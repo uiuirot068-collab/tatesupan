@@ -301,26 +301,26 @@ export default function PreviewPane({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
-      <div className="flex flex-none items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
-        <span>プレビュー</span>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5">
+      <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
+          <span className="flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={zoomOut}
               disabled={zoomScale <= ZOOM_MIN}
-              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               －
             </button>
-            <span className="w-10 text-center text-xs tabular-nums">
+            <span className="w-10 flex-shrink-0 whitespace-nowrap text-center text-xs tabular-nums">
               {Math.round(zoomScale * 100)}%
             </span>
             <button
               type="button"
               onClick={zoomIn}
               disabled={zoomScale >= ZOOM_MAX}
-              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ＋
             </button>
@@ -328,18 +328,18 @@ export default function PreviewPane({
               type="button"
               onClick={zoomReset}
               disabled={zoomScale === 1.0}
-              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               100%
             </button>
           </span>
           {canReorder && (
-            <span className="flex items-center gap-1.5">
+            <span className="flex flex-shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={selectAll}
                 disabled={pages.length === 0 || selected.size === pages.length}
-                className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 全選択
               </button>
@@ -347,16 +347,16 @@ export default function PreviewPane({
                 type="button"
                 onClick={clearSelection}
                 disabled={selected.size === 0}
-                className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 全解除
               </button>
             </span>
           )}
-          <span>
-            {layout.paper.label} / 全 {pages.length} ページ / 1ページ
-            {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
-          </span>
+        </div>
+        <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+          {layout.paper.label} / 全 {pages.length} ページ / 1ページ
+          {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
       </div>
 
