@@ -206,7 +206,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       <main
         ref={mainRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:gap-8"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row md:gap-2"
       >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
@@ -232,7 +232,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
         <div
           onMouseDown={handleDividerMouseDown}
-          className="hidden w-1.5 shrink-0 cursor-col-resize bg-ink/10 transition-colors hover:bg-accent/60 active:bg-accent md:block"
+          className="hidden w-1 shrink-0 cursor-col-resize bg-ink/10 transition-all hover:w-2 hover:bg-accent/60 active:bg-accent md:block"
         />
 
         <section

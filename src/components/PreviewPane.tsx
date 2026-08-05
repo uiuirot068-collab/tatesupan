@@ -382,7 +382,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className={`w-full flex-1 min-h-0 overflow-y-auto p-6 ${
+        className={`flex w-full flex-1 min-h-0 overflow-y-auto p-6 ${
           zoomScale > 1 ? "overflow-x-auto" : "overflow-x-hidden"
         }`}
         style={{ cursor: "grab" }}
@@ -393,7 +393,7 @@ export default function PreviewPane({
         onScroll={handlePreviewScroll}
       >
         <div
-          className="flex flex-col items-center gap-6"
+          className="m-auto flex w-max h-max flex-col gap-6"
           style={{
             transform: `scale(${zoomScale})`,
             // top-left origin keeps all scaled overflow in the
