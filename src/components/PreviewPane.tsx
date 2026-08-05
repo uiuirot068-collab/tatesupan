@@ -20,8 +20,8 @@ export default function PreviewPane({
   }, [content, layout.charsPerPage]);
 
   return (
-    <div className="flex h-full flex-col bg-zinc-100 dark:bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+    <div className="flex h-full flex-col bg-base">
+      <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
         <span>プレビュー</span>
         <span>
           {layout.paper.label} / 全 {pages.length} ページ / 1ページ

@@ -7,6 +7,7 @@ import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import MobileTabBar, { type MobileTab } from "./MobileTabBar";
+import ThemeToggle from "./ThemeToggle";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -61,11 +62,12 @@ export default function TategakiEditor() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-          縦書きWebエディタ
-        </h1>
-        <SaveStatusLabel status={saveStatus} />
+      <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
+        <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <SaveStatusLabel status={saveStatus} />
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -87,7 +89,7 @@ export default function TategakiEditor() {
         </section>
 
         <section
-          className={`min-h-0 flex-1 border-zinc-200 md:flex md:w-1/2 md:border-l dark:border-zinc-800 ${
+          className={`min-h-0 flex-1 border-ink/10 md:flex md:w-1/2 md:border-l ${
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
@@ -118,11 +120,22 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
     saved: "保存済み",
     error: "保存に失敗しました",
   };
-  const color: Record<SaveStatus, string> = {
-    loading: "text-zinc-400",
-    saving: "text-amber-500",
-    saved: "text-emerald-600 dark:text-emerald-400",
+  const dot: Record<SaveStatus, string> = {
+    loading: "bg-ink/30",
+    saving: "bg-accent animate-pulse",
+    saved: "bg-accent",
+    error: "bg-red-500",
+  };
+  const label: Record<SaveStatus, string> = {
+    loading: "text-ink/40",
+    saving: "text-ink/70",
+    saved: "text-ink/70",
     error: "text-red-500",
   };
-  return <span className={`text-xs ${color[status]}`}>{text[status]}</span>;
+  return (
+    <span className="flex items-center gap-1.5 text-xs">
+      <span className={`h-1.5 w-1.5 rounded-full ${dot[status]}`} />
+      <span className={label[status]}>{text[status]}</span>
+    </span>
+  );
 }

@@ -39,15 +39,12 @@ export default function PageCard({
   return (
     <div className="flex shrink-0 flex-col items-center gap-2">
       <div
-        className="shrink-0 overflow-x-auto overflow-y-hidden border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+        className="shrink-0 overflow-x-auto overflow-y-hidden border border-paper-ink/15 bg-paper shadow-sm dark:border-paper-ink/5 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
         style={sheetStyle}
       >
-        <div
-          className="h-full text-zinc-800 dark:text-zinc-100"
-          style={textStyle}
-        >
+        <div className="h-full text-paper-ink" style={textStyle}>
           {tokens.length === 0 ? (
-            <span className="text-zinc-400 dark:text-zinc-600">
+            <span className="text-paper-ink/40">
               （本文を入力すると、ここに縦書きで表示されます）
             </span>
           ) : (
@@ -57,9 +54,7 @@ export default function PageCard({
           )}
         </div>
       </div>
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-        {pageNumber} ページ
-      </span>
+      <span className="text-xs text-ink/60">{pageNumber} ページ</span>
     </div>
   );
 }

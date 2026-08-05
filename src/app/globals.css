@@ -1,26 +1,33 @@
 @import "tailwindcss";
 
+/* Theme is switched by setting data-theme on <html> (see ThemeToggle), not by OS preference. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --base: #f9f8f6; /* 生成り: page background */
+  --ink: #1f2a44; /* インディゴブルー: text, borders, primary UI */
+  --accent: #f5a623; /* ウォームゴールド: autosave indicator, count badges */
+  --paper: #f9f8f6; /* PageCard sheet stays paper-colored in both themes */
+  --paper-ink: #1f2a44; /* text on the paper sheet stays legible in both themes */
+}
+
+[data-theme="dark"] {
+  --base: #121212;
+  --ink: #aab4d4; /* lightened indigo tint so text/borders stay readable on near-black */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-base: var(--base);
+  --color-ink: var(--ink);
+  --color-accent: var(--accent);
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--base);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }

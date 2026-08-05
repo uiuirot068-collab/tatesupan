@@ -7,7 +7,7 @@ interface MobileTabBarProps {
 
 export default function MobileTabBar({ active, onChange }: MobileTabBarProps) {
   return (
-    <div className="flex border-t border-zinc-200 bg-white md:hidden dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex border-t border-ink/10 bg-base md:hidden">
       <TabButton
         label="編集"
         isActive={active === "edit"}
@@ -37,8 +37,8 @@ function TabButton({
       onClick={onClick}
       className={`flex-1 py-3 text-sm font-medium ${
         isActive
-          ? "border-t-2 border-zinc-800 text-zinc-900 dark:border-zinc-100 dark:text-zinc-50"
-          : "border-t-2 border-transparent text-zinc-400"
+          ? "border-t-2 border-ink text-ink"
+          : "border-t-2 border-transparent text-ink/40"
       }`}
     >
       {label}

@@ -21,18 +21,18 @@ export default function PageSettingsPanel({
   };
 
   return (
-    <details className="border-b border-zinc-200 dark:border-zinc-800" open>
-      <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50">
+    <details className="border-b border-ink/10" open>
+      <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-ink/70 hover:bg-ink/5">
         ページ設定（用紙・余白・文字組み）
       </summary>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">用紙サイズ</span>
+          <span className="text-xs text-ink/60">用紙サイズ</span>
           <select
             value={settings.paperSize}
             onChange={(e) => update("paperSize", e.target.value as PaperSizeKey)}
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
             {Object.entries(PAPER_SIZES).map(([key, size]) => (
               <option key={key} value={key}>
@@ -64,7 +64,7 @@ export default function PageSettingsPanel({
         />
 
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="text-xs text-ink/60">
             フォントサイズ（pt）
           </span>
           <input
@@ -74,12 +74,12 @@ export default function PageSettingsPanel({
             step={0.5}
             value={settings.fontSizePt}
             onChange={(e) => update("fontSizePt", Number(e.target.value))}
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">行間倍率</span>
+          <span className="text-xs text-ink/60">行間倍率</span>
           <input
             type="number"
             min={1}
@@ -87,12 +87,12 @@ export default function PageSettingsPanel({
             step={0.1}
             value={settings.lineHeightRatio}
             onChange={(e) => update("lineHeightRatio", Number(e.target.value))}
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
       </div>
 
-      <dl className="grid grid-cols-3 gap-2 border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-center dark:border-zinc-800 dark:bg-zinc-800/40">
+      <dl className="grid grid-cols-3 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center">
         <LayoutStat label="1行の文字数" value={`${layout.charsPerLine} 字`} />
         <LayoutStat label="1ページの行数" value={`${layout.linesPerPage} 行`} />
         <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
@@ -112,7 +112,7 @@ function MarginField({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">{label} mm</span>
+      <span className="text-xs text-ink/60">{label} mm</span>
       <input
         type="number"
         min={0}
@@ -120,7 +120,7 @@ function MarginField({
         step={0.5}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
       />
     </label>
   );
@@ -128,11 +128,11 @@ function MarginField({
 
 function LayoutStat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <div className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+    <div className="flex flex-col items-center gap-1">
+      <span className="rounded-full bg-accent px-2.5 py-0.5 text-sm font-semibold text-paper-ink">
         {value}
-      </div>
-      <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</div>
+      </span>
+      <span className="text-[11px] text-ink/60">{label}</span>
     </div>
   );
 }
