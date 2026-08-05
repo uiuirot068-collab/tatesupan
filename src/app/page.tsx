@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { createDocument, db, deleteDocument, listDocuments, type DocumentRecord } from "@/lib/db";
 import ThemeToggle from "@/components/ThemeToggle";
+import Logo from "@/components/Logo";
 
 const FREE_DOCUMENT_LIMIT = 15;
 
@@ -57,7 +58,7 @@ export default function Home() {
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
         <h1 className="flex items-baseline">
-          <span className="font-bold text-lg">TateSpun（タテスパン）</span>
+          <Logo />
           <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
         </h1>
         <ThemeToggle />
@@ -65,7 +66,7 @@ export default function Home() {
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center gap-8 px-4 py-10">
         <Image
-          src="/img/caroad_main1.png"
+          src="/caroad_main1.png"
           alt="縦書きWebエディタ"
           width={384}
           height={578}

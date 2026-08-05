@@ -19,6 +19,7 @@ import SearchReplaceModal from "./SearchReplaceModal";
 import MobileTabBar, { type MobileTab } from "./MobileTabBar";
 import ThemeToggle from "./ThemeToggle";
 import HelpModal from "./HelpModal";
+import Logo from "./Logo";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -151,7 +152,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             ← 作品一覧
           </Link>
           <h1 className="flex items-baseline">
-            <span className="font-bold text-lg">TateSpun（タテスパン）</span>
+            <Logo />
             <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
           </h1>
         </div>
