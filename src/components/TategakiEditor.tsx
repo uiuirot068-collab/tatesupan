@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadAllImages, loadDocument, saveDocument, saveImage, type ImageRecord } from "@/lib/db";
+import {
+  deleteImage,
+  loadAllImages,
+  loadDocument,
+  saveDocument,
+  saveImage,
+  type ImageRecord,
+} from "@/lib/db";
 import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
@@ -48,6 +55,15 @@ export default function TategakiEditor() {
   const handleImageAdd = (record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
     saveImage(record).catch(() => setSaveStatus("error"));
+  };
+
+  const handleImageDelete = (id: string) => {
+    setImages((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    deleteImage(id).catch(() => setSaveStatus("error"));
   };
 
   useEffect(() => {
@@ -107,6 +123,7 @@ export default function TategakiEditor() {
             images={images}
             onContentChange={setContent}
             onImageAdd={handleImageAdd}
+            onImageDelete={handleImageDelete}
           />
         </section>
       </main>

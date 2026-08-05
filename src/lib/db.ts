@@ -80,3 +80,7 @@ export async function saveImage(record: ImageRecord): Promise<void> {
 export async function loadAllImages(): Promise<ImageRecord[]> {
   return db.images.toArray();
 }
+
+export async function deleteImage(id: string): Promise<void> {
+  await db.images.delete(id);
+}

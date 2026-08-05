@@ -1,16 +1,22 @@
+/** 挿絵の配置位置: 天側（上部）/ 中央 / 地側（下部）/ ページ全体 */
+export type ImagePosition = "top" | "center" | "bottom" | "full";
+
 export type TategakiToken =
   | { type: "text"; value: string }
   | { type: "ruby"; base: string; rt: string }
   | { type: "tcy"; value: string }
-  | { type: "image"; id: string; widthMm: number; heightMm: number }
+  | { type: "image"; id: string; widthMm: number; heightMm: number; position: ImagePosition }
   | { type: "pageBreak" };
 
 const RUBY_PATTERN = /｜([^｜《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
 const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
-// 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>】
+// 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>:<position>】
+// (the trailing :<position> is optional for backward compatibility with
+// documents saved before positioning was introduced; it defaults to "center")
 // 改ページ marker: 【改ページ】
 export const PAGE_BREAK_MARKER = "【改ページ】";
-const MARKER_PATTERN = /【IMG:([^:]+):([\d.]+):([\d.]+)】|【改ページ】/g;
+const MARKER_PATTERN =
+  /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
 
 /**
  * Parses raw editor text into a flat token stream:
@@ -34,6 +40,7 @@ export function tokenizeTategaki(source: string): TategakiToken[] {
         id: match[1],
         widthMm: Number(match[2]),
         heightMm: Number(match[3]),
+        position: (match[4] as ImagePosition | undefined) ?? "center",
       });
     } else {
       tokens.push({ type: "pageBreak" });
@@ -181,7 +188,7 @@ export function detokenizeTategaki(tokens: TategakiToken[]): string {
     .map((token) => {
       if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
       if (token.type === "image") {
-        return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}】`;
+        return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}:${token.position}】`;
       }
       if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
       return token.value;

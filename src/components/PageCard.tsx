@@ -1,6 +1,15 @@
 import { useRef, type CSSProperties, type DragEvent, type MouseEvent } from "react";
-import type { TategakiToken } from "@/lib/tategaki";
+import type { ImagePosition, TategakiToken } from "@/lib/tategaki";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+
+type ImageToken = Extract<TategakiToken, { type: "image" }>;
+
+const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
+  top: "天側（上部）",
+  center: "中央",
+  bottom: "地側（下部）",
+  full: "ページ全体",
+};
 
 interface PageCardProps {
   pageNumber: number;
@@ -17,6 +26,8 @@ interface PageCardProps {
   onDrop?: (event: DragEvent) => void;
   onDragEnd?: (event: DragEvent) => void;
   onInsertImage?: (file: File) => void;
+  onImagePositionChange?: (imageId: string, position: ImagePosition) => void;
+  onImageDelete?: (imageId: string) => void;
 }
 
 export default function PageCard({
@@ -34,6 +45,8 @@ export default function PageCard({
   onDrop,
   onDragEnd,
   onInsertImage,
+  onImagePositionChange,
+  onImageDelete,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { paper } = layout;
@@ -96,6 +109,16 @@ export default function PageCard({
 
   const isInteractive = Boolean(onToggleSelect);
 
+  // 挿絵 tokens are page-level decorations positioned via 天/中央/地/ページ全体
+  // rather than inline members of the text flow, so they're pulled out of
+  // `tokens` here and rendered separately by position.
+  const flowTokens = tokens.filter((token) => token.type !== "image");
+  const imageTokens = tokens.filter((token): token is ImageToken => token.type === "image");
+  const fullImage = imageTokens.find((token) => token.position === "full");
+  const topImages = imageTokens.filter((token) => token.position === "top");
+  const centerImages = imageTokens.filter((token) => token.position === "center");
+  const bottomImages = imageTokens.filter((token) => token.position === "bottom");
+
   return (
     <div
       className={`flex shrink-0 flex-col items-center gap-2 rounded-md p-1 transition-colors ${
@@ -155,6 +178,41 @@ export default function PageCard({
           </div>
         </div>
       )}
+      {isInteractive && imageTokens.length > 0 && (
+        <div className="flex w-full flex-col gap-1 px-1" onClick={(event) => event.stopPropagation()}>
+          {imageTokens.map((token) => (
+            <div
+              key={token.id}
+              className="flex items-center gap-1.5 text-[10px] text-ink/60"
+              draggable={false}
+              onDragStart={(event) => event.stopPropagation()}
+            >
+              <span className="shrink-0">挿絵</span>
+              <select
+                value={token.position}
+                onChange={(event) =>
+                  onImagePositionChange?.(token.id, event.target.value as ImagePosition)
+                }
+                className="rounded border border-ink/20 bg-transparent px-1 py-0.5 text-[10px]"
+              >
+                {(Object.keys(IMAGE_POSITION_LABELS) as ImagePosition[]).map((position) => (
+                  <option key={position} value={position}>
+                    {IMAGE_POSITION_LABELS[position]}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => onImageDelete?.(token.id)}
+                className="rounded border border-ink/20 px-1 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
+                title="この画像を削除"
+              >
+                削除
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div
         className={`shrink-0 overflow-hidden border bg-paper shadow-sm dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           selected
@@ -163,17 +221,31 @@ export default function PageCard({
         }`}
         style={sheetStyle}
       >
-        <div className="text-paper-ink" style={textStyle}>
-          {tokens.length === 0 ? (
-            <span className="text-paper-ink/40">
-              （本文を入力すると、ここに縦書きで表示されます）
-            </span>
-          ) : (
-            tokens.map((token, index) => (
-              <TokenView key={index} token={token} images={images} />
-            ))
-          )}
-        </div>
+        {fullImage ? (
+          <FullPageImage token={fullImage} images={images} />
+        ) : (
+          <>
+            <div className="text-paper-ink" style={textStyle}>
+              {flowTokens.length === 0 ? (
+                <span className="text-paper-ink/40">
+                  （本文を入力すると、ここに縦書きで表示されます）
+                </span>
+              ) : (
+                flowTokens.map((token, index) => <TokenView key={index} token={token} />)
+              )}
+            </div>
+
+            {topImages.length > 0 && (
+              <ImagePositionOverlay tokens={topImages} images={images} position="top" />
+            )}
+            {centerImages.length > 0 && (
+              <ImagePositionOverlay tokens={centerImages} images={images} position="center" />
+            )}
+            {bottomImages.length > 0 && (
+              <ImagePositionOverlay tokens={bottomImages} images={images} position="bottom" />
+            )}
+          </>
+        )}
 
         {hashiraText && (
           <HashiraOverlay
@@ -265,13 +337,7 @@ function HashiraOverlay({
   );
 }
 
-function TokenView({
-  token,
-  images,
-}: {
-  token: TategakiToken;
-  images: Record<string, string>;
-}) {
+function TokenView({ token }: { token: Exclude<TategakiToken, { type: "image" }> }) {
   if (token.type === "ruby") {
     return (
       <ruby>
@@ -286,22 +352,68 @@ function TokenView({
   if (token.type === "pageBreak") {
     return null;
   }
-  if (token.type === "image") {
-    const src = images[token.id];
-    if (!src) return null;
-    return (
-      <img
-        src={src}
-        alt=""
-        style={{
-          display: "inline-block",
-          width: token.widthMm * PX_PER_MM,
-          height: token.heightMm * PX_PER_MM,
-          verticalAlign: "top",
-          breakInside: "avoid",
-        }}
-      />
-    );
-  }
   return <>{token.value}</>;
+}
+
+/** Renders 挿絵 anchored to 天 (top) / 中央 (center) / 地 (bottom) of the page. */
+function ImagePositionOverlay({
+  tokens,
+  images,
+  position,
+}: {
+  tokens: ImageToken[];
+  images: Record<string, string>;
+  position: "top" | "center" | "bottom";
+}) {
+  const style: CSSProperties = {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: position === "bottom" ? undefined : position === "center" ? "50%" : 0,
+    bottom: position === "bottom" ? 0 : undefined,
+    transform: position === "center" ? "translateY(-50%)" : undefined,
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: position === "bottom" ? "flex-end" : "flex-start",
+    gap: 4 * PX_PER_MM,
+    writingMode: "horizontal-tb",
+    pointerEvents: "none",
+  };
+
+  return (
+    <div style={style}>
+      {tokens.map((token) => {
+        const src = images[token.id];
+        if (!src) return null;
+        return (
+          <img
+            key={token.id}
+            src={src}
+            alt=""
+            style={{ width: token.widthMm * PX_PER_MM, height: token.heightMm * PX_PER_MM }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Renders a single 挿絵 that spans the entire page (ページ全体). */
+function FullPageImage({ token, images }: { token: ImageToken; images: Record<string, string> }) {
+  const src = images[token.id];
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+      }}
+    />
+  );
 }

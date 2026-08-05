@@ -3,6 +3,7 @@ import {
   detokenizeTategaki,
   paginateTokens,
   tokenizeTategaki,
+  type ImagePosition,
   type TategakiToken,
 } from "@/lib/tategaki";
 import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
@@ -21,6 +22,7 @@ interface PreviewPaneProps {
   images: Record<string, string>;
   onContentChange?: (content: string) => void;
   onImageAdd?: (record: ImageRecord) => void;
+  onImageDelete?: (imageId: string) => void;
 }
 
 export default function PreviewPane({
@@ -30,6 +32,7 @@ export default function PreviewPane({
   images,
   onContentChange,
   onImageAdd,
+  onImageDelete,
 }: PreviewPaneProps) {
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(content);
@@ -129,9 +132,33 @@ export default function PreviewPane({
     const id = crypto.randomUUID();
     onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
     const nextPages = pages.map((tokens, i) =>
-      i === index ? [...tokens, { type: "image" as const, id, widthMm, heightMm }] : tokens
+      i === index
+        ? [...tokens, { type: "image" as const, id, widthMm, heightMm, position: "center" as const }]
+        : tokens
     );
     onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+  };
+
+  const handleImagePositionChange =
+    (index: number) => (imageId: string, position: ImagePosition) => {
+      if (!onContentChange) return;
+      const nextPages = pages.map((tokens, i) =>
+        i === index
+          ? tokens.map((token) =>
+              token.type === "image" && token.id === imageId ? { ...token, position } : token
+            )
+          : tokens
+      );
+      onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    };
+
+  const handleImageDelete = (index: number) => (imageId: string) => {
+    if (!onContentChange) return;
+    const nextPages = pages.map((tokens, i) =>
+      i === index ? tokens.filter((token) => !(token.type === "image" && token.id === imageId)) : tokens
+    );
+    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    onImageDelete?.(imageId);
   };
 
   return (
@@ -229,6 +256,8 @@ export default function PreviewPane({
                   onDrop={canReorder ? handleDrop(index) : undefined}
                   onDragEnd={canReorder ? handleDragEnd : undefined}
                   onInsertImage={canReorder ? handleInsertImage(index) : undefined}
+                  onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
+                  onImageDelete={canReorder ? handleImageDelete(index) : undefined}
                 />
               ))}
             </div>
