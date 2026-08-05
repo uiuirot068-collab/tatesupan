@@ -15,6 +15,7 @@ import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import MobileTabBar, { type MobileTab } from "./MobileTabBar";
 import ThemeToggle from "./ThemeToggle";
+import HelpModal from "./HelpModal";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -28,6 +29,7 @@ export default function TategakiEditor() {
   const [images, setImages] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
 
@@ -122,9 +124,20 @@ export default function TategakiEditor() {
         <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setIsHelpOpen(true)}
+            aria-label="使い方"
+            title="使い方"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink/20 text-xs font-semibold text-ink/70 hover:bg-ink/5"
+          >
+            ？
+          </button>
           <SaveStatusLabel status={saveStatus} />
         </div>
       </header>
+
+      {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
 
       <main ref={mainRef} className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section
