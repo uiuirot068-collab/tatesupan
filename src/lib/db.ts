@@ -1,5 +1,9 @@
 import Dexie, { type Table } from "dexie";
-import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "./pageLayout";
+import {
+  DEFAULT_MASTER_PAGE_SETTINGS,
+  DEFAULT_PAGE_SETTINGS,
+  type PageSettings,
+} from "./pageLayout";
 
 export interface DocumentRecord {
   id: number;
@@ -28,8 +32,19 @@ export const CURRENT_DOCUMENT_ID = 1;
 export async function loadDocument(): Promise<DocumentRecord | undefined> {
   const doc = await db.documents.get(CURRENT_DOCUMENT_ID);
   if (!doc) return undefined;
-  // Merge defaults so records saved before `settings` existed still load.
-  return { ...doc, settings: { ...DEFAULT_PAGE_SETTINGS, ...doc.settings } };
+  // Merge defaults so records saved before `settings` (or before
+  // `masterPage` was added to it) still load with valid values.
+  return {
+    ...doc,
+    settings: {
+      ...DEFAULT_PAGE_SETTINGS,
+      ...doc.settings,
+      masterPage: {
+        ...DEFAULT_MASTER_PAGE_SETTINGS,
+        ...doc.settings?.masterPage,
+      },
+    },
+  };
 }
 
 export async function saveDocument(

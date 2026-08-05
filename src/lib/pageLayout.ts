@@ -22,7 +22,33 @@ export interface PageSettings {
   marginOuter: number; // 小口 / 外側 (mm)
   fontSizePt: number; // pt
   lineHeightRatio: number; // 行間倍率 (例: 1.6〜1.8)
+  masterPage: MasterPageSettings;
 }
+
+/** ノンブル（ページ番号）の表示位置 */
+export type NombrePosition = "center" | "outer" | "hidden";
+
+/** 柱（ヘッダー/フッター）の表示位置 */
+export type HashiraPosition = "top" | "bottom";
+
+export interface MasterPageSettings {
+  nombrePosition: NombrePosition;
+  // 表紙・扉など先頭ページのノンブルを非表示にする
+  hideNombreOnFirstPage: boolean;
+  nombreStart: number;
+  hashiraOdd: string; // 奇数ページ柱（例: 作品名）
+  hashiraEven: string; // 偶数ページ柱（例: 章名）
+  hashiraPosition: HashiraPosition;
+}
+
+export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
+  nombrePosition: "center",
+  hideNombreOnFirstPage: false,
+  nombreStart: 1,
+  hashiraOdd: "",
+  hashiraEven: "",
+  hashiraPosition: "top",
+};
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   paperSize: "bunko",
@@ -32,6 +58,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   marginOuter: 10,
   fontSizePt: 9,
   lineHeightRatio: 1.7,
+  masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
 };
 
 export const MM_PER_PT = 25.4 / 72;

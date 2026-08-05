@@ -1,5 +1,8 @@
 import {
   PAPER_SIZES,
+  type HashiraPosition,
+  type MasterPageSettings,
+  type NombrePosition,
   type PageLayout,
   type PageSettings,
   type PaperSizeKey,
@@ -20,7 +23,18 @@ export default function PageSettingsPanel({
     onChange({ ...settings, [key]: value });
   };
 
+  const updateMasterPage = <K extends keyof MasterPageSettings>(
+    key: K,
+    value: MasterPageSettings[K]
+  ) => {
+    onChange({
+      ...settings,
+      masterPage: { ...settings.masterPage, [key]: value },
+    });
+  };
+
   return (
+    <>
     <details className="border-b border-ink/10" open>
       <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-ink/70 hover:bg-ink/5">
         ページ設定（用紙・余白・文字組み）
@@ -98,6 +112,94 @@ export default function PageSettingsPanel({
         <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
       </dl>
     </details>
+
+    <details className="border-b border-ink/10">
+      <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-ink/70 hover:bg-ink/5">
+        マスターページ（ノンブル・柱）
+      </summary>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">ノンブル表示位置</span>
+          <select
+            value={settings.masterPage.nombrePosition}
+            onChange={(e) =>
+              updateMasterPage("nombrePosition", e.target.value as NombrePosition)
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          >
+            <option value="center">中央</option>
+            <option value="outer">小口側（左右交互）</option>
+            <option value="hidden">非表示</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">開始ページ番号</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={settings.masterPage.nombreStart}
+            onChange={(e) =>
+              updateMasterPage("nombreStart", Number(e.target.value))
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="col-span-2 flex items-center gap-2 sm:col-span-2 sm:self-end sm:pb-1.5">
+          <input
+            type="checkbox"
+            checked={settings.masterPage.hideNombreOnFirstPage}
+            onChange={(e) =>
+              updateMasterPage("hideNombreOnFirstPage", e.target.checked)
+            }
+            className="h-4 w-4 rounded border-ink/30"
+          />
+          <span className="text-xs text-ink/60">
+            隠しノンブル（表紙・扉など先頭ページを非表示）
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">奇数ページ柱</span>
+          <input
+            type="text"
+            placeholder="例: 作品名"
+            value={settings.masterPage.hashiraOdd}
+            onChange={(e) => updateMasterPage("hashiraOdd", e.target.value)}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">偶数ページ柱</span>
+          <input
+            type="text"
+            placeholder="例: 章名"
+            value={settings.masterPage.hashiraEven}
+            onChange={(e) => updateMasterPage("hashiraEven", e.target.value)}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">柱表示位置</span>
+          <select
+            value={settings.masterPage.hashiraPosition}
+            onChange={(e) =>
+              updateMasterPage("hashiraPosition", e.target.value as HashiraPosition)
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          >
+            <option value="top">天側（上部）</option>
+            <option value="bottom">地側（下部）</option>
+          </select>
+        </label>
+      </div>
+    </details>
+    </>
   );
 }
 
