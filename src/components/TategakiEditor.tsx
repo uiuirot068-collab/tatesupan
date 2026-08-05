@@ -14,6 +14,7 @@ import {
 } from "@/lib/db";
 import { computePageLayout } from "@/lib/pageLayout";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
@@ -42,9 +43,11 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const hasLoadedRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -143,6 +146,32 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     };
   }, [docId, title, content, settings, plotNote]);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  const showToast = (message: string) => {
+    setToast(message);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
+  };
+
+  const saveNow = () => {
+    if (docId === null) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setSaveStatus("saving");
+    saveDocument(docId, title, content, settings, plotNote)
+      .then(() => {
+        setSaveStatus("saved");
+        showToast("下書きを自動保存しました");
+      })
+      .catch(() => setSaveStatus("error"));
+  };
+
+  useShortcuts([{ key: "s", handler: saveNow }]);
+
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
@@ -155,7 +184,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           </Link>
           <h1 className="flex items-baseline">
             <Logo />
-            <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
+            <span className="font-normal text-sm text-ink/50 ml-2">縦書きWebエディタ</span>
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -234,6 +263,12 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           }}
           onClose={() => setIsSearchOpen(false)}
         />
+      )}
+
+      {toast && (
+        <div className="pointer-events-none fixed bottom-4 right-4 z-50 rounded-lg border border-ink/10 bg-ink px-4 py-2 text-sm text-base shadow-lg">
+          {toast}
+        </div>
       )}
     </div>
   );

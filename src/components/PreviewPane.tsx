@@ -13,6 +13,7 @@ import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import type { ImageRecord } from "@/lib/db";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import PageCard from "./PageCard";
 
 /** Visual seam width (px) between the two pages of a spread. */
@@ -84,6 +85,12 @@ export default function PreviewPane({
   const zoomOut = () => setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
   const zoomIn = () => setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
   const zoomReset = () => setZoomScale(1.0);
+
+  useShortcuts([
+    { key: "+", handler: zoomIn },
+    { key: "-", handler: zoomOut },
+    { key: "0", handler: zoomReset },
+  ]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isPanningRef = useRef(false);

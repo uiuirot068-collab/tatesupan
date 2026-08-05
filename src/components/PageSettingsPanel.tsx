@@ -128,7 +128,7 @@ export default function PageSettingsPanel({
         <button
           type="button"
           onClick={onOpenHelp}
-          className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded font-bold"
+          className="px-3 py-2 text-ink/60 hover:bg-ink/5 rounded font-bold"
           title="使い方ガイド"
         >
           ？

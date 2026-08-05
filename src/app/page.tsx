@@ -59,7 +59,7 @@ export default function Home() {
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
         <h1 className="flex items-baseline">
           <Logo />
-          <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
+          <span className="font-normal text-sm text-ink/50 ml-2">縦書きWebエディタ</span>
         </h1>
         <ThemeToggle />
       </header>
