@@ -98,6 +98,7 @@ export default function PageCard({
     overflow: "hidden",
     fontSize: `${fontSizePx}px`,
     lineHeight: settings.lineHeightRatio,
+    color: "#000000",
     ...(settings.columnCount === 2
       ? {
           columnCount: 2,
@@ -248,7 +249,7 @@ export default function PageCard({
           <FullPageImage token={fullImage} images={images} />
         ) : (
           <>
-            <div className="text-paper-ink" style={textStyle}>
+            <div style={textStyle}>
               {flowTokens.length === 0 ? (
                 <span className="text-paper-ink/40">
                   （本文を入力すると、ここに縦書きで表示されます）
@@ -380,8 +381,8 @@ function HiddenNombreOverlay({
     left: isOddPage ? undefined : BLEED_MM * PX_PER_MM,
     right: isOddPage ? BLEED_MM * PX_PER_MM : undefined,
     writingMode: "vertical-rl",
-    fontSize: "8pt",
-    color: "#999999",
+    fontSize: "7pt",
+    color: "#888888",
     padding: `${1 * PX_PER_MM}px`,
   };
 
@@ -480,7 +481,11 @@ function ImagePositionOverlay({
             key={token.id}
             src={src}
             alt=""
-            style={{ width: token.widthMm * PX_PER_MM, height: token.heightMm * PX_PER_MM }}
+            style={{
+              width: token.widthMm * PX_PER_MM,
+              height: token.heightMm * PX_PER_MM,
+              filter: "grayscale(100%)",
+            }}
           />
         );
       })}
@@ -502,6 +507,7 @@ function FullPageImage({ token, images }: { token: ImageToken; images: Record<st
         width: "100%",
         height: "100%",
         objectFit: "cover",
+        filter: "grayscale(100%)",
       }}
     />
   );
