@@ -60,10 +60,22 @@ export default function PageCard({
     paddingRight: (isOddPage ? settings.marginGutter : settings.marginOuter) * PX_PER_MM,
   };
 
+  // Font size must be scaled by the same PX_PER_MM factor as the page box
+  // (sheetStyle above): the box's mm dimensions are drawn at a preview
+  // scale, not true physical size, so rendering the font at its raw pt
+  // size (true physical size) makes glyphs too large for the box and
+  // overflows the page — hence the reported horizontal-scroll text overflow.
+  const fontSizePx = layout.fontSizeMm * PX_PER_MM;
+  const textAreaWidthPx = layout.textAreaWidthMm * PX_PER_MM;
+  const textAreaHeightPx = layout.textAreaHeightMm * PX_PER_MM;
+
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
-    fontSize: `${settings.fontSizePt}pt`,
+    width: textAreaWidthPx,
+    height: textAreaHeightPx,
+    overflow: "hidden",
+    fontSize: `${fontSizePx}px`,
     lineHeight: settings.lineHeightRatio,
     ...(settings.columnCount === 2
       ? {
@@ -144,14 +156,14 @@ export default function PageCard({
         </div>
       )}
       <div
-        className={`shrink-0 overflow-x-auto overflow-y-hidden border bg-paper shadow-sm dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+        className={`shrink-0 overflow-hidden border bg-paper shadow-sm dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           selected
             ? "border-accent ring-2 ring-accent dark:border-accent"
             : "border-paper-ink/15 dark:border-paper-ink/5"
         }`}
         style={sheetStyle}
       >
-        <div className="h-full text-paper-ink" style={textStyle}>
+        <div className="text-paper-ink" style={textStyle}>
           {tokens.length === 0 ? (
             <span className="text-paper-ink/40">
               （本文を入力すると、ここに縦書きで表示されます）
