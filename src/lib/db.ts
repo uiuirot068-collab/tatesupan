@@ -10,6 +10,7 @@ export interface DocumentRecord {
   title: string;
   content: string;
   settings: PageSettings;
+  plotNote?: string;
   updatedAt: number;
 }
 
@@ -57,19 +58,22 @@ export async function loadDocument(): Promise<DocumentRecord | undefined> {
       },
       pageOverrides: doc.settings?.pageOverrides ?? {},
     },
+    plotNote: doc.plotNote ?? "",
   };
 }
 
 export async function saveDocument(
   title: string,
   content: string,
-  settings: PageSettings
+  settings: PageSettings,
+  plotNote: string
 ): Promise<void> {
   await db.documents.put({
     id: CURRENT_DOCUMENT_ID,
     title,
     content,
     settings,
+    plotNote,
     updatedAt: Date.now(),
   });
 }

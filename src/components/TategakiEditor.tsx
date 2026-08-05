@@ -23,6 +23,7 @@ const AUTOSAVE_DELAY_MS = 800;
 export default function TategakiEditor() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [plotNote, setPlotNote] = useState("");
   const [settings, setSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
   const [images, setImages] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
@@ -45,6 +46,7 @@ export default function TategakiEditor() {
         setTitle(doc.title);
         setContent(doc.content);
         setSettings(doc.settings);
+        setPlotNote(doc.plotNote ?? "");
       }
       setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
       hasLoadedRef.current = true;
@@ -104,7 +106,7 @@ export default function TategakiEditor() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveDocument(title, content, settings)
+      saveDocument(title, content, settings, plotNote)
         .then(() => setSaveStatus("saved"))
         .catch(() => setSaveStatus("error"));
     }, AUTOSAVE_DELAY_MS);
@@ -112,7 +114,7 @@ export default function TategakiEditor() {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [title, content, settings]);
+  }, [title, content, settings, plotNote]);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -140,6 +142,8 @@ export default function TategakiEditor() {
             settings={settings}
             layout={layout}
             onSettingsChange={setSettings}
+            plotNote={plotNote}
+            onPlotNoteChange={setPlotNote}
           />
         </section>
 

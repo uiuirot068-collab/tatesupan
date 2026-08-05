@@ -16,16 +16,21 @@ interface PageSettingsPanelProps {
   settings: PageSettings;
   layout: PageLayout;
   onChange: (next: PageSettings) => void;
+  plotNote: string;
+  onPlotNoteChange: (plotNote: string) => void;
 }
 
-type SettingsTab = "page" | "master";
+type SettingsTab = "page" | "master" | "plot";
 
 export default function PageSettingsPanel({
   settings,
   layout,
   onChange,
+  plotNote,
+  onPlotNoteChange,
 }: PageSettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("page");
+  const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
 
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
     onChange({ ...settings, [key]: value });
@@ -43,7 +48,7 @@ export default function PageSettingsPanel({
 
   return (
     <div className="border-b border-ink/10">
-      <div className="grid grid-cols-2">
+      <div className="grid grid-cols-3">
         <button
           type="button"
           onClick={() => setActiveTab("page")}
@@ -65,6 +70,17 @@ export default function PageSettingsPanel({
           }`}
         >
           マスターページ（ノンブル・柱）
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("plot")}
+          className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "plot"
+              ? "border-accent bg-ink/5 text-ink"
+              : "border-transparent text-ink/60 hover:bg-ink/5"
+          }`}
+        >
+          プロットメモ
         </button>
       </div>
 
@@ -287,8 +303,144 @@ export default function PageSettingsPanel({
           </div>
         </div>
       )}
+
+      {activeTab === "plot" && (
+        <div className="w-full">
+          <div className="flex items-center justify-end gap-1 px-4 pb-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setPlotMode("edit")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                plotMode === "edit"
+                  ? "bg-accent text-paper-ink"
+                  : "text-ink/60 hover:bg-ink/5"
+              }`}
+            >
+              編集
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlotMode("preview")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                plotMode === "preview"
+                  ? "bg-accent text-paper-ink"
+                  : "text-ink/60 hover:bg-ink/5"
+              }`}
+            >
+              プレビュー
+            </button>
+          </div>
+
+          <div className="px-4 pb-4">
+            {plotMode === "edit" ? (
+              <textarea
+                value={plotNote}
+                onChange={(e) => onPlotNoteChange(e.target.value)}
+                placeholder="プロットや設定メモを入力してください&#10;&#10;# 見出し&#10;**太字** や *強調* 、- 箇条書きが使えます"
+                spellCheck={false}
+                className="h-64 w-full resize-y rounded border border-ink/20 bg-base p-2 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
+              />
+            ) : (
+              <div className="h-64 overflow-y-auto rounded border border-ink/20 bg-base p-3">
+                {plotNote.trim() === "" ? (
+                  <p className="text-sm text-ink/40">メモはまだありません</p>
+                ) : (
+                  <MarkdownPreview text={plotNote} />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*.+?\*\*|\*.+?\*)/g;
+  let lastIndex = 0;
+  let count = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**")) {
+      nodes.push(<strong key={`${keyPrefix}-${count++}`}>{token.slice(2, -2)}</strong>);
+    } else {
+      nodes.push(<em key={`${keyPrefix}-${count++}`}>{token.slice(1, -1)}</em>);
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+function MarkdownPreview({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let listItems: string[] = [];
+
+  const flushList = (key: string) => {
+    if (listItems.length > 0) {
+      blocks.push(
+        <ul key={key} className="list-disc space-y-1 pl-5">
+          {listItems.map((item, idx) => (
+            <li key={idx} className="text-sm leading-relaxed text-ink">
+              {renderInline(item, `${key}-li-${idx}`)}
+            </li>
+          ))}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+
+  lines.forEach((line, idx) => {
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+    const listMatch = /^[-*]\s+(.*)$/.exec(line);
+    if (heading) {
+      flushList(`list-${idx}`);
+      const level = heading[1].length;
+      const inline = renderInline(heading[2], `h-${idx}`);
+      if (level === 1) {
+        blocks.push(
+          <h1 key={idx} className="mb-1 mt-3 text-lg font-bold text-ink first:mt-0">
+            {inline}
+          </h1>
+        );
+      } else if (level === 2) {
+        blocks.push(
+          <h2 key={idx} className="mb-1 mt-3 text-base font-bold text-ink first:mt-0">
+            {inline}
+          </h2>
+        );
+      } else {
+        blocks.push(
+          <h3 key={idx} className="mb-1 mt-2 text-sm font-bold text-ink first:mt-0">
+            {inline}
+          </h3>
+        );
+      }
+    } else if (listMatch) {
+      listItems.push(listMatch[1]);
+    } else if (line.trim() === "") {
+      flushList(`list-${idx}`);
+      blocks.push(<div key={idx} className="h-2" />);
+    } else {
+      flushList(`list-${idx}`);
+      blocks.push(
+        <p key={idx} className="text-sm leading-relaxed text-ink">
+          {renderInline(line, `p-${idx}`)}
+        </p>
+      );
+    }
+  });
+  flushList("list-end");
+
+  return <div className="space-y-0.5">{blocks}</div>;
 }
 
 function MarginField({
