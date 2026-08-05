@@ -12,7 +12,8 @@ import {
   saveImage,
   type ImageRecord,
 } from "@/lib/db";
-import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
+import { computePageLayout } from "@/lib/pageLayout";
+import { useEditorSettings } from "@/hooks/useEditorSettings";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
@@ -33,7 +34,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [plotNote, setPlotNote] = useState("");
-  const [settings, setSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
+  const [settings, setSettings] = useEditorSettings();
   const [images, setImages] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [isSearchOpen, setIsSearchOpen] = useState(false);

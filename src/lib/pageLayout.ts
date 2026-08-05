@@ -1,4 +1,4 @@
-export type PaperSizeKey = "a5" | "b5" | "shinsho" | "a6" | "bunko";
+export type PaperSizeKey = "a5" | "b5" | "b6" | "shinsho" | "a6" | "bunko";
 
 export interface PaperSize {
   label: string;
@@ -9,6 +9,7 @@ export interface PaperSize {
 export const PAPER_SIZES: Record<PaperSizeKey, PaperSize> = {
   a5: { label: "A5", widthMm: 148, heightMm: 210 },
   b5: { label: "B5", widthMm: 182, heightMm: 257 },
+  b6: { label: "B6", widthMm: 128, heightMm: 182 },
   shinsho: { label: "新書", widthMm: 103, heightMm: 182 },
   a6: { label: "A6", widthMm: 105, heightMm: 148 },
   bunko: { label: "文庫", widthMm: 105, heightMm: 148 },
