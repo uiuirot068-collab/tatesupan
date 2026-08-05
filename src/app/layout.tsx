@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "縦書きWebエディタ",
+  title: "TateSpun（タテスパン） | 縦書きWebエディタ",
   description: "縦書きプレビュー付きのテキストエディタ プロトタイプ",
 };
 

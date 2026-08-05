@@ -243,7 +243,11 @@ export default function PageCard({
               </select>
               <button
                 type="button"
-                onClick={() => onImageDelete?.(token.id)}
+                onClick={() => {
+                  if (window.confirm("この画像を削除しますか？この操作は取り消せません。")) {
+                    onImageDelete?.(token.id);
+                  }
+                }}
                 className="rounded border border-ink/20 px-1 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
                 title="この画像を削除"
               >

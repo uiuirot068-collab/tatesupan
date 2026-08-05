@@ -150,7 +150,10 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           >
             ← 作品一覧
           </Link>
-          <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
+          <h1 className="flex items-baseline">
+            <span className="font-bold text-lg">TateSpun（タテスパン）</span>
+            <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
+          </h1>
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
