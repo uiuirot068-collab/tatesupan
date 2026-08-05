@@ -71,6 +71,40 @@ export default function PreviewPane({
   const zoomIn = () => setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
   const zoomReset = () => setZoomScale(1.0);
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isPanningRef = useRef(false);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const scrollPosRef = useRef({ left: 0, top: 0 });
+
+  const handlePanMouseDown = (event: MouseEvent) => {
+    if (event.button !== 0 && event.button !== 1) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    isPanningRef.current = true;
+    startPosRef.current = { x: event.clientX, y: event.clientY };
+    scrollPosRef.current = { left: container.scrollLeft, top: container.scrollTop };
+    container.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+  };
+
+  const handlePanMouseMove = (event: MouseEvent) => {
+    if (!isPanningRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const dx = event.clientX - startPosRef.current.x;
+    const dy = event.clientY - startPosRef.current.y;
+    container.scrollLeft = scrollPosRef.current.left - dx;
+    container.scrollTop = scrollPosRef.current.top - dy;
+  };
+
+  const stopPanning = () => {
+    if (!isPanningRef.current) return;
+    isPanningRef.current = false;
+    const container = scrollContainerRef.current;
+    if (container) container.style.cursor = "grab";
+    document.body.style.userSelect = "";
+  };
+
   const canReorder = Boolean(onContentChange);
 
   const applyReorder = (nextPages: TategakiToken[][], nextSelected: Set<number>) => {
@@ -275,7 +309,15 @@ export default function PreviewPane({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-6">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto p-6"
+        style={{ cursor: "grab" }}
+        onMouseDown={handlePanMouseDown}
+        onMouseMove={handlePanMouseMove}
+        onMouseUp={stopPanning}
+        onMouseLeave={stopPanning}
+      >
         <div
           className="flex flex-col items-center gap-6"
           style={{
