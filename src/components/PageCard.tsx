@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import type { TategakiToken } from "@/lib/tategaki";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 
@@ -7,6 +7,14 @@ interface PageCardProps {
   tokens: TategakiToken[];
   settings: PageSettings;
   layout: PageLayout;
+  selected?: boolean;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
+  onToggleSelect?: (event: MouseEvent) => void;
+  onDragStart?: (event: DragEvent) => void;
+  onDragOver?: (event: DragEvent) => void;
+  onDrop?: (event: DragEvent) => void;
+  onDragEnd?: (event: DragEvent) => void;
 }
 
 export default function PageCard({
@@ -14,6 +22,14 @@ export default function PageCard({
   tokens,
   settings,
   layout,
+  selected = false,
+  isDragging = false,
+  isDropTarget = false,
+  onToggleSelect,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: PageCardProps) {
   const { paper } = layout;
   const { masterPage } = settings;
@@ -50,10 +66,45 @@ export default function PageCard({
 
   const hashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
 
+  const isInteractive = Boolean(onToggleSelect);
+
   return (
-    <div className="flex shrink-0 flex-col items-center gap-2">
+    <div
+      className={`flex shrink-0 flex-col items-center gap-2 rounded-md p-1 transition-colors ${
+        isDropTarget ? "bg-accent/10 ring-2 ring-accent" : ""
+      } ${isDragging ? "opacity-40" : ""}`}
+      draggable={isInteractive}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
+      {isInteractive && (
+        <div className="flex w-full items-center justify-between px-1">
+          <label
+            className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => {}}
+              onClick={onToggleSelect}
+              className="h-3.5 w-3.5 cursor-pointer accent-accent"
+            />
+            選択
+          </label>
+          <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
+            ⠿
+          </span>
+        </div>
+      )}
       <div
-        className="shrink-0 overflow-x-auto overflow-y-hidden border border-paper-ink/15 bg-paper shadow-sm dark:border-paper-ink/5 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
+        className={`shrink-0 overflow-x-auto overflow-y-hidden border bg-paper shadow-sm dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+          selected
+            ? "border-accent ring-2 ring-accent dark:border-accent"
+            : "border-paper-ink/15 dark:border-paper-ink/5"
+        }`}
         style={sheetStyle}
       >
         <div className="h-full text-paper-ink" style={textStyle}>

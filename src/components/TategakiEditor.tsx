@@ -93,7 +93,12 @@ export default function TategakiEditor() {
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
-          <PreviewPane content={content} settings={settings} layout={layout} />
+          <PreviewPane
+            content={content}
+            settings={settings}
+            layout={layout}
+            onContentChange={setContent}
+          />
         </section>
       </main>
 

@@ -1,5 +1,11 @@
-import { useMemo } from "react";
-import { paginateTokens, tokenizeTategaki } from "@/lib/tategaki";
+import { useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import {
+  detokenizeTategaki,
+  paginateTokens,
+  tokenizeTategaki,
+  type TategakiToken,
+} from "@/lib/tategaki";
+import { moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import PageCard from "./PageCard";
 
@@ -7,17 +13,94 @@ interface PreviewPaneProps {
   content: string;
   settings: PageSettings;
   layout: PageLayout;
+  onContentChange?: (content: string) => void;
 }
 
 export default function PreviewPane({
   content,
   settings,
   layout,
+  onContentChange,
 }: PreviewPaneProps) {
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(content);
     return paginateTokens(tokens, layout.charsPerPage);
   }, [content, layout.charsPerPage]);
+
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const lastClickedRef = useRef<number | null>(null);
+
+  const canReorder = Boolean(onContentChange);
+
+  const applyReorder = (nextPages: TategakiToken[][], nextSelected: Set<number>) => {
+    if (!onContentChange) return;
+    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    setSelected(nextSelected);
+  };
+
+  const handleToggleSelect = (index: number) => (event: MouseEvent) => {
+    const next = new Set(selected);
+    if (event.shiftKey && lastClickedRef.current !== null) {
+      for (const i of rangeIndices(lastClickedRef.current, index)) next.add(i);
+    } else if (event.ctrlKey || event.metaKey) {
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+    } else {
+      next.clear();
+      next.add(index);
+    }
+    lastClickedRef.current = index;
+    setSelected(next);
+  };
+
+  const moveBy = (direction: -1 | 1) => {
+    const { items, selected: nextSelected } = moveSelected(pages, selected, direction);
+    applyReorder(items, nextSelected);
+  };
+
+  const clearSelection = () => setSelected(new Set());
+
+  const handleDragStart = (index: number) => (event: DragEvent) => {
+    const movingSet = selected.has(index) ? selected : new Set([index]);
+    if (!selected.has(index)) setSelected(movingSet);
+    setDragIndex(index);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (index: number) => (event: DragEvent) => {
+    if (dragIndex === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropIndex(index);
+  };
+
+  const handleDrop = (index: number) => (event: DragEvent) => {
+    event.preventDefault();
+    if (dragIndex === null) return;
+    const movingSet = selected.has(dragIndex) ? selected : new Set([dragIndex]);
+    const nextPages = reorderByDrag(pages, movingSet, index);
+
+    // Re-derive selection: which final positions hold the moved pages.
+    const movedCount = movingSet.size;
+    const restIndices = pages
+      .map((_, i) => i)
+      .filter((i) => !movingSet.has(i));
+    let insertAt = restIndices.findIndex((i) => i >= index);
+    if (insertAt === -1) insertAt = restIndices.length;
+    const nextSelected = new Set<number>();
+    for (let k = 0; k < movedCount; k++) nextSelected.add(insertAt + k);
+
+    applyReorder(nextPages, nextSelected);
+    setDragIndex(null);
+    setDropIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDropIndex(null);
+  };
 
   return (
     <div className="flex h-full flex-col bg-base">
@@ -28,6 +111,34 @@ export default function PreviewPane({
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </span>
       </div>
+
+      {canReorder && selected.size > 0 && (
+        <div className="flex items-center gap-3 border-b border-ink/10 bg-accent/5 px-4 py-2 text-sm text-ink/70">
+          <span>{selected.size} ページ選択中</span>
+          <button
+            type="button"
+            onClick={() => moveBy(-1)}
+            className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5"
+          >
+            前へ移動
+          </button>
+          <button
+            type="button"
+            onClick={() => moveBy(1)}
+            className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5"
+          >
+            後へ移動
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="ml-auto rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5"
+          >
+            選択解除
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-1 flex-row-reverse flex-wrap content-start gap-6 overflow-auto p-6">
         {pages.map((tokens, index) => (
           <PageCard
@@ -36,6 +147,14 @@ export default function PreviewPane({
             tokens={tokens}
             settings={settings}
             layout={layout}
+            selected={selected.has(index)}
+            isDragging={dragIndex === index}
+            isDropTarget={dropIndex === index && dragIndex !== index}
+            onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
+            onDragStart={canReorder ? handleDragStart(index) : undefined}
+            onDragOver={canReorder ? handleDragOver(index) : undefined}
+            onDrop={canReorder ? handleDrop(index) : undefined}
+            onDragEnd={canReorder ? handleDragEnd : undefined}
           />
         ))}
       </div>

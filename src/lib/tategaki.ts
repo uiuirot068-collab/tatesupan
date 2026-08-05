@@ -125,3 +125,13 @@ function paginateTokensBySize(
 export function countVisualLength(source: string): number {
   return tokenizeTategaki(source).reduce((sum, t) => sum + tokenLength(t), 0);
 }
+
+/** Reverses `tokenizeTategaki`, re-serializing ruby tokens in `｜base《rt》` form. */
+export function detokenizeTategaki(tokens: TategakiToken[]): string {
+  return tokens
+    .map((token) => {
+      if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
+      return token.value;
+    })
+    .join("");
+}
