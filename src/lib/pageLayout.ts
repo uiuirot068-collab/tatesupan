@@ -27,6 +27,7 @@ export interface PageSettings {
   lineHeightRatio: number; // 行間倍率 (例: 1.6〜1.8)
   columnCount: ColumnCount; // 段数
   columnGapMm: number; // 段間 (mm)
+  fontFamily: string; // 本文フォント
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
@@ -78,6 +79,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   lineHeightRatio: 1.7,
   columnCount: 1,
   columnGapMm: 8,
+  fontFamily: "'Shippori Mincho', serif",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
 };

@@ -138,6 +138,21 @@ export default function PageSettingsPanel({
         />
 
         <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">フォント</span>
+          <select
+            value={settings.fontFamily}
+            onChange={(e) => update("fontFamily", e.target.value)}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          >
+            <option value="'Shippori Mincho', serif">しっぽり明朝</option>
+            <option value="'Zen Old Mincho', serif">Zenオールド明朝</option>
+            <option value="'Noto Serif JP', serif">Noto Serif 明朝</option>
+            <option value="'Noto Sans JP', sans-serif">Noto Sans ゴシック</option>
+            <option value="serif">システム標準明朝</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">
             フォントサイズ（pt）
           </span>

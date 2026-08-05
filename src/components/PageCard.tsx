@@ -111,6 +111,7 @@ export default function PageCard({
     height: textAreaHeightPx,
     overflow: "hidden",
     fontSize: `${fontSizePx}px`,
+    fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
     ...(settings.columnCount === 2
