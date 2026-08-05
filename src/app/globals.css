@@ -6,7 +6,7 @@
 :root {
   --base: #f9f8f6; /* 生成り: page background */
   --ink: #1f2a44; /* インディゴブルー: text, borders, primary UI */
-  --accent: #f5a623; /* ウォームゴールド: autosave indicator, count badges */
+  --accent: #ad9543; /* ウォームゴールド: autosave indicator, count badges */
   --paper: #f9f8f6; /* PageCard sheet stays paper-colored in both themes */
   --paper-ink: #1f2a44; /* text on the paper sheet stays legible in both themes */
 }
