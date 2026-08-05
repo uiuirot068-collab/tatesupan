@@ -4,8 +4,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { createDocument, deleteDocument, listDocuments, type DocumentRecord } from "@/lib/db";
+import { createDocument, db, deleteDocument, listDocuments, type DocumentRecord } from "@/lib/db";
 import ThemeToggle from "@/components/ThemeToggle";
+
+const FREE_DOCUMENT_LIMIT = 15;
 
 function estimateCharCount(content: string): number {
   return content.replace(/\s/g, "").length;
@@ -26,11 +28,17 @@ export default function Home() {
   const documents = useLiveQuery(() => listDocuments(), []);
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
 
   const handleCreate = async () => {
     if (creating) return;
     setCreating(true);
     try {
+      const count = await db.documents.count();
+      if (count >= FREE_DOCUMENT_LIMIT) {
+        setIsLimitModalOpen(true);
+        return;
+      }
       const id = await createDocument();
       router.push(`/editor?id=${id}`);
     } finally {
@@ -48,7 +56,10 @@ export default function Home() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
-        <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
+        <h1 className="flex items-baseline">
+          <span className="font-bold text-lg">TateSpun（タテスパン）</span>
+          <span className="font-normal text-sm text-gray-500 ml-2">縦書きWebエディタ</span>
+        </h1>
         <ThemeToggle />
       </header>
 
@@ -121,6 +132,32 @@ export default function Home() {
                 className="rounded bg-red-500 px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
               >
                 削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isLimitModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setIsLimitModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-ink/10 bg-base p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-ink">作品数の保存上限に達しています</h3>
+            <p className="mt-2 text-sm text-ink/70">
+              無料プランでローカル保存できる作品数は最大{FREE_DOCUMENT_LIMIT}作品までです。新しい作品を作成するには、不要な作品を削除するか、既存の作品を編集してください。
+            </p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsLimitModalOpen(false)}
+                className="rounded border border-ink/20 px-3 py-1.5 text-sm text-ink/70 hover:bg-ink/5"
+              >
+                閉じる
               </button>
             </div>
           </div>
