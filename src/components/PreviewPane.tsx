@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import {
+  computePageParagraphStarts,
   detokenizeTategaki,
   paginateTokens,
   tokenizeTategaki,
@@ -44,6 +45,10 @@ export default function PreviewPane({
     });
   }, [content, layout.charsPerLine, layout.linesPerPage]);
 
+  // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
+  // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
+  const paragraphStarts = useMemo(() => computePageParagraphStarts(pages), [pages]);
+
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads.
   const spreadGroups = useMemo(() => computeSpreadGroups(pages.length), [pages.length]);
@@ -53,6 +58,18 @@ export default function PreviewPane({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const lastClickedRef = useRef<number | null>(null);
+
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.0;
+  const ZOOM_STEP = 0.1;
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+
+  const clampZoom = (value: number) =>
+    Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
+
+  const zoomOut = () => setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
+  const zoomIn = () => setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
+  const zoomReset = () => setZoomScale(1.0);
 
   const canReorder = Boolean(onContentChange);
 
@@ -182,6 +199,35 @@ export default function PreviewPane({
       <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
         <span>プレビュー</span>
         <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={zoomOut}
+              disabled={zoomScale <= ZOOM_MIN}
+              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              －
+            </button>
+            <span className="w-10 text-center text-xs tabular-nums">
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={zoomIn}
+              disabled={zoomScale >= ZOOM_MAX}
+              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ＋
+            </button>
+            <button
+              type="button"
+              onClick={zoomReset}
+              disabled={zoomScale === 1.0}
+              className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              100%
+            </button>
+          </span>
           {canReorder && (
             <span className="flex items-center gap-1.5">
               <button
@@ -229,7 +275,15 @@ export default function PreviewPane({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col items-center gap-6 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6">
+        <div
+          className="flex flex-col items-center gap-6"
+          style={{
+            transform: `scale(${zoomScale})`,
+            transformOrigin: "top center",
+            transition: "transform 0.1s ease-out",
+          }}
+        >
         {spreadGroups.map((group, spreadIndex) => {
           const isSingle = group.length === 1;
           // Lone pages (page 1, or a trailing page when the count is even)
@@ -260,6 +314,7 @@ export default function PreviewPane({
                   key={index}
                   pageNumber={index + 1}
                   tokens={pages[index]}
+                  startsNewParagraph={paragraphStarts[index]}
                   settings={settings}
                   layout={layout}
                   images={images}
@@ -283,6 +338,7 @@ export default function PreviewPane({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

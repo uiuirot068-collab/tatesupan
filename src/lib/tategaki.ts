@@ -229,6 +229,62 @@ export function countVisualLength(source: string): number {
   return tokenizeTategaki(source).reduce((sum, t) => sum + tokenLength(t), 0);
 }
 
+/**
+ * A bare newline is always emitted by `paginateTokensByLines` as its own
+ * single-character text token (never merged with surrounding characters),
+ * so it doubles as the paragraph-boundary marker for indent rendering.
+ */
+function isBareNewline(token: TategakiToken): boolean {
+  return token.type === "text" && token.value === "\n";
+}
+
+/**
+ * Flags which tokens begin a new paragraph — immediately after an explicit
+ * newline, or the first token when `startsNewParagraph` is true — so the
+ * renderer can apply 一字下げ (indent) only at genuine paragraph starts, not
+ * at every mid-paragraph line wrap.
+ */
+export function computeParagraphStartFlags(
+  tokens: TategakiToken[],
+  startsNewParagraph: boolean
+): boolean[] {
+  const flags: boolean[] = [];
+  let pending = startsNewParagraph;
+  for (const token of tokens) {
+    if (isBareNewline(token)) {
+      flags.push(false);
+      pending = true;
+      continue;
+    }
+    flags.push(pending);
+    pending = false;
+  }
+  return flags;
+}
+
+/**
+ * For each page produced by `paginateTokens`, whether its first content
+ * token begins a genuine new paragraph, as opposed to continuing a
+ * paragraph that pagination cut off mid-sentence at the page boundary.
+ */
+export function computePageParagraphStarts(pages: TategakiToken[][]): boolean[] {
+  const flags: boolean[] = [];
+  let pending = true;
+  for (const page of pages) {
+    let pageFlag: boolean | null = null;
+    for (const token of page) {
+      if (isBareNewline(token)) {
+        pending = true;
+        continue;
+      }
+      if (pageFlag === null) pageFlag = pending;
+      pending = false;
+    }
+    flags.push(pageFlag ?? pending);
+  }
+  return flags;
+}
+
 /** Reverses `tokenizeTategaki`, re-serializing ruby/image tokens back to their marker form. */
 export function detokenizeTategaki(tokens: TategakiToken[]): string {
   return tokens

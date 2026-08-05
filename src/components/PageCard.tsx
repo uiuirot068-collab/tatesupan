@@ -1,6 +1,17 @@
-import { useRef, type CSSProperties, type DragEvent, type MouseEvent } from "react";
-import type { ImagePosition, TategakiToken } from "@/lib/tategaki";
+import { Fragment, useRef, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
+import { computeParagraphStartFlags, type ImagePosition, type TategakiToken } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+
+// 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
+// 対象となる開き括弧類。地文の段落先頭にはここに含まれない場合のみ、
+// 全角スペース1文字ぶんの字下げを描画時に補う（元テキストは変更しない）。
+const OPENING_BRACKETS = "「『（〈《【〔［｛“‘";
+const INDENT_SPACE = "　";
+
+// 縦書きの行末で分断されると読みにくくなる、2文字以上連続するダッシュ
+// （――）・三点リーダー（……）等を検出して改行させないためのパターン。
+const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
+const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 
@@ -14,6 +25,8 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
 interface PageCardProps {
   pageNumber: number;
   tokens: TategakiToken[];
+  /** Whether this page's first content token begins a genuine new paragraph (vs. a mid-sentence page break). Defaults to true. */
+  startsNewParagraph?: boolean;
   settings: PageSettings;
   layout: PageLayout;
   images: Record<string, string>;
@@ -35,6 +48,7 @@ interface PageCardProps {
 export default function PageCard({
   pageNumber,
   tokens,
+  startsNewParagraph = true,
   settings,
   layout,
   images,
@@ -123,6 +137,7 @@ export default function PageCard({
   // rather than inline members of the text flow, so they're pulled out of
   // `tokens` here and rendered separately by position.
   const flowTokens = tokens.filter((token) => token.type !== "image");
+  const paragraphStarts = computeParagraphStartFlags(flowTokens, startsNewParagraph);
   const imageTokens = tokens.filter((token): token is ImageToken => token.type === "image");
   const fullImage = imageTokens.find((token) => token.position === "full");
   const topImages = imageTokens.filter((token) => token.position === "top");
@@ -255,7 +270,9 @@ export default function PageCard({
                   （本文を入力すると、ここに縦書きで表示されます）
                 </span>
               ) : (
-                flowTokens.map((token, index) => <TokenView key={index} token={token} />)
+                flowTokens.map((token, index) => (
+                  <TokenView key={index} token={token} indent={paragraphStarts[index]} />
+                ))
               )}
             </div>
 
@@ -427,22 +444,69 @@ function HashiraOverlay({
   );
 }
 
-function TokenView({ token }: { token: Exclude<TategakiToken, { type: "image" }> }) {
+/** First visible character of a token, used to detect 会話文（かぎ括弧など始まり）for the indent exemption. */
+function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): string {
+  if (token.type === "ruby") return token.base.charAt(0);
+  if (token.type === "pageBreak") return "";
+  return token.value.charAt(0);
+}
+
+function TokenView({
+  token,
+  indent,
+}: {
+  token: Exclude<TategakiToken, { type: "image" }>;
+  indent: boolean;
+}) {
+  const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+
   if (token.type === "ruby") {
     return (
-      <ruby>
-        {token.base}
-        <rt>{token.rt}</rt>
-      </ruby>
+      <>
+        {prefix}
+        <ruby>
+          {token.base}
+          <rt>{token.rt}</rt>
+        </ruby>
+      </>
     );
   }
   if (token.type === "tcy") {
-    return <span style={{ textCombineUpright: "all" }}>{token.value}</span>;
+    return (
+      <>
+        {prefix}
+        <span style={{ textCombineUpright: "all" }}>{token.value}</span>
+      </>
+    );
   }
   if (token.type === "pageBreak") {
     return null;
   }
-  return <>{token.value}</>;
+  return (
+    <>
+      {prefix}
+      {renderNowrapProtected(token.value)}
+    </>
+  );
+}
+
+/**
+ * Wraps 2+ character runs of ――（ダッシュ）/ ……（三点リーダー）in a
+ * `white-space: nowrap` inline-block so the vertical-writing line wrap never
+ * splits a single dash/leader off onto the next line by itself.
+ */
+function renderNowrapProtected(value: string): ReactNode {
+  const parts = value.split(NOWRAP_RUN_PATTERN);
+  if (parts.length <= 1) return value;
+  return parts.map((part, index) =>
+    NOWRAP_RUN_TEST.test(part) ? (
+      <span key={index} style={{ whiteSpace: "nowrap", display: "inline-block" }}>
+        {part}
+      </span>
+    ) : (
+      <Fragment key={index}>{part}</Fragment>
+    )
+  );
 }
 
 /** Renders 挿絵 anchored to 天 (top) / 中央 (center) / 地 (bottom) of the page. */
