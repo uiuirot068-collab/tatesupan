@@ -18,6 +18,7 @@ interface PageSettingsPanelProps {
   onChange: (next: PageSettings) => void;
   plotNote: string;
   onPlotNoteChange: (plotNote: string) => void;
+  onOpenHelp: () => void;
 }
 
 type SettingsTab = "page" | "master" | "plot";
@@ -28,6 +29,7 @@ export default function PageSettingsPanel({
   onChange,
   plotNote,
   onPlotNoteChange,
+  onOpenHelp,
 }: PageSettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("page");
   const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
@@ -48,7 +50,7 @@ export default function PageSettingsPanel({
 
   return (
     <div className="border-b border-ink/10">
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-4">
         <button
           type="button"
           onClick={() => setActiveTab("page")}
@@ -81,6 +83,14 @@ export default function PageSettingsPanel({
           }`}
         >
           プロットメモ
+        </button>
+        <button
+          type="button"
+          onClick={onOpenHelp}
+          className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded font-bold"
+          title="使い方ガイド"
+        >
+          ？
         </button>
       </div>
 

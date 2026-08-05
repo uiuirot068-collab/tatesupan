@@ -157,6 +157,7 @@ export default function TategakiEditor() {
             onSettingsChange={setSettings}
             plotNote={plotNote}
             onPlotNoteChange={setPlotNote}
+            onOpenHelp={() => setIsHelpOpen(true)}
           />
         </section>
 

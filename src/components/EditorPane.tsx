@@ -14,6 +14,7 @@ interface EditorPaneProps {
   onSettingsChange: (settings: PageSettings) => void;
   plotNote: string;
   onPlotNoteChange: (plotNote: string) => void;
+  onOpenHelp: () => void;
 }
 
 export default function EditorPane({
@@ -27,6 +28,7 @@ export default function EditorPane({
   onSettingsChange,
   plotNote,
   onPlotNoteChange,
+  onOpenHelp,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -76,6 +78,7 @@ export default function EditorPane({
         onChange={onSettingsChange}
         plotNote={plotNote}
         onPlotNoteChange={onPlotNoteChange}
+        onOpenHelp={onOpenHelp}
       />
 
       <textarea
