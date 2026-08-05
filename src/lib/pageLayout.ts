@@ -92,6 +92,16 @@ export const PX_PER_MM = 2.2;
 /** 印刷用の塗り足し幅（天地左右）。仕上がり線は用紙外形からこの分だけ内側。 */
 export const BLEED_MM = 3;
 
+/**
+ * Safety buffer (in character cells) subtracted before flooring how many
+ * characters/lines fit in the available space. Without it, floating-point
+ * rounding and real font-metric drift can let a boundary character be
+ * judged as "fits" when the browser actually renders it a hair past the
+ * page edge, where `overflow: hidden` clips it in half instead of carrying
+ * it to the next line/page.
+ */
+const PAGE_SAFETY_MARGIN_CHARS = 0.5;
+
 export interface PageLayout {
   paper: PaperSize;
   fontSizeMm: number;
@@ -133,8 +143,18 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     0
   );
 
+  // Actual rendered glyph advance in the browser (font metrics, sub-pixel
+  // rounding of the mm→px conversion, etc.) can run slightly ahead of the
+  // nominal fontSizeMm/linePitchMm used here, so a character that this
+  // floating-point math says "just barely" fits can in practice render past
+  // the text box's bottom/inner edge and get clipped by `overflow: hidden`.
+  // Reserving one character's worth of space before flooring guarantees a
+  // full character of slack, so a boundary character is pushed to the next
+  // line/page instead of being cut in half.
   const charsPerLine =
-    fontSizeMm > 0 ? Math.floor(textAreaHeightMm / fontSizeMm) : 0;
+    fontSizeMm > 0
+      ? Math.max(Math.floor(textAreaHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS), 0)
+      : 0;
 
   const columnCount = settings.columnCount;
   const columnGapMm = settings.columnGapMm;
@@ -144,7 +164,9 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   );
 
   const linesPerColumn =
-    linePitchMm > 0 ? Math.floor(columnWidthMm / linePitchMm) : 0;
+    linePitchMm > 0
+      ? Math.max(Math.floor(columnWidthMm / linePitchMm - PAGE_SAFETY_MARGIN_CHARS), 0)
+      : 0;
   const linesPerPage = linesPerColumn * columnCount;
   const charsPerColumn = charsPerLine * linesPerColumn;
 
