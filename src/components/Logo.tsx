@@ -1,6 +1,6 @@
 export default function Logo() {
   return (
-    <>
+    <span className="flex items-center gap-2">
       <img
         src="/caroad_main2.png"
         alt="TateSpun（タテスパン）"
@@ -11,6 +11,7 @@ export default function Logo() {
         alt="TateSpun（タテスパン）"
         className="hidden h-8 w-auto dark:block"
       />
-    </>
+      <span className="font-bold text-base md:text-lg">TateSpun（タテスパン）</span>
+    </span>
   );
 }

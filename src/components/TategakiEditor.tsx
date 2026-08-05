@@ -182,9 +182,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           >
             ← 作品一覧
           </Link>
-          <h1 className="flex items-baseline">
+          <h1 className="flex items-center gap-2">
             <Logo />
-            <span className="font-normal text-sm text-ink/50 ml-2">縦書きWebエディタ</span>
+            <span className="font-normal text-sm text-ink/50">縦書きWebエディタ</span>
           </h1>
         </div>
         <div className="flex items-center gap-3">
