@@ -64,7 +64,7 @@ export default function PageSettingsPanel({
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          ページ設定
+          {activeTab === "page" ? "▼" : "▶"} ページ設定
         </button>
         <button
           type="button"
@@ -75,7 +75,7 @@ export default function PageSettingsPanel({
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          ノンブル・柱
+          {activeTab === "master" ? "▼" : "▶"} ノンブル・柱
         </button>
         <button
           type="button"
@@ -86,7 +86,7 @@ export default function PageSettingsPanel({
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          メモ
+          {activeTab === "plot" ? "▼" : "▶"} メモ
         </button>
         <button
           type="button"
