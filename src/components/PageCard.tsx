@@ -50,10 +50,12 @@ export default function PageCard({
     height: paper.heightMm * PX_PER_MM,
     paddingTop: settings.marginTop * PX_PER_MM,
     paddingBottom: settings.marginBottom * PX_PER_MM,
-    // ノド(gutter) sits on the left, 小口(outer) on the right: tategaki
-    // reading starts at the top-right and proceeds toward the spine.
-    paddingLeft: settings.marginGutter * PX_PER_MM,
-    paddingRight: settings.marginOuter * PX_PER_MM,
+    // ノド(gutter) always faces the spine at the center of a 見開き spread,
+    // 小口(outer) always faces the book's outer edge. On a recto (odd, right
+    // page of the spread) the spine is on the left, so gutter goes left; on
+    // a verso (even, left page) the spine is on the right, so it mirrors.
+    paddingLeft: (isOddPage ? settings.marginGutter : settings.marginOuter) * PX_PER_MM,
+    paddingRight: (isOddPage ? settings.marginOuter : settings.marginGutter) * PX_PER_MM,
   };
 
   const textStyle: CSSProperties = {
@@ -266,6 +268,9 @@ function TokenView({
   }
   if (token.type === "tcy") {
     return <span style={{ textCombineUpright: "all" }}>{token.value}</span>;
+  }
+  if (token.type === "pageBreak") {
+    return null;
   }
   if (token.type === "image") {
     const src = images[token.id];

@@ -2,34 +2,42 @@ export type TategakiToken =
   | { type: "text"; value: string }
   | { type: "ruby"; base: string; rt: string }
   | { type: "tcy"; value: string }
-  | { type: "image"; id: string; widthMm: number; heightMm: number };
+  | { type: "image"; id: string; widthMm: number; heightMm: number }
+  | { type: "pageBreak" };
 
 const RUBY_PATTERN = /｜([^｜《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
 const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
 // 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>】
-const IMAGE_PATTERN = /【IMG:([^:]+):([\d.]+):([\d.]+)】/g;
+// 改ページ marker: 【改ページ】
+export const PAGE_BREAK_MARKER = "【改ページ】";
+const MARKER_PATTERN = /【IMG:([^:]+):([\d.]+):([\d.]+)】|【改ページ】/g;
 
 /**
  * Parses raw editor text into a flat token stream:
  * ruby notation (｜漢字《かんじ》 or 漢字《かんじ》) becomes `ruby` tokens,
  * tate-chu-yoko candidates (2-digit numbers, !!/!?/?? pairs) become `tcy` tokens,
- * 挿絵 markers become `image` tokens, everything else stays as `text`.
+ * 挿絵 markers become `image` tokens, 改ページ markers become `pageBreak`
+ * tokens, everything else stays as `text`.
  */
 export function tokenizeTategaki(source: string): TategakiToken[] {
   const tokens: TategakiToken[] = [];
   let lastIndex = 0;
 
-  for (const match of source.matchAll(IMAGE_PATTERN)) {
+  for (const match of source.matchAll(MARKER_PATTERN)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
       tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index)));
     }
-    tokens.push({
-      type: "image",
-      id: match[1],
-      widthMm: Number(match[2]),
-      heightMm: Number(match[3]),
-    });
+    if (match[1] !== undefined) {
+      tokens.push({
+        type: "image",
+        id: match[1],
+        widthMm: Number(match[2]),
+        heightMm: Number(match[3]),
+      });
+    } else {
+      tokens.push({ type: "pageBreak" });
+    }
     lastIndex = index + match[0].length;
   }
 
@@ -91,6 +99,7 @@ function tokenLength(token: TategakiToken): number {
     // space an image occupies as character cells (~5mm per cell).
     return Math.max(1, Math.round(token.heightMm / 5));
   }
+  if (token.type === "pageBreak") return 0; // forces a break, occupies no space
   return 1; // a tate-chu-yoko pair occupies a single character cell
 }
 
@@ -117,8 +126,8 @@ function paginateTokensBySize(
   let currentPage: TategakiToken[] = [];
   let currentCount = 0;
 
-  const pushPage = () => {
-    if (currentPage.length > 0) {
+  const pushPage = (force = false) => {
+    if (currentPage.length > 0 || force) {
       pages.push(currentPage);
     }
     currentPage = [];
@@ -126,6 +135,13 @@ function paginateTokensBySize(
   };
 
   for (const token of tokens) {
+    if (token.type === "pageBreak") {
+      // Manual page break: always flush, even mid-page or on an empty page,
+      // so an explicit break reliably sends the following content to the next page.
+      pushPage(true);
+      continue;
+    }
+
     if (token.type === "text") {
       let remaining = token.value;
       while (remaining.length > 0) {
@@ -167,6 +183,7 @@ export function detokenizeTategaki(tokens: TategakiToken[]): string {
       if (token.type === "image") {
         return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}】`;
       }
+      if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
       return token.value;
     })
     .join("");

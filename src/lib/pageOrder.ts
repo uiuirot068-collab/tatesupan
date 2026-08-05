@@ -61,3 +61,19 @@ export function rangeIndices(from: number, to: number): number[] {
   for (let i = start; i <= end; i++) result.push(i);
   return result;
 }
+
+/**
+ * 面付け (imposition) grouping for 見開き (spread) preview: page 1 (奇数
+ * ページ始まり) stands alone as a lone recto page, then every following pair
+ * of pages forms a spread — (2,3), (4,5), (6,7), ... — so each pair lands on
+ * the correct verso/recto (even/odd) sides. A trailing unpaired page (when
+ * the total page count is even) is returned as its own single-item group.
+ */
+export function computeSpreadGroups(pageCount: number): number[][] {
+  if (pageCount === 0) return [];
+  const groups: number[][] = [[0]];
+  for (let i = 1; i < pageCount; i += 2) {
+    groups.push(i + 1 < pageCount ? [i, i + 1] : [i]);
+  }
+  return groups;
+}

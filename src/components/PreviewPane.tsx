@@ -5,11 +5,14 @@ import {
   tokenizeTategaki,
   type TategakiToken,
 } from "@/lib/tategaki";
-import { moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import type { ImageRecord } from "@/lib/db";
-import type { PageLayout, PageSettings } from "@/lib/pageLayout";
+import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import PageCard from "./PageCard";
+
+/** Visual seam width (px) between the two pages of a spread. */
+const SPREAD_GAP_PX = 4;
 
 interface PreviewPaneProps {
   content: string;
@@ -32,6 +35,11 @@ export default function PreviewPane({
     const tokens = tokenizeTategaki(content);
     return paginateTokens(tokens, layout.charsPerPage);
   }, [content, layout.charsPerPage]);
+
+  // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
+  // (2,3), (4,5), ... into 見開き spreads.
+  const spreadGroups = useMemo(() => computeSpreadGroups(pages.length), [pages.length]);
+  const spreadWidthPx = layout.paper.widthMm * 2 * PX_PER_MM + SPREAD_GAP_PX;
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -178,26 +186,48 @@ export default function PreviewPane({
         </div>
       )}
 
-      <div className="flex flex-1 flex-row-reverse flex-wrap content-start gap-6 overflow-auto p-6">
-        {pages.map((tokens, index) => (
-          <PageCard
-            key={index}
-            pageNumber={index + 1}
-            tokens={tokens}
-            settings={settings}
-            layout={layout}
-            images={images}
-            selected={selected.has(index)}
-            isDragging={dragIndex === index}
-            isDropTarget={dropIndex === index && dragIndex !== index}
-            onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
-            onDragStart={canReorder ? handleDragStart(index) : undefined}
-            onDragOver={canReorder ? handleDragOver(index) : undefined}
-            onDrop={canReorder ? handleDrop(index) : undefined}
-            onDragEnd={canReorder ? handleDragEnd : undefined}
-            onInsertImage={canReorder ? handleInsertImage(index) : undefined}
-          />
-        ))}
+      <div className="flex flex-1 flex-col items-center gap-6 overflow-auto p-6">
+        {spreadGroups.map((group, spreadIndex) => {
+          const isSingle = group.length === 1;
+          // Lone pages (page 1, or a trailing page when the count is even)
+          // stay aligned to their conventional recto/verso side of the spine.
+          const singleIsOdd = isSingle && (group[0] + 1) % 2 === 1;
+          return (
+            <div
+              key={spreadIndex}
+              className="flex flex-row items-start"
+              style={{
+                gap: SPREAD_GAP_PX,
+                width: isSingle ? spreadWidthPx : undefined,
+                justifyContent: isSingle
+                  ? singleIsOdd
+                    ? "flex-end"
+                    : "flex-start"
+                  : undefined,
+              }}
+            >
+              {group.map((index) => (
+                <PageCard
+                  key={index}
+                  pageNumber={index + 1}
+                  tokens={pages[index]}
+                  settings={settings}
+                  layout={layout}
+                  images={images}
+                  selected={selected.has(index)}
+                  isDragging={dragIndex === index}
+                  isDropTarget={dropIndex === index && dragIndex !== index}
+                  onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
+                  onDragStart={canReorder ? handleDragStart(index) : undefined}
+                  onDragOver={canReorder ? handleDragOver(index) : undefined}
+                  onDrop={canReorder ? handleDrop(index) : undefined}
+                  onDragEnd={canReorder ? handleDragEnd : undefined}
+                  onInsertImage={canReorder ? handleInsertImage(index) : undefined}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
