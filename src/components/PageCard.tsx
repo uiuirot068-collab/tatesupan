@@ -256,16 +256,21 @@ export default function PageCard({
                 ? settings.marginTop
                 : settings.marginBottom
             }
+            isOddPage={isOddPage}
           />
         )}
 
         {showNombre && (
           <NombreOverlay
             value={nombreValue}
-            position={nombrePosition as "center" | "outer"}
+            position={nombrePosition as "center" | "gutter" | "outer"}
             isOddPage={isOddPage}
-            marginBottomMm={settings.marginBottom}
+            bottomMarginMm={masterPage.nombreBottomMargin}
           />
+        )}
+
+        {masterPage.showHiddenNombre && (
+          <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} />
         )}
       </div>
       <span className="text-xs text-ink/60">{pageNumber} ページ</span>
@@ -277,23 +282,31 @@ function NombreOverlay({
   value,
   position,
   isOddPage,
-  marginBottomMm,
+  bottomMarginMm,
 }: {
   value: number;
-  position: "center" | "outer";
+  position: "center" | "gutter" | "outer";
   isOddPage: boolean;
-  marginBottomMm: number;
+  bottomMarginMm: number;
 }) {
-  // 小口側: 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せに交互配置する。
+  // ノド(綴じ側): 奇数ページ(左)は右寄せ、偶数ページ(右)は左寄せ。
+  // 小口(外側): 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せ。
   const justifyContent =
-    position === "center" ? "center" : isOddPage ? "flex-start" : "flex-end";
+    position === "center"
+      ? "center"
+      : position === "gutter"
+        ? isOddPage
+          ? "flex-end"
+          : "flex-start"
+        : isOddPage
+          ? "flex-start"
+          : "flex-end";
 
   const style: CSSProperties = {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
-    height: marginBottomMm * PX_PER_MM,
+    bottom: bottomMarginMm * PX_PER_MM,
     display: "flex",
     alignItems: "center",
     justifyContent,
@@ -308,14 +321,47 @@ function NombreOverlay({
   );
 }
 
+/**
+ * 隠しノンブル: 表示・非表示設定に関わらず、製本時の突き合わせ用にノド側の
+ * 断ち切り境界付近（余白の外側端）へ小さく薄く常時焼き込む慣行的な表示。
+ */
+function HiddenNombreOverlay({
+  value,
+  isOddPage,
+}: {
+  value: number;
+  isOddPage: boolean;
+}) {
+  // ノドは奇数ページ(左)では右端、偶数ページ(右)では左端に来る。
+  const style: CSSProperties = {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    left: isOddPage ? undefined : 0,
+    right: isOddPage ? 0 : undefined,
+    writingMode: "vertical-rl",
+    fontSize: "8pt",
+    color: "#999999",
+    padding: `${1 * PX_PER_MM}px`,
+  };
+
+  return (
+    <div style={style} className="pointer-events-none select-none">
+      {value}
+    </div>
+  );
+}
+
 function HashiraOverlay({
   text,
   position,
   marginMm,
+  isOddPage,
 }: {
   text: string;
   position: "top" | "bottom";
   marginMm: number;
+  isOddPage: boolean;
 }) {
   const style: CSSProperties = {
     position: "absolute",
@@ -326,12 +372,15 @@ function HashiraOverlay({
     height: marginMm * PX_PER_MM,
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    writingMode: "vertical-rl",
+    justifyContent: isOddPage ? "flex-start" : "flex-end",
+    writingMode: "horizontal-tb",
+    color: "#000000",
+    textAlign: isOddPage ? "left" : "right",
+    padding: `0 ${2 * PX_PER_MM}px`,
   };
 
   return (
-    <div style={style} className="pointer-events-none select-none text-[10px] text-paper-ink/60">
+    <div style={style} className="pointer-events-none select-none text-[10px]">
       {text}
     </div>
   );

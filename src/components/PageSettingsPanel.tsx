@@ -159,7 +159,8 @@ export default function PageSettingsPanel({
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
             <option value="center">中央</option>
-            <option value="outer">小口側（左右交互）</option>
+            <option value="gutter">ノド（綴じ側）</option>
+            <option value="outer">小口（外側）</option>
             <option value="hidden">非表示</option>
           </select>
         </label>
@@ -178,6 +179,21 @@ export default function PageSettingsPanel({
           />
         </label>
 
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">ノンブル: 地からの距離 mm</span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            step={0.5}
+            value={settings.masterPage.nombreBottomMargin}
+            onChange={(e) =>
+              updateMasterPage("nombreBottomMargin", Number(e.target.value))
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
         <label className="col-span-2 flex items-center gap-2 sm:col-span-2 sm:self-end sm:pb-1.5">
           <input
             type="checkbox"
@@ -188,7 +204,21 @@ export default function PageSettingsPanel({
             className="h-4 w-4 rounded border-ink/30"
           />
           <span className="text-xs text-ink/60">
-            隠しノンブル（表紙・扉など先頭ページを非表示）
+            表紙・扉など先頭ページのノンブルを非表示
+          </span>
+        </label>
+
+        <label className="col-span-2 flex items-center gap-2 sm:col-span-2 sm:self-end sm:pb-1.5">
+          <input
+            type="checkbox"
+            checked={settings.masterPage.showHiddenNombre}
+            onChange={(e) =>
+              updateMasterPage("showHiddenNombre", e.target.checked)
+            }
+            className="h-4 w-4 rounded border-ink/30"
+          />
+          <span className="text-xs text-ink/60">
+            隠しノンブル（ノド側の断ち切り境界付近に薄く常時表示）
           </span>
         </label>
 

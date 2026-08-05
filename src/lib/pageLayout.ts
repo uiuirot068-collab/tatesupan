@@ -30,8 +30,8 @@ export interface PageSettings {
   masterPage: MasterPageSettings;
 }
 
-/** ノンブル（ページ番号）の表示位置 */
-export type NombrePosition = "center" | "outer" | "hidden";
+/** ノンブル（ページ番号）の表示位置: 中央 / ノド（綴じ側） / 小口（外側） / 非表示 */
+export type NombrePosition = "center" | "gutter" | "outer" | "hidden";
 
 /** 柱（ヘッダー/フッター）の表示位置 */
 export type HashiraPosition = "top" | "bottom";
@@ -41,6 +41,10 @@ export interface MasterPageSettings {
   // 表紙・扉など先頭ページのノンブルを非表示にする
   hideNombreOnFirstPage: boolean;
   nombreStart: number;
+  // 地（下端）からノンブルまでの距離 (mm)
+  nombreBottomMargin: number;
+  // 隠しノンブル: ノド側の断ち切り境界付近に薄く常時表示する
+  showHiddenNombre: boolean;
   hashiraOdd: string; // 奇数ページ柱（例: 作品名）
   hashiraEven: string; // 偶数ページ柱（例: 章名）
   hashiraPosition: HashiraPosition;
@@ -50,6 +54,8 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   nombrePosition: "center",
   hideNombreOnFirstPage: false,
   nombreStart: 1,
+  nombreBottomMargin: 8,
+  showHiddenNombre: false,
   hashiraOdd: "",
   hashiraEven: "",
   hashiraPosition: "top",
