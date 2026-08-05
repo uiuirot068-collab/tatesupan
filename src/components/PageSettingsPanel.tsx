@@ -1,5 +1,6 @@
 import {
   PAPER_SIZES,
+  type ColumnCount,
   type HashiraPosition,
   type MasterPageSettings,
   type NombrePosition,
@@ -104,11 +105,40 @@ export default function PageSettingsPanel({
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">段数</span>
+          <select
+            value={settings.columnCount}
+            onChange={(e) =>
+              update("columnCount", Number(e.target.value) as ColumnCount)
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          >
+            <option value={1}>1段</option>
+            <option value={2}>2段</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">段間 mm</span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            step={0.5}
+            value={settings.columnGapMm}
+            disabled={settings.columnCount === 1}
+            onChange={(e) => update("columnGapMm", Number(e.target.value))}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
+          />
+        </label>
       </div>
 
-      <dl className="grid grid-cols-3 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center">
+      <dl className="grid grid-cols-2 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center sm:grid-cols-4">
         <LayoutStat label="1行の文字数" value={`${layout.charsPerLine} 字`} />
-        <LayoutStat label="1ページの行数" value={`${layout.linesPerPage} 行`} />
+        <LayoutStat label="1段の行数" value={`${layout.linesPerColumn} 行`} />
+        <LayoutStat label="1段の文字数" value={`${layout.charsPerColumn} 字`} />
         <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
       </dl>
     </details>

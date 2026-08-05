@@ -14,6 +14,9 @@ export const PAPER_SIZES: Record<PaperSizeKey, PaperSize> = {
   bunko: { label: "文庫", widthMm: 105, heightMm: 148 },
 };
 
+/** 段数（1段 / 2段組） */
+export type ColumnCount = 1 | 2;
+
 export interface PageSettings {
   paperSize: PaperSizeKey;
   marginTop: number; // 天 (mm)
@@ -22,6 +25,8 @@ export interface PageSettings {
   marginOuter: number; // 小口 / 外側 (mm)
   fontSizePt: number; // pt
   lineHeightRatio: number; // 行間倍率 (例: 1.6〜1.8)
+  columnCount: ColumnCount; // 段数
+  columnGapMm: number; // 段間 (mm)
   masterPage: MasterPageSettings;
 }
 
@@ -58,6 +63,8 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   marginOuter: 10,
   fontSizePt: 9,
   lineHeightRatio: 1.7,
+  columnCount: 1,
+  columnGapMm: 8,
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
 };
 
@@ -73,14 +80,25 @@ export interface PageLayout {
   textAreaWidthMm: number;
   textAreaHeightMm: number;
   charsPerLine: number;
+  /** 段の幅 (mm)。段組みでテキスト領域の幅を段数と段間で分割した1段分。 */
+  columnWidthMm: number;
+  /** 1段あたりの行数 */
+  linesPerColumn: number;
+  /** 1段あたりの文字数 */
+  charsPerColumn: number;
+  /** 1ページの総行数（全段の合計） */
   linesPerPage: number;
+  /** 1ページの総文字数（全段の合計） */
   charsPerPage: number;
 }
 
 /**
  * Vertical writing (縦書き) layout: a line runs top-to-bottom so its length
  * is bounded by the page height minus 天/地; lines then stack right-to-left
- * so their count is bounded by the page width minus ノド/小口.
+ * so their count is bounded by the page width minus ノド/小口. When the page
+ * is split into multiple 段 (columns), that width is first divided evenly
+ * across the columns (minus the 段間 gaps between them), and each column
+ * independently stacks lines right-to-left within its own share of the width.
  */
 export function computePageLayout(settings: PageSettings): PageLayout {
   const paper = PAPER_SIZES[settings.paperSize];
@@ -98,8 +116,18 @@ export function computePageLayout(settings: PageSettings): PageLayout {
 
   const charsPerLine =
     fontSizeMm > 0 ? Math.floor(textAreaHeightMm / fontSizeMm) : 0;
-  const linesPerPage =
-    linePitchMm > 0 ? Math.floor(textAreaWidthMm / linePitchMm) : 0;
+
+  const columnCount = settings.columnCount;
+  const columnGapMm = settings.columnGapMm;
+  const columnWidthMm = Math.max(
+    (textAreaWidthMm - columnGapMm * (columnCount - 1)) / columnCount,
+    0
+  );
+
+  const linesPerColumn =
+    linePitchMm > 0 ? Math.floor(columnWidthMm / linePitchMm) : 0;
+  const linesPerPage = linesPerColumn * columnCount;
+  const charsPerColumn = charsPerLine * linesPerColumn;
 
   return {
     paper,
@@ -108,6 +136,9 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     textAreaWidthMm,
     textAreaHeightMm,
     charsPerLine,
+    columnWidthMm,
+    linesPerColumn,
+    charsPerColumn,
     linesPerPage,
     charsPerPage: charsPerLine * linesPerPage,
   };

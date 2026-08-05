@@ -56,6 +56,13 @@ export default function PageCard({
     wordBreak: "break-word",
     fontSize: `${settings.fontSizePt}pt`,
     lineHeight: settings.lineHeightRatio,
+    ...(settings.columnCount === 2
+      ? {
+          columnCount: 2,
+          columnGap: `${settings.columnGapMm * PX_PER_MM}px`,
+          columnFill: "auto",
+        }
+      : {}),
   };
 
   const nombrePosition = masterPage.nombrePosition;
