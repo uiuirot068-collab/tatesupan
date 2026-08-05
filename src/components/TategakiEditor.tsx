@@ -173,8 +173,8 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
   return (
-    <div className="flex h-dvh flex-col bg-canvas">
-      <header className="flex items-center justify-between border-b border-ink/10 bg-base px-4 py-2">
+    <div className="flex h-dvh flex-col gap-4 bg-canvas p-4 md:p-6">
+      <header className="flex shrink-0 items-center justify-between rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-sm">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -206,7 +206,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       <main
         ref={mainRef}
-        className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:flex-row md:gap-4 md:p-6"
+        className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row md:gap-4"
       >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
