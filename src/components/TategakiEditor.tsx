@@ -28,9 +28,12 @@ export default function TategakiEditor() {
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
+  const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
 
   const hasLoadedRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const mainRef = useRef<HTMLElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
 
@@ -51,6 +54,34 @@ export default function TategakiEditor() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !mainRef.current) return;
+      const rect = mainRef.current.getBoundingClientRect();
+      const percent = ((e.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(80, Math.max(20, percent));
+      setEditorWidthPercent(clamped);
+    };
+
+    const handleMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const handleDividerMouseDown = () => {
+    isDraggingRef.current = true;
+    document.body.style.userSelect = "none";
+  };
 
   const handleImageAdd = (record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
@@ -93,9 +124,10 @@ export default function TategakiEditor() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <main ref={mainRef} className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section
-          className={`min-h-0 flex-1 md:flex md:w-1/2 ${
+          style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
+          className={`min-h-0 flex-1 md:flex md:w-[var(--editor-w)] md:flex-none ${
             mobileTab === "edit" ? "flex flex-col" : "hidden"
           }`}
         >
@@ -111,8 +143,14 @@ export default function TategakiEditor() {
           />
         </section>
 
+        <div
+          onMouseDown={handleDividerMouseDown}
+          className="hidden w-1.5 shrink-0 cursor-col-resize bg-ink/10 transition-colors hover:bg-accent/60 active:bg-accent md:block"
+        />
+
         <section
-          className={`min-h-0 flex-1 border-ink/10 md:flex md:w-1/2 md:border-l ${
+          style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
+          className={`min-h-0 flex-1 md:flex md:w-[var(--preview-w)] md:flex-none ${
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
