@@ -300,8 +300,8 @@ export default function PreviewPane({
   };
 
   return (
-    <div className="flex h-full flex-col bg-base">
-      <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
+      <div className="flex flex-none items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
         <span>プレビュー</span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5">
@@ -361,7 +361,7 @@ export default function PreviewPane({
       </div>
 
       {canReorder && selected.size > 0 && (
-        <div className="flex items-center gap-3 border-b border-ink/10 bg-accent/5 px-4 py-2 text-sm text-ink/70">
+        <div className="flex flex-none items-center gap-3 border-b border-ink/10 bg-accent/5 px-4 py-2 text-sm text-ink/70">
           <span>{selected.size} ページ選択中</span>
           <button
             type="button"
@@ -382,7 +382,9 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden p-6"
+        className={`w-full flex-1 min-h-0 overflow-y-auto p-6 ${
+          zoomScale > 1 ? "overflow-x-auto" : "overflow-x-hidden"
+        }`}
         style={{ cursor: "grab" }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}

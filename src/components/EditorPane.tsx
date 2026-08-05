@@ -54,8 +54,8 @@ export default function EditorPane({
   };
 
   return (
-    <div className="flex h-full flex-col bg-base">
-      <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
+      <div className="flex flex-none items-center justify-between border-b border-ink/10 px-4 py-2">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
@@ -81,14 +81,16 @@ export default function EditorPane({
         </div>
       </div>
 
-      <PageSettingsPanel
-        settings={settings}
-        layout={layout}
-        onChange={onSettingsChange}
-        plotNote={plotNote}
-        onPlotNoteChange={onPlotNoteChange}
-        onOpenHelp={onOpenHelp}
-      />
+      <div className="flex-none">
+        <PageSettingsPanel
+          settings={settings}
+          layout={layout}
+          onChange={onSettingsChange}
+          plotNote={plotNote}
+          onPlotNoteChange={onPlotNoteChange}
+          onOpenHelp={onOpenHelp}
+        />
+      </div>
 
       <textarea
         ref={textareaRef}
@@ -102,10 +104,10 @@ export default function EditorPane({
         onKeyUp={reportCursorIndex}
         placeholder="ここに本文を入力してください&#10;&#10;ルビ: ｜漢字《かんじ》&#10;縦中横: 数字2桁や !! ？？ などを自動検知します"
         spellCheck={false}
-        className="flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
+        className="w-full flex-1 min-h-0 resize-none overflow-y-auto bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
       />
 
-      <div className="flex items-center justify-between border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
+      <div className="flex flex-none items-center justify-between border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
         <span>
           ルビ記法: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁・
           <code>!!</code>

@@ -173,7 +173,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
   return (
-    <div className="flex h-dvh flex-col gap-6 bg-canvas px-6 pb-6 pt-4 md:px-8 md:pb-8 md:pt-6">
+    <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:px-8 md:pb-8 md:pt-6">
       <header className="flex shrink-0 items-center justify-between rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-sm">
         <div className="flex items-center gap-3">
           <Link
@@ -206,11 +206,11 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       <main
         ref={mainRef}
-        className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row md:gap-8"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:gap-8"
       >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
-          className={`min-h-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex md:w-[var(--editor-w)] md:flex-none ${
+          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex md:w-[var(--editor-w)] md:flex-none ${
             mobileTab === "edit" ? "flex flex-col" : "hidden"
           }`}
         >
@@ -237,7 +237,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`min-h-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-xl md:flex md:w-[var(--preview-w)] md:flex-none ${
+          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-xl md:flex md:w-[var(--preview-w)] md:flex-none ${
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
