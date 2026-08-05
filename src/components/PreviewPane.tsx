@@ -322,7 +322,12 @@ export default function PreviewPane({
           className="flex flex-col items-center gap-6"
           style={{
             transform: `scale(${zoomScale})`,
-            transformOrigin: "top center",
+            // top-left origin keeps all scaled overflow in the
+            // positive-scroll direction; a centered origin pushes half
+            // the overflow to negative offsets that scrollLeft/scrollTop
+            // can never reach (min is 0), which clipped the right/bottom
+            // edges when zoomed in.
+            transformOrigin: "top left",
             transition: "transform 0.1s ease-out",
           }}
         >
