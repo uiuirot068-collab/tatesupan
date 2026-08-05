@@ -206,7 +206,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       <main
         ref={mainRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:gap-8"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden md:flex-row md:gap-2"
       >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
