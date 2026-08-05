@@ -190,7 +190,9 @@ export default function PreviewPane({
         {spreadGroups.map((group, spreadIndex) => {
           const isSingle = group.length === 1;
           // Lone pages (page 1, or a trailing page when the count is even)
-          // stay aligned to their conventional recto/verso side of the spine.
+          // stay aligned to their conventional side: page 1 (奇数ページ始まり)
+          // sits at the left, so lone odd pages align left and lone even
+          // pages align right.
           const singleIsOdd = isSingle && (group[0] + 1) % 2 === 1;
           return (
             <div
@@ -201,8 +203,8 @@ export default function PreviewPane({
                 width: isSingle ? spreadWidthPx : undefined,
                 justifyContent: isSingle
                   ? singleIsOdd
-                    ? "flex-end"
-                    : "flex-start"
+                    ? "flex-start"
+                    : "flex-end"
                   : undefined,
               }}
             >
