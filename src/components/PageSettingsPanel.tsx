@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import {
   PAPER_SIZES,
   type ColumnCount,
@@ -15,11 +18,15 @@ interface PageSettingsPanelProps {
   onChange: (next: PageSettings) => void;
 }
 
+type SettingsTab = "page" | "master";
+
 export default function PageSettingsPanel({
   settings,
   layout,
   onChange,
 }: PageSettingsPanelProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>("page");
+
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
     onChange({ ...settings, [key]: value });
   };
@@ -35,13 +42,35 @@ export default function PageSettingsPanel({
   };
 
   return (
-    <>
-    <details className="border-b border-ink/10" open>
-      <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-ink/70 hover:bg-ink/5">
-        ページ設定（用紙・余白・文字組み）
-      </summary>
+    <div className="border-b border-ink/10">
+      <div className="grid grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("page")}
+          className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "page"
+              ? "border-accent bg-ink/5 text-ink"
+              : "border-transparent text-ink/60 hover:bg-ink/5"
+          }`}
+        >
+          ページ設定（用紙・余白・文字組み）
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("master")}
+          className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "master"
+              ? "border-accent bg-ink/5 text-ink"
+              : "border-transparent text-ink/60 hover:bg-ink/5"
+          }`}
+        >
+          マスターページ（ノンブル・柱）
+        </button>
+      </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
+      {activeTab === "page" && (
+        <div className="w-full">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
           <span className="text-xs text-ink/60">用紙サイズ</span>
           <select
@@ -135,20 +164,18 @@ export default function PageSettingsPanel({
         </label>
       </div>
 
-      <dl className="grid grid-cols-2 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center sm:grid-cols-4">
-        <LayoutStat label="1行の文字数" value={`${layout.charsPerLine} 字`} />
-        <LayoutStat label="1段の行数" value={`${layout.linesPerColumn} 行`} />
-        <LayoutStat label="1段の文字数" value={`${layout.charsPerColumn} 字`} />
-        <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
-      </dl>
-    </details>
+          <dl className="grid grid-cols-2 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center sm:grid-cols-4">
+            <LayoutStat label="1行の文字数" value={`${layout.charsPerLine} 字`} />
+            <LayoutStat label="1段の行数" value={`${layout.linesPerColumn} 行`} />
+            <LayoutStat label="1段の文字数" value={`${layout.charsPerColumn} 字`} />
+            <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
+          </dl>
+        </div>
+      )}
 
-    <details className="border-b border-ink/10">
-      <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-ink/70 hover:bg-ink/5">
-        マスターページ（ノンブル・柱）
-      </summary>
-
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
+      {activeTab === "master" && (
+        <div className="w-full">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">ノンブル表示位置</span>
           <select
@@ -257,9 +284,10 @@ export default function PageSettingsPanel({
             <option value="bottom">地側（下部）</option>
           </select>
         </label>
-      </div>
-    </details>
-    </>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
