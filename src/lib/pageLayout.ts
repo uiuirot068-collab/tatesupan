@@ -28,6 +28,13 @@ export interface PageSettings {
   columnCount: ColumnCount; // 段数
   columnGapMm: number; // 段間 (mm)
   masterPage: MasterPageSettings;
+  // ページ番号（1始まり）ごとの個別設定の上書き
+  pageOverrides: Record<number, PageOverride>;
+}
+
+/** 特定ページ単位でマスターページ設定を上書きする項目 */
+export interface PageOverride {
+  hideNombre?: boolean;
 }
 
 /** ノンブル（ページ番号）の表示位置: 中央 / ノド（綴じ側） / 小口（外側） / 非表示 */
@@ -72,6 +79,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   columnCount: 1,
   columnGapMm: 8,
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
+  pageOverrides: {},
 };
 
 export const MM_PER_PT = 25.4 / 72;

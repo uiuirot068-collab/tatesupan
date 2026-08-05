@@ -55,6 +55,7 @@ export async function loadDocument(): Promise<DocumentRecord | undefined> {
         ...DEFAULT_MASTER_PAGE_SETTINGS,
         ...doc.settings?.masterPage,
       },
+      pageOverrides: doc.settings?.pageOverrides ?? {},
     },
   };
 }

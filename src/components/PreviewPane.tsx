@@ -21,6 +21,7 @@ interface PreviewPaneProps {
   layout: PageLayout;
   images: Record<string, string>;
   onContentChange?: (content: string) => void;
+  onSettingsChange?: (settings: PageSettings) => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
 }
@@ -31,6 +32,7 @@ export default function PreviewPane({
   layout,
   images,
   onContentChange,
+  onSettingsChange,
   onImageAdd,
   onImageDelete,
 }: PreviewPaneProps) {
@@ -164,6 +166,17 @@ export default function PreviewPane({
     onImageDelete?.(imageId);
   };
 
+  const handleHideNombreChange = (pageNumber: number) => (hideNombre: boolean) => {
+    if (!onSettingsChange) return;
+    const nextOverrides = { ...settings.pageOverrides };
+    if (hideNombre) {
+      nextOverrides[pageNumber] = { ...nextOverrides[pageNumber], hideNombre: true };
+    } else {
+      delete nextOverrides[pageNumber];
+    }
+    onSettingsChange({ ...settings, pageOverrides: nextOverrides });
+  };
+
   return (
     <div className="flex h-full flex-col bg-base">
       <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
@@ -261,6 +274,10 @@ export default function PreviewPane({
                   onInsertImage={canReorder ? handleInsertImage(index) : undefined}
                   onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
                   onImageDelete={canReorder ? handleImageDelete(index) : undefined}
+                  hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
+                  onHideNombreChange={
+                    onSettingsChange ? handleHideNombreChange(index + 1) : undefined
+                  }
                 />
               ))}
             </div>

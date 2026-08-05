@@ -122,6 +122,7 @@ export default function TategakiEditor() {
             layout={layout}
             images={images}
             onContentChange={setContent}
+            onSettingsChange={setSettings}
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
           />

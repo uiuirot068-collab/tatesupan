@@ -28,6 +28,8 @@ interface PageCardProps {
   onInsertImage?: (file: File) => void;
   onImagePositionChange?: (imageId: string, position: ImagePosition) => void;
   onImageDelete?: (imageId: string) => void;
+  hideNombre?: boolean;
+  onHideNombreChange?: (hideNombre: boolean) => void;
 }
 
 export default function PageCard({
@@ -47,6 +49,8 @@ export default function PageCard({
   onInsertImage,
   onImagePositionChange,
   onImageDelete,
+  hideNombre = false,
+  onHideNombreChange,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { paper } = layout;
@@ -102,7 +106,8 @@ export default function PageCard({
   const nombrePosition = masterPage.nombrePosition;
   const showNombre =
     nombrePosition !== "hidden" &&
-    !(masterPage.hideNombreOnFirstPage && isFirstPage);
+    !(masterPage.hideNombreOnFirstPage && isFirstPage) &&
+    !hideNombre;
   const nombreValue = masterPage.nombreStart + pageNumber - 1;
 
   const hashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
@@ -146,6 +151,20 @@ export default function PageCard({
             選択
           </label>
           <div className="flex items-center gap-2">
+            {onHideNombreChange && (
+              <label
+                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={hideNombre}
+                  onChange={(event) => onHideNombreChange(event.target.checked)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-accent"
+                />
+                ノンブル非表示
+              </label>
+            )}
             {onInsertImage && (
               <>
                 <button
