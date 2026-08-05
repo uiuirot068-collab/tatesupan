@@ -39,6 +39,7 @@ interface PageCardProps {
   onDrop?: (event: DragEvent) => void;
   onDragEnd?: (event: DragEvent) => void;
   onInsertImage?: (file: File) => void;
+  insertingImage?: boolean;
   onImagePositionChange?: (imageId: string, position: ImagePosition) => void;
   onImageDelete?: (imageId: string) => void;
   hideNombre?: boolean;
@@ -61,6 +62,7 @@ export default function PageCard({
   onDrop,
   onDragEnd,
   onInsertImage,
+  insertingImage = false,
   onImagePositionChange,
   onImageDelete,
   hideNombre = false,
@@ -194,15 +196,16 @@ export default function PageCard({
                     event.stopPropagation();
                     fileInputRef.current?.click();
                   }}
-                  className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5"
+                  disabled={insertingImage}
+                  className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
                   title="このページに画像を挿入"
                 >
-                  画像挿入
+                  {insertingImage ? "PSDを変換中…" : "画像挿入"}
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.psd"
                   className="hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0];

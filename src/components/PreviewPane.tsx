@@ -11,6 +11,7 @@ import {
 } from "@/lib/tategaki";
 import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
+import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
 import type { ImageRecord } from "@/lib/db";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -72,6 +73,7 @@ export default function PreviewPane({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [insertingImageIndex, setInsertingImageIndex] = useState<number | null>(null);
   const lastClickedRef = useRef<number | null>(null);
 
   const ZOOM_MIN = 0.5;
@@ -240,20 +242,28 @@ export default function PreviewPane({
 
   const handleInsertImage = (index: number) => async (file: File) => {
     if (!onContentChange) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    const { widthMm, heightMm } = await fitImageToMm(
-      dataUrl,
-      layout.textAreaWidthMm * 0.9,
-      layout.textAreaHeightMm * 0.6
-    );
-    const id = crypto.randomUUID();
-    onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
-    const nextPages = pages.map((tokens, i) =>
-      i === index
-        ? [...tokens, { type: "image" as const, id, widthMm, heightMm, position: "center" as const }]
-        : tokens
-    );
-    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    const isPsd = file.name.toLowerCase().endsWith(".psd");
+    setInsertingImageIndex(index);
+    try {
+      const dataUrl = isPsd ? await convertPsdToPngDataUrl(file) : await readFileAsDataUrl(file);
+      const { widthMm, heightMm } = await fitImageToMm(
+        dataUrl,
+        layout.textAreaWidthMm * 0.9,
+        layout.textAreaHeightMm * 0.6
+      );
+      const id = crypto.randomUUID();
+      onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
+      const nextPages = pages.map((tokens, i) =>
+        i === index
+          ? [...tokens, { type: "image" as const, id, widthMm, heightMm, position: "center" as const }]
+          : tokens
+      );
+      onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "画像の挿入に失敗しました。");
+    } finally {
+      setInsertingImageIndex(null);
+    }
   };
 
   const handleImagePositionChange =
@@ -436,6 +446,7 @@ export default function PreviewPane({
                     onDrop={canReorder ? handleDrop(index) : undefined}
                     onDragEnd={canReorder ? handleDragEnd : undefined}
                     onInsertImage={canReorder ? handleInsertImage(index) : undefined}
+                    insertingImage={insertingImageIndex === index}
                     onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
                     onImageDelete={canReorder ? handleImageDelete(index) : undefined}
                     hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
