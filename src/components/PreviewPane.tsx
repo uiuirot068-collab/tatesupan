@@ -300,7 +300,7 @@ export default function PreviewPane({
   };
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
+    <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
@@ -382,9 +382,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className={`flex w-full flex-1 min-h-0 overflow-y-auto p-6 ${
-          zoomScale > 1 ? "overflow-x-auto" : "overflow-x-hidden"
-        }`}
+        className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-auto p-6"
         style={{ cursor: "grab" }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}
