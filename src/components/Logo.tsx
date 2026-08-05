@@ -11,7 +11,7 @@ export default function Logo() {
         alt="TateSpun（タテスパン）"
         className="hidden h-8 w-auto dark:block"
       />
-      <span className="font-bold text-base md:text-lg">TateSpun（タテスパン）</span>
+      <span className="font-bold text-ink text-[1rem] md:text-lg">TateSpun（タテスパン）</span>
     </span>
   );
 }
