@@ -298,6 +298,8 @@ export default function PageCard({
                 : settings.marginBottom
             }
             isOddPage={isOddPage}
+            insetLeftPx={sheetStyle.paddingLeft as number}
+            insetRightPx={sheetStyle.paddingRight as number}
           />
         )}
 
@@ -398,8 +400,9 @@ function HiddenNombreOverlay({
     left: isOddPage ? undefined : BLEED_MM * PX_PER_MM,
     right: isOddPage ? BLEED_MM * PX_PER_MM : undefined,
     writingMode: "vertical-rl",
-    fontSize: "7pt",
-    color: "#888888",
+    color: "#000000",
+    fontSize: "6pt",
+    letterSpacing: "1px",
     padding: `${1 * PX_PER_MM}px`,
   };
 
@@ -415,31 +418,38 @@ function HashiraOverlay({
   position,
   marginMm,
   isOddPage,
+  insetLeftPx,
+  insetRightPx,
 }: {
   text: string;
   position: "top" | "bottom";
   marginMm: number;
   isOddPage: boolean;
+  insetLeftPx: number;
+  insetRightPx: number;
 }) {
+  // 柱のコンテナは本文領域(小口境界)と同じ左右インセットを持たせ、
+  // 小口側の端に文字が吸着するようテキスト側で text-align を指定する。
   const style: CSSProperties = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: insetLeftPx,
+    right: insetRightPx,
     top: position === "top" ? BLEED_MM * PX_PER_MM : undefined,
     bottom: position === "bottom" ? BLEED_MM * PX_PER_MM : undefined,
     height: marginMm * PX_PER_MM,
     display: "flex",
     alignItems: "center",
-    justifyContent: isOddPage ? "flex-start" : "flex-end",
     writingMode: "horizontal-tb",
     color: "#000000",
-    textAlign: isOddPage ? "left" : "right",
-    padding: `0 ${2 * PX_PER_MM}px`,
   };
+
+  const textStyle: CSSProperties = isOddPage
+    ? { textAlign: "left", width: "100%" }
+    : { textAlign: "right", width: "100%" };
 
   return (
     <div style={style} className="pointer-events-none select-none text-[10px]">
-      {text}
+      <div style={textStyle}>{text}</div>
     </div>
   );
 }
