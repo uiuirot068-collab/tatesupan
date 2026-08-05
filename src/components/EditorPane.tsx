@@ -15,6 +15,8 @@ interface EditorPaneProps {
   plotNote: string;
   onPlotNoteChange: (plotNote: string) => void;
   onOpenHelp: () => void;
+  /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
+  onCursorIndexChange?: (index: number) => void;
 }
 
 export default function EditorPane({
@@ -29,8 +31,15 @@ export default function EditorPane({
   plotNote,
   onPlotNoteChange,
   onOpenHelp,
+  onCursorIndexChange,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const reportCursorIndex = () => {
+    const el = textareaRef.current;
+    if (!el || !onCursorIndexChange) return;
+    onCursorIndexChange(el.selectionStart);
+  };
 
   const insertPageBreak = () => {
     const el = textareaRef.current;
@@ -84,7 +93,13 @@ export default function EditorPane({
       <textarea
         ref={textareaRef}
         value={content}
-        onChange={(e) => onContentChange(e.target.value)}
+        onChange={(e) => {
+          onContentChange(e.target.value);
+          requestAnimationFrame(reportCursorIndex);
+        }}
+        onSelect={reportCursorIndex}
+        onClick={reportCursorIndex}
+        onKeyUp={reportCursorIndex}
         placeholder="ここに本文を入力してください&#10;&#10;ルビ: ｜漢字《かんじ》&#10;縦中横: 数字2桁や !! ？？ などを自動検知します"
         spellCheck={false}
         className="flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"

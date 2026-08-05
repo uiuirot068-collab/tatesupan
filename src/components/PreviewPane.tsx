@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import {
   computePageParagraphStarts,
+  computePageSourceRanges,
   detokenizeTategaki,
+  findPageIndexForCharIndex,
   paginateTokens,
   tokenizeTategaki,
   type ImagePosition,
@@ -25,6 +27,8 @@ interface PreviewPaneProps {
   onSettingsChange?: (settings: PageSettings) => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
+  /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
+  cursorIndex?: number | null;
 }
 
 export default function PreviewPane({
@@ -36,6 +40,7 @@ export default function PreviewPane({
   onSettingsChange,
   onImageAdd,
   onImageDelete,
+  cursorIndex,
 }: PreviewPaneProps) {
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(content);
@@ -44,6 +49,15 @@ export default function PreviewPane({
       linesPerPage: layout.linesPerPage,
     });
   }, [content, layout.charsPerLine, layout.linesPerPage]);
+
+  const pageSourceRanges = useMemo(
+    () =>
+      computePageSourceRanges(content, {
+        charsPerLine: layout.charsPerLine,
+        linesPerPage: layout.linesPerPage,
+      }),
+    [content, layout.charsPerLine, layout.linesPerPage]
+  );
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
@@ -75,6 +89,46 @@ export default function PreviewPane({
   const isPanningRef = useRef(false);
   const startPosRef = useRef({ x: 0, y: 0 });
   const scrollPosRef = useRef({ left: 0, top: 0 });
+
+  // Cursor-follow: scrolls the preview to the page containing the editor
+  // caret. isAutoScrollingRef guards against the programmatic scroll being
+  // mistaken for a manual one by any future manual-scroll-driven logic.
+  const pageElementsRef = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const registerPageElement = (index: number) => (el: HTMLDivElement | null) => {
+    pageElementsRef.current.set(index, el);
+  };
+
+  const activePageIndex = useMemo(
+    () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
+    [cursorIndex, pageSourceRanges]
+  );
+
+  useEffect(() => {
+    if (activePageIndex == null) return;
+    const el = pageElementsRef.current.get(activePageIndex);
+    if (!el) return;
+
+    isAutoScrollingRef.current = true;
+    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+
+    if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
+    autoScrollTimeoutRef.current = setTimeout(() => {
+      isAutoScrollingRef.current = false;
+    }, 600);
+
+    return () => {
+      if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
+    };
+  }, [activePageIndex]);
+
+  const handlePreviewScroll = () => {
+    // While an automatic cursor-follow scroll is in flight, ignore scroll
+    // events so they can't be misread as a manual scroll and trigger a
+    // feedback loop.
+    if (isAutoScrollingRef.current) return;
+  };
 
   const handlePanMouseDown = (event: MouseEvent) => {
     if (event.button !== 0 && event.button !== 1) return;
@@ -317,6 +371,7 @@ export default function PreviewPane({
         onMouseMove={handlePanMouseMove}
         onMouseUp={stopPanning}
         onMouseLeave={stopPanning}
+        onScroll={handlePreviewScroll}
       >
         <div
           className="flex flex-col items-center gap-6"
@@ -357,30 +412,31 @@ export default function PreviewPane({
               }}
             >
               {displayGroup.map((index) => (
-                <PageCard
-                  key={index}
-                  pageNumber={index + 1}
-                  tokens={pages[index]}
-                  startsNewParagraph={paragraphStarts[index]}
-                  settings={settings}
-                  layout={layout}
-                  images={images}
-                  selected={selected.has(index)}
-                  isDragging={dragIndex === index}
-                  isDropTarget={dropIndex === index && dragIndex !== index}
-                  onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
-                  onDragStart={canReorder ? handleDragStart(index) : undefined}
-                  onDragOver={canReorder ? handleDragOver(index) : undefined}
-                  onDrop={canReorder ? handleDrop(index) : undefined}
-                  onDragEnd={canReorder ? handleDragEnd : undefined}
-                  onInsertImage={canReorder ? handleInsertImage(index) : undefined}
-                  onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
-                  onImageDelete={canReorder ? handleImageDelete(index) : undefined}
-                  hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
-                  onHideNombreChange={
-                    onSettingsChange ? handleHideNombreChange(index + 1) : undefined
-                  }
-                />
+                <div key={index} ref={registerPageElement(index)} className="flex shrink-0">
+                  <PageCard
+                    pageNumber={index + 1}
+                    tokens={pages[index]}
+                    startsNewParagraph={paragraphStarts[index]}
+                    settings={settings}
+                    layout={layout}
+                    images={images}
+                    selected={selected.has(index)}
+                    isDragging={dragIndex === index}
+                    isDropTarget={dropIndex === index && dragIndex !== index}
+                    onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
+                    onDragStart={canReorder ? handleDragStart(index) : undefined}
+                    onDragOver={canReorder ? handleDragOver(index) : undefined}
+                    onDrop={canReorder ? handleDrop(index) : undefined}
+                    onDragEnd={canReorder ? handleDragEnd : undefined}
+                    onInsertImage={canReorder ? handleInsertImage(index) : undefined}
+                    onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
+                    onImageDelete={canReorder ? handleImageDelete(index) : undefined}
+                    hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
+                    onHideNombreChange={
+                      onSettingsChange ? handleHideNombreChange(index + 1) : undefined
+                    }
+                  />
+                </div>
               ))}
             </div>
           );

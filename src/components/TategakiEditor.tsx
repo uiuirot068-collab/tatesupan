@@ -41,6 +41,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
+  const [cursorIndex, setCursorIndex] = useState<number | null>(null);
 
   const hasLoadedRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,6 +194,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             plotNote={plotNote}
             onPlotNoteChange={setPlotNote}
             onOpenHelp={() => setIsHelpOpen(true)}
+            onCursorIndexChange={setCursorIndex}
           />
         </section>
 
@@ -216,6 +218,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             onSettingsChange={setSettings}
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
+            cursorIndex={cursorIndex}
           />
         </section>
       </main>

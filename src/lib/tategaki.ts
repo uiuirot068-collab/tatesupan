@@ -18,6 +18,13 @@ export const PAGE_BREAK_MARKER = "【改ページ】";
 const MARKER_PATTERN =
   /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
 
+/** A token paired with the [start, end) raw source range it was parsed from. */
+export interface OffsetToken {
+  token: TategakiToken;
+  start: number;
+  end: number;
+}
+
 /**
  * Parses raw editor text into a flat token stream:
  * ruby notation (｜漢字《かんじ》 or 漢字《かんじ》) becomes `ruby` tokens,
@@ -26,72 +33,98 @@ const MARKER_PATTERN =
  * tokens, everything else stays as `text`.
  */
 export function tokenizeTategaki(source: string): TategakiToken[] {
-  const tokens: TategakiToken[] = [];
+  return tokenizeTategakiWithOffsets(source).map((t) => t.token);
+}
+
+/** Same as `tokenizeTategaki`, but retains each token's raw source range. */
+export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
+  const tokens: OffsetToken[] = [];
   let lastIndex = 0;
 
   for (const match of source.matchAll(MARKER_PATTERN)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
-      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index)));
+      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index), lastIndex));
     }
+    const end = index + match[0].length;
     if (match[1] !== undefined) {
       tokens.push({
-        type: "image",
-        id: match[1],
-        widthMm: Number(match[2]),
-        heightMm: Number(match[3]),
-        position: (match[4] as ImagePosition | undefined) ?? "center",
+        token: {
+          type: "image",
+          id: match[1],
+          widthMm: Number(match[2]),
+          heightMm: Number(match[3]),
+          position: (match[4] as ImagePosition | undefined) ?? "center",
+        },
+        start: index,
+        end,
       });
     } else {
-      tokens.push({ type: "pageBreak" });
+      tokens.push({ token: { type: "pageBreak" }, start: index, end });
     }
-    lastIndex = index + match[0].length;
+    lastIndex = end;
   }
 
   if (lastIndex < source.length) {
-    tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex)));
+    tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex), lastIndex));
   }
 
   return tokens;
 }
 
-function tokenizeRubyAndTcy(source: string): TategakiToken[] {
-  const tokens: TategakiToken[] = [];
+function tokenizeRubyAndTcy(source: string, baseOffset: number): OffsetToken[] {
+  const tokens: OffsetToken[] = [];
   let lastIndex = 0;
 
   for (const match of source.matchAll(RUBY_PATTERN)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
-      tokens.push(...tokenizePlainText(source.slice(lastIndex, index)));
+      tokens.push(...tokenizePlainText(source.slice(lastIndex, index), baseOffset + lastIndex));
     }
     const base = match[1] ?? match[3] ?? "";
     const rt = match[2] ?? match[4] ?? "";
-    tokens.push({ type: "ruby", base, rt });
+    tokens.push({
+      token: { type: "ruby", base, rt },
+      start: baseOffset + index,
+      end: baseOffset + index + match[0].length,
+    });
     lastIndex = index + match[0].length;
   }
 
   if (lastIndex < source.length) {
-    tokens.push(...tokenizePlainText(source.slice(lastIndex)));
+    tokens.push(...tokenizePlainText(source.slice(lastIndex), baseOffset + lastIndex));
   }
 
   return tokens;
 }
 
-function tokenizePlainText(text: string): TategakiToken[] {
-  const tokens: TategakiToken[] = [];
+function tokenizePlainText(text: string, baseOffset: number): OffsetToken[] {
+  const tokens: OffsetToken[] = [];
   let lastIndex = 0;
 
   for (const match of text.matchAll(TCY_PATTERN)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
-      tokens.push({ type: "text", value: text.slice(lastIndex, index) });
+      tokens.push({
+        token: { type: "text", value: text.slice(lastIndex, index) },
+        start: baseOffset + lastIndex,
+        end: baseOffset + index,
+      });
     }
-    tokens.push({ type: "tcy", value: match[0] });
+    tokens.push({
+      token: { type: "tcy", value: match[0] },
+      start: baseOffset + index,
+      end: baseOffset + index + match[0].length,
+    });
     lastIndex = index + match[0].length;
   }
 
   if (lastIndex < text.length) {
-    tokens.push({ type: "text", value: text.slice(lastIndex) });
+    tokens.push({
+      token: { type: "text", value: text.slice(lastIndex) },
+      start: baseOffset + lastIndex,
+      end: baseOffset + text.length,
+    });
   }
 
   return tokens;
@@ -223,6 +256,117 @@ function paginateTokensByLines(
   pushPage();
 
   return pages.length > 0 ? pages : [[]];
+}
+
+/**
+ * Same pagination as `paginateTokens`, but reports each page's raw source
+ * character range `[start, end)` instead of its tokens — used to map an
+ * editor caret position (a raw character index) back to a page number.
+ * Mirrors `paginateTokensByLines`'s line-wrap accounting exactly so page
+ * boundaries always agree with what's actually rendered.
+ */
+export function computePageSourceRanges(
+  source: string,
+  metrics: PageLineMetrics = DEFAULT_PAGE_LINE_METRICS
+): Array<{ start: number; end: number }> {
+  const charsPerLine = Math.max(Math.floor(metrics.charsPerLine), 1);
+  const linesPerPage = Math.max(Math.floor(metrics.linesPerPage), 1);
+  const offsetTokens = tokenizeTategakiWithOffsets(source);
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  let pageStart: number | null = null;
+  let pageEnd = 0;
+  let lineIndex = 0;
+  let lineChars = 0;
+
+  const pushPage = (force = false) => {
+    if (pageStart !== null || force) {
+      ranges.push({ start: pageStart ?? pageEnd, end: pageEnd });
+    }
+    pageStart = null;
+    lineIndex = 0;
+    lineChars = 0;
+  };
+
+  const mark = (start: number, end: number) => {
+    if (pageStart === null) pageStart = start;
+    pageEnd = end;
+  };
+
+  const breakLine = () => {
+    lineIndex += 1;
+    lineChars = 0;
+    if (lineIndex >= linesPerPage) {
+      pushPage();
+    }
+  };
+
+  for (const { token, start, end } of offsetTokens) {
+    if (token.type === "pageBreak") {
+      pushPage(true);
+      continue;
+    }
+
+    if (token.type === "text") {
+      let i = 0;
+      const value = token.value;
+      while (i < value.length) {
+        if (value[i] === "\n") {
+          mark(start + i, start + i + 1);
+          i += 1;
+          breakLine();
+          continue;
+        }
+        const room = charsPerLine - lineChars;
+        let j = i;
+        while (j < value.length && value[j] !== "\n" && j - i < room) {
+          j += 1;
+        }
+        if (j > i) {
+          mark(start + i, start + j);
+          lineChars += j - i;
+          i = j;
+        }
+        if (lineChars >= charsPerLine) {
+          breakLine();
+        }
+      }
+      continue;
+    }
+
+    const length = tokenLength(token);
+    if (lineChars > 0 && lineChars + length > charsPerLine) {
+      breakLine();
+    }
+    mark(start, end);
+    lineChars += length;
+    if (lineChars >= charsPerLine) {
+      breakLine();
+    }
+  }
+
+  pushPage();
+
+  if (ranges.length === 0) ranges.push({ start: 0, end: source.length });
+  return ranges;
+}
+
+/**
+ * Maps a raw editor caret position (character index into the full document
+ * source) to its 0-based page index, per `computePageSourceRanges`. Indices
+ * that fall in the gap between two pages (e.g. right after a page-break
+ * marker) resolve to the following page; indices past the end resolve to
+ * the last page.
+ */
+export function findPageIndexForCharIndex(
+  ranges: Array<{ start: number; end: number }>,
+  charIndex: number
+): number {
+  if (ranges.length === 0) return 0;
+  for (let i = 0; i < ranges.length; i++) {
+    if (charIndex < ranges[i].end || i === ranges.length - 1) return i;
+  }
+  return ranges.length - 1;
 }
 
 export function countVisualLength(source: string): number {
