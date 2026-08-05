@@ -206,7 +206,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       <main
         ref={mainRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden md:flex-row md:gap-2"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden pr-4 pb-4 md:flex-row md:gap-2 md:pr-6 md:pb-6"
       >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
@@ -237,7 +237,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-xl md:flex md:w-[var(--preview-w)] md:flex-none ${
+          className={`h-full min-h-0 min-w-0 flex-1 md:flex md:w-[var(--preview-w)] md:flex-none ${
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
