@@ -39,7 +39,8 @@ export default function PageCard({
   const { paper } = layout;
   const { masterPage } = settings;
 
-  // 物理的なページの左右（奇数=右/小口が右側、偶数=左/小口が左側）。
+  // 右綴じ（縦書き）を前提とした物理的なページの左右:
+  // 奇数(recto)ページは見開きの左側、偶数(verso)ページは右側に来る。
   const isOddPage = pageNumber % 2 === 1;
   const isFirstPage = pageNumber === 1;
 
@@ -51,11 +52,12 @@ export default function PageCard({
     paddingTop: settings.marginTop * PX_PER_MM,
     paddingBottom: settings.marginBottom * PX_PER_MM,
     // ノド(gutter) always faces the spine at the center of a 見開き spread,
-    // 小口(outer) always faces the book's outer edge. On a recto (odd, right
-    // page of the spread) the spine is on the left, so gutter goes left; on
-    // a verso (even, left page) the spine is on the right, so it mirrors.
-    paddingLeft: (isOddPage ? settings.marginGutter : settings.marginOuter) * PX_PER_MM,
-    paddingRight: (isOddPage ? settings.marginOuter : settings.marginGutter) * PX_PER_MM,
+    // 小口(outer) always faces the book's outer edge. On a recto (odd, left
+    // page of a 右綴じ spread) the spine is on the right, so gutter goes
+    // right; on a verso (even, right page) the spine is on the left, so it
+    // mirrors.
+    paddingLeft: (isOddPage ? settings.marginOuter : settings.marginGutter) * PX_PER_MM,
+    paddingRight: (isOddPage ? settings.marginGutter : settings.marginOuter) * PX_PER_MM,
   };
 
   const textStyle: CSSProperties = {
@@ -198,9 +200,9 @@ function NombreOverlay({
   isOddPage: boolean;
   marginBottomMm: number;
 }) {
-  // 小口側: 奇数ページ(右)は右寄せ、偶数ページ(左)は左寄せに交互配置する。
+  // 小口側: 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せに交互配置する。
   const justifyContent =
-    position === "center" ? "center" : isOddPage ? "flex-end" : "flex-start";
+    position === "center" ? "center" : isOddPage ? "flex-start" : "flex-end";
 
   const style: CSSProperties = {
     position: "absolute",

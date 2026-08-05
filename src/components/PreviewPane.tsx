@@ -194,6 +194,10 @@ export default function PreviewPane({
           // sits at the left, so lone odd pages align left and lone even
           // pages align right.
           const singleIsOdd = isSingle && (group[0] + 1) % 2 === 1;
+          // 右綴じ: within a spread the odd/recto page reads on the left and
+          // the even/verso page reads on the right (right-to-left reading
+          // visits the right page first, i.e. the lower page number).
+          const displayGroup = isSingle ? group : [group[1], group[0]];
           return (
             <div
               key={spreadIndex}
@@ -208,7 +212,7 @@ export default function PreviewPane({
                   : undefined,
               }}
             >
-              {group.map((index) => (
+              {displayGroup.map((index) => (
                 <PageCard
                   key={index}
                   pageNumber={index + 1}
