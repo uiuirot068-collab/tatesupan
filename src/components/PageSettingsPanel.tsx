@@ -31,8 +31,12 @@ export default function PageSettingsPanel({
   onPlotNoteChange,
   onOpenHelp,
 }: PageSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("page");
+  const [activeTab, setActiveTab] = useState<SettingsTab | null>("page");
   const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
+
+  const toggleTab = (tab: SettingsTab) => {
+    setActiveTab((current) => (current === tab ? null : tab));
+  };
 
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
     onChange({ ...settings, [key]: value });
@@ -53,36 +57,36 @@ export default function PageSettingsPanel({
       <div className="grid grid-cols-4">
         <button
           type="button"
-          onClick={() => setActiveTab("page")}
+          onClick={() => toggleTab("page")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "page"
               ? "border-accent bg-ink/5 text-ink"
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          ページ設定（用紙・余白・文字組み）
+          ページ設定
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("master")}
+          onClick={() => toggleTab("master")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "master"
               ? "border-accent bg-ink/5 text-ink"
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          マスターページ（ノンブル・柱）
+          ノンブル・柱
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("plot")}
+          onClick={() => toggleTab("plot")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "plot"
               ? "border-accent bg-ink/5 text-ink"
               : "border-transparent text-ink/60 hover:bg-ink/5"
           }`}
         >
-          プロットメモ
+          メモ
         </button>
         <button
           type="button"
