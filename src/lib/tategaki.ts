@@ -110,35 +110,66 @@ function tokenLength(token: TategakiToken): number {
   return 1; // a tate-chu-yoko pair occupies a single character cell
 }
 
-export const DEFAULT_PAGE_SIZE = 800;
+/** Line metrics a page is paginated against — see `computePageLayout`. */
+export interface PageLineMetrics {
+  /** 1段（縦書きの1行）に収まる文字数 */
+  charsPerLine: number;
+  /** 1ページに収まる行（段）数 */
+  linesPerPage: number;
+}
+
+export const DEFAULT_PAGE_LINE_METRICS: PageLineMetrics = {
+  charsPerLine: 20,
+  linesPerPage: 40,
+};
 
 /**
- * Splits a token stream into pages of roughly `pageSize` visual characters.
+ * Splits a token stream into pages that fit within `charsPerLine` ×
+ * `linesPerPage`. Explicit newlines end their line early — just as
+ * `white-space: pre-wrap` renders them in the browser — so the character
+ * budget accounts for the space they waste at the end of a line instead of
+ * assuming every line is filled to capacity. Without this, pages would be
+ * assigned more text than actually fits in the rendered box, and the
+ * overflowing tail would be clipped rather than carried to the next page.
  * Ruby and tate-chu-yoko tokens are never split; only plain text tokens can
- * break mid-token so pagination stays close to the target size.
+ * break mid-token.
  */
 export function paginateTokens(
   tokens: TategakiToken[],
-  pageSize: number = DEFAULT_PAGE_SIZE
+  metrics: PageLineMetrics = DEFAULT_PAGE_LINE_METRICS
 ): TategakiToken[][] {
-  const effectivePageSize = pageSize >= 1 ? pageSize : 1;
-  return paginateTokensBySize(tokens, effectivePageSize);
+  const charsPerLine = Math.max(Math.floor(metrics.charsPerLine), 1);
+  const linesPerPage = Math.max(Math.floor(metrics.linesPerPage), 1);
+  return paginateTokensByLines(tokens, charsPerLine, linesPerPage);
 }
 
-function paginateTokensBySize(
+function paginateTokensByLines(
   tokens: TategakiToken[],
-  pageSize: number
+  charsPerLine: number,
+  linesPerPage: number
 ): TategakiToken[][] {
   const pages: TategakiToken[][] = [];
   let currentPage: TategakiToken[] = [];
-  let currentCount = 0;
+  // Lines already completed on the current page, and characters placed on
+  // the current (still-open) line.
+  let lineIndex = 0;
+  let lineChars = 0;
 
   const pushPage = (force = false) => {
     if (currentPage.length > 0 || force) {
       pages.push(currentPage);
     }
     currentPage = [];
-    currentCount = 0;
+    lineIndex = 0;
+    lineChars = 0;
+  };
+
+  const breakLine = () => {
+    lineIndex += 1;
+    lineChars = 0;
+    if (lineIndex >= linesPerPage) {
+      pushPage();
+    }
   };
 
   for (const token of tokens) {
@@ -150,27 +181,43 @@ function paginateTokensBySize(
     }
 
     if (token.type === "text") {
-      let remaining = token.value;
-      while (remaining.length > 0) {
-        const space = pageSize - currentCount;
-        if (space <= 0) {
-          pushPage();
+      let i = 0;
+      const value = token.value;
+      while (i < value.length) {
+        if (value[i] === "\n") {
+          currentPage.push({ type: "text", value: "\n" });
+          i += 1;
+          breakLine();
           continue;
         }
-        const chunk = remaining.slice(0, space);
-        currentPage.push({ type: "text", value: chunk });
-        currentCount += chunk.length;
-        remaining = remaining.slice(chunk.length);
+        const room = charsPerLine - lineChars;
+        let j = i;
+        while (j < value.length && value[j] !== "\n" && j - i < room) {
+          j += 1;
+        }
+        if (j > i) {
+          currentPage.push({ type: "text", value: value.slice(i, j) });
+          lineChars += j - i;
+          i = j;
+        }
+        if (lineChars >= charsPerLine) {
+          breakLine();
+        }
       }
       continue;
     }
 
+    // Atomic (unsplittable) token: start a fresh line first if it wouldn't
+    // fit on the remainder of the current one.
     const length = tokenLength(token);
-    if (currentCount > 0 && currentCount + length > pageSize) {
-      pushPage();
+    if (lineChars > 0 && lineChars + length > charsPerLine) {
+      breakLine();
     }
     currentPage.push(token);
-    currentCount += length;
+    lineChars += length;
+    if (lineChars >= charsPerLine) {
+      breakLine();
+    }
   }
 
   pushPage();

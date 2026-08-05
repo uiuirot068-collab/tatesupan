@@ -36,8 +36,11 @@ export default function PreviewPane({
 }: PreviewPaneProps) {
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(content);
-    return paginateTokens(tokens, layout.charsPerPage);
-  }, [content, layout.charsPerPage]);
+    return paginateTokens(tokens, {
+      charsPerLine: layout.charsPerLine,
+      linesPerPage: layout.linesPerPage,
+    });
+  }, [content, layout.charsPerLine, layout.linesPerPage]);
 
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads.
