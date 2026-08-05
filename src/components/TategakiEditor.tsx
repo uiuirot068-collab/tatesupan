@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  createDocument,
   deleteImage,
   loadAllImages,
   loadDocument,
@@ -21,7 +24,11 @@ type SaveStatus = "loading" | "saved" | "saving" | "error";
 
 const AUTOSAVE_DELAY_MS = 800;
 
-export default function TategakiEditor() {
+export default function TategakiEditor({ documentId }: { documentId?: number }) {
+  const router = useRouter();
+  const [docId, setDocId] = useState<number | null>(
+    documentId && Number.isFinite(documentId) ? documentId : null
+  );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [plotNote, setPlotNote] = useState("");
@@ -42,8 +49,20 @@ export default function TategakiEditor() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadDocument(), loadAllImages()]).then(([doc, imageRecords]) => {
+
+    async function run() {
+      let id = documentId && Number.isFinite(documentId) ? documentId : null;
+      let doc = id ? await loadDocument(id) : undefined;
+
+      if (!doc) {
+        id = await createDocument();
+        router.replace(`/editor?id=${id}`);
+      }
+
+      const imageRecords = await loadAllImages();
       if (cancelled) return;
+
+      setDocId(id);
       if (doc) {
         setTitle(doc.title);
         setContent(doc.content);
@@ -53,10 +72,13 @@ export default function TategakiEditor() {
       setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
       hasLoadedRef.current = true;
       setSaveStatus("saved");
-    });
+    }
+
+    run();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -102,13 +124,13 @@ export default function TategakiEditor() {
   };
 
   useEffect(() => {
-    if (!hasLoadedRef.current) return;
+    if (!hasLoadedRef.current || docId === null) return;
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveDocument(title, content, settings, plotNote)
+      saveDocument(docId, title, content, settings, plotNote)
         .then(() => setSaveStatus("saved"))
         .catch(() => setSaveStatus("error"));
     }, AUTOSAVE_DELAY_MS);
@@ -116,12 +138,20 @@ export default function TategakiEditor() {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [title, content, settings, plotNote]);
+  }, [docId, title, content, settings, plotNote]);
 
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
-        <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="text-xs font-medium text-ink/60 hover:text-ink hover:underline"
+          >
+            ← 作品一覧
+          </Link>
+          <h1 className="text-sm font-semibold text-ink">縦書きWebエディタ</h1>
+        </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <button
