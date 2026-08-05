@@ -1,6 +1,6 @@
 import { useRef, type CSSProperties, type DragEvent, type MouseEvent } from "react";
 import type { ImagePosition, TategakiToken } from "@/lib/tategaki";
-import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 
@@ -61,20 +61,24 @@ export default function PageCard({
   const isOddPage = pageNumber % 2 === 1;
   const isFirstPage = pageNumber === 1;
 
+  // 印刷用の塗り足し(3mm)を天地左右に確保するため、カード外形は仕上がり
+  // サイズ(paper)より一回り大きく描画する。本文・柱・ノンブルは仕上がり線
+  // (内側 BLEED_MM) を基準に配置したいので、各余白に BLEED_MM を足して
+  // 仕上がり線からの距離を維持する。
   const sheetStyle: CSSProperties = {
     position: "relative",
     writingMode: "vertical-rl",
-    width: paper.widthMm * PX_PER_MM,
-    height: paper.heightMm * PX_PER_MM,
-    paddingTop: settings.marginTop * PX_PER_MM,
-    paddingBottom: settings.marginBottom * PX_PER_MM,
+    width: (paper.widthMm + BLEED_MM * 2) * PX_PER_MM,
+    height: (paper.heightMm + BLEED_MM * 2) * PX_PER_MM,
+    paddingTop: (settings.marginTop + BLEED_MM) * PX_PER_MM,
+    paddingBottom: (settings.marginBottom + BLEED_MM) * PX_PER_MM,
     // ノド(gutter) always faces the spine at the center of a 見開き spread,
     // 小口(outer) always faces the book's outer edge. On a recto (odd, left
     // page of a 右綴じ spread) the spine is on the right, so gutter goes
     // right; on a verso (even, right page) the spine is on the left, so it
     // mirrors.
-    paddingLeft: (isOddPage ? settings.marginOuter : settings.marginGutter) * PX_PER_MM,
-    paddingRight: (isOddPage ? settings.marginGutter : settings.marginOuter) * PX_PER_MM,
+    paddingLeft: ((isOddPage ? settings.marginOuter : settings.marginGutter) + BLEED_MM) * PX_PER_MM,
+    paddingRight: ((isOddPage ? settings.marginGutter : settings.marginOuter) + BLEED_MM) * PX_PER_MM,
   };
 
   // Font size must be scaled by the same PX_PER_MM factor as the page box
@@ -291,10 +295,27 @@ export default function PageCard({
         {masterPage.showHiddenNombre && (
           <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} />
         )}
+
+        <TrimGuide />
       </div>
       <span className="text-xs text-ink/60">{pageNumber} ページ</span>
     </div>
   );
+}
+
+/** 仕上がり線（断ち落としガイド）: 塗り足し(BLEED_MM)の内側境界を示す点線枠。 */
+function TrimGuide() {
+  const style: CSSProperties = {
+    position: "absolute",
+    top: BLEED_MM * PX_PER_MM,
+    bottom: BLEED_MM * PX_PER_MM,
+    left: BLEED_MM * PX_PER_MM,
+    right: BLEED_MM * PX_PER_MM,
+    border: "1px dashed #A0A0A0",
+    pointerEvents: "none",
+  };
+
+  return <div style={style} />;
 }
 
 function NombreOverlay({
@@ -325,7 +346,7 @@ function NombreOverlay({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: bottomMarginMm * PX_PER_MM,
+    bottom: (bottomMarginMm + BLEED_MM) * PX_PER_MM,
     display: "flex",
     alignItems: "center",
     justifyContent,
@@ -356,8 +377,8 @@ function HiddenNombreOverlay({
     position: "absolute",
     top: "50%",
     transform: "translateY(-50%)",
-    left: isOddPage ? undefined : 0,
-    right: isOddPage ? 0 : undefined,
+    left: isOddPage ? undefined : BLEED_MM * PX_PER_MM,
+    right: isOddPage ? BLEED_MM * PX_PER_MM : undefined,
     writingMode: "vertical-rl",
     fontSize: "8pt",
     color: "#999999",
@@ -386,8 +407,8 @@ function HashiraOverlay({
     position: "absolute",
     left: 0,
     right: 0,
-    top: position === "top" ? 0 : undefined,
-    bottom: position === "bottom" ? 0 : undefined,
+    top: position === "top" ? BLEED_MM * PX_PER_MM : undefined,
+    bottom: position === "bottom" ? BLEED_MM * PX_PER_MM : undefined,
     height: marginMm * PX_PER_MM,
     display: "flex",
     alignItems: "center",

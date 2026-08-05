@@ -87,6 +87,9 @@ export const MM_PER_PT = 25.4 / 72;
 /** Screen scale used to size preview page cards from millimeter values. */
 export const PX_PER_MM = 2.2;
 
+/** 印刷用の塗り足し幅（天地左右）。仕上がり線は用紙外形からこの分だけ内側。 */
+export const BLEED_MM = 3;
+
 export interface PageLayout {
   paper: PaperSize;
   fontSizeMm: number;
