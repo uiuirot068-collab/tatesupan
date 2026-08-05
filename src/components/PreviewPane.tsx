@@ -382,7 +382,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto p-6"
+        className="flex-1 overflow-y-auto overflow-x-hidden p-6"
         style={{ cursor: "grab" }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}

@@ -5,6 +5,7 @@
 
 :root {
   --base: #f9f8f6; /* 生成り: page background */
+  --canvas: #eceae6; /* muted backdrop behind panel cards, distinct from --base */
   --ink: #1f2a44; /* インディゴブルー: text, borders, primary UI */
   --accent: #bfa858; /* ウォームゴールド: autosave indicator, count badges */
   --paper: #f9f8f6; /* PageCard sheet stays paper-colored in both themes */
@@ -13,11 +14,13 @@
 
 [data-theme="dark"] {
   --base: #121212;
+  --canvas: #0a0a0a; /* darker than --base so panel cards read as elevated */
   --ink: #aab4d4; /* lightened indigo tint so text/borders stay readable on near-black */
 }
 
 @theme inline {
   --color-base: var(--base);
+  --color-canvas: var(--canvas);
   --color-ink: var(--ink);
   --color-accent: var(--accent);
   --color-paper: var(--paper);
@@ -27,7 +30,7 @@
 }
 
 body {
-  background: var(--base);
+  background: var(--canvas);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }

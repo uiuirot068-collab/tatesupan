@@ -261,10 +261,10 @@ export default function PageCard({
         </div>
       )}
       <div
-        className={`shrink-0 overflow-hidden border bg-paper shadow-sm dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+        className={`shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           selected
             ? "border-accent ring-2 ring-accent dark:border-accent"
-            : "border-paper-ink/15 dark:border-paper-ink/5"
+            : "border-gray-200 dark:border-gray-700"
         }`}
         style={sheetStyle}
       >

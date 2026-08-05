@@ -173,8 +173,8 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
+    <div className="flex h-dvh flex-col bg-canvas">
+      <header className="flex items-center justify-between border-b border-ink/10 bg-base px-4 py-2">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -204,10 +204,13 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
       {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
 
-      <main ref={mainRef} className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <main
+        ref={mainRef}
+        className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:flex-row md:gap-4 md:p-6"
+      >
         <section
           style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
-          className={`min-h-0 flex-1 md:flex md:w-[var(--editor-w)] md:flex-none ${
+          className={`min-h-0 flex-1 overflow-hidden rounded-xl border border-ink/10 bg-base shadow-sm md:flex md:w-[var(--editor-w)] md:flex-none ${
             mobileTab === "edit" ? "flex flex-col" : "hidden"
           }`}
         >
@@ -234,7 +237,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`min-h-0 flex-1 md:flex md:w-[var(--preview-w)] md:flex-none ${
+          className={`min-h-0 flex-1 overflow-hidden rounded-xl border border-ink/10 bg-base shadow-sm md:flex md:w-[var(--preview-w)] md:flex-none ${
             mobileTab === "preview" ? "flex flex-col" : "hidden"
           }`}
         >
