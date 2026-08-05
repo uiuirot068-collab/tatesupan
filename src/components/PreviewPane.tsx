@@ -68,6 +68,8 @@ export default function PreviewPane({
 
   const clearSelection = () => setSelected(new Set());
 
+  const selectAll = () => setSelected(new Set(pages.map((_, i) => i)));
+
   const handleDragStart = (index: number) => (event: DragEvent) => {
     const movingSet = selected.has(index) ? selected : new Set([index]);
     if (!selected.has(index)) setSelected(movingSet);
@@ -128,10 +130,32 @@ export default function PreviewPane({
     <div className="flex h-full flex-col bg-base">
       <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
         <span>プレビュー</span>
-        <span>
-          {layout.paper.label} / 全 {pages.length} ページ / 1ページ
-          {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
-        </span>
+        <div className="flex items-center gap-3">
+          {canReorder && (
+            <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={selectAll}
+                disabled={pages.length === 0 || selected.size === pages.length}
+                className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                全選択
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                disabled={selected.size === 0}
+                className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                全解除
+              </button>
+            </span>
+          )}
+          <span>
+            {layout.paper.label} / 全 {pages.length} ページ / 1ページ
+            {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
+          </span>
+        </div>
       </div>
 
       {canReorder && selected.size > 0 && (
@@ -150,13 +174,6 @@ export default function PreviewPane({
             className="rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5"
           >
             後へ移動
-          </button>
-          <button
-            type="button"
-            onClick={clearSelection}
-            className="ml-auto rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5"
-          >
-            選択解除
           </button>
         </div>
       )}
