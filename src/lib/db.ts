@@ -13,13 +13,25 @@ export interface DocumentRecord {
   updatedAt: number;
 }
 
+/** A 挿絵 (illustration) uploaded by the user. Referenced from `content` by id. */
+export interface ImageRecord {
+  id: string;
+  dataUrl: string;
+  createdAt: number;
+}
+
 class TategakiDatabase extends Dexie {
   documents!: Table<DocumentRecord, number>;
+  images!: Table<ImageRecord, string>;
 
   constructor() {
     super("tategaki-editor-db");
     this.version(1).stores({
       documents: "id, updatedAt",
+    });
+    this.version(2).stores({
+      documents: "id, updatedAt",
+      images: "id, createdAt",
     });
   }
 }
@@ -59,4 +71,12 @@ export async function saveDocument(
     settings,
     updatedAt: Date.now(),
   });
+}
+
+export async function saveImage(record: ImageRecord): Promise<void> {
+  await db.images.put(record);
+}
+
+export async function loadAllImages(): Promise<ImageRecord[]> {
+  return db.images.toArray();
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadDocument, saveDocument } from "@/lib/db";
+import { loadAllImages, loadDocument, saveDocument, saveImage, type ImageRecord } from "@/lib/db";
 import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
@@ -17,6 +17,7 @@ export default function TategakiEditor() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [settings, setSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
+  const [images, setImages] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
@@ -28,13 +29,14 @@ export default function TategakiEditor() {
 
   useEffect(() => {
     let cancelled = false;
-    loadDocument().then((doc) => {
+    Promise.all([loadDocument(), loadAllImages()]).then(([doc, imageRecords]) => {
       if (cancelled) return;
       if (doc) {
         setTitle(doc.title);
         setContent(doc.content);
         setSettings(doc.settings);
       }
+      setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
       hasLoadedRef.current = true;
       setSaveStatus("saved");
     });
@@ -42,6 +44,11 @@ export default function TategakiEditor() {
       cancelled = true;
     };
   }, []);
+
+  const handleImageAdd = (record: ImageRecord) => {
+    setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
+    saveImage(record).catch(() => setSaveStatus("error"));
+  };
 
   useEffect(() => {
     if (!hasLoadedRef.current) return;
@@ -97,7 +104,9 @@ export default function TategakiEditor() {
             content={content}
             settings={settings}
             layout={layout}
+            images={images}
             onContentChange={setContent}
+            onImageAdd={handleImageAdd}
           />
         </section>
       </main>

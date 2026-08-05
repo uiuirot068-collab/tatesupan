@@ -6,6 +6,8 @@ import {
   type TategakiToken,
 } from "@/lib/tategaki";
 import { moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
+import type { ImageRecord } from "@/lib/db";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import PageCard from "./PageCard";
 
@@ -13,14 +15,18 @@ interface PreviewPaneProps {
   content: string;
   settings: PageSettings;
   layout: PageLayout;
+  images: Record<string, string>;
   onContentChange?: (content: string) => void;
+  onImageAdd?: (record: ImageRecord) => void;
 }
 
 export default function PreviewPane({
   content,
   settings,
   layout,
+  images,
   onContentChange,
+  onImageAdd,
 }: PreviewPaneProps) {
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(content);
@@ -102,6 +108,22 @@ export default function PreviewPane({
     setDropIndex(null);
   };
 
+  const handleInsertImage = (index: number) => async (file: File) => {
+    if (!onContentChange) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    const { widthMm, heightMm } = await fitImageToMm(
+      dataUrl,
+      layout.textAreaWidthMm * 0.9,
+      layout.textAreaHeightMm * 0.6
+    );
+    const id = crypto.randomUUID();
+    onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
+    const nextPages = pages.map((tokens, i) =>
+      i === index ? [...tokens, { type: "image" as const, id, widthMm, heightMm }] : tokens
+    );
+    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+  };
+
   return (
     <div className="flex h-full flex-col bg-base">
       <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2 text-sm text-ink/60">
@@ -147,6 +169,7 @@ export default function PreviewPane({
             tokens={tokens}
             settings={settings}
             layout={layout}
+            images={images}
             selected={selected.has(index)}
             isDragging={dragIndex === index}
             isDropTarget={dropIndex === index && dragIndex !== index}
@@ -155,6 +178,7 @@ export default function PreviewPane({
             onDragOver={canReorder ? handleDragOver(index) : undefined}
             onDrop={canReorder ? handleDrop(index) : undefined}
             onDragEnd={canReorder ? handleDragEnd : undefined}
+            onInsertImage={canReorder ? handleInsertImage(index) : undefined}
           />
         ))}
       </div>

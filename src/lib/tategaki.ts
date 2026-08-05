@@ -1,18 +1,46 @@
 export type TategakiToken =
   | { type: "text"; value: string }
   | { type: "ruby"; base: string; rt: string }
-  | { type: "tcy"; value: string };
+  | { type: "tcy"; value: string }
+  | { type: "image"; id: string; widthMm: number; heightMm: number };
 
 const RUBY_PATTERN = /｜([^｜《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
 const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
+// 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>】
+const IMAGE_PATTERN = /【IMG:([^:]+):([\d.]+):([\d.]+)】/g;
 
 /**
  * Parses raw editor text into a flat token stream:
  * ruby notation (｜漢字《かんじ》 or 漢字《かんじ》) becomes `ruby` tokens,
  * tate-chu-yoko candidates (2-digit numbers, !!/!?/?? pairs) become `tcy` tokens,
- * everything else stays as `text`.
+ * 挿絵 markers become `image` tokens, everything else stays as `text`.
  */
 export function tokenizeTategaki(source: string): TategakiToken[] {
+  const tokens: TategakiToken[] = [];
+  let lastIndex = 0;
+
+  for (const match of source.matchAll(IMAGE_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index)));
+    }
+    tokens.push({
+      type: "image",
+      id: match[1],
+      widthMm: Number(match[2]),
+      heightMm: Number(match[3]),
+    });
+    lastIndex = index + match[0].length;
+  }
+
+  if (lastIndex < source.length) {
+    tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex)));
+  }
+
+  return tokens;
+}
+
+function tokenizeRubyAndTcy(source: string): TategakiToken[] {
   const tokens: TategakiToken[] = [];
   let lastIndex = 0;
 
@@ -58,6 +86,11 @@ function tokenizePlainText(text: string): TategakiToken[] {
 function tokenLength(token: TategakiToken): number {
   if (token.type === "text") return token.value.length;
   if (token.type === "ruby") return token.base.length;
+  if (token.type === "image") {
+    // No font metrics available at this layer; approximate the vertical
+    // space an image occupies as character cells (~5mm per cell).
+    return Math.max(1, Math.round(token.heightMm / 5));
+  }
   return 1; // a tate-chu-yoko pair occupies a single character cell
 }
 
@@ -126,11 +159,14 @@ export function countVisualLength(source: string): number {
   return tokenizeTategaki(source).reduce((sum, t) => sum + tokenLength(t), 0);
 }
 
-/** Reverses `tokenizeTategaki`, re-serializing ruby tokens in `｜base《rt》` form. */
+/** Reverses `tokenizeTategaki`, re-serializing ruby/image tokens back to their marker form. */
 export function detokenizeTategaki(tokens: TategakiToken[]): string {
   return tokens
     .map((token) => {
       if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
+      if (token.type === "image") {
+        return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}】`;
+      }
       return token.value;
     })
     .join("");

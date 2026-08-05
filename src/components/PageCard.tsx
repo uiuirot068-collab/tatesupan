@@ -1,4 +1,4 @@
-import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import { useRef, type CSSProperties, type DragEvent, type MouseEvent } from "react";
 import type { TategakiToken } from "@/lib/tategaki";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 
@@ -7,6 +7,7 @@ interface PageCardProps {
   tokens: TategakiToken[];
   settings: PageSettings;
   layout: PageLayout;
+  images: Record<string, string>;
   selected?: boolean;
   isDragging?: boolean;
   isDropTarget?: boolean;
@@ -15,6 +16,7 @@ interface PageCardProps {
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
   onDragEnd?: (event: DragEvent) => void;
+  onInsertImage?: (file: File) => void;
 }
 
 export default function PageCard({
@@ -22,6 +24,7 @@ export default function PageCard({
   tokens,
   settings,
   layout,
+  images,
   selected = false,
   isDragging = false,
   isDropTarget = false,
@@ -30,7 +33,9 @@ export default function PageCard({
   onDragOver,
   onDrop,
   onDragEnd,
+  onInsertImage,
 }: PageCardProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { paper } = layout;
   const { masterPage } = settings;
 
@@ -101,9 +106,37 @@ export default function PageCard({
             />
             選択
           </label>
-          <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
-            ⠿
-          </span>
+          <div className="flex items-center gap-2">
+            {onInsertImage && (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                  className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5"
+                  title="このページに画像を挿入"
+                >
+                  画像挿入
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onInsertImage(file);
+                    event.target.value = "";
+                  }}
+                />
+              </>
+            )}
+            <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
+              ⠿
+            </span>
+          </div>
         </div>
       )}
       <div
@@ -121,7 +154,7 @@ export default function PageCard({
             </span>
           ) : (
             tokens.map((token, index) => (
-              <TokenView key={index} token={token} />
+              <TokenView key={index} token={token} images={images} />
             ))
           )}
         </div>
@@ -216,7 +249,13 @@ function HashiraOverlay({
   );
 }
 
-function TokenView({ token }: { token: TategakiToken }) {
+function TokenView({
+  token,
+  images,
+}: {
+  token: TategakiToken;
+  images: Record<string, string>;
+}) {
   if (token.type === "ruby") {
     return (
       <ruby>
@@ -227,6 +266,23 @@ function TokenView({ token }: { token: TategakiToken }) {
   }
   if (token.type === "tcy") {
     return <span style={{ textCombineUpright: "all" }}>{token.value}</span>;
+  }
+  if (token.type === "image") {
+    const src = images[token.id];
+    if (!src) return null;
+    return (
+      <img
+        src={src}
+        alt=""
+        style={{
+          display: "inline-block",
+          width: token.widthMm * PX_PER_MM,
+          height: token.heightMm * PX_PER_MM,
+          verticalAlign: "top",
+          breakInside: "avoid",
+        }}
+      />
+    );
   }
   return <>{token.value}</>;
 }
