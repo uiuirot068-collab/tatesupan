@@ -201,20 +201,20 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
-      <header className="relative z-10 flex shrink-0 items-center justify-between rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-lg">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-lg">
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
-            className="text-xs font-medium text-ink/60 hover:text-ink hover:underline"
+            className="shrink-0 text-xs font-medium text-ink/60 hover:text-ink hover:underline"
           >
             ← 作品一覧
           </Link>
-          <h1 className="flex items-center gap-2">
+          <h1 className="flex min-w-0 items-center gap-2">
             <Logo />
-            <span className="font-normal text-sm text-ink/50">縦書きWebエディタ</span>
+            <span className="truncate font-normal text-sm text-ink/50">縦書きWebエディタ</span>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <ThemeToggle />
           <button
             type="button"

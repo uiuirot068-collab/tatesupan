@@ -45,6 +45,10 @@ export default function PageSettingsPanel({
 }: PageSettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab | null>(() => {
     if (typeof window === "undefined") return "page";
+    // モバイル画面（768px未満）は過去の閲覧履歴に関わらず必ず閉じる
+    if (window.innerWidth < 768) {
+      return null;
+    }
     const hasOpened = localStorage.getItem("tatespun_has_opened_settings");
     if (!hasOpened) {
       localStorage.setItem("tatespun_has_opened_settings", "true");
