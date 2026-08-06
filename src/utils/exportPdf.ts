@@ -124,6 +124,13 @@ export async function exportCustomPdf(
       drawLine(pdfWidth - margin - bleed, pdfHeight - margin, pdfWidth - margin - bleed, pdfHeight - margin + 10);
       drawLine(pdfWidth - margin, pdfHeight - margin, pdfWidth - margin, pdfHeight - margin + 10);
     }
+
+    // メモリ領域の明示的クリア
+    canvas.width = 0;
+    canvas.height = 0;
+
+    // マクロタスク挿入（UI開放・フリーズ防止）
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   pdf.save(fileName);
