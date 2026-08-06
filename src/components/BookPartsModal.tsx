@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { generateTitlePageText, generateColophonText, ColophonData } from '@/utils/bookStructure';
-import { extractHeadingOffsets, generateTocText, TocItem } from '@/utils/tocGenerator';
-import { computePageSourceRanges, findPageIndexForCharIndex } from '@/lib/tategaki';
+import { computeTocItemsWithOffset, generateTocText, TocItem } from '@/utils/tocGenerator';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
 
 interface BookPartsModalProps {
@@ -48,25 +47,12 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   if (!isOpen) return null;
 
   const detectToc = () => {
-    const headings = extractHeadingOffsets(content);
-    if (headings.length === 0) {
-      setTocItems([]);
-      setTocDetected(true);
-      return;
-    }
-    const ranges = computePageSourceRanges(content, {
-      charsPerLine: layout.charsPerLine,
-      linesPerPage: layout.linesPerPage,
-    });
-    setTocItems(
-      headings.map((heading) => {
-        const pageIndex = findPageIndexForCharIndex(ranges, heading.index);
-        return {
-          title: heading.title,
-          pageNumber: settings.masterPage.nombreStart + pageIndex,
-        };
-      })
+    const items = computeTocItemsWithOffset(
+      content,
+      { charsPerLine: layout.charsPerLine, linesPerPage: layout.linesPerPage },
+      settings.masterPage.nombreStart
     );
+    setTocItems(items);
     setTocDetected(true);
   };
 

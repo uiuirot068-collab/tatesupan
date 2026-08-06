@@ -13,6 +13,7 @@ import {
   type ImageRecord,
 } from "@/lib/db";
 import { computePageLayout, DEFAULT_PAGE_SETTINGS } from "@/lib/pageLayout";
+import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import EditorPane from "./EditorPane";
@@ -195,7 +196,26 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
-    setContent((prev) => (position === "start" ? textToInsert + prev : prev + textToInsert));
+    const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
+
+    // 扉・目次・奥付は本文と異なりノンブル（柱含む）を表示しないのが慣例
+    // なので、挿入した瞬間にそのパーツが占めるページへ自動でノンブル非表示
+    // を設定する。ユーザーは挿入後もページ単位のチェックボックスで上書き可能。
+    const range = computeInsertedPartPageRange(nextContent, textToInsert, position, {
+      charsPerLine: layout.charsPerLine,
+      linesPerPage: layout.linesPerPage,
+    });
+    if (range) {
+      setSettings((prev) => {
+        const nextOverrides = { ...prev.pageOverrides };
+        for (let pageNumber = range.startPage; pageNumber <= range.endPage; pageNumber++) {
+          nextOverrides[pageNumber] = { ...nextOverrides[pageNumber], hideNombre: true };
+        }
+        return { ...prev, pageOverrides: nextOverrides };
+      });
+    }
+
+    setContent(nextContent);
   };
 
   return (

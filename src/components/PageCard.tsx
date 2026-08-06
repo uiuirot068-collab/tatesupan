@@ -128,14 +128,18 @@ export default function PageCard({
       : {}),
   };
 
+  // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
+  // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが
+  // 組版の慣例。隠しノンブル（製本用の極小表記）はこの抑制と独立して、
+  // masterPage.showHiddenNombre の設定どおりに常時トグル連動して表示する。
+  const isChromeSuppressed = hideNombre || (masterPage.hideNombreOnFirstPage && isFirstPage);
+
   const nombrePosition = masterPage.nombrePosition;
-  const showNombre =
-    nombrePosition !== "hidden" &&
-    !(masterPage.hideNombreOnFirstPage && isFirstPage) &&
-    !hideNombre;
+  const showNombre = nombrePosition !== "hidden" && !isChromeSuppressed;
   const nombreValue = masterPage.nombreStart + pageNumber - 1;
 
   const hashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
+  const showHashira = Boolean(hashiraText) && !isChromeSuppressed;
 
   const isInteractive = Boolean(onToggleSelect);
 
@@ -299,7 +303,7 @@ export default function PageCard({
           </>
         )}
 
-        {hashiraText && (
+        {showHashira && (
           <HashiraOverlay
             text={hashiraText}
             position={masterPage.hashiraPosition}
