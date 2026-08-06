@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { createDocument, db, deleteDocument, listDocuments, type DocumentRecord } from "@/lib/db";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
+import { CombineModal } from "@/components/CombineModal";
 
 const FREE_DOCUMENT_LIMIT = 15;
 
@@ -30,6 +31,7 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+  const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
 
   const handleCreate = async () => {
     if (creating) return;
@@ -84,7 +86,17 @@ export default function Home() {
         </button>
 
         <section className="w-full">
-          <h2 className="mb-3 text-sm font-semibold text-ink/70">作品一覧</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-ink/70">作品一覧</h2>
+            <button
+              type="button"
+              onClick={() => setIsCombineModalOpen(true)}
+              disabled={!documents || documents.length < 2}
+              className="rounded-full border border-ink/20 px-3 py-1.5 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink/5 disabled:opacity-40"
+            >
+              📚 短編集を作成
+            </button>
+          </div>
 
           {documents === undefined && (
             <p className="text-sm text-ink/50">読み込み中…</p>
@@ -138,6 +150,16 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <CombineModal
+        isOpen={isCombineModalOpen}
+        onClose={() => setIsCombineModalOpen(false)}
+        onSuccess={(newDocumentId) => {
+          setIsCombineModalOpen(false);
+          router.push(`/editor?id=${newDocumentId}`);
+        }}
+        documents={documents ?? []}
+      />
 
       {isLimitModalOpen && (
         <div
