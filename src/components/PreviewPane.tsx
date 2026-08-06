@@ -209,6 +209,16 @@ export default function PreviewPane({
   const handleOpenPdfModal = () => setIsPdfModalOpen(true);
 
   const handleDownloadPdf = async () => {
+    const totalPages = pages.length;
+    // 最終ページ（総ページ数)が奇数の場合の入稿チェック
+    if (totalPages % 2 !== 0) {
+      const isConfirmed = window.confirm(
+        `最終ページが奇数（全 ${totalPages} ページ）ですが大丈夫ですか？\n※冊子印刷では白ページの挿入が必要になる場合があります。`
+      );
+      if (!isConfirmed) {
+        return; // 処理中断
+      }
+    }
     const elements = pages
       .map((_, i) => pageElementsRef.current.get(i))
       .filter((el): el is HTMLDivElement => el != null);
