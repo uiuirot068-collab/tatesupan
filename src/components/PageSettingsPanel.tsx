@@ -302,7 +302,7 @@ export default function PageSettingsPanel({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">ノンブル: 地からの距離 mm</span>
+          <span className="text-xs text-ink/60 whitespace-nowrap">ノンブル: 地からの距離 mm</span>
           <input
             type="number"
             min={0}
@@ -339,9 +339,7 @@ export default function PageSettingsPanel({
             }
             className="h-4 w-4 rounded border-ink/30"
           />
-          <span className="text-xs text-ink/60">
-            隠しノンブル（ノド側の断ち切り境界付近に薄く常時表示）
-          </span>
+          <span className="text-xs text-ink/60">隠しノンブル</span>
         </label>
 
         <label className="flex flex-col gap-1">
