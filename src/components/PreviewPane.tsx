@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+} from "react";
 import {
   computePageParagraphStarts,
   computePageSourceRanges,
@@ -53,21 +61,27 @@ export default function PreviewPane({
   isCollapsed = false,
   onToggleCollapse,
 }: PreviewPaneProps) {
+  // Deferring the (expensive, O(content length)) pagination recompute keeps
+  // keystrokes in the editor responsive on large manuscripts: React renders
+  // this at low priority and lets input updates interrupt it, instead of
+  // recomputing every page's layout synchronously on every keystroke.
+  const deferredContent = useDeferredValue(content);
+
   const pages = useMemo(() => {
-    const tokens = tokenizeTategaki(content);
+    const tokens = tokenizeTategaki(deferredContent);
     return paginateTokens(tokens, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
     });
-  }, [content, layout.charsPerLine, layout.linesPerPage]);
+  }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
 
   const pageSourceRanges = useMemo(
     () =>
-      computePageSourceRanges(content, {
+      computePageSourceRanges(deferredContent, {
         charsPerLine: layout.charsPerLine,
         linesPerPage: layout.linesPerPage,
       }),
-    [content, layout.charsPerLine, layout.linesPerPage]
+    [deferredContent, layout.charsPerLine, layout.linesPerPage]
   );
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
