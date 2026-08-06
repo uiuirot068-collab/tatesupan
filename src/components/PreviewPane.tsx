@@ -13,6 +13,7 @@ import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
 import { exportAllPagesToZip, exportPageToJpg } from "@/utils/exportImage";
+import { exportCustomPdf, type PdfExportMode } from "@/utils/exportPdf";
 import type { ImageRecord } from "@/lib/db";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -148,6 +149,34 @@ export default function PreviewPane({
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  };
+
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
+
+  const handleOpenPdfModal = () => setIsPdfModalOpen(true);
+
+  const handleDownloadPdf = async () => {
+    const elements = pages
+      .map((_, i) => pageElementsRef.current.get(i))
+      .filter((el): el is HTMLDivElement => el != null);
+    if (elements.length === 0) return;
+    setIsExporting(true);
+    setExportProgress({ current: 0, total: elements.length });
+    try {
+      await exportCustomPdf(elements, {
+        mode: pdfMode,
+        paperSizeName: layout.paper.label,
+        bleed: 3,
+        onProgress: (current, total) => setExportProgress({ current, total }),
+      });
+      setIsPdfModalOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "PDF書き出しに失敗しました。");
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -412,6 +441,14 @@ export default function PreviewPane({
                 ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
                 : "ZIP保存"}
             </button>
+            <button
+              type="button"
+              onClick={handleOpenPdfModal}
+              disabled={isExporting || pages.length === 0}
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              PDF出力
+            </button>
           </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
@@ -521,6 +558,64 @@ export default function PreviewPane({
         })}
         </div>
       </div>
+
+      {isPdfModalOpen && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !isExporting && setIsPdfModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-ink/10 bg-base p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-3 text-sm font-bold text-ink">PDF出力</h2>
+            <div className="flex flex-col gap-2">
+              {(
+                [
+                  { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
+                  { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
+                  { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
+                ] as { value: PdfExportMode; label: string }[]
+              ).map((option) => (
+                <label
+                  key={option.value}
+                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+                >
+                  <input
+                    type="radio"
+                    name="pdf-export-mode"
+                    value={option.value}
+                    checked={pdfMode === option.value}
+                    onChange={() => setPdfMode(option.value)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-ink">{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(false)}
+                disabled={isExporting}
+                className="rounded border border-ink/20 px-3 py-1.5 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isExporting}
+                className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isExporting && exportProgress
+                  ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
+                  : "ダウンロード"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
