@@ -3,6 +3,30 @@ import { countVisualLength, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import PageSettingsPanel from "./PageSettingsPanel";
 
+const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
+１.ここに本文を入力してください
+２.上の「ドキュメント・タイトル名」はファイルの保存名になります
+
+
+タイトルの下の下記のメニューでは以下の調整ができます
+▶①ページ設定｜▶②ノンブル・柱｜▶③メモ｜④？
+①用紙サイズ・余白・フォント
+②ノンブル・柱記載
+③プロット等にご活用ください
+④ショートカットや記号での太字の方法等のやり方について
+
+1. 改ページ
+【改ページ】と入力すると、任意の場所で強制的に改ページが挿入されます。
+
+2. 見出し（目次自動生成対応）
+「# 第一章」「■ はじめに」のように書くと見出しとして認識され、目次機能でページ番号が自動抽出されます。
+
+3. ルビ（ふりがな）
+《》を使うことで文字にルビ《ふりがな》を振ることができます。
+
+4. 縦中横（たてちゅうよこ）
+半角数字（例：12月、3丁目）は、自動的に縦書きの中で横組み表示されます。`;
+
 interface EditorPaneProps {
   title: string;
   onTitleChange: (title: string) => void;
@@ -112,7 +136,7 @@ export default function EditorPane({
         onSelect={reportCursorIndex}
         onClick={reportCursorIndex}
         onKeyUp={reportCursorIndex}
-        placeholder="ここに本文を入力してください&#10;&#10;ルビ: ｜漢字《かんじ》&#10;縦中横: 数字2桁や !! ？？ などを自動検知します"
+        placeholder={DEFAULT_INITIAL_TEXT}
         spellCheck={false}
         className="w-full flex-1 min-h-0 resize-none overflow-y-auto bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
       />
