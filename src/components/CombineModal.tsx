@@ -1,10 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/db';
 import type { PageSettings } from '@/lib/pageLayout';
 import { DEFAULT_PAGE_SETTINGS } from '@/lib/pageLayout';
 import { combineNovelTexts, canUsePremiumFeatures, UserStatus } from '@/utils/combineProjects';
+
+/** 選択中の作品から「〜」ほか○編（短編集）形式のデフォルトタイトルを生成する */
+function buildDefaultTitle(titles: string[]): string {
+  if (titles.length === 0) return '';
+  const [first, ...rest] = titles;
+  const firstTitle = first || '無題の作品';
+  if (rest.length === 0) return `「${firstTitle}」（短編集）`;
+  return `「${firstTitle}」ほか${rest.length}編（短編集）`;
+}
 
 interface CombineModalProps {
   isOpen: boolean;
@@ -23,17 +32,48 @@ export const CombineModal: React.FC<CombineModalProps> = ({
 }) => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [newTitle, setNewTitle] = useState('');
+  const [titleTouched, setTitleTouched] = useState(false);
   const [insertTitleAsHeader, setInsertTitleAsHeader] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // モーダルを開くたびに選択状態をリセットし、古い選択のまま結合してしまう事故を防ぐ
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIds([]);
+      setNewTitle('');
+      setTitleTouched(false);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
+
+  // 選択作品が変わるたびにタイトル未編集ならデフォルトタイトルを自動生成する
+  useEffect(() => {
+    if (titleTouched) return;
+    const targetDocs = selectedIds
+      .map((id) => documents.find((d) => d.id === id))
+      .filter((d): d is NonNullable<typeof d> => d !== undefined);
+    setNewTitle(buildDefaultTitle(targetDocs.map((d) => d.title)));
+  }, [selectedIds, documents, titleTouched]);
 
   if (!isOpen) return null;
 
   const isAllowed = canUsePremiumFeatures(userStatus);
 
   const handleToggleSelect = (id: number) => {
+    if (isProcessing) return;
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const handleTitleChange = (value: string) => {
+    setNewTitle(value);
+    setTitleTouched(true);
+  };
+
+  const handleClose = () => {
+    if (isProcessing) return;
+    onClose();
   };
 
   const handleCombine = async () => {
@@ -51,6 +91,9 @@ export const CombineModal: React.FC<CombineModalProps> = ({
     }
 
     setIsProcessing(true);
+    // setState直後は同期処理でメインスレッドを占有しがちなので、
+    // 「結合データを生成中...」の描画を確実に挟んでから重い処理へ進む
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     try {
       // 選択順に作品を取得
@@ -58,7 +101,11 @@ export const CombineModal: React.FC<CombineModalProps> = ({
         .map((id) => documents.find((d) => d.id === id))
         .filter((d): d is NonNullable<typeof d> => d !== undefined);
 
-      // 本文の結合
+      if (targetDocs.length !== selectedIds.length) {
+        throw new Error('選択された作品の一部が見つかりませんでした。');
+      }
+
+      // 本文の結合（作品間には必ず【改ページ】を挿入）
       const combinedContent = combineNovelTexts(targetDocs, insertTitleAsHeader);
 
       // 最初の作品の組版設定をベースに保存（存在する場合）
@@ -76,20 +123,25 @@ export const CombineModal: React.FC<CombineModalProps> = ({
         includedDocumentIds: selectedIds,
       });
 
-      alert('短編集を作成しました！');
       onSuccess(newId);
       onClose();
     } catch (error) {
       console.error('結合エラー:', error);
-      alert('結合処理に失敗しました。');
-    } finally {
+      alert('結合処理に失敗しました。作品数やデータ容量をご確認のうえ、もう一度お試しください。');
       setIsProcessing(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-900 p-6 shadow-xl border border-gray-200 dark:border-neutral-800">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-900 p-6 shadow-xl border border-gray-200 dark:border-neutral-800">
+        {isProcessing && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/90 dark:bg-neutral-900/90">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">結合データを生成中...</p>
+          </div>
+        )}
+
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
           📚 短編集・再録本メーカー <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-normal">PREMIUM</span>
         </h2>
@@ -104,8 +156,9 @@ export const CombineModal: React.FC<CombineModalProps> = ({
               type="text"
               placeholder="例：短編集 2026夏"
               value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              onChange={(e) => handleTitleChange(e.target.value)}
+              disabled={isProcessing}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             />
           </div>
 
@@ -127,6 +180,7 @@ export const CombineModal: React.FC<CombineModalProps> = ({
                     type="checkbox"
                     checked={selectedIds.includes(doc.id)}
                     onChange={() => handleToggleSelect(doc.id)}
+                    disabled={isProcessing}
                     className="rounded text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="truncate">{doc.title || '無題のドキュメント'}</span>
@@ -140,6 +194,7 @@ export const CombineModal: React.FC<CombineModalProps> = ({
               type="checkbox"
               checked={insertTitleAsHeader}
               onChange={(e) => setInsertTitleAsHeader(e.target.checked)}
+              disabled={isProcessing}
               className="rounded text-indigo-600"
             />
             各作品の先頭に作品タイトル（# 見出し）を自動挿入する
@@ -148,8 +203,9 @@ export const CombineModal: React.FC<CombineModalProps> = ({
 
         <div className="mt-6 flex justify-end gap-2">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg"
+            onClick={handleClose}
+            disabled={isProcessing}
+            className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg disabled:opacity-50"
           >
             キャンセル
           </button>
@@ -158,7 +214,7 @@ export const CombineModal: React.FC<CombineModalProps> = ({
             disabled={isProcessing || selectedIds.length < 2 || !newTitle.trim()}
             className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-all"
           >
-            {isProcessing ? '結合中...' : '短編集を作成'}
+            {isProcessing ? '結合データを生成中...' : '短編集を作成'}
           </button>
         </div>
       </div>
