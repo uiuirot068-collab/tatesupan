@@ -12,6 +12,7 @@ import {
 import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
+import { exportAllPagesToZip, exportPageToJpg } from "@/utils/exportImage";
 import type { ImageRecord } from "@/lib/db";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -113,6 +114,45 @@ export default function PreviewPane({
     () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
     [cursorIndex, pageSourceRanges]
   );
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
+
+  const handleExportJpg = async () => {
+    const index =
+      selected.size > 0 ? Math.min(...selected) : activePageIndex ?? 0;
+    const el = pageElementsRef.current.get(index);
+    if (!el) return;
+    setIsExporting(true);
+    try {
+      await exportPageToJpg(el, "tatespun_page.jpg");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportZip = async () => {
+    const elements = pages
+      .map((_, i) => pageElementsRef.current.get(i))
+      .filter((el): el is HTMLDivElement => el != null);
+    if (elements.length === 0) return;
+    setIsExporting(true);
+    setExportProgress({ current: 0, total: elements.length });
+    try {
+      await exportAllPagesToZip(elements, "tatespun_all_pages.zip", (current, total) => {
+        setExportProgress({ current, total });
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  };
 
   useEffect(() => {
     if (activePageIndex == null) return;
@@ -353,6 +393,26 @@ export default function PreviewPane({
               </button>
             </span>
           )}
+          <span className="flex flex-shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleExportJpg}
+              disabled={isExporting || pages.length === 0}
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              JPG保存
+            </button>
+            <button
+              type="button"
+              onClick={handleExportZip}
+              disabled={isExporting || pages.length === 0}
+              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isExporting && exportProgress
+                ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
+                : "ZIP保存"}
+            </button>
+          </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
           {layout.paper.label} / 全 {pages.length} ページ / 1ページ
