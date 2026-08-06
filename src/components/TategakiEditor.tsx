@@ -19,7 +19,6 @@ import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
-import MobileTabBar, { type MobileTab } from "./MobileTabBar";
 import ThemeToggle from "./ThemeToggle";
 import HelpModal from "./HelpModal";
 import Logo from "./Logo";
@@ -38,7 +37,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [plotNote, setPlotNote] = useState("");
   const [settings, setSettings] = useEditorSettings();
   const [images, setImages] = useState<Record<string, string>>({});
-  const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
+  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -241,9 +240,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex md:flex-none ${
+          className={`flex min-h-[40vh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"
-          } ${mobileTab === "edit" ? "flex flex-col" : "hidden"}`}
+          }`}
         >
           <EditorPane
             title={title}
@@ -262,6 +261,15 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           />
         </section>
 
+        <button
+          type="button"
+          onClick={() => setIsMobilePreviewOpen((prev) => !prev)}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-ink/10 bg-base px-4 py-2.5 text-sm font-medium text-ink/70 shadow-lg md:hidden"
+        >
+          <span aria-hidden>👁️</span>
+          {isMobilePreviewOpen ? "プレビューを閉じる" : "プレビューを表示・確認する"}
+        </button>
+
         {!isPreviewCollapsed && (
           <div
             onMouseDown={handleDividerMouseDown}
@@ -271,9 +279,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`h-full min-h-0 min-w-0 transition-all duration-200 md:flex md:flex-none ${
+          className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileTab === "preview" ? "flex flex-col" : "hidden"}`}
+          } ${isMobilePreviewOpen ? "flex h-[60vh] shrink-0 flex-col" : "hidden"}`}
         >
           <PreviewPane
             content={content}
@@ -290,8 +298,6 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           />
         </section>
       </main>
-
-      <MobileTabBar active={mobileTab} onChange={setMobileTab} />
 
       {isSearchOpen && (
         <SearchReplaceModal

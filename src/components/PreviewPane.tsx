@@ -399,7 +399,7 @@ export default function PreviewPane({
               type="button"
               onClick={onToggleCollapse}
               title="プレビューを折りたたむ"
-              className="flex-shrink-0 rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/60 hover:bg-ink/5"
+              className="hidden flex-shrink-0 rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/60 hover:bg-ink/5 md:inline-flex"
             >
               ▶
             </button>
