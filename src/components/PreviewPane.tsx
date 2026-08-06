@@ -25,6 +25,7 @@ import { exportCustomPdf, type PdfExportMode } from "@/utils/exportPdf";
 import type { ImageRecord } from "@/lib/db";
 import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
 
 /** Visual seam width (px) between the two pages of a spread. */
@@ -164,6 +165,7 @@ export default function PreviewPane({
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(
     null
   );
+  const [exportLabel, setExportLabel] = useState("");
 
   const handleExportJpg = async () => {
     const index =
@@ -171,6 +173,7 @@ export default function PreviewPane({
     const el = pageElementsRef.current.get(index);
     if (!el) return;
     setIsExporting(true);
+    setExportLabel("画像");
     try {
       await exportPageToJpg(el, "tatespun_page.jpg");
     } catch (err) {
@@ -186,6 +189,7 @@ export default function PreviewPane({
       .filter((el): el is HTMLDivElement => el != null);
     if (elements.length === 0) return;
     setIsExporting(true);
+    setExportLabel("画像");
     setExportProgress({ current: 0, total: elements.length });
     try {
       await exportAllPagesToZip(elements, "tatespun_all_pages.zip", (current, total) => {
@@ -210,6 +214,7 @@ export default function PreviewPane({
       .filter((el): el is HTMLDivElement => el != null);
     if (elements.length === 0) return;
     setIsExporting(true);
+    setExportLabel("PDF");
     setExportProgress({ current: 0, total: elements.length });
     try {
       await exportCustomPdf(elements, {
@@ -690,6 +695,14 @@ export default function PreviewPane({
             </div>
           </div>
         </div>
+      )}
+
+      {isExporting && (
+        <ExportProgressModal
+          label={exportLabel || "ファイル"}
+          current={exportProgress?.current ?? 0}
+          total={exportProgress?.total ?? 0}
+        />
       )}
     </div>
   );
