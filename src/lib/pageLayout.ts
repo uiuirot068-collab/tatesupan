@@ -1,4 +1,6 @@
-export type PaperSizeKey = "a5" | "b5" | "b6" | "shinsho" | "a6" | "bunko";
+import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+
+export type PaperSizeKey = keyof typeof PAPER_SIZE_TEMPLATES;
 
 export interface PaperSize {
   label: string;
@@ -6,14 +8,23 @@ export interface PaperSize {
   heightMm: number;
 }
 
-export const PAPER_SIZES: Record<PaperSizeKey, PaperSize> = {
-  a5: { label: "A5", widthMm: 148, heightMm: 210 },
-  b5: { label: "B5", widthMm: 182, heightMm: 257 },
-  b6: { label: "B6", widthMm: 128, heightMm: 182 },
-  shinsho: { label: "新書", widthMm: 103, heightMm: 182 },
-  a6: { label: "A6", widthMm: 105, heightMm: 148 },
-  bunko: { label: "文庫", widthMm: 105, heightMm: 148 },
+// 旧バージョンで使用していた用紙サイズキーとの互換マップ（保存済みデータの移行用）
+const LEGACY_PAPER_SIZE_KEY_MAP: Record<string, PaperSizeKey> = {
+  a5: "A5",
+  b5: "B5",
+  b6: "B6",
+  shinsho: "新書",
+  a6: "A6",
+  bunko: "文庫",
 };
+
+function resolvePaperSize(key: string): PaperSize {
+  const template =
+    PAPER_SIZE_TEMPLATES[key] ??
+    PAPER_SIZE_TEMPLATES[LEGACY_PAPER_SIZE_KEY_MAP[key]] ??
+    PAPER_SIZE_TEMPLATES["文庫"];
+  return { label: template.name, widthMm: template.width, heightMm: template.height };
+}
 
 /** 段数（1段 / 2段組） */
 export type ColumnCount = 1 | 2;
@@ -71,7 +82,7 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {
-  paperSize: "bunko",
+  paperSize: "文庫",
   marginTop: 12,
   marginBottom: 12,
   marginGutter: 12,
@@ -131,7 +142,7 @@ export interface PageLayout {
  * independently stacks lines right-to-left within its own share of the width.
  */
 export function computePageLayout(settings: PageSettings): PageLayout {
-  const paper = PAPER_SIZES[settings.paperSize];
+  const paper = resolvePaperSize(settings.paperSize);
   const fontSizeMm = settings.fontSizePt * MM_PER_PT;
   const linePitchMm = fontSizeMm * settings.lineHeightRatio;
 

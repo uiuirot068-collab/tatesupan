@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  PAPER_SIZES,
   type ColumnCount,
   type HashiraPosition,
   type MasterPageSettings,
@@ -11,6 +10,7 @@ import {
   type PageSettings,
   type PaperSizeKey,
 } from "@/lib/pageLayout";
+import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -22,43 +22,6 @@ interface PageSettingsPanelProps {
 }
 
 type SettingsTab = "page" | "master" | "plot";
-
-interface SettingsPreset {
-  label: string;
-  apply: (settings: PageSettings) => PageSettings;
-}
-
-const SETTINGS_PRESETS: SettingsPreset[] = [
-  {
-    label: "文庫本風 (A6)",
-    apply: (settings) => ({
-      ...settings,
-      paperSize: "a6",
-      fontFamily: "'Shippori Mincho', serif",
-      fontSizePt: 13,
-      lineHeightRatio: 1.7,
-    }),
-  },
-  {
-    label: "同人誌・一般的な小説風 (A5)",
-    apply: (settings) => ({
-      ...settings,
-      paperSize: "a5",
-      fontFamily: "'Shippori Mincho', serif",
-      fontSizePt: 14,
-      lineHeightRatio: 1.8,
-    }),
-  },
-  {
-    label: "Web閲覧最適化",
-    apply: (settings) => ({
-      ...settings,
-      paperSize: "b6",
-      fontSizePt: 15,
-      lineHeightRatio: 1.9,
-    }),
-  },
-];
 
 export default function PageSettingsPanel({
   settings,
@@ -94,6 +57,18 @@ export default function PageSettingsPanel({
     onChange({
       ...settings,
       masterPage: { ...settings.masterPage, [key]: value },
+    });
+  };
+
+  const handlePaperSizeChange = (key: PaperSizeKey) => {
+    const template = PAPER_SIZE_TEMPLATES[key];
+    onChange({
+      ...settings,
+      paperSize: key,
+      marginTop: template.marginTop,
+      marginBottom: template.marginBottom,
+      marginGutter: template.marginGutter,
+      marginOuter: template.marginEdge,
     });
   };
 
@@ -157,30 +132,17 @@ export default function PageSettingsPanel({
 
       {activeTab === "page" && (
         <div className="w-full">
-          <div className="flex flex-wrap items-center gap-2 px-4 pb-2 pt-3">
-            <span className="text-xs text-ink/60">プリセット適用:</span>
-            {SETTINGS_PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                onClick={() => onChange(preset.apply(settings))}
-                className="cursor-pointer select-none rounded-full border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 transition-colors hover:border-accent hover:bg-accent/10 hover:text-ink"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
           <span className="text-xs text-ink/60">用紙サイズ</span>
           <select
             value={settings.paperSize}
-            onChange={(e) => update("paperSize", e.target.value as PaperSizeKey)}
+            onChange={(e) => handlePaperSizeChange(e.target.value as PaperSizeKey)}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
-            {Object.entries(PAPER_SIZES).map(([key, size]) => (
+            {Object.entries(PAPER_SIZE_TEMPLATES).map(([key, size]) => (
               <option key={key} value={key}>
-                {size.label}（{size.widthMm}×{size.heightMm}mm）
+                {size.name}（{size.width}×{size.height}mm）
               </option>
             ))}
           </select>
