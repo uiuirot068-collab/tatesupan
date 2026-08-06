@@ -4,6 +4,7 @@ import {
   DEFAULT_PAGE_SETTINGS,
   type PageSettings,
 } from "./pageLayout";
+import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
 export interface DocumentRecord {
   id: number;
@@ -16,6 +17,8 @@ export interface DocumentRecord {
   isCollection?: boolean;
   /** 結合元となった作品（DocumentRecord.id）のリスト。isCollection のときのみ有効 */
   includedDocumentIds?: number[];
+  /** 削除不可の初期サンプル作品フラグ */
+  isSample?: boolean;
 }
 
 /** A 挿絵 (illustration) uploaded by the user. Referenced from `content` by id. */
@@ -64,12 +67,33 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
     plotNote: doc.plotNote ?? "",
     isCollection: doc.isCollection ?? false,
     includedDocumentIds: doc.includedDocumentIds ?? [],
+    isSample: doc.isSample ?? false,
   };
 }
 
+/** サンプル作品が未登録の場合、削除不可の初期サンプルとして IndexedDB に登録する。 */
+async function ensureSampleProject(): Promise<void> {
+  const existing = await db.documents.get(SAMPLE_PROJECT.id);
+  if (existing) return;
+  await db.documents.put({
+    id: SAMPLE_PROJECT.id,
+    title: SAMPLE_PROJECT.title,
+    content: SAMPLE_PROJECT.content,
+    isSample: true,
+    settings: DEFAULT_PAGE_SETTINGS,
+    plotNote: "",
+    updatedAt: Date.now(),
+  });
+}
+
 export async function listDocuments(): Promise<DocumentRecord[]> {
+  await ensureSampleProject();
   const docs = await db.documents.orderBy("updatedAt").reverse().toArray();
-  return docs.map(withDefaults);
+  const [samples, rest] = [
+    docs.filter((doc) => doc.isSample),
+    docs.filter((doc) => !doc.isSample),
+  ];
+  return [...samples, ...rest].map(withDefaults);
 }
 
 export async function loadDocument(id: number): Promise<DocumentRecord | undefined> {
@@ -113,6 +137,7 @@ export async function saveDocument(
 }
 
 export async function deleteDocument(id: number): Promise<void> {
+  if (id === SAMPLE_PROJECT.id) return;
   await db.documents.delete(id);
 }
 

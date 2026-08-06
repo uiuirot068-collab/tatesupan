@@ -37,7 +37,7 @@ export default function Home() {
     if (creating) return;
     setCreating(true);
     try {
-      const count = await db.documents.count();
+      const count = await db.documents.filter((doc) => !doc.isSample).count();
       if (count >= FREE_DOCUMENT_LIMIT) {
         setIsLimitModalOpen(true);
         return;
@@ -256,6 +256,11 @@ function DocumentCard({
             className="line-clamp-2 flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-sm font-semibold text-ink"
           >
             <span className="line-clamp-2">{doc.title || "無題のドキュメント"}</span>
+            {doc.isSample && (
+              <span className="shrink-0 rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                サンプル
+              </span>
+            )}
             {doc.isCollection && (
               <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
                 📚 短編集
@@ -278,18 +283,20 @@ function DocumentCard({
               ✎
             </button>
           )}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            aria-label="削除"
-            title="削除"
-            className="rounded p-1 text-xs text-ink/40 hover:bg-red-500/10 hover:text-red-500"
-          >
-            削除
-          </button>
+          {!doc.isSample && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              aria-label="削除"
+              title="削除"
+              className="rounded p-1 text-xs text-ink/40 hover:bg-red-500/10 hover:text-red-500"
+            >
+              削除
+            </button>
+          )}
         </div>
       </div>
       <p className="text-xs text-ink/50">最終更新: {formatUpdatedAt(doc.updatedAt)}</p>
