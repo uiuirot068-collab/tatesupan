@@ -97,6 +97,18 @@ export default function PageSettingsPanel({
     });
   };
 
+  const handleHideNombreOnFirstPageChange = (checked: boolean) => {
+    onChange({
+      ...settings,
+      masterPage: {
+        ...settings.masterPage,
+        hideNombreOnFirstPage: checked,
+        // チェックが入れられたら「隠しノンブル」も自動で有効化する
+        showHiddenNombre: checked ? true : settings.masterPage.showHiddenNombre,
+      },
+    });
+  };
+
   return (
     <div className="border-b border-ink/10">
       <div className="grid grid-cols-4">
@@ -329,12 +341,12 @@ export default function PageSettingsPanel({
             type="checkbox"
             checked={settings.masterPage.hideNombreOnFirstPage}
             onChange={(e) =>
-              updateMasterPage("hideNombreOnFirstPage", e.target.checked)
+              handleHideNombreOnFirstPageChange(e.target.checked)
             }
             className="h-4 w-4 rounded border-ink/30"
           />
           <span className="text-xs text-ink/60">
-            表紙・扉など先頭ページのノンブルを非表示
+            チェックしたページのノンブルを非表示
           </span>
         </label>
 
