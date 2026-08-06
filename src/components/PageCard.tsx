@@ -308,6 +308,7 @@ export default function PageCard({
             isOddPage={isOddPage}
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
+            fontFamily={textStyle.fontFamily as string}
           />
         )}
 
@@ -428,6 +429,7 @@ function HashiraOverlay({
   isOddPage,
   insetLeftPx,
   insetRightPx,
+  fontFamily,
 }: {
   text: string;
   position: "top" | "bottom";
@@ -435,6 +437,7 @@ function HashiraOverlay({
   isOddPage: boolean;
   insetLeftPx: number;
   insetRightPx: number;
+  fontFamily: string;
 }) {
   // 柱のコンテナは本文領域(小口境界)と同じ左右インセットを持たせ、
   // 小口側の端に文字が吸着するようテキスト側で text-align を指定する。
@@ -449,6 +452,7 @@ function HashiraOverlay({
     alignItems: "center",
     writingMode: "horizontal-tb",
     color: "#000000",
+    fontFamily,
   };
 
   const textStyle: CSSProperties = isOddPage
