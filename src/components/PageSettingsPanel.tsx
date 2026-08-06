@@ -11,6 +11,7 @@ import {
   type PaperSizeKey,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { calculateCustomLayout } from "@/utils/layoutCalculator";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -48,6 +49,36 @@ export default function PageSettingsPanel({
 
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
     onChange({ ...settings, [key]: value });
+  };
+
+  // 小口自動調整が有効な場合、文字数・行数から marginOuter（小口余白）を再計算する
+  const applyAutoEdgeAdjustment = (next: PageSettings): PageSettings => {
+    if (!next.autoAdjustEdge) return next;
+    const paper = PAPER_SIZE_TEMPLATES[next.paperSize];
+    const { marginEdge } = calculateCustomLayout({
+      paperWidth: paper.width,
+      paperHeight: paper.height,
+      marginTop: next.marginTop,
+      marginBottom: next.marginBottom,
+      marginGutter: next.marginGutter,
+      fontSizePt: next.fontSizePt,
+      charsPerLine: next.charsPerLine,
+      linesPerColumn: next.linesPerColumn,
+      columnsPerPage: next.columnCount,
+    });
+    return { ...next, marginOuter: marginEdge };
+  };
+
+  const handleCharsPerLineChange = (value: number) => {
+    onChange(applyAutoEdgeAdjustment({ ...settings, charsPerLine: value }));
+  };
+
+  const handleLinesPerColumnChange = (value: number) => {
+    onChange(applyAutoEdgeAdjustment({ ...settings, linesPerColumn: value }));
+  };
+
+  const handleAutoAdjustEdgeChange = (checked: boolean) => {
+    onChange(applyAutoEdgeAdjustment({ ...settings, autoAdjustEdge: checked }));
   };
 
   const updateMasterPage = <K extends keyof MasterPageSettings>(
@@ -167,6 +198,7 @@ export default function PageSettingsPanel({
           label="小口（外側）"
           value={settings.marginOuter}
           onChange={(v) => update("marginOuter", v)}
+          disabled={settings.autoAdjustEdge}
         />
 
         <label className="flex flex-col gap-1">
@@ -238,6 +270,40 @@ export default function PageSettingsPanel({
             onChange={(e) => update("columnGapMm", Number(e.target.value))}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">1行の文字数</span>
+          <input
+            type="number"
+            min={10}
+            max={60}
+            value={settings.charsPerLine}
+            onChange={(e) => handleCharsPerLineChange(Number(e.target.value))}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">1段の行数</span>
+          <input
+            type="number"
+            min={5}
+            max={40}
+            value={settings.linesPerColumn}
+            onChange={(e) => handleLinesPerColumnChange(Number(e.target.value))}
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:self-end sm:pb-1.5">
+          <input
+            type="checkbox"
+            checked={settings.autoAdjustEdge}
+            onChange={(e) => handleAutoAdjustEdgeChange(e.target.checked)}
+            className="h-4 w-4 rounded border-ink/30"
+          />
+          <span className="text-xs text-ink/60">小口に合わせる（自動調整）</span>
         </label>
       </div>
 
@@ -506,10 +572,12 @@ function MarginField({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-1">
@@ -520,8 +588,9 @@ function MarginField({
         max={60}
         step={0.5}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+        className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
       />
     </label>
   );

@@ -40,6 +40,9 @@ export interface PageSettings {
   columnCount: ColumnCount; // 段数
   columnGapMm: number; // 段間 (mm)
   fontFamily: string; // 本文フォント
+  charsPerLine: number; // 目標: 1行の文字数（小口自動調整の入力値）
+  linesPerColumn: number; // 目標: 1段の行数（小口自動調整の入力値）
+  autoAdjustEdge: boolean; // 小口余白を文字数・行数から自動調整するか
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
@@ -92,6 +95,9 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   columnCount: 1,
   columnGapMm: 8,
   fontFamily: "'Shippori Mincho', serif",
+  charsPerLine: 40,
+  linesPerColumn: 17,
+  autoAdjustEdge: true,
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
 };
