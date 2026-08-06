@@ -2,6 +2,7 @@
 
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { resetScaleTransformOnClone } from './exportCapture';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -85,6 +86,7 @@ export async function exportCustomPdf(
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
+      onclone: resetScaleTransformOnClone,
     });
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
 

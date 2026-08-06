@@ -7,6 +7,7 @@ declare module "html2canvas" {
     logging: boolean;
     width: number;
     height: number;
+    onclone: (document: Document, element: HTMLElement) => void | Promise<void>;
   }
 
   const html2canvas: (

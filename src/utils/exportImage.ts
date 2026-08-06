@@ -3,6 +3,7 @@
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { resetScaleTransformOnClone } from './exportCapture';
 
 /**
  * 指定された単一の原稿ページDOM要素を高画質JPGとしてダウンロード
@@ -15,6 +16,7 @@ export async function exportPageToJpg(element: HTMLElement, fileName: string = '
     useCORS: true,
     backgroundColor: '#ffffff',
     logging: false,
+    onclone: resetScaleTransformOnClone,
   });
 
   const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
@@ -42,6 +44,7 @@ export async function exportAllPagesToZip(
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
+      onclone: resetScaleTransformOnClone,
     });
 
     const blob = await new Promise<Blob | null>((resolve) => {

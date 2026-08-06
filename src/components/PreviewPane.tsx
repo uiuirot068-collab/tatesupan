@@ -565,6 +565,7 @@ export default function PreviewPane({
         onScroll={handlePreviewScroll}
       >
         <div
+          data-export-scale-root="true"
           className="m-auto flex w-max h-max flex-col gap-6"
           style={{
             // autoFitScale shrinks the spread to the container's measured
