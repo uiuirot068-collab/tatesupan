@@ -199,32 +199,98 @@ function DocumentCard({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(doc.title);
+
+  const startEditing = () => {
+    setTitleDraft(doc.title);
+    setIsEditingTitle(true);
+  };
+
+  const commitTitle = async () => {
+    const next = titleDraft.trim();
+    setIsEditingTitle(false);
+    if (next !== doc.title) {
+      await db.documents.update(doc.id, { title: next });
+    }
+  };
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpen}
+      onClick={isEditingTitle ? undefined : onOpen}
       onKeyDown={(e) => {
+        if (isEditingTitle) return;
         if (e.key === "Enter" || e.key === " ") onOpen();
       }}
       className="flex cursor-pointer flex-col gap-2 rounded-lg border border-ink/10 bg-base p-4 text-left shadow-sm transition-colors hover:border-accent/60"
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="line-clamp-2 text-sm font-semibold text-ink">
-          {doc.title || "無題のドキュメント"}
-        </h3>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label="削除"
-          title="削除"
-          className="shrink-0 rounded p-1 text-xs text-ink/40 hover:bg-red-500/10 hover:text-red-500"
-        >
-          削除
-        </button>
+        {isEditingTitle ? (
+          <input
+            type="text"
+            value={titleDraft}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => commitTitle()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitTitle();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setIsEditingTitle(false);
+              }
+            }}
+            className="min-w-0 flex-1 rounded border border-accent/60 bg-base px-1.5 py-0.5 text-sm font-semibold text-ink outline-none"
+          />
+        ) : (
+          <h3
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              startEditing();
+            }}
+            className="line-clamp-2 flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-sm font-semibold text-ink"
+          >
+            <span className="line-clamp-2">{doc.title || "無題のドキュメント"}</span>
+            {doc.isCollection && (
+              <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                📚 短編集
+              </span>
+            )}
+          </h3>
+        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {!isEditingTitle && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                startEditing();
+              }}
+              aria-label="タイトルを変更"
+              title="タイトルを変更"
+              className="rounded p-1 text-xs text-ink/40 hover:bg-ink/10 hover:text-ink"
+            >
+              ✎
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            aria-label="削除"
+            title="削除"
+            className="rounded p-1 text-xs text-ink/40 hover:bg-red-500/10 hover:text-red-500"
+          >
+            削除
+          </button>
+        </div>
       </div>
       <p className="text-xs text-ink/50">最終更新: {formatUpdatedAt(doc.updatedAt)}</p>
       <p className="text-xs text-ink/50">文字数目安: {estimateCharCount(doc.content)} 字</p>
