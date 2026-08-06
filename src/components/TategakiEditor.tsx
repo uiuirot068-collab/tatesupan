@@ -301,6 +301,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           onClose={() => setIsBookPartsModalOpen(false)}
           onInsert={handleBookPartsInsert}
           currentTitle={title}
+          content={content}
+          layout={layout}
+          settings={settings}
         />
       )}
 
