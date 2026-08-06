@@ -68,7 +68,15 @@ export default function PageSettingsPanel({
   onPlotNoteChange,
   onOpenHelp,
 }: PageSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab | null>("page");
+  const [activeTab, setActiveTab] = useState<SettingsTab | null>(() => {
+    if (typeof window === "undefined") return "page";
+    const hasOpened = localStorage.getItem("tatespun_has_opened_settings");
+    if (!hasOpened) {
+      localStorage.setItem("tatespun_has_opened_settings", "true");
+      return "page"; // 初回はオープン
+    }
+    return null; // 2回目以降は閉じる
+  });
   const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
 
   const toggleTab = (tab: SettingsTab) => {
