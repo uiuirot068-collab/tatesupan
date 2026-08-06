@@ -9,6 +9,7 @@ interface EditorPaneProps {
   content: string;
   onContentChange: (content: string) => void;
   onOpenSearchReplace: () => void;
+  onOpenBookParts: () => void;
   settings: PageSettings;
   layout: PageLayout;
   onSettingsChange: (settings: PageSettings) => void;
@@ -25,6 +26,7 @@ export default function EditorPane({
   content,
   onContentChange,
   onOpenSearchReplace,
+  onOpenBookParts,
   settings,
   layout,
   onSettingsChange,
@@ -77,6 +79,14 @@ export default function EditorPane({
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
             検索・置換
+          </button>
+          <button
+            type="button"
+            onClick={onOpenBookParts}
+            title="扉・奥付テキストを自動生成して挿入"
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            📖 扉・奥付
           </button>
         </div>
       </div>

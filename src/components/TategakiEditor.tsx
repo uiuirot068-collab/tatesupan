@@ -18,6 +18,7 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
+import { BookPartsModal } from "./BookPartsModal";
 import MobileTabBar, { type MobileTab } from "./MobileTabBar";
 import ThemeToggle from "./ThemeToggle";
 import HelpModal from "./HelpModal";
@@ -39,6 +40,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [images, setImages] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
@@ -192,6 +194,10 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
+  const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
+    setContent((prev) => (position === "start" ? textToInsert + prev : prev + textToInsert));
+  };
+
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
       <header className="relative z-10 flex shrink-0 items-center justify-between rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-lg">
@@ -240,6 +246,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             content={content}
             onContentChange={setContent}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
+            onOpenBookParts={() => setIsBookPartsModalOpen(true)}
             settings={settings}
             layout={layout}
             onSettingsChange={setSettings}
@@ -285,6 +292,15 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             setIsSearchOpen(false);
           }}
           onClose={() => setIsSearchOpen(false)}
+        />
+      )}
+
+      {isBookPartsModalOpen && (
+        <BookPartsModal
+          isOpen={isBookPartsModalOpen}
+          onClose={() => setIsBookPartsModalOpen(false)}
+          onInsert={handleBookPartsInsert}
+          currentTitle={title}
         />
       )}
 
