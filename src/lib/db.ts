@@ -72,7 +72,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
 }
 
 /** サンプル作品が未登録の場合、削除不可の初期サンプルとして IndexedDB に登録する。 */
-async function ensureSampleProject(): Promise<void> {
+export async function ensureSampleProject(): Promise<void> {
   const existing = await db.documents.get(SAMPLE_PROJECT.id);
   if (existing) return;
   await db.documents.put({
@@ -87,7 +87,6 @@ async function ensureSampleProject(): Promise<void> {
 }
 
 export async function listDocuments(): Promise<DocumentRecord[]> {
-  await ensureSampleProject();
   const docs = await db.documents.orderBy("updatedAt").reverse().toArray();
   const [samples, rest] = [
     docs.filter((doc) => doc.isSample),

@@ -45,6 +45,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const hasLoadedRef = useRef(false);
@@ -235,10 +236,14 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
         className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden pr-4 pb-4 md:flex-row md:gap-2 md:pr-6 md:pb-6"
       >
         <section
-          style={{ "--editor-w": `${editorWidthPercent}%` } as React.CSSProperties}
-          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex md:w-[var(--editor-w)] md:flex-none ${
-            mobileTab === "edit" ? "flex flex-col" : "hidden"
-          }`}
+          style={
+            {
+              "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
+            } as React.CSSProperties
+          }
+          className={`h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex md:flex-none ${
+            isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"
+          } ${mobileTab === "edit" ? "flex flex-col" : "hidden"}`}
         >
           <EditorPane
             title={title}
@@ -257,16 +262,18 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           />
         </section>
 
-        <div
-          onMouseDown={handleDividerMouseDown}
-          className="hidden w-1 shrink-0 cursor-col-resize bg-ink/10 transition-all hover:w-2 hover:bg-accent/60 active:bg-accent md:block"
-        />
+        {!isPreviewCollapsed && (
+          <div
+            onMouseDown={handleDividerMouseDown}
+            className="hidden w-1 shrink-0 cursor-col-resize bg-ink/10 transition-all hover:w-2 hover:bg-accent/60 active:bg-accent md:block"
+          />
+        )}
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`h-full min-h-0 min-w-0 flex-1 md:flex md:w-[var(--preview-w)] md:flex-none ${
-            mobileTab === "preview" ? "flex flex-col" : "hidden"
-          }`}
+          className={`h-full min-h-0 min-w-0 transition-all duration-200 md:flex md:flex-none ${
+            isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
+          } ${mobileTab === "preview" ? "flex flex-col" : "hidden"}`}
         >
           <PreviewPane
             content={content}
@@ -278,6 +285,8 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
             cursorIndex={cursorIndex}
+            isCollapsed={isPreviewCollapsed}
+            onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
           />
         </section>
       </main>

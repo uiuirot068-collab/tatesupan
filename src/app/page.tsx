@@ -2,9 +2,16 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { createDocument, db, deleteDocument, listDocuments, type DocumentRecord } from "@/lib/db";
+import {
+  createDocument,
+  db,
+  deleteDocument,
+  ensureSampleProject,
+  listDocuments,
+  type DocumentRecord,
+} from "@/lib/db";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
 import { CombineModal } from "@/components/CombineModal";
@@ -27,6 +34,9 @@ function formatUpdatedAt(updatedAt: number): string {
 
 export default function Home() {
   const router = useRouter();
+  useEffect(() => {
+    ensureSampleProject();
+  }, []);
   const documents = useLiveQuery(() => listDocuments(), []);
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
