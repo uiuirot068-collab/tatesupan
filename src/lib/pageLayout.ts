@@ -118,7 +118,7 @@ export const BLEED_MM = 3;
  * page edge, where `overflow: hidden` clips it in half instead of carrying
  * it to the next line/page.
  */
-const PAGE_SAFETY_MARGIN_CHARS = 0.5;
+export const PAGE_SAFETY_MARGIN_CHARS = 0.5;
 
 export interface PageLayout {
   paper: PaperSize;

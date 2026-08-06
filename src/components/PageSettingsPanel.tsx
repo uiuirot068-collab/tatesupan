@@ -24,6 +24,17 @@ interface PageSettingsPanelProps {
 
 type SettingsTab = "page" | "master" | "plot";
 
+// これらのフィールドは小口自動調整の計算式の入力にもなっているため、
+// 変更されるたびに marginOuter を再計算しないと、charsPerLine・
+// linesPerColumn の指定値と実際のプレビュー描画がずれてしまう。
+const AUTO_EDGE_DEPENDENT_KEYS = new Set<keyof PageSettings>([
+  "fontSizePt",
+  "lineHeightRatio",
+  "columnCount",
+  "columnGapMm",
+  "marginGutter",
+]);
+
 export default function PageSettingsPanel({
   settings,
   layout,
@@ -47,26 +58,25 @@ export default function PageSettingsPanel({
     setActiveTab((current) => (current === tab ? null : tab));
   };
 
-  const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
-    onChange({ ...settings, [key]: value });
-  };
-
   // 小口自動調整が有効な場合、文字数・行数から marginOuter（小口余白）を再計算する
   const applyAutoEdgeAdjustment = (next: PageSettings): PageSettings => {
     if (!next.autoAdjustEdge) return next;
     const paper = PAPER_SIZE_TEMPLATES[next.paperSize];
     const { marginEdge } = calculateCustomLayout({
       paperWidth: paper.width,
-      paperHeight: paper.height,
-      marginTop: next.marginTop,
-      marginBottom: next.marginBottom,
       marginGutter: next.marginGutter,
       fontSizePt: next.fontSizePt,
-      charsPerLine: next.charsPerLine,
+      lineHeightRatio: next.lineHeightRatio,
       linesPerColumn: next.linesPerColumn,
       columnsPerPage: next.columnCount,
+      columnGapMm: next.columnGapMm,
     });
     return { ...next, marginOuter: marginEdge };
+  };
+
+  const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
+    const next = { ...settings, [key]: value };
+    onChange(AUTO_EDGE_DEPENDENT_KEYS.has(key) ? applyAutoEdgeAdjustment(next) : next);
   };
 
   const handleCharsPerLineChange = (value: number) => {
