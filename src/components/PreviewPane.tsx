@@ -22,6 +22,9 @@ import PageCard from "./PageCard";
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
 
+/** Horizontal padding (px) of the scroll container (`p-6` = 1.5rem × 2 sides). */
+const SCROLL_CONTAINER_PADDING_X_PX = 48;
+
 interface PreviewPaneProps {
   content: string;
   settings: PageSettings;
@@ -104,6 +107,29 @@ export default function PreviewPane({
   const isPanningRef = useRef(false);
   const startPosRef = useRef({ x: 0, y: 0 });
   const scrollPosRef = useRef({ left: 0, top: 0 });
+
+  // Auto-fit: on narrow (mobile) viewports the spread's natural pixel width
+  // can exceed the scroll container, which used to just clip the overflow
+  // (overflow-x-hidden) and hide part of the manuscript. Track the
+  // container's measured width so the spread can be scaled down to fit
+  // instead, independent of the user's manual zoomScale above.
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const update = () => setContainerWidth(container.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const autoFitScale = useMemo(() => {
+    if (!containerWidth || spreadWidthPx <= 0) return 1;
+    const availableWidth = containerWidth - SCROLL_CONTAINER_PADDING_X_PX;
+    if (availableWidth <= 0) return 1;
+    return Math.min(1, availableWidth / spreadWidthPx);
+  }, [containerWidth, spreadWidthPx]);
 
   // Cursor-follow: scrolls the preview to the page containing the editor
   // caret. isAutoScrollingRef guards against the programmatic scroll being
@@ -511,7 +537,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-6"
+        className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-auto p-6"
         style={{ cursor: "grab" }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}
@@ -522,7 +548,10 @@ export default function PreviewPane({
         <div
           className="m-auto flex w-max h-max flex-col gap-6"
           style={{
-            transform: `scale(${zoomScale})`,
+            // autoFitScale shrinks the spread to the container's measured
+            // width on narrow (mobile) viewports; zoomScale is the user's
+            // manual zoom on top of that fitted baseline.
+            transform: `scale(${zoomScale * autoFitScale})`,
             // top-left origin keeps all scaled overflow in the
             // positive-scroll direction; a centered origin pushes half
             // the overflow to negative offsets that scrollLeft/scrollTop

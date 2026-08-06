@@ -84,6 +84,9 @@ export default function PageCard({
   const sheetStyle: CSSProperties = {
     position: "relative",
     writingMode: "vertical-rl",
+    WebkitWritingMode: "vertical-rl",
+    textOrientation: "upright",
+    WebkitTextOrientation: "upright",
     width: (paper.widthMm + BLEED_MM * 2) * PX_PER_MM,
     height: (paper.heightMm + BLEED_MM * 2) * PX_PER_MM,
     paddingTop: (settings.marginTop + BLEED_MM) * PX_PER_MM,
@@ -108,7 +111,7 @@ export default function PageCard({
 
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
+    wordBreak: "break-all",
     width: textAreaWidthPx,
     height: textAreaHeightPx,
     overflow: "hidden",
@@ -411,6 +414,9 @@ function HiddenNombreOverlay({
     left: isOddPage ? undefined : BLEED_MM * PX_PER_MM,
     right: isOddPage ? BLEED_MM * PX_PER_MM : undefined,
     writingMode: "vertical-rl",
+    WebkitWritingMode: "vertical-rl",
+    textOrientation: "upright",
+    WebkitTextOrientation: "upright",
     color: "#000000",
     fontSize: "6pt",
     letterSpacing: "1px",
