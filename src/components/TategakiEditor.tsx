@@ -12,7 +12,7 @@ import {
   saveImage,
   type ImageRecord,
 } from "@/lib/db";
-import { computePageLayout } from "@/lib/pageLayout";
+import { computePageLayout, DEFAULT_PAGE_SETTINGS } from "@/lib/pageLayout";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import EditorPane from "./EditorPane";
@@ -25,7 +25,7 @@ import Logo from "./Logo";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
-const AUTOSAVE_DELAY_MS = 800;
+const AUTOSAVE_DELAY_MS = 1500;
 
 export default function TategakiEditor({ documentId }: { documentId?: number }) {
   const router = useRouter();
@@ -46,6 +46,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [toast, setToast] = useState<string | null>(null);
 
   const hasLoadedRef = useRef(false);
+  // Tracks which document's data is currently reflected in state, so the
+  // autosave effect can refuse to write if a document switch is in flight.
+  const loadedDocIdRef = useRef<number | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
@@ -55,6 +58,11 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   useEffect(() => {
     let cancelled = false;
+
+    // Block the autosave effect from firing with a mismatched
+    // docId/content pair while this document switch is in flight.
+    hasLoadedRef.current = false;
+    setSaveStatus("loading");
 
     async function run() {
       let id = documentId && Number.isFinite(documentId) ? documentId : null;
@@ -68,14 +76,19 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
       const imageRecords = await loadAllImages();
       if (cancelled) return;
 
-      setDocId(id);
+      // Reset every field to the newly-loaded document's data (or blank
+      // defaults for a brand-new document) so no state from the
+      // previously-open document can leak into this one.
+      setTitle(doc?.title ?? "");
+      setContent(doc?.content ?? "");
+      setPlotNote(doc?.plotNote ?? "");
       if (doc) {
-        setTitle(doc.title);
-        setContent(doc.content);
-        setSettings(doc.settings);
-        setPlotNote(doc.plotNote ?? "");
+        setSettings(doc.settings ?? DEFAULT_PAGE_SETTINGS);
       }
       setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
+
+      loadedDocIdRef.current = id;
+      setDocId(id);
       hasLoadedRef.current = true;
       setSaveStatus("saved");
     }
@@ -84,8 +97,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [documentId, router]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -131,12 +143,20 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   useEffect(() => {
     if (!hasLoadedRef.current || docId === null) return;
+    // Guard against saving while a document switch is mid-flight: state may
+    // still hold the previous document's fields for one tick after docId
+    // changes but before the new document's data has fully loaded.
+    if (loadedDocIdRef.current !== docId) return;
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
+    const targetDocId = docId;
     saveTimeoutRef.current = setTimeout(() => {
-      saveDocument(docId, title, content, settings, plotNote)
+      // Re-check immediately before writing in case the user switched
+      // documents again during the debounce window.
+      if (loadedDocIdRef.current !== targetDocId) return;
+      saveDocument(targetDocId, title, content, settings, plotNote)
         .then(() => setSaveStatus("saved"))
         .catch(() => setSaveStatus("error"));
     }, AUTOSAVE_DELAY_MS);
@@ -159,7 +179,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   };
 
   const saveNow = () => {
-    if (docId === null) return;
+    if (docId === null || loadedDocIdRef.current !== docId) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaveStatus("saving");
     saveDocument(docId, title, content, settings, plotNote)
