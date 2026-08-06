@@ -12,6 +12,10 @@ export interface DocumentRecord {
   settings: PageSettings;
   plotNote?: string;
   updatedAt: number;
+  /** 短編集・再録本フラグ: 複数作品を結合して生成されたドキュメントか */
+  isCollection?: boolean;
+  /** 結合元となった作品（DocumentRecord.id）のリスト。isCollection のときのみ有効 */
+  includedDocumentIds?: number[];
 }
 
 /** A 挿絵 (illustration) uploaded by the user. Referenced from `content` by id. */
@@ -34,6 +38,10 @@ class TategakiDatabase extends Dexie {
       documents: "id, updatedAt",
       images: "id, createdAt",
     });
+    this.version(3).stores({
+      documents: "id, updatedAt, isCollection",
+      images: "id, createdAt",
+    });
   }
 }
 
@@ -54,6 +62,8 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
       pageOverrides: doc.settings?.pageOverrides ?? {},
     },
     plotNote: doc.plotNote ?? "",
+    isCollection: doc.isCollection ?? false,
+    includedDocumentIds: doc.includedDocumentIds ?? [],
   };
 }
 
@@ -87,7 +97,8 @@ export async function saveDocument(
   title: string,
   content: string,
   settings: PageSettings,
-  plotNote: string
+  plotNote: string,
+  collection?: { isCollection?: boolean; includedDocumentIds?: number[] }
 ): Promise<void> {
   await db.documents.put({
     id,
@@ -96,6 +107,8 @@ export async function saveDocument(
     settings,
     plotNote,
     updatedAt: Date.now(),
+    isCollection: collection?.isCollection,
+    includedDocumentIds: collection?.includedDocumentIds,
   });
 }
 
