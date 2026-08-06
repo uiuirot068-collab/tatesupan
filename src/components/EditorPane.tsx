@@ -57,12 +57,12 @@ export default function EditorPane({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
-      <div className="flex flex-none items-center justify-between border-b border-ink/10 px-4 py-2">
+      <div className="flex flex-none items-center justify-between border-b border-ink/10 px-4 py-3">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="無題のドキュメント"
-          className="w-full bg-transparent text-sm font-medium text-ink outline-none placeholder:text-ink/40"
+          placeholder="ドキュメント・タイトル名"
+          className="w-full bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
         />
         <div className="flex shrink-0 items-center gap-2">
           <button
