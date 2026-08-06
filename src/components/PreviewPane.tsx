@@ -252,6 +252,8 @@ export default function PreviewPane({
     } else if (event.ctrlKey || event.metaKey) {
       if (next.has(index)) next.delete(index);
       else next.add(index);
+    } else if (next.size === 1 && next.has(index)) {
+      next.clear();
     } else {
       next.clear();
       next.add(index);
