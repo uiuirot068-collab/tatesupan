@@ -381,10 +381,12 @@ function NombreOverlay({
     justifyContent,
     writingMode: "horizontal-tb",
     padding: `0 ${2 * PX_PER_MM}px`,
+    color: "#000000",
+    fontSize: "6pt",
   };
 
   return (
-    <div style={style} className="pointer-events-none select-none text-[10px] text-paper-ink/70">
+    <div style={style} className="pointer-events-none select-none">
       {value}
     </div>
   );
