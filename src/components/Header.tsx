@@ -69,15 +69,6 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         >
           ← 作品一覧
         </Link>
-        {onSelectProject && (
-          <button
-            type="button"
-            onClick={() => setIsProjectModalOpen(true)}
-            className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-medium px-3 py-1.5 rounded-md shadow-sm transition-colors text-sm"
-          >
-            保存作品一覧
-          </button>
-        )}
         <img
           src={logoSrc}
           alt="TateSpun"
@@ -127,9 +118,18 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="px-3 py-1.5 text-sm font-medium bg-amber-500 hover:bg-amber-600 text-white rounded-md shadow-sm transition-colors disabled:opacity-50 flex-none"
+            className="px-3 py-1.5 text-sm font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none"
           >
             {isSaving ? '保存中...' : 'クラウドに保存'}
+          </button>
+        )}
+        {onSelectProject && (
+          <button
+            type="button"
+            onClick={() => setIsProjectModalOpen(true)}
+            className="shrink-0 bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-3 py-1.5 rounded-full shadow-sm transition-colors text-sm"
+          >
+            保存作品一覧
           </button>
         )}
         {user ? (
