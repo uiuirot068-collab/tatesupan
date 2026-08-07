@@ -141,6 +141,8 @@ export default function PageCard({
   const hashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
   const showHashira = Boolean(hashiraText) && !isChromeSuppressed;
 
+  const showWebFooter = settings.paperSize === "Web閲覧用";
+
   const isInteractive = Boolean(onToggleSelect);
 
   // 挿絵 tokens are page-level decorations positioned via 天/中央/地/ページ全体
@@ -334,6 +336,13 @@ export default function PageCard({
           <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} />
         )}
 
+        {showWebFooter && (
+          <WebFooterOverlay
+            insetLeftPx={sheetStyle.paddingLeft as number}
+            insetRightPx={sheetStyle.paddingRight as number}
+          />
+        )}
+
         <TrimGuide />
       </div>
       <span className="text-xs text-ink/60">{pageNumber} ページ</span>
@@ -434,6 +443,34 @@ function HiddenNombreOverlay({
   return (
     <div style={style} className="pointer-events-none select-none">
       {value}
+    </div>
+  );
+}
+
+/** Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。 */
+function WebFooterOverlay({
+  insetLeftPx,
+  insetRightPx,
+}: {
+  insetLeftPx: number;
+  insetRightPx: number;
+}) {
+  const style: CSSProperties = {
+    position: "absolute",
+    left: insetLeftPx,
+    right: insetRightPx,
+    bottom: BLEED_MM * PX_PER_MM,
+    writingMode: "horizontal-tb",
+  };
+
+  return (
+    <div style={style} className="pointer-events-none select-none">
+      <div className="flex items-center justify-center gap-2 text-xs text-gray-600 border-t pt-2 mt-auto">
+        <img src="/img/caroad_main2.png" alt="logo" className="w-4 h-4 object-contain" />
+        <span>TateSpun</span>
+        <span>https://tatespun.pages.dev/</span>
+        <span>#スパンテイル</span>
+      </div>
     </div>
   );
 }
