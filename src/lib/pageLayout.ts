@@ -189,10 +189,9 @@ export function computePageLayout(settings: PageSettings): PageLayout {
       ? Math.max(Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS), 0)
       : 0;
 
-  const columnWidthMm = Math.max(
-    (textAreaWidthMm - columnGapMm * (columnCount - 1)) / columnCount,
-    0
-  );
+  // 縦書き2段組は上下スタック（上段・下段）であり、幅方向は段数で分割しない。
+  // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
+  const columnWidthMm = textAreaWidthMm;
 
   const linesPerColumn =
     linePitchMm > 0
