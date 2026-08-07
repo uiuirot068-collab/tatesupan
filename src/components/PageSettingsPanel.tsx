@@ -24,16 +24,6 @@ interface PageSettingsPanelProps {
 
 type SettingsTab = "page" | "master" | "plot";
 
-// これらのフィールドは小口自動調整の計算式の入力にもなっているため、
-// 変更されるたびに marginOuter を再計算しないと、charsPerLine・
-// linesPerColumn の指定値と実際のプレビュー描画がずれてしまう。
-const AUTO_EDGE_DEPENDENT_KEYS = new Set<keyof PageSettings>([
-  "fontSizePt",
-  "lineHeightRatio",
-  "columnGapMm",
-  "marginGutter",
-]);
-
 // layoutMode === "margin"（余白から設定する）のとき、これらのフィールドが
 // 変更されたら天地・ノド・小口余白から charsPerLine / linesPerColumn を
 // 逆算して settings に反映する。
@@ -119,22 +109,6 @@ export default function PageSettingsPanel({
     setActiveTab((current) => (current === tab ? null : tab));
   };
 
-  // 小口自動調整が有効な場合、文字数・行数から marginOuter（小口余白）を再計算する
-  const applyAutoEdgeAdjustment = (next: PageSettings): PageSettings => {
-    if (!next.autoAdjustEdge) return next;
-    const paper = PAPER_SIZE_TEMPLATES[next.paperSize];
-    const { marginEdge } = calculateCustomLayout({
-      paperWidth: paper.width,
-      marginGutter: next.marginGutter,
-      fontSizePt: next.fontSizePt,
-      lineHeightRatio: next.lineHeightRatio,
-      linesPerColumn: next.linesPerColumn,
-      columnsPerPage: next.columnCount,
-      columnGapMm: next.columnGapMm,
-    });
-    return { ...next, marginOuter: marginEdge };
-  };
-
   // layoutMode に応じて、片方のパラメータ変更からもう片方を自動逆算する。
   // - "margin": 天地・ノド・小口余白 → charsPerLine / linesPerColumn
   // - "capacity": charsPerLine / linesPerColumn → marginOuter（小口余白）
@@ -173,10 +147,7 @@ export default function PageSettingsPanel({
   };
 
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
-    let next = applyLayoutModeAdjustment({ ...settings, [key]: value }, key);
-    if (AUTO_EDGE_DEPENDENT_KEYS.has(key)) {
-      next = applyAutoEdgeAdjustment(next);
-    }
+    const next = applyLayoutModeAdjustment({ ...settings, [key]: value }, key);
     onChange(next);
   };
 
@@ -185,7 +156,7 @@ export default function PageSettingsPanel({
       { ...settings, charsPerLine: value },
       "charsPerLine"
     );
-    onChange(applyAutoEdgeAdjustment(next));
+    onChange(next);
   };
 
   const handleLinesPerColumnChange = (value: number) => {
@@ -193,11 +164,7 @@ export default function PageSettingsPanel({
       { ...settings, linesPerColumn: value },
       "linesPerColumn"
     );
-    onChange(applyAutoEdgeAdjustment(next));
-  };
-
-  const handleAutoAdjustEdgeChange = (checked: boolean) => {
-    onChange(applyAutoEdgeAdjustment({ ...settings, autoAdjustEdge: checked }));
+    onChange(next);
   };
 
   const handleLayoutModeChange = (mode: PageSettings["layoutMode"]) => {
@@ -342,7 +309,7 @@ export default function PageSettingsPanel({
           label="小口（外側）"
           value={settings.marginOuter}
           onChange={(v) => update("marginOuter", v)}
-          disabled={settings.autoAdjustEdge || settings.layoutMode === "capacity"}
+          disabled={settings.layoutMode === "capacity"}
         />
 
         <label className="flex flex-col gap-1">
@@ -440,16 +407,6 @@ export default function PageSettingsPanel({
             onChange={(e) => handleLinesPerColumnChange(Number(e.target.value))}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
-        </label>
-
-        <label className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:self-end sm:pb-1.5">
-          <input
-            type="checkbox"
-            checked={settings.autoAdjustEdge}
-            onChange={(e) => handleAutoAdjustEdgeChange(e.target.checked)}
-            className="h-4 w-4 rounded border-ink/30"
-          />
-          <span className="text-xs text-ink/60">小口に合わせる（自動調整）</span>
         </label>
       </div>
 
