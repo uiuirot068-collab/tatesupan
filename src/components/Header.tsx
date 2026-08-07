@@ -78,13 +78,13 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         />
         <div className="flex flex-col leading-tight">
           <span className="whitespace-nowrap flex-shrink-0 text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
-          <span className="whitespace-nowrap flex-shrink-0 text-xs text-gray-500">縦書きWebエディタ</span>
+          <span className="hidden sm:block whitespace-nowrap flex-shrink-0 text-xs text-gray-500">縦書きWebエディタ</span>
         </div>
         {saveStatus && <SaveStatusLabel status={saveStatus} />}
       </div>
       <div className="flex flex-wrap items-center gap-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
+          <span className="hidden sm:inline whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
           <button
             type="button"
             role="switch"
@@ -118,7 +118,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="px-3 py-1.5 text-sm font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0"
+            className="text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0"
           >
             {isSaving ? '保存中...' : 'クラウドに保存'}
           </button>
@@ -127,14 +127,14 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             onClick={() => setIsProjectModalOpen(true)}
-            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-3 py-1.5 rounded-full shadow-sm transition-colors text-sm"
+            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 rounded-full shadow-sm transition-colors"
           >
             保存作品一覧
           </button>
         )}
         {user ? (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="whitespace-nowrap flex-shrink-0 text-sm text-gray-600 ml-2">{user.email}</span>
+            <span className="hidden md:inline whitespace-nowrap flex-shrink-0 text-sm text-gray-600 ml-2">{user.email}</span>
             <button
               onClick={() => signOut()}
               className="whitespace-nowrap flex-shrink-0 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
