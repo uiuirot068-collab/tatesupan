@@ -28,9 +28,6 @@ export interface CalculatedLayoutResult {
   marginEdge: number; // 自動調整された小口余白 (mm)
 }
 
-/** 小口余白を計算する際に確保する最低限のマージン (mm)。 */
-const MIN_MARGIN_EDGE_MM = 8;
-
 /**
  * 指定された1段の行数（linesPerColumn）に収まるよう、小口余白
  * （marginEdge）を自動アライメント計算する。
@@ -66,7 +63,7 @@ export function calculateCustomLayout(
   const textAreaWidthMm = columnWidthMm * columnsPerPage + columnGapMm * (columnsPerPage - 1);
 
   const calculatedMarginEdge = Math.max(
-    MIN_MARGIN_EDGE_MM,
+    0,
     paperWidth - marginGutter - textAreaWidthMm
   );
 
