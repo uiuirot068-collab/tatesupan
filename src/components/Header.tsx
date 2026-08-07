@@ -37,9 +37,9 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
     error: 'text-red-500',
   };
   return (
-    <span className="flex items-center gap-1.5 text-xs">
+    <span className="flex items-center gap-1.5 text-xs whitespace-nowrap flex-shrink-0">
       <span className={`h-1.5 w-1.5 rounded-full ${dot[status]}`} />
-      <span className={label[status]}>{text[status]}</span>
+      <span className={`whitespace-nowrap ${label[status]}`}>{text[status]}</span>
     </span>
   );
 }
@@ -62,10 +62,10 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
 
   return (
     <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-3 gap-y-2">
         <Link
           href="/"
-          className="shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
+          className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
         >
           ← 作品一覧
         </Link>
@@ -77,14 +77,14 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           className="h-8 w-8 flex-shrink-0 object-contain"
         />
         <div className="flex flex-col leading-tight">
-          <span className="text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
-          <span className="text-xs text-gray-500">縦書きWebエディタ</span>
+          <span className="whitespace-nowrap flex-shrink-0 text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
+          <span className="whitespace-nowrap flex-shrink-0 text-xs text-gray-500">縦書きWebエディタ</span>
         </div>
         {saveStatus && <SaveStatusLabel status={saveStatus} />}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-700">画面モード</span>
+          <span className="whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
           <button
             type="button"
             role="switch"
@@ -108,7 +108,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             onClick={onOpenHelp}
             aria-label="使い方"
             title="使い方"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+            className="flex h-7 w-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100"
           >
             ？
           </button>
@@ -118,7 +118,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             type="button"
             onClick={onSave}
             disabled={isSaving}
-            className="px-3 py-1.5 text-sm font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none"
+            className="px-3 py-1.5 text-sm font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0"
           >
             {isSaving ? '保存中...' : 'クラウドに保存'}
           </button>
@@ -127,17 +127,17 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             onClick={() => setIsProjectModalOpen(true)}
-            className="shrink-0 bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-3 py-1.5 rounded-full shadow-sm transition-colors text-sm"
+            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-3 py-1.5 rounded-full shadow-sm transition-colors text-sm"
           >
             保存作品一覧
           </button>
         )}
         {user ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 ml-2">{user.email}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="whitespace-nowrap flex-shrink-0 text-sm text-gray-600 ml-2">{user.email}</span>
             <button
               onClick={() => signOut()}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              className="whitespace-nowrap flex-shrink-0 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
             >
               ログアウト
             </button>
@@ -145,7 +145,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         ) : (
           <button
             onClick={() => setIsAuthModalOpen(true)}
-            className="rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
+            className="whitespace-nowrap flex-shrink-0 rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
           >
             ログイン / 会員登録
           </button>
