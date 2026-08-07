@@ -82,9 +82,14 @@ export default function PageCard({
   const isOddPage = pageNumber % 2 === 1;
   const isFirstPage = pageNumber === 1;
 
+  // isPx（Web閲覧用等）ページは印刷を想定しないため、塗り足し・仕上がり線を
+  // 持たない。bleedMm を0にすることで、カード外形が paper.widthMm/heightMm
+  // からPX_PER_MMで再乗算した値（例: 768×1024px）とぴったり一致する。
+  const bleedMm = paper.isPx ? 0 : BLEED_MM;
+
   // 印刷用の塗り足し(3mm)を天地左右に確保するため、カード外形は仕上がり
   // サイズ(paper)より一回り大きく描画する。本文・柱・ノンブルは仕上がり線
-  // (内側 BLEED_MM) を基準に配置したいので、各余白に BLEED_MM を足して
+  // (内側 bleedMm) を基準に配置したいので、各余白に bleedMm を足して
   // 仕上がり線からの距離を維持する。
   const sheetStyle: CSSProperties = {
     position: "relative",
@@ -92,17 +97,17 @@ export default function PageCard({
     WebkitWritingMode: "vertical-rl",
     textOrientation: "upright",
     WebkitTextOrientation: "upright",
-    width: (paper.widthMm + BLEED_MM * 2) * PX_PER_MM,
-    height: (paper.heightMm + BLEED_MM * 2) * PX_PER_MM,
-    paddingTop: (settings.marginTop + BLEED_MM) * PX_PER_MM,
-    paddingBottom: (settings.marginBottom + BLEED_MM) * PX_PER_MM,
+    width: (paper.widthMm + bleedMm * 2) * PX_PER_MM,
+    height: (paper.heightMm + bleedMm * 2) * PX_PER_MM,
+    paddingTop: (settings.marginTop + bleedMm) * PX_PER_MM,
+    paddingBottom: (settings.marginBottom + bleedMm) * PX_PER_MM,
     // ノド(gutter) always faces the spine at the center of a 見開き spread,
     // 小口(outer) always faces the book's outer edge. On a recto (odd, left
     // page of a 右綴じ spread) the spine is on the right, so gutter goes
     // right; on a verso (even, right page) the spine is on the left, so it
     // mirrors.
-    paddingLeft: ((isOddPage ? settings.marginOuter : settings.marginGutter) + BLEED_MM) * PX_PER_MM,
-    paddingRight: ((isOddPage ? settings.marginGutter : settings.marginOuter) + BLEED_MM) * PX_PER_MM,
+    paddingLeft: ((isOddPage ? settings.marginOuter : settings.marginGutter) + bleedMm) * PX_PER_MM,
+    paddingRight: ((isOddPage ? settings.marginGutter : settings.marginOuter) + bleedMm) * PX_PER_MM,
   };
 
   // Font size must be scaled by the same PX_PER_MM factor as the page box
@@ -379,6 +384,7 @@ export default function PageCard({
             insetRightPx={sheetStyle.paddingRight as number}
             fontFamily={textStyle.fontFamily as string}
             fontSize={masterPage.headerFontSize}
+            bleedMm={bleedMm}
           />
         )}
 
@@ -391,16 +397,17 @@ export default function PageCard({
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
             fontSize={masterPage.nombreFontSize}
+            bleedMm={bleedMm}
           />
         )}
 
         {masterPage.showHiddenNombre && (
-          <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} />
+          <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
         )}
 
         {showWebFooter && <WebFooterOverlay />}
 
-        <TrimGuide />
+        {!paper.isPx && <TrimGuide />}
       </div>
       <span className="text-xs text-ink/60">{pageNumber} ページ</span>
     </div>
@@ -428,12 +435,14 @@ function NombreOverlay({
   isOddPage,
   bottomMarginMm,
   fontSize,
+  bleedMm,
 }: {
   value: number;
   position: "center" | "gutter" | "outer" | "left";
   isOddPage: boolean;
   bottomMarginMm: number;
   fontSize?: number;
+  bleedMm: number;
 }) {
   // Web閲覧用のノンブルは左下に固定表示する。
   if (position === "left") {
@@ -470,7 +479,7 @@ function NombreOverlay({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: (bottomMarginMm + BLEED_MM) * PX_PER_MM,
+    bottom: (bottomMarginMm + bleedMm) * PX_PER_MM,
     display: "flex",
     alignItems: "center",
     justifyContent,
@@ -494,17 +503,19 @@ function NombreOverlay({
 function HiddenNombreOverlay({
   value,
   isOddPage,
+  bleedMm,
 }: {
   value: number;
   isOddPage: boolean;
+  bleedMm: number;
 }) {
   // ノドは奇数ページ(左)では右端、偶数ページ(右)では左端に来る。
   const style: CSSProperties = {
     position: "absolute",
     top: "50%",
     transform: "translateY(-50%)",
-    left: isOddPage ? undefined : BLEED_MM * PX_PER_MM,
-    right: isOddPage ? BLEED_MM * PX_PER_MM : undefined,
+    left: isOddPage ? undefined : bleedMm * PX_PER_MM,
+    right: isOddPage ? bleedMm * PX_PER_MM : undefined,
     writingMode: "vertical-rl",
     WebkitWritingMode: "vertical-rl",
     textOrientation: "upright",
@@ -583,6 +594,7 @@ function HashiraOverlay({
   insetRightPx,
   fontFamily,
   fontSize,
+  bleedMm,
 }: {
   text: string;
   position: "top" | "bottom";
@@ -592,6 +604,7 @@ function HashiraOverlay({
   insetRightPx: number;
   fontFamily: string;
   fontSize?: number;
+  bleedMm: number;
 }) {
   // 柱のコンテナは本文領域(小口境界)と同じ左右インセットを持たせ、
   // 小口側の端に文字が吸着するようテキスト側で text-align を指定する。
@@ -599,8 +612,8 @@ function HashiraOverlay({
     position: "absolute",
     left: insetLeftPx,
     right: insetRightPx,
-    top: position === "top" ? BLEED_MM * PX_PER_MM : undefined,
-    bottom: position === "bottom" ? BLEED_MM * PX_PER_MM : undefined,
+    top: position === "top" ? bleedMm * PX_PER_MM : undefined,
+    bottom: position === "bottom" ? bleedMm * PX_PER_MM : undefined,
     height: marginMm * PX_PER_MM,
     display: "flex",
     alignItems: "center",
@@ -611,8 +624,8 @@ function HashiraOverlay({
   };
 
   const textStyle: CSSProperties = isOddPage
-    ? { textAlign: "left", width: "100%" }
-    : { textAlign: "right", width: "100%" };
+    ? { textAlign: "right", width: "100%" }
+    : { textAlign: "left", width: "100%" };
 
   return (
     <div style={style} className="pointer-events-none select-none">
