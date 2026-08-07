@@ -135,9 +135,8 @@ function tokenLength(token: TategakiToken): number {
   if (token.type === "text") return token.value.length;
   if (token.type === "ruby") return token.base.length;
   if (token.type === "image") {
-    // No font metrics available at this layer; approximate the vertical
-    // space an image occupies as character cells (~5mm per cell).
-    return Math.max(1, Math.round(token.heightMm / 5));
+    // 挿絵（image）は absolute オーバーレイ描画されるため、本文フローの文字数計算では 0 とする
+    return 0;
   }
   if (token.type === "pageBreak") return 0; // forces a break, occupies no space
   return 1; // a tate-chu-yoko pair occupies a single character cell
