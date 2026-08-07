@@ -129,8 +129,8 @@ export default function PageCard({
   const spaceDiffPx = lineBoxHeightPx - totalTextHeightPx;
   // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
   const gapCount = Math.max(1, layout.charsPerLine - 1);
-  // ブラウザのサブピクセル丸めによる1文字溢れを防ぐため、安全マージン0.5pxのみを差し引く
-  const safeSpaceDiffPx = Math.max(0, spaceDiffPx - 0.5);
+  // フォント描画時の蓄積誤差(約1.9px)を吸収し1文字溢れを防ぐため、安全マージン2.5pxを差し引く
+  const safeSpaceDiffPx = Math.max(0, spaceDiffPx - 2.5);
   const microSpacingPx = layout.charsPerLine > 1 ? safeSpaceDiffPx / gapCount : 0;
 
   const textStyle: CSSProperties = {
