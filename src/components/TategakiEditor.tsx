@@ -276,6 +276,14 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           >
             ？
           </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex-none"
+          >
+            {isSaving ? "保存中..." : "クラウドに保存"}
+          </button>
           <SaveStatusLabel status={saveStatus} />
         </div>
       </header>
