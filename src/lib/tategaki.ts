@@ -192,7 +192,7 @@ export function paginateTokens(
   const columnCount = metrics.columnCount === 2 ? 2 : 1;
   const linesPerColumn =
     columnCount === 2
-      ? Math.max(Math.floor(metrics.linesPerColumn ?? linesPerPage / 2), 1)
+      ? Math.max(Math.floor(metrics.linesPerColumn || linesPerPage / 2), 1)
       : linesPerPage;
   return paginateTokensByLines(tokens, charsPerLine, linesPerPage, columnCount, linesPerColumn);
 }
