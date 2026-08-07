@@ -119,14 +119,9 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
-    ...(settings.columnCount === 2
-      ? {
-          columnCount: 2,
-          columnGap: `${settings.columnGapMm * PX_PER_MM}px`,
-          columnFill: "auto",
-        }
-      : {}),
   };
+
+  const isTwoColumn = settings.columnCount === 2;
 
   // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
   // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが
@@ -281,17 +276,56 @@ export default function PageCard({
           <FullPageImage token={fullImage} images={images} />
         ) : (
           <>
-            <div style={textStyle}>
-              {flowTokens.length === 0 ? (
-                <span className="text-paper-ink/40">
-                  （本文を入力すると、ここに縦書きで表示されます）
-                </span>
-              ) : (
-                flowTokens.map((token, index) => (
-                  <TokenView key={index} token={token} indent={paragraphStarts[index]} />
-                ))
-              )}
-            </div>
+            {isTwoColumn && flowTokens.length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  width: textAreaWidthPx,
+                  height: textAreaHeightPx,
+                  rowGap: `${settings.columnGapMm * PX_PER_MM}px`,
+                  overflow: "hidden",
+                }}
+              >
+                {[0, 1].map((segmentIndex) => {
+                  const mid = Math.ceil(flowTokens.length / 2);
+                  const start = segmentIndex === 0 ? 0 : mid;
+                  const end = segmentIndex === 0 ? mid : flowTokens.length;
+                  return (
+                    <div
+                      key={segmentIndex}
+                      style={{
+                        ...textStyle,
+                        width: "100%",
+                        height: "auto",
+                        flex: "1 1 0",
+                        minHeight: 0,
+                      }}
+                    >
+                      {flowTokens.slice(start, end).map((token, index) => (
+                        <TokenView
+                          key={start + index}
+                          token={token}
+                          indent={paragraphStarts[start + index]}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={textStyle}>
+                {flowTokens.length === 0 ? (
+                  <span className="text-paper-ink/40">
+                    （本文を入力すると、ここに縦書きで表示されます）
+                  </span>
+                ) : (
+                  flowTokens.map((token, index) => (
+                    <TokenView key={index} token={token} indent={paragraphStarts[index]} />
+                  ))
+                )}
+              </div>
+            )}
 
             {topImages.length > 0 && (
               <ImagePositionOverlay tokens={topImages} images={images} position="top" />
