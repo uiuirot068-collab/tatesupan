@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type ColumnCount,
   type HashiraPosition,
@@ -72,20 +72,25 @@ export default function PageSettingsPanel({
   onPlotNoteChange,
   onOpenHelp,
 }: PageSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab | null>(() => {
-    if (typeof window === "undefined") return "page";
+  // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
+  // 同じ "page" に固定し、window/localStorage に依存する判定は
+  // マウント後の useEffect 内でのみ行う。
+  const [activeTab, setActiveTab] = useState<SettingsTab | null>("page");
+  const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
+
+  useEffect(() => {
     // モバイル画面（768px未満）は過去の閲覧履歴に関わらず必ず閉じる
     if (window.innerWidth < 768) {
-      return null;
+      setActiveTab(null);
+      return;
     }
     const hasOpened = localStorage.getItem("tatespun_has_opened_settings");
     if (!hasOpened) {
       localStorage.setItem("tatespun_has_opened_settings", "true");
-      return "page"; // 初回はオープン
+      return; // 初回はオープンのまま
     }
-    return null; // 2回目以降は閉じる
-  });
-  const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
+    setActiveTab(null); // 2回目以降は閉じる
+  }, []);
 
   const toggleTab = (tab: SettingsTab) => {
     setActiveTab((current) => (current === tab ? null : tab));
