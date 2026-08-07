@@ -1,18 +1,50 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from './AuthProvider';
 import { AuthModal } from './AuthModal';
 import { ProjectListModal } from './ProjectListModal';
 import { Project } from '@/types/database';
 
+type SaveStatus = 'loading' | 'saved' | 'saving' | 'error';
+
 interface HeaderProps {
   onSave?: () => void;
   onSelectProject?: (project: Project) => void;
   isSaving?: boolean;
+  saveStatus?: SaveStatus;
+  onOpenHelp?: () => void;
 }
 
-export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
+function SaveStatusLabel({ status }: { status: SaveStatus }) {
+  const text: Record<SaveStatus, string> = {
+    loading: '読み込み中…',
+    saving: '下書き保存中…',
+    saved: '下書き保存済み',
+    error: '下書きの保存に失敗しました',
+  };
+  const dot: Record<SaveStatus, string> = {
+    loading: 'bg-gray-300',
+    saving: 'bg-[#c5a059] animate-pulse',
+    saved: 'bg-[#c5a059]',
+    error: 'bg-red-500',
+  };
+  const label: Record<SaveStatus, string> = {
+    loading: 'text-gray-400',
+    saving: 'text-gray-600',
+    saved: 'text-gray-600',
+    error: 'text-red-500',
+  };
+  return (
+    <span className="flex items-center gap-1.5 text-xs">
+      <span className={`h-1.5 w-1.5 rounded-full ${dot[status]}`} />
+      <span className={label[status]}>{text[status]}</span>
+    </span>
+  );
+}
+
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp }: HeaderProps) {
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -29,8 +61,14 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
   const logoSrc = '/caroad_main2.png';
 
   return (
-    <header className="flex items-center justify-between border-b bg-white px-6 py-4 shadow-sm">
-      <div className="flex items-center gap-3">
+    <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link
+          href="/"
+          className="shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
+        >
+          ← 作品一覧
+        </Link>
         <img
           src={logoSrc}
           alt="TateSpun"
@@ -42,6 +80,7 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
           <span className="text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
           <span className="text-xs text-gray-500">縦書きWebエディタ</span>
         </div>
+        {saveStatus && <SaveStatusLabel status={saveStatus} />}
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
@@ -63,6 +102,27 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
             />
           </button>
         </div>
+        {onOpenHelp && (
+          <button
+            type="button"
+            onClick={onOpenHelp}
+            aria-label="使い方"
+            title="使い方"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+          >
+            ？
+          </button>
+        )}
+        {onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex-none"
+          >
+            {isSaving ? '保存中...' : 'クラウドに保存'}
+          </button>
+        )}
         {user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600 ml-2">{user.email}</span>

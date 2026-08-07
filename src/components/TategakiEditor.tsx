@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,9 +21,7 @@ import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
-import ThemeToggle from "./ThemeToggle";
 import HelpModal from "./HelpModal";
-import Logo from "./Logo";
 import { Header } from "./Header";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
@@ -251,42 +248,13 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
-      <Header onSave={handleSave} onSelectProject={handleSelectProject} isSaving={isSaving} />
-      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-lg">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/"
-            className="shrink-0 text-xs font-medium text-ink/60 hover:text-ink hover:underline"
-          >
-            ← 作品一覧
-          </Link>
-          <h1 className="flex min-w-0 items-center gap-2">
-            <Logo />
-            <span className="truncate font-normal text-sm text-ink/50">縦書きWebエディタ</span>
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => setIsHelpOpen(true)}
-            aria-label="使い方"
-            title="使い方"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink/20 text-xs font-semibold text-ink/70 hover:bg-ink/5"
-          >
-            ？
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex-none"
-          >
-            {isSaving ? "保存中..." : "クラウドに保存"}
-          </button>
-          <SaveStatusLabel status={saveStatus} />
-        </div>
-      </header>
+      <Header
+        onSave={handleSave}
+        onSelectProject={handleSelectProject}
+        isSaving={isSaving}
+        saveStatus={saveStatus}
+        onOpenHelp={() => setIsHelpOpen(true)}
+      />
 
       {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
 
@@ -388,32 +356,5 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
         </div>
       )}
     </div>
-  );
-}
-
-function SaveStatusLabel({ status }: { status: SaveStatus }) {
-  const text: Record<SaveStatus, string> = {
-    loading: "読み込み中…",
-    saving: "下書き保存中…",
-    saved: "下書き保存済み",
-    error: "下書きの保存に失敗しました",
-  };
-  const dot: Record<SaveStatus, string> = {
-    loading: "bg-ink/30",
-    saving: "bg-accent animate-pulse",
-    saved: "bg-accent",
-    error: "bg-red-500",
-  };
-  const label: Record<SaveStatus, string> = {
-    loading: "text-ink/40",
-    saving: "text-ink/70",
-    saved: "text-ink/70",
-    error: "text-red-500",
-  };
-  return (
-    <span className="flex items-center gap-1.5 text-xs">
-      <span className={`h-1.5 w-1.5 rounded-full ${dot[status]}`} />
-      <span className={label[status]}>{text[status]}</span>
-    </span>
   );
 }
