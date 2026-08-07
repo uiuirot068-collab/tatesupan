@@ -12,8 +12,6 @@ import {
   listDocuments,
   type DocumentRecord,
 } from "@/lib/db";
-import ThemeToggle from "@/components/ThemeToggle";
-import Logo from "@/components/Logo";
 import { CombineModal } from "@/components/CombineModal";
 import { Header } from "@/components/Header";
 
@@ -70,13 +68,6 @@ export default function Home() {
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
-      <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
-        <h1 className="flex items-center gap-2">
-          <Logo />
-          <span className="font-normal text-sm text-ink/50">縦書きWebエディタ</span>
-        </h1>
-        <ThemeToggle />
-      </header>
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center gap-8 px-4 py-10">
         <Image
