@@ -17,8 +17,63 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
     el.style.transition = 'none';
   });
 
+  resetPageCardTransforms(clonedDoc);
+  fixVerticalWritingModeLayout(clonedDoc);
+  fixExportedImageAspectRatio(clonedDoc);
   sanitizeUnsupportedColorFunctions(clonedDoc);
   applyExportOutputCleanup(clonedDoc);
+}
+
+/**
+ * `.page-card`/`[data-page-card]` (and their ancestors) can carry an
+ * on-screen `transform: scale(...)` or `zoom` from responsive/manual
+ * preview zoom. html2canvas computes vertical-rl glyph positions from the
+ * clone's post-transform box, so a lingering scale/zoom makes tategaki text
+ * overlap in the captured output. Force every page card and its ancestor
+ * chain back to an unscaled, 100% layout before capture.
+ */
+function resetPageCardTransforms(clonedDoc: Document): void {
+  const pageElements = clonedDoc.querySelectorAll<HTMLElement>('.page-card, [data-page-card]');
+  pageElements.forEach((el) => {
+    let current: HTMLElement | null = el;
+    while (current) {
+      current.style.setProperty('transform', 'none', 'important');
+      current.style.setProperty('zoom', '1', 'important');
+      current = current.parentElement;
+    }
+  });
+}
+
+/**
+ * Keeps vertical-rl (tategaki) text blocks from shifting or clipping in the
+ * clone: forces visible overflow and a stable positioning context so glyph
+ * placement matches what's on screen instead of being recomputed against a
+ * collapsed/scrolled box.
+ */
+function fixVerticalWritingModeLayout(clonedDoc: Document): void {
+  clonedDoc.querySelectorAll<HTMLElement>('div, p, span').forEach((el) => {
+    const writingMode = clonedDoc.defaultView?.getComputedStyle(el).writingMode;
+    if (!writingMode || !writingMode.includes('vertical-rl')) return;
+
+    el.style.setProperty('writing-mode', 'vertical-rl', 'important');
+    el.style.setProperty('overflow', 'visible', 'important');
+    if (clonedDoc.defaultView?.getComputedStyle(el).position === 'static') {
+      el.style.setProperty('position', 'relative', 'important');
+    }
+  });
+}
+
+/**
+ * Locks inserted `<img>` tags to their natural aspect ratio during capture
+ * so cover/crop CSS applied for the live layout doesn't stretch or distort
+ * them in the exported image.
+ */
+function fixExportedImageAspectRatio(clonedDoc: Document): void {
+  clonedDoc.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+    img.style.setProperty('object-fit', 'contain', 'important');
+    img.style.setProperty('width', '100%', 'important');
+    img.style.setProperty('height', 'auto', 'important');
+  });
 }
 
 /**
