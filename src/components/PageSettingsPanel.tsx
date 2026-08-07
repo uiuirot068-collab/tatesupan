@@ -129,6 +129,10 @@ export default function PageSettingsPanel({
     onChange(applyAutoEdgeAdjustment({ ...settings, autoAdjustEdge: checked }));
   };
 
+  const handleLayoutModeChange = (mode: PageSettings["layoutMode"]) => {
+    onChange({ ...settings, layoutMode: mode });
+  };
+
   const updateMasterPage = <K extends keyof MasterPageSettings>(
     key: K,
     value: MasterPageSettings[K]
@@ -207,6 +211,30 @@ export default function PageSettingsPanel({
 
       {activeTab === "page" && (
         <div className="w-full">
+          <div className="flex gap-1 px-4 pt-3">
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("margin")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                settings.layoutMode === "margin"
+                  ? "bg-accent text-paper-ink"
+                  : "text-ink/60 hover:bg-ink/5"
+              }`}
+            >
+              余白から設定する
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("capacity")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                settings.layoutMode === "capacity"
+                  ? "bg-accent text-paper-ink"
+                  : "text-ink/60 hover:bg-ink/5"
+              }`}
+            >
+              文字数・行数から設定する
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
           <span className="text-xs text-ink/60">用紙サイズ</span>
@@ -242,7 +270,7 @@ export default function PageSettingsPanel({
           label="小口（外側）"
           value={settings.marginOuter}
           onChange={(v) => update("marginOuter", v)}
-          disabled={settings.autoAdjustEdge}
+          disabled={settings.autoAdjustEdge || settings.layoutMode === "capacity"}
         />
 
         <label className="flex flex-col gap-1">
@@ -323,8 +351,9 @@ export default function PageSettingsPanel({
             min={10}
             max={60}
             value={settings.charsPerLine}
+            disabled={settings.layoutMode === "margin"}
             onChange={(e) => handleCharsPerLineChange(Number(e.target.value))}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
 
@@ -335,8 +364,9 @@ export default function PageSettingsPanel({
             min={5}
             max={40}
             value={settings.linesPerColumn}
+            disabled={settings.layoutMode === "margin"}
             onChange={(e) => handleLinesPerColumnChange(Number(e.target.value))}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
 

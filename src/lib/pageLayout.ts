@@ -43,6 +43,7 @@ export interface PageSettings {
   charsPerLine: number; // 目標: 1行の文字数（小口自動調整の入力値）
   linesPerColumn: number; // 目標: 1段の行数（小口自動調整の入力値）
   autoAdjustEdge: boolean; // 小口余白を文字数・行数から自動調整するか
+  layoutMode: "margin" | "capacity"; // 設定モード: 余白から設定 / 文字数・行数から設定
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
@@ -102,6 +103,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   charsPerLine: 40,
   linesPerColumn: 17,
   autoAdjustEdge: true,
+  layoutMode: "capacity",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
 };
