@@ -259,6 +259,52 @@ function paginateTokensByLines(
 }
 
 /**
+ * Finds the index within one page's tokens where `lineCount` rendered lines
+ * have been completed, using the same charsPerLine wrap accounting as
+ * `paginateTokensByLines`. A page's tokens are already chunked at line
+ * boundaries by that same accounting, so the boundary this returns always
+ * falls between tokens — no token needs to be split mid-way. Used to divide
+ * a 2-column page's tokens between its top and bottom column boxes without
+ * relying on raw token count, which drifts from actual line count whenever
+ * ruby/tcy tokens (common in Japanese prose) are mixed into the flow.
+ */
+export function findColumnBreakIndex(
+  tokens: TategakiToken[],
+  charsPerLine: number,
+  lineCount: number
+): number {
+  let lineIndex = 0;
+  let lineChars = 0;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (lineIndex >= lineCount) return index;
+    const token = tokens[index];
+
+    if (token.type === "pageBreak") continue;
+
+    if (isBareNewline(token)) {
+      lineIndex += 1;
+      lineChars = 0;
+      continue;
+    }
+
+    const length = tokenLength(token);
+    if (lineChars > 0 && lineChars + length > charsPerLine) {
+      lineIndex += 1;
+      lineChars = 0;
+      if (lineIndex >= lineCount) return index;
+    }
+    lineChars += length;
+    if (lineChars >= charsPerLine) {
+      lineIndex += 1;
+      lineChars = 0;
+    }
+  }
+
+  return tokens.length;
+}
+
+/**
  * Same pagination as `paginateTokens`, but reports each page's raw source
  * character range `[start, end)` instead of its tokens — used to map an
  * editor caret position (a raw character index) back to a page number.

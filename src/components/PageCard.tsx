@@ -1,5 +1,10 @@
 import { Fragment, useRef, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
-import { computeParagraphStartFlags, type ImagePosition, type TategakiToken } from "@/lib/tategaki";
+import {
+  computeParagraphStartFlags,
+  findColumnBreakIndex,
+  type ImagePosition,
+  type TategakiToken,
+} from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 
 // 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
@@ -151,6 +156,14 @@ export default function PageCard({
   const centerImages = imageTokens.filter((token) => token.position === "center");
   const bottomImages = imageTokens.filter((token) => token.position === "bottom");
 
+  // 段組みの折り返しはトークン数ではなく実際の行数で判定する。ルビ・縦中横
+  // トークンは1個あたりの文字幅が本文と大きく異なるため、単純に配列を半分に
+  // 割ると上段・下段の文字量が実際の収容行数（linesPerColumn）とずれ、下段が
+  // 空になったり上段があふれて欠けたりする不具合につながる。
+  const columnBreakIndex = isTwoColumn
+    ? findColumnBreakIndex(flowTokens, layout.charsPerLine, layout.linesPerColumn)
+    : 0;
+
   return (
     <div
       className={`flex shrink-0 flex-col items-center gap-2 rounded-md p-1 transition-colors ${
@@ -289,9 +302,8 @@ export default function PageCard({
                   style={{ gap: `${settings.columnGapMm}mm` }}
                 >
                   {[0, 1].map((segmentIndex) => {
-                    const mid = Math.ceil(flowTokens.length / 2);
-                    const start = segmentIndex === 0 ? 0 : mid;
-                    const end = segmentIndex === 0 ? mid : flowTokens.length;
+                    const start = segmentIndex === 0 ? 0 : columnBreakIndex;
+                    const end = segmentIndex === 0 ? columnBreakIndex : flowTokens.length;
                     return (
                       <div
                         key={segmentIndex}
