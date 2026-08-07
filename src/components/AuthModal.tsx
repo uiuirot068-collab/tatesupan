@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { createClient } from '../lib/supabase/client';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -8,13 +9,45 @@ interface AuthModalProps {
   onSuccess?: () => void;
 }
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const supabase = createClient();
 
   if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (isSignUp) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) throw signUpError;
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+      }
+
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || '認証に失敗しました。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -37,7 +70,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         )}
 
-        <form onSubmit={(e) => e.preventDefault()} className="mt-4 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
               メールアドレス
@@ -69,9 +102,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
           <button
             type="submit"
-            className="mt-2 w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            disabled={isLoading}
+            className="mt-2 w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
           >
-            {isSignUp ? '登録する' : 'ログイン'}
+            {isLoading ? '処理中...' : isSignUp ? '登録する' : 'ログイン'}
           </button>
         </form>
 

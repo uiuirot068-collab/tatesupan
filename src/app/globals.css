@@ -25,7 +25,7 @@
   --color-accent: var(--accent);
   --color-paper: var(--paper);
   --color-paper-ink: var(--paper-ink);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 

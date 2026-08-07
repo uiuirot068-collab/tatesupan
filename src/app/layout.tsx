@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TateSpun（タテスパン） | 縦書きWebエディタ",
-  description: "縦書きプレビュー付きのテキストエディタ プロトタイプ",
+  title: "タテスパン | 縦書き小説PDF組版ツール",
+  description: "Web上で簡単に縦書きWeb小説のPDF組み換えができるツールです。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -24,14 +25,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="ja"
       data-theme="light"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Zen+Old+Mincho:wght@400;700&display=swap"
           rel="stylesheet"
         />
-        <script
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`,
           }}
