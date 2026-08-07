@@ -104,7 +104,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+            className="mt-2 w-full rounded bg-[#c5a059] py-2 text-sm font-semibold text-white hover:bg-[#b38f48] disabled:bg-[#c5a059]/50"
           >
             {isLoading ? '処理中...' : isSignUp ? '登録する' : 'ログイン'}
           </button>

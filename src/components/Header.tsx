@@ -29,7 +29,7 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
               <button
                 onClick={onSave}
                 disabled={isSaving}
-                className="rounded bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
+                className="rounded bg-[#c5a059] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48] disabled:bg-[#c5a059]/50"
               >
                 {isSaving ? '保存中...' : 'クラウド保存'}
               </button>
@@ -53,7 +53,7 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
         ) : (
           <button
             onClick={() => setIsAuthModalOpen(true)}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+            className="rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
           >
             ログイン / 会員登録
           </button>
