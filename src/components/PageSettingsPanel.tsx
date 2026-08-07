@@ -375,7 +375,7 @@ export default function PageSettingsPanel({
             </select>
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex w-28 max-w-[110px] flex-none flex-col gap-1">
             <span className="text-xs text-ink/60">開始ページ番号</span>
             <input
               type="number"
@@ -385,7 +385,7 @@ export default function PageSettingsPanel({
               onChange={(e) =>
                 updateMasterPage("nombreStart", Number(e.target.value))
               }
-              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              className="w-28 max-w-[110px] flex-none rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
             />
           </label>
 
