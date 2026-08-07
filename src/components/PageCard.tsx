@@ -126,9 +126,12 @@ export default function PageCard({
   const lineBoxHeightPx = (isTwoColumn ? layout.columnHeightMm : layout.textAreaHeightMm) * PX_PER_MM;
   // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
   const totalTextHeightPx = layout.charsPerLine * fontSizePx;
-  const spaceDiffPx = Math.max(0, lineBoxHeightPx - totalTextHeightPx);
-  // 1文字あたりに配分する微小ピッチ(px)
-  const microSpacingPx = layout.charsPerLine > 0 ? spaceDiffPx / layout.charsPerLine : 0;
+  const spaceDiffPx = lineBoxHeightPx - totalTextHeightPx;
+  // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
+  const gapCount = Math.max(1, layout.charsPerLine - 1);
+  // ブラウザのサブピクセル丸めによる1文字溢れを防ぐため、安全マージン0.5pxのみを差し引く
+  const safeSpaceDiffPx = Math.max(0, spaceDiffPx - 0.5);
+  const microSpacingPx = layout.charsPerLine > 1 ? safeSpaceDiffPx / gapCount : 0;
 
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
