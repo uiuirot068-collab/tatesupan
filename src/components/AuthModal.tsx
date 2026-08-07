@@ -32,6 +32,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           password,
         });
         if (signUpError) throw signUpError;
+        alert('アカウントを作成し、ログインしました');
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
