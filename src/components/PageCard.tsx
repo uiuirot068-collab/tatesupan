@@ -160,10 +160,7 @@ export default function PageCard({
   // 直接振り分け済み。ここでは挿絵トークンを取り除いて描画するだけでよく、
   // 独自に配列位置を再計算する必要はない。
   const columnFlowTokens = page.columns
-    ? (page.columns.map((column) => column.filter((token) => token.type !== "image")) as [
-        TategakiToken[],
-        TategakiToken[],
-      ])
+    ? page.columns.map((column) => column.filter((token) => token.type !== "image"))
     : null;
 
   return (

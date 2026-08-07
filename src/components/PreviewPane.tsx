@@ -15,7 +15,7 @@ import {
   paginateTokens,
   tokenizeTategaki,
   type ImagePosition,
-  type TategakiToken,
+  type TategakiPage,
 } from "@/lib/tategaki";
 import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
@@ -73,8 +73,16 @@ export default function PreviewPane({
     return paginateTokens(tokens, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
+      columnCount: settings.columnCount,
+      linesPerColumn: layout.linesPerColumn,
     });
-  }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
+  }, [
+    deferredContent,
+    layout.charsPerLine,
+    layout.linesPerPage,
+    layout.linesPerColumn,
+    settings.columnCount,
+  ]);
 
   const pageSourceRanges = useMemo(
     () =>
@@ -298,9 +306,9 @@ export default function PreviewPane({
 
   const canReorder = Boolean(onContentChange);
 
-  const applyReorder = (nextPages: TategakiToken[][], nextSelected: Set<number>) => {
+  const applyReorder = (nextPages: TategakiPage[], nextSelected: Set<number>) => {
     if (!onContentChange) return;
-    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     setSelected(nextSelected);
   };
 
@@ -383,12 +391,18 @@ export default function PreviewPane({
       );
       const id = crypto.randomUUID();
       onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
-      const nextPages = pages.map((tokens, i) =>
+      const nextPages = pages.map((page, i) =>
         i === index
-          ? [...tokens, { type: "image" as const, id, widthMm, heightMm, position: "center" as const }]
-          : tokens
+          ? {
+              ...page,
+              tokens: [
+                ...page.tokens,
+                { type: "image" as const, id, widthMm, heightMm, position: "center" as const },
+              ],
+            }
+          : page
       );
-      onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+      onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像の挿入に失敗しました。");
     } finally {
@@ -399,22 +413,30 @@ export default function PreviewPane({
   const handleImagePositionChange =
     (index: number) => (imageId: string, position: ImagePosition) => {
       if (!onContentChange) return;
-      const nextPages = pages.map((tokens, i) =>
+      const nextPages = pages.map((page, i) =>
         i === index
-          ? tokens.map((token) =>
-              token.type === "image" && token.id === imageId ? { ...token, position } : token
-            )
-          : tokens
+          ? {
+              ...page,
+              tokens: page.tokens.map((token) =>
+                token.type === "image" && token.id === imageId ? { ...token, position } : token
+              ),
+            }
+          : page
       );
-      onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+      onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     };
 
   const handleImageDelete = (index: number) => (imageId: string) => {
     if (!onContentChange) return;
-    const nextPages = pages.map((tokens, i) =>
-      i === index ? tokens.filter((token) => !(token.type === "image" && token.id === imageId)) : tokens
+    const nextPages = pages.map((page, i) =>
+      i === index
+        ? {
+            ...page,
+            tokens: page.tokens.filter((token) => !(token.type === "image" && token.id === imageId)),
+          }
+        : page
     );
-    onContentChange(nextPages.map((tokens) => detokenizeTategaki(tokens)).join(""));
+    onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     onImageDelete?.(imageId);
   };
 
@@ -620,7 +642,7 @@ export default function PreviewPane({
                 <div key={index} ref={registerPageElement(index)} className="flex shrink-0">
                   <PageCard
                     pageNumber={index + 1}
-                    tokens={pages[index]}
+                    page={pages[index]}
                     startsNewParagraph={paragraphStarts[index]}
                     settings={settings}
                     layout={layout}
