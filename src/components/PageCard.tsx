@@ -279,39 +279,46 @@ export default function PageCard({
             {isTwoColumn && flowTokens.length > 0 ? (
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
                   width: textAreaWidthPx,
                   height: textAreaHeightPx,
-                  rowGap: `${settings.columnGapMm * PX_PER_MM}px`,
                   overflow: "hidden",
                 }}
               >
-                {[0, 1].map((segmentIndex) => {
-                  const mid = Math.ceil(flowTokens.length / 2);
-                  const start = segmentIndex === 0 ? 0 : mid;
-                  const end = segmentIndex === 0 ? mid : flowTokens.length;
-                  return (
-                    <div
-                      key={segmentIndex}
-                      style={{
-                        ...textStyle,
-                        width: "100%",
-                        height: "auto",
-                        flex: "1 1 0",
-                        minHeight: 0,
-                      }}
-                    >
-                      {flowTokens.slice(start, end).map((token, index) => (
-                        <TokenView
-                          key={start + index}
-                          token={token}
-                          indent={paragraphStarts[start + index]}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
+                <div
+                  className="w-full h-full flex flex-col justify-between"
+                  style={{ gap: `${settings.columnGapMm}mm` }}
+                >
+                  {[0, 1].map((segmentIndex) => {
+                    const mid = Math.ceil(flowTokens.length / 2);
+                    const start = segmentIndex === 0 ? 0 : mid;
+                    const end = segmentIndex === 0 ? mid : flowTokens.length;
+                    return (
+                      <div
+                        key={segmentIndex}
+                        className="w-full overflow-hidden"
+                        style={{
+                          height: `calc((100% - ${settings.columnGapMm}mm) / 2)`,
+                          writingMode: "vertical-rl",
+                          textOrientation: "mixed",
+                          whiteSpace: textStyle.whiteSpace,
+                          wordBreak: textStyle.wordBreak,
+                          fontSize: textStyle.fontSize,
+                          fontFamily: textStyle.fontFamily,
+                          lineHeight: textStyle.lineHeight,
+                          color: textStyle.color,
+                        }}
+                      >
+                        {flowTokens.slice(start, end).map((token, index) => (
+                          <TokenView
+                            key={start + index}
+                            token={token}
+                            indent={paragraphStarts[start + index]}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div style={textStyle}>
