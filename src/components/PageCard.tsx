@@ -338,12 +338,7 @@ export default function PageCard({
           <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} />
         )}
 
-        {showWebFooter && (
-          <WebFooterOverlay
-            insetLeftPx={sheetStyle.paddingLeft as number}
-            insetRightPx={sheetStyle.paddingRight as number}
-          />
-        )}
+        {showWebFooter && <WebFooterOverlay />}
 
         <TrimGuide />
       </div>
@@ -453,29 +448,35 @@ function HiddenNombreOverlay({
 }
 
 /** Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。 */
-function WebFooterOverlay({
-  insetLeftPx,
-  insetRightPx,
-}: {
-  insetLeftPx: number;
-  insetRightPx: number;
-}) {
+function WebFooterOverlay() {
+  // 親のsheetStyleが writingMode: vertical-rl を敷いているため、ここで
+  // horizontal-tb に強制解除しないとロゴ・文字列が縦書きに巻き込まれて崩れる。
   const style: CSSProperties = {
     position: "absolute",
-    left: insetLeftPx,
-    right: insetRightPx,
-    bottom: BLEED_MM * PX_PER_MM,
+    bottom: "8px",
+    left: 0,
+    width: "100%",
     writingMode: "horizontal-tb",
+    whiteSpace: "nowrap",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "8px",
+    fontFamily: '"Shippori Mincho", serif',
+    fontSize: "11px",
+    color: "#666",
   };
 
   return (
     <div style={style} className="pointer-events-none select-none">
-      <div className="flex items-center justify-center gap-2 text-xs text-gray-600 border-t pt-2 mt-auto">
-        <img src="/img/caroad_main2.png" alt="logo" className="w-4 h-4 object-contain" />
-        <span>TateSpun</span>
-        <span>https://tatespun.pages.dev/</span>
-        <span>#スパンテイル</span>
-      </div>
+      <img
+        src="/caroad_main2.png"
+        alt="logo"
+        style={{ width: "16px", height: "16px", objectFit: "contain" }}
+      />
+      <span>TateSpun</span>
+      <span>https://tatespun.pages.dev/</span>
+      <span>#スパンテイル</span>
     </div>
   );
 }
