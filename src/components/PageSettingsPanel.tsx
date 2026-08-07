@@ -35,6 +35,23 @@ const AUTO_EDGE_DEPENDENT_KEYS = new Set<keyof PageSettings>([
   "marginGutter",
 ]);
 
+// PAPER_SIZE_TEMPLATES にはフォントサイズ・ノンブル位置の情報がないため、
+// 用紙サイズごとの推奨値をここで保持する。
+// Web閲覧用のノンブルは PageCard 側で自動的に左寄せ表示されるため、
+// ここでは基準値の "center" を保持しておく。
+const PAPER_SIZE_FONT_AND_NOMBRE: Record<
+  PaperSizeKey,
+  { fontSizePt: number; nombrePosition: NombrePosition }
+> = {
+  Web閲覧用: { fontSizePt: 15, nombrePosition: "center" },
+  A5: { fontSizePt: 9.5, nombrePosition: "center" },
+  B5: { fontSizePt: 10, nombrePosition: "center" },
+  B6: { fontSizePt: 9, nombrePosition: "center" },
+  新書: { fontSizePt: 9, nombrePosition: "center" },
+  A6: { fontSizePt: 9, nombrePosition: "center" },
+  文庫: { fontSizePt: 9, nombrePosition: "center" },
+};
+
 export default function PageSettingsPanel({
   settings,
   layout,
@@ -107,6 +124,7 @@ export default function PageSettingsPanel({
 
   const handlePaperSizeChange = (key: PaperSizeKey) => {
     const template = PAPER_SIZE_TEMPLATES[key];
+    const { fontSizePt, nombrePosition } = PAPER_SIZE_FONT_AND_NOMBRE[key];
     onChange({
       ...settings,
       paperSize: key,
@@ -114,6 +132,11 @@ export default function PageSettingsPanel({
       marginBottom: template.marginBottom,
       marginGutter: template.marginGutter,
       marginOuter: template.marginEdge,
+      fontSizePt,
+      masterPage: {
+        ...settings.masterPage,
+        nombrePosition,
+      },
     });
   };
 
