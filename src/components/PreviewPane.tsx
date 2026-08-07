@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from "react";
 import {
+  PAGE_BREAK_MARKER,
   computePageParagraphStarts,
   computePageSourceRanges,
   detokenizeTategaki,
@@ -96,6 +97,19 @@ export default function PreviewPane({
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
   const paragraphStarts = useMemo(() => computePageParagraphStarts(pages), [pages]);
+
+  // Maps each paginated page object back to its position in `pages` so
+  // reorder reconstruction can tell which pages were originally adjacent
+  // (moveSelected/reorderByDrag rearrange these same references, they never
+  // clone), letting it pull exact original source text instead of
+  // re-detokenizing — detokenizing drops 【改ページ】 markers entirely, since
+  // paginateTokensByLines consumes pageBreak tokens without ever placing
+  // them into a page's `tokens` array.
+  const pageOriginalIndex = useMemo(() => {
+    const map = new Map<TategakiPage, number>();
+    pages.forEach((page, i) => map.set(page, i));
+    return map;
+  }, [pages]);
 
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads.
@@ -306,9 +320,48 @@ export default function PreviewPane({
 
   const canReorder = Boolean(onContentChange);
 
+  // Rebuilds document text for a reordered page sequence. Runs of pages that
+  // were already consecutive in the original order are copied verbatim from
+  // `content` (preserving any 【改ページ】 marker or other separator between
+  // them exactly); everywhere the reorder makes two originally-non-adjacent
+  // pages neighbors, a marker is inserted so their text isn't silently fused
+  // into one run-on paragraph at the new seam.
+  const buildReorderedContent = (nextPages: TategakiPage[]): string => {
+    const segments: string[] = [];
+    let runStart: number | null = null;
+    let runEnd: number | null = null;
+
+    const flushRun = () => {
+      if (runStart === null || runEnd === null) return;
+      if (segments.length > 0) segments.push(PAGE_BREAK_MARKER);
+      segments.push(content.slice(pageSourceRanges[runStart].start, pageSourceRanges[runEnd].end));
+      runStart = null;
+      runEnd = null;
+    };
+
+    for (const page of nextPages) {
+      const origIndex = pageOriginalIndex.get(page);
+      if (origIndex == null) {
+        flushRun();
+        if (segments.length > 0) segments.push(PAGE_BREAK_MARKER);
+        segments.push(detokenizeTategaki(page.tokens));
+        continue;
+      }
+      if (runStart !== null && runEnd !== null && origIndex === runEnd + 1) {
+        runEnd = origIndex;
+      } else {
+        flushRun();
+        runStart = origIndex;
+        runEnd = origIndex;
+      }
+    }
+    flushRun();
+    return segments.join("");
+  };
+
   const applyReorder = (nextPages: TategakiPage[], nextSelected: Set<number>) => {
     if (!onContentChange) return;
-    onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
+    onContentChange(buildReorderedContent(nextPages));
     setSelected(nextSelected);
   };
 
@@ -378,6 +431,16 @@ export default function PreviewPane({
     setDropIndex(null);
   };
 
+  // Replaces just the affected page's own source range within `content`
+  // (per `pageSourceRanges`), leaving every other page's text — including
+  // any 【改ページ】 markers between pages — completely untouched. Also
+  // sidesteps any `tokens`/`columns` mismatch: since no TategakiPage object
+  // is mutated or copied here, there's nothing that could disagree.
+  const replacePageContent = (index: number, tokens: TategakiPage["tokens"]) => {
+    const range = pageSourceRanges[index];
+    onContentChange?.(content.slice(0, range.start) + detokenizeTategaki(tokens) + content.slice(range.end));
+  };
+
   const handleInsertImage = (index: number) => async (file: File) => {
     if (!onContentChange) return;
     const isPsd = file.name.toLowerCase().endsWith(".psd");
@@ -391,18 +454,10 @@ export default function PreviewPane({
       );
       const id = crypto.randomUUID();
       onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
-      const nextPages = pages.map((page, i) =>
-        i === index
-          ? {
-              ...page,
-              tokens: [
-                ...page.tokens,
-                { type: "image" as const, id, widthMm, heightMm, position: "center" as const },
-              ],
-            }
-          : page
-      );
-      onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
+      replacePageContent(index, [
+        ...pages[index].tokens,
+        { type: "image" as const, id, widthMm, heightMm, position: "center" as const },
+      ]);
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像の挿入に失敗しました。");
     } finally {
@@ -413,30 +468,20 @@ export default function PreviewPane({
   const handleImagePositionChange =
     (index: number) => (imageId: string, position: ImagePosition) => {
       if (!onContentChange) return;
-      const nextPages = pages.map((page, i) =>
-        i === index
-          ? {
-              ...page,
-              tokens: page.tokens.map((token) =>
-                token.type === "image" && token.id === imageId ? { ...token, position } : token
-              ),
-            }
-          : page
+      replacePageContent(
+        index,
+        pages[index].tokens.map((token) =>
+          token.type === "image" && token.id === imageId ? { ...token, position } : token
+        )
       );
-      onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     };
 
   const handleImageDelete = (index: number) => (imageId: string) => {
     if (!onContentChange) return;
-    const nextPages = pages.map((page, i) =>
-      i === index
-        ? {
-            ...page,
-            tokens: page.tokens.filter((token) => !(token.type === "image" && token.id === imageId)),
-          }
-        : page
+    replacePageContent(
+      index,
+      pages[index].tokens.filter((token) => !(token.type === "image" && token.id === imageId))
     );
-    onContentChange(nextPages.map((page) => detokenizeTategaki(page.tokens)).join(""));
     onImageDelete?.(imageId);
   };
 
