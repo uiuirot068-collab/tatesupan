@@ -325,9 +325,9 @@ export default function PageCard({
         {showNombre && (
           <NombreOverlay
             value={nombreValue}
-            // Web閲覧用は中央下にフッターを表示するため、ノンブルが重ならないよう
-            // 綴じ側/小口側の慣例より優先して右下固定にする。
-            position={showWebFooter ? "right" : (nombrePosition as "center" | "gutter" | "outer")}
+            // Web閲覧用はフッターが右寄りに表示されるため、ノンブルが重ならないよう
+            // 綴じ側/小口側の慣例より優先して左下固定にする。
+            position={showWebFooter ? "left" : (nombrePosition as "center" | "gutter" | "outer")}
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
             fontSize={masterPage.nombreFontSize}
@@ -370,26 +370,41 @@ function NombreOverlay({
   fontSize,
 }: {
   value: number;
-  position: "center" | "gutter" | "outer" | "right";
+  position: "center" | "gutter" | "outer" | "left";
   isOddPage: boolean;
   bottomMarginMm: number;
   fontSize?: number;
 }) {
+  // Web閲覧用のノンブルは左下に固定表示する。
+  if (position === "left") {
+    const webStyle: CSSProperties = {
+      position: "absolute",
+      left: "16px",
+      bottom: "6px",
+      writingMode: "horizontal-tb",
+      color: "#000000",
+      fontSize: `${fontSize ?? 8}pt`,
+    };
+
+    return (
+      <div style={webStyle} className="pointer-events-none select-none">
+        {value}
+      </div>
+    );
+  }
+
   // ノド(綴じ側): 奇数ページ(左)は右寄せ、偶数ページ(右)は左寄せ。
   // 小口(外側): 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せ。
-  // right: Web閲覧用フッター（中央下）との重なりを避けるための固定右寄せ。
   const justifyContent =
     position === "center"
       ? "center"
-      : position === "right"
-        ? "flex-end"
-        : position === "gutter"
-          ? isOddPage
-            ? "flex-end"
-            : "flex-start"
-          : isOddPage
-            ? "flex-start"
-            : "flex-end";
+      : position === "gutter"
+        ? isOddPage
+          ? "flex-end"
+          : "flex-start"
+        : isOddPage
+          ? "flex-start"
+          : "flex-end";
 
   const style: CSSProperties = {
     position: "absolute",
@@ -451,32 +466,48 @@ function HiddenNombreOverlay({
 function WebFooterOverlay() {
   // 親のsheetStyleが writingMode: vertical-rl を敷いているため、ここで
   // horizontal-tb に強制解除しないとロゴ・文字列が縦書きに巻き込まれて崩れる。
-  const style: CSSProperties = {
+  const containerStyle: CSSProperties = {
     position: "absolute",
-    bottom: "8px",
+    bottom: 0,
     left: 0,
     width: "100%",
     writingMode: "horizontal-tb",
-    whiteSpace: "nowrap",
+  };
+
+  const dividerStyle: CSSProperties = {
+    borderTop: "1px solid #333",
+    width: "100%",
+  };
+
+  const contentStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    gap: "8px",
+    gap: "6px",
+    paddingTop: "4px",
+    paddingBottom: "6px",
+    paddingLeft: "48px",
+    paddingRight: "16px",
+    whiteSpace: "nowrap",
+    writingMode: "horizontal-tb",
     fontFamily: '"Shippori Mincho", serif',
-    fontSize: "11px",
-    color: "#666",
+    fontSize: "9.5px",
+    color: "#888",
   };
 
   return (
-    <div style={style} className="pointer-events-none select-none">
-      <img
-        src="/caroad_main2.png"
-        alt="logo"
-        style={{ width: "16px", height: "16px", objectFit: "contain" }}
-      />
-      <span>TateSpun</span>
-      <span>https://tatespun.pages.dev/</span>
-      <span>#スパンテイル</span>
+    <div style={containerStyle} className="pointer-events-none select-none">
+      <div style={dividerStyle} />
+      <div style={contentStyle}>
+        <img
+          src="/caroad_main2.png"
+          alt="logo"
+          style={{ width: "12px", height: "12px", objectFit: "contain" }}
+        />
+        <span>TateSpun</span>
+        <span>https://tatespun.pages.dev/</span>
+        <span>#スパンテイル</span>
+      </div>
     </div>
   );
 }
