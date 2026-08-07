@@ -358,50 +358,66 @@ export default function PageSettingsPanel({
       {activeTab === "master" && (
         <div className="w-full">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">ノンブル表示位置</span>
-          <select
-            value={settings.masterPage.nombrePosition}
-            onChange={(e) =>
-              updateMasterPage("nombrePosition", e.target.value as NombrePosition)
-            }
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-          >
-            <option value="center">中央</option>
-            <option value="gutter">ノド（綴じ側）</option>
-            <option value="outer">小口（外側）</option>
-            <option value="hidden">非表示</option>
-          </select>
-        </label>
+        <div className="col-span-2 flex flex-wrap items-end gap-3 sm:col-span-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60">ノンブル表示位置</span>
+            <select
+              value={settings.masterPage.nombrePosition}
+              onChange={(e) =>
+                updateMasterPage("nombrePosition", e.target.value as NombrePosition)
+              }
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="center">中央</option>
+              <option value="gutter">ノド（綴じ側）</option>
+              <option value="outer">小口（外側）</option>
+              <option value="hidden">非表示</option>
+            </select>
+          </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">開始ページ番号</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={settings.masterPage.nombreStart}
-            onChange={(e) =>
-              updateMasterPage("nombreStart", Number(e.target.value))
-            }
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-          />
-        </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60">開始ページ番号</span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={settings.masterPage.nombreStart}
+              onChange={(e) =>
+                updateMasterPage("nombreStart", Number(e.target.value))
+              }
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            />
+          </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60 whitespace-nowrap">ノンブル: 地からの距離 mm</span>
-          <input
-            type="number"
-            min={0}
-            max={60}
-            step={0.5}
-            value={settings.masterPage.nombreBottomMargin}
-            onChange={(e) =>
-              updateMasterPage("nombreBottomMargin", Number(e.target.value))
-            }
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-          />
-        </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60 whitespace-nowrap">ノンブル: 地からの距離 mm</span>
+            <input
+              type="number"
+              min={0}
+              max={60}
+              step={0.5}
+              value={settings.masterPage.nombreBottomMargin}
+              onChange={(e) =>
+                updateMasterPage("nombreBottomMargin", Number(e.target.value))
+              }
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60">ノンブルの文字サイズ (pt)</span>
+            <input
+              type="number"
+              min={5}
+              max={24}
+              value={settings.masterPage.nombreFontSize ?? 8}
+              onChange={(e) =>
+                updateMasterPage("nombreFontSize", Number(e.target.value))
+              }
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            />
+          </label>
+        </div>
 
         <label className="col-span-2 flex items-center gap-2 sm:col-span-2 sm:self-end sm:pb-1.5">
           <input
@@ -474,20 +490,6 @@ export default function PageSettingsPanel({
             value={settings.masterPage.headerFontSize ?? 8}
             onChange={(e) =>
               updateMasterPage("headerFontSize", Number(e.target.value))
-            }
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">ノンブルの文字サイズ (pt)</span>
-          <input
-            type="number"
-            min={5}
-            max={24}
-            value={settings.masterPage.nombreFontSize ?? 8}
-            onChange={(e) =>
-              updateMasterPage("nombreFontSize", Number(e.target.value))
             }
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
