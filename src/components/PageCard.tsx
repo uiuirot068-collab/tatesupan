@@ -380,7 +380,7 @@ function NombreOverlay({
     const webStyle: CSSProperties = {
       position: "absolute",
       left: "16px",
-      bottom: "24px",
+      bottom: "15px",
       writingMode: "horizontal-tb",
       color: "#000000",
       fontSize: `${fontSize ?? 8}pt`,
@@ -468,7 +468,7 @@ function WebFooterOverlay() {
   // horizontal-tb に強制解除しないとロゴ・文字列が縦書きに巻き込まれて崩れる。
   const containerStyle: CSSProperties = {
     position: "absolute",
-    bottom: "24px",
+    bottom: "15px",
     left: 0,
     width: "100%",
     writingMode: "horizontal-tb",
