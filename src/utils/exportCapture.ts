@@ -27,15 +27,25 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
  * inline `style` attributes (including CSS custom properties like `--tw-*`
  * that expand into oklab/oklch elsewhere), and constructed stylesheets whose
  * `cssRules` aren't reflected back into `style.innerHTML`.
+ *
+ * Mutating `style.innerHTML` in place does not refresh the document's CSSOM
+ * (`document.styleSheets`) — the browser keeps the originally-parsed rules,
+ * including the oklab/oklch ones, bound to that node. html2canvas reads
+ * `clonedDoc.styleSheets`, so it would still see the un-sanitized colors.
+ * Replacing the node outright (`replaceWith`) forces the browser to parse a
+ * brand-new stylesheet from the cleaned text.
  */
 function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
   const pattern = /oklab\([^)]+\)|oklch\([^)]+\)/gi;
   const replace = (text: string) => text.replace(pattern, 'rgba(0, 0, 0, 0.1)');
 
   clonedDoc.querySelectorAll('style').forEach((style) => {
-    if (pattern.test(style.innerHTML)) {
+    const cssText = style.innerHTML;
+    if (pattern.test(cssText)) {
       pattern.lastIndex = 0;
-      style.innerHTML = replace(style.innerHTML);
+      const newStyle = clonedDoc.createElement('style');
+      newStyle.innerHTML = replace(cssText);
+      style.replaceWith(newStyle);
     }
   });
 
