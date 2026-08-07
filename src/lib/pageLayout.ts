@@ -184,8 +184,7 @@ export function computeAutoLinesPerColumn(
 ): number {
   if (linePitchMm <= 0) return 1;
   const rawLines = Math.floor(textAreaWidthMm / linePitchMm);
-  // 2段組時はフォントレンダリングの誤差で左端が切れるのを防ぐため 1行分の安全マージンを減算
-  return columnCount === 2 ? Math.max(rawLines - 1, 1) : Math.max(rawLines, 1);
+  return Math.max(rawLines, 1);
 }
 
 export interface PageLayout {
