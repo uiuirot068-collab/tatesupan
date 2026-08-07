@@ -129,7 +129,8 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
-    letterSpacing: "0em",
+    // textAreaHeightMm に charsPerLine 文字をぴったり配置するための字送り
+    letterSpacing: `${layout.letterSpacingEm}em`,
     // 縦書き・横書き双方のプロポーショナル詰め（vpal/vhal/palt/vkrn等）をすべて完全オフ
     fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
     // 東アジア文字を完全全角に固定
@@ -137,6 +138,7 @@ export default function PageCard({
     // 原稿用紙的な均等割り付け（行末・約物調整）
     textAlign: "justify",
     textJustify: "inter-character",
+    textAlignLast: "justify",
   };
 
   const isTwoColumn = settings.columnCount === 2;
@@ -341,6 +343,7 @@ export default function PageCard({
                           fontVariantEastAsian: textStyle.fontVariantEastAsian,
                           textAlign: textStyle.textAlign,
                           textJustify: textStyle.textJustify,
+                          textAlignLast: textStyle.textAlignLast,
                         }}
                       >
                         {column.map((token, index) => (

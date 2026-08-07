@@ -229,6 +229,10 @@ export interface PageLayout {
   linesPerPage: number;
   /** 1ページの総文字数（全段の合計） */
   charsPerPage: number;
+  /** 天地の実高さに charsPerLine 文字をぴったり配置するための字送り (mm) */
+  letterSpacingMm: number;
+  /** 天地の実高さに charsPerLine 文字をぴったり配置するための字送り (em) */
+  letterSpacingEm: number;
 }
 
 /**
@@ -309,6 +313,13 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   const linesPerPage = linesPerColumn * columnCount;
   const charsPerColumn = charsPerLine * linesPerColumn;
 
+  // 1行の指定高さ（textAreaHeightMm）に対して、charsPerLine 文字をピッタリ配置するための 1文字あたり字送り(mm)
+  const totalFontHeightMm = charsPerLine * fontSizeMm;
+  const remainingSpaceMm = textAreaHeightMm - totalFontHeightMm;
+  // 負の値（はみ出し）にならないよう Math.max(0, ...) で保護
+  const letterSpacingMm = charsPerLine > 0 ? Math.max(0, remainingSpaceMm / charsPerLine) : 0;
+  const letterSpacingEm = fontSizeMm > 0 ? letterSpacingMm / fontSizeMm : 0;
+
   return {
     paper,
     fontSizeMm,
@@ -321,5 +332,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     charsPerColumn,
     linesPerPage,
     charsPerPage: charsPerLine * linesPerPage,
+    letterSpacingMm,
+    letterSpacingEm,
   };
 }
