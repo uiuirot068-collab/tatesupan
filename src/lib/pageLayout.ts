@@ -193,8 +193,8 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // 追加マージンを設け、実描画時に文字が上段枠の下端を突き抜けるのを防ぐ。
   const autoCharsPerLine =
     columnCount === 2
-      ? Math.max(Math.floor(rawCharsPerLine - 1.5), 1)
-      : Math.max(rawCharsPerLine, 0);
+      ? Math.max(Math.floor(rawCharsPerLine) - 1, 1)
+      : Math.max(Math.floor(rawCharsPerLine), 0);
   const charsPerLine =
     settings.charsPerLine > 0 ? settings.charsPerLine : autoCharsPerLine;
 
