@@ -294,11 +294,15 @@ export default function PageCard({
                   width: textAreaWidthPx,
                   height: textAreaHeightPx,
                   overflow: "hidden",
+                  writingMode: "horizontal-tb",
                 }}
               >
                 <div
                   className="w-full h-full flex flex-col"
-                  style={{ gap: `${settings.columnGapMm * PX_PER_MM}px` }}
+                  style={{
+                    gap: `${settings.columnGapMm * PX_PER_MM}px`,
+                    writingMode: "horizontal-tb",
+                  }}
                 >
                   {columnFlowTokens.map((column, segmentIndex) => {
                     const startOffset = segmentIndex === 0 ? 0 : columnFlowTokens[0].length;
