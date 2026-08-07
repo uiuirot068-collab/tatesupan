@@ -6,6 +6,30 @@ export interface PaperSize {
   label: string;
   widthMm: number;
   heightMm: number;
+  /** True for presets (e.g. Web閲覧用) authored directly in screen pixels rather than physical mm. */
+  isPx: boolean;
+}
+
+export const MM_PER_PT = 25.4 / 72;
+
+/** Screen scale used to size preview page cards from millimeter values. */
+export const PX_PER_MM = 2.2;
+
+/**
+ * `isPx` presets (e.g. Web閲覧用) author width/height/margins/font size
+ * directly as target screen pixels. Every layout calculation elsewhere
+ * works in mm and re-multiplies by PX_PER_MM (or the pt→mm ratio) at
+ * render time, so those px-authored numbers are converted back to the
+ * internal mm/pt unit here — otherwise they'd be scaled by PX_PER_MM a
+ * second time and render far larger (and with a far smaller font) than
+ * intended.
+ */
+export function pxToInternalMm(px: number): number {
+  return px / PX_PER_MM;
+}
+
+export function pxToInternalFontSizePt(px: number): number {
+  return px / PX_PER_MM / MM_PER_PT;
 }
 
 // 旧バージョンで使用していた用紙サイズキーとの互換マップ（保存済みデータの移行用）
@@ -23,7 +47,13 @@ export function resolvePaperSize(key: string): PaperSize {
     PAPER_SIZE_TEMPLATES[key] ??
     PAPER_SIZE_TEMPLATES[LEGACY_PAPER_SIZE_KEY_MAP[key]] ??
     PAPER_SIZE_TEMPLATES["文庫"];
-  return { label: template.name, widthMm: template.width, heightMm: template.height };
+  const isPx = template.isPx === true;
+  return {
+    label: template.name,
+    widthMm: isPx ? pxToInternalMm(template.width) : template.width,
+    heightMm: isPx ? pxToInternalMm(template.height) : template.height,
+    isPx,
+  };
 }
 
 /** 段数（1段 / 2段組） */
@@ -105,11 +135,6 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
 };
-
-export const MM_PER_PT = 25.4 / 72;
-
-/** Screen scale used to size preview page cards from millimeter values. */
-export const PX_PER_MM = 2.2;
 
 /** 印刷用の塗り足し幅（天地左右）。仕上がり線は用紙外形からこの分だけ内側。 */
 export const BLEED_MM = 3;
@@ -216,16 +241,35 @@ export interface PageLayout {
  */
 export function computePageLayout(settings: PageSettings): PageLayout {
   const paper = resolvePaperSize(settings.paperSize);
-  const fontSizeMm = computeFontSizeMm(settings.fontSizePt);
-  const linePitchMm = computeLinePitchMm(settings.fontSizePt, settings.lineHeightRatio);
+
+  // isPx プリセットは fontSizePt・余白も画面ピクセルとして入力されるため、
+  // 用紙幅・高さ（resolvePaperSize 側）と同じ基準（内部 mm/pt）に揃える。
+  const effectiveFontSizePt = paper.isPx
+    ? pxToInternalFontSizePt(settings.fontSizePt)
+    : settings.fontSizePt;
+  const effectiveMarginGutter = paper.isPx
+    ? pxToInternalMm(settings.marginGutter)
+    : settings.marginGutter;
+  const effectiveMarginOuter = paper.isPx
+    ? pxToInternalMm(settings.marginOuter)
+    : settings.marginOuter;
+  const effectiveMarginTop = paper.isPx
+    ? pxToInternalMm(settings.marginTop)
+    : settings.marginTop;
+  const effectiveMarginBottom = paper.isPx
+    ? pxToInternalMm(settings.marginBottom)
+    : settings.marginBottom;
+
+  const fontSizeMm = computeFontSizeMm(effectiveFontSizePt);
+  const linePitchMm = computeLinePitchMm(effectiveFontSizePt, settings.lineHeightRatio);
 
   const textAreaWidthMm = computeTextAreaWidthMm(
     paper,
-    settings.marginGutter,
-    settings.marginOuter
+    effectiveMarginGutter,
+    effectiveMarginOuter
   );
   const textAreaHeightMm = Math.max(
-    paper.heightMm - settings.marginTop - settings.marginBottom,
+    paper.heightMm - effectiveMarginTop - effectiveMarginBottom,
     0
   );
 
@@ -236,8 +280,8 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // 計算されてしまい、1行の文字数が異常に多くなる。
   const columnHeightMm = computeColumnHeightMm(
     paper,
-    settings.marginTop,
-    settings.marginBottom,
+    effectiveMarginTop,
+    effectiveMarginBottom,
     columnCount,
     settings.columnGapMm
   );
