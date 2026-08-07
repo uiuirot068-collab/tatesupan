@@ -1,6 +1,18 @@
 'use client';
 
-import { MM_PER_PT, PAGE_SAFETY_MARGIN_CHARS } from "@/lib/pageLayout";
+import {
+  MM_PER_PT,
+  PAGE_SAFETY_MARGIN_CHARS,
+  computeAutoCharsPerLine,
+  computeAutoLinesPerColumn,
+  computeColumnHeightMm,
+  computeFontSizeMm,
+  computeLinePitchMm,
+  computeTextAreaWidthMm,
+  resolvePaperSize,
+  type ColumnCount,
+  type PaperSizeKey,
+} from "@/lib/pageLayout";
 
 export interface CustomLayoutInput {
   paperWidth: number;       // 用紙幅 (mm)
@@ -62,5 +74,51 @@ export function calculateCustomLayout(
   // below what's needed for `linesPerColumn` to still fit.
   return {
     marginEdge: Math.floor(calculatedMarginEdge * 10) / 10,
+  };
+}
+
+export interface MarginModeCapacityInput {
+  paperSize: PaperSizeKey;
+  marginTop: number;     // 天 (mm)
+  marginBottom: number;  // 地 (mm)
+  marginGutter: number;  // ノド (mm)
+  marginOuter: number;   // 小口 (mm)
+  fontSizePt: number;    // フォントサイズ (pt)
+  lineHeightRatio: number; // 行間倍率
+  columnCount: ColumnCount; // 段数 (1 or 2)
+  columnGapMm: number;   // 段間 (mm)
+}
+
+export interface MarginModeCapacityResult {
+  charsPerLine: number;   // 1行の文字数
+  linesPerColumn: number; // 1段の行数
+}
+
+/**
+ * layoutMode === "margin"（余白から設定する）用: 天地・ノド・小口の
+ * 余白とフォントサイズから、その枠に収まる1行の文字数・1段の行数を
+ * 逆算する。`computePageLayout` の autoCharsPerLine / autoLinesPerColumn
+ * と同じ式を使うことで、ここで算出した値をそのまま settings に反映しても
+ * 実際のプレビュー描画とズレない。
+ */
+export function calculateCapacityFromMargins(
+  input: MarginModeCapacityInput
+): MarginModeCapacityResult {
+  const paper = resolvePaperSize(input.paperSize);
+  const fontSizeMm = computeFontSizeMm(input.fontSizePt);
+  const linePitchMm = computeLinePitchMm(input.fontSizePt, input.lineHeightRatio);
+
+  const columnHeightMm = computeColumnHeightMm(
+    paper,
+    input.marginTop,
+    input.marginBottom,
+    input.columnCount,
+    input.columnGapMm
+  );
+  const textAreaWidthMm = computeTextAreaWidthMm(paper, input.marginGutter, input.marginOuter);
+
+  return {
+    charsPerLine: computeAutoCharsPerLine(columnHeightMm, fontSizeMm, input.columnCount),
+    linesPerColumn: computeAutoLinesPerColumn(textAreaWidthMm, linePitchMm),
   };
 }

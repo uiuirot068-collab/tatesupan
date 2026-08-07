@@ -18,7 +18,7 @@ const LEGACY_PAPER_SIZE_KEY_MAP: Record<string, PaperSizeKey> = {
   bunko: "文庫",
 };
 
-function resolvePaperSize(key: string): PaperSize {
+export function resolvePaperSize(key: string): PaperSize {
   const template =
     PAPER_SIZE_TEMPLATES[key] ??
     PAPER_SIZE_TEMPLATES[LEGACY_PAPER_SIZE_KEY_MAP[key]] ??
@@ -126,6 +126,68 @@ export const BLEED_MM = 3;
  */
 export const PAGE_SAFETY_MARGIN_CHARS = 0.5;
 
+export function computeFontSizeMm(fontSizePt: number): number {
+  return fontSizePt * MM_PER_PT;
+}
+
+export function computeLinePitchMm(fontSizePt: number, lineHeightRatio: number): number {
+  return computeFontSizeMm(fontSizePt) * lineHeightRatio;
+}
+
+/** 天地余白から、1行（縦書きの縦方向）の長さの上限となる本文縦幅を算出する。 */
+export function computeColumnHeightMm(
+  paper: PaperSize,
+  marginTop: number,
+  marginBottom: number,
+  columnCount: ColumnCount,
+  columnGapMm: number
+): number {
+  const textAreaHeightMm = Math.max(paper.heightMm - marginTop - marginBottom, 0);
+  return columnCount === 2
+    ? Math.max((textAreaHeightMm - columnGapMm) / 2, 0)
+    : textAreaHeightMm;
+}
+
+/** ノド・小口余白から、行が並ぶ横方向の本文幅を算出する。 */
+export function computeTextAreaWidthMm(
+  paper: PaperSize,
+  marginGutter: number,
+  marginOuter: number
+): number {
+  return Math.max(paper.widthMm - marginGutter - marginOuter, 0);
+}
+
+/**
+ * 天地余白と字送りから、安全マージン（PAGE_SAFETY_MARGIN_CHARS）を
+ * 考慮した1行あたりの最大文字数を算出する。
+ */
+export function computeAutoCharsPerLine(
+  columnHeightMm: number,
+  fontSizeMm: number,
+  columnCount: ColumnCount
+): number {
+  const rawCharsPerLine =
+    fontSizeMm > 0
+      ? Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS)
+      : 0;
+  // 2段組は段間ギャップの丸め誤差やフォントメトリクスのブレが1段組より
+  // 顕著に効くため、通常の PAGE_SAFETY_MARGIN_CHARS に加えて1文字分の
+  // 追加マージンを設け、実描画時に文字が上段枠の下端を突き抜けるのを防ぐ。
+  return columnCount === 2
+    ? Math.max(Math.floor(rawCharsPerLine) - 1, 1)
+    : Math.max(Math.floor(rawCharsPerLine), 0);
+}
+
+/** ノド・小口余白と行間から、1段に収まる行数を算出する。 */
+export function computeAutoLinesPerColumn(
+  textAreaWidthMm: number,
+  linePitchMm: number
+): number {
+  return linePitchMm > 0
+    ? Math.max(Math.floor(textAreaWidthMm / linePitchMm), 1)
+    : 1;
+}
+
 export interface PageLayout {
   paper: PaperSize;
   fontSizeMm: number;
@@ -155,28 +217,31 @@ export interface PageLayout {
  */
 export function computePageLayout(settings: PageSettings): PageLayout {
   const paper = resolvePaperSize(settings.paperSize);
-  const fontSizeMm = settings.fontSizePt * MM_PER_PT;
-  const linePitchMm = fontSizeMm * settings.lineHeightRatio;
+  const fontSizeMm = computeFontSizeMm(settings.fontSizePt);
+  const linePitchMm = computeLinePitchMm(settings.fontSizePt, settings.lineHeightRatio);
 
+  const textAreaWidthMm = computeTextAreaWidthMm(
+    paper,
+    settings.marginGutter,
+    settings.marginOuter
+  );
   const textAreaHeightMm = Math.max(
     paper.heightMm - settings.marginTop - settings.marginBottom,
     0
   );
-  const textAreaWidthMm = Math.max(
-    paper.widthMm - settings.marginGutter - settings.marginOuter,
-    0
-  );
 
   const columnCount = settings.columnCount;
-  const columnGapMm = settings.columnGapMm;
 
   // 段組みでは天地方向の利用可能な高さも段数で分割される（段間の分だけ差し引く）。
   // これを考慮しないと、2段組で1行の長さ（縦書きの高さ方向）が1段組と同じまま
   // 計算されてしまい、1行の文字数が異常に多くなる。
-  const columnHeightMm =
-    columnCount === 2
-      ? Math.max((textAreaHeightMm - columnGapMm) / 2, 0)
-      : textAreaHeightMm;
+  const columnHeightMm = computeColumnHeightMm(
+    paper,
+    settings.marginTop,
+    settings.marginBottom,
+    columnCount,
+    settings.columnGapMm
+  );
 
   // Actual rendered glyph advance in the browser (font metrics, sub-pixel
   // rounding of the mm→px conversion, etc.) can run slightly ahead of the
@@ -186,17 +251,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // Reserving one character's worth of space before flooring guarantees a
   // full character of slack, so a boundary character is pushed to the next
   // line/page instead of being cut in half.
-  const rawCharsPerLine =
-    fontSizeMm > 0
-      ? Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS)
-      : 0;
-  // 2段組は段間ギャップの丸め誤差やフォントメトリクスのブレが1段組より
-  // 顕著に効くため、通常の PAGE_SAFETY_MARGIN_CHARS に加えて1.5文字分の
-  // 追加マージンを設け、実描画時に文字が上段枠の下端を突き抜けるのを防ぐ。
-  const autoCharsPerLine =
-    columnCount === 2
-      ? Math.max(Math.floor(rawCharsPerLine) - 1, 1)
-      : Math.max(Math.floor(rawCharsPerLine), 0);
+  const autoCharsPerLine = computeAutoCharsPerLine(columnHeightMm, fontSizeMm, columnCount);
   const charsPerLine =
     settings.charsPerLine > 0 ? settings.charsPerLine : autoCharsPerLine;
 
@@ -204,10 +259,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
   const columnWidthMm = textAreaWidthMm;
 
-  const autoLinesPerColumn =
-    linePitchMm > 0
-      ? Math.max(Math.floor(columnWidthMm / linePitchMm), 1)
-      : 1;
+  const autoLinesPerColumn = computeAutoLinesPerColumn(columnWidthMm, linePitchMm);
   const targetLinesPerColumn =
     settings.linesPerColumn > 0 ? settings.linesPerColumn : autoLinesPerColumn;
   const linesPerColumn = Math.min(targetLinesPerColumn, autoLinesPerColumn);

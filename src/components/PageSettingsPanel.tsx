@@ -11,7 +11,7 @@ import {
   type PaperSizeKey,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
-import { calculateCustomLayout } from "@/utils/layoutCalculator";
+import { calculateCapacityFromMargins, calculateCustomLayout } from "@/utils/layoutCalculator";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -31,6 +31,29 @@ const AUTO_EDGE_DEPENDENT_KEYS = new Set<keyof PageSettings>([
   "fontSizePt",
   "lineHeightRatio",
   "columnGapMm",
+  "marginGutter",
+]);
+
+// layoutMode === "margin"（余白から設定する）のとき、これらのフィールドが
+// 変更されたら天地・ノド・小口余白から charsPerLine / linesPerColumn を
+// 逆算して settings に反映する。
+const MARGIN_MODE_TRIGGER_KEYS = new Set<keyof PageSettings>([
+  "marginTop",
+  "marginBottom",
+  "marginGutter",
+  "marginOuter",
+  "fontSizePt",
+]);
+
+// layoutMode === "capacity"（文字数・行数から設定する）のとき、これらの
+// フィールドが変更されたら1行の文字数・1段の行数から小口余白
+// （marginOuter）を逆算して settings に反映する。
+const CAPACITY_MODE_TRIGGER_KEYS = new Set<keyof PageSettings>([
+  "charsPerLine",
+  "linesPerColumn",
+  "fontSizePt",
+  "marginTop",
+  "marginBottom",
   "marginGutter",
 ]);
 
@@ -112,17 +135,65 @@ export default function PageSettingsPanel({
     return { ...next, marginOuter: marginEdge };
   };
 
+  // layoutMode に応じて、片方のパラメータ変更からもう片方を自動逆算する。
+  // - "margin": 天地・ノド・小口余白 → charsPerLine / linesPerColumn
+  // - "capacity": charsPerLine / linesPerColumn → marginOuter（小口余白）
+  const applyLayoutModeAdjustment = (
+    next: PageSettings,
+    changedKey: keyof PageSettings
+  ): PageSettings => {
+    if (next.layoutMode === "margin" && MARGIN_MODE_TRIGGER_KEYS.has(changedKey)) {
+      const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
+        paperSize: next.paperSize,
+        marginTop: next.marginTop,
+        marginBottom: next.marginBottom,
+        marginGutter: next.marginGutter,
+        marginOuter: next.marginOuter,
+        fontSizePt: next.fontSizePt,
+        lineHeightRatio: next.lineHeightRatio,
+        columnCount: next.columnCount,
+        columnGapMm: next.columnGapMm,
+      });
+      return { ...next, charsPerLine, linesPerColumn };
+    }
+    if (next.layoutMode === "capacity" && CAPACITY_MODE_TRIGGER_KEYS.has(changedKey)) {
+      const paper = PAPER_SIZE_TEMPLATES[next.paperSize];
+      const { marginEdge } = calculateCustomLayout({
+        paperWidth: paper.width,
+        marginGutter: next.marginGutter,
+        fontSizePt: next.fontSizePt,
+        lineHeightRatio: next.lineHeightRatio,
+        linesPerColumn: next.linesPerColumn,
+        columnsPerPage: next.columnCount,
+        columnGapMm: next.columnGapMm,
+      });
+      return { ...next, marginOuter: marginEdge };
+    }
+    return next;
+  };
+
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
-    const next = { ...settings, [key]: value };
-    onChange(AUTO_EDGE_DEPENDENT_KEYS.has(key) ? applyAutoEdgeAdjustment(next) : next);
+    let next = applyLayoutModeAdjustment({ ...settings, [key]: value }, key);
+    if (AUTO_EDGE_DEPENDENT_KEYS.has(key)) {
+      next = applyAutoEdgeAdjustment(next);
+    }
+    onChange(next);
   };
 
   const handleCharsPerLineChange = (value: number) => {
-    onChange(applyAutoEdgeAdjustment({ ...settings, charsPerLine: value }));
+    const next = applyLayoutModeAdjustment(
+      { ...settings, charsPerLine: value },
+      "charsPerLine"
+    );
+    onChange(applyAutoEdgeAdjustment(next));
   };
 
   const handleLinesPerColumnChange = (value: number) => {
-    onChange(applyAutoEdgeAdjustment({ ...settings, linesPerColumn: value }));
+    const next = applyLayoutModeAdjustment(
+      { ...settings, linesPerColumn: value },
+      "linesPerColumn"
+    );
+    onChange(applyAutoEdgeAdjustment(next));
   };
 
   const handleAutoAdjustEdgeChange = (checked: boolean) => {
