@@ -234,7 +234,7 @@ export default function PageSettingsPanel({
             className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
               settings.layoutMode === "margin"
                 ? "bg-accent text-paper-ink"
-                : "text-ink/60 hover:bg-ink/5"
+                : "bg-ink/10 text-ink/60 hover:bg-ink/15"
             }`}
           >
             余白から設定する
@@ -245,7 +245,7 @@ export default function PageSettingsPanel({
             className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
               settings.layoutMode === "capacity"
                 ? "bg-accent text-paper-ink"
-                : "text-ink/60 hover:bg-ink/5"
+                : "bg-ink/10 text-ink/60 hover:bg-ink/15"
             }`}
           >
             文字数・行数から設定する
