@@ -44,6 +44,7 @@ function resetPageCardTransforms(clonedDoc: Document): void {
   });
 }
 
+
 /**
  * Keeps vertical-rl (tategaki) text blocks from shifting or clipping in the
  * clone: forces visible overflow and a stable positioning context so glyph
@@ -69,11 +70,21 @@ function fixVerticalWritingModeLayout(clonedDoc: Document): void {
  * them in the exported image.
  */
 function fixExportedImageAspectRatio(clonedDoc: Document): void {
-  clonedDoc.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
-    img.style.setProperty('object-fit', 'contain', 'important');
-    img.style.setProperty('width', '100%', 'important');
-    img.style.setProperty('height', 'auto', 'important');
-  });
+  clonedDoc
+    .querySelectorAll<HTMLImageElement>('img:not([data-logo-img]):not(.footer-logo)')
+    .forEach((img) => {
+      img.style.setProperty('object-fit', 'contain', 'important');
+      img.style.setProperty('width', '100%', 'important');
+      img.style.setProperty('height', 'auto', 'important');
+    });
+
+  clonedDoc
+    .querySelectorAll<HTMLImageElement>('img[data-logo-img], img.footer-logo')
+    .forEach((img) => {
+      img.style.setProperty('width', '12px', 'important');
+      img.style.setProperty('height', '12px', 'important');
+      img.style.setProperty('object-fit', 'contain', 'important');
+    });
 }
 
 /**
@@ -96,6 +107,7 @@ function applyExportOutputCleanup(clonedDoc: Document): void {
 
   clonedDoc.querySelectorAll<HTMLElement>('.border-dashed, [data-bleed-guide]').forEach((el) => {
     el.style.setProperty('border-color', 'transparent', 'important');
+    el.style.setProperty('border', 'none', 'important');
   });
 }
 
