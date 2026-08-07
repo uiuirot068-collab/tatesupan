@@ -325,7 +325,9 @@ export default function PageCard({
         {showNombre && (
           <NombreOverlay
             value={nombreValue}
-            position={nombrePosition as "center" | "gutter" | "outer"}
+            // Web閲覧用は中央下にフッターを表示するため、ノンブルが重ならないよう
+            // 綴じ側/小口側の慣例より優先して右下固定にする。
+            position={showWebFooter ? "right" : (nombrePosition as "center" | "gutter" | "outer")}
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
             fontSize={masterPage.nombreFontSize}
@@ -373,23 +375,26 @@ function NombreOverlay({
   fontSize,
 }: {
   value: number;
-  position: "center" | "gutter" | "outer";
+  position: "center" | "gutter" | "outer" | "right";
   isOddPage: boolean;
   bottomMarginMm: number;
   fontSize?: number;
 }) {
   // ノド(綴じ側): 奇数ページ(左)は右寄せ、偶数ページ(右)は左寄せ。
   // 小口(外側): 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せ。
+  // right: Web閲覧用フッター（中央下）との重なりを避けるための固定右寄せ。
   const justifyContent =
     position === "center"
       ? "center"
-      : position === "gutter"
-        ? isOddPage
-          ? "flex-end"
-          : "flex-start"
-        : isOddPage
-          ? "flex-start"
-          : "flex-end";
+      : position === "right"
+        ? "flex-end"
+        : position === "gutter"
+          ? isOddPage
+            ? "flex-end"
+            : "flex-start"
+          : isOddPage
+            ? "flex-start"
+            : "flex-end";
 
   const style: CSSProperties = {
     position: "absolute",
