@@ -165,6 +165,17 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     0
   );
 
+  const columnCount = settings.columnCount;
+  const columnGapMm = settings.columnGapMm;
+
+  // 段組みでは天地方向の利用可能な高さも段数で分割される（段間の分だけ差し引く）。
+  // これを考慮しないと、2段組で1行の長さ（縦書きの高さ方向）が1段組と同じまま
+  // 計算されてしまい、1行の文字数が異常に多くなる。
+  const columnHeightMm =
+    columnCount === 2
+      ? Math.max((textAreaHeightMm - columnGapMm) / 2, 0)
+      : textAreaHeightMm;
+
   // Actual rendered glyph advance in the browser (font metrics, sub-pixel
   // rounding of the mm→px conversion, etc.) can run slightly ahead of the
   // nominal fontSizeMm/linePitchMm used here, so a character that this
@@ -175,11 +186,9 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // line/page instead of being cut in half.
   const charsPerLine =
     fontSizeMm > 0
-      ? Math.max(Math.floor(textAreaHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS), 0)
+      ? Math.max(Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS), 0)
       : 0;
 
-  const columnCount = settings.columnCount;
-  const columnGapMm = settings.columnGapMm;
   const columnWidthMm = Math.max(
     (textAreaWidthMm - columnGapMm * (columnCount - 1)) / columnCount,
     0
