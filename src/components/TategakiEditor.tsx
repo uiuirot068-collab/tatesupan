@@ -12,10 +12,12 @@ import {
   saveImage,
   type ImageRecord,
 } from "@/lib/db";
-import { computePageLayout, DEFAULT_PAGE_SETTINGS } from "@/lib/pageLayout";
+import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { createProject, updateProject } from "@/lib/supabase/projects";
+import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
@@ -23,6 +25,7 @@ import { BookPartsModal } from "./BookPartsModal";
 import ThemeToggle from "./ThemeToggle";
 import HelpModal from "./HelpModal";
 import Logo from "./Logo";
+import { Header } from "./Header";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -47,6 +50,8 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const hasLoadedRef = useRef(false);
   // Tracks which document's data is currently reflected in state, so the
@@ -195,6 +200,28 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      if (currentProjectId) {
+        await updateProject(currentProjectId, { title, content, settings });
+      } else {
+        const project = await createProject({ title, content, settings });
+        if (project) setCurrentProjectId(project.id);
+      }
+      alert("クラウドに保存しました");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSelectProject = (project: Project) => {
+    setCurrentProjectId(project.id);
+    setTitle(project.title);
+    setContent(project.content);
+    setSettings((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS);
+  };
+
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
 
@@ -220,6 +247,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
+      <Header onSave={handleSave} onSelectProject={handleSelectProject} isSaving={isSaving} />
       <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-ink/10 bg-base px-4 py-2 shadow-lg">
         <div className="flex min-w-0 items-center gap-3">
           <Link

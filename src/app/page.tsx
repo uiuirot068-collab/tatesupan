@@ -15,6 +15,7 @@ import {
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
 import { CombineModal } from "@/components/CombineModal";
+import { Header } from "@/components/Header";
 
 const FREE_DOCUMENT_LIMIT = 15;
 
@@ -68,6 +69,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <Header />
       <header className="flex items-center justify-between border-b border-ink/10 px-4 py-2">
         <h1 className="flex items-center gap-2">
           <Logo />
