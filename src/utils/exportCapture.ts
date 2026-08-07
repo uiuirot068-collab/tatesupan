@@ -35,34 +35,109 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
  * Replacing the node outright (`replaceWith`) forces the browser to parse a
  * brand-new stylesheet from the cleaned text.
  */
-function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
-  const pattern = /oklab\([^)]+\)|oklch\([^)]+\)/gi;
-  const replace = (text: string) => text.replace(pattern, 'rgba(0, 0, 0, 0.1)');
+const UNSUPPORTED_COLOR_DETECTOR = /oklab|oklch|color-mix/i;
 
+/**
+ * Replaces every balanced `name(...)` call in `text` for which `predicate`
+ * returns true. Unlike a `[^)]+` regex, this tracks paren depth, so it
+ * correctly consumes calls with nested parens — e.g.
+ * `color-mix(in oklab, var(--tw-color), oklch(0.7 0.1 200))` — without
+ * truncating at the first inner `)`.
+ */
+function replaceBalancedCalls(
+  text: string,
+  name: string,
+  predicate: (fullMatch: string) => boolean,
+  replacement: string
+): string {
+  const needle = `${name}(`;
+  const lowerText = text.toLowerCase();
+  let result = '';
+  let i = 0;
+
+  while (i < text.length) {
+    const idx = lowerText.indexOf(needle, i);
+    if (idx === -1) {
+      result += text.slice(i);
+      break;
+    }
+    result += text.slice(i, idx);
+
+    let depth = 0;
+    let j = idx + name.length;
+    for (; j < text.length; j += 1) {
+      if (text[j] === '(') depth += 1;
+      else if (text[j] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          j += 1;
+          break;
+        }
+      }
+    }
+
+    const fullMatch = text.slice(idx, j);
+    result += predicate(fullMatch) ? replacement : fullMatch;
+    i = j;
+  }
+
+  return result;
+}
+
+/**
+ * Strips `color-mix(in oklab|oklch, ...)` (Tailwind v4's default palette
+ * mixing) and any bare `oklab()`/`oklch()` calls, replacing them with a
+ * plain, html2canvas-safe color. `color-mix` is handled first, while its
+ * contents still contain the `oklab`/`oklch` keyword/nested-call that marks
+ * it as unsupported — otherwise the later oklab/oklch pass would consume the
+ * nested calls first and erase that signal.
+ */
+function sanitizeColorText(text: string): string {
+  let result = replaceBalancedCalls(
+    text,
+    'color-mix',
+    (match) => /oklab|oklch/i.test(match),
+    'transparent'
+  );
+  result = replaceBalancedCalls(result, 'oklab', () => true, 'transparent');
+  result = replaceBalancedCalls(result, 'oklch', () => true, 'transparent');
+  return result;
+}
+
+/**
+ * Properties whose resolved color most commonly leaks Tailwind v4's
+ * oklab/oklch palette into html2canvas's parser.
+ */
+const COLOR_PROPERTIES = [
+  'color',
+  'backgroundColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'outlineColor',
+] as const;
+
+function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
   clonedDoc.querySelectorAll('style').forEach((style) => {
     const cssText = style.innerHTML;
-    if (pattern.test(cssText)) {
-      pattern.lastIndex = 0;
+    if (UNSUPPORTED_COLOR_DETECTOR.test(cssText)) {
       const newStyle = clonedDoc.createElement('style');
-      newStyle.innerHTML = replace(cssText);
+      newStyle.innerHTML = sanitizeColorText(cssText);
       style.replaceWith(newStyle);
     }
   });
 
   clonedDoc.querySelectorAll<HTMLElement>('*').forEach((el) => {
     const attr = el.getAttribute('style');
-    if (attr && pattern.test(attr)) {
-      pattern.lastIndex = 0;
-      el.setAttribute('style', replace(attr));
+    if (attr && UNSUPPORTED_COLOR_DETECTOR.test(attr)) {
+      el.setAttribute('style', sanitizeColorText(attr));
     }
-    pattern.lastIndex = 0;
 
     const cssText = el.style?.cssText;
-    if (cssText && pattern.test(cssText)) {
-      pattern.lastIndex = 0;
-      el.style.cssText = replace(cssText);
+    if (cssText && UNSUPPORTED_COLOR_DETECTOR.test(cssText)) {
+      el.style.cssText = sanitizeColorText(cssText);
     }
-    pattern.lastIndex = 0;
   });
 
   Array.from(clonedDoc.styleSheets).forEach((sheet) => {
@@ -75,17 +150,34 @@ function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
 
     for (let i = rules.length - 1; i >= 0; i -= 1) {
       const rule = rules[i];
-      if (pattern.test(rule.cssText)) {
-        pattern.lastIndex = 0;
+      if (UNSUPPORTED_COLOR_DETECTOR.test(rule.cssText)) {
         try {
           sheet.deleteRule(i);
-          sheet.insertRule(replace(rule.cssText), i);
+          sheet.insertRule(sanitizeColorText(rule.cssText), i);
         } catch {
           // Rule can't be safely rewritten in place; leave it and rely on
-          // the style-attribute/inline-style passes above for elements.
+          // the style-attribute/inline-style/computed-style passes to mask
+          // its effect on the rendered elements instead.
         }
       }
-      pattern.lastIndex = 0;
+    }
+  });
+
+  // `getComputedStyle()` on the clone can still resolve to an oklab/oklch
+  // serialization even after the passes above — e.g. a cross-origin
+  // stylesheet whose `cssRules` threw above, or a browser that serializes
+  // `color-mix` results as `oklab(...)`. html2canvas reads computed style
+  // directly, so force those specific properties to a safe inline value
+  // whenever the computed result still contains an unsupported function.
+  clonedDoc.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    const computed = clonedDoc.defaultView?.getComputedStyle(el);
+    if (!computed) return;
+
+    for (const prop of COLOR_PROPERTIES) {
+      const value = computed[prop];
+      if (value && UNSUPPORTED_COLOR_DETECTOR.test(value)) {
+        el.style[prop] = 'transparent';
+      }
     }
   });
 }
