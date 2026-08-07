@@ -297,7 +297,7 @@ export default function PageCard({
                 }}
               >
                 <div
-                  className="w-full h-full flex flex-col justify-between"
+                  className="w-full h-full flex flex-col"
                   style={{ gap: `${settings.columnGapMm * PX_PER_MM}px` }}
                 >
                   {columnFlowTokens.map((column, segmentIndex) => {
@@ -305,7 +305,7 @@ export default function PageCard({
                     return (
                       <div
                         key={segmentIndex}
-                        className="w-full overflow-hidden"
+                        className="w-full flex-1 min-h-0 overflow-hidden"
                         style={{
                           height: `calc((100% - ${settings.columnGapMm * PX_PER_MM}px) / 2)`,
                           writingMode: "vertical-rl",
