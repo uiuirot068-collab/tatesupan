@@ -298,7 +298,7 @@ export default function PageCard({
               >
                 <div
                   className="w-full h-full flex flex-col justify-between"
-                  style={{ gap: `${settings.columnGapMm}mm` }}
+                  style={{ gap: `${settings.columnGapMm * PX_PER_MM}px` }}
                 >
                   {columnFlowTokens.map((column, segmentIndex) => {
                     const startOffset = segmentIndex === 0 ? 0 : columnFlowTokens[0].length;
@@ -307,7 +307,7 @@ export default function PageCard({
                         key={segmentIndex}
                         className="w-full overflow-hidden"
                         style={{
-                          height: `calc((100% - ${settings.columnGapMm}mm) / 2)`,
+                          height: `calc((100% - ${settings.columnGapMm * PX_PER_MM}px) / 2)`,
                           writingMode: "vertical-rl",
                           textOrientation: "mixed",
                           whiteSpace: textStyle.whiteSpace,
