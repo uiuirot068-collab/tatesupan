@@ -30,26 +30,38 @@ type SettingsTab = "page" | "master" | "plot";
 const AUTO_EDGE_DEPENDENT_KEYS = new Set<keyof PageSettings>([
   "fontSizePt",
   "lineHeightRatio",
-  "columnCount",
   "columnGapMm",
   "marginGutter",
 ]);
 
-// PAPER_SIZE_TEMPLATES にはフォントサイズ・ノンブル位置の情報がないため、
-// 用紙サイズごとの推奨値をここで保持する。
-// Web閲覧用のノンブルは PageCard 側で自動的に左寄せ表示されるため、
-// ここでは基準値の "center" を保持しておく。
-const PAPER_SIZE_FONT_AND_NOMBRE: Record<
-  PaperSizeKey,
-  { fontSizePt: number; nombrePosition: NombrePosition }
-> = {
-  Web閲覧用: { fontSizePt: 15, nombrePosition: "center" },
-  A5: { fontSizePt: 9.5, nombrePosition: "center" },
-  B5: { fontSizePt: 10, nombrePosition: "center" },
-  B6: { fontSizePt: 9, nombrePosition: "center" },
-  新書: { fontSizePt: 9, nombrePosition: "center" },
-  A6: { fontSizePt: 9, nombrePosition: "center" },
-  文庫: { fontSizePt: 9, nombrePosition: "center" },
+// 用紙サイズ・段数（1段/2段）の組み合わせごとの版面パラメータ一式を
+// PAPER_SIZE_TEMPLATES の cols1/cols2 から取り出して settings に反映する。
+const applyPaperTemplate = (
+  base: PageSettings,
+  paperSize: PaperSizeKey,
+  columnCount: ColumnCount
+): PageSettings => {
+  const template = PAPER_SIZE_TEMPLATES[paperSize];
+  const profile = columnCount === 2 ? template.cols2 : template.cols1;
+  return {
+    ...base,
+    paperSize,
+    columnCount,
+    marginTop: profile.marginTop,
+    marginBottom: profile.marginBottom,
+    marginGutter: profile.marginGutter,
+    marginOuter: profile.marginOuter,
+    fontSizePt: profile.fontSizePt,
+    lineHeightRatio: profile.lineSpacing,
+    columnGapMm: profile.columnGap,
+    charsPerLine: profile.charsPerLine,
+    linesPerColumn: profile.linesPerColumn,
+    masterPage: {
+      ...base.masterPage,
+      nombrePosition: profile.nombrePosition as NombrePosition,
+      nombreBottomMargin: profile.nombreDistance,
+    },
+  };
 };
 
 export default function PageSettingsPanel({
@@ -123,21 +135,11 @@ export default function PageSettingsPanel({
   };
 
   const handlePaperSizeChange = (key: PaperSizeKey) => {
-    const template = PAPER_SIZE_TEMPLATES[key];
-    const { fontSizePt, nombrePosition } = PAPER_SIZE_FONT_AND_NOMBRE[key];
-    onChange({
-      ...settings,
-      paperSize: key,
-      marginTop: template.marginTop,
-      marginBottom: template.marginBottom,
-      marginGutter: template.marginGutter,
-      marginOuter: template.marginEdge,
-      fontSizePt,
-      masterPage: {
-        ...settings.masterPage,
-        nombrePosition,
-      },
-    });
+    onChange(applyPaperTemplate(settings, key, settings.columnCount));
+  };
+
+  const handleColumnCountChange = (count: ColumnCount) => {
+    onChange(applyPaperTemplate(settings, settings.paperSize, count));
   };
 
   const handleHideNombreOnFirstPageChange = (checked: boolean) => {
@@ -286,7 +288,7 @@ export default function PageSettingsPanel({
           <select
             value={settings.columnCount}
             onChange={(e) =>
-              update("columnCount", Number(e.target.value) as ColumnCount)
+              handleColumnCountChange(Number(e.target.value) as ColumnCount)
             }
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
