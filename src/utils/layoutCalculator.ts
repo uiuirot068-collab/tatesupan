@@ -49,8 +49,6 @@ export function calculateCustomLayout(
     fontSizePt,
     lineHeightRatio,
     linesPerColumn,
-    columnsPerPage = 1,
-    columnGapMm = 0,
   } = input;
 
   const fontSizeMm = fontSizePt * MM_PER_PT;
@@ -60,7 +58,8 @@ export function calculateCustomLayout(
   // `linesPerColumn`; a hair of epsilon guards the exact boundary against
   // floating-point rounding landing one line short.
   const columnWidthMm = (linesPerColumn + PAGE_SAFETY_MARGIN_CHARS) * linePitchMm + 0.001;
-  const textAreaWidthMm = columnWidthMm * columnsPerPage + columnGapMm * (columnsPerPage - 1);
+  // 縦書き2段組は高さ方向の分割のため、横幅（textAreaWidthMm）は1段分の幅（columnWidthMm）と等しい
+  const textAreaWidthMm = columnWidthMm;
 
   const calculatedMarginEdge = Math.max(
     0,
