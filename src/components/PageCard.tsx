@@ -127,11 +127,13 @@ export default function PageCard({
   // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
   const totalTextHeightPx = layout.charsPerLine * fontSizePx;
   const spaceDiffPx = lineBoxHeightPx - totalTextHeightPx;
+  // 1文字あたりの描画膨張(約0.08px)の累積誤差を吸収する安全領域
+  const accumulativeMarginPx = Math.max(2.0, layout.charsPerLine * 0.08);
+  const effectiveSpaceDiffPx = spaceDiffPx - accumulativeMarginPx;
   // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
   const gapCount = Math.max(1, layout.charsPerLine - 1);
-  // フォント描画時の蓄積誤差(約1.9px)を吸収し1文字溢れを防ぐため、安全マージン2.5pxを差し引く
-  const safeSpaceDiffPx = Math.max(0, spaceDiffPx - 2.5);
-  const microSpacingPx = layout.charsPerLine > 1 ? safeSpaceDiffPx / gapCount : 0;
+  // 溢れる場合でも負の値を許容し、コンテナ高さ内に100%収まる微細圧縮を適用
+  const microSpacingPx = layout.charsPerLine > 1 ? effectiveSpaceDiffPx / gapCount : 0;
 
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",

@@ -297,8 +297,10 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // full character of slack, so a boundary character is pushed to the next
   // line/page instead of being cut in half.
   const autoCharsPerLine = computeAutoCharsPerLine(columnHeightMm, fontSizeMm, columnCount);
-  const charsPerLine =
+  const rawCharsPerLine =
     settings.charsPerLine > 0 ? settings.charsPerLine : autoCharsPerLine;
+  const maxCapacityChars = Math.floor(textAreaHeightMm / fontSizeMm);
+  const charsPerLine = Math.min(rawCharsPerLine, maxCapacityChars);
 
   // 縦書き2段組は上下スタック（上段・下段）であり、幅方向は段数で分割しない。
   // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
