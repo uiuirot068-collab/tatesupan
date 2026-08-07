@@ -179,11 +179,13 @@ export function computeAutoCharsPerLine(
 /** ノド・小口余白と行間から、1段に収まる行数を算出する。 */
 export function computeAutoLinesPerColumn(
   textAreaWidthMm: number,
-  linePitchMm: number
+  linePitchMm: number,
+  columnCount: ColumnCount
 ): number {
-  return linePitchMm > 0
-    ? Math.max(Math.floor(textAreaWidthMm / linePitchMm), 1)
-    : 1;
+  if (linePitchMm <= 0) return 1;
+  const rawLines = Math.floor(textAreaWidthMm / linePitchMm);
+  // 2段組時はフォントレンダリングの誤差で左端が切れるのを防ぐため 1行分の安全マージンを減算
+  return columnCount === 2 ? Math.max(rawLines - 1, 1) : Math.max(rawLines, 1);
 }
 
 export interface PageLayout {
@@ -257,7 +259,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
   const columnWidthMm = textAreaWidthMm;
 
-  const autoLinesPerColumn = computeAutoLinesPerColumn(columnWidthMm, linePitchMm);
+  const autoLinesPerColumn = computeAutoLinesPerColumn(columnWidthMm, linePitchMm, columnCount);
   const targetLinesPerColumn =
     settings.linesPerColumn > 0 ? settings.linesPerColumn : autoLinesPerColumn;
   const linesPerColumn = Math.min(targetLinesPerColumn, autoLinesPerColumn);
