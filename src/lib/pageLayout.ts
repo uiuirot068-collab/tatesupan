@@ -209,8 +209,9 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     linePitchMm > 0
       ? Math.max(Math.floor(columnWidthMm / linePitchMm) - 1, 1)
       : 1;
-  const linesPerColumn =
+  const targetLinesPerColumn =
     settings.linesPerColumn > 0 ? settings.linesPerColumn : autoLinesPerColumn;
+  const linesPerColumn = Math.min(targetLinesPerColumn, autoLinesPerColumn);
   const linesPerPage = linesPerColumn * columnCount;
   const charsPerColumn = charsPerLine * linesPerColumn;
 
