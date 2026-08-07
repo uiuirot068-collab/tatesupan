@@ -211,30 +211,6 @@ export default function PageSettingsPanel({
 
       {activeTab === "page" && (
         <div className="w-full">
-          <div className="flex gap-1 px-4 pt-3">
-            <button
-              type="button"
-              onClick={() => handleLayoutModeChange("margin")}
-              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-                settings.layoutMode === "margin"
-                  ? "bg-accent text-paper-ink"
-                  : "text-ink/60 hover:bg-ink/5"
-              }`}
-            >
-              余白から設定する
-            </button>
-            <button
-              type="button"
-              onClick={() => handleLayoutModeChange("capacity")}
-              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-                settings.layoutMode === "capacity"
-                  ? "bg-accent text-paper-ink"
-                  : "text-ink/60 hover:bg-ink/5"
-              }`}
-            >
-              文字数・行数から設定する
-            </button>
-          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
           <span className="text-xs text-ink/60">用紙サイズ</span>
@@ -250,6 +226,31 @@ export default function PageSettingsPanel({
             ))}
           </select>
         </label>
+
+        <div className="col-span-2 flex gap-1 sm:col-span-4">
+          <button
+            type="button"
+            onClick={() => handleLayoutModeChange("margin")}
+            className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+              settings.layoutMode === "margin"
+                ? "bg-accent text-paper-ink"
+                : "text-ink/60 hover:bg-ink/5"
+            }`}
+          >
+            余白から設定する
+          </button>
+          <button
+            type="button"
+            onClick={() => handleLayoutModeChange("capacity")}
+            className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+              settings.layoutMode === "capacity"
+                ? "bg-accent text-paper-ink"
+                : "text-ink/60 hover:bg-ink/5"
+            }`}
+          >
+            文字数・行数から設定する
+          </button>
+        </div>
 
         <MarginField
           label="天（上）"
