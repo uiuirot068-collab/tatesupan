@@ -26,12 +26,18 @@ export function Header({ onSave, onSelectProject, isSaving }: HeaderProps) {
     }
   }, [isDarkTheme]);
 
-  const logoSrc = isDarkTheme ? '/img/caroad_main2.png' : '/img/caroad_main2.png';
+  const logoSrc = '/caroad_main2.png';
 
   return (
     <header className="flex items-center justify-between border-b bg-white px-6 py-4 shadow-sm">
       <div className="flex items-center gap-3">
-        <img src={logoSrc} alt="TateSpun" className="h-8 w-8 flex-shrink-0 object-contain" />
+        <img
+          src={logoSrc}
+          alt="TateSpun"
+          width={32}
+          height={32}
+          className="h-8 w-8 flex-shrink-0 object-contain"
+        />
         <div className="flex flex-col leading-tight">
           <span className="text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
           <span className="text-xs text-gray-500">縦書きWebエディタ</span>
