@@ -79,26 +79,28 @@ export default function Home() {
           className="h-auto w-full max-w-[220px] sm:max-w-[260px]"
         />
 
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={creating}
-          className="rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          + 新しい作品を作成する
-        </button>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={creating}
+            className="rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            + 新しい作品を作成する
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCombineModalOpen(true)}
+            disabled={!documents || documents.length < 2}
+            className="bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-40"
+          >
+            総集編を編成する
+          </button>
+        </div>
 
         <section className="w-full">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-ink/70">作品一覧</h2>
-            <button
-              type="button"
-              onClick={() => setIsCombineModalOpen(true)}
-              disabled={!documents || documents.length < 2}
-              className="rounded-full border border-ink/20 px-3 py-1.5 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink/5 disabled:opacity-40"
-            >
-              📚 短編集を作成
-            </button>
           </div>
 
           {documents === undefined && (
