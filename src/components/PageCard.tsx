@@ -316,6 +316,7 @@ export default function PageCard({
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
             fontFamily={textStyle.fontFamily as string}
+            fontSize={masterPage.headerFontSize}
           />
         )}
 
@@ -325,6 +326,7 @@ export default function PageCard({
             position={nombrePosition as "center" | "gutter" | "outer"}
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
+            fontSize={masterPage.nombreFontSize}
           />
         )}
 
@@ -359,11 +361,13 @@ function NombreOverlay({
   position,
   isOddPage,
   bottomMarginMm,
+  fontSize,
 }: {
   value: number;
   position: "center" | "gutter" | "outer";
   isOddPage: boolean;
   bottomMarginMm: number;
+  fontSize?: number;
 }) {
   // ノド(綴じ側): 奇数ページ(左)は右寄せ、偶数ページ(右)は左寄せ。
   // 小口(外側): 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せ。
@@ -389,7 +393,7 @@ function NombreOverlay({
     writingMode: "horizontal-tb",
     padding: `0 ${2 * PX_PER_MM}px`,
     color: "#000000",
-    fontSize: "6pt",
+    fontSize: `${fontSize ?? 8}pt`,
   };
 
   return (
@@ -442,6 +446,7 @@ function HashiraOverlay({
   insetLeftPx,
   insetRightPx,
   fontFamily,
+  fontSize,
 }: {
   text: string;
   position: "top" | "bottom";
@@ -450,6 +455,7 @@ function HashiraOverlay({
   insetLeftPx: number;
   insetRightPx: number;
   fontFamily: string;
+  fontSize?: number;
 }) {
   // 柱のコンテナは本文領域(小口境界)と同じ左右インセットを持たせ、
   // 小口側の端に文字が吸着するようテキスト側で text-align を指定する。
@@ -465,6 +471,7 @@ function HashiraOverlay({
     writingMode: "horizontal-tb",
     color: "#000000",
     fontFamily,
+    fontSize: `${fontSize ?? 8}pt`,
   };
 
   const textStyle: CSSProperties = isOddPage
@@ -472,7 +479,7 @@ function HashiraOverlay({
     : { textAlign: "right", width: "100%" };
 
   return (
-    <div style={style} className="pointer-events-none select-none text-[10px]">
+    <div style={style} className="pointer-events-none select-none">
       <div style={textStyle}>{text}</div>
     </div>
   );
