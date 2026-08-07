@@ -184,10 +184,17 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // Reserving one character's worth of space before flooring guarantees a
   // full character of slack, so a boundary character is pushed to the next
   // line/page instead of being cut in half.
-  const charsPerLine =
+  const rawCharsPerLine =
     fontSizeMm > 0
-      ? Math.max(Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS), 0)
+      ? Math.floor(columnHeightMm / fontSizeMm - PAGE_SAFETY_MARGIN_CHARS)
       : 0;
+  // 2段組は段間ギャップの丸め誤差やフォントメトリクスのブレが1段組より
+  // 顕著に効くため、通常の PAGE_SAFETY_MARGIN_CHARS に加えて1文字分の
+  // 追加マージンを設け、CSS の overflow: hidden による行末クリップを防ぐ。
+  const charsPerLine =
+    columnCount === 2
+      ? Math.max(rawCharsPerLine - 1, 1)
+      : Math.max(rawCharsPerLine, 0);
 
   // 縦書き2段組は上下スタック（上段・下段）であり、幅方向は段数で分割しない。
   // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
