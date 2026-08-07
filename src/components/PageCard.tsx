@@ -121,25 +121,21 @@ export default function PageCard({
 
   const isTwoColumn = settings.columnCount === 2;
 
-  // 1行(縦書きの1本)が実際に配置される高さ(px)。2段組は天地方向を段数で
-  // 分割した1段分の高さ(columnHeightMm)、1段組はテキスト領域の高さそのもの。
-  const lineBoxHeightPx = (isTwoColumn ? layout.columnHeightMm : layout.textAreaHeightMm) * PX_PER_MM;
+  // ブラウザの自動折り返し誤作動を防ぐため 4px の許容バッファを付与
+  const renderContainerHeightPx = textAreaHeightPx + 4;
+
   // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
   const totalTextHeightPx = layout.charsPerLine * fontSizePx;
-  const spaceDiffPx = lineBoxHeightPx - totalTextHeightPx;
-  // 1文字あたりの描画膨張(約0.08px)の累積誤差を吸収する安全領域
-  const accumulativeMarginPx = Math.max(2.0, layout.charsPerLine * 0.08);
-  const effectiveSpaceDiffPx = spaceDiffPx - accumulativeMarginPx;
+  const spaceDiffPx = Math.max(0, textAreaHeightPx - totalTextHeightPx);
   // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
   const gapCount = Math.max(1, layout.charsPerLine - 1);
-  // 溢れる場合でも負の値を許容し、コンテナ高さ内に100%収まる微細圧縮を適用
-  const microSpacingPx = layout.charsPerLine > 1 ? effectiveSpaceDiffPx / gapCount : 0;
+  const microSpacingPx = layout.charsPerLine > 1 ? spaceDiffPx / gapCount : 0;
 
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
     width: textAreaWidthPx,
-    height: textAreaHeightPx,
+    height: renderContainerHeightPx,
     overflow: "hidden",
     fontSize: `${fontSizePx}px`,
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
@@ -323,7 +319,7 @@ export default function PageCard({
               <div
                 style={{
                   width: textAreaWidthPx,
-                  height: textAreaHeightPx,
+                  height: renderContainerHeightPx,
                   overflow: "hidden",
                   writingMode: "horizontal-tb",
                 }}
