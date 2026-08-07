@@ -19,6 +19,7 @@ export interface PaperSizeConfig {
   name: string;
   width: number;      // 横幅 (mm)
   height: number;     // 縦幅 (mm)
+  isPx?: boolean; // px単位フラグ（Web閲覧用等で使用）
   cols1: PaperSizeColumnProfile; // 1段組用の設定値
   cols2: PaperSizeColumnProfile; // 2段組用の設定値
 }
@@ -212,31 +213,32 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
   },
   'Web閲覧用': {
     name: 'Web閲覧用',
-    width: 148,
-    height: 210,
+    width: 768,
+    height: 1024,
+    isPx: true,
     cols1: {
       marginTop: 20,
-      marginBottom: 25,
-      marginGutter: 8,
-      marginOuter: 8,
+      marginBottom: 30,
+      marginGutter: 15,
+      marginOuter: 15,
       fontSizePt: 16,
       lineSpacing: 1.8,
       columnGap: 0,
-      charsPerLine: 40,
-      linesPerColumn: 20,
+      charsPerLine: 27,
+      linesPerColumn: 11,
       nombrePosition: 'center',
       nombreDistance: 8,
     },
     cols2: {
       marginTop: 20,
-      marginBottom: 25,
-      marginGutter: 8,
-      marginOuter: 8,
+      marginBottom: 30,
+      marginGutter: 15,
+      marginOuter: 15,
       fontSizePt: 14,
       lineSpacing: 1.75,
-      columnGap: 10,
-      charsPerLine: 24,
-      linesPerColumn: 22,
+      columnGap: 30,
+      charsPerLine: 12,
+      linesPerColumn: 12,
       nombrePosition: 'center',
       nombreDistance: 8,
     },
