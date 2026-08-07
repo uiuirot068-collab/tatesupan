@@ -193,7 +193,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     saveDocument(docId, title, content, settings, plotNote)
       .then(() => {
         setSaveStatus("saved");
-        showToast("下書きを自動保存しました");
+        showToast("下書きを保存しました");
       })
       .catch(() => setSaveStatus("error"));
   };
@@ -208,7 +208,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
         : await createProject({ title, content, settings });
 
       if (result.error || !result.data) {
-        alert("保存に失敗しました: " + (result.error || "詳細不明のエラー"));
+        alert("クラウドへの保存に失敗しました: " + (result.error || "原因不明のエラー"));
         return;
       }
 
@@ -319,7 +319,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-ink/10 bg-base px-4 py-2.5 text-sm font-medium text-ink/70 shadow-lg md:hidden"
         >
           <span aria-hidden>👁️</span>
-          {isMobilePreviewOpen ? "プレビューを閉じる" : "プレビューを表示・確認する"}
+          {isMobilePreviewOpen ? "プレビューを閉じる" : "プレビューを見る"}
         </button>
 
         {!isPreviewCollapsed && (
@@ -386,9 +386,9 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 function SaveStatusLabel({ status }: { status: SaveStatus }) {
   const text: Record<SaveStatus, string> = {
     loading: "読み込み中…",
-    saving: "保存中…",
-    saved: "保存済み",
-    error: "保存に失敗しました",
+    saving: "下書き保存中…",
+    saved: "下書き保存済み",
+    error: "下書きの保存に失敗しました",
   };
   const dot: Record<SaveStatus, string> = {
     loading: "bg-ink/30",
