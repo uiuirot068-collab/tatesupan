@@ -175,17 +175,18 @@ export default function PageCard({
       onDragEnd={onDragEnd}
     >
       {isInteractive && (
-        <div className="flex w-full items-center justify-between px-1">
+        <div data-no-print="true" className="no-print flex w-full items-center justify-between px-1">
           <label
             className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
             onClick={(event) => event.stopPropagation()}
           >
             <input
               type="checkbox"
+              data-no-print="true"
               checked={selected}
               onChange={() => {}}
               onClick={onToggleSelect}
-              className="h-3.5 w-3.5 cursor-pointer accent-accent"
+              className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
             />
             選択
           </label>
@@ -197,9 +198,10 @@ export default function PageCard({
               >
                 <input
                   type="checkbox"
+                  data-no-print="true"
                   checked={hideNombre}
                   onChange={(event) => onHideNombreChange(event.target.checked)}
-                  className="h-3.5 w-3.5 cursor-pointer accent-accent"
+                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
                 />
                 ノンブル非表示
               </label>
@@ -277,7 +279,8 @@ export default function PageCard({
         </div>
       )}
       <div
-        className={`shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+        data-page-card="true"
+        className={`page-card shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           selected
             ? "border-accent ring-2 ring-accent dark:border-accent"
             : "border-gray-200 dark:border-gray-700"
@@ -414,7 +417,7 @@ function TrimGuide() {
     pointerEvents: "none",
   };
 
-  return <div style={style} />;
+  return <div data-bleed-guide="true" className="border-dashed" style={style} />;
 }
 
 function NombreOverlay({
@@ -557,6 +560,8 @@ function WebFooterOverlay() {
         <img
           src="/caroad_main2.png"
           alt="logo"
+          data-logo-img="true"
+          className="footer-logo"
           style={{ width: "12px", height: "12px", objectFit: "contain" }}
         />
         <span>TateSpun</span>
