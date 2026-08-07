@@ -333,7 +333,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
           className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
-          } ${isMobilePreviewOpen ? "flex h-[60vh] shrink-0 flex-col" : "hidden"}`}
+          } ${isMobilePreviewOpen ? "flex max-h-[85vh] shrink-0 flex-col overflow-y-auto" : "hidden"}`}
         >
           <PreviewPane
             content={content}
