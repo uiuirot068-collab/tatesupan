@@ -202,9 +202,12 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // そのため linesPerColumn の算出には利用可能幅全体をそのまま使用する。
   const columnWidthMm = textAreaWidthMm;
 
+  // 縦書きは行が増えるほど右→左（X軸マイナス方向）に展開するため、末尾（左端）の
+  // 行が版面の枠線ぎりぎりに配置されると欠けて見えることがある。1行分の安全
+  // マージンを確保し、左端の行が枠線で切れないようにする。
   const autoLinesPerColumn =
     linePitchMm > 0
-      ? Math.max(Math.floor(columnWidthMm / linePitchMm - PAGE_SAFETY_MARGIN_CHARS), 1)
+      ? Math.max(Math.floor(columnWidthMm / linePitchMm) - 1, 1)
       : 1;
   const linesPerColumn =
     settings.linesPerColumn > 0 ? settings.linesPerColumn : autoLinesPerColumn;

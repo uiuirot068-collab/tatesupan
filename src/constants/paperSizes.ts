@@ -211,7 +211,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
     },
   },
   'Web閲覧用': {
-    name: 'Web閲覧用',
+    name: 'Web閲覧用(768×1024px)',
     width: 148,
     height: 210,
     cols1: {
