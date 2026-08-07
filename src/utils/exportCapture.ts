@@ -35,7 +35,7 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
  * Replacing the node outright (`replaceWith`) forces the browser to parse a
  * brand-new stylesheet from the cleaned text.
  */
-const UNSUPPORTED_COLOR_DETECTOR = /oklab|oklch|color-mix/i;
+const UNSUPPORTED_COLOR_DETECTOR = /lab\(|oklch|color-mix/i;
 
 /**
  * Replaces every balanced `name(...)` call in `text` for which `predicate`
@@ -96,11 +96,15 @@ function sanitizeColorText(text: string): string {
   let result = replaceBalancedCalls(
     text,
     'color-mix',
-    (match) => /oklab|oklch/i.test(match),
+    (match) => /lab\(|oklch/i.test(match),
     'transparent'
   );
-  result = replaceBalancedCalls(result, 'oklab', () => true, 'transparent');
+  // `oklch`/`oklab` must be stripped before the bare `lab` pass below —
+  // `oklab(` itself contains the literal substring `lab(`, so running the
+  // `lab` pass first would match inside it and leave a stray `ok` prefix.
   result = replaceBalancedCalls(result, 'oklch', () => true, 'transparent');
+  result = replaceBalancedCalls(result, 'oklab', () => true, 'transparent');
+  result = replaceBalancedCalls(result, 'lab', () => true, 'transparent');
   return result;
 }
 
@@ -116,7 +120,15 @@ const COLOR_PROPERTIES = [
   'borderBottomColor',
   'borderLeftColor',
   'outlineColor',
+  'fill',
+  'stroke',
 ] as const;
+
+// `boxShadow` isn't a plain color — it's a shadow list (offsets/blur/spread
+// plus a color). `transparent` alone is not a valid `box-shadow` value, so
+// an unsupported color inside it is neutralized by dropping the shadow
+// entirely rather than by the blanket `transparent` used for color props.
+const SHADOW_PROPERTY = 'boxShadow' as const;
 
 function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
   clonedDoc.querySelectorAll('style').forEach((style) => {
@@ -176,8 +188,13 @@ function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
     for (const prop of COLOR_PROPERTIES) {
       const value = computed[prop];
       if (value && UNSUPPORTED_COLOR_DETECTOR.test(value)) {
-        el.style[prop] = 'transparent';
+        el.style.setProperty(prop.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`), 'transparent', 'important');
       }
+    }
+
+    const shadow = computed[SHADOW_PROPERTY];
+    if (shadow && UNSUPPORTED_COLOR_DETECTOR.test(shadow)) {
+      el.style.setProperty('box-shadow', 'none', 'important');
     }
   });
 }
