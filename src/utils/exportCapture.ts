@@ -16,4 +16,30 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
     el.style.transform = 'none';
     el.style.transition = 'none';
   });
+
+  sanitizeUnsupportedColorFunctions(clonedDoc);
+}
+
+/**
+ * html2canvas's color parser doesn't understand `oklab()`/`oklch()` (used by
+ * Tailwind v4's default palette), and throws instead of rendering. Replace
+ * them in the clone only, right before capture.
+ */
+function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
+  const pattern = /oklab\([^)]+\)|oklch\([^)]+\)/gi;
+
+  clonedDoc.querySelectorAll('style').forEach((style) => {
+    if (pattern.test(style.innerHTML)) {
+      pattern.lastIndex = 0;
+      style.innerHTML = style.innerHTML.replace(pattern, 'rgba(0, 0, 0, 0.1)');
+    }
+  });
+
+  clonedDoc.querySelectorAll<HTMLElement>('[style]').forEach((el) => {
+    const attr = el.getAttribute('style');
+    if (attr && pattern.test(attr)) {
+      el.setAttribute('style', attr.replace(pattern, 'rgba(0, 0, 0, 0.1)'));
+    }
+    pattern.lastIndex = 0;
+  });
 }
