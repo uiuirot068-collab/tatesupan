@@ -119,6 +119,17 @@ export default function PageCard({
   const textAreaWidthPx = layout.textAreaWidthMm * PX_PER_MM;
   const textAreaHeightPx = layout.textAreaHeightMm * PX_PER_MM;
 
+  const isTwoColumn = settings.columnCount === 2;
+
+  // 1行(縦書きの1本)が実際に配置される高さ(px)。2段組は天地方向を段数で
+  // 分割した1段分の高さ(columnHeightMm)、1段組はテキスト領域の高さそのもの。
+  const lineBoxHeightPx = (isTwoColumn ? layout.columnHeightMm : layout.textAreaHeightMm) * PX_PER_MM;
+  // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
+  const totalTextHeightPx = layout.charsPerLine * fontSizePx;
+  const spaceDiffPx = Math.max(0, lineBoxHeightPx - totalTextHeightPx);
+  // 1文字あたりに配分する微小ピッチ(px)
+  const microSpacingPx = layout.charsPerLine > 0 ? spaceDiffPx / layout.charsPerLine : 0;
+
   const textStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
@@ -129,7 +140,7 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
-    letterSpacing: "0em", // 一律の字間拡張を解除
+    letterSpacing: `${microSpacingPx}px`, // 微小ピッチ補正で地のラインへ吸着
     // 縦書き・横書き双方のプロポーショナル詰め（vpal/vhal/palt/vkrn等）をすべて完全オフ
     fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
     // 東アジア文字を完全全角に固定
@@ -139,8 +150,6 @@ export default function PageCard({
     textJustify: "inter-character", // 文字間均等割り
     textAlignLast: "start", // 改行で終わる短行（見出しや段落末尾）は上詰め固定
   };
-
-  const isTwoColumn = settings.columnCount === 2;
 
   // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
   // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが

@@ -219,6 +219,8 @@ export interface PageLayout {
   textAreaWidthMm: number;
   textAreaHeightMm: number;
   charsPerLine: number;
+  /** 1行（縦書きの1本）の高さ (mm)。段組みでは天地方向を段数で分割した1段分。 */
+  columnHeightMm: number;
   /** 段の幅 (mm)。段組みでテキスト領域の幅を段数と段間で分割した1段分。 */
   columnWidthMm: number;
   /** 1段あたりの行数 */
@@ -316,6 +318,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     textAreaWidthMm,
     textAreaHeightMm,
     charsPerLine,
+    columnHeightMm,
     columnWidthMm,
     linesPerColumn,
     charsPerColumn,
