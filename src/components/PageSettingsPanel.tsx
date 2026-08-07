@@ -9,6 +9,9 @@ import {
   type PageLayout,
   type PageSettings,
   type PaperSizeKey,
+  pxToInternalFontSizePt,
+  pxToInternalMm,
+  resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { calculateCapacityFromMargins, calculateCustomLayout } from "@/utils/layoutCalculator";
@@ -56,23 +59,25 @@ const applyPaperTemplate = (
 ): PageSettings => {
   const template = PAPER_SIZE_TEMPLATES[paperSize];
   const profile = columnCount === 2 ? template.cols2 : template.cols1;
+  const isPx = template.isPx === true;
+  const toMm = (value: number) => (isPx ? pxToInternalMm(value) : value);
   return {
     ...base,
     paperSize,
     columnCount,
-    marginTop: profile.marginTop,
-    marginBottom: profile.marginBottom,
-    marginGutter: profile.marginGutter,
-    marginOuter: profile.marginOuter,
-    fontSizePt: profile.fontSizePt,
+    marginTop: toMm(profile.marginTop),
+    marginBottom: toMm(profile.marginBottom),
+    marginGutter: toMm(profile.marginGutter),
+    marginOuter: toMm(profile.marginOuter),
+    fontSizePt: isPx ? pxToInternalFontSizePt(profile.fontSizePt) : profile.fontSizePt,
     lineHeightRatio: profile.lineSpacing,
-    columnGapMm: profile.columnGap,
+    columnGapMm: toMm(profile.columnGap),
     charsPerLine: profile.charsPerLine,
     linesPerColumn: profile.linesPerColumn,
     masterPage: {
       ...base.masterPage,
       nombrePosition: profile.nombrePosition as NombrePosition,
-      nombreBottomMargin: profile.nombreDistance,
+      nombreBottomMargin: toMm(profile.nombreDistance),
     },
   };
 };
@@ -131,9 +136,9 @@ export default function PageSettingsPanel({
       return { ...next, charsPerLine, linesPerColumn };
     }
     if (next.layoutMode === "capacity" && CAPACITY_MODE_TRIGGER_KEYS.has(changedKey)) {
-      const paper = PAPER_SIZE_TEMPLATES[next.paperSize];
+      const paper = resolvePaperSize(next.paperSize);
       const { marginEdge } = calculateCustomLayout({
-        paperWidth: paper.width,
+        paperWidth: paper.widthMm,
         marginGutter: next.marginGutter,
         fontSizePt: next.fontSizePt,
         lineHeightRatio: next.lineHeightRatio,
@@ -259,35 +264,50 @@ export default function PageSettingsPanel({
           >
             {Object.entries(PAPER_SIZE_TEMPLATES).map(([key, size]) => (
               <option key={key} value={key}>
-                {size.name}（{size.width}×{size.height}mm）
+                {size.name}（{size.width}×{size.height}{size.isPx ? "px" : "mm"}）
               </option>
             ))}
           </select>
         </label>
 
-        <div className="col-span-2 flex gap-1 sm:col-span-4">
-          <button
-            type="button"
-            onClick={() => handleLayoutModeChange("margin")}
-            className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-              settings.layoutMode === "margin"
-                ? "bg-accent text-paper-ink"
-                : "bg-ink/10 text-ink/60 hover:bg-ink/15"
-            }`}
-          >
-            余白から設定する
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLayoutModeChange("capacity")}
-            className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-              settings.layoutMode === "capacity"
-                ? "bg-accent text-paper-ink"
-                : "bg-ink/10 text-ink/60 hover:bg-ink/15"
-            }`}
-          >
-            文字数・行数から設定する
-          </button>
+        <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 sm:col-span-4">
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("margin")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                settings.layoutMode === "margin"
+                  ? "bg-accent text-paper-ink"
+                  : "bg-ink/10 text-ink/60 hover:bg-ink/15"
+              }`}
+            >
+              余白から設定する
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("capacity")}
+              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                settings.layoutMode === "capacity"
+                  ? "bg-accent text-paper-ink"
+                  : "bg-ink/10 text-ink/60 hover:bg-ink/15"
+              }`}
+            >
+              文字数・行数から設定する
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5 text-xs font-semibold">
+            {settings.columnCount === 2 && (
+              <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
+                {layout.charsPerColumn}字
+                <span className="ml-1 text-[10px] font-normal opacity-80">1段の文字数</span>
+              </span>
+            )}
+            <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
+              {layout.charsPerPage}字
+              <span className="ml-1 text-[10px] font-normal opacity-80">1ページの文字数</span>
+            </span>
+          </div>
         </div>
 
         <MarginField
@@ -409,13 +429,6 @@ export default function PageSettingsPanel({
           />
         </label>
       </div>
-
-          <dl className="grid grid-cols-2 gap-2 border-t border-ink/10 bg-ink/5 px-4 py-3 text-center sm:grid-cols-4">
-            <LayoutStat label="1行の文字数" value={`${layout.charsPerLine} 字`} />
-            <LayoutStat label="1段の行数" value={`${layout.linesPerColumn} 行`} />
-            <LayoutStat label="1段の文字数" value={`${layout.charsPerColumn} 字`} />
-            <LayoutStat label="1ページの文字数" value={`${layout.charsPerPage} 字`} />
-          </dl>
         </div>
       )}
 
@@ -726,16 +739,5 @@ function MarginField({
         className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
       />
     </label>
-  );
-}
-
-function LayoutStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="rounded-full bg-accent px-2.5 py-0.5 text-sm font-semibold text-paper-ink">
-        {value}
-      </span>
-      <span className="text-[11px] text-ink/60">{label}</span>
-    </div>
   );
 }
