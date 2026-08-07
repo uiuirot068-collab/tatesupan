@@ -236,7 +236,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       lineSpacing: 1.7,
       columnGap: 10,
       charsPerLine: 25,
-      linesPerColumn: 16,
+      linesPerColumn: 15,
       nombrePosition: 'center',
       nombreDistance: 8,
     },
