@@ -14,7 +14,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
     width: 148,
     height: 210,
     marginTop: 15,
-    marginBottom: 15,
+    marginBottom: 25,
     marginGutter: 15,
     marginEdge: 15,
   },
