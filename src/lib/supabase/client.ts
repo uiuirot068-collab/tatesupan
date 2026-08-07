@@ -1,8 +1,12 @@
 import { createBrowserClient } from '@supabase/ssr';
 
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  const supabaseUrl =
+    rawUrl && rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
+  const supabaseAnonKey = rawKey || 'placeholder-key';
 
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }

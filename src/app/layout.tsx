@@ -32,6 +32,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Zen+Old+Mincho:wght@400;700&display=swap"
           rel="stylesheet"
         />
+      </head>
+      <body className="flex h-full min-h-full flex-col">
         <Script
           id="theme-initializer"
           strategy="beforeInteractive"
@@ -39,8 +41,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             __html: `(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`,
           }}
         />
-      </head>
-      <body className="flex h-full min-h-full flex-col">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
