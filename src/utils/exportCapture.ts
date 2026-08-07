@@ -18,6 +18,30 @@ export function resetScaleTransformOnClone(clonedDoc: Document): void {
   });
 
   sanitizeUnsupportedColorFunctions(clonedDoc);
+  applyExportOutputCleanup(clonedDoc);
+}
+
+/**
+ * Final output cleanup for the exported capture: forces a pure white page
+ * background (no off-white/cream tint), strips editor-only UI (checkboxes,
+ * controls) that must never appear in the exported image, and hides the
+ * bleed/guide dashed borders that are only meant for on-screen alignment.
+ */
+function applyExportOutputCleanup(clonedDoc: Document): void {
+  clonedDoc.querySelectorAll<HTMLElement>('.page-card, [data-page-card], body').forEach((el) => {
+    el.style.setProperty('background-color', '#ffffff', 'important');
+    el.style.setProperty('background', '#ffffff', 'important');
+  });
+
+  clonedDoc
+    .querySelectorAll<HTMLElement>('input[type="checkbox"], .no-print, [data-no-print]')
+    .forEach((el) => {
+      el.style.setProperty('display', 'none', 'important');
+    });
+
+  clonedDoc.querySelectorAll<HTMLElement>('.border-dashed, [data-bleed-guide]').forEach((el) => {
+    el.style.setProperty('border-color', 'transparent', 'important');
+  });
 }
 
 /**
