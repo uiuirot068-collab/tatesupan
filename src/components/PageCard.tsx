@@ -124,6 +124,8 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
+    letterSpacing: "0em",
+    fontFeatureSettings: '"palt" 0',
   };
 
   const isTwoColumn = settings.columnCount === 2;
@@ -633,7 +635,7 @@ function TokenView({
   token: Exclude<TategakiToken, { type: "image" }>;
   indent: boolean;
 }) {
-  const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+  const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
 
   if (token.type === "ruby") {
     return (
