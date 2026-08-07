@@ -19,6 +19,7 @@ const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
 const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
+type FlowToken = Exclude<TategakiToken, { type: "image" }>;
 
 const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
   top: "天側（上部）",
@@ -118,11 +119,9 @@ export default function PageCard({
   const fontSizePx = layout.fontSizeMm * PX_PER_MM;
   const textAreaWidthPx = layout.textAreaWidthMm * PX_PER_MM;
   const textAreaHeightPx = layout.textAreaHeightMm * PX_PER_MM;
+  const columnHeightPx = layout.columnHeightMm * PX_PER_MM;
 
   const isTwoColumn = settings.columnCount === 2;
-
-  // ブラウザの自動折り返し誤作動を防ぐため 4px の許容バッファを付与
-  const renderContainerHeightPx = textAreaHeightPx + 4;
 
   // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
   const totalTextHeightPx = layout.charsPerLine * fontSizePx;
@@ -131,11 +130,20 @@ export default function PageCard({
   const gapCount = Math.max(1, layout.charsPerLine - 1);
   const microSpacingPx = layout.charsPerLine > 1 ? spaceDiffPx / gapCount : 0;
 
-  const textStyle: CSSProperties = {
+  // 本文全体を囲むコンテナ。行境界の判定はここでは行わず（ブラウザの自動
+  // 折り返しに委ねず）、tategaki.ts が確定した論理行を下記 lineStyle の
+  // 行要素として個別に描画する。高さは許容バッファなしの厳密値。
+  const textContainerStyle: CSSProperties = {
+    whiteSpace: "pre-wrap",
+    width: textAreaWidthPx,
+    height: textAreaHeightPx,
+    overflow: "hidden",
+  };
+
+  const lineStyle: CSSProperties = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
-    width: textAreaWidthPx,
-    height: renderContainerHeightPx,
+    height: textAreaHeightPx,
     overflow: "hidden",
     fontSize: `${fontSizePx}px`,
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
@@ -151,6 +159,9 @@ export default function PageCard({
     textJustify: "inter-character", // 文字間均等割り
     textAlignLast: "start", // 改行で終わる短行（見出しや段落末尾）は上詰め固定
   };
+
+  // 2段組: 1行の天地方向の長さは段（column）の高さ基準になる。
+  const columnLineStyle: CSSProperties = { ...lineStyle, height: columnHeightPx };
 
   // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
   // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが
@@ -180,11 +191,43 @@ export default function PageCard({
   const centerImages = imageTokens.filter((token) => token.position === "center");
   const bottomImages = imageTokens.filter((token) => token.position === "bottom");
 
-  // 2段組の上段・下段トークンは tategaki.ts のページ分割ループが行単位で
-  // 直接振り分け済み。ここでは挿絵トークンを取り除いて描画するだけでよく、
-  // 独自に配列位置を再計算する必要はない。
-  const columnFlowTokens = page.columns
-    ? page.columns.map((column) => column.filter((token) => token.type !== "image"))
+  // tategaki.ts が確定した論理行（各 <= charsPerLine 文字）をそのまま行要素
+  // として描画する。ページ側で二重に linesPerPage/linesPerColumn を超えて
+  // 切り詰めることで、想定行数を超える行要素自体が生成されないようにする。
+  const flowLines = page.lines
+    .map((line) => line.filter((token) => token.type !== "image"))
+    .slice(0, layout.linesPerPage);
+
+  // 2段組の上段・下段の行は tategaki.ts のページ分割ループが行単位で直接
+  // 振り分け済み。ここでは挿絵トークンを取り除いて描画するだけでよく、
+  // 独自に行の再計算を行う必要はない。
+  const columnFlowLines = page.columnLines
+    ? (page.columnLines.map((column) =>
+        column
+          .map((line) => line.filter((token) => token.type !== "image"))
+          .slice(0, layout.linesPerColumn)
+      ) as [FlowToken[][], FlowToken[][]])
+    : null;
+
+  // flowLines/columnFlowLines の各トークンを、paragraphStarts（flowTokens の
+  // フラットな並びに対応するインデックス配列）へ対応づけるための行頭オフセット。
+  // レンダー中の再代入を避けるため、JSX 構築前にここで一括計算しておく。
+  let flowOffsetCursor = 0;
+  const flowLineOffsets = flowLines.map((line) => {
+    const start = flowOffsetCursor;
+    flowOffsetCursor += line.length;
+    return start;
+  });
+
+  let columnFlowOffsetCursor = 0;
+  const columnFlowLineOffsets = columnFlowLines
+    ? columnFlowLines.map((columnLines) =>
+        columnLines.map((line) => {
+          const start = columnFlowOffsetCursor;
+          columnFlowOffsetCursor += line.length;
+          return start;
+        })
+      )
     : null;
 
   return (
@@ -315,11 +358,11 @@ export default function PageCard({
           <FullPageImage token={fullImage} images={images} />
         ) : (
           <>
-            {isTwoColumn && columnFlowTokens && flowTokens.length > 0 ? (
+            {isTwoColumn && columnFlowLines && flowTokens.length > 0 ? (
               <div
                 style={{
                   width: textAreaWidthPx,
-                  height: renderContainerHeightPx,
+                  height: textAreaHeightPx,
                   overflow: "hidden",
                   writingMode: "horizontal-tb",
                 }}
@@ -331,51 +374,46 @@ export default function PageCard({
                     writingMode: "horizontal-tb",
                   }}
                 >
-                  {columnFlowTokens.map((column, segmentIndex) => {
-                    const startOffset = segmentIndex === 0 ? 0 : columnFlowTokens[0].length;
-                    return (
-                      <div
-                        key={segmentIndex}
-                        className="w-full flex-1 min-h-0 overflow-hidden"
-                        style={{
-                          height: `calc((100% - ${settings.columnGapMm * PX_PER_MM}px) / 2)`,
-                          writingMode: "vertical-rl",
-                          textOrientation: "mixed",
-                          whiteSpace: textStyle.whiteSpace,
-                          wordBreak: textStyle.wordBreak,
-                          fontSize: textStyle.fontSize,
-                          fontFamily: textStyle.fontFamily,
-                          lineHeight: textStyle.lineHeight,
-                          color: textStyle.color,
-                          letterSpacing: textStyle.letterSpacing,
-                          fontFeatureSettings: textStyle.fontFeatureSettings,
-                          fontVariantEastAsian: textStyle.fontVariantEastAsian,
-                          textAlign: textStyle.textAlign,
-                          textJustify: textStyle.textJustify,
-                          textAlignLast: textStyle.textAlignLast,
-                        }}
-                      >
-                        {column.map((token, index) => (
-                          <TokenView
-                            key={startOffset + index}
-                            token={token}
-                            indent={paragraphStarts[startOffset + index]}
-                          />
-                        ))}
-                      </div>
-                    );
-                  })}
+                  {columnFlowLines.map((columnLines, segmentIndex) => (
+                    <div
+                      key={segmentIndex}
+                      className="w-full flex-1 min-h-0 overflow-hidden"
+                      style={{
+                        height: `calc((100% - ${settings.columnGapMm * PX_PER_MM}px) / 2)`,
+                        writingMode: "vertical-rl",
+                        textOrientation: "mixed",
+                      }}
+                    >
+                      {columnLines.map((line, lineIndex) => (
+                        <div key={lineIndex} className="tategaki-line" style={columnLineStyle}>
+                          {line.map((token, tokenIndex) => {
+                            const flatIndex = columnFlowLineOffsets![segmentIndex][lineIndex] + tokenIndex;
+                            return (
+                              <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (
-              <div style={textStyle}>
+              <div style={textContainerStyle}>
                 {flowTokens.length === 0 ? (
                   <span className="text-paper-ink/40">
                     （本文を入力すると、ここに縦書きで表示されます）
                   </span>
                 ) : (
-                  flowTokens.map((token, index) => (
-                    <TokenView key={index} token={token} indent={paragraphStarts[index]} />
+                  flowLines.map((line, lineIndex) => (
+                    <div key={lineIndex} className="tategaki-line" style={lineStyle}>
+                      {line.map((token, tokenIndex) => {
+                        const flatIndex = flowLineOffsets[lineIndex] + tokenIndex;
+                        return (
+                          <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
+                        );
+                      })}
+                    </div>
                   ))
                 )}
               </div>
@@ -405,7 +443,7 @@ export default function PageCard({
             isOddPage={isOddPage}
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
-            fontFamily={textStyle.fontFamily as string}
+            fontFamily={lineStyle.fontFamily as string}
             fontSize={masterPage.headerFontSize}
             bleedMm={bleedMm}
           />

@@ -169,6 +169,17 @@ export const DEFAULT_PAGE_LINE_METRICS: PageLineMetrics = {
 export interface TategakiPage {
   tokens: TategakiToken[];
   columns: [TategakiToken[], TategakiToken[]] | null;
+  /**
+   * `tokens` grouped into explicit rendered lines (each the tokens placed
+   * before one `breakLine()` call). Rendering one line element per entry
+   * here — instead of letting the browser's own word-wrap decide where a
+   * line ends — keeps the DOM's line boundaries identical to what
+   * pagination already decided, so a line can never silently absorb an
+   * extra (or one fewer) character than `charsPerLine` allows.
+   */
+  lines: TategakiToken[][];
+  /** Same per-line grouping as `lines`, pre-split into [topLines, bottomLines] for 2段組 pages. */
+  columnLines: [TategakiToken[][], TategakiToken[][]] | null;
 }
 
 /**
@@ -207,6 +218,11 @@ function paginateTokensByLines(
   let currentPage: TategakiToken[] = [];
   let topTokens: TategakiToken[] = [];
   let bottomTokens: TategakiToken[] = [];
+  // Completed lines on the current page, and the tokens placed on the
+  // current (still-open) line, mirrored alongside currentPage/lineChars so
+  // every page can report its exact line grouping for rendering.
+  let lines: TategakiToken[][] = [];
+  let currentLine: TategakiToken[] = [];
   // Lines already completed on the current page, and characters placed on
   // the current (still-open) line.
   let lineIndex = 0;
@@ -219,26 +235,37 @@ function paginateTokensByLines(
   // were mixed into the flow, causing large chunks of text to vanish).
   const placeToken = (token: TategakiToken) => {
     currentPage.push(token);
+    currentLine.push(token);
     if (columnCount === 2) {
       (lineIndex < linesPerColumn ? topTokens : bottomTokens).push(token);
     }
   };
 
   const pushPage = (force = false) => {
+    if (currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = [];
+    }
     if (currentPage.length > 0 || force) {
       pages.push({
         tokens: currentPage,
         columns: columnCount === 2 ? [topTokens, bottomTokens] : null,
+        lines,
+        columnLines:
+          columnCount === 2 ? [lines.slice(0, linesPerColumn), lines.slice(linesPerColumn)] : null,
       });
     }
     currentPage = [];
     topTokens = [];
     bottomTokens = [];
+    lines = [];
     lineIndex = 0;
     lineChars = 0;
   };
 
   const breakLine = () => {
+    lines.push(currentLine);
+    currentLine = [];
     lineIndex += 1;
     lineChars = 0;
     if (lineIndex >= linesPerPage) {
@@ -298,7 +325,14 @@ function paginateTokensByLines(
 
   return pages.length > 0
     ? pages
-    : [{ tokens: [], columns: columnCount === 2 ? [[], []] : null }];
+    : [
+        {
+          tokens: [],
+          columns: columnCount === 2 ? [[], []] : null,
+          lines: [],
+          columnLines: columnCount === 2 ? [[], []] : null,
+        },
+      ];
 }
 
 /**
