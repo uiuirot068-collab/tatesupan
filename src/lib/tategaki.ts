@@ -149,12 +149,28 @@ export interface PageLineMetrics {
   charsPerLine: number;
   /** 1ページに収まる行（段）数 */
   linesPerPage: number;
+  /** 段組み数（1 または 2）。省略時は1段組として扱う。 */
+  columnCount?: number;
+  /** 2段組の場合、上段・下段それぞれに収まる行数 */
+  linesPerColumn?: number;
 }
 
 export const DEFAULT_PAGE_LINE_METRICS: PageLineMetrics = {
   charsPerLine: 20,
   linesPerPage: 40,
 };
+
+/**
+ * One paginated page. `tokens` is always the full flat token stream for the
+ * page (used for 1段組 rendering and paragraph-start accounting); `columns`
+ * is populated only for 2段組 pages with the tokens already bucketed into
+ * `[topTokens, bottomTokens]` by the same line-wrap pass that produced
+ * `tokens`, so no downstream recomputation of the split point is needed.
+ */
+export interface TategakiPage {
+  tokens: TategakiToken[];
+  columns: [TategakiToken[], TategakiToken[]] | null;
+}
 
 /**
  * Splits a token stream into pages that fit within `charsPerLine` ×
@@ -170,29 +186,55 @@ export const DEFAULT_PAGE_LINE_METRICS: PageLineMetrics = {
 export function paginateTokens(
   tokens: TategakiToken[],
   metrics: PageLineMetrics = DEFAULT_PAGE_LINE_METRICS
-): TategakiToken[][] {
+): TategakiPage[] {
   const charsPerLine = Math.max(Math.floor(metrics.charsPerLine), 1);
   const linesPerPage = Math.max(Math.floor(metrics.linesPerPage), 1);
-  return paginateTokensByLines(tokens, charsPerLine, linesPerPage);
+  const columnCount = metrics.columnCount === 2 ? 2 : 1;
+  const linesPerColumn =
+    columnCount === 2
+      ? Math.max(Math.floor(metrics.linesPerColumn ?? linesPerPage / 2), 1)
+      : linesPerPage;
+  return paginateTokensByLines(tokens, charsPerLine, linesPerPage, columnCount, linesPerColumn);
 }
 
 function paginateTokensByLines(
   tokens: TategakiToken[],
   charsPerLine: number,
-  linesPerPage: number
-): TategakiToken[][] {
-  const pages: TategakiToken[][] = [];
+  linesPerPage: number,
+  columnCount: number,
+  linesPerColumn: number
+): TategakiPage[] {
+  const pages: TategakiPage[] = [];
   let currentPage: TategakiToken[] = [];
+  let topTokens: TategakiToken[] = [];
+  let bottomTokens: TategakiToken[] = [];
   // Lines already completed on the current page, and characters placed on
   // the current (still-open) line.
   let lineIndex = 0;
   let lineChars = 0;
 
+  // Bucket every token into top/bottom as it's placed, in the same pass that
+  // decides which line it lands on — avoids a second, separately-accounted
+  // pass over an already-paginated page (which drifted from the real line
+  // count whenever ruby/tcy tokens, with their non-1:1 char-to-token ratio,
+  // were mixed into the flow, causing large chunks of text to vanish).
+  const placeToken = (token: TategakiToken) => {
+    currentPage.push(token);
+    if (columnCount === 2) {
+      (lineIndex < linesPerColumn ? topTokens : bottomTokens).push(token);
+    }
+  };
+
   const pushPage = (force = false) => {
     if (currentPage.length > 0 || force) {
-      pages.push(currentPage);
+      pages.push({
+        tokens: currentPage,
+        columns: columnCount === 2 ? [topTokens, bottomTokens] : null,
+      });
     }
     currentPage = [];
+    topTokens = [];
+    bottomTokens = [];
     lineIndex = 0;
     lineChars = 0;
   };
@@ -218,7 +260,7 @@ function paginateTokensByLines(
       const value = token.value;
       while (i < value.length) {
         if (value[i] === "\n") {
-          currentPage.push({ type: "text", value: "\n" });
+          placeToken({ type: "text", value: "\n" });
           i += 1;
           breakLine();
           continue;
@@ -229,7 +271,7 @@ function paginateTokensByLines(
           j += 1;
         }
         if (j > i) {
-          currentPage.push({ type: "text", value: value.slice(i, j) });
+          placeToken({ type: "text", value: value.slice(i, j) });
           lineChars += j - i;
           i = j;
         }
@@ -246,7 +288,7 @@ function paginateTokensByLines(
     if (lineChars > 0 && lineChars + length > charsPerLine) {
       breakLine();
     }
-    currentPage.push(token);
+    placeToken(token);
     lineChars += length;
     if (lineChars >= charsPerLine) {
       breakLine();
@@ -255,53 +297,9 @@ function paginateTokensByLines(
 
   pushPage();
 
-  return pages.length > 0 ? pages : [[]];
-}
-
-/**
- * Finds the index within one page's tokens where `lineCount` rendered lines
- * have been completed, using the same charsPerLine wrap accounting as
- * `paginateTokensByLines`. A page's tokens are already chunked at line
- * boundaries by that same accounting, so the boundary this returns always
- * falls between tokens — no token needs to be split mid-way. Used to divide
- * a 2-column page's tokens between its top and bottom column boxes without
- * relying on raw token count, which drifts from actual line count whenever
- * ruby/tcy tokens (common in Japanese prose) are mixed into the flow.
- */
-export function findColumnBreakIndex(
-  tokens: TategakiToken[],
-  charsPerLine: number,
-  lineCount: number
-): number {
-  let lineIndex = 0;
-  let lineChars = 0;
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (lineIndex >= lineCount) return index;
-    const token = tokens[index];
-
-    if (token.type === "pageBreak") continue;
-
-    if (isBareNewline(token)) {
-      lineIndex += 1;
-      lineChars = 0;
-      continue;
-    }
-
-    const length = tokenLength(token);
-    if (lineChars > 0 && lineChars + length > charsPerLine) {
-      lineIndex += 1;
-      lineChars = 0;
-      if (lineIndex >= lineCount) return index;
-    }
-    lineChars += length;
-    if (lineChars >= charsPerLine) {
-      lineIndex += 1;
-      lineChars = 0;
-    }
-  }
-
-  return tokens.length;
+  return pages.length > 0
+    ? pages
+    : [{ tokens: [], columns: columnCount === 2 ? [[], []] : null }];
 }
 
 /**
@@ -457,12 +455,12 @@ export function computeParagraphStartFlags(
  * token begins a genuine new paragraph, as opposed to continuing a
  * paragraph that pagination cut off mid-sentence at the page boundary.
  */
-export function computePageParagraphStarts(pages: TategakiToken[][]): boolean[] {
+export function computePageParagraphStarts(pages: TategakiPage[]): boolean[] {
   const flags: boolean[] = [];
   let pending = true;
   for (const page of pages) {
     let pageFlag: boolean | null = null;
-    for (const token of page) {
+    for (const token of page.tokens) {
       if (isBareNewline(token)) {
         pending = true;
         continue;

@@ -1,8 +1,8 @@
 import { Fragment, useRef, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import {
   computeParagraphStartFlags,
-  findColumnBreakIndex,
   type ImagePosition,
+  type TategakiPage,
   type TategakiToken,
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
@@ -29,7 +29,7 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
 
 interface PageCardProps {
   pageNumber: number;
-  tokens: TategakiToken[];
+  page: TategakiPage;
   /** Whether this page's first content token begins a genuine new paragraph (vs. a mid-sentence page break). Defaults to true. */
   startsNewParagraph?: boolean;
   settings: PageSettings;
@@ -53,7 +53,7 @@ interface PageCardProps {
 
 export default function PageCard({
   pageNumber,
-  tokens,
+  page,
   startsNewParagraph = true,
   settings,
   layout,
@@ -147,22 +147,24 @@ export default function PageCard({
 
   // 挿絵 tokens are page-level decorations positioned via 天/中央/地/ページ全体
   // rather than inline members of the text flow, so they're pulled out of
-  // `tokens` here and rendered separately by position.
-  const flowTokens = tokens.filter((token) => token.type !== "image");
+  // `page.tokens` here and rendered separately by position.
+  const flowTokens = page.tokens.filter((token) => token.type !== "image");
   const paragraphStarts = computeParagraphStartFlags(flowTokens, startsNewParagraph);
-  const imageTokens = tokens.filter((token): token is ImageToken => token.type === "image");
+  const imageTokens = page.tokens.filter((token): token is ImageToken => token.type === "image");
   const fullImage = imageTokens.find((token) => token.position === "full");
   const topImages = imageTokens.filter((token) => token.position === "top");
   const centerImages = imageTokens.filter((token) => token.position === "center");
   const bottomImages = imageTokens.filter((token) => token.position === "bottom");
 
-  // 段組みの折り返しはトークン数ではなく実際の行数で判定する。ルビ・縦中横
-  // トークンは1個あたりの文字幅が本文と大きく異なるため、単純に配列を半分に
-  // 割ると上段・下段の文字量が実際の収容行数（linesPerColumn）とずれ、下段が
-  // 空になったり上段があふれて欠けたりする不具合につながる。
-  const columnBreakIndex = isTwoColumn
-    ? findColumnBreakIndex(flowTokens, layout.charsPerLine, layout.linesPerColumn)
-    : 0;
+  // 2段組の上段・下段トークンは tategaki.ts のページ分割ループが行単位で
+  // 直接振り分け済み。ここでは挿絵トークンを取り除いて描画するだけでよく、
+  // 独自に配列位置を再計算する必要はない。
+  const columnFlowTokens = page.columns
+    ? (page.columns.map((column) => column.filter((token) => token.type !== "image")) as [
+        TategakiToken[],
+        TategakiToken[],
+      ])
+    : null;
 
   return (
     <div
@@ -289,7 +291,7 @@ export default function PageCard({
           <FullPageImage token={fullImage} images={images} />
         ) : (
           <>
-            {isTwoColumn && flowTokens.length > 0 ? (
+            {isTwoColumn && columnFlowTokens && flowTokens.length > 0 ? (
               <div
                 style={{
                   width: textAreaWidthPx,
@@ -301,9 +303,8 @@ export default function PageCard({
                   className="w-full h-full flex flex-col justify-between"
                   style={{ gap: `${settings.columnGapMm}mm` }}
                 >
-                  {[0, 1].map((segmentIndex) => {
-                    const start = segmentIndex === 0 ? 0 : columnBreakIndex;
-                    const end = segmentIndex === 0 ? columnBreakIndex : flowTokens.length;
+                  {columnFlowTokens.map((column, segmentIndex) => {
+                    const startOffset = segmentIndex === 0 ? 0 : columnFlowTokens[0].length;
                     return (
                       <div
                         key={segmentIndex}
@@ -320,11 +321,11 @@ export default function PageCard({
                           color: textStyle.color,
                         }}
                       >
-                        {flowTokens.slice(start, end).map((token, index) => (
+                        {column.map((token, index) => (
                           <TokenView
-                            key={start + index}
+                            key={startOffset + index}
                             token={token}
-                            indent={paragraphStarts[start + index]}
+                            indent={paragraphStarts[startOffset + index]}
                           />
                         ))}
                       </div>
