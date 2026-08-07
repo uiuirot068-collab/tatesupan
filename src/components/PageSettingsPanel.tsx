@@ -439,6 +439,34 @@ export default function PageSettingsPanel({
             <option value="bottom">地側（下部）</option>
           </select>
         </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">柱の文字サイズ (pt)</span>
+          <input
+            type="number"
+            min={5}
+            max={24}
+            value={settings.masterPage.headerFontSize ?? 8}
+            onChange={(e) =>
+              updateMasterPage("headerFontSize", Number(e.target.value))
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink/60">ノンブルの文字サイズ (pt)</span>
+          <input
+            type="number"
+            min={5}
+            max={24}
+            value={settings.masterPage.nombreFontSize ?? 8}
+            onChange={(e) =>
+              updateMasterPage("nombreFontSize", Number(e.target.value))
+            }
+            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+          />
+        </label>
           </div>
         </div>
       )}

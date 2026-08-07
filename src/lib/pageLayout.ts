@@ -71,6 +71,8 @@ export interface MasterPageSettings {
   hashiraOdd: string; // 奇数ページ柱（例: 作品名）
   hashiraEven: string; // 偶数ページ柱（例: 章名）
   hashiraPosition: HashiraPosition;
+  headerFontSize?: number; // 柱のフォントサイズ (pt, デフォルト: 8)
+  nombreFontSize?: number; // ノンブルのフォントサイズ (pt, デフォルト: 8)
 }
 
 export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
@@ -82,6 +84,8 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   hashiraOdd: "",
   hashiraEven: "",
   hashiraPosition: "top",
+  headerFontSize: 8,
+  nombreFontSize: 8,
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {
