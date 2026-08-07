@@ -30,11 +30,19 @@ export async function getProjectById(id: string): Promise<Project | null> {
   return data;
 }
 
-export async function createProject(input: CreateProjectInput): Promise<Project | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export interface ProjectResult {
+  data: Project | null;
+  error: string | null;
+}
 
-  if (!user) return null;
+export async function createProject(input: CreateProjectInput): Promise<ProjectResult> {
+  const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error('Error getting user for createProject:', userError);
+    return { data: null, error: userError?.message ?? 'ログインしていません' };
+  }
 
   const { data, error } = await supabase
     .from('projects')
@@ -44,25 +52,32 @@ export async function createProject(input: CreateProjectInput): Promise<Project 
 
   if (error) {
     console.error('Error creating project:', error);
-    return null;
+    return { data: null, error: error.message };
   }
-  return data;
+  return { data, error: null };
 }
 
-export async function updateProject(id: string, input: UpdateProjectInput): Promise<Project | null> {
+export async function updateProject(id: string, input: UpdateProjectInput): Promise<ProjectResult> {
   const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error('Error getting user for updateProject:', userError);
+    return { data: null, error: userError?.message ?? 'ログインしていません' };
+  }
+
   const { data, error } = await supabase
     .from('projects')
-    .update(input)
+    .update({ ...input, user_id: user.id })
     .eq('id', id)
     .select()
     .single();
 
   if (error) {
     console.error('Error updating project:', error);
-    return null;
+    return { data: null, error: error.message };
   }
-  return data;
+  return { data, error: null };
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

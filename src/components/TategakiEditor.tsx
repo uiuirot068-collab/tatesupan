@@ -203,13 +203,17 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      if (currentProjectId) {
-        await updateProject(currentProjectId, { title, content, settings });
-      } else {
-        const project = await createProject({ title, content, settings });
-        if (project) setCurrentProjectId(project.id);
+      const result = currentProjectId
+        ? await updateProject(currentProjectId, { title, content, settings })
+        : await createProject({ title, content, settings });
+
+      if (result.error || !result.data) {
+        alert("保存に失敗しました: " + (result.error || "詳細不明のエラー"));
+        return;
       }
-      alert("クラウドに保存しました");
+
+      if (!currentProjectId) setCurrentProjectId(result.data.id);
+      alert("クラウドに保存しました！");
     } finally {
       setIsSaving(false);
     }
