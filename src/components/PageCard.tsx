@@ -129,16 +129,15 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
-    // textAreaHeightMm に charsPerLine 文字をぴったり配置するための字送り
-    letterSpacing: `${layout.letterSpacingEm}em`,
+    letterSpacing: "0em", // 一律の字間拡張を解除
     // 縦書き・横書き双方のプロポーショナル詰め（vpal/vhal/palt/vkrn等）をすべて完全オフ
     fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
     // 東アジア文字を完全全角に固定
     fontVariantEastAsian: "full-width",
     // 原稿用紙的な均等割り付け（行末・約物調整）
-    textAlign: "justify",
-    textJustify: "inter-character",
-    textAlignLast: "justify",
+    textAlign: "justify", // 満杯行のみ均等割り付け
+    textJustify: "inter-character", // 文字間均等割り
+    textAlignLast: "start", // 改行で終わる短行（見出しや段落末尾）は上詰め固定
   };
 
   const isTwoColumn = settings.columnCount === 2;
