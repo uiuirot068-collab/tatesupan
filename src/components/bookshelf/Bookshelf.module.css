@@ -33,14 +33,15 @@
   position: absolute;
   z-index: 2;
   bottom: 93.45px;
-  left: 50%;
+  right: 0;
+  left: 0;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 8px;
   width: max-content;
   min-width: calc(100% - 68px);
-  transform: translateX(-50%);
+  margin-inline: auto;
   padding-inline: 34px;
 }
 
@@ -286,6 +287,10 @@
   text-align: left;
 }
 
+.mobileMenuBackdrop {
+  display: none;
+}
+
 .closeMenuButton {
   position: absolute;
   top: 5px;
@@ -459,6 +464,50 @@
 }
 
 @media (max-width: 639px) {
+  .mobileMenuBackdrop {
+    position: fixed;
+    z-index: 40;
+    display: block;
+    inset: 0;
+    background: rgb(10 10 10 / 18%);
+  }
+
+  .menuPanel {
+    position: fixed;
+    z-index: 41;
+    top: 50%;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: 420px;
+    max-height: calc(100dvh - 24px);
+    margin-inline: auto;
+    padding: 44px 16px 16px;
+    transform: translateY(-50%);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .closeMenuButton {
+    top: 2px;
+    right: 4px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .titleInput,
+  .menuAction,
+  .deleteAction,
+  .cancelTitleButton,
+  .saveTitleButton {
+    min-height: 44px;
+  }
+
+  .titleEditorActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
   .shelfViewport {
     margin-inline: -4px;
     width: calc(100% + 8px);

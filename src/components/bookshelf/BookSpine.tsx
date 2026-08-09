@@ -213,12 +213,21 @@ export function BookSpine({
             <span aria-hidden="true">•••</span>
           </button>
           {isMenuOpen && (
-            <div
-              id={menuId}
-              className={styles.menuPanel}
-              role="dialog"
-              aria-label={`${fullTitle}の操作`}
-            >
+            <>
+              <div
+                className={styles.mobileMenuBackdrop}
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  closeMenu(true);
+                }}
+              />
+              <div
+                id={menuId}
+                className={styles.menuPanel}
+                role="dialog"
+                aria-label={`${fullTitle}の操作`}
+              >
               <button
                 type="button"
                 className={styles.closeMenuButton}
@@ -290,7 +299,8 @@ export function BookSpine({
                   削除
                 </button>
               )}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}
