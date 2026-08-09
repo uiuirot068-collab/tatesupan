@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocument,
   deleteImage,
@@ -15,7 +15,7 @@ import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/l
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import { createProject, updateProject, getCloudProjectCount } from "@/lib/supabase/projects";
+import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
@@ -30,7 +30,13 @@ type SaveStatus = "loading" | "saved" | "saving" | "error";
 
 const AUTOSAVE_DELAY_MS = 1500;
 
-export default function TategakiEditor({ documentId }: { documentId?: number }) {
+export default function TategakiEditor({
+  documentId,
+  cloudProjectId,
+}: {
+  documentId?: number;
+  cloudProjectId?: string;
+}) {
   const router = useRouter();
   const [docId, setDocId] = useState<number | null>(
     documentId && Number.isFinite(documentId) ? documentId : null
@@ -66,6 +72,16 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = docId === SAMPLE_PROJECT.id;
 
+  const applyCloudProject = useCallback((project: Project) => {
+    setCurrentProjectId(project.id);
+    setTitle(project.title);
+    setContent(project.content);
+    setSettings((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS);
+    setPlotNote("");
+    loadedDocIdRef.current = null;
+    setDocId(null);
+  }, [setSettings]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -75,8 +91,22 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     setSaveStatus("loading");
 
     async function run() {
+      if (cloudProjectId) {
+        const project = await getProjectById(cloudProjectId);
+        if (cancelled) return;
+        if (!project) {
+          setSaveStatus("error");
+          return;
+        }
+        applyCloudProject(project);
+        setImages({});
+        hasLoadedRef.current = true;
+        setSaveStatus("saved");
+        return;
+      }
+
       let id = documentId && Number.isFinite(documentId) ? documentId : null;
-      let doc = id ? await loadDocument(id) : undefined;
+      const doc = id ? await loadDocument(id) : undefined;
 
       if (!doc) {
         id = await createDocument();
@@ -107,7 +137,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     return () => {
       cancelled = true;
     };
-  }, [documentId, router]);
+  }, [applyCloudProject, cloudProjectId, documentId, router, setSettings]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -260,10 +290,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   };
 
   const handleSelectProject = (project: Project) => {
-    setCurrentProjectId(project.id);
-    setTitle(project.title);
-    setContent(project.content);
-    setSettings((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS);
+    applyCloudProject(project);
   };
 
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {

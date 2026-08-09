@@ -3,6 +3,11 @@
   max-width: 100%;
 }
 
+.bookshelfEmpty {
+  width: clamp(360px, 48vw, 520px);
+  margin-inline: auto;
+}
+
 .shelves {
   display: flex;
   flex-direction: column;
@@ -45,17 +50,25 @@
   padding-inline: 34px;
 }
 
+.booksRowEmpty {
+  justify-content: initial;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-right: 22px;
+}
+
 .bookItem {
   position: relative;
-  width: 44.5px;
-  flex: 0 0 44.5px;
+  width: var(--book-width);
+  flex: 0 0 var(--book-width);
   --book-status-band-color: #e8e1d3;
 }
 
 .bookButton {
   position: relative;
   display: block;
-  width: 44.5px;
+  width: var(--book-width);
   height: 161.3125px;
   padding: 0;
   border: 0;
@@ -74,22 +87,44 @@
 .bookSvg {
   position: absolute;
   top: 0;
-  left: -2.0025px;
+  left: 0;
   display: block;
-  width: 48.505px;
+  width: 100%;
   height: 161.3125px;
   overflow: visible;
 }
 
-.bookSvg :global(.spine-body) path {
+.bookSvg > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bookSvgLoading {
+  border-radius: 4px;
+  background: var(--book-spine-color);
+}
+
+.bookSvg :global(.spine-body) path,
+.bookSvg :global(#spine-body_1_) path {
   fill: var(--book-spine-color);
 }
 
-.bookSvg :global(.spine-decoration) {
+.bookSvg :global(.spine-decoration),
+.bookSvg :global(#spine-decoration) * {
   fill: var(--book-decoration-color);
 }
 
-.bookSvg :global(.spine-line) {
+.bookSvg :global(.spine-line),
+.bookSvg :global(#spine-line) * {
+  fill: var(--book-line-color);
+}
+
+.bookSvg > svg > rect:first-of-type {
+  fill: var(--book-status-band-color);
+}
+
+.bookSvg > svg > rect:not(:first-of-type) {
   fill: var(--book-line-color);
 }
 
@@ -97,7 +132,12 @@
   fill: var(--book-status-band-color);
 }
 
-:global([data-theme="dark"]) .bookSvg :global(.spine-line) {
+:global([data-theme="dark"]) .bookSvg :global(.spine-line),
+:global([data-theme="dark"]) .bookSvg :global(#spine-line) * {
+  fill: var(--book-dark-line-color);
+}
+
+:global([data-theme="dark"]) .bookSvg > svg > rect:not(:first-of-type) {
   fill: var(--book-dark-line-color);
 }
 
@@ -109,9 +149,9 @@
   position: absolute;
   z-index: 1;
   top: 135.725px;
-  right: -2.0025px;
+  right: 0;
   bottom: 6.4525px;
-  left: -2.0025px;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,40 +246,42 @@
 .bookTitle {
   position: absolute;
   top: 34.884px;
-  right: 20%;
+  right: 0;
   bottom: 31.8175px;
-  left: 20%;
+  left: 0;
   overflow: hidden;
+  pointer-events: none;
+}
+
+.emptyMessage {
+  align-self: center;
+  flex: 1 1 auto;
+  max-width: none;
+  margin: 0 16px 18px 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.9;
+  text-align: center;
+  opacity: .58;
 }
 
 .bookTitleText {
   position: absolute;
-  top: 8px;
+  top: 0;
   left: 50%;
-  max-height: calc(100% - 8px);
-  max-width: 100%;
+  height: 100%;
   transform: translateX(-50%);
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  line-height: 1.1;
+  white-space: nowrap;
+  line-height: 1;
   letter-spacing: .04em;
   text-align: start;
-  overflow-wrap: normal;
+  overflow: hidden;
   color: #29231e;
+  font-size: 12px;
   font-weight: 600;
   text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
-}
-
-.titleNormal {
-  font-size: 13px;
-}
-
-.titleMedium {
-  font-size: 11px;
-}
-
-.titleSmall {
-  font-size: 9px;
 }
 
 .bookMenu {
@@ -250,19 +292,31 @@
 }
 
 .menuTrigger {
+  position: relative;
   display: grid;
   width: 24px;
   height: 24px;
   place-items: center;
-  border: 1px solid rgb(31 42 68 / 20%);
+  border: 1px solid rgb(31 42 68 / 12%);
   border-radius: 999px;
-  background: var(--base);
-  color: var(--ink);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 14%);
+  background: rgb(239 233 220 / 88%);
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 9%);
   cursor: pointer;
   font-size: 10px;
   letter-spacing: -1px;
   list-style: none;
+}
+
+.menuTrigger::before {
+  position: absolute;
+  content: "";
+  inset: -10px;
+}
+
+:global([data-theme="dark"]) .menuTrigger {
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(43 38 32 / 88%);
 }
 
 .menuTrigger:focus-visible {
@@ -419,6 +473,24 @@
   transform: translateX(-50%);
 }
 
+/* Only the scaled 5-unit top edge of the rack sits in front of the books.
+   The rack body and legs stay behind in .rackRow, preserving natural depth. */
+.shelfFrontLip {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 93.45px;
+  left: 0;
+  height: 3px;
+  margin-inline: auto;
+  background: #000;
+  pointer-events: none;
+}
+
+:global([data-theme="dark"]) .shelfFrontLip {
+  background: #a0a0a0;
+}
+
 .rackSegment {
   display: block;
   flex: none;
@@ -459,11 +531,14 @@
 @media (hover: hover) and (pointer: fine) {
   .bookButton:hover {
     transform: translateY(-8px);
-    filter: drop-shadow(0 7px 5px rgb(26 20 15 / 20%));
   }
 }
 
 @media (max-width: 639px) {
+  .bookshelfEmpty {
+    width: 100%;
+  }
+
   .mobileMenuBackdrop {
     position: fixed;
     z-index: 40;
@@ -517,13 +592,8 @@
     height: 259px;
   }
 
-  .bookItem,
-  .bookButton {
-    width: 44.5px;
-  }
-
-  .bookItem {
-    flex-basis: 44.5px;
+  .shelfStageEmpty {
+    height: 315px;
   }
 
   .bookButton {
@@ -532,6 +602,22 @@
 
   .booksRow {
     gap: 8px;
+  }
+
+  .emptyMessage {
+    position: absolute;
+    top: -64px;
+    right: 8px;
+    bottom: auto;
+    left: 8px;
+    max-width: none;
+    margin: 0;
+    text-align: center;
+  }
+
+  .booksRowEmpty {
+    justify-content: flex-end;
+    padding-right: 22px;
   }
 }
 

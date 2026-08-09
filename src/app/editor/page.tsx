@@ -8,8 +8,9 @@ function EditorPageContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const documentId = id ? Number(id) : undefined;
+  const cloudProjectId = searchParams.get("cloudId") ?? undefined;
 
-  return <TategakiEditor documentId={documentId} />;
+  return <TategakiEditor documentId={documentId} cloudProjectId={cloudProjectId} />;
 }
 
 export default function EditorPage() {

@@ -34,7 +34,12 @@ export async function getCloudProjectCount(): Promise<CloudProjectCountResult> {
   return { count: count ?? 0, error: null };
 }
 
-export async function getProjects(): Promise<Project[]> {
+export interface ProjectsResult {
+  data: Project[];
+  error: string | null;
+}
+
+export async function getProjectsResult(): Promise<ProjectsResult> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('projects')
@@ -43,9 +48,13 @@ export async function getProjects(): Promise<Project[]> {
 
   if (error) {
     console.error('Error fetching projects:', error);
-    return [];
+    return { data: [], error: error.message };
   }
-  return data || [];
+  return { data: data || [], error: null };
+}
+
+export async function getProjects(): Promise<Project[]> {
+  return (await getProjectsResult()).data;
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {

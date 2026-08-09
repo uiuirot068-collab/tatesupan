@@ -1,10 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 117.27 53.635" aria-hidden="true" focusable="false">
-  <g class="rack-body">
-    <rect y="5" width="117.27" height="43.635" fill="#494E57"/>
-    <path d="M0 5h117.27M0 48.635h117.27"/>
-  </g>
-  <g class="rack-decoration"/>
-  <g class="rack-line" fill="#A0A0A0">
-    <path d="M0 0h117.27v5H0zM0 48.635h117.27v5H0z"/>
-  </g>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 16.0.3, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" id="レイヤー_1" focusable="false"
+	 xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="117.27px"
+	 height="53.635px" viewBox="0 0 117.27 53.635" enable-background="new 0 0 117.27 53.635" xml:space="preserve">
+<g>
+	<rect x="0" y="1.568" fill="#494E57" width="117.27" height="48.767"/>
+	<path d="M0,50.334h117.27"/>
+</g>
+<path fill="#A0A0A0" d="M0,0h117.27v3.544H0V0z"/>
+<rect x="0" y="50.334" fill="#A0A0A0" width="117.27" height="3.301"/>
 </svg>

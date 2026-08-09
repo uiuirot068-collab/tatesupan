@@ -9,6 +9,7 @@ import {
 } from "react";
 import styles from "./Bookshelf.module.css";
 import { SpineStatusIcons, type SpineStatusIcon } from "./SpineStatusIcons";
+import { truncateSpineTitle, type BookWidth } from "./bookshelfLayout";
 
 export interface BookSpineColors {
   spineColor: string;
@@ -33,9 +34,9 @@ interface BookSpineProps extends BookSpineColors {
   onRename: (title: string) => Promise<void>;
   onDelete?: () => void;
   statusIcons?: SpineStatusIcon[];
+  bookWidth?: BookWidth;
 }
 
-const MAX_VISIBLE_TITLE_LENGTH = 12;
 const GUIDE_STATUS_ICONS: SpineStatusIcon[] = [
   { kind: "shosin", label: "使い方ガイド" },
 ];
@@ -60,23 +61,39 @@ export function BookSpine({
   onRename,
   onDelete,
   statusIcons,
+  bookWidth,
 }: BookSpineProps) {
+  const [bookArtwork, setBookArtwork] = useState("");
   const fullTitle = title || "無題のドキュメント";
-  const titleCharacters = Array.from(fullTitle);
-  const visibleTitle =
-    titleCharacters.length > MAX_VISIBLE_TITLE_LENGTH
-      ? `${titleCharacters.slice(0, MAX_VISIBLE_TITLE_LENGTH - 1).join("")}…`
-      : fullTitle;
-  const titleSize =
-    titleCharacters.length > 10
-      ? styles.titleSmall
-      : titleCharacters.length > 7
-        ? styles.titleMedium
-        : styles.titleNormal;
+  const visibleTitle = truncateSpineTitle(fullTitle);
+  const resolvedBookWidth = bookWidth ?? 46;
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(title);
   const menuRootRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/assets/bookshelf/book_5_${resolvedBookWidth}.svg`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load book artwork (${response.status})`);
+        return response.text();
+      })
+      .then((source) => {
+        const parsed = new DOMParser().parseFromString(source, "image/svg+xml");
+        const svg = parsed.documentElement;
+        svg.setAttribute("preserveAspectRatio", "none");
+        svg.setAttribute("aria-hidden", "true");
+        svg.removeAttribute("width");
+        svg.removeAttribute("height");
+        setBookArtwork(svg.outerHTML);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) console.error(error);
+      });
+
+    return () => controller.abort();
+  }, [resolvedBookWidth]);
 
   const closeMenu = (restoreFocus: boolean) => {
     setIsEditingTitle(false);
@@ -142,6 +159,7 @@ export function BookSpine({
     "--book-decoration-color": decorationColor,
     "--book-line-color": lineColor,
     "--book-dark-line-color": darkLineColor,
+    "--book-width": `${resolvedBookWidth}px`,
   } as CSSProperties;
   const visibleStatusIcons = isSample
     ? GUIDE_STATUS_ICONS
@@ -159,39 +177,18 @@ export function BookSpine({
         title={fullTitle}
         aria-label={`「${fullTitle}」を開く${statusDescription ? `。${statusDescription}` : ""}`}
       >
-        <svg
-          className={styles.bookSvg}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="-4.5 -42.5 109 362.5"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <g className="spine-body">
-            <g opacity=".7">
-              <path
-                fill="#707070"
-                d="M0-29.563c0 5.09 0 290.029 0 341.214 0 5.055 2.22 7.83 5.98 7.83 20.476 0 86.611-.001 88.521 0 2.261.001 5.499-2.083 5.499-5.926 0-45.799 0-341.663 0-345.636 0-4.306-3.398-5.396-5.499-5.396H5.98C2.22-37.478 0-35.157 0-29.563ZM80 248.5H20V35.891h60V248.5Z"
-              />
-            </g>
-          </g>
-          <g className="spine-decoration" fill="#616161">
-            <rect x="5.98" y="-37.479" width="4.998" height="356.958" />
-            <rect x="89.504" y="-37.479" width="4.998" height="356.958" />
-            <rect x="7.23" y="13.792" width="82.454" height="6.769" />
-            <rect x="7.23" y="24.543" width="82.454" height="6.769" />
-          </g>
-          <g className="spine-status-band">
-            <rect y="262.5" width="104.499" height="43" />
-          </g>
-          <g className="spine-line">
-            <path d="M104.5-32.083c0-3.611-1.42-6.635-3.999-8.516-2.271-1.654-4.733-1.902-6-1.902H5.98C-.582-42.499-4.5-37.664-4.5-29.564v341.212c0 7.807 4.114 12.852 10.48 12.852h88.522c4.828 0 9.997-4.397 9.997-10.947v-70.103c.001-102.466 0-272.526.001-275.533ZM100 313.552c0 3.845-3.238 5.929-5.499 5.928-1.91-.001-68.044 0-88.521 0-3.76 0-5.98-2.774-5.98-7.832 0-51.182 0-336.122 0-341.212 0-5.593 2.22-7.915 5.98-7.915h88.521c2.101 0 5.499 1.091 5.499 5.396-.001 3.973 0 299.838 0 345.635Z" />
-            <rect x="-4.5" y="257.5" width="108.999" height="5" />
-            <rect x="-4.5" y="305.5" width="108.999" height="5" />
-          </g>
-        </svg>
+        {bookArtwork ? (
+          <span
+            className={styles.bookSvg}
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: bookArtwork }}
+          />
+        ) : (
+          <span className={`${styles.bookSvg} ${styles.bookSvgLoading}`} aria-hidden="true" />
+        )}
         <SpineStatusIcons statuses={visibleStatusIcons} />
         <span className={styles.bookTitle} aria-hidden="true">
-          <span className={`${styles.bookTitleText} ${titleSize}`}>{visibleTitle}</span>
+          <span className={styles.bookTitleText}>{visibleTitle}</span>
         </span>
       </button>
 

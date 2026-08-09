@@ -3,24 +3,39 @@
 /* eslint-disable @next/next/no-img-element -- Rack SVG segments intentionally use native img elements so their exact geometry joins without image optimization wrappers. */
 
 import type { DocumentRecord } from "@/lib/db";
+import { countVisualLength } from "@/lib/tategaki";
+import type { Project } from "@/types/database";
 import { useEffect, useRef, useState } from "react";
 import { BookSpine, type BookSpineColors } from "./BookSpine";
 import styles from "./Bookshelf.module.css";
+import {
+  GUIDE_BOOK_WIDTH,
+  bookWidthForCharacterCount,
+  packShelfBooks,
+  shelfFrontLipWidth,
+  shelfMetricsForAvailableWidth,
+  shelfMetricsForContentWidth,
+} from "./bookshelfLayout";
+import { assignBookPaletteIndices } from "./bookshelfPalette";
 
 interface BookshelfProps {
-  documents: DocumentRecord[];
-  onOpen: (id: number) => void;
-  onRename: (id: number, title: string) => Promise<void>;
-  onDelete: (id: number) => void;
+  documents?: DocumentRecord[];
+  cloudProjects?: Project[];
+  onOpen?: (id: number) => void;
+  onOpenCloud?: (id: string) => void;
+  onRename?: (id: number, title: string) => Promise<void>;
+  onDelete?: (id: number) => void;
   /** ログイン中、ローカル保存の作品に「ブラウザ保存」表示を出す */
   showLocalOnlyLabel?: boolean;
+  showEmptyState?: boolean;
 }
 
 const BOOK_COLORS: BookSpineColors[] = [
-  { spineColor: "#667b68", decorationColor: "#485b4b", lineColor: "#29332b", darkLineColor: "#93a394" },
-  { spineColor: "#66758c", decorationColor: "#48566d", lineColor: "#29303c", darkLineColor: "#929eaf" },
-  { spineColor: "#756887", decorationColor: "#584d69", lineColor: "#302b38", darkLineColor: "#9d91aa" },
-  { spineColor: "#9a7a52", decorationColor: "#745a3b", lineColor: "#382e22", darkLineColor: "#aa9678" },
+  { spineColor: "#8796a6", decorationColor: "#6d7d8e", lineColor: "#5e6c7a", darkLineColor: "#b0bdca" },
+  { spineColor: "#8f9b87", decorationColor: "#74806d", lineColor: "#65705f", darkLineColor: "#b2bcaa" },
+  { spineColor: "#a58c6d", decorationColor: "#897256", lineColor: "#756149", darkLineColor: "#c9b392" },
+  { spineColor: "#998da3", decorationColor: "#7e7289", lineColor: "#6e6478", darkLineColor: "#c0b4c7" },
+  { spineColor: "#8d8377", decorationColor: "#73695f", lineColor: "#625a52", darkLineColor: "#b5aaa0" },
 ];
 
 const GUIDE_COLORS: BookSpineColors = {
@@ -29,43 +44,6 @@ const GUIDE_COLORS: BookSpineColors = {
   lineColor: "#1f2a44",
   darkLineColor: "#bca663",
 };
-
-const RACK_SCALE = 0.6;
-const RACK_OVERLAP = 0.75;
-const RACK_END_WIDTH = 122.262;
-const RACK_CENTER_WIDTH = 117.27;
-const BOOK_PITCH = 52.5;
-const BOOKS_SIDE_SPACE = 70;
-const MAX_BOOKS_PER_SHELF = 8;
-
-function shelfMetrics(bookCount: number) {
-  const scaledCenterWidth = RACK_CENTER_WIDTH * RACK_SCALE;
-  const centerCount = Math.max(
-    1,
-    Math.ceil((bookCount * BOOK_PITCH - BOOKS_SIDE_SPACE) / scaledCenterWidth),
-  );
-  const rackSegmentCount = centerCount + 2;
-  const shelfWidth =
-    (RACK_END_WIDTH * 2 + RACK_CENTER_WIDTH * centerCount) * RACK_SCALE -
-    RACK_OVERLAP * (rackSegmentCount - 1);
-
-  return { centerCount, shelfWidth };
-}
-
-function booksThatFit(availableWidth: number): number {
-  for (let count = MAX_BOOKS_PER_SHELF; count > 1; count -= 1) {
-    if (shelfMetrics(count).shelfWidth <= availableWidth) return count;
-  }
-  return 1;
-}
-
-function colorsForDocument(id: number): BookSpineColors {
-  return BOOK_COLORS[Math.abs(id) % BOOK_COLORS.length];
-}
-
-function estimateCharCount(content: string): number {
-  return content.replace(/\s/g, "").length;
-}
 
 function formatUpdatedAt(updatedAt: number): string {
   return new Date(updatedAt).toLocaleString("ja-JP", {
@@ -105,14 +83,54 @@ function RackSegment({ part, className, width, height }: RackSegmentProps) {
   );
 }
 
-export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnlyLabel }: BookshelfProps) {
-  const [openMenuProjectId, setOpenMenuProjectId] = useState<number | null>(null);
-  const [booksPerShelf, setBooksPerShelf] = useState(MAX_BOOKS_PER_SHELF);
+export function Bookshelf({
+  documents = [],
+  cloudProjects = [],
+  onOpen,
+  onOpenCloud,
+  onRename,
+  onDelete,
+  showLocalOnlyLabel,
+  showEmptyState = false,
+}: BookshelfProps) {
+  const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
   const bookshelfRef = useRef<HTMLDivElement>(null);
   const regularDocuments = documents.filter((doc) => !doc.isSample);
   const sampleDocuments = documents.filter((doc) => doc.isSample);
-  const shelfDocuments: DocumentRecord[][] = [];
+  const books = [
+    ...regularDocuments.map((doc) => ({
+      key: `local-${doc.id}`,
+      source: "local" as const,
+      id: doc.id,
+      title: doc.title,
+      content: doc.content,
+      updatedAt: doc.updatedAt,
+      isSample: false,
+      isCollection: doc.isCollection,
+    })),
+    ...cloudProjects.map((project) => ({
+      key: `cloud-${project.id}`,
+      source: "cloud" as const,
+      id: project.id,
+      title: project.title,
+      content: project.content,
+      updatedAt: new Date(project.updated_at).getTime(),
+      isSample: false,
+      isCollection: false,
+    })),
+    ...sampleDocuments.map((doc) => ({
+      key: `sample-${doc.id}`,
+      source: "local" as const,
+      id: doc.id,
+      title: doc.title,
+      content: doc.content,
+      updatedAt: doc.updatedAt,
+      isSample: true,
+      isCollection: doc.isCollection,
+    })),
+  ];
+  const displayBooks = assignBookPaletteIndices(books);
 
   useEffect(() => {
     const bookshelf = bookshelfRef.current;
@@ -120,7 +138,6 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnly
 
     const updateLayout = (width: number) => {
       setAvailableWidth(width);
-      setBooksPerShelf(booksThatFit(width));
     };
     const observer = new ResizeObserver(([entry]) => {
       updateLayout(entry.contentRect.width);
@@ -131,24 +148,33 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnly
     return () => observer.disconnect();
   }, []);
 
-  for (let index = 0; index < regularDocuments.length; index += booksPerShelf) {
-    shelfDocuments.push(regularDocuments.slice(index, index + booksPerShelf));
-  }
-
-  for (const sampleDocument of sampleDocuments) {
-    const lastShelf = shelfDocuments.at(-1);
-    if (!lastShelf || lastShelf.length >= booksPerShelf) {
-      shelfDocuments.push([sampleDocument]);
-    } else {
-      lastShelf.push(sampleDocument);
-    }
-  }
-
+  const measuredWidth = availableWidth ?? 320;
+  const shelfBooks = packShelfBooks(
+    [
+      ...displayBooks.map((book) => {
+        const characterCount = countVisualLength(book.content);
+        return {
+          item: book,
+          width: book.isSample ? GUIDE_BOOK_WIDTH : bookWidthForCharacterCount(characterCount),
+        };
+      }),
+    ],
+    measuredWidth,
+  );
   return (
-    <div className={styles.bookshelf} ref={bookshelfRef}>
+    <div
+      className={`${styles.bookshelf} ${showEmptyState ? styles.bookshelfEmpty : ""}`}
+      ref={bookshelfRef}
+    >
       <div className={styles.shelves}>
-        {shelfDocuments.map((shelf, shelfIndex) => {
-          const { centerCount, shelfWidth } = shelfMetrics(shelf.length);
+        {shelfBooks.map((shelf, shelfIndex) => {
+          const booksWidth = shelf.reduce(
+            (total, book, index) => total + book.width + (index > 0 ? 8 : 0),
+            0,
+          );
+          const { centerCount, shelfWidth } = showEmptyState
+            ? shelfMetricsForAvailableWidth(measuredWidth)
+            : shelfMetricsForContentWidth(booksWidth);
           const needsOverflowFallback =
             availableWidth !== null && shelfWidth > availableWidth;
 
@@ -159,32 +185,57 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnly
                 needsOverflowFallback ? styles.shelfViewportOverflow : ""
               }`}
             >
-              <div className={styles.shelfStage} style={{ width: shelfWidth }}>
-                <div className={styles.booksRow}>
-                  {shelf.map((doc) => (
+              <div
+                className={`${styles.shelfStage} ${showEmptyState ? styles.shelfStageEmpty : ""}`}
+                style={{ width: shelfWidth }}
+              >
+                <div className={`${styles.booksRow} ${showEmptyState ? styles.booksRowEmpty : ""}`}>
+                  {showEmptyState && shelfIndex === 0 && (
+                    <p className={styles.emptyMessage}>
+                      あなたの本が、ここに増えていきます。<br />
+                      はじめの1冊は、使い方ガイドのとなりへ。
+                    </p>
+                  )}
+                  {shelf.map(({ item: book }) => {
+                    const characterCount = countVisualLength(book.content);
+                    const menuKey = book.key;
+                    const isCloud = book.source === "cloud";
+                    return (
                     <BookSpine
-                      key={doc.id}
-                      title={doc.title}
-                      updatedAtLabel={formatUpdatedAt(doc.updatedAt)}
-                      characterCount={estimateCharCount(doc.content)}
-                      isSample={doc.isSample}
-                      isCollection={doc.isCollection}
-                      isLocalOnly={showLocalOnlyLabel && !doc.isSample}
-                      showMenu={!doc.isSample}
-                      menuId={`bookshelf-menu-${doc.id}`}
-                      isMenuOpen={openMenuProjectId === doc.id}
+                      key={book.key}
+                      title={book.title}
+                      updatedAtLabel={formatUpdatedAt(book.updatedAt)}
+                      characterCount={characterCount}
+                      bookWidth={book.isSample ? undefined : bookWidthForCharacterCount(characterCount)}
+                      isSample={book.isSample}
+                      isCollection={book.isCollection}
+                      isLocalOnly={showLocalOnlyLabel && !book.isSample && !isCloud}
+                      statusIcons={isCloud ? [{ kind: "cloud", label: "クラウド保存" }] : undefined}
+                      showMenu={!book.isSample && !isCloud}
+                      menuId={`bookshelf-menu-${menuKey}`}
+                      isMenuOpen={openMenuProjectId === menuKey}
                       onToggleMenu={() =>
                         setOpenMenuProjectId((currentId) =>
-                          currentId === doc.id ? null : doc.id,
+                          currentId === menuKey ? null : menuKey,
                         )
                       }
                       onCloseMenu={() => setOpenMenuProjectId(null)}
-                      {...(doc.isSample ? GUIDE_COLORS : colorsForDocument(doc.id))}
-                      onOpen={() => onOpen(doc.id)}
-                      onRename={(title) => onRename(doc.id, title)}
-                      onDelete={doc.isSample ? undefined : () => onDelete(doc.id)}
+                      {...(book.isSample ? GUIDE_COLORS : BOOK_COLORS[book.paletteIndex])}
+                      onOpen={() => {
+                        if (isCloud) onOpenCloud?.(String(book.id));
+                        else onOpen?.(Number(book.id));
+                      }}
+                      onRename={(title) =>
+                        isCloud || !onRename
+                          ? Promise.resolve()
+                          : onRename(Number(book.id), title)
+                      }
+                      onDelete={book.isSample || isCloud || !onDelete
+                        ? undefined
+                        : () => onDelete(Number(book.id))}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className={styles.rackRow} aria-hidden="true">
@@ -210,6 +261,11 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnly
                     height="160.755"
                   />
                 </div>
+                <div
+                  className={styles.shelfFrontLip}
+                  style={{ width: shelfFrontLipWidth(centerCount) }}
+                  aria-hidden="true"
+                />
               </div>
             </div>
           );
