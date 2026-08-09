@@ -15,7 +15,8 @@ import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/l
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import { createProject, updateProject } from "@/lib/supabase/projects";
+import { createProject, updateProject, getCloudProjectCount } from "@/lib/supabase/projects";
+import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
@@ -51,6 +52,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [cloudLimitPlan, setCloudLimitPlan] = useState<CloudPlan | null>(null);
 
   const hasLoadedRef = useRef(false);
   // Tracks which document's data is currently reflected in state, so the
@@ -211,9 +213,39 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     if (isSampleDocument) return;
     setIsSaving(true);
     try {
+      // Existing cloud projects can always be overwritten regardless of the
+      // plan's count limit -- the limit only ever blocks brand-new saves.
+      const isNewCloudSave = !currentProjectId;
+      let knownPlan: CloudPlan | null = null;
+
+      if (isNewCloudSave) {
+        // UX-only early check: lets us show the "cloud bookshelf is full"
+        // guidance before attempting the write. The DB trigger below is the
+        // real enforcement and still runs even if this check is skipped due
+        // to a network/plan-lookup error.
+        const [{ plan, error: planError }, { count, error: countError }] = await Promise.all([
+          getCloudPlan(),
+          getCloudProjectCount(),
+        ]);
+        knownPlan = plan;
+
+        if (!planError && !countError && plan && count !== null) {
+          const limit = CLOUD_PROJECT_LIMITS[plan];
+          if (limit !== null && count >= limit) {
+            setCloudLimitPlan(plan);
+            return;
+          }
+        }
+      }
+
       const result = currentProjectId
         ? await updateProject(currentProjectId, { title, content, settings })
         : await createProject({ title, content, settings });
+
+      if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
+        setCloudLimitPlan(knownPlan ?? 'resident');
+        return;
+      }
 
       if (result.error || !result.data) {
         alert("クラウドへの保存に失敗しました: " + (result.error || "原因不明のエラー"));
@@ -370,6 +402,34 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
       {toast && (
         <div className="pointer-events-none fixed bottom-4 right-4 z-50 rounded-lg border border-ink/10 bg-ink px-4 py-2 text-sm text-base shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {cloudLimitPlan && cloudLimitPlan !== "unlimited" && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setCloudLimitPlan(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-ink/10 bg-base p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-ink">クラウド本棚がいっぱいです</h3>
+            <p className="mt-2 text-sm text-ink/70">
+              {cloudLimitPlan === "light"
+                ? `Lightプランではクラウドに最大${CLOUD_PROJECT_LIMITS.light}作品まで保存できます。すでに保存している作品は、引き続き編集できます。`
+                : `無料会員ではクラウドに最大${CLOUD_PROJECT_LIMITS.resident}作品まで保存できます。すでに保存している作品は、引き続き編集できます。`}
+            </p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCloudLimitPlan(null)}
+                className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-base hover:opacity-90"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

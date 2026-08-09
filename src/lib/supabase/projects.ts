@@ -1,5 +1,38 @@
 import { createClient } from './client';
 import { Project, CreateProjectInput, UpdateProjectInput } from '@/types/database';
+import { CLOUD_PROJECT_LIMIT_ERROR } from './plans';
+
+function isCloudProjectLimitError(error: { message?: string } | null): boolean {
+  return !!error?.message?.includes(CLOUD_PROJECT_LIMIT_ERROR);
+}
+
+export interface CloudProjectCountResult {
+  count: number | null;
+  error: string | null;
+}
+
+// Counts only the current user's cloud projects (never other users',
+// and never the local-only usage-guide sample, which is never stored here).
+export async function getCloudProjectCount(): Promise<CloudProjectCountResult> {
+  const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { count: null, error: userError?.message ?? 'ログインしていません' };
+  }
+
+  const { count, error } = await supabase
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Error counting cloud projects:', error);
+    return { count: null, error: error.message };
+  }
+
+  return { count: count ?? 0, error: null };
+}
 
 export async function getProjects(): Promise<Project[]> {
   const supabase = createClient();
@@ -51,6 +84,9 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
     .single();
 
   if (error) {
+    if (isCloudProjectLimitError(error)) {
+      return { data: null, error: CLOUD_PROJECT_LIMIT_ERROR };
+    }
     console.error('Error creating project:', error);
     return { data: null, error: error.message };
   }
