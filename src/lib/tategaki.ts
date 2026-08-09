@@ -207,6 +207,150 @@ export function paginateTokens(
   return paginateTokensByLines(tokens, charsPerLine, linesPerPage, columnCount, linesPerColumn);
 }
 
+/**
+ * The two doubled-punctuation "families" Japanese typesetting treats as a
+ * single glyph pair (――, ……) — matches the families PageCard.tsx's own
+ * nowrap-rendering pattern recognizes (`[―—]{2,}` / `[…‥]{2,}`), so
+ * pagination and rendering agree on what counts as one run. A dash directly
+ * followed by an ellipsis (mixed families) is not a recognized run.
+ */
+const NOWRAP_RUN_FAMILIES: readonly RegExp[] = [/[―—]/, /[…‥]/];
+
+function nowrapRunFamily(char: string): RegExp | null {
+  for (const family of NOWRAP_RUN_FAMILIES) {
+    if (family.test(char)) return family;
+  }
+  return null;
+}
+
+/**
+ * If `splitIndex` lands inside a same-family run of ―― / …… characters,
+ * snaps it down to the nearest point that keeps every fragment placed on
+ * this line at least 2 characters long — these doubled marks read as a
+ * single glyph pair, so splitting them 1+1 (or stranding a lone ― / … next
+ * to unrelated text) looks like a typo rather than the intended mark. Runs
+ * longer than 2 may still be split at any even offset (2, 4, 6, …), so a
+ * long "……………" can wrap in 2-character chunks; a run whose *total* length
+ * is odd may still end with a 1-character fragment on its very last line,
+ * since no split point can avoid that.
+ *
+ * `allowDefer` gates only the case where snapping would defer the entire
+ * run to the next line (i.e. place nothing at all this line) — the caller
+ * passes `false` once a line is already completely empty, so a run that's
+ * simply too long for `charsPerLine` can't be deferred forever.
+ */
+function adjustSplitForNowrapRun(
+  value: string,
+  splitIndex: number,
+  minIndex: number,
+  allowDefer: boolean
+): number {
+  if (splitIndex <= minIndex || splitIndex >= value.length) return splitIndex;
+  const family = nowrapRunFamily(value[splitIndex - 1]);
+  if (!family || !family.test(value[splitIndex])) return splitIndex;
+
+  let runStart = splitIndex - 1;
+  while (runStart > minIndex && family.test(value[runStart - 1])) runStart -= 1;
+
+  const offsetIntoRun = splitIndex - runStart;
+  const snapped = offsetIntoRun % 2 === 0 ? offsetIntoRun : offsetIntoRun - 1;
+  if (snapped >= 2) return runStart + snapped;
+  return allowDefer ? runStart : splitIndex;
+}
+
+/**
+ * 行頭禁則: characters that must never begin a line — closing brackets,
+ * common punctuation, small kana, the prolonged sound mark, and iteration
+ * marks.
+ */
+const LINE_START_PROHIBITED = new Set(
+  "、。，．！？‼⁉）］｝〕〉》」』】〙〗ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶー々ゝゞヽヾ"
+);
+
+/** 行末禁則: opening brackets, which must never end a line. */
+const LINE_END_PROHIBITED = new Set("（［｛〔〈《「『【〘〖");
+
+export function isLineStartProhibited(char: string): boolean {
+  return LINE_START_PROHIBITED.has(char);
+}
+
+export function isLineEndProhibited(char: string): boolean {
+  return LINE_END_PROHIBITED.has(char);
+}
+
+/**
+ * Max characters 行頭禁則 may pull back onto the previous line (追い込み)
+ * past `charsPerLine` before giving up — keeps a run of closing brackets
+ * from overflowing a line without bound.
+ */
+const MAX_OIKOMI_CHARS = 2;
+
+/**
+ * Adjusts a naive split point `splitIndex` (`value.slice(minIndex,
+ * splitIndex)` is about to become this line's content) so it never leaves
+ * an opening bracket as the line's last character, nor a closing bracket /
+ * small kana / prolonged mark / iteration mark as the next line's first:
+ *
+ * - 行末禁則 (line-end): while the character just before the split is
+ *   prohibited there, the split backs off by one, pushing it to the next
+ *   line instead (追い出し). When `allowFullDefer` is false, backing off
+ *   stops one character short of `minIndex` instead of reaching it —
+ *   guaranteeing at least one character still lands on this line — for the
+ *   same reason as `adjustSplitForNowrapRun`'s `allowDefer`: an
+ *   already-empty line can't be allowed to defer *everything* it's handed,
+ *   or it spins forever re-deferring the same unplaced text. This is a
+ *   one-character floor, not "skip backing off altogether" — a line that
+ *   already holds a few characters before hitting a trailing bracket run
+ *   still gets every one of them pushed off, `allowFullDefer` or not.
+ * - 行頭禁則 (line-start): while the character at the split is prohibited
+ *   there, the split advances by one, pulling it onto this line instead
+ *   (追い込み), capped at `MAX_OIKOMI_CHARS`.
+ *
+ * Only ever moves within `[minIndex, value.length]`, so it can neither
+ * strand nor duplicate characters.
+ */
+function adjustSplitForKinsoku(
+  value: string,
+  minIndex: number,
+  splitIndex: number,
+  allowFullDefer: boolean
+): number {
+  let j = splitIndex;
+  const backOffFloor = allowFullDefer ? minIndex : Math.min(minIndex + 1, value.length);
+
+  while (j > backOffFloor && isLineEndProhibited(value[j - 1])) {
+    j -= 1;
+  }
+
+  let pulled = 0;
+  while (j < value.length && isLineStartProhibited(value[j]) && pulled < MAX_OIKOMI_CHARS) {
+    j += 1;
+    pulled += 1;
+  }
+
+  return j;
+}
+
+/**
+ * Combines the nowrap-run and kinsoku split adjustments used by both
+ * `paginateTokensByLines` and `computePageSourceRanges`, so the two share
+ * one definition of "where a line is actually allowed to end" instead of
+ * two independently-maintained copies. Both underlying adjustments only
+ * move within `[minIndex, value.length]` and neither can grow/shrink past
+ * the other's protected boundary (bracket and nowrap-run characters are
+ * disjoint sets), so applying them once each, in sequence, is enough —
+ * no fixed-point iteration needed.
+ */
+function adjustLineSplit(
+  value: string,
+  minIndex: number,
+  splitIndex: number,
+  allowDefer: boolean
+): number {
+  const afterNowrap = adjustSplitForNowrapRun(value, splitIndex, minIndex, allowDefer);
+  return adjustSplitForKinsoku(value, minIndex, afterNowrap, allowDefer);
+}
+
 function paginateTokensByLines(
   tokens: TategakiToken[],
   charsPerLine: number,
@@ -313,19 +457,26 @@ function paginateTokensByLines(
         // only a break decided below can make it true again.
         lineFilledByWrap = false;
         const startI = i;
+        // A completely empty line can't be allowed to defer everything to
+        // "the next line" — there is no next line yet, so that would just
+        // spin forever. Only a line that already holds something may defer.
+        const isFreshLine = lineChars === 0;
         const room = charsPerLine - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
         }
+        j = adjustLineSplit(value, i, j, !isFreshLine);
         if (j > i) {
           placeToken({ type: "text", value: value.slice(i, j) });
           lineChars += j - i;
           i = j;
         }
         // j === startI means this iteration placed nothing at all (no room
-        // left on the line) — that still has to force a break so the outer
-        // loop makes progress instead of spinning forever on the same index.
+        // left, or every candidate character was deferred by nowrap-run /
+        // kinsoku protection) — that still has to force a break so the
+        // outer loop makes progress instead of spinning forever on the
+        // same index.
         const wasFilled = lineChars >= charsPerLine;
         if (wasFilled || j === startI) {
           breakLine();
@@ -440,11 +591,13 @@ export function computePageSourceRanges(
         }
         lineFilledByWrap = false;
         const startI = i;
+        const isFreshLine = lineChars === 0;
         const room = charsPerLine - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
         }
+        j = adjustLineSplit(value, i, j, !isFreshLine);
         if (j > i) {
           mark(start + i, start + j);
           lineChars += j - i;
