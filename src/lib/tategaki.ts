@@ -227,6 +227,13 @@ function paginateTokensByLines(
   // the current (still-open) line.
   let lineIndex = 0;
   let lineChars = 0;
+  // True immediately after the line just closed was ended because content
+  // filled it to exactly `charsPerLine` (an auto-wrap), as opposed to being
+  // ended by an explicit "\n" in the source. A single "\n" found right after
+  // such a fill is redundant with the break that already happened — without
+  // this, it would open, and immediately close, its own empty line, adding a
+  // phantom blank column that has no counterpart in the source text.
+  let lineFilledByWrap = false;
 
   // Bucket every token into top/bottom as it's placed, in the same pass that
   // decides which line it lands on — avoids a second, separately-accounted
@@ -268,6 +275,7 @@ function paginateTokensByLines(
     currentLine = [];
     lineIndex += 1;
     lineChars = 0;
+    lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
       pushPage();
     }
@@ -277,6 +285,7 @@ function paginateTokensByLines(
     if (token.type === "pageBreak") {
       // Manual page break: always flush, even mid-page or on an empty page,
       // so an explicit break reliably sends the following content to the next page.
+      lineFilledByWrap = false;
       pushPage(true);
       continue;
     }
@@ -286,11 +295,24 @@ function paginateTokensByLines(
       const value = token.value;
       while (i < value.length) {
         if (value[i] === "\n") {
+          if (lineFilledByWrap) {
+            // The line that just closed was already ended by filling up to
+            // charsPerLine; this "\n" doesn't mark a second, separate line
+            // end, so consume it without emitting a token or a blank line.
+            i += 1;
+            lineFilledByWrap = false;
+            continue;
+          }
           placeToken({ type: "text", value: "\n" });
           i += 1;
           breakLine();
           continue;
         }
+        // Real content is being placed on the current line now, so whatever
+        // it was before (freshly wrapped-full, or not) no longer applies —
+        // only a break decided below can make it true again.
+        lineFilledByWrap = false;
+        const startI = i;
         const room = charsPerLine - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
@@ -301,8 +323,13 @@ function paginateTokensByLines(
           lineChars += j - i;
           i = j;
         }
-        if (lineChars >= charsPerLine) {
+        // j === startI means this iteration placed nothing at all (no room
+        // left on the line) — that still has to force a break so the outer
+        // loop makes progress instead of spinning forever on the same index.
+        const wasFilled = lineChars >= charsPerLine;
+        if (wasFilled || j === startI) {
           breakLine();
+          lineFilledByWrap = wasFilled;
         }
       }
       continue;
@@ -316,8 +343,11 @@ function paginateTokensByLines(
     }
     placeToken(token);
     lineChars += length;
-    if (lineChars >= charsPerLine) {
+    const wasFilled = lineChars >= charsPerLine;
+    lineFilledByWrap = false;
+    if (wasFilled) {
       breakLine();
+      lineFilledByWrap = true;
     }
   }
 
@@ -355,6 +385,10 @@ export function computePageSourceRanges(
   let pageEnd = 0;
   let lineIndex = 0;
   let lineChars = 0;
+  // Mirrors paginateTokensByLines's lineFilledByWrap: true right after a line
+  // was closed by filling to charsPerLine, so the very next "\n" — redundant
+  // with that break — can be skipped instead of being counted as its own line.
+  let lineFilledByWrap = false;
 
   const pushPage = (force = false) => {
     if (pageStart !== null || force) {
@@ -373,6 +407,7 @@ export function computePageSourceRanges(
   const breakLine = () => {
     lineIndex += 1;
     lineChars = 0;
+    lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
       pushPage();
     }
@@ -380,6 +415,7 @@ export function computePageSourceRanges(
 
   for (const { token, start, end } of offsetTokens) {
     if (token.type === "pageBreak") {
+      lineFilledByWrap = false;
       pushPage(true);
       continue;
     }
@@ -389,11 +425,21 @@ export function computePageSourceRanges(
       const value = token.value;
       while (i < value.length) {
         if (value[i] === "\n") {
+          if (lineFilledByWrap) {
+            // Redundant with the fill-triggered break that already closed
+            // this line — same rule as paginateTokensByLines, so page
+            // boundaries here don't drift from what's actually rendered.
+            i += 1;
+            lineFilledByWrap = false;
+            continue;
+          }
           mark(start + i, start + i + 1);
           i += 1;
           breakLine();
           continue;
         }
+        lineFilledByWrap = false;
+        const startI = i;
         const room = charsPerLine - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
@@ -404,8 +450,10 @@ export function computePageSourceRanges(
           lineChars += j - i;
           i = j;
         }
-        if (lineChars >= charsPerLine) {
+        const wasFilled = lineChars >= charsPerLine;
+        if (wasFilled || j === startI) {
           breakLine();
+          lineFilledByWrap = wasFilled;
         }
       }
       continue;
@@ -417,8 +465,11 @@ export function computePageSourceRanges(
     }
     mark(start, end);
     lineChars += length;
-    if (lineChars >= charsPerLine) {
+    const wasFilled = lineChars >= charsPerLine;
+    lineFilledByWrap = false;
+    if (wasFilled) {
       breakLine();
+      lineFilledByWrap = true;
     }
   }
 
