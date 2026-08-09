@@ -426,10 +426,11 @@ export default function PageSettingsPanel({
         <button
           type="button"
           onClick={onOpenHelp}
-          className="px-3 py-2 text-ink/60 hover:bg-ink/5 rounded font-bold"
-          title="使い方ガイド"
+          className="m-1 cursor-pointer whitespace-nowrap rounded-md border border-ink/15 bg-ink/5 px-2 py-1 text-sm font-medium text-ink/70 transition-colors hover:bg-ink/10 hover:text-ink sm:px-3"
+          aria-label="使い方ガイドを開く"
+          title="使い方ガイドを開く"
         >
-          ？
+          ヘルプ
         </button>
       </div>
 
