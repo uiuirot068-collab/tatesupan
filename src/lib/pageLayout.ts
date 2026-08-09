@@ -8,6 +8,14 @@ export interface PaperSize {
   heightMm: number;
   /** True for presets (e.g. Web閲覧用) authored directly in screen pixels rather than physical mm. */
   isPx: boolean;
+  /**
+   * Raw px-authored outer width/height (e.g. 768/1024 for Web閲覧用), present
+   * only when isPx. widthMm/heightMm above are scaled by the preview-only
+   * PX_PER_MM constant, not a real DPI, so physical-size exports (PDF page
+   * format) must derive from these via cssPxToPhysicalMm instead.
+   */
+  widthPx?: number;
+  heightPx?: number;
 }
 
 export const MM_PER_PT = 25.4 / 72;
@@ -16,13 +24,17 @@ export const MM_PER_PT = 25.4 / 72;
 export const PX_PER_MM = 2.2;
 
 /**
- * `isPx` presets (e.g. Web閲覧用) author width/height/margins/font size
- * directly as target screen pixels. Every layout calculation elsewhere
- * works in mm and re-multiplies by PX_PER_MM (or the pt→mm ratio) at
- * render time, so those px-authored numbers are converted back to the
- * internal mm/pt unit here — otherwise they'd be scaled by PX_PER_MM a
- * second time and render far larger (and with a far smaller font) than
- * intended.
+ * `isPx` presets (e.g. Web閲覧用) author their outer page *width/height*
+ * directly as target screen pixels (e.g. 768×1024). Every other layout
+ * calculation works in mm and re-multiplies by PX_PER_MM at render time, so
+ * those two px-authored dimensions are converted back to the internal mm
+ * unit here — this is the *only* place that conversion happens.
+ *
+ * Everything else on `PageSettings` (marginTop/Bottom/Gutter/Outer,
+ * fontSizePt) is always canonical mm/pt, isPx or not — it must never be
+ * treated as px and converted a second time here or anywhere downstream,
+ * or it renders far larger (and re-derives a font size that's wrong) than
+ * the value the user actually set.
  */
 export function pxToInternalMm(px: number): number {
   return px / PX_PER_MM;
@@ -30,6 +42,18 @@ export function pxToInternalMm(px: number): number {
 
 export function pxToInternalFontSizePt(px: number): number {
   return px / PX_PER_MM / MM_PER_PT;
+}
+
+/**
+ * Real-world 96dpi CSS-px↔mm conversion — distinct from PX_PER_MM (a
+ * preview render-scale constant, not a physical DPI). Used only when an
+ * isPx page's outer px dimensions need a genuine physical size, e.g. a PDF
+ * page format for Web閲覧用.
+ */
+const CSS_PX_PER_MM_96DPI = 96 / 25.4;
+
+export function cssPxToPhysicalMm(px: number): number {
+  return px / CSS_PX_PER_MM_96DPI;
 }
 
 // 旧バージョンで使用していた用紙サイズキーとの互換マップ（保存済みデータの移行用）
@@ -53,6 +77,8 @@ export function resolvePaperSize(key: string): PaperSize {
     widthMm: isPx ? pxToInternalMm(template.width) : template.width,
     heightMm: isPx ? pxToInternalMm(template.height) : template.height,
     isPx,
+    widthPx: isPx ? template.width : undefined,
+    heightPx: isPx ? template.height : undefined,
   };
 }
 
@@ -244,34 +270,21 @@ export interface PageLayout {
 export function computePageLayout(settings: PageSettings): PageLayout {
   const paper = resolvePaperSize(settings.paperSize);
 
-  // isPx プリセットは fontSizePt・余白も画面ピクセルとして入力されるため、
-  // 用紙幅・高さ（resolvePaperSize 側）と同じ基準（内部 mm/pt）に揃える。
-  const effectiveFontSizePt = paper.isPx
-    ? pxToInternalFontSizePt(settings.fontSizePt)
-    : settings.fontSizePt;
-  const effectiveMarginGutter = paper.isPx
-    ? pxToInternalMm(settings.marginGutter)
-    : settings.marginGutter;
-  const effectiveMarginOuter = paper.isPx
-    ? pxToInternalMm(settings.marginOuter)
-    : settings.marginOuter;
-  const effectiveMarginTop = paper.isPx
-    ? pxToInternalMm(settings.marginTop)
-    : settings.marginTop;
-  const effectiveMarginBottom = paper.isPx
-    ? pxToInternalMm(settings.marginBottom)
-    : settings.marginBottom;
-
-  const fontSizeMm = computeFontSizeMm(effectiveFontSizePt);
-  const linePitchMm = computeLinePitchMm(effectiveFontSizePt, settings.lineHeightRatio);
+  // settings.marginTop/Bottom/Gutter/Outer と fontSizePt は、用紙が isPx
+  // （Web閲覧用など）かどうかに関わらず常に mm / pt のcanonical値。isPxで
+  // 変換が必要なのは用紙の外形（width/height）だけで、それは
+  // resolvePaperSize() 側で既に完結している——ここで再度 px→mm/pt 変換を
+  // 行うと二重変換になり、意図した値より大きく描画されてしまう。
+  const fontSizeMm = computeFontSizeMm(settings.fontSizePt);
+  const linePitchMm = computeLinePitchMm(settings.fontSizePt, settings.lineHeightRatio);
 
   const textAreaWidthMm = computeTextAreaWidthMm(
     paper,
-    effectiveMarginGutter,
-    effectiveMarginOuter
+    settings.marginGutter,
+    settings.marginOuter
   );
   const textAreaHeightMm = Math.max(
-    paper.heightMm - effectiveMarginTop - effectiveMarginBottom,
+    paper.heightMm - settings.marginTop - settings.marginBottom,
     0
   );
 
@@ -282,8 +295,8 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   // 計算されてしまい、1行の文字数が異常に多くなる。
   const columnHeightMm = computeColumnHeightMm(
     paper,
-    effectiveMarginTop,
-    effectiveMarginBottom,
+    settings.marginTop,
+    settings.marginBottom,
     columnCount,
     settings.columnGapMm
   );

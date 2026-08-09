@@ -50,6 +50,25 @@ interface PageCardProps {
   onImageDelete?: (imageId: string) => void;
   hideNombre?: boolean;
   onHideNombreChange?: (hideNombre: boolean) => void;
+  /**
+   * Counter-scale for editor-only chrome (selection checkbox, insert-image/
+   * hide-nombre controls, the "Nページ" caption) that sits as a sibling of
+   * `.page-card`, not inside it. PreviewPane's ancestor `data-export-scale-root`
+   * already applies `transform: scale(presentationScale)` to this whole
+   * PageCard for the *paper surface's* benefit (so different paper presets'
+   * wildly different canonical px magnitudes still read at a comparable
+   * size) — but that same transform, left unchecked, shrinks/grows this
+   * chrome by the exact same factor, which is what made it read as
+   * illegibly tiny for presets whose canonical size forces a small
+   * presentationScale (e.g. Web閲覧用's 768×1024). Passing
+   * `1 / baseAutoFitScale` here (see PreviewPane.tsx) cancels exactly that
+   * preset-dependent portion out of the chrome's rendered size while still
+   * leaving it responsive to the user's manual zoom (userZoom), matching
+   * how it already behaved for presets close to baseAutoFitScale≈1.
+   * Defaults to 1 (no correction) so any caller that doesn't pass it keeps
+   * today's behavior unchanged.
+   */
+  chromeScale?: number;
 }
 
 export default function PageCard({
@@ -73,6 +92,7 @@ export default function PageCard({
   onImageDelete,
   hideNombre = false,
   onHideNombreChange,
+  chromeScale = 1,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { paper } = layout;
@@ -245,6 +265,7 @@ export default function PageCard({
         <div data-no-print="true" className="no-print flex w-full items-center justify-between px-1">
           <label
             className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
+            style={{ transform: `scale(${chromeScale})`, transformOrigin: "left center" }}
             onClick={(event) => event.stopPropagation()}
           >
             <input
@@ -257,7 +278,10 @@ export default function PageCard({
             />
             選択
           </label>
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            style={{ transform: `scale(${chromeScale})`, transformOrigin: "right center" }}
+          >
             {onHideNombreChange && (
               <label
                 className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
@@ -307,7 +331,11 @@ export default function PageCard({
         </div>
       )}
       {isInteractive && imageTokens.length > 0 && (
-        <div className="flex w-full flex-col gap-1 px-1" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="flex w-full flex-col gap-1 px-1"
+          style={{ transform: `scale(${chromeScale})`, transformOrigin: "top center" }}
+          onClick={(event) => event.stopPropagation()}
+        >
           {imageTokens.map((token) => (
             <div
               key={token.id}
@@ -347,6 +375,12 @@ export default function PageCard({
       )}
       <div
         data-page-card="true"
+        // isPx (Web閲覧用) pages author their outer size directly in target
+        // *screen* px (768×1024) — exportCapture.ts reads this to decide
+        // whether it must capture at the element's true outer (border
+        // included) size rather than its content-box size; see the comment
+        // there for why that distinction matters only for isPx pages.
+        data-is-px-page={paper.isPx ? "true" : undefined}
         className={`page-card shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           selected
             ? "border-accent ring-2 ring-accent dark:border-accent"
@@ -466,11 +500,16 @@ export default function PageCard({
           <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
         )}
 
-        {showWebFooter && <WebFooterOverlay />}
+        {showWebFooter && <WebFooterOverlay bodyFontSizePx={fontSizePx} />}
 
         {!paper.isPx && <TrimGuide />}
       </div>
-      <span className="text-xs text-ink/60">{pageNumber} ページ</span>
+      <span
+        className="text-xs text-ink/60"
+        style={{ transform: `scale(${chromeScale})`, transformOrigin: "center top" }}
+      >
+        {pageNumber} ページ
+      </span>
     </div>
   );
 }
@@ -595,7 +634,7 @@ function HiddenNombreOverlay({
 }
 
 /** Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。 */
-function WebFooterOverlay() {
+function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // 親のsheetStyleが writingMode: vertical-rl を敷いているため、ここで
   // horizontal-tb に強制解除しないとロゴ・文字列が縦書きに巻き込まれて崩れる。
   const containerStyle: CSSProperties = {
@@ -611,6 +650,17 @@ function WebFooterOverlay() {
     width: "100%",
   };
 
+  // このfooterは紙面（export対象）の一部なので、editor chrome（chromeScale）
+  // のようにscreen-space固定にはしない——canonical DOM上でpaperと一緒に
+  // scaleされる、という既存の挙動はそのまま。ただし固定"9.5px"は、Web閲覧用の
+  // 本文フォントがまだ16ptだった頃の値がそのまま残ったもので、本文フォント比
+  // 約76%（9.5÷12.42px）で釣り合っていた。今回の正式preset化で本文が36pt
+  // （27.9px canonical）へ拡大された一方、この9.5pxだけ取り残されたため、
+  // 本文に対して比率にして約1/3まで縮んで見えていた。本文フォントに対する
+  // 比率で算出し直すことで、以後どの本文サイズでも同じ見えの強さを保つ。
+  const FOOTER_TO_BODY_FONT_RATIO = 0.75;
+  const footerFontSizePx = bodyFontSizePx * FOOTER_TO_BODY_FONT_RATIO;
+
   const contentStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
@@ -623,7 +673,7 @@ function WebFooterOverlay() {
     whiteSpace: "nowrap",
     writingMode: "horizontal-tb",
     fontFamily: '"Shippori Mincho", serif',
-    fontSize: "9.5px",
+    fontSize: `${footerFontSizePx}px`,
     color: "#888",
   };
 

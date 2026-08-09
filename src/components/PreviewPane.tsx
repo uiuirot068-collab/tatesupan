@@ -19,12 +19,13 @@ import {
   type TategakiPage,
 } from "@/lib/tategaki";
 import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
 import { exportAllPagesToZip, exportPageToJpg } from "@/utils/exportImage";
 import { exportCustomPdf, type PdfExportMode } from "@/utils/exportPdf";
 import type { ImageRecord } from "@/lib/db";
-import { PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import { PX_PER_MM, cssPxToPhysicalMm, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
@@ -32,7 +33,7 @@ import PageCard from "./PageCard";
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
 
-/** Horizontal padding (px) of the scroll container (`p-6` = 1.5rem × 2 sides). */
+/** Padding (px) of the scroll container per axis (`p-6` = 1.5rem × 2 sides, uniform on all four sides). */
 const SCROLL_CONTAINER_PADDING_X_PX = 48;
 
 interface PreviewPaneProps {
@@ -114,7 +115,44 @@ export default function PreviewPane({
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads.
   const spreadGroups = useMemo(() => computeSpreadGroups(pages.length), [pages.length]);
+
+  // Web閲覧用 (isPx) authors its canonical DOM size directly in *screen*
+  // pixels (768×1024) rather than the small mm-based magnitude every other
+  // preset's canonical size resolves to (e.g. 文庫/A6 ≈ 230×326px). Fitting
+  // the fit-ratio math directly against that literal 768/1024 makes the
+  // *fit result itself* swing between presets depending on which axis binds
+  // for that particular preset's aspect ratio vs. the pane's aspect ratio.
+  // The preview's job is legibility, not physical-size comparison (spec:
+  // 100% here already isn't a literal canonical-px 1:1 view), so Web asks
+  // the *fit math* to treat it as if its canonical size were
+  // WEB_PREVIEW_REFERENCE_WIDTH/HEIGHT_PX — a magnitude in the same
+  // ballpark as the print presets' own canonical sizes, and at the exact
+  // same 3:4 ratio as the true 768×1024 so orientation/proportion is
+  // unaffected — then `webPreviewBaseScale` below corrects the resulting
+  // scale factor back up so it still lands correctly on the *real* 768×1024
+  // DOM node (which is never resized or touched here).
+  const WEB_PREVIEW_REFERENCE_WIDTH_PX = 240;
+  const WEB_PREVIEW_REFERENCE_HEIGHT_PX = 320;
+  const isWebPreset = layout.paper.isPx;
+  const fitUnitWidthPx = isWebPreset ? WEB_PREVIEW_REFERENCE_WIDTH_PX : layout.paper.widthMm * PX_PER_MM;
+  const fitUnitHeightPx = isWebPreset ? WEB_PREVIEW_REFERENCE_HEIGHT_PX : layout.paper.heightMm * PX_PER_MM;
+  const webPreviewBaseScale =
+    isWebPreset && layout.paper.widthPx ? WEB_PREVIEW_REFERENCE_WIDTH_PX / layout.paper.widthPx : 1;
+
+  // `spreadWidthPx` sizes the *real* DOM row (two true-canonical-width page
+  // cards side by side, and the empty verso/recto slot reserved beside a
+  // lone page — see the spread-row JSX below) and must stay the true
+  // canonical magnitude — it has no bearing on the fit-scale math (see
+  // `fitUnitWidthPx` above), which is single-page-only regardless of page
+  // count or how many real 2-up spreads exist. A 2-up row that doesn't fit
+  // the pane at that single-page scale simply overflows into the scroll
+  // container's existing `overflow-x-auto`, rather than shrinking every
+  // page to make the spread fit.
   const spreadWidthPx = layout.paper.widthMm * 2 * PX_PER_MM + SPREAD_GAP_PX;
+  // True canonical single-page height, used only to reserve visual breathing
+  // room below a still-single-page manuscript (see the spacer below) — never
+  // for the fit-scale math, which uses `fitUnitHeightPx` instead.
+  const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -125,7 +163,12 @@ export default function PreviewPane({
   const ZOOM_MIN = 0.5;
   const ZOOM_MAX = 2.0;
   const ZOOM_STEP = 0.1;
-  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  // Default view is an overview of the book's page layout — [page1][空き] /
+  // [page3][page2] / ... at a glance — not one page maximized to fill the
+  // pane, so the preview opens at 50% rather than 100%. Resetting via the
+  // "100%" toolbar button still targets a literal 100%, matching its label;
+  // only this initial mount value changes.
+  const [zoomScale, setZoomScale] = useState<number>(0.5);
 
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
@@ -145,28 +188,142 @@ export default function PreviewPane({
   const startPosRef = useRef({ x: 0, y: 0 });
   const scrollPosRef = useRef({ left: 0, top: 0 });
 
-  // Auto-fit: on narrow (mobile) viewports the spread's natural pixel width
-  // can exceed the scroll container, which used to just clip the overflow
-  // (overflow-x-hidden) and hide part of the manuscript. Track the
-  // container's measured width so the spread can be scaled down to fit
-  // instead, independent of the user's manual zoomScale above.
+  // Fit-to-pane presentation scale: each paper preset's *canonical* CSS px
+  // size (used for layout/export, e.g. mm-based presets via PX_PER_MM, or
+  // Web閲覧用's 768×1024px) has nothing to do with how large it should look
+  // in this editor pane. A page's own canonical DOM size is decided by
+  // PageCard's inline width/height and is never touched here — this only
+  // scales the `data-export-scale-root` wrapper visually so every preset
+  // reads at a comparably legible size regardless of how big or small its
+  // canonical px magnitude happens to be (Web閲覧用's 768px canonical width
+  // used to make it render far smaller than e.g. A6 once naively shrunk to
+  // fit the pane, since A6's much smaller canonical width rarely needed any
+  // shrinking at all). Track both container dimensions so the fit can scale
+  // pages up as well as down; exports always strip this transform before
+  // capture, so it never affects the exported pixel size.
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const [containerHeight, setContainerHeight] = useState<number | null>(null);
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const update = () => setContainerWidth(container.clientWidth);
+    const update = () => {
+      setContainerWidth(container.clientWidth);
+      setContainerHeight(container.clientHeight);
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
 
-  const autoFitScale = useMemo(() => {
-    if (!containerWidth || spreadWidthPx <= 0) return 1;
+  // baseAutoFitScale: fits *one single page only* to the currently visible
+  // pane — never a 2-up spread, never the whole multi-page document — so it
+  // is entirely independent of page count and of whether any spread rows
+  // exist. Only the paper preset's own single-page dimensions (or Web閲覧用's
+  // reference-size stand-in above) and the pane's measured size affect it.
+  // webPreviewBaseScale (1 for every non-Web preset) rescales the
+  // reference-size fit ratio back onto the real 768×1024 canonical DOM node.
+  const baseAutoFitScale = useMemo(() => {
+    if (!containerWidth || !containerHeight || fitUnitWidthPx <= 0 || fitUnitHeightPx <= 0) return 1;
+    // p-6 (SCROLL_CONTAINER_PADDING_X_PX = 1.5rem × 2 sides = 48px) is
+    // uniform on all four sides, so the same constant applies to height too.
     const availableWidth = containerWidth - SCROLL_CONTAINER_PADDING_X_PX;
-    if (availableWidth <= 0) return 1;
-    return Math.min(1, availableWidth / spreadWidthPx);
-  }, [containerWidth, spreadWidthPx]);
+    const availableHeight = containerHeight - SCROLL_CONTAINER_PADDING_X_PX;
+    if (availableWidth <= 0 || availableHeight <= 0) return 1;
+    // Web閲覧用's canonical page is tall (768×1024) relative to how short a
+    // real browser window's preview pane often is once the editor toolbar,
+    // header, and settings rows are subtracted — e.g. a real ~1061×651
+    // Chrome window measured availableHeight down to ~280px, which alone
+    // (via the old width/height min()) forced the page down to 210px wide
+    // even though ~430px of width was available. The vertical extent of a
+    // single page was never something users needed to see all at once (this
+    // pane already scrolls vertically for multi-page manuscripts), so for
+    // Web閲覧用 specifically the fit is width-only: legible page width first,
+    // vertical overflow always handled by the pane's existing scroll rather
+    // than by shrinking the page to fit the window's height. Print presets
+    // (文庫/A6/...) keep the width+height fit unchanged — their canonical
+    // pages are already close to a normal window's proportions, so height
+    // rarely binds for them the way it does for Web閲覧用's very tall page.
+    const referenceFitScale = isWebPreset
+      ? availableWidth / fitUnitWidthPx
+      : Math.min(availableWidth / fitUnitWidthPx, availableHeight / fitUnitHeightPx);
+    return referenceFitScale * webPreviewBaseScale;
+  }, [containerWidth, containerHeight, fitUnitWidthPx, fitUnitHeightPx, webPreviewBaseScale, isWebPreset]);
+
+  // Presentation scale actually applied to the preview: toolbar 100% means
+  // userZoom(=zoomScale) 1.0 on top of the paper-size-dependent
+  // baseAutoFitScale baseline — never a literal canonical-CSS-px 1:1 view.
+  const presentationScale = zoomScale * baseAutoFitScale;
+
+  // Reference paper for editor-chrome sizing: A5 is the size the user
+  // already found comfortable before any of this scaling existed, so chrome
+  // is pinned to "how big it would be if A5 were the current preset in this
+  // exact pane" rather than to a literal frozen pixel constant (which would
+  // stop adapting if the pane were resized) or to 1 (which was tried first
+  // and made chrome uniformly *smaller* than that liked A5 baseline — e.g.
+  // A5 100% checkbox 17.91px → 14px — solving "Web too small" by shrinking
+  // A5 too, not by bringing Web up to match it). Deriving it from A5's own
+  // real mm dimensions via the *same* fit formula as any other preset means
+  // there's no magic number to keep in sync by hand: if A5's own template
+  // ever changes, this reference changes with it automatically.
+  const CHROME_REFERENCE_WIDTH_MM = PAPER_SIZE_TEMPLATES["A5"].width;
+  const CHROME_REFERENCE_HEIGHT_MM = PAPER_SIZE_TEMPLATES["A5"].height;
+  const chromeReferenceWidthPx = CHROME_REFERENCE_WIDTH_MM * PX_PER_MM;
+  const chromeReferenceHeightPx = CHROME_REFERENCE_HEIGHT_MM * PX_PER_MM;
+  const chromeReferenceFitScale = useMemo(() => {
+    if (!containerWidth || !containerHeight) return 1;
+    const availableWidth = containerWidth - SCROLL_CONTAINER_PADDING_X_PX;
+    const availableHeight = containerHeight - SCROLL_CONTAINER_PADDING_X_PX;
+    if (availableWidth <= 0 || availableHeight <= 0) return 1;
+    return Math.min(availableWidth / chromeReferenceWidthPx, availableHeight / chromeReferenceHeightPx);
+  }, [containerWidth, containerHeight, chromeReferenceWidthPx, chromeReferenceHeightPx]);
+
+  // Counter-scale passed down to PageCard for its editor-only chrome
+  // (selection checkbox, insert-image/hide-nombre controls, "Nページ"
+  // caption) — everything OUTSIDE `.page-card` itself. Those elements sit
+  // inside the same `transform: scale(presentationScale)` ancestor as the
+  // paper surface below, so without this they shrink/grow by
+  // baseAutoFitScale right along with it — and since baseAutoFitScale
+  // varies hugely by preset (e.g. ~1.28 for A5 vs ~0.81 for Web閲覧用 in the
+  // same pane, both at "100%"/userZoom=1), that chrome read as comparably
+  // fine on A5 but illegibly tiny on Web閲覧用. Net chrome scale here =
+  // presentationScale × (chromeReferenceFitScale / baseAutoFitScale) =
+  // userZoom × chromeReferenceFitScale — when A5 is the selected preset,
+  // baseAutoFitScale *is* chromeReferenceFitScale (identical formula, same
+  // inputs), so this is exactly 1 and A5's own chrome is completely
+  // unaffected; for every other preset it instead renders at "the size A5's
+  // chrome would be in this pane," which is what actually needs to change.
+  const chromeScale = baseAutoFitScale > 0 ? chromeReferenceFitScale / baseAutoFitScale : 1;
+
+  // `data-export-scale-root` (below) holds every spread stacked at its
+  // *natural*, untransformed size — for a canonical-px-heavy preset like
+  // Web閲覧用 (768×1024) that natural box can vastly exceed the pane, and
+  // CSS `transform: scale()` never changes the box's own layout size (only
+  // how it paints), so the flex `m-auto` centering on that box resolves its
+  // auto margins against the *unscaled* size vs. the pane — went negative
+  // and collapsed to 0, pinning the (visually shrunk) page to the pane's
+  // top-left corner instead of centering it, which read as the page being
+  // "tiny" in a sea of empty scrollable space even though its rendered
+  // pixel size was comparable to other presets. Measuring that untransformed
+  // size here and giving *this* wrapper explicit dimensions equal to
+  // natural size × presentationScale gives `m-auto` the correct (already
+  // scaled) footprint to center against, regardless of preset or page count.
+  const scaleContentRef = useRef<HTMLDivElement | null>(null);
+  const [naturalContentSize, setNaturalContentSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  useEffect(() => {
+    const content = scaleContentRef.current;
+    if (!content) return;
+    const update = () => {
+      setNaturalContentSize({ width: content.offsetWidth, height: content.offsetHeight });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
   // Cursor-follow: scrolls the preview to the page containing the editor
   // caret. isAutoScrollingRef guards against the programmatic scroll being
@@ -197,7 +354,9 @@ export default function PreviewPane({
     setIsExporting(true);
     setExportLabel("画像");
     try {
-      await exportPageToJpg(el, "tatespun_page.jpg");
+      // Web閲覧用（isPx）はcanonicalなpx外形(768×1024)をそのまま出力するため
+      // scale=1。印刷用presetは既存どおり高画質化のscale=3を維持する。
+      await exportPageToJpg(el, "tatespun_page.jpg", layout.paper.isPx ? 1 : 3);
     } catch (err) {
       alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
     } finally {
@@ -214,9 +373,14 @@ export default function PreviewPane({
     setExportLabel("画像");
     setExportProgress({ current: 0, total: elements.length });
     try {
-      await exportAllPagesToZip(elements, "tatespun_all_pages.zip", (current, total) => {
-        setExportProgress({ current, total });
-      });
+      await exportAllPagesToZip(
+        elements,
+        "tatespun_all_pages.zip",
+        (current, total) => {
+          setExportProgress({ current, total });
+        },
+        layout.paper.isPx ? 1 : 3
+      );
     } catch (err) {
       alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
     } finally {
@@ -249,10 +413,26 @@ export default function PreviewPane({
     setExportLabel("PDF");
     setExportProgress({ current: 0, total: elements.length });
     try {
+      // Web閲覧用（isPx）はmm実寸表(exportPdf.tsのPAPER_SIZES)に載っておらず、
+      // customWidth/customHeightを渡さないとA5へフォールバックしてしまう。
+      // 768×1024pxのcanonical外形を96dpi換算した実寸mmを明示的に渡し、
+      // 3:4比率を保ったcustom PDFページを使う。
+      const isWebPreset = layout.paper.isPx;
+      const customWidth =
+        isWebPreset && layout.paper.widthPx != null
+          ? cssPxToPhysicalMm(layout.paper.widthPx)
+          : undefined;
+      const customHeight =
+        isWebPreset && layout.paper.heightPx != null
+          ? cssPxToPhysicalMm(layout.paper.heightPx)
+          : undefined;
       await exportCustomPdf(elements, {
         mode: pdfMode,
         paperSizeName: layout.paper.label,
+        customWidth,
+        customHeight,
         bleed: 3,
+        scale: isWebPreset ? 1 : 4,
         onProgress: (current, total) => setExportProgress({ current, total }),
       });
       setIsPdfModalOpen(false);
@@ -642,13 +822,18 @@ export default function PreviewPane({
         onScroll={handlePreviewScroll}
       >
         <div
-          data-export-scale-root="true"
-          className="m-auto flex w-max h-max flex-col gap-6"
+          className="m-auto"
           style={{
-            // autoFitScale shrinks the spread to the container's measured
-            // width on narrow (mobile) viewports; zoomScale is the user's
-            // manual zoom on top of that fitted baseline.
-            transform: `scale(${zoomScale * autoFitScale})`,
+            width: naturalContentSize ? naturalContentSize.width * presentationScale : undefined,
+            height: naturalContentSize ? naturalContentSize.height * presentationScale : undefined,
+          }}
+        >
+        <div
+          ref={scaleContentRef}
+          data-export-scale-root="true"
+          className="flex w-max h-max flex-col gap-6"
+          style={{
+            transform: `scale(${presentationScale})`,
             // top-left origin keeps all scaled overflow in the
             // positive-scroll direction; a centered origin pushes half
             // the overflow to negative offsets that scrollLeft/scrollTop
@@ -675,6 +860,18 @@ export default function PreviewPane({
               className="flex flex-row items-start"
               style={{
                 gap: SPREAD_GAP_PX,
+                // A lone page always reserves the full 2-up spread width and
+                // sits at its conventional side (page 1 / odd → left, even →
+                // right) — an overview of the book, not a single maximized
+                // page, so a still-empty verso/recto slot stays visually
+                // present even before that page exists. This is independent
+                // of the fit-scale math above (single-page-basis regardless
+                // of page count): reserving this box never changes how big
+                // the *page itself* renders, only how much empty space sits
+                // beside it, so a 1-page manuscript still gets the
+                // single-page-basis scale while showing "page 1 beside an
+                // empty slot" instead of page 1 centered alone with no
+                // spread context.
                 width: isSingle ? spreadWidthPx : undefined,
                 justifyContent: isSingle
                   ? singleIsOdd
@@ -708,12 +905,25 @@ export default function PreviewPane({
                     onHideNombreChange={
                       onSettingsChange ? handleHideNombreChange(index + 1) : undefined
                     }
+                    chromeScale={chromeScale}
                   />
                 </div>
               ))}
             </div>
           );
         })}
+        {/* A manuscript that's still just page 1 would otherwise have the
+            scrollable canvas end flush at its bottom edge, reading as if
+            there's nothing more to the document. Reserving one more row's
+            worth of height (no page content, so never a real DOM page or
+            export element — html-to-image's capture target is `.page-card`,
+            which this has none of) hints that the next spread row (page 3
+            beside page 2) will land there once typed, without page 1's own
+            position or scale shifting when it does. */}
+        {spreadGroups.length === 1 && (
+          <div aria-hidden="true" style={{ height: canonicalPageHeightPx }} />
+        )}
+        </div>
         </div>
       </div>
 

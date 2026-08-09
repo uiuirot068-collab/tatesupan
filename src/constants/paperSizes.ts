@@ -217,28 +217,35 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
     height: 1024,
     isPx: true,
     cols1: {
-      marginTop: 20,
-      marginBottom: 30,
-      marginGutter: 15,
-      marginOuter: 15,
-      fontSizePt: 16,
+      marginTop: 40,
+      marginBottom: 40,
+      marginGutter: 30,
+      marginOuter: 30,
+      fontSizePt: 36,
       lineSpacing: 1.8,
       columnGap: 0,
-      charsPerLine: 27,
-      linesPerColumn: 11,
+      // charsPerLine/linesPerColumn は margin/font から calculateCapacityFromMargins()
+      // で導出した値と一致させてある（PageSettingsPanel.tsx の
+      // handlePaperSizeChange/handleColumnCountChange が実際に適用する際は
+      // このderiveを都度やり直すため、この2値自体は実行時には使われない —
+      // ただしテンプレート単体として見た時にmargin/fontと矛盾しないよう
+      // 値を合わせておく）。
+      charsPerLine: 29,
+      linesPerColumn: 12,
       nombrePosition: 'center',
       nombreDistance: 8,
     },
     cols2: {
-      marginTop: 20,
-      marginBottom: 30,
-      marginGutter: 15,
-      marginOuter: 15,
-      fontSizePt: 14,
+      marginTop: 40,
+      marginBottom: 20,
+      marginGutter: 30,
+      marginOuter: 30,
+      fontSizePt: 32,
       lineSpacing: 1.75,
-      columnGap: 30,
-      charsPerLine: 12,
-      linesPerColumn: 12,
+      columnGap: 10,
+      // 同上: margin/fontから導出した値と一致させてある。
+      charsPerLine: 16,
+      linesPerColumn: 14,
       nombrePosition: 'center',
       nombreDistance: 8,
     },

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import {
+  computePageLayout,
   type ColumnCount,
   type HashiraPosition,
   type MasterPageSettings,
@@ -9,8 +10,6 @@ import {
   type PageLayout,
   type PageSettings,
   type PaperSizeKey,
-  pxToInternalFontSizePt,
-  pxToInternalMm,
   resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
@@ -50,8 +49,36 @@ const CAPACITY_MODE_TRIGGER_KEYS = new Set<keyof PageSettings>([
   "marginGutter",
 ]);
 
+// 数値1文字ぶんの入力途中（"4" → "42" の途中で "" や "4" を経由する等）で
+// geometry/pagination の再計算が走ってUIが固まるのを防ぐため、これらの
+// フィールドは「入力中のdraft文字列」として保持し、「設定を反映」操作で
+// まとめて validate した上で一括コミットする。用紙サイズpresetの切り替えや
+// layoutMode切り替えは（この一覧に関わらず）従来どおり即時反映のまま。
+const DRAFT_FIELD_KEYS = [
+  "marginTop",
+  "marginBottom",
+  "marginGutter",
+  "marginOuter",
+  "fontSizePt",
+  "lineHeightRatio",
+  "columnGapMm",
+  "charsPerLine",
+  "linesPerColumn",
+] as const;
+
+type DraftFieldKey = (typeof DRAFT_FIELD_KEYS)[number];
+type DraftValues = Record<DraftFieldKey, string>;
+
+const toDraftValues = (settings: PageSettings): DraftValues =>
+  Object.fromEntries(DRAFT_FIELD_KEYS.map((key) => [key, String(settings[key])])) as DraftValues;
+
 // 用紙サイズ・段数（1段/2段）の組み合わせごとの版面パラメータ一式を
 // PAPER_SIZE_TEMPLATES の cols1/cols2 から取り出して settings に反映する。
+// これらの値（marginTop/Bottom/Gutter/Outer=mm, fontSizePt=pt）は用紙が
+// isPx（Web閲覧用など）かどうかに関わらず常にcanonicalなmm/ptとして
+// そのまま settings に渡す——px→mm/pt変換が必要なのは用紙の外形
+// （width/height）だけで、それは pageLayout.ts の resolvePaperSize() 側で
+// 行われる。ここで変換すると computePageLayout() 側の変換と重複する。
 const applyPaperTemplate = (
   base: PageSettings,
   paperSize: PaperSizeKey,
@@ -59,25 +86,23 @@ const applyPaperTemplate = (
 ): PageSettings => {
   const template = PAPER_SIZE_TEMPLATES[paperSize];
   const profile = columnCount === 2 ? template.cols2 : template.cols1;
-  const isPx = template.isPx === true;
-  const toMm = (value: number) => (isPx ? pxToInternalMm(value) : value);
   return {
     ...base,
     paperSize,
     columnCount,
-    marginTop: toMm(profile.marginTop),
-    marginBottom: toMm(profile.marginBottom),
-    marginGutter: toMm(profile.marginGutter),
-    marginOuter: toMm(profile.marginOuter),
-    fontSizePt: isPx ? pxToInternalFontSizePt(profile.fontSizePt) : profile.fontSizePt,
+    marginTop: profile.marginTop,
+    marginBottom: profile.marginBottom,
+    marginGutter: profile.marginGutter,
+    marginOuter: profile.marginOuter,
+    fontSizePt: profile.fontSizePt,
     lineHeightRatio: profile.lineSpacing,
-    columnGapMm: toMm(profile.columnGap),
+    columnGapMm: profile.columnGap,
     charsPerLine: profile.charsPerLine,
     linesPerColumn: profile.linesPerColumn,
     masterPage: {
       ...base.masterPage,
       nombrePosition: profile.nombrePosition as NombrePosition,
-      nombreBottomMargin: toMm(profile.nombreDistance),
+      nombreBottomMargin: profile.nombreDistance,
     },
   };
 };
@@ -117,10 +142,15 @@ export default function PageSettingsPanel({
   // layoutMode に応じて、片方のパラメータ変更からもう片方を自動逆算する。
   // - "margin": 天地・ノド・小口余白 → charsPerLine / linesPerColumn
   // - "capacity": charsPerLine / linesPerColumn → marginOuter（小口余白）
+  //
+  // 戻り値が null の場合は「capacity → margin の逆算が物理的に成立しない」
+  // ことを意味し、呼び出し側は next の一部（marginOuterだけ等）を差し替えて
+  // 適用してはいけない。marginだけ旧値・capacityだけ新値という自己矛盾した
+  // settingsを作らないよう、変更全体を丸ごと不採用にする。
   const applyLayoutModeAdjustment = (
     next: PageSettings,
     changedKey: keyof PageSettings
-  ): PageSettings => {
+  ): PageSettings | null => {
     if (next.layoutMode === "margin" && MARGIN_MODE_TRIGGER_KEYS.has(changedKey)) {
       const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
         paperSize: next.paperSize,
@@ -137,7 +167,7 @@ export default function PageSettingsPanel({
     }
     if (next.layoutMode === "capacity" && CAPACITY_MODE_TRIGGER_KEYS.has(changedKey)) {
       const paper = resolvePaperSize(next.paperSize);
-      const { marginEdge } = calculateCustomLayout({
+      const { marginEdge, textAreaWidthMm } = calculateCustomLayout({
         paperWidth: paper.widthMm,
         marginGutter: next.marginGutter,
         fontSizePt: next.fontSizePt,
@@ -146,6 +176,28 @@ export default function PageSettingsPanel({
         columnsPerPage: next.columnCount,
         columnGapMm: next.columnGapMm,
       });
+      // Invariant, two failure modes:
+      // 1. `paper.widthMm - marginGutter - textAreaWidthMm < 0` — the
+      //    requested linesPerColumn needs a column wider than the paper
+      //    itself has room for at all (e.g. linesPerColumn=500 at a normal
+      //    font size). calculateCustomLayout's own `Math.max(0, …)` clamps
+      //    this to marginEdge=0 internally, which — checked in isolation —
+      //    looks like a perfectly ordinary "zero margin" result instead of
+      //    the physically-impossible target it actually is, so this must be
+      //    detected here from the *unclamped* quantities, not from marginEdge.
+      // 2. An outer margin wider than the text column it borders is never a
+      //    well-formed page (the "frame" bigger than the "picture") — e.g. a
+      //    linesPerColumn target far narrower than what marginGutter/
+      //    marginOuter would otherwise allow on that paper's width.
+      // Either way, returning null here (rather than silently keeping the
+      // old marginOuter while still applying the new charsPerLine/
+      // linesPerColumn in `next`) lets the caller reject the *entire*
+      // candidate settings object, so margin and capacity never end up
+      // describing two different, inconsistent page layouts at once.
+      const fitsOnPaper = paper.widthMm - next.marginGutter - textAreaWidthMm >= 0;
+      if (!fitsOnPaper || marginEdge > textAreaWidthMm) {
+        return null;
+      }
       return { ...next, marginOuter: marginEdge };
     }
     return next;
@@ -153,23 +205,150 @@ export default function PageSettingsPanel({
 
   const update = <K extends keyof PageSettings>(key: K, value: PageSettings[K]) => {
     const next = applyLayoutModeAdjustment({ ...settings, [key]: value }, key);
-    onChange(next);
+    if (next) onChange(next);
   };
 
-  const handleCharsPerLineChange = (value: number) => {
-    const next = applyLayoutModeAdjustment(
-      { ...settings, charsPerLine: value },
-      "charsPerLine"
-    );
-    onChange(next);
+  // 用紙サイズpreset・段数の切り替え直後は、テンプレートが持つ暫定
+  // charsPerLine/linesPerColumn をそのまま signal of truth として使わず、
+  // 常にそのテンプレートのmargin/fontから改めて算出し直す（現在の
+  // layoutModeが margin/capacity のどちらであっても関係なく）。これにより
+  // 「marginOuter=15と表示されているのにcharsPerLine/linesPerColumnはそれと
+  // 無関係な旧値のまま」という不整合が、preset適用の入り口で発生しなくなる。
+  const deriveCapacityFromCurrentMargins = (base: PageSettings): PageSettings => {
+    const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
+      paperSize: base.paperSize,
+      marginTop: base.marginTop,
+      marginBottom: base.marginBottom,
+      marginGutter: base.marginGutter,
+      marginOuter: base.marginOuter,
+      fontSizePt: base.fontSizePt,
+      lineHeightRatio: base.lineHeightRatio,
+      columnCount: base.columnCount,
+      columnGapMm: base.columnGapMm,
+    });
+    return { ...base, charsPerLine, linesPerColumn };
   };
 
-  const handleLinesPerColumnChange = (value: number) => {
-    const next = applyLayoutModeAdjustment(
-      { ...settings, linesPerColumn: value },
-      "linesPerColumn"
-    );
-    onChange(next);
+  // DRAFT_FIELD_KEYS の入力途中文字列。キー入力のたびに settings へ反映して
+  // computePageLayout/paginateTokens を毎回再計算させると、値によっては
+  // プレビュー全体が固まる（UXとして危険）ため、ここではdraftだけを更新し、
+  // 「設定を反映」（またはEnter）を押した時に限り一括で settings へコミットする。
+  const [draft, setDraft] = useState<DraftValues>(() => toDraftValues(settings));
+  const [commitError, setCommitError] = useState<string | null>(null);
+
+  // settings側のこれらのフィールドが実際に変わった時だけ（用紙サイズpreset
+  // 適用・段数変更・このパネル自身のコミット成功時など）draftを追従させる。
+  // settings全体を依存にすると、他パネル発の無関係な変更（例:
+  // PreviewPaneのノンブル非表示チェック）のたびに入力中のdraftが上書きされてしまう。
+  useEffect(() => {
+    setDraft(toDraftValues(settings));
+    setCommitError(null);
+  }, [
+    settings.marginTop,
+    settings.marginBottom,
+    settings.marginGutter,
+    settings.marginOuter,
+    settings.fontSizePt,
+    settings.lineHeightRatio,
+    settings.columnGapMm,
+    settings.charsPerLine,
+    settings.linesPerColumn,
+  ]);
+
+  const setDraftField = (key: DraftFieldKey, raw: string) => {
+    setDraft((prev) => ({ ...prev, [key]: raw }));
+    setCommitError(null);
+  };
+
+  const isDraftDirty = DRAFT_FIELD_KEYS.some((key) => draft[key] !== String(settings[key]));
+
+  const commitDraft = () => {
+    const parsed = {} as Record<DraftFieldKey, number>;
+    for (const key of DRAFT_FIELD_KEYS) {
+      const raw = draft[key].trim();
+      if (raw === "") {
+        setCommitError("すべての項目を入力してください。");
+        return;
+      }
+      const num = Number(raw);
+      if (!Number.isFinite(num)) {
+        setCommitError("数値として認識できない値があります。");
+        return;
+      }
+      parsed[key] = num;
+    }
+
+    if (
+      parsed.marginTop < 0 ||
+      parsed.marginBottom < 0 ||
+      parsed.marginGutter < 0 ||
+      parsed.marginOuter < 0
+    ) {
+      setCommitError("余白は0以上の値を指定してください。");
+      return;
+    }
+    if (parsed.fontSizePt <= 0) {
+      setCommitError("フォントサイズは0より大きい値を指定してください。");
+      return;
+    }
+    if (parsed.lineHeightRatio <= 0) {
+      setCommitError("行間倍率は0より大きい値を指定してください。");
+      return;
+    }
+    if (parsed.columnGapMm < 0) {
+      setCommitError("段間は0以上の値を指定してください。");
+      return;
+    }
+    if (parsed.charsPerLine < 0 || parsed.linesPerColumn < 0) {
+      setCommitError("1行の文字数・1段の行数は0以上の値を指定してください。");
+      return;
+    }
+
+    const rawCandidate: PageSettings = {
+      ...settings,
+      marginTop: parsed.marginTop,
+      marginBottom: parsed.marginBottom,
+      marginGutter: parsed.marginGutter,
+      marginOuter: parsed.marginOuter,
+      fontSizePt: parsed.fontSizePt,
+      lineHeightRatio: parsed.lineHeightRatio,
+      columnGapMm: parsed.columnGapMm,
+      charsPerLine: parsed.charsPerLine,
+      linesPerColumn: parsed.linesPerColumn,
+    };
+    // "marginTop" は MARGIN_MODE_TRIGGER_KEYS / CAPACITY_MODE_TRIGGER_KEYS の
+    // 両方に含まれるため、現在の layoutMode に対応する方の逆算だけが働く。
+    const candidate = applyLayoutModeAdjustment(rawCandidate, "marginTop");
+    if (!candidate) {
+      // capacity → margin の逆算が成立しない（小口が本文領域より広くなる
+      // 等）。marginだけ前回値・capacityだけ入力値、という自己矛盾した
+      // settingsを絶対に作らないため、変更全体を丸ごと不採用にし、
+      // 直前の正常な settings をそのまま維持する。
+      setCommitError(
+        "指定した文字数・行数では、現在の余白に収まる版面になりません。値を見直してください。"
+      );
+      return;
+    }
+
+    const candidateLayout = computePageLayout(candidate);
+    if (
+      candidateLayout.textAreaWidthMm <= 0 ||
+      candidateLayout.textAreaHeightMm <= 0 ||
+      candidateLayout.charsPerLine < 1 ||
+      candidateLayout.linesPerColumn < 1
+    ) {
+      setCommitError("この設定では本文領域を確保できません。値を見直してください。");
+      return;
+    }
+
+    setCommitError(null);
+    onChange(candidate);
+  };
+
+  const handleDraftKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    commitDraft();
   };
 
   const handleLayoutModeChange = (mode: PageSettings["layoutMode"]) => {
@@ -187,11 +366,13 @@ export default function PageSettingsPanel({
   };
 
   const handlePaperSizeChange = (key: PaperSizeKey) => {
-    onChange(applyPaperTemplate(settings, key, settings.columnCount));
+    const next = applyPaperTemplate(settings, key, settings.columnCount);
+    onChange(deriveCapacityFromCurrentMargins(next));
   };
 
   const handleColumnCountChange = (count: ColumnCount) => {
-    onChange(applyPaperTemplate(settings, settings.paperSize, count));
+    const next = applyPaperTemplate(settings, settings.paperSize, count);
+    onChange(deriveCapacityFromCurrentMargins(next));
   };
 
   const handleHideNombreOnFirstPageChange = (checked: boolean) => {
@@ -312,23 +493,27 @@ export default function PageSettingsPanel({
 
         <MarginField
           label="天（上）"
-          value={settings.marginTop}
-          onChange={(v) => update("marginTop", v)}
+          value={draft.marginTop}
+          onChange={(v) => setDraftField("marginTop", v)}
+          onKeyDown={handleDraftKeyDown}
         />
         <MarginField
           label="地（下）"
-          value={settings.marginBottom}
-          onChange={(v) => update("marginBottom", v)}
+          value={draft.marginBottom}
+          onChange={(v) => setDraftField("marginBottom", v)}
+          onKeyDown={handleDraftKeyDown}
         />
         <MarginField
           label="ノド（閉じ側）"
-          value={settings.marginGutter}
-          onChange={(v) => update("marginGutter", v)}
+          value={draft.marginGutter}
+          onChange={(v) => setDraftField("marginGutter", v)}
+          onKeyDown={handleDraftKeyDown}
         />
         <MarginField
           label="小口（外側）"
-          value={settings.marginOuter}
-          onChange={(v) => update("marginOuter", v)}
+          value={draft.marginOuter}
+          onChange={(v) => setDraftField("marginOuter", v)}
+          onKeyDown={handleDraftKeyDown}
           disabled={settings.layoutMode === "capacity"}
         />
 
@@ -356,8 +541,9 @@ export default function PageSettingsPanel({
             min={4}
             max={36}
             step={0.5}
-            value={settings.fontSizePt}
-            onChange={(e) => update("fontSizePt", Number(e.target.value))}
+            value={draft.fontSizePt}
+            onChange={(e) => setDraftField("fontSizePt", e.target.value)}
+            onKeyDown={handleDraftKeyDown}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
@@ -369,8 +555,9 @@ export default function PageSettingsPanel({
             min={1}
             max={3}
             step={0.1}
-            value={settings.lineHeightRatio}
-            onChange={(e) => update("lineHeightRatio", Number(e.target.value))}
+            value={draft.lineHeightRatio}
+            onChange={(e) => setDraftField("lineHeightRatio", e.target.value)}
+            onKeyDown={handleDraftKeyDown}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
@@ -396,9 +583,10 @@ export default function PageSettingsPanel({
             min={0}
             max={60}
             step={0.5}
-            value={settings.columnGapMm}
+            value={draft.columnGapMm}
             disabled={settings.columnCount === 1}
-            onChange={(e) => update("columnGapMm", Number(e.target.value))}
+            onChange={(e) => setDraftField("columnGapMm", e.target.value)}
+            onKeyDown={handleDraftKeyDown}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
@@ -409,9 +597,10 @@ export default function PageSettingsPanel({
             type="number"
             min={10}
             max={60}
-            value={settings.charsPerLine}
+            value={draft.charsPerLine}
             disabled={settings.layoutMode === "margin"}
-            onChange={(e) => handleCharsPerLineChange(Number(e.target.value))}
+            onChange={(e) => setDraftField("charsPerLine", e.target.value)}
+            onKeyDown={handleDraftKeyDown}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
@@ -422,12 +611,30 @@ export default function PageSettingsPanel({
             type="number"
             min={5}
             max={40}
-            value={settings.linesPerColumn}
+            value={draft.linesPerColumn}
             disabled={settings.layoutMode === "margin"}
-            onChange={(e) => handleLinesPerColumnChange(Number(e.target.value))}
+            onChange={(e) => setDraftField("linesPerColumn", e.target.value)}
+            onKeyDown={handleDraftKeyDown}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
+
+        {/* grid-cols-4 上で「段間mm・1行の文字数・1段の行数」が3枠を占め、
+            このセルが同じ行の空いた4枠目へ自然に収まる（col-spanなし）。 */}
+        <div className="flex flex-col justify-end gap-1">
+          <button
+            type="button"
+            onClick={commitDraft}
+            className="cursor-pointer select-none rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90"
+          >
+            設定を反映
+          </button>
+          {commitError ? (
+            <span className="text-xs text-red-600">{commitError}</span>
+          ) : isDraftDirty ? (
+            <span className="text-xs text-ink/50">未反映の変更があります</span>
+          ) : null}
+        </div>
       </div>
         </div>
       )}
@@ -718,11 +925,13 @@ function MarginField({
   label,
   value,
   onChange,
+  onKeyDown,
   disabled = false,
 }: {
   label: string;
-  value: number;
-  onChange: (value: number) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   disabled?: boolean;
 }) {
   return (
@@ -735,7 +944,8 @@ function MarginField({
         step={0.5}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
       />
     </label>

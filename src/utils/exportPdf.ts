@@ -1,12 +1,15 @@
 'use client';
 
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { resetScaleTransformOnClone } from './exportCapture';
+import { capturePageToCanvas } from './exportCapture';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
-// 全選択サイズ（mm）の判別マップ
+// 全選択サイズ（mm）の判別マップ。
+// Web閲覧用（isPxプリセット）はここに存在しない——px単位の用紙なので
+// mmの実寸表には載せられない。呼び出し側が customWidth/customHeight を
+// 明示的に渡すこと。渡さないと下の matchedKey 検索がヒットせず A5 に
+// フォールバックしてしまうので注意。
 export const PAPER_SIZES: Record<string, { width: number; height: number }> = {
   'A5': { width: 148, height: 210 },
   'B5': { width: 182, height: 257 },
@@ -19,10 +22,12 @@ export const PAPER_SIZES: Record<string, { width: number; height: number }> = {
 interface PdfOptions {
   mode: PdfExportMode;
   paperSizeName?: string; // 例: "A5", "B5", "新書" など
-  customWidth?: number;   // 直接数値指定の場合
-  customHeight?: number;  // 直接数値指定の場合
+  customWidth?: number;   // 直接数値指定の場合（mm）。Web閲覧用は必須
+  customHeight?: number;  // 直接数値指定の場合（mm）。Web閲覧用は必須
   bleed?: number;         // デフォルト: 3mm
   fileName?: string;
+  /** capturePageToCanvas の pixelRatio。印刷用の既定値4を維持しつつ、Web閲覧用は呼び出し側から1を渡す。 */
+  scale?: number;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -39,6 +44,7 @@ export async function exportCustomPdf(
     customHeight,
     bleed = 3,
     fileName = 'tatespun_document.pdf',
+    scale = 4,
     onProgress
   } = options;
 
@@ -81,13 +87,7 @@ export async function exportCustomPdf(
     if (onProgress) onProgress(i + 1, elements.length);
 
     const el = elements[i];
-    const canvas = await html2canvas(el, {
-      scale: 4,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      onclone: resetScaleTransformOnClone,
-    });
+    const canvas = await capturePageToCanvas(el, { pixelRatio: scale });
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
     if (mode === 'trim') {

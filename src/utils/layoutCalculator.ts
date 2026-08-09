@@ -26,6 +26,13 @@ export interface CustomLayoutInput {
 
 export interface CalculatedLayoutResult {
   marginEdge: number; // 自動調整された小口余白 (mm)
+  /**
+   * marginEdge が実際に隣接する本文領域の幅 (mm)。呼び出し側で
+   * 「余白が、それが縁取る本文領域より広い」という明らかに不自然な結果
+   * （例: Web閲覧用のプレースホルダーpreset値のように、linesPerColumn が
+   * 版面幅に対して極端に小さい場合）を弾くための invariant チェックに使う。
+   */
+  textAreaWidthMm: number;
 }
 
 /**
@@ -70,6 +77,7 @@ export function calculateCustomLayout(
   // below what's needed for `linesPerColumn` to still fit.
   return {
     marginEdge: Math.floor(calculatedMarginEdge * 10) / 10,
+    textAreaWidthMm,
   };
 }
 

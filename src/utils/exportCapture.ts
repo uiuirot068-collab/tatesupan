@@ -1,291 +1,125 @@
 'use client';
 
-/**
- * html2canvas recomputes its crop bounds from the *cloned* document after
- * `onclone` runs (see html2canvas's renderElement: `parseBounds` is called
- * on `clonedElement` post-clone). PreviewPane applies a responsive
- * `transform: scale(...)` (mobile auto-fit / manual zoom) to the page
- * container, so without this the clone's bounding rect — and therefore the
- * captured resolution and crop — reflects the shrunk on-screen size instead
- * of the manuscript's true dimensions. Stripping the transform on the clone
- * only (never the live, visible DOM) restores full-resolution, correctly
- * aligned capture regardless of current zoom/viewport.
- */
-export function resetScaleTransformOnClone(clonedDoc: Document): void {
-  clonedDoc.querySelectorAll<HTMLElement>('[data-export-scale-root]').forEach((el) => {
-    el.style.transform = 'none';
-    el.style.transition = 'none';
-  });
+import { toCanvas } from 'html-to-image';
 
-  resetPageCardTransforms(clonedDoc);
-  fixVerticalWritingModeLayout(clonedDoc);
-  fixExportedImageAspectRatio(clonedDoc);
-  sanitizeUnsupportedColorFunctions(clonedDoc);
-  applyExportOutputCleanup(clonedDoc);
+/**
+ * `pageElementsRef` in PreviewPane registers the wrapper div around each
+ * `PageCard` (which also holds the editor-only toolbar row and the
+ * "N ページ" label), not the `.page-card`/`[data-page-card]` element itself.
+ * Exporting that wrapper verbatim pulls that editor chrome into the
+ * captured image. `capturePageToCanvas` below resolves down to it first —
+ * the toolbar row and page-number label are siblings of `.page-card`, not
+ * descendants, so this excludes them without touching PageCard.tsx.
+ */
+export function resolvePageCardElement(root: HTMLElement): HTMLElement {
+  if (root.matches('.page-card, [data-page-card]')) return root;
+  return root.querySelector<HTMLElement>('.page-card, [data-page-card]') ?? root;
+}
+
+export interface CapturePageOptions {
+  /** Output canvas resolution multiplier relative to the captured page's canonical CSS px size. */
+  pixelRatio: number;
 }
 
 /**
- * `.page-card`/`[data-page-card]` (and their ancestors) can carry an
- * on-screen `transform: scale(...)` or `zoom` from responsive/manual
- * preview zoom. html2canvas computes vertical-rl glyph positions from the
- * clone's post-transform box, so a lingering scale/zoom makes tategaki text
- * overlap in the captured output. Force every page card and its ancestor
- * chain back to an unscaled, 100% layout before capture.
- */
-function resetPageCardTransforms(clonedDoc: Document): void {
-  const pageElements = clonedDoc.querySelectorAll<HTMLElement>('.page-card, [data-page-card]');
-  pageElements.forEach((el) => {
-    let current: HTMLElement | null = el;
-    while (current) {
-      current.style.setProperty('transform', 'none', 'important');
-      current.style.setProperty('zoom', '1', 'important');
-      current = current.parentElement;
-    }
-  });
-}
-
-
-/**
- * Keeps vertical-rl (tategaki) text blocks from shifting or clipping in the
- * clone: forces visible overflow and a stable positioning context so glyph
- * placement matches what's on screen instead of being recomputed against a
- * collapsed/scrolled box.
- */
-function fixVerticalWritingModeLayout(clonedDoc: Document): void {
-  clonedDoc.querySelectorAll<HTMLElement>('div, p, span').forEach((el) => {
-    const writingMode = clonedDoc.defaultView?.getComputedStyle(el).writingMode;
-    if (!writingMode || !writingMode.includes('vertical-rl')) return;
-
-    el.style.setProperty('writing-mode', 'vertical-rl', 'important');
-    el.style.setProperty('overflow', 'visible', 'important');
-    if (clonedDoc.defaultView?.getComputedStyle(el).position === 'static') {
-      el.style.setProperty('position', 'relative', 'important');
-    }
-  });
-}
-
-/**
- * Locks inserted `<img>` tags to their natural aspect ratio during capture
- * so cover/crop CSS applied for the live layout doesn't stretch or distort
- * them in the exported image.
- */
-function fixExportedImageAspectRatio(clonedDoc: Document): void {
-  clonedDoc
-    .querySelectorAll<HTMLImageElement>('img:not([data-logo-img]):not(.footer-logo)')
-    .forEach((img) => {
-      img.style.setProperty('object-fit', 'contain', 'important');
-      img.style.setProperty('width', '100%', 'important');
-      img.style.setProperty('height', 'auto', 'important');
-    });
-
-  clonedDoc
-    .querySelectorAll<HTMLImageElement>('img[data-logo-img], img.footer-logo')
-    .forEach((img) => {
-      img.style.setProperty('width', '12px', 'important');
-      img.style.setProperty('height', '12px', 'important');
-      img.style.setProperty('object-fit', 'contain', 'important');
-    });
-}
-
-/**
- * Final output cleanup for the exported capture: forces a pure white page
- * background (no off-white/cream tint), strips editor-only UI (checkboxes,
- * controls) that must never appear in the exported image, and hides the
- * bleed/guide dashed borders that are only meant for on-screen alignment.
- */
-function applyExportOutputCleanup(clonedDoc: Document): void {
-  clonedDoc.querySelectorAll<HTMLElement>('.page-card, [data-page-card], body').forEach((el) => {
-    el.style.setProperty('background-color', '#ffffff', 'important');
-    el.style.setProperty('background', '#ffffff', 'important');
-  });
-
-  clonedDoc
-    .querySelectorAll<HTMLElement>('input[type="checkbox"], .no-print, [data-no-print]')
-    .forEach((el) => {
-      el.style.setProperty('display', 'none', 'important');
-    });
-
-  clonedDoc.querySelectorAll<HTMLElement>('.border-dashed, [data-bleed-guide]').forEach((el) => {
-    el.style.setProperty('border-color', 'transparent', 'important');
-    el.style.setProperty('border', 'none', 'important');
-  });
-}
-
-/**
- * html2canvas's color parser doesn't understand `oklab()`/`oklch()` (used by
- * Tailwind v4's default palette), and throws instead of rendering. Replace
- * them in the clone only, right before capture. Covers `<style>` text,
- * inline `style` attributes (including CSS custom properties like `--tw-*`
- * that expand into oklab/oklch elsewhere), and constructed stylesheets whose
- * `cssRules` aren't reflected back into `style.innerHTML`.
+ * Shared capture entry point used by JPG/ZIP/PDF export alike (see
+ * exportImage.ts / exportPdf.ts) so all three formats rasterize the same
+ * page the same way.
  *
- * Mutating `style.innerHTML` in place does not refresh the document's CSSOM
- * (`document.styleSheets`) — the browser keeps the originally-parsed rules,
- * including the oklab/oklch ones, bound to that node. html2canvas reads
- * `clonedDoc.styleSheets`, so it would still see the un-sanitized colors.
- * Replacing the node outright (`replaceWith`) forces the browser to parse a
- * brand-new stylesheet from the cleaned text.
+ * This used to go through html2canvas, which reimplements CSS box/text
+ * layout in JS rather than using the browser's real renderer — it has no
+ * real support for `writing-mode: vertical-rl`, which is exactly why
+ * tategaki body text came out scattered/collapsed in JPG/ZIP/PDF while the
+ * live preview (real browser layout) stayed correct. html-to-image instead
+ * serializes the target's *computed* styles into an SVG `<foreignObject>`
+ * and lets the browser itself rasterize that via an `<img>` load — the same
+ * rendering engine that already draws the (correct) on-screen preview, so
+ * vertical-rl, ruby, oklch colors, image object-fit, etc. all come from real
+ * browser behavior instead of a reimplementation that has to be individually
+ * patched for each CSS feature it doesn't support.
  */
-const UNSUPPORTED_COLOR_DETECTOR = /lab\(|oklch|color-mix/i;
+export async function capturePageToCanvas(
+  root: HTMLElement,
+  { pixelRatio }: CapturePageOptions
+): Promise<HTMLCanvasElement> {
+  const target = resolvePageCardElement(root);
 
-/**
- * Replaces every balanced `name(...)` call in `text` for which `predicate`
- * returns true. Unlike a `[^)]+` regex, this tracks paren depth, so it
- * correctly consumes calls with nested parens — e.g.
- * `color-mix(in oklab, var(--tw-color), oklch(0.7 0.1 200))` — without
- * truncating at the first inner `)`.
- */
-function replaceBalancedCalls(
-  text: string,
-  name: string,
-  predicate: (fullMatch: string) => boolean,
-  replacement: string
-): string {
-  const needle = `${name}(`;
-  const lowerText = text.toLowerCase();
-  let result = '';
-  let i = 0;
-
-  while (i < text.length) {
-    const idx = lowerText.indexOf(needle, i);
-    if (idx === -1) {
-      result += text.slice(i);
-      break;
-    }
-    result += text.slice(i, idx);
-
-    let depth = 0;
-    let j = idx + name.length;
-    for (; j < text.length; j += 1) {
-      if (text[j] === '(') depth += 1;
-      else if (text[j] === ')') {
-        depth -= 1;
-        if (depth === 0) {
-          j += 1;
-          break;
-        }
-      }
-    }
-
-    const fullMatch = text.slice(idx, j);
-    result += predicate(fullMatch) ? replacement : fullMatch;
-    i = j;
+  // PreviewPane applies a responsive `transform: scale(...)` (mobile
+  // auto-fit / manual zoom / fit-to-pane presentation scale, see
+  // PreviewPane.tsx's `autoFitScale`) several ancestors up, on the
+  // `[data-export-scale-root]` wrapper. Unlike html2canvas's clone-then-fix
+  // approach, html-to-image renders the *live* node's current on-screen
+  // geometry, so that presentation-only transform must be neutralized on
+  // the real DOM for the moment of capture (and restored right after) —
+  // otherwise the exported canvas would reflect whatever zoom level the
+  // editor happened to be showing instead of the page's true canonical
+  // size. The brief flicker this causes is limited to an explicit export
+  // action.
+  const scaleRoot = target.closest<HTMLElement>('[data-export-scale-root]');
+  const previousTransform = scaleRoot?.style.transform ?? '';
+  const previousTransition = scaleRoot?.style.transition ?? '';
+  if (scaleRoot) {
+    scaleRoot.style.setProperty('transform', 'none');
+    scaleRoot.style.setProperty('transition', 'none');
   }
 
-  return result;
-}
+  try {
+    // Rasterizing mid-swap (e.g. before a webfont like Shippori Mincho has
+    // finished loading) would bake in the fallback face instead of the
+    // intended one.
+    await document.fonts.ready;
 
-/**
- * Strips `color-mix(in oklab|oklch, ...)` (Tailwind v4's default palette
- * mixing) and any bare `oklab()`/`oklch()` calls, replacing them with a
- * plain, html2canvas-safe color. `color-mix` is handled first, while its
- * contents still contain the `oklab`/`oklch` keyword/nested-call that marks
- * it as unsupported — otherwise the later oklab/oklch pass would consume the
- * nested calls first and erase that signal.
- */
-function sanitizeColorText(text: string): string {
-  let result = replaceBalancedCalls(
-    text,
-    'color-mix',
-    (match) => /lab\(|oklch/i.test(match),
-    'transparent'
-  );
-  // `oklch`/`oklab` must be stripped before the bare `lab` pass below —
-  // `oklab(` itself contains the literal substring `lab(`, so running the
-  // `lab` pass first would match inside it and leave a stray `ok` prefix.
-  result = replaceBalancedCalls(result, 'oklch', () => true, 'transparent');
-  result = replaceBalancedCalls(result, 'oklab', () => true, 'transparent');
-  result = replaceBalancedCalls(result, 'lab', () => true, 'transparent');
-  return result;
-}
+    // `.page-card` is `box-sizing: border-box` with a 1px border on every
+    // side (Tailwind's `border`), so `clientWidth`/`clientHeight` (content
+    // box, border excluded) read 2px narrower/shorter than the element's
+    // true outer size — e.g. Web閲覧用's canonical 768×1024 (set directly as
+    // its inline `width`/`height`, confirmed via `offsetWidth`/`offsetHeight`
+    // matching that inline style exactly) exported at 766×1024 clientWidth-
+    // measured. `offsetWidth`/`offsetHeight` include the border and so match
+    // the canonical size Web閲覧用 promises callers (768×1024 exactly, not
+    // "about" 768×1024) — used only for isPx pages here since print presets'
+    // existing capture pixel counts (already derived from clientWidth today)
+    // must stay exactly as they are this round.
+    const isPxPage = target.dataset.isPxPage === "true";
+    const width = isPxPage ? target.offsetWidth : target.clientWidth;
+    const height = isPxPage ? target.offsetHeight : target.clientHeight;
 
-/**
- * Properties whose resolved color most commonly leaks Tailwind v4's
- * oklab/oklch palette into html2canvas's parser.
- */
-const COLOR_PROPERTIES = [
-  'color',
-  'backgroundColor',
-  'borderTopColor',
-  'borderRightColor',
-  'borderBottomColor',
-  'borderLeftColor',
-  'outlineColor',
-  'fill',
-  'stroke',
-] as const;
-
-// `boxShadow` isn't a plain color — it's a shadow list (offsets/blur/spread
-// plus a color). `transparent` alone is not a valid `box-shadow` value, so
-// an unsupported color inside it is neutralized by dropping the shadow
-// entirely rather than by the blanket `transparent` used for color props.
-const SHADOW_PROPERTY = 'boxShadow' as const;
-
-function sanitizeUnsupportedColorFunctions(clonedDoc: Document): void {
-  clonedDoc.querySelectorAll('style').forEach((style) => {
-    const cssText = style.innerHTML;
-    if (UNSUPPORTED_COLOR_DETECTOR.test(cssText)) {
-      const newStyle = clonedDoc.createElement('style');
-      newStyle.innerHTML = sanitizeColorText(cssText);
-      style.replaceWith(newStyle);
+    return await toCanvas(target, {
+      pixelRatio,
+      width,
+      height,
+      backgroundColor: '#ffffff',
+      cacheBust: true,
+      // Excludes editor-only chrome that can appear *inside* `.page-card`
+      // (currently just the print-only trim/bleed guide, `[data-bleed-guide]`
+      // — checkboxes/toolbar/page-number label are siblings of `.page-card`,
+      // already excluded by resolvePageCardElement above). `node` can be a
+      // non-Element (e.g. a text node) at runtime despite the declared
+      // HTMLElement type, so guard with `instanceof Element` before calling
+      // `.matches`.
+      filter: (node) =>
+        !(node instanceof Element) ||
+        !node.matches('.no-print, [data-no-print], [data-bleed-guide]'),
+      // Root-only overrides: PageCard.tsx applies `border-accent`/`ring-2
+      // ring-accent` (a warm-gold accent color) to `.page-card` when the
+      // page is selected in the editor — purely an editor affordance that
+      // must never appear in an export regardless of the page's selection
+      // state. Tailwind's `ring-*` utilities composite into `box-shadow`,
+      // so clearing box-shadow/outline and resetting the border color
+      // removes both. The background override forces a pure white page
+      // (no off-white/cream `bg-paper` tint) independent of theme.
+      style: {
+        boxShadow: 'none',
+        outline: 'none',
+        borderColor: '#e5e7eb',
+        backgroundColor: '#ffffff',
+        background: '#ffffff',
+      },
+    });
+  } finally {
+    if (scaleRoot) {
+      scaleRoot.style.transform = previousTransform;
+      scaleRoot.style.transition = previousTransition;
     }
-  });
-
-  clonedDoc.querySelectorAll<HTMLElement>('*').forEach((el) => {
-    const attr = el.getAttribute('style');
-    if (attr && UNSUPPORTED_COLOR_DETECTOR.test(attr)) {
-      el.setAttribute('style', sanitizeColorText(attr));
-    }
-
-    const cssText = el.style?.cssText;
-    if (cssText && UNSUPPORTED_COLOR_DETECTOR.test(cssText)) {
-      el.style.cssText = sanitizeColorText(cssText);
-    }
-  });
-
-  Array.from(clonedDoc.styleSheets).forEach((sheet) => {
-    let rules: CSSRuleList;
-    try {
-      rules = sheet.cssRules;
-    } catch {
-      return;
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-      const rule = rules[i];
-      if (UNSUPPORTED_COLOR_DETECTOR.test(rule.cssText)) {
-        try {
-          sheet.deleteRule(i);
-          sheet.insertRule(sanitizeColorText(rule.cssText), i);
-        } catch {
-          // Rule can't be safely rewritten in place; leave it and rely on
-          // the style-attribute/inline-style/computed-style passes to mask
-          // its effect on the rendered elements instead.
-        }
-      }
-    }
-  });
-
-  // `getComputedStyle()` on the clone can still resolve to an oklab/oklch
-  // serialization even after the passes above — e.g. a cross-origin
-  // stylesheet whose `cssRules` threw above, or a browser that serializes
-  // `color-mix` results as `oklab(...)`. html2canvas reads computed style
-  // directly, so force those specific properties to a safe inline value
-  // whenever the computed result still contains an unsupported function.
-  clonedDoc.querySelectorAll<HTMLElement>('*').forEach((el) => {
-    const computed = clonedDoc.defaultView?.getComputedStyle(el);
-    if (!computed) return;
-
-    for (const prop of COLOR_PROPERTIES) {
-      const value = computed[prop];
-      if (value && UNSUPPORTED_COLOR_DETECTOR.test(value)) {
-        el.style.setProperty(prop.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`), 'transparent', 'important');
-      }
-    }
-
-    const shadow = computed[SHADOW_PROPERTY];
-    if (shadow && UNSUPPORTED_COLOR_DETECTOR.test(shadow)) {
-      el.style.setProperty('box-shadow', 'none', 'important');
-    }
-  });
+  }
 }
