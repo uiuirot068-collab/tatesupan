@@ -41,10 +41,13 @@ interface PreviewPaneProps {
   settings: PageSettings;
   layout: PageLayout;
   images: Record<string, string>;
+  /** Front/back stacking rank per image id (ImageRecord.layerOrder) — see PageCard.tsx's layering controls. */
+  imageLayerOrder: Record<string, number>;
   onContentChange?: (content: string) => void;
   onSettingsChange?: (settings: PageSettings) => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
+  onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
   isCollapsed?: boolean;
@@ -56,10 +59,12 @@ export default function PreviewPane({
   settings,
   layout,
   images,
+  imageLayerOrder,
   onContentChange,
   onSettingsChange,
   onImageAdd,
   onImageDelete,
+  onImageLayerChange,
   cursorIndex,
   isCollapsed = false,
   onToggleCollapse,
@@ -645,6 +650,15 @@ export default function PreviewPane({
     }
   };
 
+  // Images keep their own fixed widthMm/heightMm across paper/margin changes
+  // — those numbers are the "基準配置サイズ" (base placement size), the
+  // source of truth for the IMG marker, and are never rewritten by a paper
+  // switch alone. When the current page's usable area is smaller than that
+  // base size, PageCard scales the image down for *display only* (see
+  // `getDisplayImageSize` in PageCard.tsx); switching back to a paper with
+  // more room restores the original base size automatically since nothing
+  // was ever persisted. This keeps paper-size round-trips byte-for-byte
+  // reversible on the IMG marker / document content.
   const handleImagePositionChange =
     (index: number) => (imageId: string, position: ImagePosition) => {
       if (!onContentChange) return;
@@ -857,7 +871,28 @@ export default function PreviewPane({
           return (
             <div
               key={spreadIndex}
-              className="flex flex-row items-start"
+              // `items-stretch` (the flexbox default, made explicit here)
+              // makes both per-page wrapper columns in a spread exactly as
+              // tall as the taller one — whichever page has the 挿絵
+              // operation panel (divider + panel, 1+ wrapped lines) above
+              // its `.page-card`. Each wrapper's own child (`<PageCard>`)
+              // then inherits that same stretched height. Inside PageCard,
+              // the normal toolbar row stays at the top of that height
+              // (unchanged), while `.page-card` itself gets `margin-top:
+              // auto` (see PageCard.tsx) — an auto margin absorbs *all*
+              // leftover space above it, so it (and the page-number label
+              // right after it) gets pushed down to the shared bottom of
+              // the now-equal-height columns. Net effect: the normal
+              // toolbar top-aligns between spread pages, while the paper
+              // surface (`.page-card`) bottom- (and, when both sides are
+              // equally tall, top-) aligns — instead of the whole wrapper
+              // (toolbar included) shifting down together, which is what a
+              // simple `items-end` on this row did before. A lone page in a
+              // spread (page 1 + empty slot) is the row's only flex item,
+              // so stretching is a no-op there — its height already *is*
+              // the row's height, and its own `margin-top:auto` resolves
+              // to 0 (no leftover space to absorb).
+              className="flex flex-row items-stretch"
               style={{
                 gap: SPREAD_GAP_PX,
                 // A lone page always reserves the full 2-up spread width and
@@ -889,6 +924,7 @@ export default function PreviewPane({
                     settings={settings}
                     layout={layout}
                     images={images}
+                    imageLayerOrder={imageLayerOrder}
                     selected={selected.has(index)}
                     isDragging={dragIndex === index}
                     isDropTarget={dropIndex === index && dragIndex !== index}
@@ -901,6 +937,7 @@ export default function PreviewPane({
                     insertingImage={insertingImageIndex === index}
                     onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
                     onImageDelete={canReorder ? handleImageDelete(index) : undefined}
+                    onImageLayerChange={canReorder ? onImageLayerChange : undefined}
                     hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
                     onHideNombreChange={
                       onSettingsChange ? handleHideNombreChange(index + 1) : undefined

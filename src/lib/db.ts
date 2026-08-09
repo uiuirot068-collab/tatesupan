@@ -26,6 +26,15 @@ export interface ImageRecord {
   id: string;
   dataUrl: string;
   createdAt: number;
+  /**
+   * Front/back stacking rank among images sharing the same page + 天/中央/地
+   * position, independent of the IMG marker's position in `content` (which
+   * must stay untouched by layering so pagination/tokenLength are never
+   * affected). Undefined for images inserted before this field existed, or
+   * never explicitly reordered — callers fall back to document/token order
+   * in that case. Lower sorts further back; not required to be contiguous.
+   */
+  layerOrder?: number;
 }
 
 class TategakiDatabase extends Dexie {
@@ -164,4 +173,9 @@ export async function loadAllImages(): Promise<ImageRecord[]> {
 
 export async function deleteImage(id: string): Promise<void> {
   await db.images.delete(id);
+}
+
+/** Persists a single image's front/back stacking rank without touching its dataUrl/createdAt. */
+export async function updateImageLayerOrder(id: string, layerOrder: number): Promise<void> {
+  await db.images.update(id, { layerOrder });
 }

@@ -1,4 +1,4 @@
-import { Fragment, useRef, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import {
   computeParagraphStartFlags,
   type ImagePosition,
@@ -25,7 +25,10 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
   top: "天側（上部）",
   center: "中央",
   bottom: "地側（下部）",
-  full: "ページ全体",
+  // "全体を表示": FullPageImage below uses objectFit:"contain", not "cover" —
+  // this mode shows the whole image (letterboxed if needed), never crops it,
+  // so the label should promise that rather than implying a crop-to-fill.
+  full: "全体を表示",
 };
 
 interface PageCardProps {
@@ -36,6 +39,8 @@ interface PageCardProps {
   settings: PageSettings;
   layout: PageLayout;
   images: Record<string, string>;
+  /** Front/back stacking rank per image id (ImageRecord.layerOrder), independent of IMG marker/token order. */
+  imageLayerOrder: Record<string, number>;
   selected?: boolean;
   isDragging?: boolean;
   isDropTarget?: boolean;
@@ -48,6 +53,7 @@ interface PageCardProps {
   insertingImage?: boolean;
   onImagePositionChange?: (imageId: string, position: ImagePosition) => void;
   onImageDelete?: (imageId: string) => void;
+  onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   hideNombre?: boolean;
   onHideNombreChange?: (hideNombre: boolean) => void;
   /**
@@ -78,6 +84,7 @@ export default function PageCard({
   settings,
   layout,
   images,
+  imageLayerOrder,
   selected = false,
   isDragging = false,
   isDropTarget = false,
@@ -90,11 +97,20 @@ export default function PageCard({
   insertingImage = false,
   onImagePositionChange,
   onImageDelete,
+  onImageLayerChange,
   hideNombre = false,
   onHideNombreChange,
   chromeScale = 1,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Which of this page's inserted images the 挿絵 control bar below currently
+  // operates on. UI-only (not persisted) — deliberately not lifted to
+  // PreviewPane/document state, since a page's own image list already fully
+  // determines what's selectable, and keeping it page-local means it's
+  // trivially "cleaned up" for free (see the derivation below) whenever an
+  // image is deleted or pagination moves images on/off this page, without a
+  // separate effect to prune a stale id.
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const { paper } = layout;
   const { masterPage } = settings;
 
@@ -206,10 +222,64 @@ export default function PageCard({
   const flowTokens = page.tokens.filter((token) => token.type !== "image");
   const paragraphStarts = computeParagraphStartFlags(flowTokens, startsNewParagraph);
   const imageTokens = page.tokens.filter((token): token is ImageToken => token.type === "image");
+  // Falls back to the first image whenever `selectedImageId` doesn't match
+  // any image actually on this page — covers "nothing explicitly selected
+  // yet", "the selected image was just deleted", and "pagination moved the
+  // selected image to a different page" alike, with no explicit reset effect
+  // needed. With exactly one image this always resolves to that one image,
+  // satisfying "1枚なら自動的にその画像を対象にする" for free.
+  const selectedImage = imageTokens.find((token) => token.id === selectedImageId) ?? imageTokens[0];
   const fullImage = imageTokens.find((token) => token.position === "full");
   const topImages = imageTokens.filter((token) => token.position === "top");
   const centerImages = imageTokens.filter((token) => token.position === "center");
   const bottomImages = imageTokens.filter((token) => token.position === "bottom");
+  const fullImages = imageTokens.filter((token) => token.position === "full");
+
+  // The group of images that front/back layering moves `selectedImage`
+  // within — always just the images sharing its own 天/中央/地/全体 position
+  // on this same page, never a different page or a different position group.
+  const groupForPosition = (position: ImagePosition): ImageToken[] => {
+    switch (position) {
+      case "top":
+        return topImages;
+      case "center":
+        return centerImages;
+      case "bottom":
+        return bottomImages;
+      case "full":
+        return fullImages;
+    }
+  };
+  const selectedLayerGroup = selectedImage
+    ? orderedByLayer(groupForPosition(selectedImage.position), imageLayerOrder)
+    : [];
+  const selectedLayerIndex = selectedImage
+    ? selectedLayerGroup.findIndex((token) => token.id === selectedImage.id)
+    : -1;
+  const isBackmost = selectedLayerIndex <= 0;
+  const isFrontmost = selectedLayerIndex === selectedLayerGroup.length - 1;
+
+  const handleLayerMove = (direction: "front" | "back") => {
+    if (!selectedImage || !onImageLayerChange) return;
+    const ordered = selectedLayerGroup;
+    const fromIndex = selectedLayerIndex;
+    const toIndex = direction === "front" ? fromIndex + 1 : fromIndex - 1;
+    if (fromIndex === -1 || toIndex < 0 || toIndex >= ordered.length) return;
+    const reordered = [...ordered];
+    [reordered[fromIndex], reordered[toIndex]] = [reordered[toIndex], reordered[fromIndex]];
+    onImageLayerChange(reordered.map((token, index) => ({ id: token.id, layerOrder: index })));
+  };
+
+  // Render-only fit bounds for 天/中央/地 images, matching the bounds used at
+  // insertion time (see PreviewPane.tsx's handleInsertImage). token.widthMm/
+  // heightMm are the image's fixed "基準配置サイズ" (base placement size) —
+  // the source of truth persisted in the IMG marker — and are never mutated
+  // here. `getDisplayImageSize` only ever shrinks for display when the
+  // current page's usable area is smaller than that base size; switching to
+  // a paper with more room again naturally displays the base size, with
+  // nothing ever written back to content.
+  const maxImageWidthMm = layout.textAreaWidthMm * 0.9;
+  const maxImageHeightMm = layout.textAreaHeightMm * 0.6;
 
   // tategaki.ts が確定した論理行（各 <= charsPerLine 文字）をそのまま行要素
   // として描画する。ページ側で二重に linesPerPage/linesPerColumn を超えて
@@ -255,6 +325,22 @@ export default function PageCard({
       className={`flex shrink-0 flex-col items-center gap-2 rounded-md p-1 transition-colors ${
         isDropTarget ? "bg-accent/10 ring-2 ring-accent" : ""
       } ${isDragging ? "opacity-40" : ""}`}
+      // Without an explicit width here, this flex-col's auto width would
+      // normally just shrink-wrap to its widest child (`.page-card` below).
+      // But its `w-full` toolbar/image-bar rows contain children with
+      // `transform: scale(chromeScale)` — transform never affects layout
+      // size, so those rows' own max-content width is computed from their
+      // *pre*-scale (visually larger, when chromeScale<1) content. A
+      // percentage width (`w-full`) inside an auto-sized container resolves
+      // against that pre-scale content size instead of `.page-card`'s own
+      // (post-scale) width, so this column silently grew wider than one
+      // page — spilling the toolbar/image-bar into the neighboring page's
+      // slot in a spread. Pinning width to the exact same canonical value
+      // `.page-card` uses (`sheetStyle.width`, before the shared ancestor
+      // `presentationScale` transform) makes every `w-full` row resolve
+      // against the true one-page width, so `flex-wrap` wraps overflowing
+      // controls onto more lines instead of growing the column sideways.
+      style={{ width: sheetStyle.width }}
       draggable={isInteractive}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -330,38 +416,105 @@ export default function PageCard({
           </div>
         </div>
       )}
-      {isInteractive && imageTokens.length > 0 && (
-        <div
-          className="flex w-full flex-col gap-1 px-1"
-          style={{ transform: `scale(${chromeScale})`, transformOrigin: "top center" }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {imageTokens.map((token) => (
-            <div
-              key={token.id}
-              className="flex items-center gap-1.5 text-[10px] text-ink/60"
-              draggable={false}
-              onDragStart={(event) => event.stopPropagation()}
-            >
+      {isInteractive && imageTokens.length > 0 && selectedImage && (
+        <>
+          {/* Separates the normal per-page toolbar above (選択/ノンブル非表示/画像挿入)
+              from the 挿絵 operation panel below, so the two don't read as one
+              blended control group. */}
+          <div className="my-0.5 w-full border-t border-ink/10" aria-hidden="true" />
+          <div
+            className="flex flex-wrap items-end gap-x-2 gap-y-1.5 rounded-md border border-ink/10 bg-ink/5 px-1.5 py-1 text-[10px] text-ink/60"
+            style={{
+              // `width:100%` would resolve against the (fixed-width, see the
+              // root wrapper's own `style` above) parent — one page's width —
+              // *before* `zoom` below is applied. Budgeting the pre-zoom
+              // width as pageWidth/chromeScale means the zoomed result always
+              // lands back at exactly one page's width, whether chromeScale
+              // shrinks (<1) or enlarges (>1) it, so wrapped/enlarged content
+              // never spills into a neighboring page.
+              //
+              // This uses CSS `zoom`, not `transform: scale()`: transform
+              // never affects layout size, so when this panel's content
+              // wraps onto a 2nd line (e.g. all 8 controls at once on a
+              // narrow budget), a transform-scaled box's *painted* height
+              // still only reserves its *pre*-scale (1-line) height in the
+              // surrounding flex-col flow — the enlarged 2nd line then
+              // visually overlaps and paints underneath `.page-card`'s own
+              // opaque background right below it, making the wrapped
+              // controls invisible even though they exist in the DOM. `zoom`
+              // scales layout size too, so however many lines this panel
+              // wraps onto, the right amount of vertical space is reserved
+              // and every control stays visible.
+              width: (sheetStyle.width as number) / (chromeScale || 1),
+              zoom: chromeScale,
+            }}
+            onClick={(event) => event.stopPropagation()}
+            draggable={false}
+            onDragStart={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-end gap-1.5">
               <span className="shrink-0">挿絵</span>
-              <select
-                value={token.position}
-                onChange={(event) =>
-                  onImagePositionChange?.(token.id, event.target.value as ImagePosition)
-                }
-                className="rounded border border-ink/20 bg-transparent px-1 py-0.5 text-[10px]"
-              >
-                {(Object.keys(IMAGE_POSITION_LABELS) as ImagePosition[]).map((position) => (
-                  <option key={position} value={position}>
-                    {IMAGE_POSITION_LABELS[position]}
-                  </option>
-                ))}
-              </select>
+              {imageTokens.length > 1 && (
+                <select
+                  value={selectedImage.id}
+                  onChange={(event) => setSelectedImageId(event.target.value)}
+                  className="rounded border border-ink/20 bg-transparent px-1 py-0.5 text-[10px]"
+                  title="操作対象の画像を選択"
+                >
+                  {imageTokens.map((token, index) => (
+                    <option key={token.id} value={token.id}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="flex items-end gap-1.5">
+              {(Object.keys(IMAGE_POSITION_LABELS) as ImagePosition[]).map((position) => (
+                <button
+                  key={position}
+                  type="button"
+                  onClick={() => onImagePositionChange?.(selectedImage.id, position)}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] ${
+                    selectedImage.position === position
+                      ? "border-accent bg-accent text-paper-ink"
+                      : "border-ink/20 text-ink/60 hover:bg-ink/5"
+                  }`}
+                >
+                  {IMAGE_POSITION_LABELS[position]}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-end gap-1.5">
+              {imageTokens.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleLayerMove("back")}
+                    disabled={isBackmost}
+                    className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="背面へ"
+                    aria-label="背面へ"
+                  >
+                    背面へ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLayerMove("front")}
+                    disabled={isFrontmost}
+                    className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="前面へ"
+                    aria-label="前面へ"
+                  >
+                    前面へ
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   if (window.confirm("この画像を削除しますか？この操作は取り消せません。")) {
-                    onImageDelete?.(token.id);
+                    onImageDelete?.(selectedImage.id);
                   }
                 }}
                 className="rounded border border-ink/20 px-1 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10"
@@ -370,8 +523,8 @@ export default function PageCard({
                 削除
               </button>
             </div>
-          ))}
-        </div>
+          </div>
+        </>
       )}
       <div
         data-page-card="true"
@@ -386,7 +539,17 @@ export default function PageCard({
             ? "border-accent ring-2 ring-accent dark:border-accent"
             : "border-gray-200 dark:border-gray-700"
         }`}
-        style={sheetStyle}
+        // `marginTop: "auto"` on a flex-col child absorbs *all* leftover
+        // vertical space above it. PreviewPane's spread row now stretches
+        // both per-page columns to equal height (see its own comment) — the
+        // normal toolbar row (and, when present, the 挿絵 panel) stay at
+        // this column's top at their natural height, and this auto margin
+        // pushes `.page-card` (plus the page-number label right after it,
+        // via the existing `gap-2`) down to the column's bottom. When both
+        // spread pages have the same toolbar/panel height (including the
+        // common case of neither having a panel), there's no leftover space
+        // and this resolves to 0 — a no-op, matching prior behavior.
+        style={{ ...sheetStyle, marginTop: "auto" }}
       >
         {fullImage ? (
           <FullPageImage token={fullImage} images={images} />
@@ -454,13 +617,34 @@ export default function PageCard({
             )}
 
             {topImages.length > 0 && (
-              <ImagePositionOverlay tokens={topImages} images={images} position="top" />
+              <ImagePositionOverlay
+                tokens={topImages}
+                images={images}
+                position="top"
+                maxWidthMm={maxImageWidthMm}
+                maxHeightMm={maxImageHeightMm}
+                imageLayerOrder={imageLayerOrder}
+              />
             )}
             {centerImages.length > 0 && (
-              <ImagePositionOverlay tokens={centerImages} images={images} position="center" />
+              <ImagePositionOverlay
+                tokens={centerImages}
+                images={images}
+                position="center"
+                maxWidthMm={maxImageWidthMm}
+                maxHeightMm={maxImageHeightMm}
+                imageLayerOrder={imageLayerOrder}
+              />
             )}
             {bottomImages.length > 0 && (
-              <ImagePositionOverlay tokens={bottomImages} images={images} position="bottom" />
+              <ImagePositionOverlay
+                tokens={bottomImages}
+                images={images}
+                position="bottom"
+                maxWidthMm={maxImageWidthMm}
+                maxHeightMm={maxImageHeightMm}
+                imageLayerOrder={imageLayerOrder}
+              />
             )}
           </>
         )}
@@ -810,16 +994,63 @@ function renderNowrapProtected(value: string): ReactNode {
   );
 }
 
+// Sorts a same-page/same-position group of images back-to-front for layer
+// stacking: images with an explicit `layerOrder` (see lib/db.ts's
+// ImageRecord.layerOrder, set only by handleLayerMove below) sort by that
+// value; images that have never been layer-reordered fall back to their
+// position within `tokens` (i.e. document/token order — the pre-existing
+// behavior), so a page with no layering activity renders exactly as before.
+// Never reads or writes IMG marker/content — purely a display-order helper.
+function orderedByLayer(tokens: ImageToken[], layerOrder: Record<string, number>): ImageToken[] {
+  return tokens
+    .map((token, index) => ({ token, key: layerOrder[token.id] ?? index }))
+    .sort((a, b) => a.key - b.key)
+    .map((entry) => entry.token);
+}
+
+// Computes the render-only display size for a 天/中央/地 image: shrinks
+// (never enlarges — `Math.min(1, …)`) the image's fixed base widthMm/
+// heightMm to fit within the current page's usable area, using one shared
+// scale factor for both dimensions so aspect ratio can never drift. The
+// result is never written back to the token/content — it exists purely for
+// this render. When there's no usable-area constraint (or the base size is
+// degenerate), the base size itself is returned unchanged.
+function getDisplayImageSize(
+  token: ImageToken,
+  maxWidthMm: number,
+  maxHeightMm: number
+): { widthMm: number; heightMm: number } {
+  if (maxWidthMm <= 0 || maxHeightMm <= 0 || token.widthMm <= 0 || token.heightMm <= 0) {
+    return { widthMm: token.widthMm, heightMm: token.heightMm };
+  }
+  const displayScale = Math.min(1, maxWidthMm / token.widthMm, maxHeightMm / token.heightMm);
+  return { widthMm: token.widthMm * displayScale, heightMm: token.heightMm * displayScale };
+}
+
 /** Renders 挿絵 anchored to 天 (top) / 中央 (center) / 地 (bottom) of the page. */
 function ImagePositionOverlay({
   tokens,
   images,
   position,
+  maxWidthMm,
+  maxHeightMm,
+  imageLayerOrder,
 }: {
   tokens: ImageToken[];
   images: Record<string, string>;
   position: "top" | "center" | "bottom";
+  maxWidthMm: number;
+  maxHeightMm: number;
+  imageLayerOrder: Record<string, number>;
 }) {
+  // `tokens` keeps its original (document/token) order here so the flex-wrap
+  // left-to-right layout position of each image is never affected by
+  // layering — only paint/stacking order (via z-index below) reflects
+  // front/back moves. Flex items honor z-index directly (no `position`
+  // needed on the child), so images that visually overlap stack according
+  // to their layer rank while non-overlapping images keep their normal
+  // left-to-right placement.
+  const layerRank = new Map(orderedByLayer(tokens, imageLayerOrder).map((token, index) => [token.id, index]));
   const style: CSSProperties = {
     position: "absolute",
     left: 0,
@@ -841,14 +1072,16 @@ function ImagePositionOverlay({
       {tokens.map((token) => {
         const src = images[token.id];
         if (!src) return null;
+        const { widthMm, heightMm } = getDisplayImageSize(token, maxWidthMm, maxHeightMm);
         return (
           <img
             key={token.id}
             src={src}
             alt=""
             style={{
-              width: token.widthMm * PX_PER_MM,
-              height: token.heightMm * PX_PER_MM,
+              width: widthMm * PX_PER_MM,
+              height: heightMm * PX_PER_MM,
+              zIndex: layerRank.get(token.id),
               filter: "grayscale(100%)",
             }}
           />
@@ -871,7 +1104,16 @@ function FullPageImage({ token, images }: { token: ImageToken; images: Record<st
         inset: 0,
         width: "100%",
         height: "100%",
-        objectFit: "cover",
+        // "全体を表示" means the whole image stays visible, aspect ratio
+        // intact — "cover" (crop-to-fill) used to make the visible crop
+        // change with every paper preset's own width:height ratio, which
+        // read as the image itself distorting when switching papers even
+        // though no pixel was ever actually stretched. "contain" letterboxes
+        // instead of cropping, so switching papers only ever changes how
+        // much of `.page-card`'s own background shows around the image, not
+        // what part of the image itself is visible. `.page-card`'s existing
+        // background (no override here) shows through the letterbox area.
+        objectFit: "contain",
         filter: "grayscale(100%)",
       }}
     />

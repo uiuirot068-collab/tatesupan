@@ -9,6 +9,7 @@ import {
   loadDocument,
   saveDocument,
   saveImage,
+  updateImageLayerOrder,
   type ImageRecord,
 } from "@/lib/db";
 import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
@@ -47,6 +48,11 @@ export default function TategakiEditor({
   const isSampleRoute = documentId === SAMPLE_PROJECT.id;
   const [settings, setSettings] = useEditorSettings({ persist: !isSampleRoute });
   const [images, setImages] = useState<Record<string, string>>({});
+  // Front/back stacking rank per image id, sourced from ImageRecord.layerOrder
+  // (see lib/db.ts) — kept entirely separate from `content`/IMG markers so
+  // reordering layers never touches document text, tokenLength, or
+  // pagination. Images with no entry here fall back to document/token order.
+  const [imageLayerOrder, setImageLayerOrder] = useState<Record<string, number>>({});
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
@@ -100,6 +106,7 @@ export default function TategakiEditor({
         }
         applyCloudProject(project);
         setImages({});
+        setImageLayerOrder({});
         hasLoadedRef.current = true;
         setSaveStatus("saved");
         return;
@@ -126,6 +133,13 @@ export default function TategakiEditor({
         setSettings(doc.settings ?? DEFAULT_PAGE_SETTINGS);
       }
       setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
+      setImageLayerOrder(
+        Object.fromEntries(
+          imageRecords
+            .filter((record) => record.layerOrder !== undefined)
+            .map((record) => [record.id, record.layerOrder as number])
+        )
+      );
 
       loadedDocIdRef.current = id;
       setDocId(id);
@@ -181,6 +195,21 @@ export default function TategakiEditor({
     });
     if (isSampleDocument) return;
     deleteImage(id).catch(() => setSaveStatus("error"));
+  };
+
+  // Persists a front/back stacking swap for a small group of images (see
+  // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,
+  // so pagination/tokenLength are unaffected.
+  const handleImageLayerChange = (updates: { id: string; layerOrder: number }[]) => {
+    setImageLayerOrder((prev) => {
+      const next = { ...prev };
+      for (const update of updates) next[update.id] = update.layerOrder;
+      return next;
+    });
+    if (isSampleDocument) return;
+    for (const update of updates) {
+      updateImageLayerOrder(update.id, update.layerOrder).catch(() => setSaveStatus("error"));
+    }
   };
 
   useEffect(() => {
@@ -392,10 +421,12 @@ export default function TategakiEditor({
             settings={settings}
             layout={layout}
             images={images}
+            imageLayerOrder={imageLayerOrder}
             onContentChange={setContent}
             onSettingsChange={setSettings}
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
+            onImageLayerChange={handleImageLayerChange}
             cursorIndex={cursorIndex}
             isCollapsed={isPreviewCollapsed}
             onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
