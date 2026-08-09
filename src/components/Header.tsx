@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from './AuthProvider';
 import { AuthModal } from './AuthModal';
 import { ProjectListModal } from './ProjectListModal';
 import { Project } from '@/types/database';
+import ThemeToggle from './ThemeToggle';
 
 type SaveStatus = 'loading' | 'saved' | 'saving' | 'error';
 
@@ -48,16 +49,6 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-
-  useEffect(() => {
-    if (isDarkTheme) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-  }, [isDarkTheme]);
-
   const logoSrc = '/caroad_main2.png';
 
   return (
@@ -85,22 +76,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
       <div className="flex flex-wrap items-center gap-4 gap-y-2">
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isDarkTheme}
-            aria-label="テーマ切り替え"
-            onClick={() => setIsDarkTheme((prev) => !prev)}
-            className={`relative inline-flex h-5 w-10 flex-shrink-0 items-center rounded-full transition-colors ${
-              isDarkTheme ? 'bg-[#c5a059]' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                isDarkTheme ? 'translate-x-5' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <ThemeToggle />
         </div>
         {onOpenHelp && (
           <button

@@ -116,6 +116,11 @@ export function BookSpine({
     onCloseMenu();
   };
 
+  const cancelTitleEdit = () => {
+    setTitleDraft(title);
+    setIsEditingTitle(false);
+  };
+
   const handleTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     event.stopPropagation();
     if (event.key === "Enter") {
@@ -233,16 +238,33 @@ export function BookSpine({
                 </p>
               )}
               {isEditingTitle ? (
-                <input
-                  type="text"
-                  value={titleDraft}
-                  autoFocus
-                  aria-label="作品タイトル"
-                  onChange={(event) => setTitleDraft(event.target.value)}
-                  onBlur={() => void commitTitle()}
-                  onKeyDown={handleTitleKeyDown}
-                  className={styles.titleInput}
-                />
+                <div className={styles.titleEditor}>
+                  <input
+                    type="text"
+                    value={titleDraft}
+                    autoFocus
+                    aria-label="作品タイトル"
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onKeyDown={handleTitleKeyDown}
+                    className={styles.titleInput}
+                  />
+                  <div className={styles.titleEditorActions}>
+                    <button
+                      type="button"
+                      className={styles.cancelTitleButton}
+                      onClick={cancelTitleEdit}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.saveTitleButton}
+                      onClick={() => void commitTitle()}
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <button
                   type="button"

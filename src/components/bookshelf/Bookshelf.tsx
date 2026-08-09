@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Rack SVG segments intentionally use native img elements so their exact geometry joins without image optimization wrappers. */
 
 import type { DocumentRecord } from "@/lib/db";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookSpine, type BookSpineColors } from "./BookSpine";
 import styles from "./Bookshelf.module.css";
 
@@ -34,7 +34,28 @@ const RACK_END_WIDTH = 122.262;
 const RACK_CENTER_WIDTH = 117.27;
 const BOOK_PITCH = 52.5;
 const BOOKS_SIDE_SPACE = 70;
-const BOOKS_PER_SHELF = 8;
+const MAX_BOOKS_PER_SHELF = 8;
+
+function shelfMetrics(bookCount: number) {
+  const scaledCenterWidth = RACK_CENTER_WIDTH * RACK_SCALE;
+  const centerCount = Math.max(
+    1,
+    Math.ceil((bookCount * BOOK_PITCH - BOOKS_SIDE_SPACE) / scaledCenterWidth),
+  );
+  const rackSegmentCount = centerCount + 2;
+  const shelfWidth =
+    (RACK_END_WIDTH * 2 + RACK_CENTER_WIDTH * centerCount) * RACK_SCALE -
+    RACK_OVERLAP * (rackSegmentCount - 1);
+
+  return { centerCount, shelfWidth };
+}
+
+function booksThatFit(availableWidth: number): number {
+  for (let count = MAX_BOOKS_PER_SHELF; count > 1; count -= 1) {
+    if (shelfMetrics(count).shelfWidth <= availableWidth) return count;
+  }
+  return 1;
+}
 
 function colorsForDocument(id: number): BookSpineColors {
   return BOOK_COLORS[Math.abs(id) % BOOK_COLORS.length];
@@ -84,17 +105,37 @@ function RackSegment({ part, className, width, height }: RackSegmentProps) {
 
 export function Bookshelf({ documents, onOpen, onRename, onDelete }: BookshelfProps) {
   const [openMenuProjectId, setOpenMenuProjectId] = useState<number | null>(null);
+  const [booksPerShelf, setBooksPerShelf] = useState(MAX_BOOKS_PER_SHELF);
+  const [availableWidth, setAvailableWidth] = useState<number | null>(null);
+  const bookshelfRef = useRef<HTMLDivElement>(null);
   const regularDocuments = documents.filter((doc) => !doc.isSample);
   const sampleDocuments = documents.filter((doc) => doc.isSample);
   const shelfDocuments: DocumentRecord[][] = [];
 
-  for (let index = 0; index < regularDocuments.length; index += BOOKS_PER_SHELF) {
-    shelfDocuments.push(regularDocuments.slice(index, index + BOOKS_PER_SHELF));
+  useEffect(() => {
+    const bookshelf = bookshelfRef.current;
+    if (!bookshelf) return;
+
+    const updateLayout = (width: number) => {
+      setAvailableWidth(width);
+      setBooksPerShelf(booksThatFit(width));
+    };
+    const observer = new ResizeObserver(([entry]) => {
+      updateLayout(entry.contentRect.width);
+    });
+
+    updateLayout(bookshelf.clientWidth);
+    observer.observe(bookshelf);
+    return () => observer.disconnect();
+  }, []);
+
+  for (let index = 0; index < regularDocuments.length; index += booksPerShelf) {
+    shelfDocuments.push(regularDocuments.slice(index, index + booksPerShelf));
   }
 
   for (const sampleDocument of sampleDocuments) {
     const lastShelf = shelfDocuments.at(-1);
-    if (!lastShelf || lastShelf.length >= BOOKS_PER_SHELF) {
+    if (!lastShelf || lastShelf.length >= booksPerShelf) {
       shelfDocuments.push([sampleDocument]);
     } else {
       lastShelf.push(sampleDocument);
@@ -102,21 +143,20 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete }: BookshelfPr
   }
 
   return (
-    <div className={styles.bookshelf}>
+    <div className={styles.bookshelf} ref={bookshelfRef}>
       <div className={styles.shelves}>
         {shelfDocuments.map((shelf, shelfIndex) => {
-          const scaledCenterWidth = RACK_CENTER_WIDTH * RACK_SCALE;
-          const centerCount = Math.max(
-            1,
-            Math.ceil((shelf.length * BOOK_PITCH - BOOKS_SIDE_SPACE) / scaledCenterWidth),
-          );
-          const rackSegmentCount = centerCount + 2;
-          const shelfWidth =
-            (RACK_END_WIDTH * 2 + RACK_CENTER_WIDTH * centerCount) * RACK_SCALE -
-            RACK_OVERLAP * (rackSegmentCount - 1);
+          const { centerCount, shelfWidth } = shelfMetrics(shelf.length);
+          const needsOverflowFallback =
+            availableWidth !== null && shelfWidth > availableWidth;
 
           return (
-            <div key={shelfIndex} className={styles.shelfViewport}>
+            <div
+              key={shelfIndex}
+              className={`${styles.shelfViewport} ${
+                needsOverflowFallback ? styles.shelfViewportOverflow : ""
+              }`}
+            >
               <div className={styles.shelfStage} style={{ width: shelfWidth }}>
                 <div className={styles.booksRow}>
                   {shelf.map((doc) => (

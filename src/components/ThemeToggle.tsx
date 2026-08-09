@@ -1,30 +1,54 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark";
 
 const STORAGE_KEY = "theme";
+const THEME_CHANGE_EVENT = "tatespun-theme-change";
 
 function readStoredTheme(): Theme {
   if (typeof window === "undefined") return "light";
-  return localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  }
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(readStoredTheme);
+  const theme = useSyncExternalStore(
+    (onStoreChange) => {
+      const handleStorage = (event: StorageEvent) => {
+        if (event.key === STORAGE_KEY) onStoreChange();
+      };
+      window.addEventListener("storage", handleStorage);
+      window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+      return () => {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+      };
+    },
+    readStoredTheme,
+    () => "light",
+  );
   const isDark = theme === "dark";
 
-  // Re-apply after React's dev Strict Mode remount clears the attribute the
-  // inline bootstrap script set; a no-op in production.
+  // The layout bootstrap applies the stored theme before paint. This keeps the
+  // DOM attribute synchronized when the external store changes later.
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
   const toggle = () => {
     const next: Theme = isDark ? "light" : "dark";
-    localStorage.setItem(STORAGE_KEY, next);
-    setTheme(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Keep the selected theme for this page when storage is unavailable.
+    }
+    document.documentElement.setAttribute("data-theme", next);
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   };
 
   return (
@@ -33,18 +57,15 @@ export default function ThemeToggle() {
       onClick={toggle}
       role="switch"
       aria-checked={isDark}
+      aria-label="テーマ切り替え"
       suppressHydrationWarning
-      className="flex shrink-0 items-center gap-2 rounded-full border border-ink/20 px-2.5 py-1 text-xs font-medium text-ink/70 transition-colors hover:bg-ink/5"
+      className="relative inline-flex h-5 w-10 flex-shrink-0 items-center rounded-full bg-gray-300 transition-colors dark:bg-[#c5a059]"
     >
       {/* Visuals are driven purely by the dark: CSS variant (keyed off the
           data-theme attribute the bootstrap script sets pre-paint), not by
           this component's state, so there's nothing for SSR and the client's
           first render to disagree on. */}
-      <span className="flex h-4 w-8 shrink-0 items-center rounded-full border border-ink/30 p-0.5">
-        <span className="h-2.5 w-2.5 translate-x-0 rounded-full bg-accent transition-transform dark:translate-x-3.5" />
-      </span>
-      <span className="dark:hidden">生成り</span>
-      <span className="hidden dark:inline">ブラック</span>
+      <span className="inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform dark:translate-x-5" />
     </button>
   );
 }
