@@ -12,6 +12,8 @@ interface BookshelfProps {
   onOpen: (id: number) => void;
   onRename: (id: number, title: string) => Promise<void>;
   onDelete: (id: number) => void;
+  /** ログイン中、ローカル保存の作品に「ブラウザ保存」表示を出す */
+  showLocalOnlyLabel?: boolean;
 }
 
 const BOOK_COLORS: BookSpineColors[] = [
@@ -103,7 +105,7 @@ function RackSegment({ part, className, width, height }: RackSegmentProps) {
   );
 }
 
-export function Bookshelf({ documents, onOpen, onRename, onDelete }: BookshelfProps) {
+export function Bookshelf({ documents, onOpen, onRename, onDelete, showLocalOnlyLabel }: BookshelfProps) {
   const [openMenuProjectId, setOpenMenuProjectId] = useState<number | null>(null);
   const [booksPerShelf, setBooksPerShelf] = useState(MAX_BOOKS_PER_SHELF);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
@@ -167,6 +169,7 @@ export function Bookshelf({ documents, onOpen, onRename, onDelete }: BookshelfPr
                       characterCount={estimateCharCount(doc.content)}
                       isSample={doc.isSample}
                       isCollection={doc.isCollection}
+                      isLocalOnly={showLocalOnlyLabel && !doc.isSample}
                       showMenu={!doc.isSample}
                       menuId={`bookshelf-menu-${doc.id}`}
                       isMenuOpen={openMenuProjectId === doc.id}

@@ -23,6 +23,7 @@ interface BookSpineProps extends BookSpineColors {
   characterCount: number;
   isSample?: boolean;
   isCollection?: boolean;
+  isLocalOnly?: boolean;
   showMenu?: boolean;
   menuId: string;
   isMenuOpen: boolean;
@@ -45,6 +46,7 @@ export function BookSpine({
   characterCount,
   isSample,
   isCollection,
+  isLocalOnly,
   showMenu = true,
   menuId,
   isMenuOpen,
@@ -240,10 +242,11 @@ export function BookSpine({
               <p className={styles.menuTitle}>{fullTitle}</p>
               <p>最終更新: {updatedAtLabel}</p>
               <p>文字数目安: {characterCount} 字</p>
-              {(isSample || isCollection) && (
+              {(isSample || isCollection || isLocalOnly) && (
                 <p className={styles.bookLabels}>
                   {isSample && <span>サンプル</span>}
                   {isCollection && <span>短編集</span>}
+                  {isLocalOnly && <span>ブラウザ保存</span>}
                 </p>
               )}
               {isEditingTitle ? (

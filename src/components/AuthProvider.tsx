@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createClient } from '../lib/supabase/client';
+import { LOCAL_ONLY_NOTICE_SESSION_KEY } from '../lib/localOnlyNotice';
 
 interface AuthContextType {
   user: User | null;
@@ -35,10 +36,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+        // Allow the local-only works safety notice to reappear on the next login.
+        if (event === 'SIGNED_OUT') {
+          sessionStorage.removeItem(LOCAL_ONLY_NOTICE_SESSION_KEY);
+        }
       }
     );
 
