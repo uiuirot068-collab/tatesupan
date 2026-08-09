@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="117.27" height="53.635" viewBox="0 0 117.27 53.635" aria-hidden="true" focusable="false">
+  <g class="rack-body">
+    <rect y="5" width="117.27" height="43.635" fill="#C8C9CA"/>
+    <path d="M0 5h117.27M0 48.635h117.27"/>
+  </g>
+  <g class="rack-decoration"/>
+  <g class="rack-line" fill="#000000">
+    <path d="M0 0h117.27v5H0zM0 48.635h117.27v5H0z"/>
+  </g>
+</svg>

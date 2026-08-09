@@ -10,26 +10,12 @@ import {
   deleteDocument,
   ensureSampleProject,
   listDocuments,
-  type DocumentRecord,
 } from "@/lib/db";
 import { CombineModal } from "@/components/CombineModal";
 import { Header } from "@/components/Header";
+import { Bookshelf } from "@/components/bookshelf/Bookshelf";
 
 const FREE_DOCUMENT_LIMIT = 15;
-
-function estimateCharCount(content: string): number {
-  return content.replace(/\s/g, "").length;
-}
-
-function formatUpdatedAt(updatedAt: number): string {
-  return new Date(updatedAt).toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function Home() {
   const router = useRouter();
@@ -66,10 +52,10 @@ export default function Home() {
   const pendingDoc = documents?.find((doc) => doc.id === pendingDeleteId);
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div data-bookshelf-page className="flex min-h-dvh flex-col">
       <Header />
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center gap-8 px-4 py-10">
+      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center gap-8 px-4 py-10">
         <Image
           src="/caroad_main1.png"
           alt="縦書きWebエディタ"
@@ -79,7 +65,7 @@ export default function Home() {
           className="h-auto w-full max-w-[220px] sm:max-w-[260px]"
         />
 
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-4">
           <button
             type="button"
             onClick={handleCreate}
@@ -100,7 +86,7 @@ export default function Home() {
 
         <section className="w-full">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-ink/70">作品一覧</h2>
+            <h2 className="text-sm font-semibold text-ink/70">あなたの本棚</h2>
           </div>
 
           {documents === undefined && (
@@ -111,16 +97,16 @@ export default function Home() {
             <p className="text-sm text-ink/50">まだ作品がありません。上のボタンから作成してください。</p>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {documents?.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                doc={doc}
-                onOpen={() => router.push(`/editor?id=${doc.id}`)}
-                onDelete={() => setPendingDeleteId(doc.id)}
-              />
-            ))}
-          </div>
+          {documents && documents.length > 0 && (
+            <Bookshelf
+              documents={documents}
+              onOpen={(id) => router.push(`/editor?id=${id}`)}
+              onRename={async (id, title) => {
+                await db.documents.update(id, { title });
+              }}
+              onDelete={setPendingDeleteId}
+            />
+          )}
         </section>
       </main>
 
@@ -191,121 +177,6 @@ export default function Home() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function DocumentCard({
-  doc,
-  onOpen,
-  onDelete,
-}: {
-  doc: DocumentRecord;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(doc.title);
-
-  const startEditing = () => {
-    setTitleDraft(doc.title);
-    setIsEditingTitle(true);
-  };
-
-  const commitTitle = async () => {
-    const next = titleDraft.trim();
-    setIsEditingTitle(false);
-    if (next !== doc.title) {
-      await db.documents.update(doc.id, { title: next });
-    }
-  };
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={isEditingTitle ? undefined : onOpen}
-      onKeyDown={(e) => {
-        if (isEditingTitle) return;
-        if (e.key === "Enter" || e.key === " ") onOpen();
-      }}
-      className="flex cursor-pointer flex-col gap-2 rounded-lg border border-ink/10 bg-base p-4 text-left shadow-sm transition-colors hover:border-accent/60"
-    >
-      <div className="flex items-start justify-between gap-2">
-        {isEditingTitle ? (
-          <input
-            type="text"
-            value={titleDraft}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={() => commitTitle()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitTitle();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setIsEditingTitle(false);
-              }
-            }}
-            className="min-w-0 flex-1 rounded border border-accent/60 bg-base px-1.5 py-0.5 text-sm font-semibold text-ink outline-none"
-          />
-        ) : (
-          <h3
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              startEditing();
-            }}
-            className="line-clamp-2 flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-sm font-semibold text-ink"
-          >
-            <span className="line-clamp-2">{doc.title || "無題のドキュメント"}</span>
-            {doc.isSample && (
-              <span className="shrink-0 rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-                サンプル
-              </span>
-            )}
-            {doc.isCollection && (
-              <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                📚 短編集
-              </span>
-            )}
-          </h3>
-        )}
-        <div className="flex shrink-0 items-center gap-1">
-          {!isEditingTitle && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                startEditing();
-              }}
-              aria-label="タイトルを変更"
-              title="タイトルを変更"
-              className="rounded p-1 text-xs text-ink/40 hover:bg-ink/10 hover:text-ink"
-            >
-              ✎
-            </button>
-          )}
-          {!doc.isSample && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              aria-label="削除"
-              title="削除"
-              className="rounded p-1 text-xs text-ink/40 hover:bg-red-500/10 hover:text-red-500"
-            >
-              削除
-            </button>
-          )}
-        </div>
-      </div>
-      <p className="text-xs text-ink/50">最終更新: {formatUpdatedAt(doc.updatedAt)}</p>
-      <p className="text-xs text-ink/50">文字数目安: {estimateCharCount(doc.content)} 字</p>
     </div>
   );
 }

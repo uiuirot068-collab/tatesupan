@@ -23,6 +23,7 @@ import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
 import HelpModal from "./HelpModal";
 import { Header } from "./Header";
+import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -36,7 +37,8 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [plotNote, setPlotNote] = useState("");
-  const [settings, setSettings] = useEditorSettings();
+  const isSampleRoute = documentId === SAMPLE_PROJECT.id;
+  const [settings, setSettings] = useEditorSettings({ persist: !isSampleRoute });
   const [images, setImages] = useState<Record<string, string>>({});
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -60,6 +62,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   const mainRef = useRef<HTMLElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
+  const isSampleDocument = docId === SAMPLE_PROJECT.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +137,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   const handleImageAdd = (record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
+    if (isSampleDocument) return;
     saveImage(record).catch(() => setSaveStatus("error"));
   };
 
@@ -143,6 +147,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
       delete next[id];
       return next;
     });
+    if (isSampleDocument) return;
     deleteImage(id).catch(() => setSaveStatus("error"));
   };
 
@@ -152,6 +157,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
     // still hold the previous document's fields for one tick after docId
     // changes but before the new document's data has fully loaded.
     if (loadedDocIdRef.current !== docId) return;
+    if (docId === SAMPLE_PROJECT.id) return;
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -185,6 +191,10 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
 
   const saveNow = () => {
     if (docId === null || loadedDocIdRef.current !== docId) return;
+    if (isSampleDocument) {
+      showToast("使い方ガイドでの編集内容は保存されません");
+      return;
+    }
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaveStatus("saving");
     saveDocument(docId, title, content, settings, plotNote)
@@ -198,6 +208,7 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
   const handleSave = async () => {
+    if (isSampleDocument) return;
     setIsSaving(true);
     try {
       const result = currentProjectId
@@ -249,12 +260,18 @@ export default function TategakiEditor({ documentId }: { documentId?: number }) 
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
       <Header
-        onSave={handleSave}
-        onSelectProject={handleSelectProject}
+        onSave={isSampleDocument ? undefined : handleSave}
+        onSelectProject={isSampleDocument ? undefined : handleSelectProject}
         isSaving={isSaving}
-        saveStatus={saveStatus}
+        saveStatus={isSampleDocument ? undefined : saveStatus}
         onOpenHelp={() => setIsHelpOpen(true)}
       />
+
+      {isSampleDocument && (
+        <p className="mx-auto -my-3 rounded-full bg-[#c5a059]/15 px-3 py-1 text-xs font-medium text-[#6f5727]">
+          使い方ガイドでの編集内容は保存されません
+        </p>
+      )}
 
       {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
 

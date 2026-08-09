@@ -1,6 +1,6 @@
 export const SAMPLE_PROJECT = {
   id: -1, // サンプル専用固定ID
-  title: '【使い方ガイド】タテスパンへようこそ',
+  title: '使い方ガイド',
   isSample: true,
   content: `タテスパンをご利用いただきありがとうございます。
 この作品は操作方法の確認やプレビュー表示を試すためのサンプルテキストです。

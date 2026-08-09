@@ -71,6 +71,20 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
   };
 }
 
+function sampleDocument(updatedAt: number): DocumentRecord {
+  return {
+    id: SAMPLE_PROJECT.id,
+    title: SAMPLE_PROJECT.title,
+    content: SAMPLE_PROJECT.content,
+    isSample: true,
+    settings: DEFAULT_PAGE_SETTINGS,
+    plotNote: "",
+    updatedAt,
+    isCollection: false,
+    includedDocumentIds: [],
+  };
+}
+
 /** サンプル作品が未登録の場合、削除不可の初期サンプルとして IndexedDB に登録する。 */
 export async function ensureSampleProject(): Promise<void> {
   const existing = await db.documents.get(SAMPLE_PROJECT.id);
@@ -88,16 +102,15 @@ export async function ensureSampleProject(): Promise<void> {
 
 export async function listDocuments(): Promise<DocumentRecord[]> {
   const docs = await db.documents.orderBy("updatedAt").reverse().toArray();
-  const [samples, rest] = [
-    docs.filter((doc) => doc.isSample),
-    docs.filter((doc) => !doc.isSample),
-  ];
-  return [...samples, ...rest].map(withDefaults);
+  return docs.map((doc) =>
+    doc.id === SAMPLE_PROJECT.id ? sampleDocument(doc.updatedAt) : withDefaults(doc)
+  );
 }
 
 export async function loadDocument(id: number): Promise<DocumentRecord | undefined> {
   const doc = await db.documents.get(id);
   if (!doc) return undefined;
+  if (id === SAMPLE_PROJECT.id) return sampleDocument(doc.updatedAt);
   return withDefaults(doc);
 }
 
@@ -123,6 +136,7 @@ export async function saveDocument(
   plotNote: string,
   collection?: { isCollection?: boolean; includedDocumentIds?: number[] }
 ): Promise<void> {
+  if (id === SAMPLE_PROJECT.id) return;
   await db.documents.put({
     id,
     title,

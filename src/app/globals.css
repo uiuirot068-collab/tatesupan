@@ -39,6 +39,15 @@ body {
   box-sizing: border-box;
 }
 
+html:has([data-bookshelf-page]),
+body:has([data-bookshelf-page]) {
+  width: 100%;
+  height: auto;
+  min-height: 100%;
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+}
+
 body {
   background: var(--canvas);
   color: var(--ink);

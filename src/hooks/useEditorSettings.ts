@@ -40,24 +40,25 @@ function loadStoredSettings(): PageSettings | null {
  * localStorage there would make the client's hydration render diverge from
  * the server-rendered HTML and trigger a hydration error).
  */
-export function useEditorSettings() {
+export function useEditorSettings({ persist = true }: { persist?: boolean } = {}) {
   const [settings, setSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
+    if (!persist) return;
     const stored = loadStoredSettings();
     if (stored) setSettings(stored);
     hasLoadedRef.current = true;
-  }, []);
+  }, [persist]);
 
   useEffect(() => {
-    if (!hasLoadedRef.current || typeof window === "undefined") return;
+    if (!persist || !hasLoadedRef.current || typeof window === "undefined") return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch {
       // Ignore storage failures (e.g. private browsing quota exceeded).
     }
-  }, [settings]);
+  }, [persist, settings]);
 
   return [settings, setSettings] as const;
 }
