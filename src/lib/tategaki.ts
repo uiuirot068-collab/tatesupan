@@ -741,16 +741,48 @@ export function computePageParagraphStarts(pages: TategakiPage[]): boolean[] {
   return flags;
 }
 
+/** Serializes a single image token back to its 【IMG:...】 marker form (see `MARKER_PATTERN`). */
+export function formatImageMarker(token: Extract<TategakiToken, { type: "image" }>): string {
+  return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}:${token.position}】`;
+}
+
 /** Reverses `tokenizeTategaki`, re-serializing ruby/image tokens back to their marker form. */
 export function detokenizeTategaki(tokens: TategakiToken[]): string {
   return tokens
     .map((token) => {
       if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
-      if (token.type === "image") {
-        return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}:${token.position}】`;
-      }
+      if (token.type === "image") return formatImageMarker(token);
       if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
       return token.value;
     })
     .join("");
+}
+
+/**
+ * Finds the exact `[start, end)` span of a specific image's 【IMG:...】
+ * marker within raw source text, by reusing `tokenizeTategakiWithOffsets`
+ * (the same tokenizer pagination itself runs) rather than a hand-rolled
+ * regex — so this can never disagree with how the rest of the pipeline
+ * parses markers. Built for image-editing operations that must splice the
+ * original source string in place (insert/replace/delete just this one
+ * marker) instead of detokenizing and rewriting an entire page: pagination
+ * tokens are a display-oriented, intentionally lossy view of the source
+ * (see `paginateTokensByLines`'s redundant-`\n` consumption), so
+ * reconstructing text from them and writing it back as the saved document
+ * would silently drop characters the pagination pass never round-trips.
+ * Returns `null` if no marker with that id exists in `source`. If more than
+ * one marker somehow shares an id (ids are `crypto.randomUUID()`-generated
+ * and nothing else in this codebase mints or duplicates them, so this
+ * shouldn't occur in practice), the first match wins.
+ */
+export function findImageTokenRange(
+  source: string,
+  imageId: string
+): { start: number; end: number; token: Extract<TategakiToken, { type: "image" }> } | null {
+  for (const { token, start, end } of tokenizeTategakiWithOffsets(source)) {
+    if (token.type === "image" && token.id === imageId) {
+      return { start, end, token };
+    }
+  }
+  return null;
 }

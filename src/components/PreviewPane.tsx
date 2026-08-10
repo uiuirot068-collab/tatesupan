@@ -12,7 +12,9 @@ import {
   computePageParagraphStarts,
   computePageSourceRanges,
   detokenizeTategaki,
+  findImageTokenRange,
   findPageIndexForCharIndex,
+  formatImageMarker,
   paginateTokens,
   tokenizeTategaki,
   type ImagePosition,
@@ -616,16 +618,15 @@ export default function PreviewPane({
     setDropIndex(null);
   };
 
-  // Replaces just the affected page's own source range within `content`
-  // (per `pageSourceRanges`), leaving every other page's text — including
-  // any 【改ページ】 markers between pages — completely untouched. Also
-  // sidesteps any `tokens`/`columns` mismatch: since no TategakiPage object
-  // is mutated or copied here, there's nothing that could disagree.
-  const replacePageContent = (index: number, tokens: TategakiPage["tokens"]) => {
-    const range = pageSourceRanges[index];
-    onContentChange?.(content.slice(0, range.start) + detokenizeTategaki(tokens) + content.slice(range.end));
-  };
-
+  // Every image-editing operation below splices `content` (the sole source
+  // of truth — see PreviewPane's `content` prop) directly, locating the
+  // target marker via `findImageTokenRange` and replacing/inserting/
+  // deleting only that marker's own span. None of them detokenize a whole
+  // page's tokens: `pages[index].tokens` is pagination's display-oriented
+  // token stream, which intentionally drops characters that don't
+  // round-trip (e.g. a "\n" redundant with an auto-wrapped line — see
+  // `paginateTokensByLines`), so rewriting a page from it would silently
+  // eat unrelated newlines/ruby/【改ページ】 markers elsewhere on that page.
   const handleInsertImage = (index: number) => async (file: File) => {
     if (!onContentChange) return;
     const isPsd = file.name.toLowerCase().endsWith(".psd");
@@ -639,10 +640,13 @@ export default function PreviewPane({
       );
       const id = crypto.randomUUID();
       onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
-      replacePageContent(index, [
-        ...pages[index].tokens,
-        { type: "image" as const, id, widthMm, heightMm, position: "center" as const },
-      ]);
+      // Appended at this page's own source-range end (before any trailing
+      // 【改ページ】 marker, per `computePageSourceRanges`) — the same
+      // insertion point the old tokens-append + detokenize approach
+      // produced, just without reconstructing the rest of the page's text.
+      const insertAt = pageSourceRanges[index].end;
+      const marker = formatImageMarker({ type: "image", id, widthMm, heightMm, position: "center" });
+      onContentChange(content.slice(0, insertAt) + marker + content.slice(insertAt));
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像の挿入に失敗しました。");
     } finally {
@@ -659,23 +663,19 @@ export default function PreviewPane({
   // more room restores the original base size automatically since nothing
   // was ever persisted. This keeps paper-size round-trips byte-for-byte
   // reversible on the IMG marker / document content.
-  const handleImagePositionChange =
-    (index: number) => (imageId: string, position: ImagePosition) => {
-      if (!onContentChange) return;
-      replacePageContent(
-        index,
-        pages[index].tokens.map((token) =>
-          token.type === "image" && token.id === imageId ? { ...token, position } : token
-        )
-      );
-    };
-
-  const handleImageDelete = (index: number) => (imageId: string) => {
+  const handleImagePositionChange = () => (imageId: string, position: ImagePosition) => {
     if (!onContentChange) return;
-    replacePageContent(
-      index,
-      pages[index].tokens.filter((token) => !(token.type === "image" && token.id === imageId))
-    );
+    const match = findImageTokenRange(content, imageId);
+    if (!match) return;
+    const marker = formatImageMarker({ ...match.token, position });
+    onContentChange(content.slice(0, match.start) + marker + content.slice(match.end));
+  };
+
+  const handleImageDelete = () => (imageId: string) => {
+    if (!onContentChange) return;
+    const match = findImageTokenRange(content, imageId);
+    if (!match) return;
+    onContentChange(content.slice(0, match.start) + content.slice(match.end));
     onImageDelete?.(imageId);
   };
 
@@ -935,8 +935,8 @@ export default function PreviewPane({
                     onDragEnd={canReorder ? handleDragEnd : undefined}
                     onInsertImage={canReorder ? handleInsertImage(index) : undefined}
                     insertingImage={insertingImageIndex === index}
-                    onImagePositionChange={canReorder ? handleImagePositionChange(index) : undefined}
-                    onImageDelete={canReorder ? handleImageDelete(index) : undefined}
+                    onImagePositionChange={canReorder ? handleImagePositionChange() : undefined}
+                    onImageDelete={canReorder ? handleImageDelete() : undefined}
                     onImageLayerChange={canReorder ? onImageLayerChange : undefined}
                     hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
                     onHideNombreChange={
