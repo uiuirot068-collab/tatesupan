@@ -1227,16 +1227,31 @@ function rubyBaseGlyphLaneWidthPx(fontSizePx: number): number {
  * rubyのrt（読み）だけを、対応するbase slot範囲[startSlot, startSlot+slotCount)
  * の脇（ruby lane内）へ独立して重ね描画する。base文字（`slots`側で通常
  * 文字と同じcellとして描画済み）の座標・サイズには一切影響しない —
- * native <ruby>/<rt>は使わない。
+ * native <ruby>/<rt>は使わない。横方向位置(left/width)はG2cまでと不変。
  *
- * ruby laneはcolumnThicknessPxの内側に収まる固定幅のため、rtの文字数が
- * 多い（base文字数に対してrtが長い）ケースでbase slot範囲の高さ
- * (annotation.slotCount * slotExtentPx)を超えてrtがはみ出すと、
- * flexのcenteringにより見た目上baseから離れて浮いて見える（実ブラウザQA
- * で報告された「花厳は近いが特等席・長《naga》は離れすぎる」の原因）。
- * これを避けるため、rtのfont-sizeを「base slot範囲の高さ ÷ rt文字数」を
- * 上限として動的に縮小し、base文字数・rt文字数に関わらず必ずbase slot
- * 範囲内へ収める。
+ * rubyのfont-sizeはrt文字数で縮小しない（fontSizePx/2固定）。
+ *
+ * rt全体を1個のtext nodeとしてブラウザの自然layout（flexの中央寄せ）に
+ * 任せていた前実装は、その1個のtext nodeが持つ「行ボックス」の開始位置
+ * （font metrics由来のascent/leading）がスクリプトによって微妙に異なり、
+ * 例えば「長《naga》」のように欧文rtだと「長《なが》」の仮名rtに対して
+ * 数px下にずれて見える原因になっていた。本修正ではrt文字を
+ * Array.from(rt)で1文字ずつに分解し、各文字を
+ * `rubyBlockTop + i * rubyPitchPx` という完全に自前計算した固定座標へ
+ * 個別配置する——1cellに1文字しか入らないため、ブラウザの複数文字
+ * text-layout/line-box依存が構造的になくなり、スクリプトに関係なく
+ * annotation blockの先頭位置が揃う。
+ *
+ * rubyPitchPxはrubyFontSizePxに固定tracking(0.1em相当)を足した値。
+ * rt/base文字数によらず常に同じpitchを使う（新規のspace-betweenや
+ * base範囲への均等割付はしない）。
+ *
+ *   - rtExtentPx(= rt文字数 × rubyPitchPx) <= baseExtentPx:
+ *     rubyBlockTop = baseStartTop + (baseExtentPx - rtExtentPx) / 2
+ *     （文字列はpitchのまま、ひとかたまりとしてbase範囲の中央へ）
+ *   - rtExtentPx > baseExtentPx:
+ *     rubyBlockTop = baseStartTop（base開始位置と正確に一致、
+ *     base範囲を縦方向に越えて続く。line自体のheight/widthは変えない）
  */
 function FixedSlotRubyAnnotation({
   annotation,
@@ -1251,32 +1266,43 @@ function FixedSlotRubyAnnotation({
   rubyLaneWidthPx: number;
   fontSizePx: number;
 }) {
-  const availableHeightPx = annotation.slotCount * slotExtentPx;
-  const rtCharCount = Math.max(1, Array.from(annotation.rt).length);
-  const maxRtFontSizePx = fontSizePx / 2;
-  const rtFontSizePx = Math.min(maxRtFontSizePx, availableHeightPx / rtCharCount);
+  const baseStartTop = annotation.startSlot * slotExtentPx;
+  const baseExtentPx = annotation.slotCount * slotExtentPx;
+
+  const rubyFontSizePx = fontSizePx / 2;
+  const rubyTrackingPx = rubyFontSizePx * 0.1;
+  const rubyPitchPx = rubyFontSizePx + rubyTrackingPx;
+
+  const rtChars = Array.from(annotation.rt);
+  const rtExtentPx = Math.max(1, rtChars.length) * rubyPitchPx;
+  const rubyBlockTop =
+    rtExtentPx <= baseExtentPx ? baseStartTop + (baseExtentPx - rtExtentPx) / 2 : baseStartTop;
 
   return (
-    <span
-      style={{
-        position: "absolute",
-        top: annotation.startSlot * slotExtentPx,
-        left: baseGlyphLaneWidthPx,
-        width: rubyLaneWidthPx,
-        height: availableHeightPx,
-        overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        writingMode: "vertical-rl",
-        fontSize: `${rtFontSizePx}px`,
-        lineHeight: 1,
-        color: "#000000",
-        pointerEvents: "none",
-      }}
-    >
-      {annotation.rt}
-    </span>
+    <>
+      {rtChars.map((ch, index) => (
+        <span
+          key={index}
+          style={{
+            position: "absolute",
+            top: rubyBlockTop + index * rubyPitchPx,
+            left: baseGlyphLaneWidthPx,
+            width: rubyLaneWidthPx,
+            height: rubyPitchPx,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            writingMode: "vertical-rl",
+            fontSize: `${rubyFontSizePx}px`,
+            lineHeight: 1,
+            color: "#000000",
+            pointerEvents: "none",
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </>
   );
 }
 
