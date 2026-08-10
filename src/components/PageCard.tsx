@@ -18,6 +18,11 @@ const INDENT_SPACE = "　";
 // （――）・三点リーダー（……）等を検出して改行させないためのパターン。
 const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
 const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
+// NOWRAP_RUN_PATTERN と同じ対象文字列を検出するための non-global 版。
+// .test() はglobalフラグ付き正規表現だとlastIndexを書き換えて呼び出しごとに
+// 状態が変わってしまう（isNormalLineは行ごとに繰り返し呼ばれる）ため、
+// 検出専用にstateを持たない正規表現を別途用意する。
+const NOWRAP_RUN_DETECT = /[―—]{2,}|[…‥]{2,}/;
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
@@ -161,9 +166,17 @@ export default function PageCard({
   // size (true physical size) makes glyphs too large for the box and
   // overflows the page — hence the reported horizontal-scroll text overflow.
   const fontSizePx = layout.fontSizeMm * PX_PER_MM;
+  const fontFamily = settings.fontFamily || "'Shippori Mincho', serif";
   const textAreaWidthPx = layout.textAreaWidthMm * PX_PER_MM;
   const textAreaHeightPx = layout.textAreaHeightMm * PX_PER_MM;
   const columnHeightPx = layout.columnHeightMm * PX_PER_MM;
+  // FixedSlotLine（G1固定slot grid）の列の厚み(block-axis方向の幅)。legacy
+  // rendererではこの厚みは「文字コンテンツからブラウザが自動計算する
+  // line-height由来のwidth」に暗黙的に依存しているが、unitless line-height の
+  // 仕様上その計算結果は必ず fontSizePx * lineHeightRatio に等しいため、
+  // 同じ値を明示widthとして与えることでブラウザのfont metricsに依存せず
+  // 同じ列幅を再現できる。
+  const gridColumnThicknessPx = fontSizePx * settings.lineHeightRatio;
 
   const isTwoColumn = settings.columnCount === 2;
 
@@ -233,7 +246,7 @@ export default function PageCard({
     height: textAreaHeightPx,
     overflow: "hidden",
     fontSize: `${fontSizePx}px`,
-    fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
+    fontFamily,
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
     letterSpacing: "normal", // 短行・段落末尾は上詰め固定（既定ピッチのまま）
@@ -658,6 +671,23 @@ export default function PageCard({
                       }}
                     >
                       {columnLines.map((line, lineIndex) => {
+                        const flatIndexBase = columnFlowLineOffsets![segmentIndex][lineIndex];
+                        if (isNormalLine(line)) {
+                          return (
+                            <FixedSlotLine
+                              key={lineIndex}
+                              line={line}
+                              flatIndexBase={flatIndexBase}
+                              paragraphStarts={paragraphStarts}
+                              charsPerLine={layout.charsPerLine}
+                              slotExtentPx={columnHeightPx / layout.charsPerLine}
+                              columnThicknessPx={gridColumnThicknessPx}
+                              heightPx={columnHeightPx}
+                              fontSizePx={fontSizePx}
+                              fontFamily={fontFamily}
+                            />
+                          );
+                        }
                         const isFullLine = lineVisualCellCount(line) === layout.charsPerLine;
                         return (
                           <div
@@ -666,7 +696,7 @@ export default function PageCard({
                             style={isFullLine ? fullColumnLineStyle : columnLineStyle}
                           >
                             {line.map((token, tokenIndex) => {
-                              const flatIndex = columnFlowLineOffsets![segmentIndex][lineIndex] + tokenIndex;
+                              const flatIndex = flatIndexBase + tokenIndex;
                               return (
                                 <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
                               );
@@ -686,6 +716,23 @@ export default function PageCard({
                   </span>
                 ) : (
                   flowLines.map((line, lineIndex) => {
+                    const flatIndexBase = flowLineOffsets[lineIndex];
+                    if (isNormalLine(line)) {
+                      return (
+                        <FixedSlotLine
+                          key={lineIndex}
+                          line={line}
+                          flatIndexBase={flatIndexBase}
+                          paragraphStarts={paragraphStarts}
+                          charsPerLine={layout.charsPerLine}
+                          slotExtentPx={textAreaHeightPx / layout.charsPerLine}
+                          columnThicknessPx={gridColumnThicknessPx}
+                          heightPx={textAreaHeightPx}
+                          fontSizePx={fontSizePx}
+                          fontFamily={fontFamily}
+                        />
+                      );
+                    }
                     const isFullLine = lineVisualCellCount(line) === layout.charsPerLine;
                     return (
                       <div
@@ -694,7 +741,7 @@ export default function PageCard({
                         style={isFullLine ? fullLineStyle : lineStyle}
                       >
                         {line.map((token, tokenIndex) => {
-                          const flatIndex = flowLineOffsets[lineIndex] + tokenIndex;
+                          const flatIndex = flatIndexBase + tokenIndex;
                           return (
                             <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
                           );
@@ -1029,6 +1076,119 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
   if (token.type === "ruby") return token.base.charAt(0);
   if (token.type === "pageBreak") return "";
   return token.value.charAt(0);
+}
+
+/**
+ * G1固定slot grid（FixedSlotLine）へ載せてよい「通常text-onlyの論理行」かどうか。
+ * ruby/tcy/pageBreakトークンを含む行、および――/……等のnowrap保護対象
+ * （NOWRAP_RUN_DETECT）を含む行は、現時点ではgridでの再現方法が未対応の
+ * ため既存のlegacy TokenView rendererへfallbackする。
+ */
+function isNormalLine(line: FlowToken[]): boolean {
+  return line.every((token) => token.type === "text" && !NOWRAP_RUN_DETECT.test(token.value));
+}
+
+/** FixedSlotLineが1 slotとして描画する最小単位。 */
+interface LineSlot {
+  key: string;
+  text: string;
+}
+
+/**
+ * 通常text-onlyの論理行を、固定slot座標（slotIndex）へ並ぶ文字単位の配列へ
+ * 分解する。TokenViewと同じ規則（paragraphStartsに基づく一字下げprefix、
+ * \nトークンは可視slotを持たない）を踏襲し、文字はサロゲートペアを壊さない
+ * よう Array.from() で分割する。
+ *
+ * 一字下げはpagination側のcharsPerLine予算に含まれない、純粋に描画時だけの
+ * 追加文字のため、満杯行の段落先頭が重なると理論上charsPerLineを1つ超える
+ * ことがある。legacy rendererはこの場合 overflow:hidden で末尾のはみ出し分を
+ * 黙って切っている（lineStyle/fullLineStyleのheight+overflow:hidden参照）ため、
+ * ここでも同じ範囲(0..charsPerLine-1)だけを返し、同じ見え方を再現する。
+ */
+function buildLineSlots(
+  line: FlowToken[],
+  flatIndexBase: number,
+  paragraphStarts: boolean[],
+  charsPerLine: number
+): LineSlot[] {
+  const slots: LineSlot[] = [];
+  line.forEach((token, tokenIndex) => {
+    if (token.type !== "text") return;
+    const flatIndex = flatIndexBase + tokenIndex;
+    const indent = paragraphStarts[flatIndex];
+    const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+    if (prefix) slots.push({ key: `${flatIndex}-indent`, text: prefix });
+    if (token.value === "\n") return;
+    Array.from(token.value).forEach((ch, charIndex) => {
+      slots.push({ key: `${flatIndex}-${charIndex}`, text: ch });
+    });
+  });
+  return slots.slice(0, charsPerLine);
+}
+
+/**
+ * G1固定slot grid renderer。通常text-onlyの論理行1つを、charsPerLine個の
+ * 固定座標(slotTop = slotIndex * slotExtentPx)へ位置付けて描画する。
+ * 文字が存在するslotだけDOMへ描画するが、座標計算は常に全N slot基準。
+ * letterSpacing/text-justifyには一切依存しない。
+ */
+function FixedSlotLine({
+  line,
+  flatIndexBase,
+  paragraphStarts,
+  charsPerLine,
+  slotExtentPx,
+  columnThicknessPx,
+  heightPx,
+  fontSizePx,
+  fontFamily,
+}: {
+  line: FlowToken[];
+  flatIndexBase: number;
+  paragraphStarts: boolean[];
+  charsPerLine: number;
+  slotExtentPx: number;
+  columnThicknessPx: number;
+  heightPx: number;
+  fontSizePx: number;
+  fontFamily: string;
+}) {
+  const slots = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
+
+  const containerStyle: CSSProperties = {
+    position: "relative",
+    width: columnThicknessPx,
+    height: heightPx,
+    overflow: "hidden",
+    fontSize: `${fontSizePx}px`,
+    fontFamily,
+    color: "#000000",
+    fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
+    fontVariantEastAsian: "full-width",
+  };
+
+  return (
+    <div className="tategaki-line" style={containerStyle}>
+      {slots.map((slot, slotIndex) => (
+        <span
+          key={slot.key}
+          style={{
+            position: "absolute",
+            top: slotIndex * slotExtentPx,
+            left: 0,
+            width: columnThicknessPx,
+            height: slotExtentPx,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {slot.text}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function TokenView({
