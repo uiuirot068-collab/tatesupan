@@ -74,7 +74,10 @@ export function BookSpine({
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetch(`/assets/bookshelf/book_5_${resolvedBookWidth}.svg`, { signal: controller.signal })
+    const artworkPath = isSample
+      ? "/assets/bookshelf/book_5_46.svg"
+      : `/assets/bookshelf/book_6_${resolvedBookWidth}.svg`;
+    void fetch(artworkPath, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Could not load book artwork (${response.status})`);
         return response.text();
@@ -93,7 +96,7 @@ export function BookSpine({
       });
 
     return () => controller.abort();
-  }, [resolvedBookWidth]);
+  }, [isSample, resolvedBookWidth]);
 
   const closeMenu = (restoreFocus: boolean) => {
     setIsEditingTitle(false);

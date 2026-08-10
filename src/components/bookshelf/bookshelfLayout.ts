@@ -11,7 +11,7 @@ const RACK_CENTER_WIDTH = 117.27;
 const BOOKS_SIDE_SPACE = 70;
 const RACK_MIN_WIDTH = 215.576;
 
-export type BookWidth = 40 | 46 | 52 | 60 | 70;
+export type BookWidth = 30 | 40 | 50 | 60 | 70;
 
 export const MAX_VISIBLE_SPINE_TITLE_LENGTH = 7;
 
@@ -22,10 +22,10 @@ export function truncateSpineTitle(title: string): string {
 }
 
 export function bookWidthForCharacterCount(characterCount: number): BookWidth {
-  if (characterCount <= 1_000) return 40;
-  if (characterCount <= 10_000) return 46;
-  if (characterCount <= 30_000) return 52;
-  if (characterCount <= 80_000) return 60;
+  if (characterCount < 1_000) return 30;
+  if (characterCount < 10_000) return 40;
+  if (characterCount < 30_000) return 50;
+  if (characterCount <= 100_000) return 60;
   return 70;
 }
 
