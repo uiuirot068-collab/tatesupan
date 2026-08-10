@@ -212,7 +212,23 @@ export default function PageCard({
   };
 
   const lineStyle: CSSProperties = {
-    whiteSpace: "pre-wrap",
+    // `.tategaki-line` renders exactly one pagination-decided line — never
+    // more. `pre-wrap` (unlike `pre`) lets the browser wrap this div's own
+    // content into a second internal line the moment its real rendered
+    // extent (glyph advances, this writing-mode's letter-spacing behavior,
+    // etc.) exceeds `height` by even a sub-pixel amount; because block flow
+    // is horizontal in `writing-mode: vertical-rl` (inherited from
+    // `.page-card`), that wrapped remainder renders as its own new column —
+    // indistinguishable from a genuine second pagination line, e.g. the
+    // theoretically-exact-fit 16th character of a full charsPerLine=16 line
+    // stranding itself alone in what looks like the next tategaki-line. `pre`
+    // preserves the same whitespace handling (irrelevant here regardless,
+    // since paginateTokensByLines never leaves a raw "\n" character in a
+    // line's rendered content — see TokenView) while forbidding that
+    // wrap, so any leftover sub-pixel overflow is absorbed by the
+    // `overflow: hidden` below exactly as it already is today, instead of
+    // visibly relocating a whole character into a phantom extra column.
+    whiteSpace: "pre",
     wordBreak: "break-all",
     height: textAreaHeightPx,
     overflow: "hidden",
