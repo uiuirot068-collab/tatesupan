@@ -992,9 +992,14 @@ function HashiraOverlay({
     fontSize: `${fontSize ?? 8}pt`,
   };
 
+  // insetLeftPx/insetRightPx はsheetStyleのpaddingLeft/Rightと同じ値——
+  // 奇数ページはpaddingLeft=marginOuter（小口が左）、偶数ページは
+  // paddingRight=marginOuter（小口が右）。よってコンテナの「小口側の端」は
+  // 奇数=左端・偶数=右端になる（NombreOverlayの「小口」判定と同じ規約、
+  // justifyContent: isOddPage ? "flex-start" : "flex-end" 参照）。
   const textStyle: CSSProperties = isOddPage
-    ? { textAlign: "right", width: "100%" }
-    : { textAlign: "left", width: "100%" };
+    ? { textAlign: "left", width: "100%" }
+    : { textAlign: "right", width: "100%" };
 
   return (
     <div style={style} className="pointer-events-none select-none">
