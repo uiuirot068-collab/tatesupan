@@ -43,6 +43,8 @@ interface EditorPaneProps {
   onOpenHelp: () => void;
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
   onCursorIndexChange?: (index: number) => void;
+  /** 1-based printed page numbers currently selected in PreviewPane, for the 「ノンブル・柱」タブの選択ページパネル. */
+  selectedPageNumbers: number[];
 }
 
 export default function EditorPane({
@@ -59,6 +61,7 @@ export default function EditorPane({
   onPlotNoteChange,
   onOpenHelp,
   onCursorIndexChange,
+  selectedPageNumbers,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -124,6 +127,7 @@ export default function EditorPane({
           plotNote={plotNote}
           onPlotNoteChange={onPlotNoteChange}
           onOpenHelp={onOpenHelp}
+          selectedPageNumbers={selectedPageNumbers}
         />
       </div>
 

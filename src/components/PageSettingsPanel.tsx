@@ -3,6 +3,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import {
   computePageLayout,
+  updatePageOverrides,
   type ColumnCount,
   type HashiraPosition,
   type MasterPageSettings,
@@ -22,6 +23,8 @@ interface PageSettingsPanelProps {
   plotNote: string;
   onPlotNoteChange: (plotNote: string) => void;
   onOpenHelp: () => void;
+  /** 1-based printed page numbers currently selected in the preview. */
+  selectedPageNumbers: number[];
 }
 
 type SettingsTab = "page" | "master" | "plot";
@@ -114,6 +117,7 @@ export default function PageSettingsPanel({
   plotNote,
   onPlotNoteChange,
   onOpenHelp,
+  selectedPageNumbers,
 }: PageSettingsPanelProps) {
   // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
   // 同じ "page" に固定し、window/localStorage に依存する判定は
@@ -384,6 +388,79 @@ export default function PageSettingsPanel({
         // チェックが入れられたら「隠しノンブル」も自動で有効化する
         showHiddenNombre: checked ? true : settings.masterPage.showHiddenNombre,
       },
+    });
+  };
+
+  // 選択ページの柱テキスト入力欄。「入力して適用すると選択ページすべてを
+  // 上書き」という仕様のため、settingsの既存値をここへ書き戻すことはしない
+  // ——さもないと画面を開いただけで（あるいは選択を切り替えただけで）既存の
+  // 個別指定を上書きしてしまいかねない。選択が変わるたびに空へリセットする
+  // ことで、直前の選択向けに書いたdraftを別ページへ誤爆させないようにする。
+  const [hashiraDraft, setHashiraDraft] = useState("");
+  const selectedPageKey = selectedPageNumbers.join(",");
+  // 選択の変化をレンダー中に検知して同期リセットする（React公式が推奨する
+  // 「レンダー中にstateを調整する」パターン）。useEffectで行うと余分な
+  // 再レンダーを1回挟むため、react-hooks/set-state-in-effect が指摘する
+  // アンチパターンを避けてここで直接行う。
+  const [prevSelectedPageKey, setPrevSelectedPageKey] = useState(selectedPageKey);
+  if (selectedPageKey !== prevSelectedPageKey) {
+    setPrevSelectedPageKey(selectedPageKey);
+    setHashiraDraft("");
+  }
+
+  const hasSelection = selectedPageNumbers.length > 0;
+
+  const handleApplyHashiraOverride = () => {
+    if (!hasSelection) return;
+    onChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, selectedPageNumbers, (prev) => ({
+        ...prev,
+        hashiraOverride: hashiraDraft,
+      })),
+    });
+  };
+
+  const handleClearHashiraOverride = () => {
+    if (!hasSelection) return;
+    onChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, selectedPageNumbers, (prev) => {
+        const rest = { ...prev };
+        delete rest.hashiraOverride;
+        return rest;
+      }),
+    });
+    setHashiraDraft("");
+  };
+
+  // 選択ページ全部で一致している場合だけチェック済みにする（一部だけON等の
+  // 混在状態は「未チェック」として扱う——複数選択時のmixed stateを厳密な
+  // tri-state表示にはせず、誤って「全ページON」と読める表示を避ける簡易化）。
+  const selectedAllHideNombre =
+    hasSelection && selectedPageNumbers.every((n) => Boolean(settings.pageOverrides[n]?.hideNombre));
+  const selectedAllHideHashira =
+    hasSelection && selectedPageNumbers.every((n) => Boolean(settings.pageOverrides[n]?.hideHashira));
+
+  const handleToggleSelectedHideNombre = (checked: boolean) => {
+    if (!hasSelection) return;
+    onChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, selectedPageNumbers, (prev) => ({
+        ...prev,
+        hideNombre: checked,
+      })),
+    });
+  };
+
+  const handleToggleSelectedHideHashira = (checked: boolean) => {
+    if (!hasSelection) return;
+    onChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, selectedPageNumbers, (prev) => ({
+        ...prev,
+        hideHashira: checked,
+      })),
     });
   };
 
@@ -779,6 +856,67 @@ export default function PageSettingsPanel({
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
+
+        <div className="col-span-2 rounded-md border border-ink/15 p-3 sm:col-span-4">
+          <p className="mb-2 text-xs font-semibold text-ink/70">選択ページ</p>
+          {!hasSelection ? (
+            <p className="text-xs text-ink/50">
+              プレビューでページを選択すると、そのページだけ柱やノンブル表示を変更できます。
+            </p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-ink/50">
+                {selectedPageNumbers.length}ページ選択中（{selectedPageNumbers.join("、")}ページ目）
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-ink/60">選択ページの柱</span>
+                  <input
+                    type="text"
+                    value={hashiraDraft}
+                    onChange={(e) => setHashiraDraft(e.target.value)}
+                    placeholder="入力して「適用」を押すと選択ページを上書き"
+                    className="w-56 rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleApplyHashiraOverride}
+                  className="cursor-pointer select-none rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90"
+                >
+                  選択ページに適用
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearHashiraOverride}
+                  className="cursor-pointer select-none rounded border border-ink/20 px-3 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/5"
+                >
+                  個別指定を解除
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-ink/60">
+                  <input
+                    type="checkbox"
+                    checked={selectedAllHideNombre}
+                    onChange={(e) => handleToggleSelectedHideNombre(e.target.checked)}
+                    className="h-4 w-4 rounded border-ink/30"
+                  />
+                  ノンブル非表示
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-ink/60">
+                  <input
+                    type="checkbox"
+                    checked={selectedAllHideHashira}
+                    onChange={(e) => handleToggleSelectedHideHashira(e.target.checked)}
+                    className="h-4 w-4 rounded border-ink/30"
+                  />
+                  柱非表示
+                </label>
+              </div>
+            </>
+          )}
+        </div>
           </div>
         </div>
       )}

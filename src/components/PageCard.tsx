@@ -57,6 +57,10 @@ interface PageCardProps {
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   hideNombre?: boolean;
   onHideNombreChange?: (hideNombre: boolean) => void;
+  hideHashira?: boolean;
+  onHideHashiraChange?: (hideHashira: boolean) => void;
+  /** ページ別の柱文字列の上書き。undefined = 奇数/偶数の共通柱を使用。 */
+  hashiraOverride?: string;
   /**
    * Counter-scale for editor-only chrome (selection checkbox, insert-image/
    * hide-nombre controls, the "Nページ" caption) that sits as a sibling of
@@ -101,6 +105,9 @@ export default function PageCard({
   onImageLayerChange,
   hideNombre = false,
   onHideNombreChange,
+  hideHashira = false,
+  onHideHashiraChange,
+  hashiraOverride,
   chromeScale = 1,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -235,18 +242,20 @@ export default function PageCard({
     letterSpacing: `${columnMicroSpacingPx}px`,
   };
 
-  // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
-  // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが
-  // 組版の慣例。隠しノンブル（製本用の極小表記）はこの抑制と独立して、
-  // masterPage.showHiddenNombre の設定どおりに常時トグル連動して表示する。
-  const isChromeSuppressed = hideNombre || (masterPage.hideNombreOnFirstPage && isFirstPage);
+  // 正式仕様: 通常ノンブル非表示・柱非表示・隠しノンブルはそれぞれ独立した
+  // 機能。通常ノンブルの表示可否はノンブル関連のフラグだけで、柱の表示可否は
+  // 柱関連のフラグだけで決め、互いを連動させない（隠しノンブルは
+  // masterPage.showHiddenNombre の設定どおり常時トグル連動——後述）。
+  const isNombreSuppressed = hideNombre || (masterPage.hideNombreOnFirstPage && isFirstPage);
 
   const nombrePosition = masterPage.nombrePosition;
-  const showNombre = nombrePosition !== "hidden" && !isChromeSuppressed;
+  const showNombre = nombrePosition !== "hidden" && !isNombreSuppressed;
   const nombreValue = masterPage.nombreStart + pageNumber - 1;
 
-  const hashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
-  const showHashira = Boolean(hashiraText) && !isChromeSuppressed;
+  // ページ別の柱上書きがあればそれを、なければ奇数/偶数の共通柱を使用。
+  const defaultHashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
+  const hashiraText = hashiraOverride ?? defaultHashiraText;
+  const showHashira = Boolean(hashiraText) && !hideHashira;
 
   const showWebFooter = settings.paperSize === "Web閲覧用";
 
@@ -417,6 +426,21 @@ export default function PageCard({
                   className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
                 />
                 ノンブル非表示
+              </label>
+            )}
+            {onHideHashiraChange && (
+              <label
+                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  data-no-print="true"
+                  checked={hideHashira}
+                  onChange={(event) => onHideHashiraChange(event.target.checked)}
+                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
+                />
+                柱非表示
               </label>
             )}
             {onInsertImage && (

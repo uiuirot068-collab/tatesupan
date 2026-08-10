@@ -27,7 +27,13 @@ import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
 import { exportAllPagesToZip, exportPageToJpg } from "@/utils/exportImage";
 import { exportCustomPdf, type PdfExportMode } from "@/utils/exportPdf";
 import type { ImageRecord } from "@/lib/db";
-import { PX_PER_MM, cssPxToPhysicalMm, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import {
+  PX_PER_MM,
+  cssPxToPhysicalMm,
+  updatePageOverrides,
+  type PageLayout,
+  type PageSettings,
+} from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
@@ -54,6 +60,9 @@ interface PreviewPaneProps {
   cursorIndex?: number | null;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
+  selected: Set<number>;
+  onSelectedChange: (next: Set<number>) => void;
 }
 
 export default function PreviewPane({
@@ -70,6 +79,8 @@ export default function PreviewPane({
   cursorIndex,
   isCollapsed = false,
   onToggleCollapse,
+  selected,
+  onSelectedChange: setSelected,
 }: PreviewPaneProps) {
   // Deferring the (expensive, O(content length)) pagination recompute keeps
   // keystrokes in the editor responsive on large manuscripts: React renders
@@ -161,7 +172,6 @@ export default function PreviewPane({
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
 
-  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [insertingImageIndex, setInsertingImageIndex] = useState<number | null>(null);
@@ -681,13 +691,24 @@ export default function PreviewPane({
 
   const handleHideNombreChange = (pageNumber: number) => (hideNombre: boolean) => {
     if (!onSettingsChange) return;
-    const nextOverrides = { ...settings.pageOverrides };
-    if (hideNombre) {
-      nextOverrides[pageNumber] = { ...nextOverrides[pageNumber], hideNombre: true };
-    } else {
-      delete nextOverrides[pageNumber];
-    }
-    onSettingsChange({ ...settings, pageOverrides: nextOverrides });
+    onSettingsChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, [pageNumber], (prev) => ({
+        ...prev,
+        hideNombre,
+      })),
+    });
+  };
+
+  const handleHideHashiraChange = (pageNumber: number) => (hideHashira: boolean) => {
+    if (!onSettingsChange) return;
+    onSettingsChange({
+      ...settings,
+      pageOverrides: updatePageOverrides(settings.pageOverrides, [pageNumber], (prev) => ({
+        ...prev,
+        hideHashira,
+      })),
+    });
   };
 
   if (isCollapsed) {
@@ -942,6 +963,11 @@ export default function PreviewPane({
                     onHideNombreChange={
                       onSettingsChange ? handleHideNombreChange(index + 1) : undefined
                     }
+                    hideHashira={Boolean(settings.pageOverrides[index + 1]?.hideHashira)}
+                    onHideHashiraChange={
+                      onSettingsChange ? handleHideHashiraChange(index + 1) : undefined
+                    }
+                    hashiraOverride={settings.pageOverrides[index + 1]?.hashiraOverride}
                     chromeScale={chromeScale}
                   />
                 </div>

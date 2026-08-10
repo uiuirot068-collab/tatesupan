@@ -12,7 +12,12 @@ import {
   updateImageLayerOrder,
   type ImageRecord,
 } from "@/lib/db";
-import { computePageLayout, DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
+import {
+  computePageLayout,
+  DEFAULT_PAGE_SETTINGS,
+  updatePageOverrides,
+  type PageSettings,
+} from "@/lib/pageLayout";
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -65,6 +70,10 @@ export default function TategakiEditor({
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [cloudLimitPlan, setCloudLimitPlan] = useState<CloudPlan | null>(null);
+  // プレビューで選択中のページ（0-based index into PreviewPane's `pages`）。
+  // 「ノンブル・柱」タブの選択ページパネル（PageSettingsPanel、EditorPane側）
+  // がPreviewPaneと同じ選択状態を参照できるよう、ここに持ち上げてcontrolledにする。
+  const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
   const hasLoadedRef = useRef(false);
   // Tracks which document's data is currently reflected in state, so the
@@ -77,6 +86,13 @@ export default function TategakiEditor({
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = docId === SAMPLE_PROJECT.id;
+
+  // pageOverrides は1始まりの印刷ページ番号でキーされる一方、selectedPages
+  // （PreviewPaneの選択状態）は0-basedなインデックス——ここで一度だけ変換する。
+  const selectedPageNumbers = useMemo(
+    () => Array.from(selectedPages, (index) => index + 1).sort((a, b) => a - b),
+    [selectedPages]
+  );
 
   const applyCloudProject = useCallback((project: Project) => {
     setCurrentProjectId(project.id);
@@ -325,21 +341,30 @@ export default function TategakiEditor({
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
 
-    // 扉・目次・奥付は本文と異なりノンブル（柱含む）を表示しないのが慣例
-    // なので、挿入した瞬間にそのパーツが占めるページへ自動でノンブル非表示
-    // を設定する。ユーザーは挿入後もページ単位のチェックボックスで上書き可能。
+    // 扉・目次・奥付は本文と異なりノンブルも柱も表示しないのが慣例なので、
+    // 挿入した瞬間にそのパーツが占めるページへ自動でノンブル非表示・柱非表示
+    // を設定する（両者は独立したフラグ——正式仕様上「柱は消さない」のは
+    // ユーザーが個別に指定したページ単位のノンブル非表示のみで、この扉等の
+    // 自動挿入は「柱も含めて表示しない」という別の既存意図を持つため、
+    // ここでは明示的に両方をtrueにする）。ユーザーは挿入後もページ単位の
+    // チェックボックスで一方だけ上書き可能。
     const range = computeInsertedPartPageRange(nextContent, textToInsert, position, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
     });
     if (range) {
-      setSettings((prev) => {
-        const nextOverrides = { ...prev.pageOverrides };
-        for (let pageNumber = range.startPage; pageNumber <= range.endPage; pageNumber++) {
-          nextOverrides[pageNumber] = { ...nextOverrides[pageNumber], hideNombre: true };
-        }
-        return { ...prev, pageOverrides: nextOverrides };
-      });
+      const pageNumbers: number[] = [];
+      for (let pageNumber = range.startPage; pageNumber <= range.endPage; pageNumber++) {
+        pageNumbers.push(pageNumber);
+      }
+      setSettings((prev) => ({
+        ...prev,
+        pageOverrides: updatePageOverrides(prev.pageOverrides, pageNumbers, (override) => ({
+          ...override,
+          hideNombre: true,
+          hideHashira: true,
+        })),
+      }));
     }
 
     setContent(nextContent);
@@ -391,6 +416,7 @@ export default function TategakiEditor({
             onPlotNoteChange={setPlotNote}
             onOpenHelp={() => setIsHelpOpen(true)}
             onCursorIndexChange={setCursorIndex}
+            selectedPageNumbers={selectedPageNumbers}
           />
         </section>
 
@@ -430,6 +456,8 @@ export default function TategakiEditor({
             cursorIndex={cursorIndex}
             isCollapsed={isPreviewCollapsed}
             onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
+            selected={selectedPages}
+            onSelectedChange={setSelectedPages}
           />
         </section>
       </main>

@@ -107,6 +107,39 @@ export interface PageSettings {
 /** 特定ページ単位でマスターページ設定を上書きする項目 */
 export interface PageOverride {
   hideNombre?: boolean;
+  hideHashira?: boolean;
+  // 未指定(undefined)=奇数/偶数の共通柱を使用。空文字列は「柱を消す」ではなく
+  // 「空の柱文字列を明示指定」を意味する（消したい場合は hideHashira を使う）。
+  hashiraOverride?: string;
+}
+
+/**
+ * `pageNumbers` の各ページに対して `updater` を適用し、結果を新しい
+ * pageOverrides マップとして返す（`overrides` 自体は変更しない）。
+ * 各ページのオーバーライドは、有効な項目が1つも残らなくなった時点で
+ * マップからキーごと削除する——「キーが存在しない = 何も上書きしていない
+ * （常にマスター設定へフォールバック）」という既存の hideNombre の慣例を、
+ * 複数フィールドが共存する場合にも保つため。
+ */
+export function updatePageOverrides(
+  overrides: Record<number, PageOverride>,
+  pageNumbers: number[],
+  updater: (prev: PageOverride) => PageOverride
+): Record<number, PageOverride> {
+  const next = { ...overrides };
+  for (const pageNumber of pageNumbers) {
+    const updated = updater(next[pageNumber] ?? {});
+    const cleaned: PageOverride = {};
+    if (updated.hideNombre) cleaned.hideNombre = true;
+    if (updated.hideHashira) cleaned.hideHashira = true;
+    if (updated.hashiraOverride !== undefined) cleaned.hashiraOverride = updated.hashiraOverride;
+    if (Object.keys(cleaned).length > 0) {
+      next[pageNumber] = cleaned;
+    } else {
+      delete next[pageNumber];
+    }
+  }
+  return next;
 }
 
 /** ノンブル（ページ番号）の表示位置: 中央 / ノド（綴じ側） / 小口（外側） / 非表示 */
