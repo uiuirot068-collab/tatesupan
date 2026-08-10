@@ -492,13 +492,25 @@ function paginateTokensByLines(
 
   for (const token of tokens) {
     if (token.type === "pageBreak") {
-      // Manual page break: always flush, even mid-page or on an empty page,
-      // so an explicit break reliably sends the following content to the next page.
+      // Manual page break: normally always flush, even mid-page or on an
+      // empty page, so an explicit break reliably sends the following
+      // content to the next page. Exception: if the page was *just* soft-
+      // closed (line/char fill, "\n", or a trailing image attached to it)
+      // and nothing has landed on the new page yet, this break names the
+      // exact same boundary a second time — force-pushing here would add a
+      // phantom empty page with no counterpart in the source. Absorb only
+      // that first, coincident break; a second consecutive 【改ページ】 finds
+      // lastSoftClosedPage already cleared and force-pushes normally,
+      // producing the blank page the user explicitly asked for.
       // A hard boundary — no image after this point may be pulled back
       // across it onto the page that just closed.
       lineFilledByWrap = false;
-      lastSoftClosedPage = null;
-      pushPage(true);
+      if (lastSoftClosedPage !== null && currentPage.length === 0) {
+        lastSoftClosedPage = null;
+      } else {
+        lastSoftClosedPage = null;
+        pushPage(true);
+      }
       continue;
     }
 
@@ -667,9 +679,19 @@ export function computePageSourceRanges(
 
   for (const { token, start, end } of offsetTokens) {
     if (token.type === "pageBreak") {
+      // Mirrors paginateTokensByLines's pageBreak branch: absorb only a
+      // break that names the same boundary a just-finished soft close
+      // already marked, so the phantom {n,n} range doesn't appear (the
+      // marker's own source span is never included in any page's range
+      // either way — mark() is never called for it here or below — so
+      // absorbing this one doesn't shift any later offset).
       lineFilledByWrap = false;
-      lastSoftClosedRange = null;
-      pushPage(true);
+      if (lastSoftClosedRange !== null && pageStart === null) {
+        lastSoftClosedRange = null;
+      } else {
+        lastSoftClosedRange = null;
+        pushPage(true);
+      }
       continue;
     }
 
