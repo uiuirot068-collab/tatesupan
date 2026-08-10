@@ -409,6 +409,17 @@ function paginateTokensByLines(
   // this, it would open, and immediately close, its own empty line, adding a
   // phantom blank column that has no counterpart in the source text.
   let lineFilledByWrap = false;
+  // The page most recently closed by ordinary line/page-fill flow — char
+  // fill, an explicit "\n", or kinsoku/nowrap deferring everything off the
+  // line — as opposed to an explicit 【改ページ】, while the page opened
+  // after it is still completely empty (nothing placed yet). A zero-length
+  // image token arriving in this window is the trailing attachment of a
+  // page the user inserted an image into at its full/closed boundary — see
+  // `appendTrailingImage` — not the first content of the next page. Cleared
+  // the instant either real content lands on the new page (`placeToken`) or
+  // an explicit page break is seen, both of which commit the new page as a
+  // distinct one no image should be pulled back across.
+  let lastSoftClosedPage: TategakiPage | null = null;
 
   // Bucket every token into top/bottom as it's placed, in the same pass that
   // decides which line it lands on — avoids a second, separately-accounted
@@ -416,6 +427,7 @@ function paginateTokensByLines(
   // count whenever ruby/tcy tokens, with their non-1:1 char-to-token ratio,
   // were mixed into the flow, causing large chunks of text to vanish).
   const placeToken = (token: TategakiToken) => {
+    lastSoftClosedPage = null;
     currentPage.push(token);
     currentLine.push(token);
     if (columnCount === 2) {
@@ -423,19 +435,40 @@ function paginateTokensByLines(
     }
   };
 
-  const pushPage = (force = false) => {
+  // Appends a zero-length image token onto a page that's already been
+  // pushed, instead of onto the freshly-opened next page. Safe to mutate in
+  // place: `pushPage` rebinds every one of its local working arrays
+  // (`currentPage`, `lines`, `topTokens`, `bottomTokens`) to fresh arrays
+  // the moment a page is pushed, so `page`'s own arrays are never touched by
+  // pagination of any later page. Only `page.tokens` and the last entry of
+  // `page.lines` need a direct push — `page.columnLines` was built via
+  // `lines.slice(...)`, a shallow copy that already shares those same
+  // per-line array objects, so mutating the shared last line is
+  // automatically visible there too without a separate update.
+  const appendTrailingImage = (page: TategakiPage, token: TategakiToken) => {
+    page.tokens.push(token);
+    page.lines[page.lines.length - 1].push(token);
+    if (page.columns) {
+      const section = page.lines.length <= linesPerColumn ? 0 : 1;
+      page.columns[section].push(token);
+    }
+  };
+
+  const pushPage = (force = false): TategakiPage | null => {
     if (currentLine.length > 0) {
       lines.push(currentLine);
       currentLine = [];
     }
+    let pushed: TategakiPage | null = null;
     if (currentPage.length > 0 || force) {
-      pages.push({
+      pushed = {
         tokens: currentPage,
         columns: columnCount === 2 ? [topTokens, bottomTokens] : null,
         lines,
         columnLines:
           columnCount === 2 ? [lines.slice(0, linesPerColumn), lines.slice(linesPerColumn)] : null,
-      });
+      };
+      pages.push(pushed);
     }
     currentPage = [];
     topTokens = [];
@@ -443,6 +476,7 @@ function paginateTokensByLines(
     lines = [];
     lineIndex = 0;
     lineChars = 0;
+    return pushed;
   };
 
   const breakLine = () => {
@@ -452,7 +486,7 @@ function paginateTokensByLines(
     lineChars = 0;
     lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
-      pushPage();
+      lastSoftClosedPage = pushPage();
     }
   };
 
@@ -460,8 +494,27 @@ function paginateTokensByLines(
     if (token.type === "pageBreak") {
       // Manual page break: always flush, even mid-page or on an empty page,
       // so an explicit break reliably sends the following content to the next page.
+      // A hard boundary — no image after this point may be pulled back
+      // across it onto the page that just closed.
       lineFilledByWrap = false;
+      lastSoftClosedPage = null;
       pushPage(true);
+      continue;
+    }
+
+    if (token.type === "image") {
+      // Zero-length (see tokenLength): must never touch lineChars/lineIndex/
+      // lineFilledByWrap, in either branch below — otherwise placing one
+      // right after a wrap-filled line would clear lineFilledByWrap and
+      // un-suppress that line's own redundant trailing "\n", mistaking it
+      // for a second, real line break. Read into a local const first — see
+      // the mirrored branch in computePageSourceRanges for why.
+      const closedPage = lastSoftClosedPage;
+      if (closedPage && currentPage.length === 0) {
+        appendTrailingImage(closedPage, token);
+      } else {
+        placeToken(token);
+      }
       continue;
     }
 
@@ -517,8 +570,9 @@ function paginateTokensByLines(
       continue;
     }
 
-    // Atomic (unsplittable) token: start a fresh line first if it wouldn't
-    // fit on the remainder of the current one.
+    // Atomic (unsplittable) token — ruby or tcy, image/pageBreak already
+    // handled above: start a fresh line first if it wouldn't fit on the
+    // remainder of the current one.
     const length = tokenLength(token);
     if (lineChars > 0 && lineChars + length > charsPerLine) {
       breakLine();
@@ -571,17 +625,33 @@ export function computePageSourceRanges(
   // was closed by filling to charsPerLine, so the very next "\n" — redundant
   // with that break — can be skipped instead of being counted as its own line.
   let lineFilledByWrap = false;
+  // Mirrors paginateTokensByLines's lastSoftClosedPage: the range most
+  // recently closed by ordinary line/page-fill flow (not an explicit
+  // 【改ページ】), while nothing has been marked on the next page yet — see
+  // that function for why a trailing zero-length image marker should extend
+  // this range instead of starting a new one.
+  let lastSoftClosedRange: { start: number; end: number } | null = null;
+  // TS's control-flow narrowing of a `let` doesn't see through calls to the
+  // closures below (mark/breakLine) that assign it, so reading the variable
+  // straight from a loop body iteration narrows it to `null` unconditionally
+  // instead of the true union — routing every read through a function with
+  // an explicit return type sidesteps that and narrows correctly downstream.
+  const readLastSoftClosedRange = (): { start: number; end: number } | null => lastSoftClosedRange;
 
-  const pushPage = (force = false) => {
+  const pushPage = (force = false): { start: number; end: number } | null => {
+    let pushed: { start: number; end: number } | null = null;
     if (pageStart !== null || force) {
-      ranges.push({ start: pageStart ?? pageEnd, end: pageEnd });
+      pushed = { start: pageStart ?? pageEnd, end: pageEnd };
+      ranges.push(pushed);
     }
     pageStart = null;
     lineIndex = 0;
     lineChars = 0;
+    return pushed;
   };
 
   const mark = (start: number, end: number) => {
+    lastSoftClosedRange = null;
     if (pageStart === null) pageStart = start;
     pageEnd = end;
   };
@@ -591,14 +661,27 @@ export function computePageSourceRanges(
     lineChars = 0;
     lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
-      pushPage();
+      lastSoftClosedRange = pushPage();
     }
   };
 
   for (const { token, start, end } of offsetTokens) {
     if (token.type === "pageBreak") {
       lineFilledByWrap = false;
+      lastSoftClosedRange = null;
       pushPage(true);
+      continue;
+    }
+
+    if (token.type === "image") {
+      // Zero-length: never advances lineChars/lineIndex/lineFilledByWrap —
+      // see the mirrored branch in paginateTokensByLines for why.
+      const closedRange = readLastSoftClosedRange();
+      if (closedRange && pageStart === null) {
+        closedRange.end = end;
+      } else {
+        mark(start, end);
+      }
       continue;
     }
 
@@ -643,6 +726,7 @@ export function computePageSourceRanges(
       continue;
     }
 
+    // ruby or tcy — image/pageBreak already handled above.
     const length = tokenLength(token);
     if (lineChars > 0 && lineChars + length > charsPerLine) {
       breakLine();
