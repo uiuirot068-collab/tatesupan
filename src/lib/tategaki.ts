@@ -8,7 +8,11 @@ export type TategakiToken =
   | { type: "image"; id: string; widthMm: number; heightMm: number; position: ImagePosition }
   | { type: "pageBreak" };
 
-const RUBY_PATTERN = /｜([^｜《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
+// ruby開始markerは全角｜(U+FF5C)・半角|(U+007C)のどちらでも受理する
+// （原稿によって入力デバイス/IME都合でどちらが使われるか一定しないため）。
+// 《》を伴う完全なruby記法として成立する場合だけ消費するので、《》を
+// 伴わない一般的な単独の "|"/"｜" はこれまで通りtextとして残る。
+const RUBY_PATTERN = /[｜|]([^｜|《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
 const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
 // 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>:<position>】
 // (the trailing :<position> is optional for backward compatibility with

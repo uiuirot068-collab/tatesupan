@@ -18,11 +18,6 @@ const INDENT_SPACE = "　";
 // （――）・三点リーダー（……）等を検出して改行させないためのパターン。
 const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
 const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
-// NOWRAP_RUN_PATTERN と同じ対象文字列を検出するための non-global 版。
-// .test() はglobalフラグ付き正規表現だとlastIndexを書き換えて呼び出しごとに
-// 状態が変わってしまう（isNormalLineは行ごとに繰り返し呼ばれる）ため、
-// 検出専用にstateを持たない正規表現を別途用意する。
-const NOWRAP_RUN_DETECT = /[―—]{2,}|[…‥]{2,}/;
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
@@ -672,7 +667,7 @@ export default function PageCard({
                     >
                       {columnLines.map((line, lineIndex) => {
                         const flatIndexBase = columnFlowLineOffsets![segmentIndex][lineIndex];
-                        if (isNormalLine(line)) {
+                        if (isGridRenderableLine(line)) {
                           return (
                             <FixedSlotLine
                               key={lineIndex}
@@ -717,7 +712,7 @@ export default function PageCard({
                 ) : (
                   flowLines.map((line, lineIndex) => {
                     const flatIndexBase = flowLineOffsets[lineIndex];
-                    if (isNormalLine(line)) {
+                    if (isGridRenderableLine(line)) {
                       return (
                         <FixedSlotLine
                           key={lineIndex}
@@ -1079,59 +1074,192 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
 }
 
 /**
- * G1固定slot grid（FixedSlotLine）へ載せてよい「通常text-onlyの論理行」かどうか。
- * ruby/tcy/pageBreakトークンを含む行、および――/……等のnowrap保護対象
- * （NOWRAP_RUN_DETECT）を含む行は、現時点ではgridでの再現方法が未対応の
- * ため既存のlegacy TokenView rendererへfallbackする。
+ * 固定slot grid（FixedSlotLine）へ載せてよい論理行かどうか。G1はtext-onlyの
+ * 行だけを対象にしていたが、G2aでruby({base,rt})を、G2bで――/……等のnowrap
+ * 保護対象を含むtext tokenを対応に加えた。nowrap runもtext token内の通常の
+ * 文字と同じ意味論（tokenLength = value.length、1文字1slot）で扱えるため、
+ * nowrap対象を含むというだけではもうfallbackしない。tcy / pageBreak /
+ * 画像等（他はflowLines生成時点で除去済み）を含む行だけ、現時点ではgridでの
+ * 再現方法が未対応のため既存のlegacy TokenView rendererへfallbackする。
  */
-function isNormalLine(line: FlowToken[]): boolean {
-  return line.every((token) => token.type === "text" && !NOWRAP_RUN_DETECT.test(token.value));
+function isGridRenderableLine(line: FlowToken[]): boolean {
+  return line.every((token) => token.type === "text" || token.type === "ruby");
 }
 
-/** FixedSlotLineが1 slotとして描画する最小単位。 */
+/** FixedSlotLineが1 slotとして描画する最小単位。slotIndexは行内での絶対位置。 */
 interface LineSlot {
   key: string;
   text: string;
+  slotIndex: number;
 }
 
 /**
- * 通常text-onlyの論理行を、固定slot座標（slotIndex）へ並ぶ文字単位の配列へ
+ * rubyのrt（読み）1個分。base文字は通常文字と全く同じ LineSlot として
+ * `slots` 側に積まれる（rt表示のためにbaseの描画方法を一切変えない）ため、
+ * ここではrtの位置決めに必要な情報（対応するbase slot範囲とrt文字列）だけを持つ。
+ */
+interface RubyAnnotation {
+  key: string;
+  startSlot: number;
+  /** tokenLength(ruby) と同じ値（= base.length）。pagination側のslot消費数と必ず一致させる。 */
+  slotCount: number;
+  rt: string;
+}
+
+/**
+ * grid対応の論理行を、固定slot座標（slotIndex）へ並ぶ文字単位の配列へ
  * 分解する。TokenViewと同じ規則（paragraphStartsに基づく一字下げprefix、
  * \nトークンは可視slotを持たない）を踏襲し、文字はサロゲートペアを壊さない
  * よう Array.from() で分割する。
+ *
+ * ruby tokenのbase文字は、通常のtext文字と全く同じ LineSlot として `slots`
+ * へ積む（rt annotationのための特別な描画パスを持たせない）。これにより
+ * base文字の座標・見た目はrtの有無に一切左右されない。ruby tokenのslot
+ * 消費数は tokenLength()（= base.length、pagination側の予算計算と同じ
+ * ルール）をそのまま使う。base文字の描画用分割（Array.from(token.base)）は
+ * 通常サロゲートペアを含む稀なケースを除きtokenLength()と同じ個数になるが、
+ * 両者が食い違う場合でも後続tokenのslotCursorがpaginationとズレないよう、
+ * 不足分は空slotで埋めて必ず tokenLength() の分だけslotCursorを進める。
  *
  * 一字下げはpagination側のcharsPerLine予算に含まれない、純粋に描画時だけの
  * 追加文字のため、満杯行の段落先頭が重なると理論上charsPerLineを1つ超える
  * ことがある。legacy rendererはこの場合 overflow:hidden で末尾のはみ出し分を
  * 黙って切っている（lineStyle/fullLineStyleのheight+overflow:hidden参照）ため、
- * ここでも同じ範囲(0..charsPerLine-1)だけを返し、同じ見え方を再現する。
+ * ここでも同じ範囲(0..charsPerLine-1)だけを残し、同じ見え方を再現する。
  */
 function buildLineSlots(
   line: FlowToken[],
   flatIndexBase: number,
   paragraphStarts: boolean[],
   charsPerLine: number
-): LineSlot[] {
+): { slots: LineSlot[]; rubyAnnotations: RubyAnnotation[] } {
   const slots: LineSlot[] = [];
+  const rubyAnnotations: RubyAnnotation[] = [];
+  let slotCursor = 0;
+
   line.forEach((token, tokenIndex) => {
-    if (token.type !== "text") return;
+    if (token.type !== "text" && token.type !== "ruby") return;
     const flatIndex = flatIndexBase + tokenIndex;
     const indent = paragraphStarts[flatIndex];
     const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
-    if (prefix) slots.push({ key: `${flatIndex}-indent`, text: prefix });
-    if (token.value === "\n") return;
-    Array.from(token.value).forEach((ch, charIndex) => {
-      slots.push({ key: `${flatIndex}-${charIndex}`, text: ch });
+    if (prefix) {
+      slots.push({ key: `${flatIndex}-indent`, text: prefix, slotIndex: slotCursor });
+      slotCursor += 1;
+    }
+
+    if (token.type === "text") {
+      if (token.value === "\n") return;
+      Array.from(token.value).forEach((ch, charIndex) => {
+        slots.push({ key: `${flatIndex}-${charIndex}`, text: ch, slotIndex: slotCursor });
+        slotCursor += 1;
+      });
+      return;
+    }
+
+    // ruby: baseはtextと全く同じ1文字1slotのcellとして描画する。
+    const slotCount = tokenLength(token);
+    const startSlot = slotCursor;
+    const baseChars = Array.from(token.base);
+    baseChars.forEach((ch, charIndex) => {
+      slots.push({ key: `${flatIndex}-${charIndex}`, text: ch, slotIndex: slotCursor });
+      slotCursor += 1;
     });
+    // サロゲートペア文字を含むbase等、Array.from()で得られる文字数が
+    // tokenLength()（UTF-16単位）より少ない稀なケースでも、後続tokenの
+    // slotCursorがpaginationとズレないよう不足分は空slotで埋めて揃える。
+    for (let i = baseChars.length; i < slotCount; i++) {
+      slots.push({ key: `${flatIndex}-pad-${i}`, text: "", slotIndex: slotCursor });
+      slotCursor += 1;
+    }
+    rubyAnnotations.push({ key: `${flatIndex}-rt`, startSlot, slotCount, rt: token.rt });
   });
-  return slots.slice(0, charsPerLine);
+
+  return {
+    slots: slots.filter((slot) => slot.slotIndex < charsPerLine),
+    rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
+  };
 }
 
 /**
- * G1固定slot grid renderer。通常text-onlyの論理行1つを、charsPerLine個の
- * 固定座標(slotTop = slotIndex * slotExtentPx)へ位置付けて描画する。
- * 文字が存在するslotだけDOMへ描画するが、座標計算は常に全N slot基準。
- * letterSpacing/text-justifyには一切依存しない。
+ * columnThicknessPx内部を [base glyph lane][ruby lane] の2領域へ分割する。
+ * base glyph laneはfontSizePx相当（通常の全角文字1個分）を第一候補とし、
+ * ruby laneはcolumnThicknessPx（= fontSizePx * lineHeightRatio）から生じる
+ * 残りの行間余白をそのまま使う——新しいmagic numberを追加せず、既存の
+ * columnThicknessPx/fontSizePxの関係だけから導く。base glyph laneはbox
+ * 左側（次のlogical line側）、ruby laneは右側（既に描画済みの隣接logical
+ * line側、伝統的な縦書きルビの位置）に固定する。
+ *
+ * この分割は、rubyを含むかどうかに関わらず全fixed-slot lineで共通して
+ * 使う（下記FixedSlotLine）。ruby含有行だけこの分割を適用すると、本文
+ * glyphの横位置・列間隔がruby有無で変わってしまう不具合が実ブラウザQAで
+ * 確認されたため、ruby未使用行でもruby lane分の余白を同じ位置へ予約する。
+ */
+function rubyBaseGlyphLaneWidthPx(fontSizePx: number): number {
+  return fontSizePx;
+}
+
+/**
+ * rubyのrt（読み）だけを、対応するbase slot範囲[startSlot, startSlot+slotCount)
+ * の脇（ruby lane内）へ独立して重ね描画する。base文字（`slots`側で通常
+ * 文字と同じcellとして描画済み）の座標・サイズには一切影響しない —
+ * native <ruby>/<rt>は使わない。
+ *
+ * ruby laneはcolumnThicknessPxの内側に収まる固定幅のため、rtの文字数が
+ * 多い（base文字数に対してrtが長い）ケースでbase slot範囲の高さ
+ * (annotation.slotCount * slotExtentPx)を超えてrtがはみ出すと、
+ * flexのcenteringにより見た目上baseから離れて浮いて見える（実ブラウザQA
+ * で報告された「花厳は近いが特等席・長《naga》は離れすぎる」の原因）。
+ * これを避けるため、rtのfont-sizeを「base slot範囲の高さ ÷ rt文字数」を
+ * 上限として動的に縮小し、base文字数・rt文字数に関わらず必ずbase slot
+ * 範囲内へ収める。
+ */
+function FixedSlotRubyAnnotation({
+  annotation,
+  slotExtentPx,
+  baseGlyphLaneWidthPx,
+  rubyLaneWidthPx,
+  fontSizePx,
+}: {
+  annotation: RubyAnnotation;
+  slotExtentPx: number;
+  baseGlyphLaneWidthPx: number;
+  rubyLaneWidthPx: number;
+  fontSizePx: number;
+}) {
+  const availableHeightPx = annotation.slotCount * slotExtentPx;
+  const rtCharCount = Math.max(1, Array.from(annotation.rt).length);
+  const maxRtFontSizePx = fontSizePx / 2;
+  const rtFontSizePx = Math.min(maxRtFontSizePx, availableHeightPx / rtCharCount);
+
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: annotation.startSlot * slotExtentPx,
+        left: baseGlyphLaneWidthPx,
+        width: rubyLaneWidthPx,
+        height: availableHeightPx,
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        writingMode: "vertical-rl",
+        fontSize: `${rtFontSizePx}px`,
+        lineHeight: 1,
+        color: "#000000",
+        pointerEvents: "none",
+      }}
+    >
+      {annotation.rt}
+    </span>
+  );
+}
+
+/**
+ * 固定slot grid renderer。grid対応の論理行1つを、charsPerLine個の固定座標
+ * (slotTop = slotIndex * slotExtentPx)へ位置付けて描画する。文字が存在する
+ * slotだけDOMへ描画するが、座標計算は常に全N slot基準。letterSpacing/
+ * text-justifyには一切依存しない。
  */
 function FixedSlotLine({
   line,
@@ -1154,7 +1282,18 @@ function FixedSlotLine({
   fontSizePx: number;
   fontFamily: string;
 }) {
-  const slots = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
+  const { slots, rubyAnnotations } = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
+
+  // container幅は常にcolumnThicknessPx固定 — rubyの有無で変えない（rubyの
+  // ためにこの論理行自身のlayout widthを広げると、後続の論理行がすべて
+  // 横方向にずれて連鎖し、text areaの収まりやページ最終行のclipにまで
+  // 波及する不具合が実ブラウザQAで確認されたため）。base glyph laneと
+  // ruby laneの分割は、rubyの有無に関わらず全fixed-slot lineで共通して
+  // 適用する（ruby未使用行だけ従来の全幅centeringのままにすると、ruby
+  // 行だけ本文glyphの横位置・列間隔がずれる不具合が実ブラウザQAで確認
+  // されたため）。
+  const baseGlyphLaneWidthPx = rubyBaseGlyphLaneWidthPx(fontSizePx);
+  const rubyLaneWidthPx = columnThicknessPx - baseGlyphLaneWidthPx;
 
   const containerStyle: CSSProperties = {
     position: "relative",
@@ -1170,14 +1309,14 @@ function FixedSlotLine({
 
   return (
     <div className="tategaki-line" style={containerStyle}>
-      {slots.map((slot, slotIndex) => (
+      {slots.map((slot) => (
         <span
           key={slot.key}
           style={{
             position: "absolute",
-            top: slotIndex * slotExtentPx,
+            top: slot.slotIndex * slotExtentPx,
             left: 0,
-            width: columnThicknessPx,
+            width: baseGlyphLaneWidthPx,
             height: slotExtentPx,
             display: "flex",
             alignItems: "center",
@@ -1186,6 +1325,16 @@ function FixedSlotLine({
         >
           {slot.text}
         </span>
+      ))}
+      {rubyAnnotations.map((annotation) => (
+        <FixedSlotRubyAnnotation
+          key={annotation.key}
+          annotation={annotation}
+          slotExtentPx={slotExtentPx}
+          baseGlyphLaneWidthPx={baseGlyphLaneWidthPx}
+          rubyLaneWidthPx={rubyLaneWidthPx}
+          fontSizePx={fontSizePx}
+        />
       ))}
     </div>
   );
