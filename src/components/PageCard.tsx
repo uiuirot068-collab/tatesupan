@@ -1076,14 +1076,16 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
 /**
  * 固定slot grid（FixedSlotLine）へ載せてよい論理行かどうか。G1はtext-onlyの
  * 行だけを対象にしていたが、G2aでruby({base,rt})を、G2bで――/……等のnowrap
- * 保護対象を含むtext tokenを対応に加えた。nowrap runもtext token内の通常の
- * 文字と同じ意味論（tokenLength = value.length、1文字1slot）で扱えるため、
- * nowrap対象を含むというだけではもうfallbackしない。tcy / pageBreak /
- * 画像等（他はflowLines生成時点で除去済み）を含む行だけ、現時点ではgridでの
- * 再現方法が未対応のため既存のlegacy TokenView rendererへfallbackする。
+ * 保護対象を含むtext tokenを、G2cでtcy（縦中横）を対応に加えた。nowrap run
+ * もtext token内の通常の文字と同じ意味論（tokenLength = value.length、
+ * 1文字1slot）で扱えるため、nowrap対象を含むというだけではもうfallback
+ * しない。tcyもtokenLength(tcy)=1（既存仕様のまま）の1固定slotとして扱う。
+ * pageBreak / 画像等（他はflowLines生成時点で除去済み）を含む行だけ、
+ * 現時点ではgridでの再現方法が未対応のため既存のlegacy TokenView renderer
+ * へfallbackする。
  */
 function isGridRenderableLine(line: FlowToken[]): boolean {
-  return line.every((token) => token.type === "text" || token.type === "ruby");
+  return line.every((token) => token.type === "text" || token.type === "ruby" || token.type === "tcy");
 }
 
 /** FixedSlotLineが1 slotとして描画する最小単位。slotIndexは行内での絶対位置。 */
@@ -1107,6 +1109,17 @@ interface RubyAnnotation {
 }
 
 /**
+ * TCY（縦中横）token 1個分。tokenLength(tcy)（既存仕様: 常に1）と同じ
+ * 1固定slotだけを占有する装飾として扱う——前後の本文slotを押し下げたり
+ * 詰めたりしない。
+ */
+interface TcyCell {
+  key: string;
+  slotIndex: number;
+  value: string;
+}
+
+/**
  * grid対応の論理行を、固定slot座標（slotIndex）へ並ぶ文字単位の配列へ
  * 分解する。TokenViewと同じ規則（paragraphStartsに基づく一字下げprefix、
  * \nトークンは可視slotを持たない）を踏襲し、文字はサロゲートペアを壊さない
@@ -1121,6 +1134,10 @@ interface RubyAnnotation {
  * 両者が食い違う場合でも後続tokenのslotCursorがpaginationとズレないよう、
  * 不足分は空slotで埋めて必ず tokenLength() の分だけslotCursorを進める。
  *
+ * tcy tokenはtokenLength()（既存仕様: 常に1）が示す通り1slotだけを占有する
+ * ——`slots`側の文字セルとは別に`tcyCells`へ積み、slotCursorは1だけ進める
+ * （token.valueの文字数（例: "12"なら2文字）ぶんslotを消費させない）。
+ *
  * 一字下げはpagination側のcharsPerLine予算に含まれない、純粋に描画時だけの
  * 追加文字のため、満杯行の段落先頭が重なると理論上charsPerLineを1つ超える
  * ことがある。legacy rendererはこの場合 overflow:hidden で末尾のはみ出し分を
@@ -1132,13 +1149,14 @@ function buildLineSlots(
   flatIndexBase: number,
   paragraphStarts: boolean[],
   charsPerLine: number
-): { slots: LineSlot[]; rubyAnnotations: RubyAnnotation[] } {
+): { slots: LineSlot[]; rubyAnnotations: RubyAnnotation[]; tcyCells: TcyCell[] } {
   const slots: LineSlot[] = [];
   const rubyAnnotations: RubyAnnotation[] = [];
+  const tcyCells: TcyCell[] = [];
   let slotCursor = 0;
 
   line.forEach((token, tokenIndex) => {
-    if (token.type !== "text" && token.type !== "ruby") return;
+    if (token.type !== "text" && token.type !== "ruby" && token.type !== "tcy") return;
     const flatIndex = flatIndexBase + tokenIndex;
     const indent = paragraphStarts[flatIndex];
     const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
@@ -1156,6 +1174,12 @@ function buildLineSlots(
       return;
     }
 
+    if (token.type === "tcy") {
+      tcyCells.push({ key: `${flatIndex}-tcy`, slotIndex: slotCursor, value: token.value });
+      slotCursor += tokenLength(token);
+      return;
+    }
+
     // ruby: baseはtextと全く同じ1文字1slotのcellとして描画する。
     const slotCount = tokenLength(token);
     const startSlot = slotCursor;
@@ -1165,7 +1189,7 @@ function buildLineSlots(
       slotCursor += 1;
     });
     // サロゲートペア文字を含むbase等、Array.from()で得られる文字数が
-    // tokenLength()（UTF-16単位）より少ない稀なケースでも、後続tokenの
+    // tokenLength()(UTF-16単位)より少ない稀なケースでも、後続tokenの
     // slotCursorがpaginationとズレないよう不足分は空slotで埋めて揃える。
     for (let i = baseChars.length; i < slotCount; i++) {
       slots.push({ key: `${flatIndex}-pad-${i}`, text: "", slotIndex: slotCursor });
@@ -1177,6 +1201,7 @@ function buildLineSlots(
   return {
     slots: slots.filter((slot) => slot.slotIndex < charsPerLine),
     rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
+    tcyCells: tcyCells.filter((cell) => cell.slotIndex < charsPerLine),
   };
 }
 
@@ -1256,6 +1281,40 @@ function FixedSlotRubyAnnotation({
 }
 
 /**
+ * TCY（縦中横）token 1個分を、対応する固定slot（1slot、tokenLength(tcy)と
+ * 同じ）内へ描画する。既存legacy TokenView（`textCombineUpright: "all"`）と
+ * 同じCSSプロパティを使い、横並びの文字列を1つの縦書き文字枠内へ収める
+ * 既存の見た目をそのまま再現する。base glyph laneと同じ位置・幅
+ * (left:0, width:baseGlyphLaneWidthPx)で描画し、ruby laneへは侵入しない。
+ */
+function FixedSlotTcy({
+  cell,
+  slotExtentPx,
+  baseGlyphLaneWidthPx,
+}: {
+  cell: TcyCell;
+  slotExtentPx: number;
+  baseGlyphLaneWidthPx: number;
+}) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: cell.slotIndex * slotExtentPx,
+        left: 0,
+        width: baseGlyphLaneWidthPx,
+        height: slotExtentPx,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <span style={{ textCombineUpright: "all" }}>{cell.value}</span>
+    </span>
+  );
+}
+
+/**
  * 固定slot grid renderer。grid対応の論理行1つを、charsPerLine個の固定座標
  * (slotTop = slotIndex * slotExtentPx)へ位置付けて描画する。文字が存在する
  * slotだけDOMへ描画するが、座標計算は常に全N slot基準。letterSpacing/
@@ -1282,7 +1341,7 @@ function FixedSlotLine({
   fontSizePx: number;
   fontFamily: string;
 }) {
-  const { slots, rubyAnnotations } = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
+  const { slots, rubyAnnotations, tcyCells } = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
 
   // container幅は常にcolumnThicknessPx固定 — rubyの有無で変えない（rubyの
   // ためにこの論理行自身のlayout widthを広げると、後続の論理行がすべて
@@ -1325,6 +1384,14 @@ function FixedSlotLine({
         >
           {slot.text}
         </span>
+      ))}
+      {tcyCells.map((cell) => (
+        <FixedSlotTcy
+          key={cell.key}
+          cell={cell}
+          slotExtentPx={slotExtentPx}
+          baseGlyphLaneWidthPx={baseGlyphLaneWidthPx}
+        />
       ))}
       {rubyAnnotations.map((annotation) => (
         <FixedSlotRubyAnnotation
