@@ -7,11 +7,12 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  notice?: string | null;
 }
 
 type ModalMode = 'signin' | 'signup' | 'forgot';
 
-export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onSuccess, notice }: AuthModalProps) {
   const [mode, setMode] = useState<ModalMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -102,6 +103,12 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             &times;
           </button>
         </div>
+
+        {notice && (
+          <div className="mt-4 whitespace-pre-line rounded bg-blue-50 p-3 text-sm text-blue-700">
+            {notice}
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded bg-red-50 p-3 text-sm text-red-600">

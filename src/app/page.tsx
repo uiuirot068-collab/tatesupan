@@ -17,6 +17,7 @@ import { Bookshelf } from "@/components/bookshelf/Bookshelf";
 import { useAuth } from "@/components/AuthProvider";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
 import { getProjectsResult } from "@/lib/supabase/projects";
+import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
 import type { Project } from "@/types/database";
 
 // ローカル（このブラウザの IndexedDB）に保存できる作品数の上限。
@@ -43,6 +44,7 @@ export default function Home() {
     projects: Project[];
     error: string | null;
   } | null>(null);
+  const [cloudPlan, setCloudPlan] = useState<CloudPlan | null>(null);
 
   useEffect(() => {
     if (!user || !session) return;
@@ -63,6 +65,22 @@ export default function Home() {
       cancelled = true;
     };
   }, [session, user]);
+
+  // 短編集・再録本メーカー（PREMIUM機能）の利用可否判定用。
+  // 未ログイン時は下記 userStatus の算出側で null（Traveler）扱いにするため、
+  // ここではログイン時のみ取得すれば足りる。
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    void getCloudPlan().then(({ plan }) => {
+      if (!cancelled) setCloudPlan(plan);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const handleCreate = async () => {
     if (creating) return;
@@ -274,6 +292,7 @@ export default function Home() {
           router.push(`/editor?id=${newDocumentId}`);
         }}
         documents={documents ?? []}
+        userStatus={{ plan: user ? cloudPlan : null }}
       />
 
       {isLimitModalOpen && (

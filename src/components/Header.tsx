@@ -48,8 +48,25 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
 export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp }: HeaderProps) {
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalNotice, setAuthModalNotice] = useState<string | null>(null);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const logoSrc = '/caroad_main2.png';
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalNotice(null);
+  };
+
+  const handleSaveClick = () => {
+    if (!user) {
+      setAuthModalNotice(
+        'クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。'
+      );
+      setIsAuthModalOpen(true);
+      return;
+    }
+    onSave?.();
+  };
 
   return (
     <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -92,7 +109,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         {onSave && (
           <button
             type="button"
-            onClick={onSave}
+            onClick={handleSaveClick}
             disabled={isSaving}
             className="text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0"
           >
@@ -120,7 +137,10 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           </div>
         ) : (
           <button
-            onClick={() => setIsAuthModalOpen(true)}
+            onClick={() => {
+              setAuthModalNotice(null);
+              setIsAuthModalOpen(true);
+            }}
             className="whitespace-nowrap flex-shrink-0 rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
           >
             ログイン / 会員登録
@@ -130,7 +150,8 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
 
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={closeAuthModal}
+        notice={authModalNotice}
       />
 
       {onSelectProject && (

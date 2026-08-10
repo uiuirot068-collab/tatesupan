@@ -38,10 +38,10 @@ export default function SearchReplaceModal({
         className="w-full max-w-sm rounded-lg border border-ink/10 bg-base p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-base font-semibold text-ink">検索・置換</h2>
+        <h2 className="mb-4 text-base font-semibold text-ink">置換</h2>
 
         <label className="mb-1 block text-xs text-ink/60">
-          検索する文字列
+          置換する文字列
         </label>
         <input
           autoFocus

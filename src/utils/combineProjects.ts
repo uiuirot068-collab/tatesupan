@@ -2,18 +2,20 @@
 
 import { PAGE_BREAK_MARKER } from '@/lib/tategaki';
 import type { DocumentRecord } from '@/lib/db';
+import type { CloudPlan } from '@/lib/supabase/plans';
 
 export interface UserStatus {
-  isRegistered: boolean; // ユーザー登録済みか
-  isPremium: boolean;    // 有料プラン加入済みか（開発最終段階でStripe等と連動）
+  // 未ログイン（Traveler）は DB 上の plan を持たないため null で表す。
+  // 「traveler」という plan 値を DB / plans.ts 側に追加することはしない。
+  plan: CloudPlan | null;
 }
 
 /**
- * ユーザーがプレミアム機能（短編集メーカー）を利用可能か判定
- * 現段階ではユーザー登録済み（isRegistered === true）であれば解放
+ * ユーザーがプレミアム機能（短編集・再録本メーカー）を利用可能か判定
+ * Light / Unlimited プランのみ利用可（Traveler・Resident は不可）
  */
 export function canUsePremiumFeatures(user: UserStatus): boolean {
-  return user.isRegistered || user.isPremium;
+  return user.plan === 'light' || user.plan === 'unlimited';
 }
 
 /**

@@ -103,7 +103,7 @@ export default function EditorPane({
             onClick={onOpenSearchReplace}
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
-            検索・置換
+            置換
           </button>
           <button
             type="button"

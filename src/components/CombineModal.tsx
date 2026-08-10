@@ -28,7 +28,7 @@ export const CombineModal: React.FC<CombineModalProps> = ({
   onClose,
   onSuccess,
   documents,
-  userStatus = { isRegistered: true, isPremium: false }, // 現段階では登録済み扱いで解放
+  userStatus = { plan: null }, // 呼び出し元が指定しない場合は Traveler 扱い（安全側のロック）
 }) => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -78,7 +78,7 @@ export const CombineModal: React.FC<CombineModalProps> = ({
 
   const handleCombine = async () => {
     if (!isAllowed) {
-      alert('短編集メーカーはユーザー登録（プレミアム機能）が必要です。');
+      alert('短編集・再録本メーカーはLightプラン以上でご利用いただけます。');
       return;
     }
     if (selectedIds.length < 2) {
@@ -145,78 +145,104 @@ export const CombineModal: React.FC<CombineModalProps> = ({
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
           📚 短編集・再録本メーカー <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-normal">PREMIUM</span>
         </h2>
-        <p className="text-xs text-gray-500 mb-4">選択した作品を【改ページ】を挟んで1つの作品に結合します。</p>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              新短編集のタイトル
-            </label>
-            <input
-              type="text"
-              placeholder="例：短編集 2026夏"
-              value={newTitle}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              disabled={isProcessing}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              結合する作品を選択（2つ以上）
-            </label>
-            <div className="max-h-48 overflow-y-auto space-y-1.5 border border-gray-200 dark:border-neutral-800 rounded-lg p-2">
-              {documents.map((doc) => (
-                <label
-                  key={doc.id}
-                  className={`flex items-center gap-2 p-2 rounded-lg text-sm cursor-pointer transition-colors ${
-                    selectedIds.includes(doc.id)
-                      ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-medium'
-                      : 'hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(doc.id)}
-                    onChange={() => handleToggleSelect(doc.id)}
-                    disabled={isProcessing}
-                    className="rounded text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="truncate">{doc.title || '無題のドキュメント'}</span>
-                </label>
-              ))}
+        {!isAllowed ? (
+          <>
+            <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">
+              短編集・再録本メーカーは
+              <br />
+              Lightプラン以上で利用できます。
+            </p>
+            <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
+              複数の作品を選び、
+              <br />
+              一冊の短編集・再録本にまとめられます。
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg"
+              >
+                閉じる
+              </button>
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 mb-4">選択した作品を【改ページ】を挟んで1つの作品に結合します。</p>
 
-          <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={insertTitleAsHeader}
-              onChange={(e) => setInsertTitleAsHeader(e.target.checked)}
-              disabled={isProcessing}
-              className="rounded text-indigo-600"
-            />
-            各作品の先頭に作品タイトル（# 見出し）を自動挿入する
-          </label>
-        </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  新短編集のタイトル
+                </label>
+                <input
+                  type="text"
+                  placeholder="例：短編集 2026夏"
+                  value={newTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  disabled={isProcessing}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                />
+              </div>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={handleClose}
-            disabled={isProcessing}
-            className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg disabled:opacity-50"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleCombine}
-            disabled={isProcessing || selectedIds.length < 2 || !newTitle.trim()}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-all"
-          >
-            {isProcessing ? '結合データを生成中...' : '短編集を作成'}
-          </button>
-        </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  結合する作品を選択（2つ以上）
+                </label>
+                <div className="max-h-48 overflow-y-auto space-y-1.5 border border-gray-200 dark:border-neutral-800 rounded-lg p-2">
+                  {documents.map((doc) => (
+                    <label
+                      key={doc.id}
+                      className={`flex items-center gap-2 p-2 rounded-lg text-sm cursor-pointer transition-colors ${
+                        selectedIds.includes(doc.id)
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-medium'
+                          : 'hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(doc.id)}
+                        onChange={() => handleToggleSelect(doc.id)}
+                        disabled={isProcessing}
+                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="truncate">{doc.title || '無題のドキュメント'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={insertTitleAsHeader}
+                  onChange={(e) => setInsertTitleAsHeader(e.target.checked)}
+                  disabled={isProcessing}
+                  className="rounded text-indigo-600"
+                />
+                各作品の先頭に作品タイトル（# 見出し）を自動挿入する
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={handleClose}
+                disabled={isProcessing}
+                className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleCombine}
+                disabled={isProcessing || selectedIds.length < 2 || !newTitle.trim()}
+                className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg transition-all"
+              >
+                {isProcessing ? '結合データを生成中...' : '短編集を作成'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
