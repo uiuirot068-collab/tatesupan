@@ -131,7 +131,7 @@ function tokenizePlainText(text: string, baseOffset: number): OffsetToken[] {
 }
 
 /** Visual character weight used for page-break accounting. */
-function tokenLength(token: TategakiToken): number {
+export function tokenLength(token: TategakiToken): number {
   if (token.type === "text") return token.value.length;
   if (token.type === "ruby") return token.base.length;
   if (token.type === "image") {
@@ -234,10 +234,18 @@ function nowrapRunFamily(char: string): RegExp | null {
  * is odd may still end with a 1-character fragment on its very last line,
  * since no split point can avoid that.
  *
- * `allowDefer` gates only the case where snapping would defer the entire
- * run to the next line (i.e. place nothing at all this line) — the caller
- * passes `false` once a line is already completely empty, so a run that's
- * simply too long for `charsPerLine` can't be deferred forever.
+ * When fewer than 2 run characters fit before `splitIndex` (so no in-run
+ * snap point exists), the whole run is deferred to the next line instead —
+ * this is always preferred over a 1+1 split, and unlike the old
+ * `allowDefer`-gated version, doesn't require the caller's line to already
+ * hold content: deferring only needs `runStart > minIndex` (i.e. at least
+ * one ordinary character still lands on this line), which room-limited
+ * `splitIndex` guarantees for any `charsPerLine >= 2`. The sole case that
+ * can't defer is `charsPerLine === 1` landing exactly on the run's first
+ * character — a single-cell line has no room for even one character ahead
+ * of the run, so no split can avoid separating the pair there; `allowDefer`
+ * (true once this line already holds something from an earlier token)
+ * still permits deferring even then, since the line isn't left empty.
  */
 function adjustSplitForNowrapRun(
   value: string,
@@ -255,6 +263,7 @@ function adjustSplitForNowrapRun(
   const offsetIntoRun = splitIndex - runStart;
   const snapped = offsetIntoRun % 2 === 0 ? offsetIntoRun : offsetIntoRun - 1;
   if (snapped >= 2) return runStart + snapped;
+  if (runStart > minIndex) return runStart;
   return allowDefer ? runStart : splitIndex;
 }
 
@@ -279,32 +288,40 @@ export function isLineEndProhibited(char: string): boolean {
 }
 
 /**
- * Max characters 行頭禁則 may pull back onto the previous line (追い込み)
- * past `charsPerLine` before giving up — keeps a run of closing brackets
- * from overflowing a line without bound.
- */
-const MAX_OIKOMI_CHARS = 2;
-
-/**
  * Adjusts a naive split point `splitIndex` (`value.slice(minIndex,
  * splitIndex)` is about to become this line's content) so it never leaves
  * an opening bracket as the line's last character, nor a closing bracket /
- * small kana / prolonged mark / iteration mark as the next line's first:
+ * small kana / prolonged mark / iteration mark as the next line's first.
+ *
+ * Both cases are resolved the same way — 追い出し (pushing characters off
+ * this line onto the next) — and never by 追い込み (pulling characters from
+ * the next line onto this one past `charsPerLine`): this line's rendered
+ * column has a fixed height sized for exactly `charsPerLine` characters
+ * (see PageCard.tsx), so growing a line past that count would overflow the
+ * column box and clip under `overflow: hidden`. Retreating only ever
+ * shrinks a line, never grows one, so every line this function produces
+ * still satisfies charCount <= charsPerLine.
  *
  * - 行末禁則 (line-end): while the character just before the split is
- *   prohibited there, the split backs off by one, pushing it to the next
- *   line instead (追い出し). When `allowFullDefer` is false, backing off
- *   stops one character short of `minIndex` instead of reaching it —
- *   guaranteeing at least one character still lands on this line — for the
- *   same reason as `adjustSplitForNowrapRun`'s `allowDefer`: an
- *   already-empty line can't be allowed to defer *everything* it's handed,
- *   or it spins forever re-deferring the same unplaced text. This is a
- *   one-character floor, not "skip backing off altogether" — a line that
- *   already holds a few characters before hitting a trailing bracket run
- *   still gets every one of them pushed off, `allowFullDefer` or not.
+ *   prohibited there (an opening bracket), the split backs off by one.
  * - 行頭禁則 (line-start): while the character at the split is prohibited
- *   there, the split advances by one, pulling it onto this line instead
- *   (追い込み), capped at `MAX_OIKOMI_CHARS`.
+ *   there (a closing bracket / small kana / prolonged mark / iteration
+ *   mark), the split backs off by one more instead of advancing — this
+ *   carries at least one preceding ordinary character over to the next
+ *   line together with the run of prohibited characters, so the next line
+ *   no longer starts with one.
+ *
+ * Both checks run in the same loop so a mixed run (e.g. an opening bracket
+ * immediately followed by prohibited-start punctuation) resolves in one
+ * pass. When `allowFullDefer` is false, backing off stops one character
+ * short of `minIndex` instead of reaching it — guaranteeing at least one
+ * character still lands on this line — for the same reason as
+ * `adjustSplitForNowrapRun`'s `allowDefer`: an already-empty line can't be
+ * allowed to defer *everything* it's handed, or it spins forever
+ * re-deferring the same unplaced text. This is a one-character floor, not
+ * "skip backing off altogether" — a line that already holds a few
+ * characters before hitting a trailing bracket run still gets every one of
+ * them pushed off, `allowFullDefer` or not.
  *
  * Only ever moves within `[minIndex, value.length]`, so it can neither
  * strand nor duplicate characters.
@@ -318,14 +335,11 @@ function adjustSplitForKinsoku(
   let j = splitIndex;
   const backOffFloor = allowFullDefer ? minIndex : Math.min(minIndex + 1, value.length);
 
-  while (j > backOffFloor && isLineEndProhibited(value[j - 1])) {
+  while (
+    j > backOffFloor &&
+    (isLineEndProhibited(value[j - 1]) || (j < value.length && isLineStartProhibited(value[j])))
+  ) {
     j -= 1;
-  }
-
-  let pulled = 0;
-  while (j < value.length && isLineStartProhibited(value[j]) && pulled < MAX_OIKOMI_CHARS) {
-    j += 1;
-    pulled += 1;
   }
 
   return j;
@@ -335,11 +349,22 @@ function adjustSplitForKinsoku(
  * Combines the nowrap-run and kinsoku split adjustments used by both
  * `paginateTokensByLines` and `computePageSourceRanges`, so the two share
  * one definition of "where a line is actually allowed to end" instead of
- * two independently-maintained copies. Both underlying adjustments only
- * move within `[minIndex, value.length]` and neither can grow/shrink past
- * the other's protected boundary (bracket and nowrap-run characters are
- * disjoint sets), so applying them once each, in sequence, is enough —
- * no fixed-point iteration needed.
+ * two independently-maintained copies.
+ *
+ * A single nowrap-then-kinsoku pass isn't enough: kinsoku's retreat (backing
+ * off past a trailing opening bracket, or past a run-final closing bracket /
+ * small kana / prolonged mark that would otherwise start the next line) can
+ * land the split back *inside* a ――/…… run that the nowrap check already
+ * cleared at the original position — e.g. splitting "え――」" (charsPerLine
+ * budget lands right after the pair, but "」" can't start the next line)
+ * would, without re-checking, retreat one character into the middle of the
+ * pair instead of past the whole thing. So the two adjustments run in a
+ * loop, each re-validating the other's output, until a fixed point is
+ * reached. Both underlying adjustments only ever retreat (never advance)
+ * within `[minIndex, splitIndex]`, so `j` is strictly non-increasing and
+ * bounded below by `minIndex` — the loop always terminates in at most
+ * `splitIndex - minIndex` iterations; the `value.length` guard below is
+ * just a defensive upper bound against that invariant ever being violated.
  */
 function adjustLineSplit(
   value: string,
@@ -347,8 +372,14 @@ function adjustLineSplit(
   splitIndex: number,
   allowDefer: boolean
 ): number {
-  const afterNowrap = adjustSplitForNowrapRun(value, splitIndex, minIndex, allowDefer);
-  return adjustSplitForKinsoku(value, minIndex, afterNowrap, allowDefer);
+  let j = splitIndex;
+  for (let guard = 0; guard <= value.length; guard += 1) {
+    const afterNowrap = adjustSplitForNowrapRun(value, j, minIndex, allowDefer);
+    const afterKinsoku = adjustSplitForKinsoku(value, minIndex, afterNowrap, allowDefer);
+    if (afterKinsoku === j) return afterKinsoku;
+    j = afterKinsoku;
+  }
+  return j;
 }
 
 function paginateTokensByLines(

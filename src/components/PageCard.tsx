@@ -1,6 +1,7 @@
 import { Fragment, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import {
   computeParagraphStartFlags,
+  tokenLength,
   type ImagePosition,
   type TategakiPage,
   type TategakiToken,
@@ -159,12 +160,39 @@ export default function PageCard({
 
   const isTwoColumn = settings.columnCount === 2;
 
-  // 1行の高さ(px) と (文字数 * 1文字サイズ) の差分を計算
-  const totalTextHeightPx = layout.charsPerLine * fontSizePx;
-  const spaceDiffPx = Math.max(0, textAreaHeightPx - totalTextHeightPx);
-  // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
-  const gapCount = Math.max(1, layout.charsPerLine - 1);
-  const microSpacingPx = layout.charsPerLine > 1 ? spaceDiffPx / gapCount : 0;
+  // 1行の高さ(px)に対し、指定した文字数がちょうど収まるよう文字間隔(letter-spacing)を
+  // 均等配分する。満杯行（天〜地いっぱいまで文字が続く行）だけに適用し、
+  // 地のラインへ正確に吸着させるための理論値。
+  const computeMicroSpacingPx = (availableHeightPx: number, charCount: number): number => {
+    const totalTextHeightPx = charCount * fontSizePx;
+    const spaceDiffPx = Math.max(0, availableHeightPx - totalTextHeightPx);
+    // 文字間の数（N文字ならN-1箇所）で割ることで、最終文字も含めて地のラインへ正確に吸着させる
+    const gapCount = Math.max(1, charCount - 1);
+    return charCount > 1 ? spaceDiffPx / gapCount : 0;
+  };
+  const microSpacingPx = computeMicroSpacingPx(textAreaHeightPx, layout.charsPerLine);
+  const columnMicroSpacingPx = computeMicroSpacingPx(columnHeightPx, layout.charsPerLine);
+
+  // 行が「（見た目上）満杯」かどうかは、行内トークン数ではなく実際に描画される
+  // 可視文字セル数で判定する必要がある。text/ruby トークンは複数文字を1トー
+  // クンにまとめて持つことがあり（例: value.slice(i, j)）、逆に tcy トークン
+  // は2文字で1セル分しか占めないため、トークン数と文字セル数は一致しない。
+  //
+  // tategaki.ts の tokenLength() をそのまま使わないのは、"\n" を1セルとして
+  // 数えてしまうため（pagination がその行末の \n 分の空きを charsPerLine
+  // 予算へ正しく計上するのに必要な値であり、そちらの仕様は変更しない）。
+  // しかし \n は TokenView で可視文字として描画されない（ゼロ幅スペースの
+  // み）ため、字間補正の「見た目上埋まっているか」判定にはこの1セル分を
+  // 含めてはならない。そのため PageCard 側だけで使う、可視セル数専用の
+  // 計算をここに持つ。
+  const lineVisualCellCount = (line: FlowToken[]): number =>
+    line.reduce((sum, token) => {
+      if (token.type === "text") {
+        return sum + token.value.replace(/\n/g, "").length;
+      }
+      // ruby/tcy/pageBreak は \n を含み得ないので tokenLength() と同じ重みでよい
+      return sum + tokenLength(token);
+    }, 0);
 
   // 本文全体を囲むコンテナ。行境界の判定はここでは行わず（ブラウザの自動
   // 折り返しに委ねず）、tategaki.ts が確定した論理行を下記 lineStyle の
@@ -185,7 +213,7 @@ export default function PageCard({
     fontFamily: settings.fontFamily || "'Shippori Mincho', serif",
     lineHeight: settings.lineHeightRatio,
     color: "#000000",
-    letterSpacing: `${microSpacingPx}px`, // 微小ピッチ補正で地のラインへ吸着
+    letterSpacing: "normal", // 短行・段落末尾は上詰め固定（既定ピッチのまま）
     // 縦書き・横書き双方のプロポーショナル詰め（vpal/vhal/palt/vkrn等）をすべて完全オフ
     fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
     // 東アジア文字を完全全角に固定
@@ -196,8 +224,16 @@ export default function PageCard({
     textAlignLast: "start", // 改行で終わる短行（見出しや段落末尾）は上詰め固定
   };
 
+  // 満杯行（charsPerLine いっぱいまで文字が続く行）だけ、天〜地の利用可能高さに
+  // 対して文字間隔を均等配分し、地のラインまで正確に届かせる。
+  const fullLineStyle: CSSProperties = { ...lineStyle, letterSpacing: `${microSpacingPx}px` };
+
   // 2段組: 1行の天地方向の長さは段（column）の高さ基準になる。
   const columnLineStyle: CSSProperties = { ...lineStyle, height: columnHeightPx };
+  const fullColumnLineStyle: CSSProperties = {
+    ...columnLineStyle,
+    letterSpacing: `${columnMicroSpacingPx}px`,
+  };
 
   // 扉・目次・奥付ページやユーザーがノンブル非表示に指定したページでは、
   // ノンブルだけでなく柱（作品名・章名の running header）も併せて隠すのが
@@ -581,16 +617,23 @@ export default function PageCard({
                         textOrientation: "mixed",
                       }}
                     >
-                      {columnLines.map((line, lineIndex) => (
-                        <div key={lineIndex} className="tategaki-line" style={columnLineStyle}>
-                          {line.map((token, tokenIndex) => {
-                            const flatIndex = columnFlowLineOffsets![segmentIndex][lineIndex] + tokenIndex;
-                            return (
-                              <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
-                            );
-                          })}
-                        </div>
-                      ))}
+                      {columnLines.map((line, lineIndex) => {
+                        const isFullLine = lineVisualCellCount(line) === layout.charsPerLine;
+                        return (
+                          <div
+                            key={lineIndex}
+                            className="tategaki-line"
+                            style={isFullLine ? fullColumnLineStyle : columnLineStyle}
+                          >
+                            {line.map((token, tokenIndex) => {
+                              const flatIndex = columnFlowLineOffsets![segmentIndex][lineIndex] + tokenIndex;
+                              return (
+                                <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -602,16 +645,23 @@ export default function PageCard({
                     （本文を入力すると、ここに縦書きで表示されます）
                   </span>
                 ) : (
-                  flowLines.map((line, lineIndex) => (
-                    <div key={lineIndex} className="tategaki-line" style={lineStyle}>
-                      {line.map((token, tokenIndex) => {
-                        const flatIndex = flowLineOffsets[lineIndex] + tokenIndex;
-                        return (
-                          <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
-                        );
-                      })}
-                    </div>
-                  ))
+                  flowLines.map((line, lineIndex) => {
+                    const isFullLine = lineVisualCellCount(line) === layout.charsPerLine;
+                    return (
+                      <div
+                        key={lineIndex}
+                        className="tategaki-line"
+                        style={isFullLine ? fullLineStyle : lineStyle}
+                      >
+                        {line.map((token, tokenIndex) => {
+                          const flatIndex = flowLineOffsets[lineIndex] + tokenIndex;
+                          return (
+                            <TokenView key={flatIndex} token={token} indent={paragraphStarts[flatIndex]} />
+                          );
+                        })}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -967,10 +1017,21 @@ function TokenView({
   if (token.type === "pageBreak") {
     return null;
   }
+  // paginateTokensByLines はユーザー入力の \n を「行の区切り」として currentLine
+  // に積んだ直後に breakLine() している（＝この \n トークンの直後で必ず新しい
+  // tategaki-line <div> が始まる）。行境界そのものは既にその div 分割によって
+  // 表現済みなので、\n をそのまま文字として描画すると、pre-wrap の tategaki-line
+  // 内でブラウザがもう一度改行と解釈し、余分な空の行（空列）が生まれてしまう。
+  // そのため \n トークンは可視の改行文字としては描画しない。
+  // ただし、段落間の空行（"\n\n"）では2つ目の \n がその行唯一のトークンになり、
+  // 中身を完全に空にすると tategaki-line の height(auto) は行ボックスを持たず
+  // 0幅に潰れてしまう（＝段落間の空列が消える）。ゼロ幅スペースを描画すること
+  // で、可視の空白や二重改行を発生させずに1行分の行ボックス（line-height分の
+  // 段の厚み）だけを確保する。
   return (
     <>
       {prefix}
-      {renderNowrapProtected(token.value)}
+      {token.value === "\n" ? "​" : renderNowrapProtected(token.value)}
     </>
   );
 }
