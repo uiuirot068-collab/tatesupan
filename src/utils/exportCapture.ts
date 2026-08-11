@@ -208,6 +208,19 @@ export async function capturePageToCanvas(
     scaleRoot.style.setProperty('transition', 'none');
   }
 
+  // `.page-card` itself (`target`) carries an inline `marginTop: "auto"`
+  // (see PageCard.tsx) that a live spread row resolves to a concrete px
+  // value whenever this page's sibling in the same 見開き has a taller
+  // toolbar/挿絵-panel above it. html-to-image clones `target`'s *computed*
+  // style, so that live-resolved margin-top would otherwise be baked into
+  // the clone before the `style` override below ever runs — neutralizing it
+  // here, on the live element, for the moment of capture (and restoring it
+  // right after, same pattern as `scaleRoot` above) ensures the clone never
+  // observes a nonzero value in the first place, regardless of which spread
+  // partner this page happens to render next to.
+  const previousMarginTop = target.style.marginTop;
+  target.style.marginTop = '0px';
+
   let tFontsReady = tResolved;
   let tMeasured = tResolved;
   let tFontEmbedReady = tResolved;
@@ -284,11 +297,17 @@ export async function capturePageToCanvas(
       // extra room reserved for a margin) — so a nonzero margin-top pushes
       // the page's own content down by N px *inside that fixed box*,
       // silently clipping N px off its own bottom edge and leaving an N px
-      // gap that reads as extra top margin. Forcing it to 0 for the export
-      // only (the live preview's own alignment is untouched) removes that
-      // artifact so the captured content starts exactly at the page's own
-      // top, matching what TrimGuide (measured independently, see
-      // measureTrimGuideRatioRect below) actually shows on screen.
+      // gap that reads as extra top margin (confirmed via DevTools on a
+      // page whose 見開き partner had a taller 挿絵 panel: this rendered as
+      // the page's whole body text shifted downward in JPG/PDF export only,
+      // never in the live preview). The live `target.style.marginTop = '0px'`
+      // reset above (restored in `finally`) already neutralizes this before
+      // html-to-image ever reads computed style, so this clone-side
+      // `marginTop: '0'` is now a second, redundant layer for the same
+      // property — kept intentionally as defense in depth rather than
+      // relied upon alone, so the captured content starts exactly at the
+      // page's own top, matching what TrimGuide (measured independently,
+      // see measureTrimGuideRatioRect below) actually shows on screen.
       style: {
         boxShadow: 'none',
         outline: 'none',
@@ -305,6 +324,7 @@ export async function capturePageToCanvas(
       scaleRoot.style.transform = previousTransform;
       scaleRoot.style.transition = previousTransition;
     }
+    target.style.marginTop = previousMarginTop;
     if (EXPORT_TIMING_ENABLED) {
       const tEnd = performance.now();
       // 実行順は「resolve → document.fonts.ready → measure →

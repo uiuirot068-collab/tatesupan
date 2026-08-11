@@ -1,6 +1,7 @@
 'use client';
 
 import { jsPDF } from 'jspdf';
+import { encode } from 'fast-png';
 import { capturePageToCanvas, EXPORT_TIMING_ENABLED } from './exportCapture';
 import { BLEED_MM } from '@/lib/pageLayout';
 
@@ -81,6 +82,32 @@ export function cropToTrimCanvas(
   return cropped;
 }
 
+/**
+ * PDF出力（このファイルのみ）を正式仕様のDeviceGrayにするための変換。
+ * canvas→JPEGだとjsPDFは常にJPEGの3-componentを見て/DeviceRGBと判定
+ * するため、jsPDFが/DeviceGrayと判定する「本物の1-channel grayscale
+ * PNG」をfast-pngの公開API（deep importなし）でencodeしてから渡す。
+ * JPG/JPG一括/JPG ZIP export（exportImage.ts）はこの関数を経由しない。
+ *
+ * capturePageToCanvasはhtml-to-imageの`backgroundColor: '#ffffff'`
+ * （＋対象要素自体へのbackgroundColor/background強制指定）により常に
+ * 不透明white背景の上へcaptureし、cropToTrimCanvasもその不透明pixelを
+ * drawImageでそのまま複製するだけなので、この経路のcanvasは常に
+ * alpha=255——white合成の追加コストはここでは発生させない。
+ */
+function canvasToGrayscalePng(canvas: HTMLCanvasElement): Uint8Array {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to get 2D context for grayscale PDF conversion.');
+  }
+  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const gray = new Uint8Array(width * height);
+  for (let src = 0, dst = 0; dst < gray.length; src += 4, dst++) {
+    gray[dst] = Math.round(0.299 * data[src] + 0.587 * data[src + 1] + 0.114 * data[src + 2]);
+  }
+  return encode({ width, height, channels: 1, depth: 8, data: gray });
+}
+
 export async function exportCustomPdf(
   elements: HTMLElement[],
   options: PdfOptions
@@ -155,12 +182,12 @@ export async function exportCustomPdf(
         console.log(`canvas crop（仕上がり）: ${(performance.now() - tCropStart).toFixed(1)} ms`);
       }
       const tEncodeStart = performance.now();
-      const imgData = cropped.toDataURL('image/jpeg', 0.95);
+      const pngData = canvasToGrayscalePng(cropped);
       if (EXPORT_TIMING_ENABLED) {
-        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+        console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
       const tAddImageStart = performance.now();
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      pdf.addImage(pngData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'MEDIUM');
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
@@ -169,12 +196,12 @@ export async function exportCustomPdf(
     } else if (mode === 'bleed') {
       // 断ち落としPDF: 塗り足し込みページを原寸のまま出力。
       const tEncodeStart = performance.now();
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pngData = canvasToGrayscalePng(canvas);
       if (EXPORT_TIMING_ENABLED) {
-        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+        console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
       const tAddImageStart = performance.now();
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(pngData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'MEDIUM');
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
@@ -182,9 +209,9 @@ export async function exportCustomPdf(
       // 入稿用フルサイズPDF: 塗り足し込み原稿をmargin位置へ原寸配置
       // （正式仕様E。以前はここでtrim寸法へ縮小してしまっていた）。
       const tEncodeStart = performance.now();
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pngData = canvasToGrayscalePng(canvas);
       if (EXPORT_TIMING_ENABLED) {
-        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+        console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
 
       // ページ全面(pdfWidth×pdfHeight)を不透明whiteで塗ってから画像を
@@ -197,7 +224,7 @@ export async function exportCustomPdf(
       pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
 
       const tAddImageStart = performance.now();
-      pdf.addImage(imgData, 'JPEG', margin, margin, bleedWidth, bleedHeight);
+      pdf.addImage(pngData, 'PNG', margin, margin, bleedWidth, bleedHeight, undefined, 'MEDIUM');
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
