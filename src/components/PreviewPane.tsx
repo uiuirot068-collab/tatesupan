@@ -1,4 +1,5 @@
 import {
+  memo,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -43,6 +44,178 @@ const SPREAD_GAP_PX = 4;
 
 /** Padding (px) of the scroll container per axis (`p-6` = 1.5rem × 2 sides, uniform on all four sides). */
 const SCROLL_CONTAINER_PADDING_X_PX = 48;
+
+// [TateSpun perf] preview performance Phase P1: PageCardはReact.memo化した
+// (PageCard.tsx参照)が、per-page callback（onToggleSelect等）は元々
+// `(index) => (event) => {...}` という毎render新規生成されるcurry関数の
+// 呼び出し結果だったため、propsの参照が毎回変わりmemoを素通りしてしまう。
+// これら2つのhookは、呼び出し元のhandler本体（selected/dragIndex等の
+// 最新値を読む閉包ロジック）は一切変更せず、「最新のhandlerへ委譲するだけの
+// 安定した参照を1度だけ作ってキャッシュする」薄いラッパーを提供する
+// （React未公式のuseEvent的パターン）。ref経由で常に最新のhandlerへ
+// 委譲するため、キャッシュされた参照を呼び出しても古いselected/dragIndex
+// 等を使って動作することはない（stale closure化しない）。
+/** page indexを取らない単一callbackを、参照だけ安定させて返す。 */
+function useStableCallback<Args extends unknown[], R>(fn: (...args: Args) => R): (...args: Args) => R {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  const stableRef = useRef<((...args: Args) => R) | undefined>(undefined);
+  if (!stableRef.current) {
+    stableRef.current = (...args: Args) => fnRef.current(...args);
+  }
+  return stableRef.current;
+}
+
+/** `(index) => (...args) => R` 形のcurry factoryを、index単位で参照が安定するよう包む。 */
+function useStableIndexedCallback<Args extends unknown[], R>(
+  factory: (index: number) => (...args: Args) => R
+): (index: number) => (...args: Args) => R {
+  const factoryRef = useRef(factory);
+  factoryRef.current = factory;
+  const cacheRef = useRef<Map<number, (...args: Args) => R> | undefined>(undefined);
+  if (!cacheRef.current) cacheRef.current = new Map();
+  const getRef = useRef<((index: number) => (...args: Args) => R) | undefined>(undefined);
+  if (!getRef.current) {
+    getRef.current = (index: number) => {
+      const cache = cacheRef.current!;
+      let wrapper = cache.get(index);
+      if (!wrapper) {
+        wrapper = (...args: Args) => factoryRef.current(index)(...args);
+        cache.set(index, wrapper);
+      }
+      return wrapper;
+    };
+  }
+  return getRef.current;
+}
+
+// [TateSpun perf] drag調査で判明: dragIndex/dropIndexはPreviewPane自身の
+// stateのため、どちらかが変わるたびPreviewPane関数本体が再実行され、
+// spreadGroups.map(...)内で最大365ページぶんの<PageCard>要素生成＋memo
+// comparator呼び出しが毎回走っていた（PageCard自身のDOM再描画は既存の
+// React.memoで正しく抑えられていたが、その手前のJSX構築自体は防げていな
+// かった）。1ページぶんの<div ref><PageCard/></div>をこのPageSlotへ機械的
+// に切り出し、React.memo（デフォルトのshallow比較、custom comparatorなし）
+// で包むことで、実際に値が変わった行だけがPageCard要素を作り直すように
+// する。isDragging/isDropTarget/isSelectedを生のdragIndex/dropIndex/
+// selected Setではなくpage単位のbooleanとして渡しているのが要——生の
+// dragIndex/dropIndexをそのまま渡すと、値が変わるたび全PageSlotのshallow
+// 比較が「不一致」になり意味がなくなる。他のprops（page/settings/layout/
+// stable化済みcallback等）は元のJSXと同じ式をそのまま呼び出し元で評価して
+// 渡しているだけで、値・挙動は変えていない。
+interface PageSlotProps {
+  index: number;
+  registerRef: (el: HTMLDivElement | null) => void;
+  page: TategakiPage;
+  pageSignature: string;
+  startsNewParagraph: boolean;
+  settings: PageSettings;
+  layout: PageLayout;
+  images: Record<string, string>;
+  imageLayerOrder: Record<string, number>;
+  isSelected: boolean;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  /** isDropTargetがfalseの間は常にnull（呼び出し側でそう揃えている）——無関係な
+   * ページのPageSlot propsをdragoverごとに変化させないため。 */
+  dropPosition: "before" | "after" | null;
+  onToggleSelect?: (event: MouseEvent) => void;
+  onDragStart?: (event: DragEvent) => void;
+  onDragOver?: (event: DragEvent) => void;
+  onDrop?: (event: DragEvent) => void;
+  onDragEnd?: (event: DragEvent) => void;
+  onInsertImage?: (file: File) => void;
+  insertingImage: boolean;
+  onImagePositionChange?: (imageId: string, position: ImagePosition) => void;
+  onImageDelete?: (imageId: string) => void;
+  onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
+  hideNombre: boolean;
+  onHideNombreChange?: (hideNombre: boolean) => void;
+  hideHashira: boolean;
+  onHideHashiraChange?: (hideHashira: boolean) => void;
+  hashiraOverride?: string;
+  chromeScale: number;
+}
+
+const PageSlot = memo(function PageSlot({
+  index,
+  registerRef,
+  page,
+  pageSignature,
+  startsNewParagraph,
+  settings,
+  layout,
+  images,
+  imageLayerOrder,
+  isSelected,
+  isDragging,
+  isDropTarget,
+  dropPosition,
+  onToggleSelect,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onInsertImage,
+  insertingImage,
+  onImagePositionChange,
+  onImageDelete,
+  onImageLayerChange,
+  hideNombre,
+  onHideNombreChange,
+  hideHashira,
+  onHideHashiraChange,
+  hashiraOverride,
+  chromeScale,
+}: PageSlotProps) {
+  return (
+    <div ref={registerRef} className="relative flex shrink-0">
+      {/* ページ間drop挿入ガイド: PageCard.tsx自体は変更せず、その兄弟として
+          hover中のページ1枚だけに細い縦線を重ねる。見開きはRTL表示——
+          このページの右半分をhoverしたとき("before"、このページの手前へ
+          挿入)は右端に、左半分("after"、このページの後ろへ挿入)は左端に
+          出す。dropPositionはisDropTargetがtrueの行だけ非nullになるよう
+          呼び出し側で揃えているため、無関係な行では常にnullで再描画されない。 */}
+      {dropPosition && (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 z-10 w-1 rounded-full bg-accent ${
+            dropPosition === "before" ? "right-0" : "left-0"
+          }`}
+        />
+      )}
+      <PageCard
+        pageNumber={index + 1}
+        page={page}
+        pageSignature={pageSignature}
+        startsNewParagraph={startsNewParagraph}
+        settings={settings}
+        layout={layout}
+        images={images}
+        imageLayerOrder={imageLayerOrder}
+        selected={isSelected}
+        isDragging={isDragging}
+        isDropTarget={isDropTarget}
+        onToggleSelect={onToggleSelect}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+        onInsertImage={onInsertImage}
+        insertingImage={insertingImage}
+        onImagePositionChange={onImagePositionChange}
+        onImageDelete={onImageDelete}
+        onImageLayerChange={onImageLayerChange}
+        hideNombre={hideNombre}
+        onHideNombreChange={onHideNombreChange}
+        hideHashira={hideHashira}
+        onHideHashiraChange={onHideHashiraChange}
+        hashiraOverride={hashiraOverride}
+        chromeScale={chromeScale}
+      />
+    </div>
+  );
+});
 
 interface PreviewPaneProps {
   content: string;
@@ -117,6 +290,22 @@ export default function PreviewPane({
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
   const paragraphStarts = useMemo(() => computePageParagraphStarts(pages), [pages]);
 
+  // [TateSpun perf] PageCard.tsx側のReact.memoコンパレータへ渡す、ページ
+  // ごとの軽量content signature。`pages`の各要素はpaginateTokensが呼ばれる
+  // たび（＝`pages`自体のuseMemoが再計算されるたび）に新しいオブジェクト
+  // 参照になる（tokenizeTategakiが文書全体を毎回再構築するため）ので、
+  // `page`オブジェクトの参照一致では「このページの内容は本当に変わって
+  // いないか」を判定できない。detokenizeTategaki(page.tokens)は既存の
+  // token→原文復元ロジックをそのまま再利用した軽量な文字列化（深い
+  // JSON.stringify等は行わない）で、ページ内容（ruby/tcy/画像markerを
+  // 含む）が実質同一かどうかの比較に十分な信号になる。`pages`自体と同じ
+  // cadence（useDeferredValue経由）でしか再計算されないため、1文字入力
+  // ごとに毎回計算されるわけではない。
+  const pageSignatures = useMemo(
+    () => pages.map((page) => detokenizeTategaki(page.tokens)),
+    [pages]
+  );
+
   // Maps each paginated page object back to its position in `pages` so
   // reorder reconstruction can tell which pages were originally adjacent
   // (moveSelected/reorderByDrag rearrange these same references, they never
@@ -174,6 +363,10 @@ export default function PreviewPane({
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  // "このページの前" か "このページの後" か。dropIndexだけでは見開きの
+  // 「ページとページの間」を区別できないため、dragover時のpointer位置
+  // (ページ自身の横方向の中点との比較)から独立に決定する。
+  const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
   const [insertingImageIndex, setInsertingImageIndex] = useState<number | null>(null);
   const lastClickedRef = useRef<number | null>(null);
 
@@ -599,21 +792,34 @@ export default function PreviewPane({
     if (dragIndex === null) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
+    // ページ間dropの狙いやすさ改善: hover中のページ1枚だけ（event.currentTarget、
+    // 他のページのrectは読まない）の横方向中点とpointerを比較し、「このページの
+    // 前」か「後」かを決める。見開きは右綴じ(RTL)——displayGroupが並び替えている
+    // 通り、DOM上は奇数(higher番号)ページが左、偶数(lower番号)ページが右に来る
+    // ため、ページ自身の右半分は「番号が小さい方向＝前」、左半分は「番号が
+    // 大きい方向＝後」に対応する。
+    const rect = event.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const position: "before" | "after" = event.clientX > midX ? "before" : "after";
     setDropIndex(index);
+    setDropPosition(position);
   };
 
   const handleDrop = (index: number) => (event: DragEvent) => {
     event.preventDefault();
     if (dragIndex === null) return;
     const movingSet = selected.has(dragIndex) ? selected : new Set([dragIndex]);
-    const nextPages = reorderByDrag(pages, movingSet, index);
+    // reorderByDragが期待する「この元indexの要素の直前に挿入」semanticsに
+    // 合わせて、before/afterを単一の挿入位置へ変換する。関数本体は無変更。
+    const insertionIndex = dropPosition === "after" ? index + 1 : index;
+    const nextPages = reorderByDrag(pages, movingSet, insertionIndex);
 
     // Re-derive selection: which final positions hold the moved pages.
     const movedCount = movingSet.size;
     const restIndices = pages
       .map((_, i) => i)
       .filter((i) => !movingSet.has(i));
-    let insertAt = restIndices.findIndex((i) => i >= index);
+    let insertAt = restIndices.findIndex((i) => i >= insertionIndex);
     if (insertAt === -1) insertAt = restIndices.length;
     const nextSelected = new Set<number>();
     for (let k = 0; k < movedCount; k++) nextSelected.add(insertAt + k);
@@ -621,11 +827,13 @@ export default function PreviewPane({
     applyReorder(nextPages, nextSelected);
     setDragIndex(null);
     setDropIndex(null);
+    setDropPosition(null);
   };
 
   const handleDragEnd = () => {
     setDragIndex(null);
     setDropIndex(null);
+    setDropPosition(null);
   };
 
   // Every image-editing operation below splices `content` (the sole source
@@ -689,6 +897,15 @@ export default function PreviewPane({
     onImageDelete?.(imageId);
   };
 
+  // [TateSpun perf] layerOrderは(上記の挿絵handlerと違い)contentへ一切
+  // 書き戻さない単純な委譲のため、他のhandlerのような`content`スプライスを
+  // 持つローカルhandlerが存在しなかった。他callbackと同じくuseStableCallback
+  // で安定化するには、ラップ対象のfunction参照自体が必要なため、ここに
+  // 委譲するだけのローカルhandlerを追加する。
+  const handleImageLayerChange = (updates: { id: string; layerOrder: number }[]) => {
+    onImageLayerChange?.(updates);
+  };
+
   const handleHideNombreChange = (pageNumber: number) => (hideNombre: boolean) => {
     if (!onSettingsChange) return;
     onSettingsChange({
@@ -710,6 +927,33 @@ export default function PreviewPane({
       })),
     });
   };
+
+  // [TateSpun perf] drag調査で判明: registerPageElementも上記と同じ
+  // `(index) => (el) => {...}`のcurry factoryで、element ref propへ
+  // `registerPageElement(index)`をそのまま渡していたため毎render新しい
+  // ref callbackになり、365ページぶんのref detach(null呼び出し)/attach
+  // (新callbackへの再登録)がdragover起因の再render毎に発生していた。
+  // 他のindexed callbackと同じuseStableIndexedCallbackで包み、page index
+  // ごとに参照を安定させる（登録先Map・attach/detachの意味は変更なし）。
+  const stableRegisterPageElement = useStableIndexedCallback(registerPageElement);
+
+  // [TateSpun perf] 上記の各handlerは毎render新規に作られるcurry関数の
+  // ままにしておき（挙動の重複実装を避けるため本体は書き換えない）、
+  // PageCardへ実際に渡す参照だけをuseStable(Indexed)Callbackで安定させる。
+  // PageCard.tsx側のReact.memoコンパレータがcallback propsを参照比較する
+  // ため、ここを安定させないと通常の1文字入力でも全PageCardのmemoが
+  // 素通りしてしまう。
+  const stableToggleSelect = useStableIndexedCallback(handleToggleSelect);
+  const stableDragStart = useStableIndexedCallback(handleDragStart);
+  const stableDragOver = useStableIndexedCallback(handleDragOver);
+  const stableDrop = useStableIndexedCallback(handleDrop);
+  const stableDragEnd = useStableCallback(handleDragEnd);
+  const stableInsertImage = useStableIndexedCallback(handleInsertImage);
+  const stableImagePositionChange = useStableCallback(handleImagePositionChange());
+  const stableImageDelete = useStableCallback(handleImageDelete());
+  const stableImageLayerChange = useStableCallback(handleImageLayerChange);
+  const stableHideNombreChange = useStableIndexedCallback(handleHideNombreChange);
+  const stableHideHashiraChange = useStableIndexedCallback(handleHideHashiraChange);
 
   if (isCollapsed) {
     return (
@@ -936,42 +1180,52 @@ export default function PreviewPane({
                   : undefined,
               }}
             >
-              {displayGroup.map((index) => (
-                <div key={index} ref={registerPageElement(index)} className="flex shrink-0">
-                  <PageCard
-                    pageNumber={index + 1}
+              {displayGroup.map((index) => {
+                // isDropTarget算出をここで一度だけ行い、PageCardへ渡す
+                // isDropTargetと、挿入ガイド用dropPositionの両方で使い回す
+                // ——無関係なページ（dropIndex !== index）ではdropPositionが
+                // 常にnullのままになるようにするのが目的（dragoverごとの
+                // PageSlot props不変を保つため）。
+                const isPageDropTarget = dropIndex === index && dragIndex !== index;
+                return (
+                  <PageSlot
+                    key={index}
+                    index={index}
+                    registerRef={stableRegisterPageElement(index)}
                     page={pages[index]}
+                    pageSignature={pageSignatures[index]}
                     startsNewParagraph={paragraphStarts[index]}
                     settings={settings}
                     layout={layout}
                     images={images}
                     imageLayerOrder={imageLayerOrder}
-                    selected={selected.has(index)}
+                    isSelected={selected.has(index)}
                     isDragging={dragIndex === index}
-                    isDropTarget={dropIndex === index && dragIndex !== index}
-                    onToggleSelect={canReorder ? handleToggleSelect(index) : undefined}
-                    onDragStart={canReorder ? handleDragStart(index) : undefined}
-                    onDragOver={canReorder ? handleDragOver(index) : undefined}
-                    onDrop={canReorder ? handleDrop(index) : undefined}
-                    onDragEnd={canReorder ? handleDragEnd : undefined}
-                    onInsertImage={canReorder ? handleInsertImage(index) : undefined}
+                    isDropTarget={isPageDropTarget}
+                    dropPosition={isPageDropTarget ? dropPosition : null}
+                    onToggleSelect={canReorder ? stableToggleSelect(index) : undefined}
+                    onDragStart={canReorder ? stableDragStart(index) : undefined}
+                    onDragOver={canReorder ? stableDragOver(index) : undefined}
+                    onDrop={canReorder ? stableDrop(index) : undefined}
+                    onDragEnd={canReorder ? stableDragEnd : undefined}
+                    onInsertImage={canReorder ? stableInsertImage(index) : undefined}
                     insertingImage={insertingImageIndex === index}
-                    onImagePositionChange={canReorder ? handleImagePositionChange() : undefined}
-                    onImageDelete={canReorder ? handleImageDelete() : undefined}
-                    onImageLayerChange={canReorder ? onImageLayerChange : undefined}
+                    onImagePositionChange={canReorder ? stableImagePositionChange : undefined}
+                    onImageDelete={canReorder ? stableImageDelete : undefined}
+                    onImageLayerChange={canReorder ? stableImageLayerChange : undefined}
                     hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
                     onHideNombreChange={
-                      onSettingsChange ? handleHideNombreChange(index + 1) : undefined
+                      onSettingsChange ? stableHideNombreChange(index + 1) : undefined
                     }
                     hideHashira={Boolean(settings.pageOverrides[index + 1]?.hideHashira)}
                     onHideHashiraChange={
-                      onSettingsChange ? handleHideHashiraChange(index + 1) : undefined
+                      onSettingsChange ? stableHideHashiraChange(index + 1) : undefined
                     }
                     hashiraOverride={settings.pageOverrides[index + 1]?.hashiraOverride}
                     chromeScale={chromeScale}
                   />
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         })}

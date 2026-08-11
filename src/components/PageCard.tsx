@@ -1,4 +1,13 @@
-import { Fragment, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  memo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   computeParagraphStartFlags,
   tokenLength,
@@ -35,6 +44,17 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
 interface PageCardProps {
   pageNumber: number;
   page: TategakiPage;
+  /**
+   * [TateSpun perf] Phase P1: `page`は`paginateTokens`が呼ばれるたび（＝
+   * PreviewPane側の`pages` useMemoが再計算されるたび）に丸ごと新しい
+   * オブジェクト参照になる（tokenizeTategakiが文書全体を毎回再構築する
+   * ため）。React.memoの比較で`page`の参照一致に頼ると、遠く離れた
+   * ページの編集でも全ページのmemoが素通りしてしまうため、代わりに
+   * PreviewPane側で`detokenizeTategaki(page.tokens)`から作った軽量な
+   * content signature文字列をここで比較する（下記memo比較関数参照）。
+   * PageCard自身の描画では使わない（比較専用）。
+   */
+  pageSignature: string;
   /** Whether this page's first content token begins a genuine new paragraph (vs. a mid-sentence page break). Defaults to true. */
   startsNewParagraph?: boolean;
   settings: PageSettings;
@@ -82,7 +102,7 @@ interface PageCardProps {
   chromeScale?: number;
 }
 
-export default function PageCard({
+function PageCard({
   pageNumber,
   page,
   startsNewParagraph = true,
@@ -829,6 +849,90 @@ export default function PageCard({
     </div>
   );
 }
+
+/**
+ * [TateSpun perf] Phase P1: PageCard.memoのカスタム比較関数。
+ *
+ * `page`は毎pagination再計算で新規オブジェクト参照になるため、素の
+ * `page1 === page2`は使わず、PreviewPane側で作られた軽量content
+ * signature（`pageSignature`、detokenizeTategaki(page.tokens)ベース）を
+ * 代わりに比較する——ページの実質内容（token構成）が変わっていなければ
+ * signatureも一致する。
+ *
+ * callback props（onToggleSelect等）はPreviewPane側で
+ * useStable(Indexed)Callbackにより「同じpage index・同じcanReorder等の
+ * 間は参照が安定する」よう既に安定化されているため、ここでは通常通り
+ * 参照(===)比較でよい——選択状態やドラッグ状態等、callbackの実際の挙動を
+ * 左右するstateはselected/isDragging/isDropTarget等の個別propとして別途
+ * 比較しているため、callback参照が変わらないままrenderをskipしても
+ * 古いselected/dragIndex等を使って動作すること（stale closure化）はない。
+ *
+ * settings/layout/images/imageLayerOrderは親から渡される安定した
+ * オブジェクト参照（ユーザーが実際にそれらを変更したときだけ変わる）
+ * なので参照比較のままでよい。
+ *
+ * 見た目に影響する可能性のあるpropsを網羅的に列挙しており、他のprops
+ * だけ変わって見た目が変わらないケースを想定した部分省略はしていない
+ * （「見た目が変わるべきページを誤ってskipしない」ことを優先）。
+ */
+function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolean {
+  // グループ単位の真偽値へ分解してから、最後にすべてのANDを取って`equal`と
+  // する。各グループの判定内容は単純な===の参照/値比較のみ。
+  const pageNumberEqual = prev.pageNumber === next.pageNumber;
+  const pageSignatureEqual = prev.pageSignature === next.pageSignature;
+  const pageOverrideEqual =
+    prev.startsNewParagraph === next.startsNewParagraph && prev.hashiraOverride === next.hashiraOverride;
+  const layoutSettingsEqual = prev.settings === next.settings && prev.layout === next.layout;
+  const imagePropsEqual =
+    prev.images === next.images &&
+    prev.imageLayerOrder === next.imageLayerOrder &&
+    prev.insertingImage === next.insertingImage;
+  const selectedEqual = prev.selected === next.selected;
+  const activeEqual = prev.isDragging === next.isDragging && prev.isDropTarget === next.isDropTarget;
+  // `callbacksEqual`が束ねる各callback propの参照比較を、個別に名前を付けて
+  // 分解したもの（すべて===の参照比較）。下記callbacksEqualはこれらのAND。
+  const onToggleSelectEqual = prev.onToggleSelect === next.onToggleSelect;
+  const onDragStartEqual = prev.onDragStart === next.onDragStart;
+  const onDragOverEqual = prev.onDragOver === next.onDragOver;
+  const onDropEqual = prev.onDrop === next.onDrop;
+  const onDragEndEqual = prev.onDragEnd === next.onDragEnd;
+  const onInsertImageEqual = prev.onInsertImage === next.onInsertImage;
+  const onImagePositionChangeEqual = prev.onImagePositionChange === next.onImagePositionChange;
+  const onImageDeleteEqual = prev.onImageDelete === next.onImageDelete;
+  const onImageLayerChangeEqual = prev.onImageLayerChange === next.onImageLayerChange;
+  const onHideNombreChangeEqual = prev.onHideNombreChange === next.onHideNombreChange;
+  const onHideHashiraChangeEqual = prev.onHideHashiraChange === next.onHideHashiraChange;
+  const callbacksEqual =
+    onToggleSelectEqual &&
+    onDragStartEqual &&
+    onDragOverEqual &&
+    onDropEqual &&
+    onDragEndEqual &&
+    onInsertImageEqual &&
+    onImagePositionChangeEqual &&
+    onImageDeleteEqual &&
+    onImageLayerChangeEqual &&
+    onHideNombreChangeEqual &&
+    onHideHashiraChangeEqual;
+  const nombreHashiraEqual = prev.hideNombre === next.hideNombre && prev.hideHashira === next.hideHashira;
+  const otherEqual = prev.chromeScale === next.chromeScale;
+
+  const equal =
+    pageNumberEqual &&
+    pageSignatureEqual &&
+    pageOverrideEqual &&
+    layoutSettingsEqual &&
+    imagePropsEqual &&
+    selectedEqual &&
+    activeEqual &&
+    callbacksEqual &&
+    nombreHashiraEqual &&
+    otherEqual;
+
+  return equal;
+}
+
+export default memo(PageCard, arePageCardPropsEqual);
 
 /** 仕上がり線（断ち落としガイド）: 塗り足し(BLEED_MM)の内側境界を示す点線枠。 */
 function TrimGuide() {
