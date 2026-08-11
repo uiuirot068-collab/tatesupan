@@ -1,7 +1,8 @@
 'use client';
 
 import { jsPDF } from 'jspdf';
-import { capturePageToCanvas } from './exportCapture';
+import { capturePageToCanvas, EXPORT_TIMING_ENABLED } from './exportCapture';
+import { BLEED_MM } from '@/lib/pageLayout';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -24,11 +25,60 @@ interface PdfOptions {
   paperSizeName?: string; // 例: "A5", "B5", "新書" など
   customWidth?: number;   // 直接数値指定の場合（mm）。Web閲覧用は必須
   customHeight?: number;  // 直接数値指定の場合（mm）。Web閲覧用は必須
-  bleed?: number;         // デフォルト: 3mm
-  fileName?: string;
-  /** capturePageToCanvas の pixelRatio。印刷用の既定値4を維持しつつ、Web閲覧用は呼び出し側から1を渡す。 */
-  scale?: number;
+  bleed?: number;         // デフォルト: BLEED_MM(3mm)
+  fileName: string;
+  /**
+   * capturePageToCanvas の pixelRatio。正式仕様はPDF固定600dpiのため、
+   * 呼び出し側は pageLayout.ts の pixelRatioForDpi(PDF_EXPORT_DPI) の
+   * 結果を明示的に渡すこと（このモジュール自身はdpiを知らない）。
+   */
+  scale: number;
   onProgress?: (current: number, total: number) => void;
+}
+
+/**
+ * capturePageToCanvas は常に塗り足し込みページ（bleedWidthMm×bleedHeightMm
+ * 相当）の.page-card要素全体をcaptureする——仕上がりPDF(trim)はこの中央
+ * から仕上がり範囲(trimWidthMm×trimHeightMm)だけを原寸でcropする必要が
+ * ある。「154×216を148×210へstretchする」旧バグ（正式仕様C）を避けるため、
+ * scaleせず対応するbitmap範囲をそのまま切り出す。
+ *
+ * crop量はcanvas実寸(px)とbleed物理寸法(mm)の比から算出し、magic pixelを
+ * 書かない。左右・上下それぞれのpx/mm比を独立に使うのは、captureが
+ * pixelRatioで等方倍率されている前提でも、canvas.width/heightの丸め
+ * （整数px化）が縦横で独立に生じ得るため——比を共有すると丸め誤差が
+ * 蓄積し、中央からずれた非対称cropになり得る。
+ *
+ * exportImage.ts（印刷用紙JPG/JPG一括/JPG ZIP）からも同じcrop（塗り足し
+ * 込み→仕上がり）が必要になったためexport——ロジックの複製を避け、
+ * PDF/JPG両方でこの1か所のみを共有する。
+ */
+export function cropToTrimCanvas(
+  canvas: HTMLCanvasElement,
+  bleedWidthMm: number,
+  bleedHeightMm: number,
+  trimWidthMm: number,
+  trimHeightMm: number,
+  bleedMm: number
+): HTMLCanvasElement {
+  const pxPerMmX = canvas.width / bleedWidthMm;
+  const pxPerMmY = canvas.height / bleedHeightMm;
+
+  const sourceX = Math.round(bleedMm * pxPerMmX);
+  const sourceY = Math.round(bleedMm * pxPerMmY);
+  // 丸め誤差でsourceX/Y + sourceWidth/Heightがcanvas外へはみ出さないよう、
+  // 残り幅/高さでclampして中央cropを保つ。
+  const sourceWidth = Math.min(Math.round(trimWidthMm * pxPerMmX), canvas.width - sourceX);
+  const sourceHeight = Math.min(Math.round(trimHeightMm * pxPerMmY), canvas.height - sourceY);
+
+  const cropped = document.createElement('canvas');
+  cropped.width = sourceWidth;
+  cropped.height = sourceHeight;
+  const ctx = cropped.getContext('2d');
+  if (ctx) {
+    ctx.drawImage(canvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+  }
+  return cropped;
 }
 
 export async function exportCustomPdf(
@@ -42,13 +92,13 @@ export async function exportCustomPdf(
     paperSizeName = 'A5',
     customWidth,
     customHeight,
-    bleed = 3,
-    fileName = 'tatespun_document.pdf',
-    scale = 4,
+    bleed = BLEED_MM,
+    fileName,
+    scale,
     onProgress
   } = options;
 
-  // 用紙サイズの確定
+  // 用紙サイズの確定（仕上がり/trim寸法。例: A5 = 148×210mm）
   let pageWidth = customWidth;
   let pageHeight = customHeight;
 
@@ -60,20 +110,21 @@ export async function exportCustomPdf(
     pageHeight = size.height;
   }
 
+  // 塗り足し込み(bleed)寸法——DOM側(PageCard.tsx sheetStyle)がcaptureする
+  // .page-card要素の物理サイズと一致する（例: A5 = 154×216mm）。
+  const bleedWidth = pageWidth + bleed * 2;
+  const bleedHeight = pageHeight + bleed * 2;
+  const margin = 15; // トンボ用余白（入稿用フルサイズのみ）
+
   let pdfWidth = pageWidth;
   let pdfHeight = pageHeight;
-  let offsetX = 0;
-  let offsetY = 0;
-  const margin = 15; // トンボ用余白
 
   if (mode === 'bleed') {
-    pdfWidth = pageWidth + (bleed * 2);
-    pdfHeight = pageHeight + (bleed * 2);
+    pdfWidth = bleedWidth;
+    pdfHeight = bleedHeight;
   } else if (mode === 'full') {
-    pdfWidth = pageWidth + (bleed * 2) + (margin * 2);
-    pdfHeight = pageHeight + (bleed * 2) + (margin * 2);
-    offsetX = margin + bleed;
-    offsetY = margin + bleed;
+    pdfWidth = bleedWidth + margin * 2;
+    pdfHeight = bleedHeight + margin * 2;
   }
 
   const pdf = new jsPDF({
@@ -87,17 +138,72 @@ export async function exportCustomPdf(
     if (onProgress) onProgress(i + 1, elements.length);
 
     const el = elements[i];
+    if (EXPORT_TIMING_ENABLED) {
+      console.groupCollapsed(`[export timing] ${fileName} page ${i + 1}/${elements.length}`);
+    }
+    // capturePageToCanvasは常に塗り足し込み(bleedWidth×bleedHeight相当)の
+    // .page-card要素全体をcaptureする——trim/bleed/fullいずれのmodeでも
+    // ここでのsource canvasは同じ。
     const canvas = await capturePageToCanvas(el, { pixelRatio: scale });
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
     if (mode === 'trim') {
+      // 仕上がりPDF: 中央から仕上がり範囲だけを原寸でcrop——scale/stretch
+      // しない（正式仕様C）。
+      const tCropStart = performance.now();
+      const cropped = cropToTrimCanvas(canvas, bleedWidth, bleedHeight, pageWidth, pageHeight, bleed);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`canvas crop（仕上がり）: ${(performance.now() - tCropStart).toFixed(1)} ms`);
+      }
+      const tEncodeStart = performance.now();
+      const imgData = cropped.toDataURL('image/jpeg', 0.95);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+      }
+      const tAddImageStart = performance.now();
       pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
+      }
+      cropped.width = 0;
+      cropped.height = 0;
     } else if (mode === 'bleed') {
+      // 断ち落としPDF: 塗り足し込みページを原寸のまま出力。
+      const tEncodeStart = performance.now();
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+      }
+      const tAddImageStart = performance.now();
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
+      }
     } else if (mode === 'full') {
-      pdf.addImage(imgData, 'JPEG', offsetX, offsetY, pageWidth, pageHeight);
+      // 入稿用フルサイズPDF: 塗り足し込み原稿をmargin位置へ原寸配置
+      // （正式仕様E。以前はここでtrim寸法へ縮小してしまっていた）。
+      const tEncodeStart = performance.now();
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
+      }
 
-      // トンボ（トリムマーク）の動的描画
+      // ページ全面(pdfWidth×pdfHeight)を不透明whiteで塗ってから画像を
+      // 配置する——jsPDFの新規ページはデフォルトで背景塗り矩形を持たず、
+      // 画像はmargin分内側のbleedWidth×bleedHeight範囲にしか描かれない
+      // ため、その外側＝トンボ周辺の余白がPDF上で未描画（transparent）の
+      // まま残ってしまっていた（既知QA項目）。画像・トンボ自体の配置/
+      // 寸法はここでは変更しない。
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+
+      const tAddImageStart = performance.now();
+      pdf.addImage(imgData, 'JPEG', margin, margin, bleedWidth, bleedHeight);
+      if (EXPORT_TIMING_ENABLED) {
+        console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
+      }
+
+      // トンボ（トリムマーク）の動的描画: 仕上がり線(trim boundary =
+      // margin+bleed)の位置を示す——bleed boundaryではない（正式仕様E-2）。
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.1);
       const drawLine = (x1: number, y1: number, x2: number, y2: number) => pdf.line(x1, y1, x2, y2);
@@ -130,6 +236,8 @@ export async function exportCustomPdf(
     // メモリ領域の明示的クリア
     canvas.width = 0;
     canvas.height = 0;
+
+    if (EXPORT_TIMING_ENABLED) console.groupEnd();
 
     // マクロタスク挿入（UI開放・フリーズ防止）
     await new Promise((resolve) => setTimeout(resolve, 0));

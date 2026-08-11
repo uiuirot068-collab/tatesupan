@@ -25,12 +25,32 @@ import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
-import { exportAllPagesToZip, exportPageToJpg } from "@/utils/exportImage";
+import {
+  exportPagesAsIndividualJpgs,
+  exportPagesToZip,
+  exportPageToJpg,
+  type ExportPageItem,
+  type PrintJpgGeometry,
+} from "@/utils/exportImage";
 import { exportCustomPdf, type PdfExportMode } from "@/utils/exportPdf";
+import {
+  measureCaptureSize,
+  measureTrimGuideRatioRect,
+  prewarmExportFonts,
+} from "@/utils/exportCapture";
+import {
+  buildPageJpgFileName,
+  buildPdfFileName,
+  buildZipFileName,
+} from "@/utils/exportFilename";
 import type { ImageRecord } from "@/lib/db";
 import {
   PX_PER_MM,
-  cssPxToPhysicalMm,
+  BLEED_MM,
+  PDF_EXPORT_DPI,
+  PRINT_JPG_LONG_SIDE_PX,
+  computePrintJpgPixelRatio,
+  pixelRatioForDpi,
   updatePageOverrides,
   type PageLayout,
   type PageSettings,
@@ -120,6 +140,7 @@ interface PageSlotProps {
    * ページのPageSlot propsをdragoverごとに変化させないため。 */
   dropPosition: "before" | "after" | null;
   onToggleSelect?: (event: MouseEvent) => void;
+  onToggleCheckbox?: () => void;
   onDragStart?: (event: DragEvent) => void;
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
@@ -152,6 +173,7 @@ const PageSlot = memo(function PageSlot({
   isDropTarget,
   dropPosition,
   onToggleSelect,
+  onToggleCheckbox,
   onDragStart,
   onDragOver,
   onDrop,
@@ -197,6 +219,7 @@ const PageSlot = memo(function PageSlot({
         isDragging={isDragging}
         isDropTarget={isDropTarget}
         onToggleSelect={onToggleSelect}
+        onToggleCheckbox={onToggleCheckbox}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDrop={onDrop}
@@ -219,6 +242,8 @@ const PageSlot = memo(function PageSlot({
 
 interface PreviewPaneProps {
   content: string;
+  /** 作品タイトル。書き出しファイル名の生成に使う（空なら既定のフォールバック名）。 */
+  title?: string;
   settings: PageSettings;
   layout: PageLayout;
   images: Record<string, string>;
@@ -240,6 +265,7 @@ interface PreviewPaneProps {
 
 export default function PreviewPane({
   content,
+  title = "",
   settings,
   layout,
   images,
@@ -535,6 +561,32 @@ export default function PreviewPane({
     return () => observer.disconnect();
   }, []);
 
+  // Export用fontEmbedCSSのバックグラウンド先読み: exportCapture.tsの
+  // キャッシュ済みPromiseを、ユーザーが実際にexportボタンを押すより前に
+  // 一度だけ起動しておく（初回export時に約26秒かかっていたGoogle Fonts
+  // 埋め込み生成を、editorを開いている間に前倒しで終わらせておくため）。
+  // ブラウザが空いたタイミングで開始したいのでrequestIdleCallbackを使い、
+  // 未対応環境（Safari等）はsetTimeoutへfallbackする。マウント時に1回
+  // だけでよく、描画・ユーザー操作は一切blockしない（呼び出し先は
+  // 即returnする同期関数）。
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) prewarmExportFonts();
+    };
+    const hasIdleCallback = typeof window.requestIdleCallback === "function";
+    const handle = hasIdleCallback ? window.requestIdleCallback(run) : window.setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      if (hasIdleCallback && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(handle as number);
+      } else {
+        window.clearTimeout(handle as number);
+      }
+    };
+  }, []);
+
   // Cursor-follow: scrolls the preview to the page containing the editor
   // caret. isAutoScrollingRef guards against the programmatic scroll being
   // mistaken for a manual one by any future manual-scroll-driven logic.
@@ -555,18 +607,103 @@ export default function PreviewPane({
     null
   );
   const [exportLabel, setExportLabel] = useState("");
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
+  /** 選択中ページを物理ページ順（昇順）の0-basedインデックス配列で返す。画面上の選択順ではなく本のページ順。 */
+  const getOrderedSelectedIndices = (): number[] => Array.from(selected).sort((a, b) => a - b);
+
+  /** 指定インデックス群を、実在するDOM要素だけの {element, fileName} 配列に解決する。JPG一括・ZIPで共通。 */
+  const buildSelectedPageItems = (indices: number[]): ExportPageItem[] =>
+    indices
+      .map((index): ExportPageItem | null => {
+        const el = pageElementsRef.current.get(index);
+        return el ? { element: el, fileName: buildPageJpgFileName(title, index + 1) } : null;
+      })
+      .filter((item): item is ExportPageItem => item != null);
+
+  /**
+   * 正式仕様A: 印刷用紙JPG（JPG/JPG一括/JPG ZIP共通）の最終出力は
+   * 「プレビューのTrimGuide（仕上がり線）内側をそのまま切り出した画像」。
+   * crop位置は3mmという理論値から逆算するのではなく、実際にpreviewへ
+   * 描画されているTrimGuideのcanonical位置を`measureTrimGuideRatioRect`
+   * で実測した比率をそのまま使う——`.page-card`のborder有無・
+   * box-sizing・見開き内の`marginTop:auto`など、どんな見た目上のズレ
+   * 要因があっても、TrimGuideとcapture後のcanvasはどちらも同じ
+   * `.page-card`のcanonical widthを分母にした比率なので自動的に追従する
+   * （固定mm値で逆算する旧方式は、この比率とわずかにズレていた）。
+   * crop後は仕上がり物理比率（例: A5なら148:210）を保った最終px
+   * （長辺1600px固定）へ1回だけresizeし、html-to-image/crop双方の丸め
+   * 誤差を吸収する。Web閲覧用はTrimGuideを持たないため未指定
+   * （cropもresizeもしない）。
+   */
+  const resolvePrintJpgGeometry = (element: HTMLElement): PrintJpgGeometry | undefined => {
+    if (layout.paper.isPx) return undefined;
+    const cropRatio = measureTrimGuideRatioRect(element);
+    if (!cropRatio) {
+      console.warn("TrimGuideが見つからないため、印刷用紙JPGのcrop/resizeをスキップします。");
+      return undefined;
+    }
+    const { width: pageWidthPx, height: pageHeightPx } = measureCaptureSize(element);
+    const trimWidthMm = layout.paper.widthMm;
+    const trimHeightMm = layout.paper.heightMm;
+    // 他用紙も仕上がり物理比率を維持したまま長辺1600pxで算出する（正式仕様6）。
+    const isPortrait = trimHeightMm >= trimWidthMm;
+    const finalHeightPx = isPortrait
+      ? PRINT_JPG_LONG_SIDE_PX
+      : Math.round((PRINT_JPG_LONG_SIDE_PX * trimHeightMm) / trimWidthMm);
+    const finalWidthPx = isPortrait
+      ? Math.round((PRINT_JPG_LONG_SIDE_PX * trimWidthMm) / trimHeightMm)
+      : PRINT_JPG_LONG_SIDE_PX;
+    return { pageWidthPx, pageHeightPx, cropRatio, finalWidthPx, finalHeightPx };
+  };
+
+  /**
+   * 正式仕様: 印刷用紙presetのJPGはdpiではなく「アスペクト比維持・長辺
+   * 1600px固定」。長辺1600pxは塗り足し込みのcapture surfaceではなく、
+   * cropで塗り足しを除いた後の「仕上がり(trim)」比率で測る——capture
+   * surfaceのcanonical px寸法を実測し、trim/bleed比（BLEED_MMベースの
+   * 概算）を掛けて「cropした後にできるはずの」canonical px寸法へ変換
+   * してから、既存のcomputePrintJpgPixelRatio（1600px/長辺）へ渡す。
+   * ここは「captureする解像度をどれだけ確保するか」の見積りに過ぎず、
+   * 実際のcrop位置・最終pxはresolvePrintJpgGeometryのTrimGuide実測が
+   * 決める——多少の見積り誤差があっても、crop後の最終resizeで吸収される。
+   * （Web閲覧用は既存どおりcanonical px外形をそのままscale=1で出力し、
+   * この計算の対象外）。バッチ処理は文書全体で用紙サイズが共通なため、
+   * 先頭の1要素を実測すれば全ページ分のscaleとして使い回せる。
+   */
+  const resolveJpgScale = (element: HTMLElement): number => {
+    if (layout.paper.isPx) return 1;
+    const { width, height } = measureCaptureSize(element);
+    const bleedWidthMm = layout.paper.widthMm + BLEED_MM * 2;
+    const bleedHeightMm = layout.paper.heightMm + BLEED_MM * 2;
+    const trimEquivalentWidth = width * (layout.paper.widthMm / bleedWidthMm);
+    const trimEquivalentHeight = height * (layout.paper.heightMm / bleedHeightMm);
+    return computePrintJpgPixelRatio(trimEquivalentWidth, trimEquivalentHeight);
+  };
 
   const handleExportJpg = async () => {
-    const index =
-      selected.size > 0 ? Math.min(...selected) : activePageIndex ?? 0;
+    if (pages.length === 0) return;
+    let index: number;
+    if (selected.size === 1) {
+      index = Array.from(selected)[0];
+    } else if (selected.size > 1) {
+      // 複数選択中に最小番号ページを勝手に選ばない——1ページに絞ってもらう。
+      alert("JPGは1ページ用です。\n1ページだけ選択してください。");
+      return;
+    } else {
+      index = activePageIndex ?? 0;
+    }
     const el = pageElementsRef.current.get(index);
     if (!el) return;
     setIsExporting(true);
     setExportLabel("画像");
     try {
-      // Web閲覧用（isPx）はcanonicalなpx外形(768×1024)をそのまま出力するため
-      // scale=1。印刷用presetは既存どおり高画質化のscale=3を維持する。
-      await exportPageToJpg(el, "tatespun_page.jpg", layout.paper.isPx ? 1 : 3);
+      await exportPageToJpg(
+        el,
+        buildPageJpgFileName(title, index + 1),
+        resolveJpgScale(el),
+        resolvePrintJpgGeometry(el)
+      );
     } catch (err) {
       alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
     } finally {
@@ -574,22 +711,48 @@ export default function PreviewPane({
     }
   };
 
-  const handleExportZip = async () => {
-    const elements = pages
-      .map((_, i) => pageElementsRef.current.get(i))
-      .filter((el): el is HTMLDivElement => el != null);
-    if (elements.length === 0) return;
+  const handleExportJpgBatch = async () => {
+    if (selected.size === 0) {
+      alert("書き出すページを選択してください。");
+      return;
+    }
+    const items = buildSelectedPageItems(getOrderedSelectedIndices());
+    if (items.length === 0) return;
     setIsExporting(true);
     setExportLabel("画像");
-    setExportProgress({ current: 0, total: elements.length });
+    setExportProgress({ current: 0, total: items.length });
     try {
-      await exportAllPagesToZip(
-        elements,
-        "tatespun_all_pages.zip",
-        (current, total) => {
-          setExportProgress({ current, total });
-        },
-        layout.paper.isPx ? 1 : 3
+      await exportPagesAsIndividualJpgs(
+        items,
+        (current, total) => setExportProgress({ current, total }),
+        resolveJpgScale(items[0].element),
+        resolvePrintJpgGeometry(items[0].element)
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "JPG一括書き出しに失敗しました。");
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  };
+
+  const handleExportZip = async () => {
+    if (selected.size === 0) {
+      alert("書き出すページを選択してください。");
+      return;
+    }
+    const items = buildSelectedPageItems(getOrderedSelectedIndices());
+    if (items.length === 0) return;
+    setIsExporting(true);
+    setExportLabel("画像");
+    setExportProgress({ current: 0, total: items.length });
+    try {
+      await exportPagesToZip(
+        items,
+        buildZipFileName(title),
+        (current, total) => setExportProgress({ current, total }),
+        resolveJpgScale(items[0].element),
+        resolvePrintJpgGeometry(items[0].element)
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
@@ -601,48 +764,49 @@ export default function PreviewPane({
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
+  const [pdfScope, setPdfScope] = useState<"all" | "selected">("all");
 
-  const handleOpenPdfModal = () => setIsPdfModalOpen(true);
+  const handleOpenPdfModal = () => {
+    if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
+    setIsPdfModalOpen(true);
+  };
 
   const handleDownloadPdf = async () => {
-    const totalPages = pages.length;
-    // 最終ページ（総ページ数)が奇数の場合の入稿チェック
-    if (totalPages % 2 !== 0) {
-      const isConfirmed = window.confirm(
-        `最終ページが奇数（全 ${totalPages} ページ）ですが大丈夫ですか？\n※冊子印刷では白ページの挿入が必要になる場合があります。`
-      );
-      if (!isConfirmed) {
-        return; // 処理中断
+    if (layout.paper.isPx) return;
+    const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
+    if (pdfScope === "selected" && indices.length === 0) {
+      alert("書き出すページを選択してください。");
+      return;
+    }
+    if (pdfScope === "all") {
+      // この警告は本全体（製本対象）の総ページ数の奇数/偶数を指す——選択ページ
+      // だけを出力する場合は本全体の製本可否とは無関係になるため出さない。
+      const totalPages = pages.length;
+      if (totalPages % 2 !== 0) {
+        const isConfirmed = window.confirm(
+          `最終ページが奇数（全 ${totalPages} ページ）ですが大丈夫ですか？\n※冊子印刷では白ページの挿入が必要になる場合があります。`
+        );
+        if (!isConfirmed) {
+          return; // 処理中断
+        }
       }
     }
-    const elements = pages
-      .map((_, i) => pageElementsRef.current.get(i))
+    const elements = indices
+      .map((i) => pageElementsRef.current.get(i))
       .filter((el): el is HTMLDivElement => el != null);
     if (elements.length === 0) return;
     setIsExporting(true);
     setExportLabel("PDF");
     setExportProgress({ current: 0, total: elements.length });
     try {
-      // Web閲覧用（isPx）はmm実寸表(exportPdf.tsのPAPER_SIZES)に載っておらず、
-      // customWidth/customHeightを渡さないとA5へフォールバックしてしまう。
-      // 768×1024pxのcanonical外形を96dpi換算した実寸mmを明示的に渡し、
-      // 3:4比率を保ったcustom PDFページを使う。
-      const isWebPreset = layout.paper.isPx;
-      const customWidth =
-        isWebPreset && layout.paper.widthPx != null
-          ? cssPxToPhysicalMm(layout.paper.widthPx)
-          : undefined;
-      const customHeight =
-        isWebPreset && layout.paper.heightPx != null
-          ? cssPxToPhysicalMm(layout.paper.heightPx)
-          : undefined;
+      // PDFは正式仕様で常に印刷用紙preset・600dpi固定（Web閲覧用はUI側で
+      // 選択不可のためここに到達しない）。
       await exportCustomPdf(elements, {
         mode: pdfMode,
         paperSizeName: layout.paper.label,
-        customWidth,
-        customHeight,
-        bleed: 3,
-        scale: isWebPreset ? 1 : 4,
+        bleed: BLEED_MM,
+        fileName: buildPdfFileName(title, pdfMode, pdfScope),
+        scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
       });
       setIsPdfModalOpen(false);
@@ -769,6 +933,20 @@ export default function PreviewPane({
       next.add(index);
     }
     lastClickedRef.current = index;
+    setSelected(next);
+  };
+
+  /**
+   * 正式仕様: 「選択」checkboxはmodifier(Ctrl/Cmd/Shift)を一切見ず、常に
+   * そのページ単独をtoggleする——checkbox操作とページ本体クリック
+   * （handleToggleSelect、単一選択/Ctrl-Cmdトグル/Shift範囲選択を維持）を
+   * 分離するための専用handler。スマホでmodifierキーを使えなくても、
+   * 複数ページのcheckboxを順にONにしていくだけで積み上げ選択できる。
+   */
+  const handleToggleCheckbox = (index: number) => () => {
+    const next = new Set(selected);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
     setSelected(next);
   };
 
@@ -944,6 +1122,7 @@ export default function PreviewPane({
   // ため、ここを安定させないと通常の1文字入力でも全PageCardのmemoが
   // 素通りしてしまう。
   const stableToggleSelect = useStableIndexedCallback(handleToggleSelect);
+  const stableToggleCheckbox = useStableIndexedCallback(handleToggleCheckbox);
   const stableDragStart = useStableIndexedCallback(handleDragStart);
   const stableDragOver = useStableIndexedCallback(handleDragOver);
   const stableDrop = useStableIndexedCallback(handleDrop);
@@ -1035,33 +1214,80 @@ export default function PreviewPane({
               </button>
             </span>
           )}
-          <span className="flex flex-shrink-0 items-center gap-1.5">
+          <span className="relative flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"
-              onClick={handleExportJpg}
-              disabled={isExporting || pages.length === 0}
-              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              JPG保存
-            </button>
-            <button
-              type="button"
-              onClick={handleExportZip}
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
               disabled={isExporting || pages.length === 0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isExporting && exportProgress
                 ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
-                : "ZIP保存"}
+                : "書き出し ▾"}
             </button>
-            <button
-              type="button"
-              onClick={handleOpenPdfModal}
-              disabled={isExporting || pages.length === 0}
-              className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              PDF出力
-            </button>
+            {isExportMenuOpen && (
+              <>
+                {/* 背景クリックでメニューを閉じるための透明オーバーレイ。既存のPDFモーダルと同じパターン。 */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsExportMenuOpen(false)}
+                />
+                <div className="absolute left-0 top-full z-50 mt-1 flex w-48 flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleExportJpg();
+                    }}
+                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                  >
+                    JPG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleExportJpgBatch();
+                    }}
+                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                  >
+                    JPG一括（個別ダウンロード）
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleExportZip();
+                    }}
+                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                  >
+                    JPG ZIP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      handleOpenPdfModal();
+                    }}
+                    disabled={layout.paper.isPx}
+                    title={
+                      layout.paper.isPx
+                        ? "PDF書き出しは印刷用の用紙サイズで利用できます。Web閲覧用はJPGで書き出してください。"
+                        : undefined
+                    }
+                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    PDF
+                  </button>
+                  {layout.paper.isPx && (
+                    <p className="px-2 pb-1 pt-0.5 text-[11px] leading-snug text-ink/50">
+                      PDF書き出しは印刷用の用紙サイズで利用できます。
+                      Web閲覧用はJPGで書き出してください。
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
@@ -1204,6 +1430,7 @@ export default function PreviewPane({
                     isDropTarget={isPageDropTarget}
                     dropPosition={isPageDropTarget ? dropPosition : null}
                     onToggleSelect={canReorder ? stableToggleSelect(index) : undefined}
+                    onToggleCheckbox={canReorder ? stableToggleCheckbox(index) : undefined}
                     onDragStart={canReorder ? stableDragStart(index) : undefined}
                     onDragOver={canReorder ? stableDragOver(index) : undefined}
                     onDrop={canReorder ? stableDrop(index) : undefined}
@@ -1254,6 +1481,31 @@ export default function PreviewPane({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-3 text-sm font-bold text-ink">PDF出力</h2>
+            <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
+            <div className="mb-3 flex flex-col gap-2">
+              {(
+                [
+                  { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
+                  { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
+                ] as { value: "all" | "selected"; label: string }[]
+              ).map((option) => (
+                <label
+                  key={option.value}
+                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+                >
+                  <input
+                    type="radio"
+                    name="pdf-export-scope"
+                    value={option.value}
+                    checked={pdfScope === option.value}
+                    onChange={() => setPdfScope(option.value)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-ink">{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
             <div className="flex flex-col gap-2">
               {(
                 [
@@ -1278,6 +1530,9 @@ export default function PreviewPane({
                 </label>
               ))}
             </div>
+            {pdfScope === "selected" && selected.size === 0 && (
+              <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
@@ -1290,7 +1545,7 @@ export default function PreviewPane({
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={isExporting}
+                disabled={isExporting || (pdfScope === "selected" && selected.size === 0)}
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isExporting && exportProgress

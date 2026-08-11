@@ -444,6 +444,7 @@ export default function TategakiEditor({
         >
           <PreviewPane
             content={content}
+            title={title}
             settings={settings}
             layout={layout}
             images={images}

@@ -35,10 +35,10 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
   top: "天側（上部）",
   center: "中央",
   bottom: "地側（下部）",
-  // "全体を表示": FullPageImage below uses objectFit:"contain", not "cover" —
-  // this mode shows the whole image (letterboxed if needed), never crops it,
-  // so the label should promise that rather than implying a crop-to-fill.
-  full: "全体を表示",
+  // 正式仕様: FullPageImage below uses objectFit:"cover" — this mode always
+  // covers the page's full bleed-included surface, cropping whichever
+  // dimension overflows (never letterboxing, never stretching).
+  full: "全面（ページを覆う）",
 };
 
 interface PageCardProps {
@@ -65,7 +65,16 @@ interface PageCardProps {
   selected?: boolean;
   isDragging?: boolean;
   isDropTarget?: boolean;
+  /** ページ本体クリック用: 単一選択/Ctrl・Cmdトグル/Shift範囲選択のmodifier対応handler。 */
   onToggleSelect?: (event: MouseEvent) => void;
+  /**
+   * 「選択」checkbox専用: modifierを一切見ず常に単独toggleするhandler
+   * （正式仕様）。ページ本体クリック用のonToggleSelectとは別系統——
+   * checkboxはPage本体（`.page-card`）の外（このコンポーネントのトップの
+   * 兄弟要素であるツールバー行）にあるため、onClickの伝播はそもそも
+   * `.page-card`まで届かない。
+   */
+  onToggleCheckbox?: () => void;
   onDragStart?: (event: DragEvent) => void;
   onDragOver?: (event: DragEvent) => void;
   onDrop?: (event: DragEvent) => void;
@@ -114,6 +123,7 @@ function PageCard({
   isDragging = false,
   isDropTarget = false,
   onToggleSelect,
+  onToggleCheckbox,
   onDragStart,
   onDragOver,
   onDrop,
@@ -448,7 +458,7 @@ function PageCard({
               data-no-print="true"
               checked={selected}
               onChange={() => {}}
-              onClick={onToggleSelect}
+              onClick={onToggleCheckbox}
               className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
             />
             選択
@@ -639,10 +649,20 @@ function PageCard({
         // there for why that distinction matters only for isPx pages.
         data-is-px-page={paper.isPx ? "true" : undefined}
         className={`page-card shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+          isInteractive ? "cursor-pointer" : ""
+        } ${
           selected
             ? "border-accent ring-2 ring-accent dark:border-accent"
             : "border-gray-200 dark:border-gray-700"
         }`}
+        // ページ本体クリック: checkbox（このコンポーネントの外、`.page-card`の
+        // 兄弟要素であるツールバー行にある）とは独立に、modifier対応の
+        // onToggleSelect（単一選択/Ctrl・Cmdトグル/Shift範囲選択）を呼ぶ。
+        // checkboxはこの要素の子孫ではないため、クリックの伝播経路が
+        // 重複することはない。`.page-card`内部（挿絵overlay等）は
+        // pointerEvents:"none"の装飾のみで、クリックを奪う要素がないため
+        // 追加のstopPropagationは不要。
+        onClick={onToggleSelect}
         // `marginTop: "auto"` on a flex-col child absorbs *all* leftover
         // vertical space above it. PreviewPane's spread row now stretches
         // both per-page columns to equal height (see its own comment) — the
@@ -892,6 +912,7 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
   // `callbacksEqual`が束ねる各callback propの参照比較を、個別に名前を付けて
   // 分解したもの（すべて===の参照比較）。下記callbacksEqualはこれらのAND。
   const onToggleSelectEqual = prev.onToggleSelect === next.onToggleSelect;
+  const onToggleCheckboxEqual = prev.onToggleCheckbox === next.onToggleCheckbox;
   const onDragStartEqual = prev.onDragStart === next.onDragStart;
   const onDragOverEqual = prev.onDragOver === next.onDragOver;
   const onDropEqual = prev.onDrop === next.onDrop;
@@ -904,6 +925,7 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
   const onHideHashiraChangeEqual = prev.onHideHashiraChange === next.onHideHashiraChange;
   const callbacksEqual =
     onToggleSelectEqual &&
+    onToggleCheckboxEqual &&
     onDragStartEqual &&
     onDragOverEqual &&
     onDropEqual &&
@@ -1716,16 +1738,14 @@ function FullPageImage({ token, images }: { token: ImageToken; images: Record<st
         inset: 0,
         width: "100%",
         height: "100%",
-        // "全体を表示" means the whole image stays visible, aspect ratio
-        // intact — "cover" (crop-to-fill) used to make the visible crop
-        // change with every paper preset's own width:height ratio, which
-        // read as the image itself distorting when switching papers even
-        // though no pixel was ever actually stretched. "contain" letterboxes
-        // instead of cropping, so switching papers only ever changes how
-        // much of `.page-card`'s own background shows around the image, not
-        // what part of the image itself is visible. `.page-card`'s existing
-        // background (no override here) shows through the letterbox area.
-        objectFit: "contain",
+        // 正式仕様: 「全面」は塗り足し込みページ全面を必ず覆う（隙間を作らない）。
+        // "contain" would letterbox whenever the image's aspect ratio doesn't
+        // match the page's (bleed-included) aspect ratio, leaving a visible
+        // gap of `.page-card`'s own background around the image — "cover"
+        // instead fills the page fully, cropping whichever dimension
+        // overflows, while never stretching either dimension independently
+        // (aspect ratio preserved).
+        objectFit: "cover",
         filter: "grayscale(100%)",
       }}
     />

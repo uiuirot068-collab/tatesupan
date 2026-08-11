@@ -31,6 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Zen+Old+Mincho:wght@400;700&display=swap"
           rel="stylesheet"
+          crossOrigin="anonymous"
         />
       </head>
       <body className="flex h-full min-h-full flex-col">

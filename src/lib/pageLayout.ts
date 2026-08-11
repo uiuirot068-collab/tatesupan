@@ -56,6 +56,47 @@ export function cssPxToPhysicalMm(px: number): number {
   return px / CSS_PX_PER_MM_96DPI;
 }
 
+/** 正式仕様の固定解像度（ユーザーが変更するUIは設けない）。 */
+export const PDF_EXPORT_DPI = 600;
+
+/**
+ * 印刷用紙JPG（JPG/JPG一括/JPG ZIP共通）の正式仕様: dpiではなく、
+ * アスペクト比を維持したまま長辺をこのpx数へ固定する。
+ * Web閲覧用（isPxプリセット）はこの定数の対象外——canonicalな
+ * px外形（768×1024等）をpixelRatio=1でそのまま出力する。
+ */
+export const PRINT_JPG_LONG_SIDE_PX = 1600;
+
+/**
+ * captureWidthPx/captureHeightPxは、html-to-imageのpixelRatioへ渡す前の
+ * canonical CSS px寸法（＝実際にcaptureするexport surfaceの素の大きさ）。
+ * ここで返すpixelRatioをそのままcapturePageToCanvasへ渡せば、
+ * 最終bitmapの長辺がPRINT_JPG_LONG_SIDE_PXになる——二重にscaleしない
+ * よう、呼び出し側はこの戻り値をそのままpixelRatioとして使うこと。
+ */
+export function computePrintJpgPixelRatio(captureWidthPx: number, captureHeightPx: number): number {
+  const longSidePx = Math.max(captureWidthPx, captureHeightPx);
+  return longSidePx > 0 ? PRINT_JPG_LONG_SIDE_PX / longSidePx : 1;
+}
+
+/**
+ * 印刷用紙preset（mmベース）のページは、DOM上ではPX_PER_MMという
+ * プレビュー専用の縮尺（実dpiではない）で描画されている。そのため
+ * html-to-imageのpixelRatioへそのままdpi数値を渡しても物理解像度には
+ * ならない——ページの物理サイズ(mm)に対して「dpi相当のpx数」を
+ * 得るには、まずPX_PER_MMで割って実寸mmに戻し、そこから
+ * 25.4mm/inchで割ったinch数にdpiを掛けた値を、DOM描画時のcanonical
+ * px数（= mm × PX_PER_MM）で割り戻してpixelRatioを逆算する必要がある。
+ * mm項がpixelRatio・canonical px双方で相殺されるため、結果はページの
+ * 実寸に依存しない単一の係数になる: dpi / (PX_PER_MM × 25.4)。
+ *
+ * isPx preset（Web閲覧用）はこの関数の対象外——canonicalなpx外形
+ * （768×1024等）をpixelRatio=1でそのまま出力する。
+ */
+export function pixelRatioForDpi(dpi: number): number {
+  return dpi / (PX_PER_MM * 25.4);
+}
+
 // 旧バージョンで使用していた用紙サイズキーとの互換マップ（保存済みデータの移行用）
 const LEGACY_PAPER_SIZE_KEY_MAP: Record<string, PaperSizeKey> = {
   a5: "A5",
