@@ -28,6 +28,29 @@ const INDENT_SPACE = "　";
 const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
 const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 
+// 上と同じ2ファミリー（ダッシュ／三点リーダー）を1文字単位で判定する版。
+// FixedSlotLineは1文字=1slotとして個別描画するため、runの一部かどうかを
+// 文字配列内の前後1文字だけ見て判定する（runPatternのような文字列一括
+// 判定はslot単位の描画とかみ合わないため使えない）。
+const NOWRAP_RUN_CHAR_FAMILIES: readonly RegExp[] = [/[―—]/, /[…‥]/];
+
+/**
+ * `chars[index]`が――／……のような2文字以上のrunの一員か（前後どちらかの
+ * 隣接文字が同じファミリーか）を判定する。sheetStyle側のtext-orientation:
+ * uprightは全文字の90度回転（UAX #50の"R"）を無効化しており、ダッシュの
+ * ような本来回転すべき文字も横向きのまま個別slotへ中央寄せされ、縦の
+ * 1本線に見えない原因になっている。run構成文字だけtext-orientation:mixed
+ * へ局所的に戻すことで、他の文字のupright表示に一切影響を与えずに直す。
+ */
+function isNowrapRunMember(chars: string[], index: number): boolean {
+  const family = NOWRAP_RUN_CHAR_FAMILIES.find((f) => f.test(chars[index]));
+  if (!family) return false;
+  return (
+    (index > 0 && family.test(chars[index - 1])) ||
+    (index < chars.length - 1 && family.test(chars[index + 1]))
+  );
+}
+
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
 
@@ -1219,6 +1242,8 @@ interface LineSlot {
   key: string;
   text: string;
   slotIndex: number;
+  /** ――／……のようなnowrap run内の文字か（isNowrapRunMember参照）。trueの場合だけ描画側でtext-orientationを補正する。 */
+  runConnect?: boolean;
 }
 
 /**
@@ -1285,7 +1310,7 @@ function buildLineSlots(
     if (token.type !== "text" && token.type !== "ruby" && token.type !== "tcy") return;
     const flatIndex = flatIndexBase + tokenIndex;
     const indent = paragraphStarts[flatIndex];
-    const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+    const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
     if (prefix) {
       slots.push({ key: `${flatIndex}-indent`, text: prefix, slotIndex: slotCursor });
       slotCursor += 1;
@@ -1293,8 +1318,14 @@ function buildLineSlots(
 
     if (token.type === "text") {
       if (token.value === "\n") return;
-      Array.from(token.value).forEach((ch, charIndex) => {
-        slots.push({ key: `${flatIndex}-${charIndex}`, text: ch, slotIndex: slotCursor });
+      const chars = Array.from(token.value);
+      chars.forEach((ch, charIndex) => {
+        slots.push({
+          key: `${flatIndex}-${charIndex}`,
+          text: ch,
+          slotIndex: slotCursor,
+          runConnect: isNowrapRunMember(chars, charIndex),
+        });
         slotCursor += 1;
       });
       return;
@@ -1532,6 +1563,12 @@ function FixedSlotLine({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            // containerStyleはtext-orientation:uprightを継承しており（sheetStyle
+            // 側）、――等のrun構成文字も90度回転（UAX #50の"R"）されず横向きの
+            // ままslot中央へ表示されてしまう。runの一員だけmixedへ戻し、その
+            // 文字を本来の縦向きへ回転させて隣接文字との連続性を回復する。
+            // slot位置・幅・個数（tokenLength=2のまま）には一切手を入れない。
+            ...(slot.runConnect ? { textOrientation: "mixed" as const } : null),
           }}
         >
           {slot.text}
@@ -1566,7 +1603,7 @@ function TokenView({
   token: Exclude<TategakiToken, { type: "image" }>;
   indent: boolean;
 }) {
-  const prefix = indent && OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+  const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
 
   if (token.type === "ruby") {
     return (

@@ -69,8 +69,8 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
   };
 
   return (
-    <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-      <div className="flex min-w-0 flex-wrap items-center gap-3 gap-y-2">
+    <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2">
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-3 gap-y-2 sm:w-auto">
         <Link
           href="/"
           className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
@@ -85,12 +85,20 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           className="h-8 w-8 flex-shrink-0 object-contain"
         />
         <div className="flex flex-col leading-tight">
-          <span className="whitespace-nowrap flex-shrink-0 text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="flex-shrink-0 text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
+            <span
+              title="現在β版です。テスト運用期間中のため、機能や表示が変更される場合があります。"
+              className="flex-shrink-0 rounded-full border border-[#c5a059]/40 bg-[#c5a059]/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#b38f48]"
+            >
+              β版
+            </span>
+          </span>
           <span className="hidden sm:block whitespace-nowrap flex-shrink-0 text-xs text-gray-500">縦書きWebエディタ</span>
         </div>
         {saveStatus && <SaveStatusLabel status={saveStatus} />}
       </div>
-      <div className="flex flex-wrap items-center gap-4 gap-y-2">
+      <div className="flex w-full flex-wrap items-center gap-4 gap-y-2 sm:w-auto">
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
           <ThemeToggle />

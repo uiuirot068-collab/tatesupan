@@ -123,6 +123,6 @@ export function calculateCapacityFromMargins(
 
   return {
     charsPerLine: computeAutoCharsPerLine(columnHeightMm, fontSizeMm, input.columnCount),
-    linesPerColumn: computeAutoLinesPerColumn(textAreaWidthMm, linePitchMm),
+    linesPerColumn: computeAutoLinesPerColumn(textAreaWidthMm, linePitchMm, input.columnCount),
   };
 }

@@ -1481,6 +1481,9 @@ export default function PreviewPane({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-3 text-sm font-bold text-ink">PDF出力</h2>
+            <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
+              TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
+            </p>
             <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
             <div className="mb-3 flex flex-col gap-2">
               {(
