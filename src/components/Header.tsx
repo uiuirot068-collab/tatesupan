@@ -16,6 +16,8 @@ interface HeaderProps {
   isSaving?: boolean;
   saveStatus?: SaveStatus;
   onOpenHelp?: () => void;
+  /** 'editor'（既定・従来どおり「←作品一覧」を表示）/ 'home'（NON-EMPTY Home専用: 兄弟サービス表記、back linkなし） */
+  variant?: 'editor' | 'home';
 }
 
 function SaveStatusLabel({ status }: { status: SaveStatus }) {
@@ -45,7 +47,8 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
   );
 }
 
-export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp }: HeaderProps) {
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, variant = 'editor' }: HeaderProps) {
+  const isHome = variant === 'home';
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalNotice, setAuthModalNotice] = useState<string | null>(null);
@@ -69,22 +72,87 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
   };
 
   return (
-    <header className="mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2">
-      <div className="flex w-full min-w-0 flex-wrap items-center gap-3 gap-y-2 sm:w-auto">
-        <Link
-          href="/"
-          className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
-        >
-          ← 作品一覧
-        </Link>
+    <header
+      className={`mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : ''}`}
+    >
+      {isHome && (
+        <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-500">SpunTales</span>
+            <span aria-hidden="true" className="shrink-0 text-gray-300">｜</span>
+            <img
+              src={logoSrc}
+              alt="TateSpun"
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 object-contain dark:brightness-0 dark:invert"
+            />
+            <span className="shrink-0 whitespace-nowrap text-base font-bold text-gray-800">TateSpun (タテスパン)</span>
+            <span
+              title="現在β版です。テスト運用期間中のため、機能や表示が変更される場合があります。"
+              className="shrink-0 whitespace-nowrap rounded-full border border-[#c5a059]/40 bg-[#c5a059]/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#b38f48]"
+            >
+              β版
+            </span>
+          </div>
+
+          <div className="flex w-full items-center justify-between gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="whitespace-nowrap text-xs font-medium text-gray-600">画面</span>
+              <ThemeToggle />
+            </div>
+
+            {user ? (
+              <button
+                onClick={() => signOut()}
+                className="shrink-0 whitespace-nowrap rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                ログアウト
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthModalNotice(null);
+                  setIsAuthModalOpen(true);
+                }}
+                className="shrink-0 whitespace-nowrap rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
+              >
+                ログイン / 会員登録
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div
+        className={
+          isHome
+            ? 'hidden min-w-0 items-center gap-3 gap-y-2 min-[780px]:flex min-[780px]:w-auto min-[780px]:flex-nowrap min-[780px]:justify-start'
+            : 'flex w-full min-w-0 flex-wrap items-center gap-3 gap-y-2 sm:w-auto'
+        }
+      >
+        {!isHome && (
+          <Link
+            href="/"
+            className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
+          >
+            ← 作品一覧
+          </Link>
+        )}
+        {isHome && (
+          <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold text-gray-500">
+            SpunTales
+            <span aria-hidden="true" className="text-gray-300">｜</span>
+          </span>
+        )}
         <img
           src={logoSrc}
           alt="TateSpun"
           width={32}
           height={32}
-          className="h-8 w-8 flex-shrink-0 object-contain"
+          className={`h-8 w-8 flex-shrink-0 object-contain ${isHome ? 'dark:brightness-0 dark:invert' : ''}`}
         />
-        <div className="flex flex-col leading-tight">
+        <div className="flex shrink-0 flex-col leading-tight">
           <span className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="flex-shrink-0 text-xl font-bold text-gray-800">TateSpun (タテスパン)</span>
             <span
@@ -98,8 +166,13 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         </div>
         {saveStatus && <SaveStatusLabel status={saveStatus} />}
       </div>
-      <div className="flex w-full flex-wrap items-center gap-4 gap-y-2 sm:w-auto">
+      <div
+        className={isHome ? 'hidden' : 'flex w-full flex-wrap items-center gap-4 gap-y-2 sm:w-auto'}
+      >
         <div className="flex items-center gap-2">
+          {isHome && (
+            <span className="sm:hidden whitespace-nowrap flex-shrink-0 text-xs font-medium text-gray-600">画面</span>
+          )}
           <span className="hidden sm:inline whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
           <ThemeToggle />
         </div>
@@ -155,6 +228,38 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           </button>
         )}
       </div>
+
+      {isHome && (
+        <div className="hidden shrink-0 flex-col items-end gap-1.5 min-[780px]:flex">
+          <div className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-sm font-semibold text-gray-700">画面モード</span>
+            <ThemeToggle />
+          </div>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                <span className="whitespace-nowrap text-sm text-gray-600">{user.email}</span>
+                <button
+                  onClick={() => signOut()}
+                  className="whitespace-nowrap rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  ログアウト
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthModalNotice(null);
+                  setIsAuthModalOpen(true);
+                }}
+                className="whitespace-nowrap rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
+              >
+                ログイン / 会員登録
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}

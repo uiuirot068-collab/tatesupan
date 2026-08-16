@@ -140,117 +140,347 @@ export default function Home() {
     selectedBookshelfTab === "cloud" && !user
       ? "local"
       : (selectedBookshelfTab ?? initialBookshelfTab);
+  // 実作品（使い方ガイドを除く）がLocal・Cloudいずれかに1件以上あるかどうか。
+  // Cloud未解決中はLocalの件数だけで判定し、誤って非空Visualへ切り替えない。
+  const isNonEmptyVisual =
+    documents !== undefined &&
+    (localProjectCount > 0 ||
+      (!!user && cloudIsResolved && visibleCloudResult.projects.length > 0));
+  const outerClassName = isNonEmptyVisual
+    ? "flex min-h-dvh flex-col bg-[linear-gradient(to_bottom,#aeb4c0,#69738a)] px-0 min-[641px]:px-[29px] min-[921px]:px-[82px] dark:bg-[linear-gradient(to_bottom,#1B2433,#080B12)]"
+    : "flex min-h-dvh flex-col bg-[#f9f8f6] dark:bg-[#11151D]";
+  const nonEmptyShellClassName =
+    "flex min-h-dvh w-full max-w-[1160px] flex-1 flex-col mx-auto bg-[#f9f8f6] text-[#1f2a44] shadow-[0_0_0_1px_rgba(31,42,68,0.04)] dark:bg-[#11151D] dark:text-[#D4DBE7] dark:shadow-none";
 
-  return (
-    <div data-bookshelf-page className="flex min-h-dvh flex-col">
-      <Header />
+  const homeContent = (
+    <>
+      <Header variant={isNonEmptyVisual ? "home" : "editor"} />
 
-      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center px-4 py-10">
-        <Image
-          src="/caroad_main1.png"
-          alt="縦書きWebエディタ"
-          width={384}
-          height={578}
-          priority
-          className="mb-8 h-auto w-full max-w-[220px] sm:max-w-[260px]"
-        />
-
-        <div className="mb-8 flex flex-wrap items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={creating}
-            className="rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            + 新しい作品を作成する
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCombineModalOpen(true)}
-            disabled={!documents || documents.length < 2}
-            className="bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-40"
-          >
-            総集編を編成する
-          </button>
-        </div>
-
-        <section className="w-full" aria-label="本棚">
-          <div
-            className="mx-auto mb-5 flex w-fit max-w-full rounded-full border border-ink/12 bg-ink/[0.025] p-0.5"
-            role="tablist"
-            aria-label="表示する本棚"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeBookshelfTab === "local"}
-              onClick={() => setSelectedBookshelfTab("local")}
-              className={`relative min-h-9 rounded-full px-4 py-1.5 text-xs font-medium transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] sm:text-sm ${
-                activeBookshelfTab === "local"
-                  ? "bg-ink/10 text-ink ring-1 ring-inset ring-ink/10"
-                  : "text-ink/65 hover:bg-ink/5 hover:text-ink"
-              }`}
-            >
-              このブラウザの本棚 <span className="ml-1 tabular-nums">{documents === undefined ? "…" : localProjectCount}</span>
-            </button>
-            {user && (
+      <main
+        className={
+          isNonEmptyVisual
+            ? "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-4 py-10"
+            : "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center px-4 py-10"
+        }
+      >
+        {isNonEmptyVisual ? (
+          <div className="mb-10 flex w-full flex-col items-center gap-6 border-b border-ink/10 pb-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left dark:border-[#2A3240]">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
+              <h1 className="mt-2 font-serif text-[40px] font-medium leading-[1.15] text-ink sm:text-[clamp(37px,5vw,56px)] dark:text-[#D4DBE7]">あなたの本棚</h1>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-ink/70 dark:text-[#939DAF]">
+                書きかけも、できあがった本も。
+                <br />
+                TateSpunでつくる本は、ここへ戻ってきます。
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
               <button
                 type="button"
-                role="tab"
-                aria-selected={activeBookshelfTab === "cloud"}
-                onClick={() => setSelectedBookshelfTab("cloud")}
-                className={`relative min-h-9 rounded-full px-4 py-1.5 text-xs font-medium transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] sm:text-sm ${
-                  activeBookshelfTab === "cloud"
-                    ? "bg-ink/10 text-ink ring-1 ring-inset ring-ink/10"
-                    : "text-ink/65 hover:bg-ink/5 hover:text-ink"
-                }`}
+                onClick={handleCreate}
+                disabled={creating}
+                className="rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D] dark:hover:bg-[#D1BC78] dark:hover:opacity-100"
               >
-                クラウドの本棚 <span className="ml-1 tabular-nums">{cloudIsResolved ? visibleCloudResult.projects.length : "…"}</span>
+                + 新しい作品を作成する
               </button>
+              <button
+                type="button"
+                onClick={() => setIsCombineModalOpen(true)}
+                disabled={!documents || documents.length < 2}
+                className="rounded-full border border-[rgba(31,42,68,0.28)] bg-[rgba(255,255,255,0.56)] px-4 py-2 font-medium text-[#1F2A44] transition-transform hover:-translate-y-0.5 disabled:opacity-40 dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
+              >
+                総集編を編成する
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8 flex w-full flex-col items-center gap-8 text-center min-[921px]:flex-row min-[921px]:items-center min-[921px]:justify-center min-[921px]:gap-20 min-[921px]:text-left">
+            <div className="flex flex-col items-center min-[921px]:items-start">
+              <p className="text-xs font-semibold tracking-[0.2em] text-accent">YOUR BOOKSHELF</p>
+              <h1 className="mt-2 text-2xl font-bold text-ink sm:text-3xl">あなたの本棚</h1>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-ink/70">
+                書きかけも、できあがった本も。
+                <br />
+                TateSpunでつくる本は、ここへ戻ってきます。
+              </p>
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={creating}
+                className="mt-6 rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                + 新しい作品を作成する
+              </button>
+            </div>
+
+            <Image
+              src="/caroad_main1.png"
+              alt="縦書きWebエディタ"
+              width={384}
+              height={578}
+              priority
+              className="h-auto w-full max-w-[220px] shrink-0 sm:max-w-[260px] min-[921px]:max-w-[320px]"
+            />
+          </div>
+        )}
+
+        {isNonEmptyVisual ? (
+          <section className="w-full" aria-label="本棚">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                className="flex w-fit max-w-full flex-wrap rounded-full border border-ink/12 bg-ink/[0.025] p-0.5"
+                role="tablist"
+                aria-label="表示する本棚"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeBookshelfTab === "local"}
+                  onClick={() => setSelectedBookshelfTab("local")}
+                  className={`relative min-h-9 rounded-full px-4 py-1.5 text-xs font-medium transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] sm:text-sm ${
+                    activeBookshelfTab === "local"
+                      ? "bg-ink/10 text-ink ring-1 ring-inset ring-ink/10 dark:bg-[#1D2430] dark:text-[#D4DBE7] dark:ring-[#3A4658]"
+                      : "text-ink/65 hover:bg-ink/5 hover:text-ink dark:text-[#939DAF] dark:hover:bg-[#1D2430] dark:hover:text-[#D4DBE7]"
+                  }`}
+                >
+                  このブラウザの本棚 <span className="ml-1 tabular-nums">{documents === undefined ? "…" : localProjectCount}</span>
+                </button>
+                {user && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeBookshelfTab === "cloud"}
+                    onClick={() => setSelectedBookshelfTab("cloud")}
+                    className={`relative min-h-9 rounded-full px-4 py-1.5 text-xs font-medium transition-colors before:absolute before:-inset-y-1 before:inset-x-0 before:content-[''] sm:text-sm ${
+                      activeBookshelfTab === "cloud"
+                        ? "bg-ink/10 text-ink ring-1 ring-inset ring-ink/10 dark:bg-[#1D2430] dark:text-[#D4DBE7] dark:ring-[#3A4658]"
+                        : "text-ink/65 hover:bg-ink/5 hover:text-ink dark:text-[#939DAF] dark:hover:bg-[#1D2430] dark:hover:text-[#D4DBE7]"
+                    }`}
+                  >
+                    クラウドの本棚 <span className="ml-1 tabular-nums">{cloudIsResolved ? visibleCloudResult.projects.length : "…"}</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-sm text-ink/55 dark:text-[#939DAF]">
+                {activeBookshelfTab === "cloud" ? "クラウド保存された作品" : "この端末に保存されている作品"}
+              </p>
+            </div>
+
+            <div
+              role="tabpanel"
+              className="rounded-[18px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] px-2.5 pt-4 pb-6 shadow-[0_18px_48px_rgba(26,31,45,0.08)] sm:px-6 sm:pt-5 sm:pb-7 dark:border-[#2A3240] dark:bg-[#171C26] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-[rgba(31,42,68,0.14)] pb-3 dark:border-[#2A3240]">
+                <div className="grid gap-1">
+                  <span className="text-sm font-extrabold tracking-[0.14em] text-accent dark:text-[#C6AF63]">BOOKS</span>
+                  <strong className="text-lg font-bold text-ink dark:text-[#D4DBE7]">
+                    {activeBookshelfTab === "cloud" ? "クラウドの本棚" : "このブラウザの本棚"}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="mt-[25px]">
+                {activeBookshelfTab === "local" && (
+                  <>
+                    {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
+                    {documents && documents.length > 0 && (
+                      <>
+                        <Bookshelf
+                          documents={documents}
+                          onOpen={(id) => router.push(`/editor?id=${id}`)}
+                          onRename={async (id, title) => {
+                            await db.documents.update(id, { title });
+                          }}
+                          onDelete={setPendingDeleteId}
+                          showLocalOnlyLabel={!!user}
+                          showEmptyState={showEmptyState}
+                          collapsible
+                        />
+                        <p className="mt-1 text-center text-sm text-ink/55 dark:text-[#939DAF]">
+                          作品はこの本棚から、いつでも続きを開けます。
+                        </p>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {activeBookshelfTab === "cloud" && user && (
+                  <>
+                    {!visibleCloudResult && <p className="text-center text-sm text-ink/50">クラウド作品を読み込み中…</p>}
+                    {visibleCloudResult?.error && (
+                      <p className="text-center text-sm text-ink/60">
+                        クラウド作品を読み込めませんでした。このブラウザの作品は引き続き利用できます。
+                      </p>
+                    )}
+                    {cloudIsResolved && visibleCloudResult.projects.length === 0 && (
+                      <p className="py-16 text-center text-sm text-ink/50">クラウドに保存された本はまだありません。</p>
+                    )}
+                    {cloudIsResolved && visibleCloudResult.projects.length > 0 && (
+                      <>
+                        <Bookshelf
+                          cloudProjects={visibleCloudResult.projects}
+                          onOpenCloud={(id) => router.push(`/editor?cloudId=${encodeURIComponent(id)}`)}
+                          collapsible
+                        />
+                        <p className="mt-1 text-center text-sm text-ink/55 dark:text-[#939DAF]">
+                          作品はこの本棚から、いつでも続きを開けます。
+                        </p>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="w-full" aria-label="本棚">
+            {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
+            {documents && documents.length > 0 && (
+              <Bookshelf
+                documents={documents}
+                onOpen={(id) => router.push(`/editor?id=${id}`)}
+                onRename={async (id, title) => {
+                  await db.documents.update(id, { title });
+                }}
+                onDelete={setPendingDeleteId}
+                showLocalOnlyLabel={!!user}
+                showEmptyState={showEmptyState}
+              />
             )}
+          </section>
+        )}
+      </main>
+
+      {/* NON-EMPTY / EMPTY共通の下部帯（Quick Actions / About / Footer）。
+          data-nonempty-shellの外（Empty分岐）でも同じ1160px幅に収まるよう、
+          data-nonempty-shellと同じmax-widthをここでも明示している。 */}
+      <div className="mx-auto w-full max-w-[1160px]">
+        <section
+          className="border-t border-[rgba(31,42,68,0.14)] px-4 pt-[45px] pb-[65px] sm:px-[clamp(20px,5vw,62px)] sm:pt-[50px] sm:pb-[90px] dark:border-[#2A3240]"
+          aria-labelledby="quick-actions-title"
+        >
+          <div className="mb-[22px] text-center">
+            <p className="mb-2 text-sm font-extrabold tracking-[0.18em] text-accent dark:text-[#C6AF63]">FROM THE SHELF</p>
+            <h2 id="quick-actions-title" className="mt-[3px] font-serif text-3xl font-medium text-ink dark:text-[#D4DBE7]">
+              本棚からできること
+            </h2>
           </div>
 
-          <div role="tabpanel">
-            {activeBookshelfTab === "local" && (
-              <>
-                {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
-                {documents && documents.length > 0 && (
-                  <Bookshelf
-                    documents={documents}
-                    onOpen={(id) => router.push(`/editor?id=${id}`)}
-                    onRename={async (id, title) => {
-                      await db.documents.update(id, { title });
-                    }}
-                    onDelete={setPendingDeleteId}
-                    showLocalOnlyLabel={!!user}
-                    showEmptyState={showEmptyState}
-                  />
-                )}
-              </>
-            )}
+          <div className="mx-auto grid max-w-[760px] grid-cols-1 gap-[10px] sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={creating}
+              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 disabled:opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+            >
+              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">✎</span>
+              <strong className="text-lg">新しい本を書く</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">新しい作品を作成する</small>
+            </button>
 
-            {activeBookshelfTab === "cloud" && user && (
-              <>
-                {!visibleCloudResult && <p className="text-center text-sm text-ink/50">クラウド作品を読み込み中…</p>}
-                {visibleCloudResult?.error && (
-                  <p className="text-center text-sm text-ink/60">
-                    クラウド作品を読み込めませんでした。このブラウザの作品は引き続き利用できます。
-                  </p>
-                )}
-                {cloudIsResolved && visibleCloudResult.projects.length === 0 && (
-                  <p className="py-16 text-center text-sm text-ink/50">クラウドに保存された本はまだありません。</p>
-                )}
-                {cloudIsResolved && visibleCloudResult.projects.length > 0 && (
-                  <Bookshelf
-                    cloudProjects={visibleCloudResult.projects}
-                    onOpenCloud={(id) => router.push(`/editor?cloudId=${encodeURIComponent(id)}`)}
-                  />
-                )}
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsCombineModalOpen(true)}
+              disabled={!documents || documents.length < 2}
+              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 disabled:opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+            >
+              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">▤</span>
+              <strong className="text-lg">本をまとめる</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">短編集・再録集を編成する</small>
+            </button>
+
+            {/* 「使い方を見る」: page.tsx / Header.tsx に既存のguide/help導線が
+                見当たらないため、リンク先を推測せず非活性表示のみとする。 */}
+            <button
+              type="button"
+              disabled
+              title="使い方導線は準備中です"
+              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7]"
+            >
+              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">?</span>
+              <strong className="text-lg">使い方を見る</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">本棚・エディタ・書き出し</small>
+            </button>
           </div>
         </section>
-      </main>
+
+        <section
+          className="border-t border-[rgba(31,42,68,0.14)] bg-ink/[0.025] px-[18px] py-[50px] sm:px-[clamp(24px,6vw,72px)] sm:py-[54px] dark:border-[#2A3240]"
+          aria-label="TateSpunについて"
+        >
+          <div className="grid grid-cols-1 items-center gap-[30px] min-[921px]:grid-cols-[1fr_180px]">
+            <div className="text-center min-[921px]:text-left">
+              <p className="mb-2 text-sm font-extrabold tracking-[0.18em] text-accent dark:text-[#C6AF63]">TATESPUN</p>
+              <h2 className="mt-1 text-balance font-serif text-3xl font-medium text-ink dark:text-[#D4DBE7]">書く場所は、静かでいい。</h2>
+              <p className="mt-2.5 text-sm text-ink/55 dark:text-[#939DAF]">
+                TateSpunは、縦書きで書く・整える・本にするための道具です。
+                <br />
+                本棚は、その途中に何度でも戻ってくる場所。
+              </p>
+            </div>
+
+            <div className="flex justify-center min-[921px]:justify-end">
+              <Image
+                src="/caroad_main2.png"
+                alt="TateSpun"
+                width={384}
+                height={341}
+                className="h-auto w-[150px] dark:hidden"
+              />
+              <Image
+                src="/caroad_main3.png"
+                alt="TateSpun"
+                width={384}
+                height={341}
+                className="hidden h-auto w-[150px] dark:block"
+              />
+            </div>
+          </div>
+        </section>
+
+        <footer className="flex flex-col items-center gap-3 border-t border-[rgba(31,42,68,0.14)] px-[clamp(20px,5vw,58px)] pt-[25px] pb-10 text-center dark:border-[#2A3240] sm:flex-row sm:flex-wrap sm:items-center sm:text-left">
+          <div className="flex items-baseline gap-1.5">
+            <strong className="text-base font-bold text-ink dark:text-[#D4DBE7]">TateSpun</strong>
+            <span className="text-sm text-ink/55 dark:text-[#939DAF]">/ SpunTales</span>
+          </div>
+
+          <nav
+            className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-start"
+            aria-label="フッター"
+          >
+            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+              利用規約
+            </span>
+            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+              プライバシーポリシー
+            </span>
+            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+              お問い合わせ
+            </span>
+          </nav>
+
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label="ページ上部へ戻る"
+            className="mx-auto grid h-11 w-11 place-items-center rounded-full border border-[rgba(31,42,68,0.14)] text-ink transition-colors hover:border-[rgba(31,42,68,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-[#2A3240] dark:text-[#D4DBE7] dark:hover:border-[#3A4658] sm:mx-0 sm:ml-auto"
+          >
+            ↑
+          </button>
+        </footer>
+      </div>
+    </>
+  );
+
+  return (
+    <div data-bookshelf-page className={outerClassName}>
+      {isNonEmptyVisual ? (
+        <div data-nonempty-shell className={nonEmptyShellClassName}>
+          {homeContent}
+        </div>
+      ) : (
+        homeContent
+      )}
 
       {pendingDoc && (
         <div

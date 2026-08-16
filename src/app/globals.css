@@ -27,6 +27,9 @@
   --color-paper-ink: var(--paper-ink);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  /* NON-EMPTY Home hero h1 only, per design_ref (docs/design_ref/styles.css
+     --font-serif). System stack, no new font dependency. */
+  --font-serif: Georgia, "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
 }
 
 html,
@@ -52,4 +55,74 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* NON-EMPTY home page shell (Light only): blend the shared Header into the
+   central page surface instead of letting it float as a separate white card.
+   Scoped to [data-nonempty-shell] so Editor and the empty-state Header are
+   never affected, and skipped entirely in dark theme (no redesign there yet). */
+html:not([data-theme="dark"]) [data-nonempty-shell] > header {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 42, 68, 0.08);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* NON-EMPTY home page shell (Black theme): same blending strategy as the
+   Light rule above, targeted at Header.tsx's static Tailwind classes and the
+   tablist/tab attributes in page.tsx so neither file needs to change.
+   Scoped to [data-nonempty-shell], so the empty-state Home and Editor
+   Headers (which never render inside this wrapper) are unaffected. */
+html[data-theme="dark"] [data-nonempty-shell] > header {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #2a3240;
+  border-radius: 0;
+  background: #11151d;
+  box-shadow: none;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-800 {
+  color: #d4dbe7;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-700,
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-600,
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-500,
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-400 {
+  color: #939daf;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .text-gray-300 {
+  color: #3a4658;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .border-slate-200,
+html[data-theme="dark"] [data-nonempty-shell] > header .border-gray-300 {
+  border-color: #3a4658;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .hover\:bg-gray-100:hover {
+  background-color: #1d2430;
+}
+html[data-theme="dark"] [data-nonempty-shell] > header .hover\:text-gray-800:hover {
+  color: #d4dbe7;
+}
+
+/* NON-EMPTY home Bookshelf tablist (Black theme): page.tsx's tab pill uses
+   --ink-derived utilities that read as too faint on the new near-black
+   surface. Targeted via the existing role/aria attributes rather than new
+   classes so Bookshelf.tsx and its module CSS stay untouched. */
+html[data-theme="dark"] [data-nonempty-shell] [role="tablist"] {
+  border-color: #2a3240;
+  background: #171c26;
+}
+html[data-theme="dark"] [data-nonempty-shell] [role="tab"] {
+  color: #939daf;
+}
+html[data-theme="dark"] [data-nonempty-shell] [role="tab"]:hover {
+  background: #1d2430;
+  color: #d4dbe7;
+}
+html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"] {
+  background: #1d2430;
+  color: #d4dbe7;
+  box-shadow: inset 0 0 0 1px #3a4658;
 }

@@ -5,7 +5,7 @@
 import type { DocumentRecord } from "@/lib/db";
 import { countVisualLength } from "@/lib/tategaki";
 import type { Project } from "@/types/database";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { BookSpine, type BookSpineColors } from "./BookSpine";
 import styles from "./Bookshelf.module.css";
 import {
@@ -28,6 +28,8 @@ interface BookshelfProps {
   /** ログイン中、ローカル保存の作品に「ブラウザ保存」表示を出す */
   showLocalOnlyLabel?: boolean;
   showEmptyState?: boolean;
+  /** 2段目以降を「もっとみる」で折りたたむ（NON-EMPTY Home専用）。既定はfalseで全段表示、既存挙動を維持する。 */
+  collapsible?: boolean;
 }
 
 const BOOK_COLORS: BookSpineColors[] = [
@@ -92,10 +94,13 @@ export function Bookshelf({
   onDelete,
   showLocalOnlyLabel,
   showEmptyState = false,
+  collapsible = false,
 }: BookshelfProps) {
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const bookshelfRef = useRef<HTMLDivElement>(null);
+  const shelvesId = useId();
   const regularDocuments = documents.filter((doc) => !doc.isSample);
   const sampleDocuments = documents.filter((doc) => doc.isSample);
   const books = [
@@ -161,13 +166,16 @@ export function Bookshelf({
     ],
     measuredWidth,
   );
+  const hasCollapsedShelves = collapsible && shelfBooks.length > 1;
+  const visibleShelfBooks =
+    hasCollapsedShelves && !isExpanded ? shelfBooks.slice(0, 1) : shelfBooks;
   return (
     <div
       className={`${styles.bookshelf} ${showEmptyState ? styles.bookshelfEmpty : ""}`}
       ref={bookshelfRef}
     >
-      <div className={styles.shelves}>
-        {shelfBooks.map((shelf, shelfIndex) => {
+      <div className={styles.shelves} id={shelvesId}>
+        {visibleShelfBooks.map((shelf, shelfIndex) => {
           const booksWidth = shelf.reduce(
             (total, book, index) => total + book.width + (index > 0 ? 8 : 0),
             0,
@@ -271,6 +279,18 @@ export function Bookshelf({
           );
         })}
       </div>
+
+      {hasCollapsedShelves && (
+        <button
+          type="button"
+          className={styles.shelfToggle}
+          onClick={() => setIsExpanded((expanded) => !expanded)}
+          aria-expanded={isExpanded}
+          aria-controls={shelvesId}
+        >
+          {isExpanded ? "▲ とじる ▲" : "▼ もっとみる ▼"}
+        </button>
+      )}
     </div>
   );
 }
