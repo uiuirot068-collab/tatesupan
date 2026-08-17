@@ -1223,6 +1223,19 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
 }
 
 /**
+ * 段落先頭tokenへ自動一字下げ（INDENT_SPACE）を追加すべきかどうか。
+ * 開始が全角括弧類（会話文）の場合と同様に、原稿側が既にINDENT_SPACEと同じ
+ * 全角スペース（U+3000）で始まっている場合も追加しない——追加すると原稿の
+ * 手動字下げの上に自動字下げが重なり、2slot分の字下げになってしまう
+ * （実ブラウザDOM調査で確認済み）。ユーザーが入力したU+3000そのものは一切
+ * 変更・削除せず、そのまま1文字分のslotとして描画される。
+ */
+function needsAutoIndent(token: Exclude<TategakiToken, { type: "image" }>): boolean {
+  const first = firstVisibleChar(token);
+  return !OPENING_BRACKETS.includes(first) && first !== INDENT_SPACE;
+}
+
+/**
  * 固定slot grid（FixedSlotLine）へ載せてよい論理行かどうか。G1はtext-onlyの
  * 行だけを対象にしていたが、G2aでruby({base,rt})を、G2bで――/……等のnowrap
  * 保護対象を含むtext tokenを、G2cでtcy（縦中横）を対応に加えた。nowrap run
@@ -1310,7 +1323,7 @@ function buildLineSlots(
     if (token.type !== "text" && token.type !== "ruby" && token.type !== "tcy") return;
     const flatIndex = flatIndexBase + tokenIndex;
     const indent = paragraphStarts[flatIndex];
-    const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+    const prefix = indent && needsAutoIndent(token) ? INDENT_SPACE : "";
     if (prefix) {
       slots.push({ key: `${flatIndex}-indent`, text: prefix, slotIndex: slotCursor });
       slotCursor += 1;
@@ -1603,7 +1616,7 @@ function TokenView({
   token: Exclude<TategakiToken, { type: "image" }>;
   indent: boolean;
 }) {
-  const prefix = indent && !OPENING_BRACKETS.includes(firstVisibleChar(token)) ? INDENT_SPACE : "";
+  const prefix = indent && needsAutoIndent(token) ? INDENT_SPACE : "";
 
   if (token.type === "ruby") {
     return (
