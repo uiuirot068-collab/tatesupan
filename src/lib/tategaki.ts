@@ -227,6 +227,46 @@ function nowrapRunFamily(char: string): RegExp | null {
   return null;
 }
 
+// Vertical Preview Polish (2026): edge-margin scope is intentionally
+// dash-only (――), NOT the full NOWRAP_RUN_FAMILIES list above (which also
+// matches ……/‥‥ for *pagination*'s nowrap-run protection — that contract
+// is unrelated and must not change). ……runs keep their existing, unmodified
+// typesetting; only ――gets the extra boundary breathing room. Deliberately
+// a separate regex from NOWRAP_RUN_FAMILIES/nowrapRunFamily rather than
+// reusing/filtering it, so this stays independent of any future change to
+// the pagination-side family list.
+const DASH_RUN_FAMILY = /[―—]/;
+
+/**
+ * Vertical Preview Polish (2026): shared run-boundary classifier for ――
+ * runs (dash family only — see DASH_RUN_FAMILY above), used by both Current
+ * (PageCard.tsx's FixedSlotLine) and New (p1Adapter.ts) renderers to add
+ * optical spacing only where a run touches an unrelated neighboring
+ * character — never between two members of the same run (that connection
+ * is intentional and already correct in both renderers; see each call site
+ * for how it's applied).
+ *
+ * `chars` is the character array of a single contiguous text run (already
+ * split so it never crosses a token/ruby/tcy boundary — same granularity
+ * `isNowrapRunMember` in PageCard.tsx uses). Returns:
+ *   - "start": first character of a 2+ dash run (previous neighbor, if
+ *     any, is not a dash) — needs breathing room on the *before* side only.
+ *   - "end": last character of a 2+ dash run — needs breathing room on the
+ *     *after* side only.
+ *   - null: not a dash, OR a solo dash, OR a middle character of a 3+ dash
+ *     run (flanked by dashes on both sides — leave untouched, both its
+ *     neighbors are internal to the run).
+ */
+export function nowrapRunBoundaryEdge(chars: string[], index: number): "start" | "end" | null {
+  if (!DASH_RUN_FAMILY.test(chars[index])) return null;
+  const prevSame = index > 0 && DASH_RUN_FAMILY.test(chars[index - 1]);
+  const nextSame = index < chars.length - 1 && DASH_RUN_FAMILY.test(chars[index + 1]);
+  if (!prevSame && !nextSame) return null; // solo dash, not a run
+  if (!prevSame) return "start";
+  if (!nextSame) return "end";
+  return null; // middle of a 3+ dash run — both neighbors are run members
+}
+
 /**
  * If `splitIndex` lands inside a same-family run of ―― / …… characters,
  * snaps it down to the nearest point that keeps every fragment placed on

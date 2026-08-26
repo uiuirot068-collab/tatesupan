@@ -58,6 +58,13 @@ import {
 import { useShortcuts } from "@/hooks/useShortcuts";
 import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
+import PreviewPaneNew from "./PreviewPaneNew";
+
+// P2-B: local-dev-only "New (Experimental)" renderer toggle. Not persisted
+// anywhere (no localStorage/IndexedDB/cloud/settings) — always resets to
+// Current on reload. Only ever rendered when this is true, so it's absent
+// from production bundles/behavior by construction.
+const RENDERER_TOGGLE_ENABLED = process.env.NODE_ENV !== "production";
 
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
@@ -387,6 +394,47 @@ export default function PreviewPane({
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
 
+  // P2-B: which renderer this pane shows. local useState only — no
+  // persistence of any kind, never written to `settings`/document data, so
+  // it can never leak into a save and always resets to "current" on reload.
+  const [rendererMode, setRendererMode] = useState<"current" | "new">("current");
+  const [newRendererWarning, setNewRendererWarning] = useState<string | null>(null);
+  const handleNewRendererUnavailable = () => {
+    setRendererMode("current");
+    setNewRendererWarning(
+      "New renderer preview unavailable — bridge/Vivliostyleが起動していないため Current へ戻しました。"
+    );
+  };
+  const rendererToggle = RENDERER_TOGGLE_ENABLED ? (
+    <span className="flex flex-shrink-0 items-center gap-1 rounded border border-dashed border-amber-400 px-1.5 py-1">
+      <span className="whitespace-nowrap text-[10px] text-amber-700">Renderer(dev):</span>
+      <button
+        type="button"
+        onClick={() => {
+          setNewRendererWarning(null);
+          setRendererMode("current");
+        }}
+        className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
+          rendererMode === "current" ? "bg-amber-400/80 font-semibold" : "text-ink/60 hover:bg-ink/5"
+        }`}
+      >
+        Current
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setNewRendererWarning(null);
+          setRendererMode("new");
+        }}
+        className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
+          rendererMode === "new" ? "bg-amber-400/80 font-semibold" : "text-ink/60 hover:bg-ink/5"
+        }`}
+      >
+        New (Experimental)
+      </button>
+    </span>
+  ) : null;
+
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   // "このページの前" か "このページの後" か。dropIndexだけでは見開きの
@@ -397,8 +445,14 @@ export default function PreviewPane({
   const lastClickedRef = useRef<number | null>(null);
 
   const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 2.0;
-  const ZOOM_STEP = 0.1;
+  // Vertical Preview Polish: 200% -> 400%. Purely a viewing-scale ceiling —
+  // multiplies presentationScale (= zoomScale * baseAutoFitScale) below,
+  // never touches pagination/font-size/A5 physical settings or export/PDF
+  // scale (those all read layout/settings directly, not zoomScale).
+  const ZOOM_MAX = 4.0;
+  // Preview Zoom Step Polish: 0.1 -> 0.5, so +/- moves in 50%-point
+  // increments (100% -> 150% -> 200% ... -> 400%) instead of 10%-point ones.
+  const ZOOM_STEP = 0.5;
   // Default view is an overview of the book's page layout — [page1][空き] /
   // [page3][page2] / ... at a glance — not one page maximized to fill the
   // pane, so the preview opens at 50% rather than 100%. Resetting via the
@@ -1150,6 +1204,46 @@ export default function PreviewPane({
     );
   }
 
+  // P2-B: "New (Experimental)" renderer branch. Deliberately does not reuse
+  // any of the Current-only JSX below (zoom/export/reorder/PageCard) — this
+  // A/B pass is preview-only (see PreviewPaneNew.tsx header comment for what
+  // is intentionally out of scope). Current's own render path (below) is
+  // completely untouched by this branch existing.
+  if (RENDERER_TOGGLE_ENABLED && rendererMode === "new") {
+    return (
+      <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-y-auto max-h-[85vh] md:max-h-none md:overflow-y-visible md:overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+        <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
+          <div className="flex flex-wrap items-center gap-2">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                title="プレビューを折りたたむ"
+                className="hidden flex-shrink-0 rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/60 hover:bg-ink/5 md:inline-flex"
+              >
+                ▶
+              </button>
+            )}
+            <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
+            {rendererToggle}
+          </div>
+          {newRendererWarning && (
+            <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{newRendererWarning}</p>
+          )}
+        </div>
+        <div className="min-h-0 flex-1">
+          <PreviewPaneNew
+            content={content}
+            settings={settings}
+            layout={layout}
+            title={title}
+            onUnavailable={handleNewRendererUnavailable}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-y-auto max-h-[85vh] md:max-h-none md:overflow-y-visible md:overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
@@ -1165,6 +1259,7 @@ export default function PreviewPane({
             </button>
           )}
           <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
+          {rendererToggle}
           <span className="flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"
@@ -1294,6 +1389,9 @@ export default function PreviewPane({
           {layout.paper.label} / 全 {pages.length} ページ / 1ページ
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
+        {newRendererWarning && (
+          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{newRendererWarning}</p>
+        )}
       </div>
 
       {canReorder && selected.size > 0 && (

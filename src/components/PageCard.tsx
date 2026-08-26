@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   computeParagraphStartFlags,
+  nowrapRunBoundaryEdge,
   tokenLength,
   type ImagePosition,
   type TategakiPage,
@@ -33,6 +34,13 @@ const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 // 文字配列内の前後1文字だけ見て判定する（runPatternのような文字列一括
 // 判定はslot単位の描画とかみ合わないため使えない）。
 const NOWRAP_RUN_CHAR_FAMILIES: readonly RegExp[] = [/[―—]/, /[…‥]/];
+
+// Vertical Preview Polish (2026): ――／……runの外側の境界（run内部ではなく、
+// runの外にある通常文字との間）にだけ足す追加の余白。em単位——font-size
+// (fontSizePx)にそのまま比例するので、9pt/16pt等どのサイズでも同じ見た目
+// 比率になる。値は初回実装の見積りで、実機Visual QAでの微調整を想定する
+// （固定pxではなくem基準にしてあるため、調整はこの1箇所を変えるだけでよい）。
+const NOWRAP_RUN_EDGE_MARGIN_EM = 0.18;
 
 /**
  * `chars[index]`が――／……のような2文字以上のrunの一員か（前後どちらかの
@@ -1257,6 +1265,8 @@ interface LineSlot {
   slotIndex: number;
   /** ――／……のようなnowrap run内の文字か（isNowrapRunMember参照）。trueの場合だけ描画側でtext-orientationを補正する。 */
   runConnect?: boolean;
+  /** Vertical Preview Polish: nowrapRunBoundaryEdge()の結果。"start"/"end"の場合だけ、その外側にだけ小さい余白を足す（run内部の連結には一切影響しない）。 */
+  runEdge?: "start" | "end" | null;
 }
 
 /**
@@ -1338,6 +1348,7 @@ function buildLineSlots(
           text: ch,
           slotIndex: slotCursor,
           runConnect: isNowrapRunMember(chars, charIndex),
+          runEdge: nowrapRunBoundaryEdge(chars, charIndex),
         });
         slotCursor += 1;
       });
@@ -1584,7 +1595,27 @@ function FixedSlotLine({
             ...(slot.runConnect ? { textOrientation: "mixed" as const } : null),
           }}
         >
-          {slot.text}
+          {slot.runEdge ? (
+            // Vertical Preview Polish: nowrapRunBoundaryEdgeが"start"/"end"を
+            // 返した文字（runの内部ではなく、run外の通常文字と隣接する側）だけ、
+            // その外側にだけ小さいem単位の余白を足す。内側(runの続きがある側)
+            // は無指定のまま——flexの中央寄せがこの非対称marginぶんだけ文字を
+            // 外側から離す方向へ押し出す。slotIndexは上→下(top-to-bottom)で
+            // 増える物理座標なので、物理top/bottomをそのまま使う(writing-mode
+            // 由来のlogical block/inline軸変換を経由しない——このFixedSlot
+            // grid自体が既にtop座標で直接位置指定している既存方式に合わせる)。
+            // slotの位置・高さ(grid)・runConnect自体には一切手を入れない。
+            <span
+              style={{
+                marginTop: slot.runEdge === "start" ? `${NOWRAP_RUN_EDGE_MARGIN_EM}em` : undefined,
+                marginBottom: slot.runEdge === "end" ? `${NOWRAP_RUN_EDGE_MARGIN_EM}em` : undefined,
+              }}
+            >
+              {slot.text}
+            </span>
+          ) : (
+            slot.text
+          )}
         </span>
       ))}
       {tcyCells.map((cell) => (

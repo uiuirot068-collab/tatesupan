@@ -16,7 +16,15 @@
  * （P0-Aのconvert.tsと同じ設計方針。pageBreak/imageトークンの扱いのみ
  * P0-Aでは対象外だったため今回新たに追加する）。
  */
-import { tokenizeTategaki, type TategakiToken } from "@/lib/tategaki";
+import { nowrapRunBoundaryEdge, tokenizeTategaki, type TategakiToken } from "@/lib/tategaki";
+
+// Vertical Preview Polish (2026): shared with PageCard.tsx (Current renderer)
+// — see nowrapRunBoundaryEdge's doc comment in lib/tategaki.ts. Same em
+// value as PageCard.tsx's NOWRAP_RUN_EDGE_MARGIN_EM, kept independent here
+// since this file emits a plain CSS string, not a React style object (no
+// good shared-constant home without introducing a new cross-file coupling
+// for a single number — if the value needs tuning, update both).
+const NOWRAP_RUN_EDGE_MARGIN_EM = 0.18;
 
 // 会話文（かぎ括弧などで始まる段落）は一字下げしない、という組版慣行。
 // P0-Aのconvert.tsと同じ文字集合をこのファイル内で独立に再現する。
@@ -121,7 +129,34 @@ function tokenToHtml(token: TategakiToken): string {
   }
   if (token.type === "pageBreak") return ""; // splitIntoP1Blocks never places this in a paragraph's tokens
   // text
-  return escapeHtml(token.value);
+  return renderTextWithNowrapRunEdges(token.value);
+}
+
+/**
+ * Vertical Preview Polish (2026): wraps only the true outward-facing edge
+ * character(s) of a ――／……run (nowrapRunBoundaryEdge — same shared
+ * classifier PageCard.tsx's Current renderer uses) in a span carrying a
+ * small margin-top/margin-bottom, so a run gets breathing room from an
+ * unrelated neighboring character without adding any gap between members
+ * of the same run (untouched, plain adjacent text as before). Every other
+ * character (including the rest of the run) is emitted exactly as before —
+ * this only changes output for text containing a ――／……run.
+ */
+function renderTextWithNowrapRunEdges(value: string): string {
+  const chars = Array.from(value);
+  let html = "";
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const edge = nowrapRunBoundaryEdge(chars, i);
+    if (edge === "start") {
+      html += `<span class="p1-nowrap-edge-start">${escapeHtml(ch)}</span>`;
+    } else if (edge === "end") {
+      html += `<span class="p1-nowrap-edge-end">${escapeHtml(ch)}</span>`;
+    } else {
+      html += escapeHtml(ch);
+    }
+  }
+  return html;
 }
 
 function blockToHtml(block: P1Block): string {
@@ -152,11 +187,31 @@ export interface P1DocumentOptions {
    * 観察用の目盛りを重ねて表示するだけ。
    */
   grid: boolean;
+  // ---- P2-B: 実Editorの PageSettings/PageLayout からの組版条件マッピング。
+  // すべて省略可能で、省略時は既存P0-B/B2 golden設定(A5 148x210mm/18mm/
+  // 9pt/1.7)のまま —— 既存の呼び出し元(P1Section.tsx等)の後方互換を維持。
+  // 対応不能な設定(段組み/ノド・小口の見開き反転等)はP2-B REPORTに列挙する。
+  pageWidthMm: number;
+  pageHeightMm: number;
+  marginTopMm: number;
+  marginRightMm: number;
+  marginBottomMm: number;
+  marginLeftMm: number;
+  fontSizePt: number;
+  lineHeightRatio: number;
 }
 
 const DEFAULT_OPTIONS: P1DocumentOptions = {
   fontFamily: '"Noto Serif JP", serif',
   grid: false,
+  pageWidthMm: 148,
+  pageHeightMm: 210,
+  marginTopMm: 18,
+  marginRightMm: 18,
+  marginBottomMm: 18,
+  marginLeftMm: 18,
+  fontSizePt: 9,
+  lineHeightRatio: 1.7,
 };
 
 /**
@@ -167,13 +222,28 @@ const DEFAULT_OPTIONS: P1DocumentOptions = {
  * であって、typography自体はP0-B/B2で既にPASS済みのため変更しない。
  */
 export function tokensToP1Document(source: string, options: Partial<P1DocumentOptions> = {}): string {
-  const { fontFamily, grid } = { ...DEFAULT_OPTIONS, ...options };
+  const {
+    fontFamily,
+    grid,
+    pageWidthMm,
+    pageHeightMm,
+    marginTopMm,
+    marginRightMm,
+    marginBottomMm,
+    marginLeftMm,
+    fontSizePt,
+    lineHeightRatio,
+  } = { ...DEFAULT_OPTIONS, ...options };
   const blocks = splitIntoP1Blocks(source);
   const body = blocks.map(blockToHtml).join("\n");
   // body直下の直接の子として置く(<p>の中には入れない)。CSS content model上
   // <p>はphrasing contentしか許さないため、他要素と同じ理由でここでも
   // 段落タグの外に置く必要がある(P1-A image placeholderの修正と同じ配慮)。
   const gridOverlay = grid ? `<div class="p1-diag-grid" aria-hidden="true"></div>\n` : "";
+  // grid overlayのinsetは4辺共通の1値しか取れないため、上下左右の余白が
+  // 食い違う場合は上(marginTopMm)を代表値として使う(観察専用オーバーレイの
+  // 近似——本文のpagination/box自体には一切影響しない)。
+  const gridInsetMm = marginTopMm;
 
   return `<!doctype html>
 <html lang="ja">
@@ -185,7 +255,7 @@ export function tokensToP1Document(source: string, options: Partial<P1DocumentOp
   rel="stylesheet"
 />
 <style>
-  @page { size: 148mm 210mm; margin: 18mm; }
+  @page { size: ${pageWidthMm}mm ${pageHeightMm}mm; margin: ${marginTopMm}mm ${marginRightMm}mm ${marginBottomMm}mm ${marginLeftMm}mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     writing-mode: vertical-rl;
@@ -194,13 +264,19 @@ export function tokensToP1Document(source: string, options: Partial<P1DocumentOp
     word-break: normal;
     overflow-wrap: normal;
     font-family: ${fontFamily};
-    font-size: 9pt;
-    line-height: 1.7;
+    font-size: ${fontSizePt}pt;
+    line-height: ${lineHeightRatio};
     color: #000;
   }
   p.p1-para { margin: 0; text-indent: 1em; }
   p.p1-para.no-indent { text-indent: 0; }
   .p1-tcy { text-combine-upright: all; }
+  /* Vertical Preview Polish: outer-edge-only breathing room for ――／……runs
+     (see renderTextWithNowrapRunEdges / nowrapRunBoundaryEdge). Physical
+     top/bottom, not margin-block/inline — matches vertical-rl's actual
+     top-to-bottom reading direction unambiguously. */
+  .p1-nowrap-edge-start { margin-top: ${NOWRAP_RUN_EDGE_MARGIN_EM}em; }
+  .p1-nowrap-edge-end { margin-bottom: ${NOWRAP_RUN_EDGE_MARGIN_EM}em; }
   rt { font-size: 0.5em; }
   .p1-page-break { break-after: page; }
   .p1-image-placeholder {
@@ -224,7 +300,7 @@ export function tokensToP1Document(source: string, options: Partial<P1DocumentOp
    */
   .p1-diag-grid {
     position: fixed;
-    inset: 18mm;
+    inset: ${gridInsetMm}mm;
     pointer-events: none;
     z-index: 9999;
     background-image:
@@ -233,23 +309,23 @@ export function tokensToP1Document(source: string, options: Partial<P1DocumentOp
         rgba(220, 0, 0, 0.4) 0,
         rgba(220, 0, 0, 0.4) 0.5px,
         transparent 0.5px,
-        transparent calc(9pt * 1.7)
+        transparent calc(${fontSizePt}pt * ${lineHeightRatio})
       ),
       repeating-linear-gradient(
         to left,
         transparent 0,
-        transparent calc(9pt * 1.7 / 2 - 0.25px),
-        rgba(0, 90, 220, 0.45) calc(9pt * 1.7 / 2 - 0.25px),
-        rgba(0, 90, 220, 0.45) calc(9pt * 1.7 / 2 + 0.25px),
-        transparent calc(9pt * 1.7 / 2 + 0.25px),
-        transparent calc(9pt * 1.7)
+        transparent calc(${fontSizePt}pt * ${lineHeightRatio} / 2 - 0.25px),
+        rgba(0, 90, 220, 0.45) calc(${fontSizePt}pt * ${lineHeightRatio} / 2 - 0.25px),
+        rgba(0, 90, 220, 0.45) calc(${fontSizePt}pt * ${lineHeightRatio} / 2 + 0.25px),
+        transparent calc(${fontSizePt}pt * ${lineHeightRatio} / 2 + 0.25px),
+        transparent calc(${fontSizePt}pt * ${lineHeightRatio})
       ),
       repeating-linear-gradient(
         to bottom,
         rgba(0, 150, 0, 0.35) 0,
         rgba(0, 150, 0, 0.35) 0.5px,
         transparent 0.5px,
-        transparent 9pt
+        transparent ${fontSizePt}pt
       );
   }
 </style>
