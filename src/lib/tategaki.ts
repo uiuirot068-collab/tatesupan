@@ -17,10 +17,45 @@ const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
 // 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>:<position>】
 // (the trailing :<position> is optional for backward compatibility with
 // documents saved before positioning was introduced; it defaults to "center")
-// 改ページ marker: 【改ページ】
+// 改ページ marker: 【改ページ】 — but only a forced break when it is the
+// *entire* content of its line (see `isStandaloneLineMarker` below); the
+// same literal text appearing inline (e.g. prose discussing or quoting the
+// marker's own syntax) must render as literal text instead of silently
+// vanishing into an unwanted page split (TSP-LOOP-001 Fatal QA finding).
 export const PAGE_BREAK_MARKER = "【改ページ】";
 const MARKER_PATTERN =
   /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
+
+/**
+ * True when the `【改ページ】` match spanning `[start, end)` in `source` is
+ * the *only* non-whitespace content of its line — i.e. trimming the line
+ * that contains it yields exactly `PAGE_BREAK_MARKER`. Only such standalone
+ * occurrences are real forced-break commands; every other occurrence (this
+ * function returns false) is left as literal text for the surrounding
+ * ruby/TCY tokenizer pass to handle normally.
+ */
+function isStandaloneLineMarker(source: string, start: number, end: number): boolean {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const nextNewline = source.indexOf("\n", end);
+  const lineEnd = nextNewline === -1 ? source.length : nextNewline;
+  return source.slice(lineStart, lineEnd).trim() === PAGE_BREAK_MARKER;
+}
+
+/**
+ * Returns the `【改ページ】` marker text to splice between `before` and
+ * `after`, padded with a leading/trailing "\n" only on whichever side
+ * doesn't already sit at a line boundary — so the spliced marker always
+ * satisfies `isStandaloneLineMarker` (and thus still functions as a real
+ * forced break) without introducing a visible blank line where one isn't
+ * needed. Callers that insert a page break by string-splicing raw source
+ * text (editor "insert page break" action, page-reorder reconstruction)
+ * must go through this rather than inserting `PAGE_BREAK_MARKER` bare.
+ */
+export function insertPageBreakMarker(before: string, after: string): string {
+  const needsLeading = before.length > 0 && !before.endsWith("\n");
+  const needsTrailing = after.length > 0 && !after.startsWith("\n");
+  return (needsLeading ? "\n" : "") + PAGE_BREAK_MARKER + (needsTrailing ? "\n" : "");
+}
 
 /** A token paired with the [start, end) raw source range it was parsed from. */
 export interface OffsetToken {
@@ -47,10 +82,18 @@ export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
 
   for (const match of source.matchAll(MARKER_PATTERN)) {
     const index = match.index ?? 0;
+    const end = index + match[0].length;
+
+    if (match[1] === undefined && !isStandaloneLineMarker(source, index, end)) {
+      // Inline `【改ページ】` (not alone on its line): not a real forced
+      // break — leave it untouched so it flows into the next slice's
+      // ruby/TCY tokenization as ordinary literal text.
+      continue;
+    }
+
     if (index > lastIndex) {
       tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index), lastIndex));
     }
-    const end = index + match[0].length;
     if (match[1] !== undefined) {
       tokens.push({
         token: {

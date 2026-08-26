@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { countVisualLength, PAGE_BREAK_MARKER } from "@/lib/tategaki";
+import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import PageSettingsPanel from "./PageSettingsPanel";
 
@@ -75,8 +75,15 @@ export default function EditorPane({
     const el = textareaRef.current;
     const start = el?.selectionStart ?? content.length;
     const end = el?.selectionEnd ?? content.length;
-    onContentChange(content.slice(0, start) + PAGE_BREAK_MARKER + content.slice(end));
-    const caret = start + PAGE_BREAK_MARKER.length;
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    // A break inserted mid-line (the common case: cursor between two
+    // sentences on the same line) must still land on its own line, or the
+    // marker would render as literal text instead of a real page break —
+    // see `insertPageBreakMarker`'s doc.
+    const marker = insertPageBreakMarker(before, after);
+    onContentChange(before + marker + after);
+    const caret = start + marker.indexOf(PAGE_BREAK_MARKER) + PAGE_BREAK_MARKER.length;
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(caret, caret);

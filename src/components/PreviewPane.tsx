@@ -9,13 +9,13 @@ import {
   type MouseEvent,
 } from "react";
 import {
-  PAGE_BREAK_MARKER,
   computePageParagraphStarts,
   computePageSourceRanges,
   detokenizeTategaki,
   findImageTokenRange,
   findPageIndexForCharIndex,
   formatImageMarker,
+  insertPageBreakMarker,
   paginateTokens,
   tokenizeTategaki,
   type ImagePosition,
@@ -941,8 +941,13 @@ export default function PreviewPane({
 
     const flushRun = () => {
       if (runStart === null || runEnd === null) return;
-      if (segments.length > 0) segments.push(PAGE_BREAK_MARKER);
-      segments.push(content.slice(pageSourceRanges[runStart].start, pageSourceRanges[runEnd].end));
+      const text = content.slice(pageSourceRanges[runStart].start, pageSourceRanges[runEnd].end);
+      // insertPageBreakMarker (not a bare PAGE_BREAK_MARKER push): segments
+      // are joined with "" below, so an unpadded marker here could land
+      // mid-line against whatever the neighboring segment contains and
+      // silently stop functioning as a real break — see its doc.
+      if (segments.length > 0) segments.push(insertPageBreakMarker(segments[segments.length - 1], text));
+      segments.push(text);
       runStart = null;
       runEnd = null;
     };
@@ -951,8 +956,9 @@ export default function PreviewPane({
       const origIndex = pageOriginalIndex.get(page);
       if (origIndex == null) {
         flushRun();
-        if (segments.length > 0) segments.push(PAGE_BREAK_MARKER);
-        segments.push(detokenizeTategaki(page.tokens));
+        const text = detokenizeTategaki(page.tokens);
+        if (segments.length > 0) segments.push(insertPageBreakMarker(segments[segments.length - 1], text));
+        segments.push(text);
         continue;
       }
       if (runStart !== null && runEnd !== null && origIndex === runEnd + 1) {
