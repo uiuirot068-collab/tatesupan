@@ -1,0 +1,4 @@
+# Runtime output written by p1-bridge-server.mjs on every POST /update,
+# plus any local Vite cache from a `vivliostyle preview` run pointed at it.
+# Not source — never commit.
+served/
