@@ -1,5 +1,17 @@
 export type PaperSizeNombrePosition = "center" | "gutter" | "outer" | "hidden";
 
+/**
+ * 本文グリッドの字送り方式。
+ *  - "justified"（既定・省略時）: 1文字スロットの縦幅 = 版面高 / charsPerLine。
+ *    満杯行がちょうど地のラインまで届くよう、割り切れない余りを全スロットへ
+ *    均等配分する（従来挙動）。charsPerLine が版面高を割り切らない用紙では
+ *    字送りが 1em より僅かに広がる。
+ *  - "solid": 1文字スロットの縦幅 = フォントサイズ（ベタ組み・1em固定）。
+ *    余りは地側の余白として残す。字送りが用紙・charsPerLine に依存せず
+ *    常に 1em の単一グリッドになる。
+ */
+export type PaperSizeGridMode = "justified" | "solid";
+
 /** 段数（1段組 / 2段組）ごとに異なる版面パラメータ一式 */
 export interface PaperSizeColumnProfile {
   marginTop: number;    // 天 (mm)
@@ -13,6 +25,8 @@ export interface PaperSizeColumnProfile {
   linesPerColumn: number; // 1段の行数
   nombrePosition: PaperSizeNombrePosition; // ノンブル表示位置
   nombreDistance: number; // ノンブル: 地からの距離 (mm)
+  /** 本文グリッドの字送り方式。省略時は "justified"（従来挙動）。 */
+  gridMode?: PaperSizeGridMode;
 }
 
 export interface PaperSizeConfig {
@@ -37,10 +51,14 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       fontSizePt: 9.0,
       lineSpacing: 1.7,
       columnGap: 0,
-      charsPerLine: 42,
+      charsPerLine: 53,
       linesPerColumn: 22,
       nombrePosition: 'center',
       nombreDistance: 8,
+      // TSP-LOOP-003: A5 1段組は charsPerLine(53) が版面高(174mm)を割り切らず、
+      // justified だと字送りが 1.03em に広がって本文が疎らに見える。ベタ組み
+      // (1em 固定グリッド) に切り替え、余りは地側の余白として残す。A5 1段組限定。
+      gridMode: 'solid',
     },
     cols2: {
       marginTop: 16,

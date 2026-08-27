@@ -17,6 +17,7 @@ import {
   type TategakiToken,
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 
 // 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
 // 対象となる開き括弧類。地文の段落先頭にはここに含まれない場合のみ、
@@ -235,6 +236,21 @@ function PageCard({
   const gridColumnThicknessPx = fontSizePx * settings.lineHeightRatio;
 
   const isTwoColumn = settings.columnCount === 2;
+
+  // TSP-LOOP-003: 本文グリッドの字送り基準（canonical slot extent）。全 render
+  // path（FixedSlotLine の通常文字・短行・ルビ親文字・TCY・――/…… run）はこの
+  // 単一の値だけで縦位置 `slotIndex × canonicalSlotExtentPx` を決める。
+  //  - gridMode "solid"（A5 1段組）: 1文字 = fontSizePx（1em ベタ組み固定）。
+  //    charsPerLine が版面高を割り切らない余りは地側の余白として残す。
+  //  - 既定 "justified": 版面高 / charsPerLine（満杯行を地のラインへ届かせる、
+  //    従来挙動）。他の全用紙・A5 2段組はこちら（挙動不変）。
+  const columnGridMode =
+    PAPER_SIZE_TEMPLATES[settings.paperSize]?.[isTwoColumn ? "cols2" : "cols1"]?.gridMode ??
+    "justified";
+  const canonicalSlotExtentPx =
+    columnGridMode === "solid"
+      ? fontSizePx
+      : (isTwoColumn ? columnHeightPx : textAreaHeightPx) / Math.max(layout.charsPerLine, 1);
 
   // 1行の高さ(px)に対し、指定した文字数がちょうど収まるよう文字間隔(letter-spacing)を
   // 均等配分する。満杯行（天〜地いっぱいまで文字が続く行）だけに適用し、
@@ -746,7 +762,7 @@ function PageCard({
                               flatIndexBase={flatIndexBase}
                               paragraphStarts={paragraphStarts}
                               charsPerLine={layout.charsPerLine}
-                              slotExtentPx={columnHeightPx / layout.charsPerLine}
+                              slotExtentPx={canonicalSlotExtentPx}
                               columnThicknessPx={gridColumnThicknessPx}
                               heightPx={columnHeightPx}
                               fontSizePx={fontSizePx}
@@ -791,7 +807,7 @@ function PageCard({
                           flatIndexBase={flatIndexBase}
                           paragraphStarts={paragraphStarts}
                           charsPerLine={layout.charsPerLine}
-                          slotExtentPx={textAreaHeightPx / layout.charsPerLine}
+                          slotExtentPx={canonicalSlotExtentPx}
                           columnThicknessPx={gridColumnThicknessPx}
                           heightPx={textAreaHeightPx}
                           fontSizePx={fontSizePx}
