@@ -57,6 +57,13 @@ export function insertPageBreakMarker(before: string, after: string): string {
   return (needsLeading ? "\n" : "") + PAGE_BREAK_MARKER + (needsTrailing ? "\n" : "");
 }
 
+/** Pads an image marker so it cannot join adjacent source onto its line. */
+export function insertImageMarker(before: string, marker: string, after: string): string {
+  const needsLeading = before.length > 0 && !before.endsWith("\n");
+  const needsTrailing = after.length > 0 && !after.startsWith("\n");
+  return (needsLeading ? "\n" : "") + marker + (needsTrailing ? "\n" : "");
+}
+
 /** A token paired with the [start, end) raw source range it was parsed from. */
 export interface OffsetToken {
   token: TategakiToken;

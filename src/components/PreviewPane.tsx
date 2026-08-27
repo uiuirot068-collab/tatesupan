@@ -15,6 +15,7 @@ import {
   findImageTokenRange,
   findPageIndexForCharIndex,
   formatImageMarker,
+  insertImageMarker,
   insertPageBreakMarker,
   paginateTokens,
   tokenizeTategaki,
@@ -1102,7 +1103,9 @@ export default function PreviewPane({
       // produced, just without reconstructing the rest of the page's text.
       const insertAt = pageSourceRanges[index].end;
       const marker = formatImageMarker({ type: "image", id, widthMm, heightMm, position: "center" });
-      onContentChange(content.slice(0, insertAt) + marker + content.slice(insertAt));
+      const before = content.slice(0, insertAt);
+      const after = content.slice(insertAt);
+      onContentChange(before + insertImageMarker(before, marker, after) + after);
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像の挿入に失敗しました。");
     } finally {

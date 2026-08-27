@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import {
   tokenizeTategaki,
+  insertImageMarker,
   insertPageBreakMarker,
   PAGE_BREAK_MARKER,
 } from "../src/lib/tategaki.ts";
@@ -102,7 +103,43 @@ check(
   insertPageBreakMarker("line one\n", "\nline two") === PAGE_BREAK_MARKER
 );
 
-// 6. Regression: ruby / TCY / ――(dash) / ……(ellipsis) unaffected.
+// 6. Image insertion must not turn an adjacent standalone page-break marker
+// into inline literal text.
+{
+  const before = "第二章本文\n";
+  const after = PAGE_BREAK_MARKER + "\n第三章本文";
+  const image = "【IMG:test:10:20:center】";
+  const spliced = before + insertImageMarker(before, image, after) + after;
+  const tokens = tokenizeTategaki(spliced);
+  check("image inserted on its own line before page break", spliced === before + image + "\n" + after);
+  check("image insertion preserves standalone page break", hasPageBreak(tokens));
+  check("image insertion preserves page-break count", tokens.filter((t) => t.type === "pageBreak").length === 1);
+  const rebuilt = rebuildText(tokens);
+  check(
+    "image insertion preserves surrounding text",
+    rebuilt.includes("第二章本文") &&
+      rebuilt.includes("第三章本文") &&
+      rebuilt.match(/第二章本文/g)?.length === 1 &&
+      rebuilt.match(/第三章本文/g)?.length === 1
+  );
+}
+{
+  const before = "段落の途中";
+  const after = "です。ここで【改ページ】と書いた。";
+  const image = "【IMG:test:10:20:center】";
+  const spliced = before + insertImageMarker(before, image, after) + after;
+  const tokens = tokenizeTategaki(spliced);
+  check("mid-text image insertion adds only required newlines", spliced === before + "\n" + image + "\n" + after);
+  check("inline literal marker remains literal after image insertion", !hasPageBreak(tokens));
+  check("inline literal marker text remains present", rebuildText(tokens) === before + "\n\n" + after);
+}
+check(
+  "image insertion at existing line boundaries adds no redundant newline",
+  insertImageMarker("line one\n", "【IMG:test:10:20:center】", "\nline two") ===
+    "【IMG:test:10:20:center】"
+);
+
+// 7. Regression: ruby / TCY / ――(dash) / ……(ellipsis) unaffected.
 {
   const text = "｜漢字《かんじ》のテストと12月25日、それに――ダッシュと……リーダー。";
   const tokens = tokenizeTategaki(text);
