@@ -1,7 +1,15 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
+import { analyzeWriting, type WritingIssue } from "@/lib/writingCheck";
+import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import PageSettingsPanel from "./PageSettingsPanel";
+import WritingCheckOverlay from "./WritingCheckOverlay";
+import WritingCheckBar from "./WritingCheckBar";
+
+// TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
+// avoid re-analysing on every key of a fast typist, short enough to feel live.
+const WRITING_CHECK_DEBOUNCE_MS = 300;
 
 // Plain-text form of the footer syntax reminder, used as the hover `title`
 // so the full guidance is still reachable when the one-line footer truncates
@@ -76,6 +84,37 @@ export default function EditorPane({
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ---- TSP-LOOP-004 「文章チェック β」 (local, deterministic, no network) ----
+  const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
+  const isComposingRef = useRef(false);
+  const [recheckNonce, setRecheckNonce] = useState(0);
+  // The analysis is always kept paired with the exact text it ran against, so
+  // an underline is only ever drawn while `analysis.text === content`.
+  const [analysis, setAnalysis] = useState<{ text: string; issues: WritingIssue[] }>({
+    text: "",
+    issues: [],
+  });
+
+  useEffect(() => {
+    if (!writingCheckEnabled || isComposingRef.current) return;
+    const timer = setTimeout(() => {
+      setAnalysis({ text: content, issues: analyzeWriting(content) });
+    }, WRITING_CHECK_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [content, writingCheckEnabled, recheckNonce]);
+
+  const writingIssuesForContent = analysis.text === content ? analysis.issues : [];
+
+  const handleSelectWritingIssue = (issue: WritingIssue) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    const start = Math.min(issue.start, el.value.length);
+    const end = Math.min(issue.end, el.value.length);
+    el.setSelectionRange(start, end);
+    reportCursorIndex();
+  };
+
   const reportCursorIndex = () => {
     const el = textareaRef.current;
     if (!el || !onCursorIndexChange) return;
@@ -149,19 +188,47 @@ export default function EditorPane({
         />
       </div>
 
-      <textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(e) => {
-          onContentChange(e.target.value);
-          requestAnimationFrame(reportCursorIndex);
-        }}
-        onSelect={reportCursorIndex}
-        onClick={reportCursorIndex}
-        onKeyUp={reportCursorIndex}
-        placeholder={DEFAULT_INITIAL_TEXT}
-        spellCheck={false}
-        className="w-full flex-1 min-h-0 resize-none overflow-y-auto bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
+      {/* The textarea stays the sole input surface. WritingCheckOverlay is a
+          read-only, pointer-events-none mirror rendered behind it (only the
+          red wavy underline is visible); it shares the textarea's wrapping
+          box via the same p-4/font-mono/text-sm/leading-relaxed classes. */}
+      <div className="relative flex-1 min-h-0">
+        {writingCheckEnabled && (
+          <WritingCheckOverlay
+            textareaRef={textareaRef}
+            text={content}
+            issues={writingIssuesForContent}
+          />
+        )}
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => {
+            onContentChange(e.target.value);
+            requestAnimationFrame(reportCursorIndex);
+          }}
+          onSelect={reportCursorIndex}
+          onClick={reportCursorIndex}
+          onKeyUp={reportCursorIndex}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+            setRecheckNonce((value) => value + 1);
+          }}
+          placeholder={DEFAULT_INITIAL_TEXT}
+          spellCheck={false}
+          className="absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
+        />
+      </div>
+
+      <WritingCheckBar
+        enabled={writingCheckEnabled}
+        onToggle={setWritingCheckEnabled}
+        text={analysis.text}
+        issues={analysis.issues}
+        onSelectIssue={handleSelectWritingIssue}
       />
 
       {/* Two fixed zones: the syntax help sacrifices text with an ellipsis

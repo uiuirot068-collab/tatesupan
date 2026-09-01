@@ -32,6 +32,19 @@
   --font-serif: Georgia, "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
 }
 
+/* TSP-LOOP-004 「文章チェック β」: the red wavy underline is drawn ONLY on
+   the editor's mirror overlay (WritingCheckOverlay), never in the preview,
+   JPG or PDF, and it is never written into the document text. The overlay
+   div's own text is transparent, so only this decoration shows through the
+   transparent textarea sitting on top of it. */
+.tsp-writing-wavy {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #dc2626;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.15em;
+}
+
 html,
 body {
   height: 100vh;
