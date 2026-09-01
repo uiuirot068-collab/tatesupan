@@ -61,10 +61,16 @@ import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
 
-// P2-B: local-dev-only "New (Experimental)" renderer toggle. Not persisted
-// anywhere (no localStorage/IndexedDB/cloud/settings) — always resets to
-// Current on reload. Only ever rendered when this is true, so it's absent
-// from production bundles/behavior by construction.
+// The "New (Experimental)" renderer A/B toggle is a *local-development-only*
+// tool. `process.env.NODE_ENV` is inlined at build time, so this is a
+// compile-time constant: `true` only under `next dev`, and `false` in every
+// deployed build — β and production alike (`next build` sets NODE_ENV to
+// "production"). When false the toggle JSX and the New-renderer branch are
+// dead-code-eliminated, so "Renderer(dev)" never appears in a shipped bundle.
+// The toggle state (`rendererMode`) is never persisted anywhere
+// (no localStorage / IndexedDB / cloud / document settings), so it always
+// resets to "current" on reload and can never leak into a save; `activeRenderer`
+// below is additionally hard-pinned to "current" whenever this is false.
 const RENDERER_TOGGLE_ENABLED = process.env.NODE_ENV !== "production";
 
 /** Visual seam width (px) between the two pages of a spread. */
@@ -395,10 +401,14 @@ export default function PreviewPane({
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
 
-  // P2-B: which renderer this pane shows. local useState only — no
-  // persistence of any kind, never written to `settings`/document data, so
-  // it can never leak into a save and always resets to "current" on reload.
+  // The user's dev-toggle choice. Local useState only — no persistence of any
+  // kind, never written to `settings`/document data, so it can never leak into
+  // a save and always resets to "current" on reload.
   const [rendererMode, setRendererMode] = useState<"current" | "new">("current");
+  // The renderer this pane actually renders with. Single choke point: in every
+  // non-dev build (β/production) RENDERER_TOGGLE_ENABLED is false, so this is
+  // hard-pinned to "current" regardless of `rendererMode`.
+  const activeRenderer: "current" | "new" = RENDERER_TOGGLE_ENABLED ? rendererMode : "current";
   const [newRendererWarning, setNewRendererWarning] = useState<string | null>(null);
   const handleNewRendererUnavailable = () => {
     setRendererMode("current");
@@ -1218,7 +1228,7 @@ export default function PreviewPane({
   // A/B pass is preview-only (see PreviewPaneNew.tsx header comment for what
   // is intentionally out of scope). Current's own render path (below) is
   // completely untouched by this branch existing.
-  if (RENDERER_TOGGLE_ENABLED && rendererMode === "new") {
+  if (activeRenderer === "new") {
     return (
       <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-y-auto max-h-[85vh] md:max-h-none md:overflow-y-visible md:overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
         <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">

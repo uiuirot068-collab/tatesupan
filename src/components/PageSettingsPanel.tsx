@@ -14,6 +14,7 @@ import {
   resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { FONT_FAMILY_OPTIONS, NOMBRE_FONT_SAME_AS_BODY } from "@/constants/fonts";
 import { calculateCapacityFromMargins, calculateCustomLayout } from "@/utils/layoutCalculator";
 
 interface PageSettingsPanelProps {
@@ -602,11 +603,11 @@ export default function PageSettingsPanel({
             onChange={(e) => update("fontFamily", e.target.value)}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
-            <option value="'Shippori Mincho', serif">しっぽり明朝</option>
-            <option value="'Zen Old Mincho', serif">Zenオールド明朝</option>
-            <option value="'Noto Serif JP', serif">Noto Serif 明朝</option>
-            <option value="'Noto Sans JP', sans-serif">Noto Sans ゴシック</option>
-            <option value="serif">システム標準明朝</option>
+            {FONT_FAMILY_OPTIONS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -778,6 +779,22 @@ export default function PageSettingsPanel({
               }
               className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
             />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60">ノンブルのフォント</span>
+            <select
+              value={settings.masterPage.nombreFontFamily ?? NOMBRE_FONT_SAME_AS_BODY}
+              onChange={(e) => updateMasterPage("nombreFontFamily", e.target.value)}
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            >
+              <option value={NOMBRE_FONT_SAME_AS_BODY}>本文と同じ</option>
+              {FONT_FAMILY_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

@@ -13,40 +13,93 @@ export type TategakiToken =
 // 《》を伴う完全なruby記法として成立する場合だけ消費するので、《》を
 // 伴わない一般的な単独の "|"/"｜" はこれまで通りtextとして残る。
 const RUBY_PATTERN = /[｜|]([^｜|《》\n]+)《([^《》\n]+)》|([一-龠々〆ヵヶ]+)《([^《》\n]+)》/g;
-const TCY_PATTERN = /(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
+// 縦中横（tate-chu-yoko）:
+//  - 明示記法 `[tate]…[/tate]` — 括弧内をそのまま1つの縦中横セルにする。
+//    英字を含む短い列（例: `[tate]A5[/tate]`）や3桁以上の数字など、bare
+//    auto-detect の対象外を縦中横にしたいときに使う（docs/tatespun_コンテンツ.md）。
+//  - bare auto-detect — 前後を数字に挟まれない2桁の半角数字、および !!/??/!?/?! の
+//    2字ペア（既存仕様）。
+// 明示記法の中身は 1〜8 文字まで（改行・角括弧は不可）。それ以上は縦中横に
+// しても潰れて読めないため対象外（`[tate]` `[/tate]` はそのまま本文に残る）。
+const TCY_PATTERN =
+  /\[tate\]([^[\]\n]{1,8})\[\/tate\]|(?<!\d)\d{2}(?!\d)|[!?！？]{2}(?![!?！？])/g;
+// bare auto-detect と同じ形（round-trip 用）。detokenize がこれに一致しない
+// 縦中横だけ `[tate]…[/tate]` へ書き戻す。
+const TCY_BARE_FORM = /^(?:\d{2}|[!?！？]{2})$/;
 // 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>:<position>】
 // (the trailing :<position> is optional for backward compatibility with
 // documents saved before positioning was introduced; it defaults to "center")
-// 改ページ marker: 【改ページ】 — but only a forced break when it is the
-// *entire* content of its line (see `isStandaloneLineMarker` below); the
-// same literal text appearing inline (e.g. prose discussing or quoting the
-// marker's own syntax) must render as literal text instead of silently
-// vanishing into an unwanted page split (TSP-LOOP-001 Fatal QA finding).
+// 改ページ marker: 【改ページ】 — a forced break when nothing visible follows
+// it on its line (alone on the line, or at the end of a line of text — see
+// `pageBreakCommandSpan` below for the three canonical cases). The same
+// literal text with visible content after it on the same line (e.g. prose
+// discussing or quoting the marker's own syntax) renders as literal text
+// instead of silently vanishing into an unwanted page split (TSP-LOOP-001).
 export const PAGE_BREAK_MARKER = "【改ページ】";
 const MARKER_PATTERN =
   /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
 
+// Characters that carry no visible content of their own — Unicode format
+// characters (ZWSP U+200B, ZWNJ/ZWJ, word joiner U+2060, soft hyphen U+00AD,
+// bidi controls, BOM, …) and variation selectors. Real manuscripts pasted
+// from web pages, word processors, or IMEs routinely carry one of these,
+// invisibly, on an otherwise marker-only line — `String.prototype.trim()`
+// does NOT remove them (they are not White_Space), so the line silently
+// stopped counting as "the marker alone on its line". Stripping them before
+// the equality check keeps the canonical rule ("the line is exactly
+// `【改ページ】`") but judges it the way a human sees the line.
+const ZERO_WIDTH_OR_FORMAT = /[\p{Cf}\p{Variation_Selector}]/gu;
+
 /**
- * True when the `【改ページ】` match spanning `[start, end)` in `source` is
- * the *only* non-whitespace content of its line — i.e. trimming the line
- * that contains it yields exactly `PAGE_BREAK_MARKER`. Only such standalone
- * occurrences are real forced-break commands; every other occurrence (this
- * function returns false) is left as literal text for the surrounding
- * ruby/TCY tokenizer pass to handle normally.
+ * When the `【改ページ】` match spanning `[start, end)` is a real forced-break
+ * command, returns the `[consumeStart, consumeEnd)` source span the tokenizer
+ * should swallow as the `pageBreak` token. Returns `null` when the marker is
+ * inline literal text.
+ *
+ * Canonical rule: a marker is a command when **nothing visible follows it on
+ * its own line** — only whitespace and zero-width / format characters
+ * (`\p{Cf}`, variation selectors). That gives exactly three user-facing cases:
+ *
+ *   CASE 1  `【改ページ】`             — alone on the line → break
+ *   CASE 2  `章タイトル【改ページ】`     — at the end of a line of text → render
+ *                                        the text, then break
+ *   CASE 3  `これは【改ページ】という文字` — visible text after it → literal
+ *
+ * The consumed span always covers the marker plus any trailing
+ * whitespace/invisible characters up to the newline. For CASE 1 it also
+ * absorbs the (whitespace/invisible-only) run *before* the marker, so nothing
+ * leaks onto the next page as a stray blank first line. For CASE 2 the
+ * visible text before the marker is left for normal tokenization (ruby / TCY /
+ * Latin runs / punctuation before the marker are all preserved).
+ *
+ * `＃改ページ` is not matched by `MARKER_PATTERN` at all — it stays literal.
  */
-function isStandaloneLineMarker(source: string, start: number, end: number): boolean {
+function pageBreakCommandSpan(
+  source: string,
+  start: number,
+  end: number
+): { consumeStart: number; consumeEnd: number } | null {
   const lineStart = source.lastIndexOf("\n", start - 1) + 1;
   const nextNewline = source.indexOf("\n", end);
   const lineEnd = nextNewline === -1 ? source.length : nextNewline;
-  return source.slice(lineStart, lineEnd).trim() === PAGE_BREAK_MARKER;
+
+  const hasVisible = (slice: string) =>
+    slice.replace(ZERO_WIDTH_OR_FORMAT, "").trim() !== "";
+
+  if (hasVisible(source.slice(end, lineEnd))) return null; // CASE 3 — inline literal
+
+  return {
+    consumeStart: hasVisible(source.slice(lineStart, start)) ? start : lineStart,
+    consumeEnd: lineEnd,
+  };
 }
 
 /**
  * Returns the `【改ページ】` marker text to splice between `before` and
  * `after`, padded with a leading/trailing "\n" only on whichever side
- * doesn't already sit at a line boundary — so the spliced marker always
- * satisfies `isStandaloneLineMarker` (and thus still functions as a real
- * forced break) without introducing a visible blank line where one isn't
+ * doesn't already sit at a line boundary — so the spliced marker is always
+ * alone on its line (`pageBreakCommandSpan` CASE 1) and functions as a real
+ * forced break without introducing a visible blank line where one isn't
  * needed. Callers that insert a page break by string-splicing raw source
  * text (editor "insert page break" action, page-reorder reconstruction)
  * must go through this rather than inserting `PAGE_BREAK_MARKER` bare.
@@ -90,18 +143,26 @@ export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
   for (const match of source.matchAll(MARKER_PATTERN)) {
     const index = match.index ?? 0;
     const end = index + match[0].length;
+    const isImageMarker = match[1] !== undefined;
+    const breakSpan = isImageMarker ? null : pageBreakCommandSpan(source, index, end);
 
-    if (match[1] === undefined && !isStandaloneLineMarker(source, index, end)) {
-      // Inline `【改ページ】` (not alone on its line): not a real forced
-      // break — leave it untouched so it flows into the next slice's
-      // ruby/TCY tokenization as ordinary literal text.
+    if (!isImageMarker && breakSpan === null) {
+      // Inline `【改ページ】` with visible text after it on the same line: not
+      // a forced break — leave it for the next slice's ruby/TCY tokenization
+      // as ordinary literal text.
       continue;
     }
 
-    if (index > lastIndex) {
-      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index), lastIndex));
+    // A page-break command consumes the marker + trailing whitespace/invisibles
+    // (and, when alone on its line, the leading whitespace/invisibles too); an
+    // image marker consumes only its own `【IMG:...】` span.
+    const consumeStart = breakSpan ? breakSpan.consumeStart : index;
+    const consumeEnd = breakSpan ? breakSpan.consumeEnd : end;
+
+    if (consumeStart > lastIndex) {
+      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, consumeStart), lastIndex));
     }
-    if (match[1] !== undefined) {
+    if (isImageMarker) {
       tokens.push({
         token: {
           type: "image",
@@ -114,9 +175,9 @@ export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
         end,
       });
     } else {
-      tokens.push({ token: { type: "pageBreak" }, start: index, end });
+      tokens.push({ token: { type: "pageBreak" }, start: consumeStart, end: consumeEnd });
     }
-    lastIndex = end;
+    lastIndex = consumeEnd;
   }
 
   if (lastIndex < source.length) {
@@ -166,7 +227,8 @@ function tokenizePlainText(text: string, baseOffset: number): OffsetToken[] {
       });
     }
     tokens.push({
-      token: { type: "tcy", value: match[0] },
+      // 明示記法なら括弧内 (match[1])、bare auto-detect なら一致文字列そのもの。
+      token: { type: "tcy", value: match[1] ?? match[0] },
       start: baseOffset + index,
       end: baseOffset + index + match[0].length,
     });
@@ -953,6 +1015,11 @@ export function detokenizeTategaki(tokens: TategakiToken[]): string {
       if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
       if (token.type === "image") return formatImageMarker(token);
       if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
+      // 縦中横: bare auto-detect と同じ形はそのまま（再トークン化で復元）、
+      // それ以外（明示記法由来）は `[tate]…[/tate]` へ書き戻す。
+      if (token.type === "tcy") {
+        return TCY_BARE_FORM.test(token.value) ? token.value : `[tate]${token.value}[/tate]`;
+      }
       return token.value;
     })
     .join("");

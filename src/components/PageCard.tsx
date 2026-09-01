@@ -1,6 +1,8 @@
 import {
   Fragment,
   memo,
+  useEffect,
+  useReducer,
   useRef,
   useState,
   type CSSProperties,
@@ -10,7 +12,6 @@ import {
 } from "react";
 import {
   computeParagraphStartFlags,
-  nowrapRunBoundaryEdge,
   tokenLength,
   type ImagePosition,
   type TategakiPage,
@@ -18,47 +19,127 @@ import {
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { resolveNombreFontFamily } from "@/constants/fonts";
 
 // 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
 // 対象となる開き括弧類。地文の段落先頭にはここに含まれない場合のみ、
 // 全角スペース1文字ぶんの字下げを描画時に補う（元テキストは変更しない）。
 const OPENING_BRACKETS = "「『（〈《【〔［｛“‘";
+// TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
+// (by default) flex-centres it in its canonical em cell — which is correct for
+// 漢字/かな but *discards the font's designed in-cell position* for 約物, so
+// 、。「」… ended up floating in the middle of their cell, ~0.5em away from the
+// glyph they should hug. A browser-native `writing-mode: vertical-rl` block of
+// the same text (measured) instead places these glyphs against one edge of the
+// em cell — where they connect to the adjacent text:
+//   - 句読点（、。，．）と 終わり括弧・引用符（」』）〉》】〕］｝”’）: against the
+//     column-START edge (top of the cell) → hang right after the preceding glyph.
+//   - 始め括弧・引用符（「『（〈《【〔［｛“‘）: against the column-END edge (bottom of
+//     the cell) → hang right before the following glyph.
+// So the fix is a per-typographic-class flex anchor (`justify-content`), not a
+// per-glyph offset: the slot coordinates, height and advance are all unchanged,
+// only where the glyph sits *inside* its unchanged cell. `vpal` (proportional
+// vertical alternates) still keeps the glyph shapes on the font's punctuation
+// metrics.
+const YAKUMONO_VPAL_TEST = /[、。，．「」『』（）〈〉《》【】〔〕［］｛｝｟｠“”‘’]/u;
+// hang against the column start (visually the top of the cell)
+const YAKUMONO_HANG_START_TEST = /[、。，．」』）〉》】〕］｝｠”’]/u;
+// hang against the column end (visually the bottom of the cell)
+const YAKUMONO_HANG_END_TEST = /[「『（〈《【〔［｛｟“‘]/u;
+// A lone printable-ASCII character (no ASCII neighbour) stays upright on its
+// own canonical slot — the Japanese-vertical convention for single letters /
+// symbols (正立). It gets an inner horizontal-metrics box so it sits off the
+// vertical font's uneven per-glyph baselines. Multi-character ASCII is handled
+// as a sideways run instead (see ASCII_RUN_* / LatinRun below).
+const ASCII_VERTICAL_GLYPH_TEST = /^[\x21-\x7e]$/;
 const INDENT_SPACE = "　";
+
+// TSP-LOOP-003 mixed-script run model. A maximal stretch of 2+ printable-ASCII
+// characters (spaces allowed inside, at least one non-space) is set as ONE
+// sideways run under `text-orientation: mixed` — real horizontal advances and
+// kerning, the way 欧文 is set in vertical Japanese text — instead of one
+// upright glyph per full-width canonical slot (which read as letter-spaced and
+// baseline-ragged). The run still consumes a WHOLE number of canonical slots,
+// taken from the real font's measured horizontal advance rounded up and capped
+// at the run's character count. That cap is the pre-existing pagination weight
+// (`tokenLength` = value.length), which is therefore always >= what the run
+// actually renders — so `lib/tategaki.ts` pagination is untouched, never
+// overflows, and every Japanese slot before and after the run stays exactly on
+// the FixedSlot grid.
+const ASCII_RUN_MEMBER = /[\x20-\x7e]/;
+const ASCII_RUN_HAS_LETTERFORM = /[\x21-\x7e]/;
+
+const latinRunEmCache = new Map<string, number>();
+let sharedMeasureCtx: CanvasRenderingContext2D | null | undefined;
+
+/** Horizontal advance of `text` in em units, for the given font. */
+function latinRunAdvanceEm(text: string, fontSizePx: number, fontFamily: string): number {
+  const key = JSON.stringify([fontSizePx, fontFamily, text]);
+  const cached = latinRunEmCache.get(key);
+  if (cached !== undefined) return cached;
+  let em: number;
+  if (typeof document === "undefined") {
+    // SSR/SSG: the canonical grid still renders; the client refines this on mount.
+    em = text.length * 0.5;
+  } else {
+    if (sharedMeasureCtx === undefined) {
+      sharedMeasureCtx = document.createElement("canvas").getContext("2d");
+    }
+    if (sharedMeasureCtx) {
+      sharedMeasureCtx.font = `${fontSizePx}px ${fontFamily}`;
+      em = sharedMeasureCtx.measureText(text).width / fontSizePx;
+    } else {
+      em = text.length * 0.5;
+    }
+  }
+  latinRunEmCache.set(key, em);
+  return em;
+}
+
+/** Whole canonical slots a Latin run occupies: ceil(advance), >= 1, and never
+ *  more than its character count (= the unchanged pagination weight). */
+function latinRunSlotCount(text: string, fontSizePx: number, fontFamily: string): number {
+  const chars = Array.from(text).length;
+  const em = latinRunAdvanceEm(text, fontSizePx, fontFamily);
+  return Math.min(chars, Math.max(1, Math.ceil(em - 0.02)));
+}
+
+// Latin-run advances first measure against whatever font is resolved at mount;
+// once the real web font finishes loading the measurements can shift, so the
+// cache is dropped and every mounted FixedSlotLine re-measures exactly once.
+const latinRunFontListeners = new Set<() => void>();
+let latinRunFontHookInstalled = false;
+
+function useLatinRunFontSync(): void {
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    latinRunFontListeners.add(bump);
+    if (
+      !latinRunFontHookInstalled &&
+      typeof document !== "undefined" &&
+      typeof document.fonts?.ready?.then === "function"
+    ) {
+      latinRunFontHookInstalled = true;
+      document.fonts.ready.then(() => {
+        latinRunEmCache.clear();
+        latinRunFontListeners.forEach((fn) => fn());
+      });
+    }
+    return () => {
+      latinRunFontListeners.delete(bump);
+    };
+  }, [bump]);
+}
 
 // 縦書きの行末で分断されると読みにくくなる、2文字以上連続するダッシュ
 // （――）・三点リーダー（……）等を検出して改行させないためのパターン。
 const NOWRAP_RUN_PATTERN = /([―—]{2,}|[…‥]{2,})/g;
 const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 
-// 上と同じ2ファミリー（ダッシュ／三点リーダー）を1文字単位で判定する版。
-// FixedSlotLineは1文字=1slotとして個別描画するため、runの一部かどうかを
-// 文字配列内の前後1文字だけ見て判定する（runPatternのような文字列一括
-// 判定はslot単位の描画とかみ合わないため使えない）。
-const NOWRAP_RUN_CHAR_FAMILIES: readonly RegExp[] = [/[―—]/, /[…‥]/];
-
-// Vertical Preview Polish (2026): ――／……runの外側の境界（run内部ではなく、
-// runの外にある通常文字との間）にだけ足す追加の余白。em単位——font-size
-// (fontSizePx)にそのまま比例するので、9pt/16pt等どのサイズでも同じ見た目
-// 比率になる。値は初回実装の見積りで、実機Visual QAでの微調整を想定する
-// （固定pxではなくem基準にしてあるため、調整はこの1箇所を変えるだけでよい）。
-const NOWRAP_RUN_EDGE_MARGIN_EM = 0.18;
-
-/**
- * `chars[index]`が――／……のような2文字以上のrunの一員か（前後どちらかの
- * 隣接文字が同じファミリーか）を判定する。sheetStyle側のtext-orientation:
- * uprightは全文字の90度回転（UAX #50の"R"）を無効化しており、ダッシュの
- * ような本来回転すべき文字も横向きのまま個別slotへ中央寄せされ、縦の
- * 1本線に見えない原因になっている。run構成文字だけtext-orientation:mixed
- * へ局所的に戻すことで、他の文字のupright表示に一切影響を与えずに直す。
- */
-function isNowrapRunMember(chars: string[], index: number): boolean {
-  const family = NOWRAP_RUN_CHAR_FAMILIES.find((f) => f.test(chars[index]));
-  if (!family) return false;
-  return (
-    (index > 0 && family.test(chars[index - 1])) ||
-    (index < chars.length - 1 && family.test(chars[index + 1]))
-  );
-}
+// TSP-LOOP-003 cross-font: the two protected families and the single char test
+// used to gather each into one run (see buildLineSlots / ProtectedRun).
+const DASH_CHAR_TEST = /[―—]/;
+const ELLIPSIS_CHAR_TEST = /[…‥]/;
 
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
@@ -251,6 +332,12 @@ function PageCard({
     columnGridMode === "solid"
       ? fontSizePx
       : (isTwoColumn ? columnHeightPx : textAreaHeightPx) / Math.max(layout.charsPerLine, 1);
+
+  // FixedSlot body uses stable full-width metrics. Punctuation selectively
+  // enables vpal at its own slot below, keeping body rhythm independent from
+  // proportional font metrics while leaving canonical coordinates unchanged.
+  const slotFontFeatureSettings =
+    '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0';
 
   // 1行の高さ(px)に対し、指定した文字数がちょうど収まるよう文字間隔(letter-spacing)を
   // 均等配分する。満杯行（天〜地いっぱいまで文字が続く行）だけに適用し、
@@ -763,6 +850,7 @@ function PageCard({
                               paragraphStarts={paragraphStarts}
                               charsPerLine={layout.charsPerLine}
                               slotExtentPx={canonicalSlotExtentPx}
+                              fontFeatureSettings={slotFontFeatureSettings}
                               columnThicknessPx={gridColumnThicknessPx}
                               heightPx={columnHeightPx}
                               fontSizePx={fontSizePx}
@@ -808,6 +896,7 @@ function PageCard({
                           paragraphStarts={paragraphStarts}
                           charsPerLine={layout.charsPerLine}
                           slotExtentPx={canonicalSlotExtentPx}
+                          fontFeatureSettings={slotFontFeatureSettings}
                           columnThicknessPx={gridColumnThicknessPx}
                           heightPx={textAreaHeightPx}
                           fontSizePx={fontSizePx}
@@ -895,6 +984,7 @@ function PageCard({
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
             fontSize={masterPage.nombreFontSize}
+            fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
           />
         )}
@@ -1024,6 +1114,7 @@ function NombreOverlay({
   isOddPage,
   bottomMarginMm,
   fontSize,
+  fontFamily,
   bleedMm,
 }: {
   value: number;
@@ -1031,6 +1122,10 @@ function NombreOverlay({
   isOddPage: boolean;
   bottomMarginMm: number;
   fontSize?: number;
+  // Resolved page-number font — either an explicit choice or the body font
+  // (see resolveNombreFontFamily). Affects the glyph face only; position,
+  // size, and pagination are all computed elsewhere and unchanged.
+  fontFamily: string;
   bleedMm: number;
 }) {
   // Web閲覧用のノンブルは左下に固定表示する。
@@ -1042,10 +1137,11 @@ function NombreOverlay({
       writingMode: "horizontal-tb",
       color: "#000000",
       fontSize: `${fontSize ?? 8}pt`,
+      fontFamily,
     };
 
     return (
-      <div style={webStyle} className="pointer-events-none select-none">
+      <div data-nombre="" style={webStyle} className="pointer-events-none select-none">
         {value}
       </div>
     );
@@ -1076,10 +1172,11 @@ function NombreOverlay({
     padding: `0 ${2 * PX_PER_MM}px`,
     color: "#000000",
     fontSize: `${fontSize ?? 8}pt`,
+    fontFamily,
   };
 
   return (
-    <div style={style} className="pointer-events-none select-none">
+    <div data-nombre="" style={style} className="pointer-events-none select-none">
       {value}
     </div>
   );
@@ -1279,10 +1376,39 @@ interface LineSlot {
   key: string;
   text: string;
   slotIndex: number;
-  /** ――／……のようなnowrap run内の文字か（isNowrapRunMember参照）。trueの場合だけ描画側でtext-orientationを補正する。 */
-  runConnect?: boolean;
-  /** Vertical Preview Polish: nowrapRunBoundaryEdge()の結果。"start"/"end"の場合だけ、その外側にだけ小さい余白を足す（run内部の連結には一切影響しない）。 */
-  runEdge?: "start" | "end" | null;
+}
+
+/**
+ * A 2+ character run of ――（ダッシュ）or ……（三点リーダー）rendered as ONE
+ * native `writing-mode: vertical-rl` object inside its own unchanged canonical
+ * slot rectangle. TSP-LOOP-003 cross-font: the previous per-glyph fixed-slot
+ * boxes (each glyph centred in its own half-slot + a Shippori-tuned optical
+ * nudge) left a visible joint gap in every face whose ―― glyph ink does not
+ * fill the full em advance (Zen Old / Noto Serif / Noto Sans / system serif).
+ * Delegating the run to native vertical layout lets the font connect the
+ * pieces exactly as it does in a browser-native 縦組み block, for every face,
+ * with no per-font profile. `slotCount` canonical slots are still consumed;
+ * the next glyph resumes at `startSlot + slotCount` on the solid grid.
+ */
+interface ProtectedRun {
+  key: string;
+  kind: "dash" | "ellipsis";
+  text: string;
+  startSlot: number;
+  slotCount: number;
+}
+
+/**
+ * A contiguous printable-ASCII run set sideways (text-orientation: mixed) as a
+ * single object. `slotCount` is the whole number of canonical slots it occupies
+ * (<= its character count — see ASCII_RUN_* notes); the following slot resumes
+ * at `startSlot + slotCount`, on the grid.
+ */
+interface LatinRun {
+  key: string;
+  text: string;
+  startSlot: number;
+  slotCount: number;
 }
 
 /**
@@ -1338,9 +1464,18 @@ function buildLineSlots(
   line: FlowToken[],
   flatIndexBase: number,
   paragraphStarts: boolean[],
-  charsPerLine: number
-): { slots: LineSlot[]; rubyAnnotations: RubyAnnotation[]; tcyCells: TcyCell[] } {
+  charsPerLine: number,
+  resolveRunSlotCount: (text: string) => number
+): {
+  slots: LineSlot[];
+  protectedRuns: ProtectedRun[];
+  latinRuns: LatinRun[];
+  rubyAnnotations: RubyAnnotation[];
+  tcyCells: TcyCell[];
+} {
   const slots: LineSlot[] = [];
+  const protectedRuns: ProtectedRun[] = [];
+  const latinRuns: LatinRun[] = [];
   const rubyAnnotations: RubyAnnotation[] = [];
   const tcyCells: TcyCell[] = [];
   let slotCursor = 0;
@@ -1358,16 +1493,52 @@ function buildLineSlots(
     if (token.type === "text") {
       if (token.value === "\n") return;
       const chars = Array.from(token.value);
-      chars.forEach((ch, charIndex) => {
-        slots.push({
-          key: `${flatIndex}-${charIndex}`,
-          text: ch,
-          slotIndex: slotCursor,
-          runConnect: isNowrapRunMember(chars, charIndex),
-          runEdge: nowrapRunBoundaryEdge(chars, charIndex),
-        });
+      for (let charIndex = 0; charIndex < chars.length; ) {
+        const ch = chars[charIndex];
+        const protectedKind: ProtectedRun["kind"] | null = DASH_CHAR_TEST.test(ch)
+          ? "dash"
+          : ELLIPSIS_CHAR_TEST.test(ch)
+            ? "ellipsis"
+            : null;
+        if (protectedKind) {
+          const memberTest = protectedKind === "dash" ? DASH_CHAR_TEST : ELLIPSIS_CHAR_TEST;
+          let runEnd = charIndex + 1;
+          while (runEnd < chars.length && memberTest.test(chars[runEnd])) runEnd += 1;
+          const slotCount = runEnd - charIndex;
+          if (slotCount >= 2) {
+            protectedRuns.push({
+              key: `${flatIndex}-${protectedKind}-${charIndex}`,
+              kind: protectedKind,
+              text: chars.slice(charIndex, runEnd).join(""),
+              startSlot: slotCursor,
+              slotCount,
+            });
+            slotCursor += slotCount;
+            charIndex = runEnd;
+            continue;
+          }
+        }
+        if (ASCII_RUN_MEMBER.test(ch)) {
+          let runEnd = charIndex + 1;
+          while (runEnd < chars.length && ASCII_RUN_MEMBER.test(chars[runEnd])) runEnd += 1;
+          const runText = chars.slice(charIndex, runEnd).join("");
+          if (runEnd - charIndex >= 2 && ASCII_RUN_HAS_LETTERFORM.test(runText)) {
+            const slotCount = Math.min(runEnd - charIndex, resolveRunSlotCount(runText));
+            latinRuns.push({
+              key: `${flatIndex}-latin-${charIndex}`,
+              text: runText,
+              startSlot: slotCursor,
+              slotCount,
+            });
+            slotCursor += slotCount;
+            charIndex = runEnd;
+            continue;
+          }
+        }
+        slots.push({ key: `${flatIndex}-${charIndex}`, text: ch, slotIndex: slotCursor });
         slotCursor += 1;
-      });
+        charIndex += 1;
+      }
       return;
     }
 
@@ -1397,6 +1568,8 @@ function buildLineSlots(
 
   return {
     slots: slots.filter((slot) => slot.slotIndex < charsPerLine),
+    protectedRuns: protectedRuns.filter((run) => run.startSlot < charsPerLine),
+    latinRuns: latinRuns.filter((run) => run.startSlot < charsPerLine),
     rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
     tcyCells: tcyCells.filter((cell) => cell.slotIndex < charsPerLine),
   };
@@ -1553,6 +1726,7 @@ function FixedSlotLine({
   heightPx,
   fontSizePx,
   fontFamily,
+  fontFeatureSettings,
 }: {
   line: FlowToken[];
   flatIndexBase: number;
@@ -1563,8 +1737,16 @@ function FixedSlotLine({
   heightPx: number;
   fontSizePx: number;
   fontFamily: string;
+  fontFeatureSettings: string;
 }) {
-  const { slots, rubyAnnotations, tcyCells } = buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
+  useLatinRunFontSync();
+  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells } = buildLineSlots(
+    line,
+    flatIndexBase,
+    paragraphStarts,
+    charsPerLine,
+    (text) => latinRunSlotCount(text, fontSizePx, fontFamily)
+  );
 
   // container幅は常にcolumnThicknessPx固定 — rubyの有無で変えない（rubyの
   // ためにこの論理行自身のlayout widthを広げると、後続の論理行がすべて
@@ -1585,7 +1767,7 @@ function FixedSlotLine({
     fontSize: `${fontSizePx}px`,
     fontFamily,
     color: "#000000",
-    fontFeatureSettings: '"vpal" 0, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0',
+    fontFeatureSettings,
     fontVariantEastAsian: "full-width",
   };
 
@@ -1602,29 +1784,30 @@ function FixedSlotLine({
             height: slotExtentPx,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            // containerStyleはtext-orientation:uprightを継承しており（sheetStyle
-            // 側）、――等のrun構成文字も90度回転（UAX #50の"R"）されず横向きの
-            // ままslot中央へ表示されてしまう。runの一員だけmixedへ戻し、その
-            // 文字を本来の縦向きへ回転させて隣接文字との連続性を回復する。
-            // slot位置・幅・個数（tokenLength=2のまま）には一切手を入れない。
-            ...(slot.runConnect ? { textOrientation: "mixed" as const } : null),
+            // 約物は字形クラスごとにセルの端へ寄せる（下記 YAKUMONO_HANG_*）。
+            // それ以外は中央。slot 座標・高さ・字送りは不変。
+            justifyContent: YAKUMONO_HANG_START_TEST.test(slot.text)
+              ? "flex-start"
+              : YAKUMONO_HANG_END_TEST.test(slot.text)
+                ? "flex-end"
+                : "center",
+            ...(YAKUMONO_VPAL_TEST.test(slot.text)
+              ? { fontFeatureSettings: '"vpal" 1, "vhal" 0, "palt" 0, "vkrn" 0, "pkna" 0' }
+              : null),
           }}
         >
-          {slot.runEdge ? (
-            // Vertical Preview Polish: nowrapRunBoundaryEdgeが"start"/"end"を
-            // 返した文字（runの内部ではなく、run外の通常文字と隣接する側）だけ、
-            // その外側にだけ小さいem単位の余白を足す。内側(runの続きがある側)
-            // は無指定のまま——flexの中央寄せがこの非対称marginぶんだけ文字を
-            // 外側から離す方向へ押し出す。slotIndexは上→下(top-to-bottom)で
-            // 増える物理座標なので、物理top/bottomをそのまま使う(writing-mode
-            // 由来のlogical block/inline軸変換を経由しない——このFixedSlot
-            // grid自体が既にtop座標で直接位置指定している既存方式に合わせる)。
-            // slotの位置・高さ(grid)・runConnect自体には一切手を入れない。
+          {ASCII_VERTICAL_GLYPH_TEST.test(slot.text) ? (
             <span
+              data-mixed-script-glyph="ascii"
               style={{
-                marginTop: slot.runEdge === "start" ? `${NOWRAP_RUN_EDGE_MARGIN_EM}em` : undefined,
-                marginBottom: slot.runEdge === "end" ? `${NOWRAP_RUN_EDGE_MARGIN_EM}em` : undefined,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                height: "100%",
+                writingMode: "horizontal-tb",
+                textOrientation: "mixed",
+                lineHeight: 1,
               }}
             >
               {slot.text}
@@ -1632,6 +1815,88 @@ function FixedSlotLine({
           ) : (
             slot.text
           )}
+        </span>
+      ))}
+      {protectedRuns.map((run) => (
+        // TSP-LOOP-003 cross-font: one native `writing-mode: vertical-rl`
+        // object per ―― / …… run, flex-centred in the run's own unchanged
+        // canonical slot rectangle (top / height / lane width / slotCount all
+        // identical to the fixed-slot model). The browser lays the run's
+        // glyphs out with the font's own vertical metrics — exactly as a
+        // browser-native 縦組み block does — so ―― connects and …… stays
+        // column-centred in every shipped face, with no per-glyph slot boxes,
+        // no optical nudge, and no per-font profile. `fontFeatureSettings`
+        // and `fontVariantEastAsian` are reset so the font's `vert` glyphs
+        // are used; `overflow: hidden` keeps any sub-pixel ink overshoot
+        // inside the reserved slots, like `[data-latin-run]`.
+        //
+        // The run text is ONE inline run (single text node in a single span) —
+        // NOT one span per character. Splitting ―― into per-glyph boxes breaks
+        // the font's cross-glyph connection: U+2015 is designed to abut its
+        // neighbour within a run, and in every face except Shippori Mincho the
+        // per-glyph split leaves a visible white joint gap (measured: joint
+        // darkness collapses to ~3% of the stroke). Kept as one run, the em
+        // dashes connect for all 5 faces (verify-punct-optical / -export-
+        // fidelity assert the joint's luminance continuity from the screenshot).
+        <span
+          key={run.key}
+          data-protected-run-wrapper={run.kind}
+          data-protected-run-kind={run.kind}
+          data-run-start-slot={run.startSlot}
+          data-run-slot-count={run.slotCount}
+          style={{
+            position: "absolute",
+            top: run.startSlot * slotExtentPx,
+            left: 0,
+            width: baseGlyphLaneWidthPx,
+            height: run.slotCount * slotExtentPx,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            writingMode: "vertical-rl",
+            WebkitWritingMode: "vertical-rl",
+            textOrientation: "upright",
+            WebkitTextOrientation: "upright",
+            fontFeatureSettings: "normal",
+            fontVariantEastAsian: "normal",
+            lineHeight: 1,
+            overflow: "hidden",
+          }}
+        >
+          <span data-protected-run-glyph={run.kind}>{run.text}</span>
+        </span>
+      ))}
+      {latinRuns.map((run) => (
+        <span
+          key={run.key}
+          data-latin-run=""
+          data-run-start-slot={run.startSlot}
+          data-run-slot-count={run.slotCount}
+          style={{
+            position: "absolute",
+            top: run.startSlot * slotExtentPx,
+            left: 0,
+            width: baseGlyphLaneWidthPx,
+            height: run.slotCount * slotExtentPx,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            writingMode: "vertical-rl",
+            WebkitWritingMode: "vertical-rl",
+            textOrientation: "mixed",
+            WebkitTextOrientation: "mixed",
+            // real 欧文 metrics: horizontal advances + kerning, not one
+            // full-width upright cell per character.
+            fontVariantEastAsian: "normal",
+            lineHeight: 1,
+            whiteSpace: "pre",
+            // the measured slot reservation rounds the advance UP, so any
+            // residual sub-pixel overshoot stays inside the run's own box
+            // instead of nudging the next canonical slot.
+            overflow: "hidden",
+          }}
+        >
+          {run.text}
         </span>
       ))}
       {tcyCells.map((cell) => (

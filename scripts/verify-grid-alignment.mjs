@@ -66,6 +66,7 @@ const CASES = {
   dash: "遠くで汽笛が鳴った――そして静寂が訪れた――もう戻れない。",
   ellipsis: "彼は黙った……何も言えなかった……ただ立ち尽くした。",
   punctuation: "「待って！」と、叫んだ。だが、声は、届かなかった。",
+  latinRun: "設定は config/app.settings.json を読む。次の文が続く。",
   paragraphEnd: "これで終わり。",
 };
 const FIXTURE = Object.values(CASES).join("\n");
@@ -144,8 +145,9 @@ async function main() {
     await cdp(ws, "Page.enable", {}, S);
     await cdp(ws, "Runtime.enable", {}, S);
 
-    await cdp(ws, "Page.navigate", { url: `${BASE}/` }, S);
-    await sleep(2500);
+    await cdp(ws, "Page.navigate", { url: `${BASE}/editor` }, S);
+    const dbReady = await cdp(ws, "Runtime.evaluate", { expression: `(async()=>{for(let i=0;i<80;i++){const meta=(await indexedDB.databases()).find(d=>d.name==='tategaki-editor-db');if(meta){const stores=await new Promise(resolve=>{const o=indexedDB.open(meta.name);o.onsuccess=()=>{const d=o.result;const value=[...d.objectStoreNames];d.close();resolve(value)};o.onerror=()=>resolve([])});if(stores.includes('documents'))return {ok:true,version:meta.version,stores}}await new Promise(r=>setTimeout(r,100));}return {ok:false}})()`, awaitPromise: true, returnByValue: true }, S);
+    if (!dbReady.result.value?.ok) throw new Error("app IndexedDB schema did not initialize");
     const seed = `
       (async () => {
         const rec = { id: 9931, title: 'GRID-QA', content: ${JSON.stringify(FIXTURE)},
@@ -182,9 +184,18 @@ async function main() {
           const inner = k.querySelector(':scope > span');
           const ics = inner ? getComputedStyle(inner) : null;
           let kind = 'base';
-          if (inner && ics && ics.textCombineUpright === 'all') kind = 'tcy';
+          // TSP-LOOP-003 cross-font: ―― and …… are now ONE native
+          // writing-mode:vertical-rl run each (data-protected-run-wrapper =
+          // "dash" | "ellipsis"); both consume whole canonical slots.
+          if (k.dataset.protectedRunWrapper) kind = 'protectedRun';
+          else if (k.dataset.latinRun !== undefined) kind = 'latinRun';
+          else if (inner && ics && ics.textCombineUpright === 'all') kind = 'tcy';
           else if ((parseFloat(cs.left) || 0) > 1) kind = 'rt';
-          return { kind, text: k.textContent, rect: R(k) };
+          return { kind, text: k.textContent, rect: R(k),
+            runKind: k.dataset.protectedRunWrapper || '',
+            slotCount: Number(k.dataset.runSlotCount || 0),
+            charCount: kind === 'latinRun' ? [...k.textContent].length : 0,
+            glyphRects: kind === 'protectedRun' ? [...k.querySelectorAll(':scope > [data-protected-run-glyph]')].map(R) : [] };
         });
         return { rect: R(ln), kids };
       });
@@ -218,17 +229,28 @@ async function main() {
     // but paragraph A wraps, so match by first meaningful glyph.
     const wanted = {
       fullLine: "吾輩", shortLine: "みじ", dialogue: "「こんにちは", ruby: "むかし",
-      tcy: "昭和", dash: "遠くで", ellipsis: "彼は黙", punctuation: "「待って", paragraphEnd: "これで",
+      tcy: "昭和", dash: "遠くで", ellipsis: "彼は黙", punctuation: "「待って",
+      latinRun: "設定は", paragraphEnd: "これで",
     };
     // base text of a column, minus the render-time auto-indent (full-width space)
     const colText = (l) =>
-      l.kids.filter((k) => k.kind === "base").map((k) => k.text).join("").replace(/^[\s　]+/, "");
+      l.kids.filter((k) => k.kind === "base" || k.kind === "protectedRun" || k.kind === "latinRun").sort((a, b) => a.rect.y - b.rect.y).map((k) => k.text).join("").replace(/^[\s　]+/, "");
     const poolBaseAdv = [];
     for (const name of caseNames) {
       const needle = wanted[name];
       const col = data.lines.find((l) => colText(l).startsWith(needle));
       if (!col) { check(`${name} — column located`, false); continue; }
-      const base = col.kids.filter((k) => k.kind === "base");
+      let base = col.kids.filter((k) => k.kind === "base");
+      const dashRuns = col.kids.filter((k) => k.kind === "protectedRun" && k.runKind === "dash");
+      const ellipsisRuns = col.kids.filter((k) => k.kind === "protectedRun" && k.runKind === "ellipsis");
+      // Each protected run occupies slotCount solid canonical slots; expand it
+      // into that many virtual 1-slot cells so the column's Y-advance grid
+      // check still sees a uniform 1em pitch through the run.
+      const expandRun = (run) => Array.from({ length: run.slotCount }, (_, i) => ({
+        kind: "base", text: [...run.text][i] || "", rect: { ...run.rect, y: run.rect.y + i * run.rect.h / run.slotCount, h: run.rect.h / run.slotCount }
+      }));
+      if (name === "dash") base = [...base, ...dashRuns.flatMap(expandRun)].sort((a, b) => a.rect.y - b.rect.y);
+      if (name === "ellipsis") base = [...base, ...ellipsisRuns.flatMap(expandRun)].sort((a, b) => a.rect.y - b.rect.y);
       const ys = base.map((b) => b.rect.y);
       const adv = ys.slice(1).map((y, i) => y - ys[i]);
       const xs = base.map((b) => b.rect.x);
@@ -246,6 +268,32 @@ async function main() {
         check("tcy — cell occupies exactly one canonical slot",
           tcy.length > 0 && tcy.every((c) => Math.abs(c.rect.h - fontPxScaled) <= TOL),
           `tcy h ${tcy.map((c) => c.rect.h.toFixed(2)).join(",")} vs ${fontPxScaled.toFixed(2)}`);
+        continue;
+      }
+
+      if (name === "latinRun") {
+        // A contiguous printable-ASCII run is one sideways [data-latin-run]
+        // wrapper occupying whole canonical slots. Japanese BEFORE and AFTER it
+        // must still land on the same solid 1em grid (slotIndex * fontPx from
+        // the column's first cell) — that's the run-contract invariant.
+        const runs = col.kids.filter((k) => k.kind === "latinRun");
+        const jp = base.slice().sort((a, b) => a.rect.y - b.rect.y);
+        const originY = jp.length ? jp[0].rect.y : NaN;
+        const offGrid = jp
+          .map((k) => (k.rect.y - originY) / fontPxScaled)
+          .map((m) => Math.abs(m - Math.round(m)));
+        check("latinRun — a sideways run wrapper is present (not per-glyph slots)",
+          runs.length >= 1 && runs.every((r) => r.slotCount >= 1),
+          `runs=${runs.length} slotCounts=${runs.map((r) => r.slotCount).join(",")}`);
+        check("latinRun — run reserves whole canonical slots, never more than its char count",
+          runs.every((r) => Math.abs(r.rect.h - r.slotCount * fontPxScaled) <= TOL && r.slotCount <= r.charCount),
+          runs.map((r) => `h=${r.rect.h.toFixed(1)} slots=${r.slotCount} chars=${r.charCount}`).join(" | "));
+        check("latinRun — Japanese before and after the run stays on the solid 1em grid",
+          offGrid.length > 0 && Math.max(...offGrid) <= 0.12,
+          `max off-grid = ${Math.max(...offGrid).toFixed(3)} slot`);
+        check("latinRun — Japanese glyphs share one column X",
+          (() => { const xs = jp.map((k) => k.rect.x); return xs.length ? Math.max(...xs) - Math.min(...xs) <= TOL : false; })(),
+          `x spread=${(() => { const xs = jp.map((k) => k.rect.x); return xs.length ? (Math.max(...xs) - Math.min(...xs)).toFixed(3) : "n/a"; })()}`);
         continue;
       }
 
@@ -267,6 +315,29 @@ async function main() {
       if (name === "dash" || name === "ellipsis") {
         check(`${name} — run occupies canonical slots (base advance == 1 slot each)`,
           Math.abs(stats(adv).mean - fontPxScaled) <= fontPxScaled * ADV_TOL);
+      }
+      for (const [rk, runs] of [["dash", dashRuns], ["ellipsis", ellipsisRuns]]) {
+        const run = runs[0];
+        if (name !== rk || !run) continue;
+        const startBoundary = run.glyphRects.length ? run.glyphRects[0].y - run.rect.y : NaN;
+        const lastGlyph = run.glyphRects[run.glyphRects.length - 1];
+        const endBoundary = lastGlyph ? run.rect.y + run.rect.h - (lastGlyph.y + lastGlyph.h) : NaN;
+        const laneCx = run.rect.x + run.rect.w / 2;
+        const glyphCxDev = run.glyphRects.length
+          ? Math.max(...run.glyphRects.map((g) => Math.abs(g.x + g.w / 2 - laneCx))) : NaN;
+        console.log(`${rk} wrapper: startBoundary=${startBoundary.toFixed(3)}px endBoundary=${endBoundary.toFixed(3)}px glyphCxDev=${glyphCxDev.toFixed(3)}px slots=${run.slotCount}`);
+        // TSP-LOOP-003 cross-font: the run text is ONE inline run (a single
+        // [data-protected-run-glyph] span holding the whole ―― / …… string) —
+        // per-glyph boxes break the font's cross-glyph connection.
+        check(`${rk} — one native run (single inline text run) consuming ${run.slotCount} solid canonical slots`,
+          run.slotCount >= 2 && run.glyphRects.length === 1 &&
+          Math.abs(run.rect.h - fontPxScaled * run.slotCount) <= TOL,
+          `slots=${run.slotCount} glyphSpans=${run.glyphRects.length} h=${run.rect.h.toFixed(2)} vs ${(fontPxScaled * run.slotCount).toFixed(2)}`);
+        check(`${rk} — run text run is centred on the column axis (flex, no per-glyph offset)`,
+          Number.isFinite(glyphCxDev) && glyphCxDev <= 1.0, `glyph centre dev=${glyphCxDev.toFixed(3)}px`);
+        check(`${rk} — run occupies its slots symmetrically (top boundary ≈ bottom boundary)`,
+          Number.isFinite(startBoundary) && Math.abs(startBoundary - endBoundary) <= 0.75,
+          `start=${startBoundary.toFixed(3)} end=${endBoundary.toFixed(3)}`);
       }
     }
 

@@ -3,6 +3,14 @@ import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/l
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import PageSettingsPanel from "./PageSettingsPanel";
 
+// Plain-text form of the footer syntax reminder, used as the hover `title`
+// so the full guidance is still reachable when the one-line footer truncates
+// it. (The full DOM text stays present for screen readers regardless of the
+// visual `truncate`.) The detailed 3-case 改ページ explanation lives in Help /
+// 使い方ガイド — see PageBreakGuide.
+const FOOTER_SYNTAX_HELP =
+  "ルビ: ｜漢字《かんじ》 ／ 縦中横: 半角数字2桁を自動検知・[tate]A5[/tate] ／ 改ページ: 【改ページ】（詳しい使い方はヘルプ）";
+
 const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 
 1. ここに本文を入力してください
@@ -16,8 +24,10 @@ const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 ・④ ヘルプ（？）：ショートカットキーや特殊記法の使い方
 
 ■ 特殊記法・装飾
-1. 改ページ
-【改ページ】と入力すると、任意の位置でページを切り替えます。
+1. 改ページ（記法は【改ページ】。＃改ページは使いません）
+・行に【改ページ】だけを書く → その行でページを区切る
+・行の最後に【改ページ】をつける → その行の文章を表示してから区切る（例：章タイトル【改ページ】）
+・行の途中に【改ページ】があり後ろにも文字が続く → 文字としてそのまま表示（改ページにならない）
 
 2. 見出し（目次抽出対応）
 「# 第一章」や「■ はじめに」と書くと見出しとして認識され、目次機能でページ番号が自動抽出されます。
@@ -26,7 +36,8 @@ const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 《 》を使うと文字にルビを振ることができます。（例：漢字《かんじ》）
 
 4. 縦中横（たてちゅうよこ）
-半角数字（例：12月、3丁目）は、自動的に縦書きの中で横組み表示されます。`;
+半角2桁の数字（例：12月25日）は自動的に縦中横になります。
+それ以外を縦中横にしたいときは [tate]…[/tate] で挟みます（例：用紙は[tate]A5[/tate]）。`;
 
 interface EditorPaneProps {
   title: string;
@@ -153,13 +164,18 @@ export default function EditorPane({
         className="w-full flex-1 min-h-0 resize-none overflow-y-auto bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
       />
 
-      <div className="flex flex-none items-center justify-between border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
-        <span>
-          ルビ記法: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁・
-          <code>!!</code>
-          <code>??</code> を自動検知／改ページ: <code>{PAGE_BREAK_MARKER}</code>
+      {/* Two fixed zones: the syntax help sacrifices text with an ellipsis
+          first (min-w-0 + truncate), the character count is never wrapped
+          and never covered (shrink-0). No absolute positioning, one line,
+          footer height unchanged. Hovering the help text shows the full
+          string via the native `title`; the full DOM text also stays present
+          for screen readers regardless of the visual truncation. */}
+      <div className="flex flex-none items-center gap-3 border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
+        <span className="min-w-0 flex-1 cursor-help truncate" title={FOOTER_SYNTAX_HELP}>
+          ルビ: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁を自動検知・
+          <code>[tate]A5[/tate]</code>／改ページ: <code>{PAGE_BREAK_MARKER}</code>
         </span>
-        <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink">
           {countVisualLength(content)} 文字
         </span>
       </div>

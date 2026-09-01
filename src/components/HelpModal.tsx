@@ -69,8 +69,10 @@ export default function HelpModal({ onClose }: HelpModalProps) {
           {status === "loaded" && (
             <div
               className="space-y-3 text-ink
-                [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-ink
-                [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-ink
+                [&_h1]:mb-1 [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-ink
+                [&_h2]:mt-6 [&_h2]:border-b [&_h2]:border-ink/15 [&_h2]:pb-1
+                  [&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-ink
+                [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-ink/80
                 [&_p]:leading-relaxed
                 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5
                 [&_li]:leading-relaxed

@@ -165,6 +165,38 @@ export function prewarmExportFonts(): void {
 }
 
 /**
+ * html-to-image's `cloneCSSStyle` deliberately rewrites every cloned
+ * `font-size` to `Math.floor(fontSize) - 0.1` px (an internal workaround so
+ * text can't render a hair too large and wrap inside its foreignObject).
+ * For ~16px UI text that's a sub-1% change, but tategaki body text renders
+ * at `fontSizeMm × PX_PER_MM` ≈ 7px — a deliberately small preview-scale px
+ * value — where `Math.floor(6.985) - 0.1 = 5.9` is a ~15% shrink. The
+ * FixedSlot renderer still positions each glyph cell at the true size, so
+ * the undersized glyphs end up floating inside correctly-sized cells and
+ * JPG/PDF exports read as sparse / uneven while the live preview stays
+ * solid (confirmed by pixel-measuring a real exported JPG's SVG clone:
+ * `.tategaki-line { font-size: 5.9px }`).
+ *
+ * Passing an explicit `includeStyleProperties` list that is the browser's
+ * own default set minus `font-size` makes html-to-image clone every other
+ * property exactly as before, while leaving `font-size` to come from each
+ * element's own inline style — which `cloneNode` already copies, and which
+ * React sets to the exact px value on `.tategaki-line` (slot spans inherit
+ * it). Net effect: the export's font sizes match the preview's, nothing
+ * else changes. html-to-image caches this list module-side after the first
+ * `toCanvas`, so it must be passed on every call (there is only one).
+ */
+let cloneStylePropsWithoutFontSize: string[] | null = null;
+function getCloneStyleProps(): string[] {
+  if (cloneStylePropsWithoutFontSize === null) {
+    cloneStylePropsWithoutFontSize = Array.from(
+      window.getComputedStyle(document.documentElement)
+    ).filter((name) => name !== 'font-size');
+  }
+  return cloneStylePropsWithoutFontSize;
+}
+
+/**
  * Shared capture entry point used by JPG/ZIP/PDF export alike (see
  * exportImage.ts / exportPdf.ts) so all three formats rasterize the same
  * page the same way.
@@ -250,6 +282,10 @@ export async function capturePageToCanvas(
       backgroundColor: '#ffffff',
       cacheBust: true,
       fontEmbedCSS,
+      // See getCloneStyleProps above: clone every style property except
+      // font-size, so tategaki's ~7px body text isn't shrunk ~15% by
+      // html-to-image's `Math.floor(fontSize) - 0.1` clone step.
+      includeStyleProperties: getCloneStyleProps(),
       // Excludes editor-only chrome that can appear *inside* `.page-card`
       // (currently just the print-only trim/bleed guide, `[data-bleed-guide]`
       // — checkboxes/toolbar/page-number label are siblings of `.page-card`,

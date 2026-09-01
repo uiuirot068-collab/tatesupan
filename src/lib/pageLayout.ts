@@ -203,6 +203,10 @@ export interface MasterPageSettings {
   hashiraPosition: HashiraPosition;
   headerFontSize?: number; // 柱のフォントサイズ (pt, デフォルト: 8)
   nombreFontSize?: number; // ノンブルのフォントサイズ (pt, デフォルト: 8)
+  // ノンブル（ページ番号）のフォント。"" = 本文と同じ（既定）。それ以外は
+  // FONT_FAMILY_OPTIONS の CSS font-family 文字列。位置・サイズ・組版には
+  // 一切影響しない（見た目の書体だけ）。
+  nombreFontFamily?: string;
 }
 
 export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
@@ -216,6 +220,7 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   hashiraPosition: "top",
   headerFontSize: 8,
   nombreFontSize: 8,
+  nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {
