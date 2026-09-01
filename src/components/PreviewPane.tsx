@@ -60,6 +60,11 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
+import ColophonPageCard from "./ColophonPageCard";
+import { resolveColophonInsertion } from "@/lib/colophon";
+
+/** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
+type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
 
 // The "New (Experimental)" renderer A/B toggle is a *local-development-only*
 // tool. `process.env.NODE_ENV` is inlined at build time, so this is a
@@ -138,7 +143,9 @@ function useStableIndexedCallback<Args extends unknown[], R>(
 // stable化済みcallback等）は元のJSXと同じ式をそのまま呼び出し元で評価して
 // 渡しているだけで、値・挙動は変えていない。
 interface PageSlotProps {
-  index: number;
+  /** 物理ページ番号（Presentation Sequence 上の 1 始まりの位置）。ノンブル値と
+   *  見開きの左右（parity）に使う。奥付を途中へ入れると本文 index+1 と乖離する。 */
+  physicalPageNumber: number;
   registerRef: (el: HTMLDivElement | null) => void;
   page: TategakiPage;
   pageSignature: string;
@@ -173,7 +180,7 @@ interface PageSlotProps {
 }
 
 const PageSlot = memo(function PageSlot({
-  index,
+  physicalPageNumber,
   registerRef,
   page,
   pageSignature,
@@ -221,7 +228,7 @@ const PageSlot = memo(function PageSlot({
         />
       )}
       <PageCard
-        pageNumber={index + 1}
+        pageNumber={physicalPageNumber}
         page={page}
         pageSignature={pageSignature}
         startsNewParagraph={startsNewParagraph}
@@ -270,6 +277,9 @@ interface PreviewPaneProps {
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
+  /** 本文の総ページ数（pagination 結果）が変わったら通知する——奥付編集ポップアップの
+   *  「本文の何ページ後」入力の上限目安・範囲外警告に使う。 */
+  onBodyPageCountChange?: (count: number) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
@@ -290,6 +300,7 @@ export default function PreviewPane({
   onImageDelete,
   onImageLayerChange,
   cursorIndex,
+  onBodyPageCountChange,
   isCollapsed = false,
   onToggleCollapse,
   selected,
@@ -359,9 +370,40 @@ export default function PreviewPane({
     return map;
   }, [pages]);
 
+  // TSP-LOOP-005: Presentation Page Sequence — 本文 `pages`（pagination 結果）
+  // 自体は一切改変せず、その上に横書き奥付を1枚だけ差し込んだ「実際の作品
+  // ページ並び」。Preview の順序・物理ページ番号・見開きグルーピング・
+  // full PDF の順序の基準にする。source ranges / reorder / tokenizer には
+  // Colophon を混ぜない（それらは今も `pages` = 本文だけを対象にする）。
+  const showColophon = settings.colophon?.enabled === true;
+  const colophonInsertion = useMemo(
+    () => resolveColophonInsertion(settings.colophon.pagePosition, pages.length),
+    [settings.colophon.pagePosition, pages.length]
+  );
+  const presentationSequence = useMemo<PresentationItem[]>(() => {
+    const seq: PresentationItem[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      if (showColophon && i === colophonInsertion.precedingBodyPages) seq.push({ kind: "colophon" });
+      seq.push({ kind: "body", bodyIndex: i });
+    }
+    if (showColophon && colophonInsertion.precedingBodyPages >= pages.length) {
+      seq.push({ kind: "colophon" });
+    }
+    return seq;
+  }, [pages.length, showColophon, colophonInsertion.precedingBodyPages]);
+  const colophonPhysicalPageNumber = colophonInsertion.precedingBodyPages + 1;
+
+  useEffect(() => {
+    onBodyPageCountChange?.(pages.length);
+  }, [pages.length, onBodyPageCountChange]);
+
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
-  // (2,3), (4,5), ... into 見開き spreads.
-  const spreadGroups = useMemo(() => computeSpreadGroups(pages.length), [pages.length]);
+  // (2,3), (4,5), ... into 見開き spreads — Presentation Sequence 全体（奥付含む）
+  // を単位にする。
+  const spreadGroups = useMemo(
+    () => computeSpreadGroups(presentationSequence.length),
+    [presentationSequence.length]
+  );
 
   // Web閲覧用 (isPx) authors its canonical DOM size directly in *screen*
   // pixels (768×1024) rather than the small mm-based magnitude every other
@@ -674,6 +716,13 @@ export default function PreviewPane({
   const [exportLabel, setExportLabel] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
+  // TSP-LOOP-005: 横書き奥付ページのラッパー div（export capture は本文ページと
+  // 同じく resolvePageCardElement で内部の `.page-card` へ解決する）。`showColophon`
+  // / `colophonInsertion` / `presentationSequence` / `colophonPhysicalPageNumber`
+  // は上（pages 直後）で定義済み。
+  const colophonElementRef = useRef<HTMLDivElement | null>(null);
+  const [colophonOverflow, setColophonOverflow] = useState(false);
+
   /** 選択中ページを物理ページ順（昇順）の0-basedインデックス配列で返す。画面上の選択順ではなく本のページ順。 */
   const getOrderedSelectedIndices = (): number[] => Array.from(selected).sort((a, b) => a - b);
 
@@ -776,6 +825,26 @@ export default function PreviewPane({
     }
   };
 
+  /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
+  const handleExportColophonJpg = async () => {
+    const el = colophonElementRef.current;
+    if (!el) return;
+    setIsExporting(true);
+    setExportLabel("画像");
+    try {
+      await exportPageToJpg(
+        el,
+        buildPageJpgFileName(title, colophonPhysicalPageNumber),
+        resolveJpgScale(el),
+        resolvePrintJpgGeometry(el)
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleExportJpgBatch = async () => {
     if (selected.size === 0) {
       alert("書き出すページを選択してください。");
@@ -830,6 +899,10 @@ export default function PreviewPane({
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
   const [pdfScope, setPdfScope] = useState<"all" | "selected">("all");
+  // 選択ページPDFで奥付を含めるか。default OFF——「奥付ONなら常にappend」とは
+  // 推測しない（PDFは共有・確認用途にも使われるため、ユーザーの選択を尊重する）。
+  // 全ページPDFは従来どおり奥付ONなら常に含める。
+  const [pdfIncludeColophon, setPdfIncludeColophon] = useState(false);
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
@@ -846,7 +919,8 @@ export default function PreviewPane({
     if (pdfScope === "all") {
       // この警告は本全体（製本対象）の総ページ数の奇数/偶数を指す——選択ページ
       // だけを出力する場合は本全体の製本可否とは無関係になるため出さない。
-      const totalPages = pages.length;
+      // 奥付ページ（ON のとき）も物理的な1枚なので総数へ含める。
+      const totalPages = pages.length + (showColophon ? 1 : 0);
       if (totalPages % 2 !== 0) {
         const isConfirmed = window.confirm(
           `最終ページが奇数（全 ${totalPages} ページ）ですが大丈夫ですか？\n※冊子印刷では白ページの挿入が必要になる場合があります。`
@@ -856,9 +930,30 @@ export default function PreviewPane({
         }
       }
     }
-    const elements = indices
-      .map((i) => pageElementsRef.current.get(i))
-      .filter((el): el is HTMLDivElement => el != null);
+    // 全ページPDF: 奥付 ON なら含める。
+    // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
+    const includeColophonInPdf =
+      showColophon && (pdfScope === "all" || pdfIncludeColophon);
+    // 並び順は Presentation Sequence 上の相対順序を維持する——奥付を単純に
+    // 末尾 append しない。奥付は「本文 precedingBodyPages ページ」の直後。
+    const elements: HTMLElement[] = [];
+    let colophonPlaced = false;
+    for (const bodyIdx of indices) {
+      if (
+        includeColophonInPdf &&
+        !colophonPlaced &&
+        bodyIdx >= colophonInsertion.precedingBodyPages &&
+        colophonElementRef.current
+      ) {
+        elements.push(colophonElementRef.current);
+        colophonPlaced = true;
+      }
+      const el = pageElementsRef.current.get(bodyIdx);
+      if (el) elements.push(el);
+    }
+    if (includeColophonInPdf && !colophonPlaced && colophonElementRef.current) {
+      elements.push(colophonElementRef.current);
+    }
     if (elements.length === 0) return;
     setIsExporting(true);
     setExportLabel("PDF");
@@ -1377,6 +1472,18 @@ export default function PreviewPane({
                   >
                     JPG ZIP
                   </button>
+                  {showColophon && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExportMenuOpen(false);
+                        handleExportColophonJpg();
+                      }}
+                      className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                    >
+                      奥付ページ（JPG）
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1405,9 +1512,22 @@ export default function PreviewPane({
           </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
-          {layout.paper.label} / 全 {pages.length} ページ / 1ページ
+          {layout.paper.label} / 全 {pages.length} ページ
+          {showColophon ? " ＋ 奥付1ページ" : ""} / 1ページ
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
+        {showColophon && colophonInsertion.fallback && (
+          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            指定した{colophonInsertion.requestedPage}P目が現在の本文にはありません。
+            奥付は一時的に作品最終ページの後に表示されています（本文が
+            {colophonInsertion.requestedPage}P以上になれば元の位置へ戻ります）。
+          </p>
+        )}
+        {showColophon && colophonOverflow && (
+          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            奥付が1ページに収まっていません。配置・項目・自由記述を見直してください。
+          </p>
+        )}
         {newRendererWarning && (
           <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{newRendererWarning}</p>
         )}
@@ -1470,7 +1590,8 @@ export default function PreviewPane({
           // Lone pages (page 1, or a trailing page when the count is even)
           // stay aligned to their conventional side: page 1 (奇数ページ始まり)
           // sits at the left, so lone odd pages align left and lone even
-          // pages align right.
+          // pages align right. `group[i]` は Presentation Sequence 上の位置
+          // （0始まり）なので +1 が物理ページ番号。
           const singleIsOdd = isSingle && (group[0] + 1) % 2 === 1;
           // 右綴じ: within a spread the odd/recto page reads on the left and
           // the even/verso page reads on the right (right-to-left reading
@@ -1523,49 +1644,71 @@ export default function PreviewPane({
                   : undefined,
               }}
             >
-              {displayGroup.map((index) => {
-                // isDropTarget算出をここで一度だけ行い、PageCardへ渡す
-                // isDropTargetと、挿入ガイド用dropPositionの両方で使い回す
-                // ——無関係なページ（dropIndex !== index）ではdropPositionが
-                // 常にnullのままになるようにするのが目的（dragoverごとの
-                // PageSlot props不変を保つため）。
-                const isPageDropTarget = dropIndex === index && dragIndex !== index;
+              {displayGroup.map((presIndex) => {
+                const physicalPageNumber = presIndex + 1;
+                const item = presentationSequence[presIndex];
+                if (!item) return null;
+
+                if (item.kind === "colophon") {
+                  return (
+                    <div
+                      key="colophon"
+                      ref={colophonElementRef}
+                      className="relative flex shrink-0"
+                    >
+                      <ColophonPageCard
+                        settings={settings}
+                        layout={layout}
+                        colophon={settings.colophon}
+                        title={title}
+                        physicalPageNumber={physicalPageNumber}
+                        onOverflowChange={setColophonOverflow}
+                      />
+                    </div>
+                  );
+                }
+
+                // 本文ページ: 並べ替え・選択・ref・pageOverrides は今も本文
+                // pagination index（bodyIndex）基準。物理ページ番号（ノンブル値・
+                // 見開き parity）だけ Presentation Sequence 由来の値を渡す。
+                const bodyIndex = item.bodyIndex;
+                const isPageDropTarget = dropIndex === bodyIndex && dragIndex !== bodyIndex;
                 return (
                   <PageSlot
-                    key={index}
-                    index={index}
-                    registerRef={stableRegisterPageElement(index)}
-                    page={pages[index]}
-                    pageSignature={pageSignatures[index]}
-                    startsNewParagraph={paragraphStarts[index]}
+                    key={`body-${bodyIndex}`}
+                    physicalPageNumber={physicalPageNumber}
+                    registerRef={stableRegisterPageElement(bodyIndex)}
+                    page={pages[bodyIndex]}
+                    pageSignature={pageSignatures[bodyIndex]}
+                    startsNewParagraph={paragraphStarts[bodyIndex]}
                     settings={settings}
                     layout={layout}
                     images={images}
                     imageLayerOrder={imageLayerOrder}
-                    isSelected={selected.has(index)}
-                    isDragging={dragIndex === index}
+                    isSelected={selected.has(bodyIndex)}
+                    isDragging={dragIndex === bodyIndex}
                     isDropTarget={isPageDropTarget}
                     dropPosition={isPageDropTarget ? dropPosition : null}
-                    onToggleSelect={canReorder ? stableToggleSelect(index) : undefined}
-                    onToggleCheckbox={canReorder ? stableToggleCheckbox(index) : undefined}
-                    onDragStart={canReorder ? stableDragStart(index) : undefined}
-                    onDragOver={canReorder ? stableDragOver(index) : undefined}
-                    onDrop={canReorder ? stableDrop(index) : undefined}
+                    onToggleSelect={canReorder ? stableToggleSelect(bodyIndex) : undefined}
+                    onToggleCheckbox={canReorder ? stableToggleCheckbox(bodyIndex) : undefined}
+                    onDragStart={canReorder ? stableDragStart(bodyIndex) : undefined}
+                    onDragOver={canReorder ? stableDragOver(bodyIndex) : undefined}
+                    onDrop={canReorder ? stableDrop(bodyIndex) : undefined}
                     onDragEnd={canReorder ? stableDragEnd : undefined}
-                    onInsertImage={canReorder ? stableInsertImage(index) : undefined}
-                    insertingImage={insertingImageIndex === index}
+                    onInsertImage={canReorder ? stableInsertImage(bodyIndex) : undefined}
+                    insertingImage={insertingImageIndex === bodyIndex}
                     onImagePositionChange={canReorder ? stableImagePositionChange : undefined}
                     onImageDelete={canReorder ? stableImageDelete : undefined}
                     onImageLayerChange={canReorder ? stableImageLayerChange : undefined}
-                    hideNombre={Boolean(settings.pageOverrides[index + 1]?.hideNombre)}
+                    hideNombre={Boolean(settings.pageOverrides[bodyIndex + 1]?.hideNombre)}
                     onHideNombreChange={
-                      onSettingsChange ? stableHideNombreChange(index + 1) : undefined
+                      onSettingsChange ? stableHideNombreChange(bodyIndex + 1) : undefined
                     }
-                    hideHashira={Boolean(settings.pageOverrides[index + 1]?.hideHashira)}
+                    hideHashira={Boolean(settings.pageOverrides[bodyIndex + 1]?.hideHashira)}
                     onHideHashiraChange={
-                      onSettingsChange ? stableHideHashiraChange(index + 1) : undefined
+                      onSettingsChange ? stableHideHashiraChange(bodyIndex + 1) : undefined
                     }
-                    hashiraOverride={settings.pageOverrides[index + 1]?.hashiraOverride}
+                    hashiraOverride={settings.pageOverrides[bodyIndex + 1]?.hashiraOverride}
                     chromeScale={chromeScale}
                   />
                 );
@@ -1625,6 +1768,23 @@ export default function PreviewPane({
                 </label>
               ))}
             </div>
+            {showColophon && (
+              pdfScope === "selected" ? (
+                <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeColophon}
+                    onChange={(e) => setPdfIncludeColophon(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-ink">奥付ページを含める（選択ページの後ろに追加）</span>
+                </label>
+              ) : (
+                <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
+                  奥付ページは最後に含まれます。
+                </p>
+              )
+            )}
             <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
             <div className="flex flex-col gap-2">
               {(

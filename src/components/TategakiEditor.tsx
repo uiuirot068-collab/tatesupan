@@ -19,6 +19,7 @@ import {
   type PageSettings,
 } from "@/lib/pageLayout";
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
+import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
@@ -28,6 +29,7 @@ import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
+import ColophonModal from "./ColophonModal";
 import HelpModal from "./HelpModal";
 import { Header } from "./Header";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
@@ -61,6 +63,10 @@ export default function TategakiEditor({
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
+  const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
+  // 本文の総ページ数（PreviewPane の pagination 結果）。奥付編集ポップアップの
+  // 「本文の何ページ後」入力の目安・範囲外警告に使う。
+  const [bodyPageCount, setBodyPageCount] = useState(0);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
@@ -98,7 +104,9 @@ export default function TategakiEditor({
     setCurrentProjectId(project.id);
     setTitle(project.title);
     setContent(project.content);
-    setSettings((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS);
+    setSettings(
+      withColophonDefaults((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS, project.title)
+    );
     setPlotNote("");
     loadedDocIdRef.current = null;
     setDocId(null);
@@ -455,6 +463,7 @@ export default function TategakiEditor({
             onImageDelete={handleImageDelete}
             onImageLayerChange={handleImageLayerChange}
             cursorIndex={cursorIndex}
+            onBodyPageCountChange={setBodyPageCount}
             isCollapsed={isPreviewCollapsed}
             onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
             selected={selectedPages}
@@ -479,10 +488,23 @@ export default function TategakiEditor({
           isOpen={isBookPartsModalOpen}
           onClose={() => setIsBookPartsModalOpen(false)}
           onInsert={handleBookPartsInsert}
+          onOpenColophonModal={() => {
+            setIsBookPartsModalOpen(false);
+            setIsColophonModalOpen(true);
+          }}
           currentTitle={title}
           content={content}
           layout={layout}
           settings={settings}
+        />
+      )}
+
+      {isColophonModalOpen && (
+        <ColophonModal
+          colophon={settings.colophon}
+          bodyPageCount={bodyPageCount}
+          onChange={(colophon) => setSettings((prev) => ({ ...prev, colophon }))}
+          onClose={() => setIsColophonModalOpen(false)}
         />
       )}
 

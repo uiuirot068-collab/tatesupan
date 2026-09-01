@@ -152,6 +152,14 @@ export default function EditorPane({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
+            onClick={onOpenBookParts}
+            title="奥付（縦／横）・扉・目次を作成"
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            📖 扉・奥付
+          </button>
+          <button
+            type="button"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
@@ -164,14 +172,6 @@ export default function EditorPane({
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
             置換
-          </button>
-          <button
-            type="button"
-            onClick={onOpenBookParts}
-            title="扉・奥付テキストを自動生成して挿入"
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
-          >
-            📖 扉・奥付
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { createDefaultColophonSettings, type ColophonSettings } from "./colophon";
 
 export type PaperSizeKey = keyof typeof PAPER_SIZE_TEMPLATES;
 
@@ -143,6 +144,12 @@ export interface PageSettings {
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
+  // TSP-LOOP-005: 本文とは独立した横書き専用の奥付ページ設定。本文文字列
+  // （content）・ページ分割・改ページ位置には一切影響しない（enabled=true の
+  // ときのみ、pagePosition が指す位置＝本文の指定ページ後 or 作品末尾へ
+  // 1ページ差し込まれる）。旧ドキュメントは db.ts / useEditorSettings 側の
+  // normalizeColophonSettings 経由で既定値へフォールバックする。
+  colophon: ColophonSettings;
 }
 
 /** 特定ページ単位でマスターページ設定を上書きする項目 */
@@ -239,6 +246,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   layoutMode: "capacity",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
+  colophon: createDefaultColophonSettings(),
 };
 
 /** 印刷用の塗り足し幅（天地左右）。仕上がり線は用紙外形からこの分だけ内側。 */

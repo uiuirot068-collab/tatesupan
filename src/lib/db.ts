@@ -4,6 +4,7 @@ import {
   DEFAULT_PAGE_SETTINGS,
   type PageSettings,
 } from "./pageLayout";
+import { createGuideColophonSettings, normalizeColophonSettings } from "./colophon";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
 export interface DocumentRecord {
@@ -72,6 +73,8 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
         ...doc.settings?.masterPage,
       },
       pageOverrides: doc.settings?.pageOverrides ?? {},
+      // 旧レコード（colophon 未保存）は既定の奥付設定（enabled=false）で開く。
+      colophon: normalizeColophonSettings(doc.settings?.colophon, doc.title),
     },
     plotNote: doc.plotNote ?? "",
     isCollection: doc.isCollection ?? false,
@@ -80,13 +83,19 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
   };
 }
 
+// ガイドだけ横書き奥付を実例として1ページ有効化する（通常の新規 document の
+// 既定は colophon OFF のまま——createGuideColophonSettings の doc 参照）。
+function guideSettings(): PageSettings {
+  return { ...DEFAULT_PAGE_SETTINGS, colophon: createGuideColophonSettings() };
+}
+
 function sampleDocument(updatedAt: number): DocumentRecord {
   return {
     id: SAMPLE_PROJECT.id,
     title: SAMPLE_PROJECT.title,
     content: SAMPLE_PROJECT.content,
     isSample: true,
-    settings: DEFAULT_PAGE_SETTINGS,
+    settings: guideSettings(),
     plotNote: "",
     updatedAt,
     isCollection: false,
@@ -103,7 +112,7 @@ export async function ensureSampleProject(): Promise<void> {
     title: SAMPLE_PROJECT.title,
     content: SAMPLE_PROJECT.content,
     isSample: true,
-    settings: DEFAULT_PAGE_SETTINGS,
+    settings: guideSettings(),
     plotNote: "",
     updatedAt: Date.now(),
   });

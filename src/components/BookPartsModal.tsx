@@ -9,22 +9,35 @@ interface BookPartsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsert: (textToInsert: string, position: 'start' | 'end') => void;
+  /** 「奥付（横）」= 本文とは独立した横書き専用ページ（ColophonModal）を開く。 */
+  onOpenColophonModal: () => void;
   currentTitle?: string;
   content: string;
   layout: PageLayout;
   settings: PageSettings;
 }
 
+type BookPartTab = 'colophon' | 'colophon-h' | 'title' | 'toc';
+
+// 4つの「本のパーツ」入口。初見でも違いが分かるよう、1行の補足を必ず添える。
+const BOOK_PART_TABS: { id: BookPartTab; label: string; description: string }[] = [
+  { id: 'colophon', label: '奥付（縦）', description: '本文ページとして縦書きの奥付を作成' },
+  { id: 'colophon-h', label: '奥付（横）', description: '独立した横書き専用ページを作成' },
+  { id: 'title', label: '扉（タイトルページ）', description: '作品タイトルなどの扉を本文へ挿入' },
+  { id: 'toc', label: '目次作成', description: '目次用テキストを作成' },
+];
+
 export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   isOpen,
   onClose,
   onInsert,
+  onOpenColophonModal,
   currentTitle = '',
   content,
   layout,
   settings,
 }) => {
-  const [activeTab, setActiveTab] = useState<'title' | 'colophon' | 'toc'>('colophon');
+  const [activeTab, setActiveTab] = useState<BookPartTab>('colophon');
 
   // 目次作成タブ
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
@@ -101,45 +114,42 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-900 p-6 shadow-xl border border-gray-200 dark:border-neutral-800">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-          📖 書籍パーツの自動挿入
+          📖 奥付・扉・目次
         </h2>
 
-        {/* タブ切替 */}
-        <div className="flex border-b border-gray-200 dark:border-neutral-800 mb-4">
-          <button
-            onClick={() => setActiveTab('colophon')}
-            className={`pb-2 px-4 text-xs font-semibold border-b-2 transition-all ${
-              activeTab === 'colophon'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            奥付（巻末の権利表記）
-          </button>
-          <button
-            onClick={() => setActiveTab('title')}
-            className={`pb-2 px-4 text-xs font-semibold border-b-2 transition-all ${
-              activeTab === 'title'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            扉（タイトルページ）
-          </button>
-          <button
-            onClick={handleOpenTocTab}
-            className={`pb-2 px-4 text-xs font-semibold border-b-2 transition-all ${
-              activeTab === 'toc'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            目次作成
-          </button>
+        {/* タブ切替（4種類の本のパーツ） */}
+        <div className="flex flex-wrap border-b border-gray-200 dark:border-neutral-800">
+          {BOOK_PART_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => (tab.id === 'toc' ? handleOpenTocTab() : setActiveTab(tab.id))}
+              className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
+                activeTab === tab.id
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
+        <p className="mt-2 mb-4 text-[11px] text-gray-500 dark:text-gray-400">
+          {BOOK_PART_TABS.find((t) => t.id === activeTab)?.description}
+        </p>
 
         {/* フォーム内容 */}
-        {activeTab === 'colophon' ? (
+        {activeTab === 'colophon-h' ? (
+          <div className="space-y-3 text-xs">
+            <p className="leading-relaxed text-gray-600 dark:text-gray-300">
+              「奥付（横）」は、本文とは独立した横書き専用ページとして、本文の最後に追加されます。
+              テンプレート・項目編集・フォント・自由記述・ノンブルなどは専用の設定画面で行います。
+              本文の文字数・改ページ・縦書き設定には影響しません。
+            </p>
+            <p className="leading-relaxed text-gray-500 dark:text-gray-400">
+              縦書きの奥付にしたい場合は「奥付（縦）」を選んでください。どちらかを強制するものではありません。
+            </p>
+          </div>
+        ) : activeTab === 'colophon' ? (
           <div className="space-y-3 text-xs max-h-80 overflow-y-auto pr-1">
             <div>
               <label className="block font-semibold mb-1">誌名・作品タイトル *</label>
@@ -280,19 +290,23 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
           </button>
           <button
             onClick={
-              activeTab === 'colophon'
-                ? handleInsertColophon
-                : activeTab === 'title'
-                  ? handleInsertTitlePage
-                  : handleInsertToc
+              activeTab === 'colophon-h'
+                ? onOpenColophonModal
+                : activeTab === 'colophon'
+                  ? handleInsertColophon
+                  : activeTab === 'title'
+                    ? handleInsertTitlePage
+                    : handleInsertToc
             }
             className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
           >
-            {activeTab === 'colophon'
-              ? '本文の末尾に挿入'
-              : activeTab === 'title'
-                ? '本文の先頭に挿入'
-                : '目次を挿入'}
+            {activeTab === 'colophon-h'
+              ? '奥付（横）の設定を開く'
+              : activeTab === 'colophon'
+                ? '本文の末尾に挿入'
+                : activeTab === 'title'
+                  ? '本文の先頭に挿入'
+                  : '目次を挿入'}
           </button>
         </div>
       </div>

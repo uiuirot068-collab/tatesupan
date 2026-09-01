@@ -6,6 +6,7 @@ import {
   DEFAULT_PAGE_SETTINGS,
   type PageSettings,
 } from "@/lib/pageLayout";
+import { normalizeColophonSettings } from "@/lib/colophon";
 
 const STORAGE_KEY = "tatespun_settings";
 
@@ -23,6 +24,7 @@ function loadStoredSettings(): PageSettings | null {
         ...parsed.masterPage,
       },
       pageOverrides: {},
+      colophon: normalizeColophonSettings(parsed.colophon),
     };
   } catch {
     return null;

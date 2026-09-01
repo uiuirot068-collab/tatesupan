@@ -1108,7 +1108,11 @@ function TrimGuide() {
   return <div data-bleed-guide="true" className="border-dashed" style={style} />;
 }
 
-function NombreOverlay({
+// Exported so the horizontal 奥付 page (ColophonPageCard) can render the page
+// number with the *exact same* component — same nombre font / style / position
+// rules as the body — instead of a parallel implementation (TSP-LOOP-005 §1).
+// Purely presentational; no behavior change to body pages.
+export function NombreOverlay({
   value,
   position,
   isOddPage,
