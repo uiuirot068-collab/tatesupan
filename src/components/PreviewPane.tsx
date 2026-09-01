@@ -62,6 +62,10 @@ import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
 import ColophonPageCard from "./ColophonPageCard";
 import { resolveColophonInsertion } from "@/lib/colophon";
+import {
+  CLOUD_IMAGE_EXPORT_BLOCK_BODY,
+  CLOUD_IMAGE_EXPORT_BLOCK_TITLE,
+} from "@/lib/cloudImageSync";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -154,6 +158,7 @@ interface PageSlotProps {
   layout: PageLayout;
   images: Record<string, string>;
   imageLayerOrder: Record<string, number>;
+  unresolvedImageIds?: ReadonlySet<string>;
   isSelected: boolean;
   isDragging: boolean;
   isDropTarget: boolean;
@@ -189,6 +194,7 @@ const PageSlot = memo(function PageSlot({
   layout,
   images,
   imageLayerOrder,
+  unresolvedImageIds,
   isSelected,
   isDragging,
   isDropTarget,
@@ -236,6 +242,7 @@ const PageSlot = memo(function PageSlot({
         layout={layout}
         images={images}
         imageLayerOrder={imageLayerOrder}
+        unresolvedImageIds={unresolvedImageIds}
         selected={isSelected}
         isDragging={isDragging}
         isDropTarget={isDropTarget}
@@ -270,6 +277,10 @@ interface PreviewPaneProps {
   images: Record<string, string>;
   /** Front/back stacking rank per image id (ImageRecord.layerOrder) — see PageCard.tsx's layering controls. */
   imageLayerOrder: Record<string, number>;
+  /** TSP-LOOP-007: 期限切れ/欠損で復元できなかったクラウド挿絵 id（参照安定な Set）。 */
+  unresolvedImageIds?: ReadonlySet<string>;
+  /** TSP-LOOP-007: 未解決画像が1件でもあれば JPG/PDF 書き出しを完全ブロックする。 */
+  blockExportForUnresolvedImages?: boolean;
   onContentChange?: (content: string) => void;
   onSettingsChange?: (settings: PageSettings) => void;
   onImageAdd?: (record: ImageRecord) => void;
@@ -294,6 +305,8 @@ export default function PreviewPane({
   layout,
   images,
   imageLayerOrder,
+  unresolvedImageIds,
+  blockExportForUnresolvedImages = false,
   onContentChange,
   onSettingsChange,
   onImageAdd,
@@ -795,7 +808,16 @@ export default function PreviewPane({
     return computePrintJpgPixelRatio(trimEquivalentWidth, trimEquivalentHeight);
   };
 
+  // TSP-LOOP-007: 期限切れ/欠損/未解決の挿絵が1件でもあれば書き出しを完全ブロック。
+  // 「警告だけ出して続行」ではなく、OK を押しても開始させない。
+  const exportBlockedByUnresolvedImages = (): boolean => {
+    if (!blockExportForUnresolvedImages) return false;
+    alert(`${CLOUD_IMAGE_EXPORT_BLOCK_TITLE}\n\n${CLOUD_IMAGE_EXPORT_BLOCK_BODY}`);
+    return true;
+  };
+
   const handleExportJpg = async () => {
+    if (exportBlockedByUnresolvedImages()) return;
     if (pages.length === 0) return;
     let index: number;
     if (selected.size === 1) {
@@ -827,6 +849,7 @@ export default function PreviewPane({
 
   /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
   const handleExportColophonJpg = async () => {
+    if (exportBlockedByUnresolvedImages()) return;
     const el = colophonElementRef.current;
     if (!el) return;
     setIsExporting(true);
@@ -846,6 +869,7 @@ export default function PreviewPane({
   };
 
   const handleExportJpgBatch = async () => {
+    if (exportBlockedByUnresolvedImages()) return;
     if (selected.size === 0) {
       alert("書き出すページを選択してください。");
       return;
@@ -871,6 +895,7 @@ export default function PreviewPane({
   };
 
   const handleExportZip = async () => {
+    if (exportBlockedByUnresolvedImages()) return;
     if (selected.size === 0) {
       alert("書き出すページを選択してください。");
       return;
@@ -910,6 +935,7 @@ export default function PreviewPane({
   };
 
   const handleDownloadPdf = async () => {
+    if (exportBlockedByUnresolvedImages()) return;
     if (layout.paper.isPx) return;
     const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
     if (pdfScope === "selected" && indices.length === 0) {
@@ -1685,6 +1711,7 @@ export default function PreviewPane({
                     layout={layout}
                     images={images}
                     imageLayerOrder={imageLayerOrder}
+                    unresolvedImageIds={unresolvedImageIds}
                     isSelected={selected.has(bodyIndex)}
                     isDragging={dragIndex === bodyIndex}
                     isDropTarget={isPageDropTarget}

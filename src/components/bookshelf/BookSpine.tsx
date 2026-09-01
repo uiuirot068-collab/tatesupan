@@ -35,6 +35,12 @@ interface BookSpineProps extends BookSpineColors {
   onDelete?: () => void;
   statusIcons?: SpineStatusIcon[];
   bookWidth?: BookWidth;
+  /** TSP-LOOP-007: クラウド作品の一時挿絵の期限/欠損を説明する1行（詳細メニュー内）。 */
+  cloudImageDetail?: string;
+  /** TSP-LOOP-007: ⚠️ の hover/tap/aria 用の短い canonical 文言。あれば ⚠️ をボタン化する。 */
+  cloudImageWarningText?: string;
+  /** "full" = 通常（改名/削除あり）, "info" = 閲覧のみ（クラウド作品）。 */
+  menuVariant?: "full" | "info";
 }
 
 const GUIDE_STATUS_ICONS: SpineStatusIcon[] = [
@@ -62,6 +68,9 @@ export function BookSpine({
   onDelete,
   statusIcons,
   bookWidth,
+  cloudImageDetail,
+  cloudImageWarningText,
+  menuVariant = "full",
 }: BookSpineProps) {
   const [bookArtwork, setBookArtwork] = useState("");
   const fullTitle = title || "無題のドキュメント";
@@ -189,11 +198,36 @@ export function BookSpine({
         ) : (
           <span className={`${styles.bookSvg} ${styles.bookSvgLoading}`} aria-hidden="true" />
         )}
-        <SpineStatusIcons statuses={visibleStatusIcons} />
         <span className={styles.bookTitle} aria-hidden="true">
           <span className={styles.bookTitleText}>{visibleTitle}</span>
         </span>
       </button>
+
+      {/* Status icons live OUTSIDE the open button so a tap on the ⚠️ never
+          opens the work (TSP-LOOP-007 FINAL §4). Decorative icons keep
+          pointer-events:none; the warning gets its own real <button>. */}
+      {visibleStatusIcons.length > 0 && (
+        <div className={styles.spineStatusLayer}>
+          <SpineStatusIcons statuses={visibleStatusIcons} />
+          {cloudImageWarningText && (
+            <button
+              type="button"
+              className={styles.spineWarningButton}
+              aria-label={`クラウド画像の状態: ${cloudImageWarningText}`}
+              title={cloudImageWarningText}
+              aria-expanded={isMenuOpen}
+              aria-controls={menuId}
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsEditingTitle(false);
+                setTitleDraft(title);
+                onToggleMenu();
+              }}
+            />
+          )}
+        </div>
+      )}
 
       {showMenu && (
         <div className={styles.bookMenu} ref={menuRootRef}>
@@ -249,6 +283,9 @@ export function BookSpine({
                   {isLocalOnly && <span>ブラウザ保存</span>}
                 </p>
               )}
+              {cloudImageDetail && <p>{cloudImageDetail}</p>}
+              {menuVariant === "full" && (
+              <>
               {isEditingTitle ? (
                 <div className={styles.titleEditor}>
                   <input
@@ -301,6 +338,8 @@ export function BookSpine({
                 >
                   削除
                 </button>
+              )}
+              </>
               )}
               </div>
             </>

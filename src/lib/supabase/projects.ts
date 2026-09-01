@@ -1,6 +1,7 @@
 import { createClient } from './client';
 import { Project, CreateProjectInput, UpdateProjectInput } from '@/types/database';
 import { CLOUD_PROJECT_LIMIT_ERROR } from './plans';
+import { deleteManuscriptImagesForProject } from './manuscriptImages';
 
 function isCloudProjectLimitError(error: { message?: string } | null): boolean {
   return !!error?.message?.includes(CLOUD_PROJECT_LIMIT_ERROR);
@@ -127,6 +128,14 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
 
 export async function deleteProject(id: string): Promise<boolean> {
   const supabase = createClient();
+
+  // TSP-LOOP-007: まず一時クラウド挿絵（Storage オブジェクト + manifest 行）を
+  // 撤去する。manifest は projects への FK cascade でも消えるが、Storage は
+  // cascade しないため明示的に消す。他プロジェクト・他ユーザーには触れない
+  // （prefix + RLS で二重保証）。best-effort — 失敗しても本体削除は続行し、
+  // 取り残しは定期パージが回収する。
+  await deleteManuscriptImagesForProject({ projectId: id }).catch(() => {});
+
   const { error } = await supabase
     .from('projects')
     .delete()

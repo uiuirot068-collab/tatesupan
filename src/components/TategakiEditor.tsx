@@ -24,6 +24,8 @@ import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
+import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/manuscriptImages";
+import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
 import PreviewPane from "./PreviewPane";
@@ -31,6 +33,8 @@ import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
 import HelpModal from "./HelpModal";
+import BetaFeedbackModal from "./BetaFeedbackModal";
+import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
@@ -64,6 +68,7 @@ export default function TategakiEditor({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
+  const [isBetaFeedbackOpen, setIsBetaFeedbackOpen] = useState(false);
   // 本文の総ページ数（PreviewPane の pagination 結果）。奥付編集ポップアップの
   // 「本文の何ページ後」入力の目安・範囲外警告に使う。
   const [bodyPageCount, setBodyPageCount] = useState(0);
@@ -75,6 +80,22 @@ export default function TategakiEditor({
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // TSP-LOOP-007: クラウド作品を開いた際、本文が参照するのに復元できなかった
+  // 挿絵（missing = manifest にあるが Storage 取得不可 / unmanifested = 未同期）。
+  // 非 null かつ配列が空でなければエディタ／エクスポートに警告を出す。
+  const [unresolvedCloudImages, setUnresolvedCloudImages] = useState<{
+    missing: string[];
+    unmanifested: string[];
+  } | null>(null);
+  // 参照安定な Set（PageCard の memo を壊さない）。エクスポートブロック判定にも使う。
+  const unresolvedImageIdSet = useMemo(
+    () =>
+      new Set<string>([
+        ...(unresolvedCloudImages?.missing ?? []),
+        ...(unresolvedCloudImages?.unmanifested ?? []),
+      ]),
+    [unresolvedCloudImages]
+  );
   const [cloudLimitPlan, setCloudLimitPlan] = useState<CloudPlan | null>(null);
   // プレビューで選択中のページ（0-based index into PreviewPane's `pages`）。
   // 「ノンブル・柱」タブの選択ページパネル（PageSettingsPanel、EditorPane側）
@@ -129,8 +150,22 @@ export default function TategakiEditor({
           return;
         }
         applyCloudProject(project);
-        setImages({});
         setImageLayerOrder({});
+        setUnresolvedCloudImages(null);
+        if (contentHasImages(project.content)) {
+          // 別端末でも挿絵を復元する（元の image id を維持）。
+          const restored = await restoreManuscriptImages(project.id, project.content);
+          if (cancelled) return;
+          setImages(restored.images);
+          const unresolved = [...restored.missing, ...restored.unmanifested];
+          setUnresolvedCloudImages(
+            unresolved.length > 0
+              ? { missing: restored.missing, unmanifested: restored.unmanifested }
+              : null
+          );
+        } else {
+          setImages({});
+        }
         hasLoadedRef.current = true;
         setSaveStatus("saved");
         return;
@@ -336,7 +371,31 @@ export default function TategakiEditor({
       }
 
       if (!currentProjectId) setCurrentProjectId(result.data.id);
-      alert("クラウドに保存しました！");
+
+      // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
+      // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
+      const sync = await syncManuscriptImages({
+        projectId: result.data.id,
+        content,
+        localImages: images,
+      });
+      if (sync.ok || sync.noImages) {
+        setUnresolvedCloudImages(null);
+        alert(
+          sync.noImages
+            ? "クラウドに保存しました！"
+            : "クラウドに保存しました！（挿絵もクラウドへ同期しました）"
+        );
+      } else {
+        // 本文は保存済みだが画像同期は未完了。既存の有効なクラウド画像・期限は
+        // 壊していない。ユーザーへ明示し、再保存を促す（サイレント欠損を防ぐ）。
+        setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
+        alert(
+          "本文は保存しましたが、挿絵の一部をクラウドへ同期できませんでした。\n" +
+            "元の画像がこの端末にあることを確認して、もう一度「クラウドに保存」してください。\n" +
+            "（同期できるまで、別端末では該当画像が表示されません）"
+        );
+      }
     } finally {
       setIsSaving(false);
     }
@@ -394,7 +453,24 @@ export default function TategakiEditor({
         </p>
       )}
 
+      {unresolvedCloudImages &&
+        (unresolvedCloudImages.missing.length > 0 ||
+          unresolvedCloudImages.unmanifested.length > 0) && (
+          <p
+            role="alert"
+            className="mx-auto -my-3 max-w-2xl rounded-md bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-800"
+          >
+            ⚠️ この作品の挿絵
+            {unresolvedCloudImages.missing.length + unresolvedCloudImages.unmanifested.length}
+            点は保存期限切れ、または取得できませんでした。プレビューでは期限切れの表示になり、JPG・PDF の書き出しはできません。画像を再度配置してください。
+          </p>
+        )}
+
       {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
+
+      {BETA_FEEDBACK_ENABLED && isBetaFeedbackOpen && (
+        <BetaFeedbackModal onClose={() => setIsBetaFeedbackOpen(false)} />
+      )}
 
       <main
         ref={mainRef}
@@ -417,6 +493,7 @@ export default function TategakiEditor({
             onContentChange={setContent}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenBookParts={() => setIsBookPartsModalOpen(true)}
+            onOpenBetaFeedback={() => setIsBetaFeedbackOpen(true)}
             settings={settings}
             layout={layout}
             onSettingsChange={setSettings}
@@ -457,6 +534,8 @@ export default function TategakiEditor({
             layout={layout}
             images={images}
             imageLayerOrder={imageLayerOrder}
+            unresolvedImageIds={unresolvedImageIdSet}
+            blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
             onContentChange={setContent}
             onSettingsChange={setSettings}
             onImageAdd={handleImageAdd}

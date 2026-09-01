@@ -1,0 +1,14 @@
+# TSP-LOOP-006 — Supabase local/project config (minimal).
+# Only the beta-feedback Edge Function is declared here.
+project_id = "tatespun"
+
+[functions.beta-feedback]
+# 匿名・公開エンドポイント。JWT 検証を無効化し、関数内で method / origin /
+# schema / MIME / size / rate を自前検証する。
+verify_jwt = false
+
+[functions.manuscript-image-purge]
+# TSP-LOOP-007: 期限切れの一時クラウド挿絵を定期削除する内部関数。
+# 呼び出しは pg_cron + pg_net から service-role キー / PURGE_SECRET 付きで。
+# ゲートウェイ JWT ではなく関数内 Authorization 検証を使う。
+verify_jwt = false

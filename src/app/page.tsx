@@ -18,6 +18,10 @@ import { useAuth } from "@/components/AuthProvider";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
+import {
+  getProjectCloudImageMetas,
+  type ProjectCloudImageMeta,
+} from "@/lib/supabase/manuscriptImages";
 import type { Project } from "@/types/database";
 
 // ローカル（このブラウザの IndexedDB）に保存できる作品数の上限。
@@ -45,6 +49,10 @@ export default function Home() {
     error: string | null;
   } | null>(null);
   const [cloudPlan, setCloudPlan] = useState<CloudPlan | null>(null);
+  // TSP-LOOP-007: クラウド作品ごとの一時挿絵の期限/欠損状態（軽量・1クエリ）。
+  const [cloudImageMetas, setCloudImageMetas] = useState<Map<string, ProjectCloudImageMeta>>(
+    new Map()
+  );
 
   useEffect(() => {
     if (!user || !session) return;
@@ -59,6 +67,10 @@ export default function Home() {
           error,
         });
       }
+    });
+
+    void getProjectCloudImageMetas().then((metas) => {
+      if (!cancelled) setCloudImageMetas(metas);
     });
 
     return () => {
@@ -319,6 +331,7 @@ export default function Home() {
                       <>
                         <Bookshelf
                           cloudProjects={visibleCloudResult.projects}
+                          cloudImageMetas={cloudImageMetas}
                           onOpenCloud={(id) => router.push(`/editor?cloudId=${encodeURIComponent(id)}`)}
                           collapsible
                         />

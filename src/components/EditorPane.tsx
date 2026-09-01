@@ -3,6 +3,7 @@ import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/l
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import { analyzeWriting, type WritingIssue } from "@/lib/writingCheck";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
+import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import PageSettingsPanel from "./PageSettingsPanel";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
@@ -54,6 +55,8 @@ interface EditorPaneProps {
   onContentChange: (content: string) => void;
   onOpenSearchReplace: () => void;
   onOpenBookParts: () => void;
+  /** β限定「報告」ボタン。BETA_FEEDBACK_ENABLED のときだけ表示。 */
+  onOpenBetaFeedback: () => void;
   settings: PageSettings;
   layout: PageLayout;
   onSettingsChange: (settings: PageSettings) => void;
@@ -73,6 +76,7 @@ export default function EditorPane({
   onContentChange,
   onOpenSearchReplace,
   onOpenBookParts,
+  onOpenBetaFeedback,
   settings,
   layout,
   onSettingsChange,
@@ -173,6 +177,16 @@ export default function EditorPane({
           >
             置換
           </button>
+          {BETA_FEEDBACK_ENABLED && (
+            <button
+              type="button"
+              onClick={onOpenBetaFeedback}
+              title="β版フィードバック（不具合・気になる事・要望）"
+              className="rounded border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              報告
+            </button>
+          )}
         </div>
       </div>
 

@@ -5,8 +5,16 @@
 import type { DocumentRecord } from "@/lib/db";
 import { countVisualLength } from "@/lib/tategaki";
 import type { Project } from "@/types/database";
+import type { ProjectCloudImageMeta } from "@/lib/supabase/manuscriptImages";
+import {
+  cloudImageDetailLine,
+  cloudImageWarningLabel,
+  computeCloudImageWarning,
+  contentHasImages,
+} from "@/lib/cloudImageSync";
 import { useEffect, useId, useRef, useState } from "react";
 import { BookSpine, type BookSpineColors } from "./BookSpine";
+import type { SpineStatusIcon } from "./SpineStatusIcons";
 import styles from "./Bookshelf.module.css";
 import {
   GUIDE_BOOK_WIDTH,
@@ -21,6 +29,8 @@ import { assignBookPaletteIndices } from "./bookshelfPalette";
 interface BookshelfProps {
   documents?: DocumentRecord[];
   cloudProjects?: Project[];
+  /** TSP-LOOP-007: projectId -> 一時挿絵の期限/欠損メタ（軽量）。 */
+  cloudImageMetas?: Map<string, ProjectCloudImageMeta>;
   onOpen?: (id: number) => void;
   onOpenCloud?: (id: string) => void;
   onRename?: (id: number, title: string) => Promise<void>;
@@ -88,6 +98,7 @@ function RackSegment({ part, className, width, height }: RackSegmentProps) {
 export function Bookshelf({
   documents = [],
   cloudProjects = [],
+  cloudImageMetas,
   onOpen,
   onOpenCloud,
   onRename,
@@ -208,6 +219,30 @@ export function Bookshelf({
                     const characterCount = countVisualLength(book.content);
                     const menuKey = book.key;
                     const isCloud = book.source === "cloud";
+
+                    // TSP-LOOP-007: クラウド作品の一時挿絵の期限/欠損 → ⚠️ + 詳細行。
+                    // すべて同じ canonical helper（computeCloudImageWarning）由来。
+                    let cloudStatusIcons: SpineStatusIcon[] | undefined;
+                    let cloudImageDetail: string | undefined;
+                    let cloudImageWarningText: string | undefined;
+                    if (isCloud) {
+                      const meta = cloudImageMetas?.get(String(book.id));
+                      const status = {
+                        hasReferencedImages: contentHasImages(book.content),
+                        expiresAt: meta?.expiresAt ?? null,
+                        missing: meta?.missing ?? false,
+                      };
+                      const now = Date.now();
+                      const warning = computeCloudImageWarning(status, now);
+                      cloudStatusIcons = [{ kind: "cloud", label: "クラウド保存" }];
+                      if (warning.status !== "NONE") {
+                        cloudImageWarningText = cloudImageWarningLabel(warning);
+                        cloudStatusIcons.push({ kind: "warning", label: cloudImageWarningText });
+                      }
+                      cloudImageDetail =
+                        cloudImageDetailLine(status, now, formatUpdatedAt) || undefined;
+                    }
+
                     return (
                     <BookSpine
                       key={book.key}
@@ -218,8 +253,11 @@ export function Bookshelf({
                       isSample={book.isSample}
                       isCollection={book.isCollection}
                       isLocalOnly={showLocalOnlyLabel && !book.isSample && !isCloud}
-                      statusIcons={isCloud ? [{ kind: "cloud", label: "クラウド保存" }] : undefined}
-                      showMenu={!book.isSample && !isCloud}
+                      statusIcons={isCloud ? cloudStatusIcons : undefined}
+                      cloudImageDetail={cloudImageDetail}
+                      cloudImageWarningText={cloudImageWarningText}
+                      menuVariant={isCloud ? "info" : "full"}
+                      showMenu={!book.isSample && (!isCloud || Boolean(cloudImageDetail))}
                       menuId={`bookshelf-menu-${menuKey}`}
                       isMenuOpen={openMenuProjectId === menuKey}
                       onToggleMenu={() =>

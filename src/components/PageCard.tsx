@@ -175,6 +175,14 @@ interface PageCardProps {
   images: Record<string, string>;
   /** Front/back stacking rank per image id (ImageRecord.layerOrder), independent of IMG marker/token order. */
   imageLayerOrder: Record<string, number>;
+  /**
+   * TSP-LOOP-007: image ids whose cloud copy is expired / missing / unresolvable.
+   * A body 【IMG】 marker for one of these renders a NON-manuscript expiry
+   * placeholder instead of nothing — never written to content / IndexedDB /
+   * Storage / exports (exports are blocked while this set is non-empty).
+   * Must be a referentially-stable Set (memoised by the parent).
+   */
+  unresolvedImageIds?: ReadonlySet<string>;
   selected?: boolean;
   isDragging?: boolean;
   isDropTarget?: boolean;
@@ -232,6 +240,7 @@ function PageCard({
   layout,
   images,
   imageLayerOrder,
+  unresolvedImageIds,
   selected = false,
   isDragging = false,
   isDropTarget = false,
@@ -810,7 +819,7 @@ function PageCard({
         style={{ ...sheetStyle, marginTop: "auto" }}
       >
         {fullImage ? (
-          <FullPageImage token={fullImage} images={images} />
+          <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} />
         ) : (
           <>
             {isTwoColumn && columnFlowLines && flowTokens.length > 0 ? (
@@ -928,6 +937,8 @@ function PageCard({
               <ImagePositionOverlay
                 tokens={topImages}
                 images={images}
+
+                unresolvedImageIds={unresolvedImageIds}
                 position="top"
                 maxWidthMm={maxImageWidthMm}
                 maxHeightMm={maxImageHeightMm}
@@ -938,6 +949,8 @@ function PageCard({
               <ImagePositionOverlay
                 tokens={centerImages}
                 images={images}
+
+                unresolvedImageIds={unresolvedImageIds}
                 position="center"
                 maxWidthMm={maxImageWidthMm}
                 maxHeightMm={maxImageHeightMm}
@@ -948,6 +961,8 @@ function PageCard({
               <ImagePositionOverlay
                 tokens={bottomImages}
                 images={images}
+
+                unresolvedImageIds={unresolvedImageIds}
                 position="bottom"
                 maxWidthMm={maxImageWidthMm}
                 maxHeightMm={maxImageHeightMm}
@@ -1043,6 +1058,7 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
   const imagePropsEqual =
     prev.images === next.images &&
     prev.imageLayerOrder === next.imageLayerOrder &&
+    prev.unresolvedImageIds === next.unresolvedImageIds &&
     prev.insertingImage === next.insertingImage;
   const selectedEqual = prev.selected === next.selected;
   const activeEqual = prev.isDragging === next.isDragging && prev.isDropTarget === next.isDropTarget;
@@ -2027,10 +2043,77 @@ function getDisplayImageSize(
   return { widthMm: token.widthMm * displayScale, heightMm: token.heightMm * displayScale };
 }
 
+const NO_UNRESOLVED_IMAGES: ReadonlySet<string> = new Set();
+
+// TSP-LOOP-007: the canonical caroad top-page visual, reused (UI-only) as the
+// expired/missing cloud-image placeholder. Never manuscript data.
+const CLOUD_IMAGE_PLACEHOLDER_SRC = "/caroad_main1.png";
+
+/**
+ * 期限切れ / 取得不能なクラウド挿絵の位置に出す UI 専用プレースホルダ。
+ * caroad 画像を使うが「通常の挿絵」と誤認しないよう明確な警告を重ねる。
+ * `data-no-print` + `.no-print` 相当でエクスポート捕捉から除外（そもそも
+ * 未解決画像があるとエクスポート自体がブロックされる）。原稿データには一切
+ * 保存されない。
+ */
+function ExpiredImagePlaceholder({
+  widthPx,
+  heightPx,
+  zIndex,
+}: {
+  widthPx: number;
+  heightPx: number;
+  zIndex?: number;
+}) {
+  return (
+    <span
+      data-no-print="true"
+      className="no-print"
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: widthPx,
+        height: heightPx,
+        zIndex,
+        border: "2px dashed #b45309",
+        background: "#fffbeb",
+        overflow: "hidden",
+        writingMode: "horizontal-tb",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={CLOUD_IMAGE_PLACEHOLDER_SRC}
+        alt=""
+        aria-hidden="true"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", opacity: 0.28 }}
+      />
+      <span
+        style={{
+          position: "relative",
+          maxWidth: "90%",
+          textAlign: "center",
+          fontSize: 11,
+          lineHeight: 1.5,
+          fontWeight: 700,
+          color: "#7c2d12",
+        }}
+      >
+        ⚠️ 画像の保存期限が切れています
+        <br />
+        画像を再度配置してください
+      </span>
+    </span>
+  );
+}
+
 /** Renders 挿絵 anchored to 天 (top) / 中央 (center) / 地 (bottom) of the page. */
 function ImagePositionOverlay({
   tokens,
   images,
+  unresolvedImageIds = NO_UNRESOLVED_IMAGES,
   position,
   maxWidthMm,
   maxHeightMm,
@@ -2038,6 +2121,7 @@ function ImagePositionOverlay({
 }: {
   tokens: ImageToken[];
   images: Record<string, string>;
+  unresolvedImageIds?: ReadonlySet<string>;
   position: "top" | "center" | "bottom";
   maxWidthMm: number;
   maxHeightMm: number;
@@ -2071,8 +2155,18 @@ function ImagePositionOverlay({
     <div style={style}>
       {tokens.map((token) => {
         const src = images[token.id];
-        if (!src) return null;
         const { widthMm, heightMm } = getDisplayImageSize(token, maxWidthMm, maxHeightMm);
+        if (!src) {
+          if (!unresolvedImageIds.has(token.id)) return null;
+          return (
+            <ExpiredImagePlaceholder
+              key={token.id}
+              widthPx={widthMm * PX_PER_MM}
+              heightPx={heightMm * PX_PER_MM}
+              zIndex={layerRank.get(token.id)}
+            />
+          );
+        }
         return (
           <img
             key={token.id}
@@ -2092,9 +2186,48 @@ function ImagePositionOverlay({
 }
 
 /** Renders a single 挿絵 that spans the entire page (ページ全体). */
-function FullPageImage({ token, images }: { token: ImageToken; images: Record<string, string> }) {
+function FullPageImage({
+  token,
+  images,
+  unresolvedImageIds = NO_UNRESOLVED_IMAGES,
+}: {
+  token: ImageToken;
+  images: Record<string, string>;
+  unresolvedImageIds?: ReadonlySet<string>;
+}) {
   const src = images[token.id];
-  if (!src) return null;
+  if (!src) {
+    if (!unresolvedImageIds.has(token.id)) return null;
+    return (
+      <span
+        data-no-print="true"
+        className="no-print"
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "2px dashed #b45309",
+          background: "#fffbeb",
+          writingMode: "horizontal-tb",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={CLOUD_IMAGE_PLACEHOLDER_SRC}
+          alt=""
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", opacity: 0.22 }}
+        />
+        <span style={{ position: "relative", textAlign: "center", fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: "#7c2d12" }}>
+          ⚠️ 画像の保存期限が切れています
+          <br />
+          画像を再度配置してください
+        </span>
+      </span>
+    );
+  }
   return (
     <img
       src={src}
