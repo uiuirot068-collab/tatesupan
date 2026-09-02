@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:basepath": "node scripts/build-basepath.mjs",
     "start": "next start",
     "lint": "eslint"
   },

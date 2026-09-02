@@ -7,6 +7,7 @@ import { useAuth } from './AuthProvider';
 import { AuthModal } from './AuthModal';
 import { ProjectListModal } from './ProjectListModal';
 import { Project } from '@/types/database';
+import { withBasePath } from '@/lib/basePath';
 import ThemeToggle from './ThemeToggle';
 
 type SaveStatus = 'loading' | 'saved' | 'saving' | 'error';
@@ -58,7 +59,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalNotice, setAuthModalNotice] = useState<string | null>(null);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const logoSrc = '/caroad_main2.png';
+  const logoSrc = withBasePath('/caroad_main2.png');
 
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);

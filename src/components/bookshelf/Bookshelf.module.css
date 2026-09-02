@@ -230,7 +230,11 @@
 .cloudStatusIcon {
   color: #687983;
   background-color: currentColor;
-  mask: url("/assets/bookshelf/icons/cloud.svg") center / contain no-repeat;
+  /* TSP-LOOP-013A: --cloud-mask-url is injected from SpineStatusIcons.tsx with
+     withBasePath() so the asset resolves under /tatespun/ too. The url() here
+     is a root-served fallback for the (never-hit) case of a missing var. */
+  mask: var(--cloud-mask-url, url("/assets/bookshelf/icons/cloud.svg")) center /
+    contain no-repeat;
 }
 
 :global([data-theme="dark"]) .cloudStatusIcon {

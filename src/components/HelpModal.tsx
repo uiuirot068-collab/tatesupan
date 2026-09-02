@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { withBasePath } from "@/lib/basePath";
 
 interface HelpModalProps {
   onClose: () => void;
@@ -13,7 +14,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/docs/help.md`)
+    fetch(withBasePath("/docs/help.md"))
       .then((res) => {
         if (!res.ok) throw new Error("failed to load help.md");
         return res.text();

@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import styles from "./Bookshelf.module.css";
+import { withBasePath } from "@/lib/basePath";
 import { SpineStatusIcons, type SpineStatusIcon } from "./SpineStatusIcons";
 import { truncateSpineTitle, type BookWidth } from "./bookshelfLayout";
 
@@ -83,9 +84,11 @@ export function BookSpine({
 
   useEffect(() => {
     const controller = new AbortController();
-    const artworkPath = isSample
-      ? "/assets/bookshelf/book_5_46.svg"
-      : `/assets/bookshelf/book_6_${resolvedBookWidth}.svg`;
+    const artworkPath = withBasePath(
+      isSample
+        ? "/assets/bookshelf/book_5_46.svg"
+        : `/assets/bookshelf/book_6_${resolvedBookWidth}.svg`
+    );
     void fetch(artworkPath, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Could not load book artwork (${response.status})`);

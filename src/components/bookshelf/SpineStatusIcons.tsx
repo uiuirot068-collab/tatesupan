@@ -1,4 +1,13 @@
+import type { CSSProperties } from "react";
 import styles from "./Bookshelf.module.css";
+import { withBasePath } from "@/lib/basePath";
+
+// TSP-LOOP-013A: the cloud icon is a CSS mask on a /public asset, which CSS
+// url() cannot make basePath-aware on its own — feed the resolved URL in as a
+// custom property.
+const cloudMaskStyle = {
+  "--cloud-mask-url": `url(${withBasePath("/assets/bookshelf/icons/cloud.svg")})`,
+} as CSSProperties;
 
 export type SpineStatusIconKind = "cloud" | "warning" | "shosin" | "key";
 
@@ -29,6 +38,7 @@ export function SpineStatusIcons({ statuses = [] }: SpineStatusIconsProps) {
           <span
             key={`${kind}-${label}`}
             className={`${styles.spineStatusIcon} ${styles.cloudStatusIcon}`}
+            style={cloudMaskStyle}
             aria-hidden="true"
           />
         ) : kind === "shosin" ? (

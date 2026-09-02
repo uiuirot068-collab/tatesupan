@@ -1,17 +1,19 @@
 import type { NextConfig } from "next";
 
-const isGithubActions = process.env.GITHUB_ACTIONS === "true";
-const repoName = "tatesupan";
+// TSP-LOOP-013A — one source of truth for the deploy base path.
+// Set NEXT_PUBLIC_BASE_PATH="/tatespun" for the spuntales.net/tatespun/ build;
+// leave it unset for root-served builds (local dev, current tatespun.pages.dev).
+// src/lib/basePath.ts reads the same env var for manually constructed paths.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH?.trim() || "";
 
 const nextConfig: NextConfig = {
   output: "export",
   images: {
     unoptimized: true,
   },
-  basePath: isGithubActions ? `/${repoName}` : undefined,
-  assetPrefix: isGithubActions ? `/${repoName}/` : undefined,
+  ...(basePath ? { basePath } : {}),
   env: {
-    NEXT_PUBLIC_BASE_PATH: isGithubActions ? `/${repoName}` : "",
+    NEXT_PUBLIC_BASE_PATH: basePath,
   },
 };
 

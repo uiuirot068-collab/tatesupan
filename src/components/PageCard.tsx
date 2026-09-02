@@ -10,6 +10,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { withBasePath } from "@/lib/basePath";
 import {
   computeParagraphStartFlags,
   tokenLength,
@@ -1266,12 +1267,17 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // 比率で算出し直すことで、以後どの本文サイズでも同じ見えの強さを保つ。
   const FOOTER_TO_BODY_FONT_RATIO = 0.75;
   const footerFontSizePx = bodyFontSizePx * FOOTER_TO_BODY_FONT_RATIO;
+  // TSP-LOOP-013A polish: keep the logo + wordmark as the footer's anchor and
+  // let the URL / hashtag read as quiet supporting text — a size step down
+  // (~18%), not a different visual weight.
+  const finePrintFontSizePx = footerFontSizePx * 0.82;
+  const LOGO_SIZE_PX = 17;
 
   const contentStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    gap: "6px",
+    gap: "7px",
     paddingTop: "4px",
     paddingBottom: "6px",
     paddingLeft: "48px",
@@ -1283,20 +1289,22 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
     color: "#888",
   };
 
+  const finePrintStyle: CSSProperties = { fontSize: `${finePrintFontSizePx}px` };
+
   return (
     <div style={containerStyle} className="pointer-events-none select-none">
       <div style={dividerStyle} />
       <div style={contentStyle}>
         <img
-          src="/caroad_main2.png"
+          src={withBasePath("/caroad_main2.png")}
           alt="logo"
           data-logo-img="true"
           className="footer-logo"
-          style={{ width: "12px", height: "12px", objectFit: "contain" }}
+          style={{ width: `${LOGO_SIZE_PX}px`, height: `${LOGO_SIZE_PX}px`, objectFit: "contain" }}
         />
         <span>TateSpun</span>
-        <span>https://tatespun.pages.dev/</span>
-        <span>#スパンテイル</span>
+        <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>
+        <span style={finePrintStyle}>#スパンテイル</span>
       </div>
     </div>
   );

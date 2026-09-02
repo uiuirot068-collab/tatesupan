@@ -17,6 +17,7 @@ import HelpModal from "@/components/HelpModal";
 import { Header } from "@/components/Header";
 import { Bookshelf } from "@/components/bookshelf/Bookshelf";
 import { useAuth } from "@/components/AuthProvider";
+import { withBasePath } from "@/lib/basePath";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
 import { INQUIRY_FORM_URL } from "@/components/legal/LegalArticle";
 import { getProjectsResult } from "@/lib/supabase/projects";
@@ -230,7 +231,7 @@ export default function Home() {
             </div>
 
             <Image
-              src="/caroad_main1.png"
+              src={withBasePath("/caroad_main1.png")}
               alt="縦書きWebエディタ"
               width={384}
               height={578}
@@ -470,14 +471,14 @@ export default function Home() {
 
             <div className="flex justify-center min-[921px]:justify-end">
               <Image
-                src="/caroad_main2.png"
+                src={withBasePath("/caroad_main2.png")}
                 alt="TateSpun"
                 width={384}
                 height={341}
                 className="h-auto w-[150px] dark:hidden"
               />
               <Image
-                src="/caroad_main3.png"
+                src={withBasePath("/caroad_main3.png")}
                 alt="TateSpun"
                 width={384}
                 height={341}

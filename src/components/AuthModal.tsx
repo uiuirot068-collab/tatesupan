@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { createClient } from '../lib/supabase/client';
+import { BASE_PATH } from '@/lib/basePath';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -50,7 +51,9 @@ export function AuthModal({ isOpen, onClose, onSuccess, notice }: AuthModalProps
     try {
       if (mode === 'forgot') {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset-password`,
+          // BASE_PATH keeps this correct under https://spuntales.net/tatespun/
+          // while staying http://localhost:3000/auth/reset-password at root.
+          redirectTo: `${window.location.origin}${BASE_PATH}/auth/reset-password`,
         });
         // Account enumeration対策: Supabaseから返る具体的なエラーの有無にかかわらず、
         // ユーザーへは常に同じ一般的な成功メッセージを表示する。

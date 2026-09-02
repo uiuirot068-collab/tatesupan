@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Rack SVG segments intentionally use native img elements so their exact geometry joins without image optimization wrappers. */
 
 import type { DocumentRecord } from "@/lib/db";
+import { withBasePath } from "@/lib/basePath";
 import { countVisualLength } from "@/lib/tategaki";
 import type { Project } from "@/types/database";
 import type { ProjectCloudImageMeta } from "@/lib/supabase/manuscriptImages";
@@ -79,14 +80,14 @@ function RackSegment({ part, className, width, height }: RackSegmentProps) {
     <span className={styles.rackSegment}>
       <img
         className={`${className} ${styles.rackLight}`}
-        src={`/assets/bookshelf/rack_${part}.svg`}
+        src={withBasePath(`/assets/bookshelf/rack_${part}.svg`)}
         alt=""
         width={width}
         height={height}
       />
       <img
         className={`${className} ${styles.rackDark}`}
-        src={`/assets/bookshelf/rack_${part}_dark.svg`}
+        src={withBasePath(`/assets/bookshelf/rack_${part}_dark.svg`)}
         alt=""
         width={width}
         height={height}
