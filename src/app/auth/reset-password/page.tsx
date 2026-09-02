@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 
 type SessionStatus = 'checking' | 'ready' | 'invalid';
 
-// Supabaseは無効・期限切れのrecoveryリンクの場合、code交換を行わずに
-// error / error_description をURLへ直接付与してredirectする。
+// Supabase は無効・期限切れの recovery リンクの場合、code 交換を行わずに
+// error / error_description を URL（query か hash）へ直接付与して redirect する。
 function readUrlError(): string | null {
   if (typeof window === 'undefined') return null;
   const search = new URLSearchParams(window.location.search);
@@ -18,42 +18,97 @@ function readUrlError(): string | null {
   return description ? decodeURIComponent(description.replace(/\+/g, ' ')) : 'リンクが無効です。';
 }
 
+// recovery リンクは PKCE フローでは `?code=<pkce>`、実装によっては
+// `#access_token=...&type=recovery` として届く。@supabase/ssr の
+// detectSessionInUrl は **共有シングルトン**クライアント（AuthProvider が
+// このページより先に生成する）が code を交換した直後に `?code=` を URL から
+// 除去し、`PASSWORD_RECOVERY` イベントもそのとき一度だけ発火する。よって
+// このページの購読が間に合わず「有効なのに無効」と誤判定していた。
+function readArrivedViaAuthLink(): boolean {
+  if (typeof window === 'undefined') return false;
+  const search = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return Boolean(
+    search.get('code') ||
+      hash.get('access_token') ||
+      hash.get('type') === 'recovery',
+  );
+}
+
 export default function ResetPasswordPage() {
+  // 明示的な URL error はマウント時点で確定できる（既存の挙動を踏襲）。
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>(() =>
-    readUrlError() ? 'invalid' : 'checking'
+    readUrlError() ? 'invalid' : 'checking',
   );
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [updateSucceeded, setUpdateSucceeded] = useState(false);
-  const resolvedRef = useRef(false);
+  const doneRef = useRef(false);
 
   useEffect(() => {
-    // URLのerrorパラメータで既に'invalid'と判定済みの場合、購読は不要。
+    // 1. URL に明示的な error があれば、初期 state で既に 'invalid'。購読不要。
     if (readUrlError()) return;
 
+    const arrivedViaLink = readArrivedViaAuthLink();
     const supabase = createClient();
+    let cancelled = false;
+    const timers: number[] = [];
+
+    const markReady = () => {
+      if (cancelled) return;
+      cancelled = true;
+      timers.forEach(window.clearTimeout);
+      setSessionStatus('ready');
+    };
+    const markInvalid = () => {
+      if (cancelled) return;
+      cancelled = true;
+      timers.forEach(window.clearTimeout);
+      setSessionStatus('invalid');
+    };
+
+    // 2. 「有効の証明」は event ではなく **セッションの実在**。共有クライアントが
+    //    既に PKCE 交換を終えていれば getSession() がそれを返す。まだ交換中なら
+    //    短い間隔でポーリングして待つ（8秒固定タイマーを唯一の判定にしない）。
+    const deadline = Date.now() + (arrivedViaLink ? 15_000 : 3_000);
+    const poll = async () => {
+      if (cancelled) return;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (session) {
+        markReady();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        markInvalid();
+        return;
+      }
+      timers.push(window.setTimeout(poll, 700));
+    };
+    poll();
+
+    // 3. 交換がこのページのマウント後に完了する速いケースも取りこぼさない。
+    //    自前の signOut() による SIGNED_OUT では絶対に「無効」へ倒さない。
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        resolvedRef.current = true;
-        setSessionStatus('ready');
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (
+        event === 'PASSWORD_RECOVERY' ||
+        (event !== 'SIGNED_OUT' && session)
+      ) {
+        markReady();
       }
     });
 
-    // codeが無効/期限切れの場合、exchangeが失敗してもイベントは発火しないため、
-    // 一定時間待っても recovery が確認できなければ無効として扱う。
-    const timeoutId = window.setTimeout(() => {
-      if (!resolvedRef.current) {
-        setSessionStatus('invalid');
-      }
-    }, 8000);
-
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
-      window.clearTimeout(timeoutId);
+      timers.forEach(window.clearTimeout);
     };
   }, []);
 
@@ -73,14 +128,25 @@ export default function ResetPasswordPage() {
       setFormError('パスワードは6文字以上で入力してください。');
       return;
     }
+    if (doneRef.current) return;
 
     setIsSubmitting(true);
     try {
       const supabase = createClient();
+      // 念のため、更新前にセッションの実在を再確認する（匿名では通さない）。
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setSessionStatus('invalid');
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      doneRef.current = true;
 
-      // recovery sessionのまま通常利用へ進めず、新しいパスワードでの
+      // recovery セッションのまま通常利用へ進めず、新しいパスワードでの
       // 明示的な再ログインを必須にする。
       await supabase.auth.signOut();
       setUpdateSucceeded(true);
