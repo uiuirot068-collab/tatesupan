@@ -489,25 +489,33 @@ check(
     /取得できません・再配置/.test(pureLib)
 );
 
-// --- expired-image placeholder (caroad, UI-only) ---
+// --- expired-image placeholder (warning frame + text only, NO decorative image) ---
 check(
-  "F10. placeholder uses the canonical existing caroad top asset",
-  /CLOUD_IMAGE_PLACEHOLDER_SRC = "\/caroad_main1\.png"/.test(pageCard) &&
+  "F10. placeholder has NO decorative image — dashed warning frame + text only (caroad asset untouched elsewhere)",
+  !/CLOUD_IMAGE_PLACEHOLDER_SRC/.test(pageCard) &&
+    !/caroad_main1/.test(pageCard) &&
+    /border: "2px dashed #b45309"/.test(pageCard) &&
+    // the site's own use of the asset must NOT be removed
+    /caroad_main1\.png/.test(read("src/app/page.tsx")) &&
     fs.existsSync(path.join(repoRoot, "public/caroad_main1.png"))
 );
 check(
-  "F11. body marker with an unresolved image renders the placeholder (not null)",
+  "F11. body marker with an unresolved image renders the placeholder (not null), keeps warning text",
   /if \(!src\) \{\s*\n\s*if \(!unresolvedImageIds\.has\(token\.id\)\) return null;\s*\n\s*return \(\s*\n\s*<ExpiredImagePlaceholder/.test(pageCard) &&
     /画像の保存期限が切れています/.test(pageCard) &&
-    /画像を再度配置してください/.test(pageCard)
+    /画像を再度配置してください/.test(pageCard) &&
+    // placeholder still occupies the slot's real size (not blank)
+    /width: widthPx,\s*\n\s*height: heightPx,/.test(pageCard)
 );
 check(
-  "F12. placeholder is UI-only: data-no-print + .no-print, never in content/IndexedDB/Storage/export",
+  "F12. placeholder is UI-only: data-no-print + .no-print, no <img>, never touches content/IndexedDB/Storage/export",
   /data-no-print="true"\s*\n?\s*className="no-print"/.test(pageCard) &&
-    // the placeholder component never touches saveImage / manuscript_cloud_images / content
     (() => {
       const comp = pageCard.slice(pageCard.indexOf("function ExpiredImagePlaceholder"), pageCard.indexOf("function ImagePositionOverlay"));
-      return !/saveImage|manuscript_cloud_images|onContentChange|setContent|upload\(/.test(comp);
+      return (
+        !/<img/.test(comp) &&
+        !/saveImage|manuscript_cloud_images|onContentChange|setContent|upload\(/.test(comp)
+      );
     })()
 );
 check(

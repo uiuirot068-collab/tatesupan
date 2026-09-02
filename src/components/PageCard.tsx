@@ -2045,16 +2045,12 @@ function getDisplayImageSize(
 
 const NO_UNRESOLVED_IMAGES: ReadonlySet<string> = new Set();
 
-// TSP-LOOP-007: the canonical caroad top-page visual, reused (UI-only) as the
-// expired/missing cloud-image placeholder. Never manuscript data.
-const CLOUD_IMAGE_PLACEHOLDER_SRC = "/caroad_main1.png";
-
 /**
  * 期限切れ / 取得不能なクラウド挿絵の位置に出す UI 専用プレースホルダ。
- * caroad 画像を使うが「通常の挿絵」と誤認しないよう明確な警告を重ねる。
- * `data-no-print` + `.no-print` 相当でエクスポート捕捉から除外（そもそも
- * 未解決画像があるとエクスポート自体がブロックされる）。原稿データには一切
- * 保存されない。
+ * 破線の警告枠 + 文言のみ（装飾画像なし）。空白にはせず、元の挿絵スロットの
+ * サイズをそのまま占有する。`data-no-print` + `.no-print` でエクスポート捕捉から
+ * 除外（そもそも未解決画像があるとエクスポート自体がブロックされる）。原稿
+ * データ・IndexedDB・Storage・PDF/JPG には一切入らない。
  */
 function ExpiredImagePlaceholder({
   widthPx,
@@ -2070,7 +2066,6 @@ function ExpiredImagePlaceholder({
       data-no-print="true"
       className="no-print"
       style={{
-        position: "relative",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -2083,16 +2078,8 @@ function ExpiredImagePlaceholder({
         writingMode: "horizontal-tb",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={CLOUD_IMAGE_PLACEHOLDER_SRC}
-        alt=""
-        aria-hidden="true"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", opacity: 0.28 }}
-      />
       <span
         style={{
-          position: "relative",
           maxWidth: "90%",
           textAlign: "center",
           fontSize: 11,
@@ -2213,14 +2200,7 @@ function FullPageImage({
           writingMode: "horizontal-tb",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={CLOUD_IMAGE_PLACEHOLDER_SRC}
-          alt=""
-          aria-hidden="true"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", opacity: 0.22 }}
-        />
-        <span style={{ position: "relative", textAlign: "center", fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: "#7c2d12" }}>
+        <span style={{ textAlign: "center", fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: "#7c2d12" }}>
           ⚠️ 画像の保存期限が切れています
           <br />
           画像を再度配置してください
