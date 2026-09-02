@@ -151,11 +151,11 @@ supabase functions deploy manuscript-image-purge --project-ref vjgxrqgnbgnewfvis
     MANUSCRIPT_IMAGE_PURGE_SECRET=...
   ```
   (`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by Supabase.)
-- **After** the function is live, recreate the pg_cron → pg_net POST to
-  `https://vjgxrqgnbgnewfvissgd.functions.supabase.co/manuscript-image-purge`
-  with `Authorization: Bearer <MANUSCRIPT_IMAGE_PURGE_SECRET>` (see
-  `docs/supabase/manuscript-cloud-images-setup.md`). Disable the old `rgv…`
-  cron **last**, only after QA.
+- **After** the function is live + `MANUSCRIPT_IMAGE_PURGE_SECRET` is set on
+  `vjg…`, run **`docs/supabase/migrations/20260903000001_manuscript_purge_cron_vjg.sql`**
+  in the `vjg…` SQL editor (replace `__PURGE_SECRET__` with the real value).
+  Disable the old `rgv…` cron **last**, only after QA:
+  `select cron.unschedule('manuscript-image-purge-hourly');` (in `rgv…`).
 
 ---
 
@@ -168,9 +168,21 @@ supabase functions deploy manuscript-image-purge --project-ref vjgxrqgnbgnewfvis
   - keep `http://localhost:3000/**` if already present for portal dev; add it if
     TateSpun local dev needs it (it does, for recovery testing).
 - **Confirm email:** leave OFF (`vjg…` `mailer_autoconfirm` is already `true`).
-- **Custom SMTP:** enter the same production **Resend** config used on `rgv…`.
-  Sender: `SpunTales <no-reply@spuntales.net>`.
 - **Do not remove or reorder** existing SpunTales redirect URLs.
+
+### 5b. Custom SMTP on `vjg…`  (Authentication → Emails → SMTP Settings)
+
+| Field | Value |
+|---|---|
+| Sender name | `SpunTales` |
+| Sender email | `no-reply@spuntales.net` |
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` |
+| Password | the existing **Resend API key** (same one already used on `rgv…`) — **never printed/committed** |
+| Minimum interval | keep the portal's current value |
+
+Send a test email from the dashboard after saving. Do not change `rgv…`'s SMTP.
 
 ---
 
@@ -179,16 +191,24 @@ supabase functions deploy manuscript-image-purge --project-ref vjgxrqgnbgnewfvis
 The TateSpun app never hard-codes a project ref — it's `NEXT_PUBLIC_SUPABASE_URL`
 / `NEXT_PUBLIC_SUPABASE_ANON_KEY` only.
 
-- **Cloudflare Pages `tatespun` → Settings → Environment variables (Production):**
+- **Cloudflare Pages `tatespun` → Settings → Environment variables → Production:**
   - `NEXT_PUBLIC_SUPABASE_URL = https://vjgxrqgnbgnewfvissgd.supabase.co`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY = <vjg publishable key>` (from `vjg…` API settings)
-- **`.env.local`** (operator's machine): same two values.
-- Redeploy (push or "Retry deployment").
-- Keep `rgv…` values noted for rollback.
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY = <vjg publishable key>` — Project Settings →
+    Data API (or API Keys) on `vjg…`. This is the **only** frontend key var the
+    app reads (`src/lib/supabase/client.ts`, `src/lib/betaFeedbackClient.ts`);
+    there is no `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+  - `TATESPUN_LOCK_CANONICAL = 1` — makes the build hard-fail on any
+    non-canonical `NEXT_PUBLIC_SUPABASE_URL` (via `prebuild` and
+    `build-basepath.mjs` step 0).
+- **`.env.local`** (operator's machine): the same three.
+- Redeploy: push, or Cloudflare → Deployments → "Retry deployment".
+- Keep the `rgv…` URL + key noted for rollback (do **not** set
+  `TATESPUN_LOCK_CANONICAL` back to 1 with a `rgv…` URL — that's the point).
 
-`scripts/verify-supabase-project.mjs` (added this loop) checks the URL is the
-canonical `vjg…` (or, until the flip, the documented rollback `rgv…`). After the
-flip, set `TATESPUN_LOCK_CANONICAL=1` in CI to make `rgv…` a hard failure.
+`scripts/verify-supabase-project.mjs` is wired into `npm run build`
+(`prebuild`) and `npm run build:basepath` (step 0). Before the flip it accepts
+`vjg…` **or** the documented `rgv…` rollback; with `TATESPUN_LOCK_CANONICAL=1`
+only `vjg…` passes; a third/typo'd ref always fails.
 
 ---
 
