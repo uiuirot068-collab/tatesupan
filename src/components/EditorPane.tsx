@@ -67,6 +67,13 @@ interface EditorPaneProps {
   onCursorIndexChange?: (index: number) => void;
   /** 1-based printed page numbers currently selected in PreviewPane, for the 「ノンブル・柱」タブの選択ページパネル. */
   selectedPageNumbers: number[];
+  /**
+   * TSP-LOOP-012: narrow-viewport 集中モード. When true, the title + toolbar
+   * strip and the PageSettings/help strip are removed from the layout on
+   * `< md` only (`max-md:hidden` → display:none, zero height, state kept). The
+   * desktop / tablet-wide layout is unaffected.
+   */
+  focusMode?: boolean;
 }
 
 export default function EditorPane({
@@ -85,6 +92,7 @@ export default function EditorPane({
   onOpenHelp,
   onCursorIndexChange,
   selectedPageNumbers,
+  focusMode = false,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -146,7 +154,11 @@ export default function EditorPane({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
-      <div className="flex flex-none flex-col gap-2 border-b border-ink/10 px-4 py-3">
+      <div
+        className={`flex flex-none flex-col gap-2 border-b border-ink/10 px-4 py-3 ${
+          focusMode ? "max-md:hidden" : ""
+        }`}
+      >
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
@@ -190,7 +202,7 @@ export default function EditorPane({
         </div>
       </div>
 
-      <div className="flex-none">
+      <div className={`flex-none ${focusMode ? "max-md:hidden" : ""}`}>
         <PageSettingsPanel
           settings={settings}
           layout={layout}

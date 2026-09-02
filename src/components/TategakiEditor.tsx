@@ -21,6 +21,7 @@ import {
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
+import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
@@ -36,6 +37,7 @@ import HelpModal from "./HelpModal";
 import BetaFeedbackModal from "./BetaFeedbackModal";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
+import MobileFocusBar from "./MobileFocusBar";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
@@ -65,6 +67,16 @@ export default function TategakiEditor({
   // pagination. Images with no entry here fall back to document/token order.
   const [imageLayerOrder, setImageLayerOrder] = useState<Record<string, number>>({});
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
+  // TSP-LOOP-012: narrow-viewport「集中モード」. Per-device localStorage
+  // preference only (never Supabase / manuscript data); default OFF. Every
+  // consumer of `focusMode` is scoped to md- via `md:hidden` / `max-md:` /
+  // `md:contents`, so the desktop / tablet-wide layout is untouched.
+  const [focusMode, setFocusMode] = useMobileFocusMode();
+  const enterFocusMode = () => {
+    setFocusMode(true);
+    setIsMobilePreviewOpen(false);
+  };
+  const exitFocusMode = () => setFocusMode(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
@@ -439,13 +451,18 @@ export default function TategakiEditor({
 
   return (
     <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
-      <Header
-        onSave={isSampleDocument ? undefined : handleSave}
-        onSelectProject={isSampleDocument ? undefined : handleSelectProject}
-        isSaving={isSaving}
-        saveStatus={isSampleDocument ? undefined : saveStatus}
-        onOpenHelp={() => setIsHelpOpen(true)}
-      />
+      {/* Focus mode collapses the full header on narrow viewports only; at md+
+          the wrapper is `display:contents`, so the header lays out exactly as
+          before on desktop / tablet-wide. */}
+      <div className={focusMode ? "hidden md:contents" : "contents"}>
+        <Header
+          onSave={isSampleDocument ? undefined : handleSave}
+          onSelectProject={isSampleDocument ? undefined : handleSelectProject}
+          isSaving={isSaving}
+          saveStatus={isSampleDocument ? undefined : saveStatus}
+          onOpenHelp={() => setIsHelpOpen(true)}
+        />
+      </div>
 
       {isSampleDocument && (
         <p className="mx-auto -my-3 rounded-full bg-[#c5a059]/15 px-3 py-1 text-xs font-medium text-[#6f5727]">
@@ -480,18 +497,27 @@ export default function TategakiEditor({
         // side-by-side, fixed to the viewport, each pane scrolls internally.
         className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pr-4 pb-4 md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6"
       >
+        <MobileFocusBar
+          focusMode={focusMode}
+          onEnterFocus={enterFocusMode}
+          onExitFocus={exitFocusMode}
+          saveStatus={isSampleDocument ? undefined : saveStatus}
+          onSave={isSampleDocument ? undefined : handleSave}
+          isSaving={isSaving}
+          onOpenFeedback={
+            BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined
+          }
+        />
+
         <section
           style={
             {
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          // Narrow: fixed, usably-tall block (`<main>` scrolls past it to the
-          // Preview). Wide: `md:h-full` / `md:flex-none` restore the current
-          // viewport-fitted, width-controlled pane.
-          className={`flex h-[70dvh] min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${
-            isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"
-          }`}
+          // Narrow: fixed h-[70dvh] block; `<main>` scrolls past it (focus mode
+          // adds max-md:grow). Wide: md overrides restore the fitted pane.
+          className={`flex h-[70dvh] min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}${focusMode ? " max-md:grow" : ""}`}
         >
           <EditorPane
             title={title}
@@ -509,6 +535,7 @@ export default function TategakiEditor({
             onOpenHelp={() => setIsHelpOpen(true)}
             onCursorIndexChange={setCursorIndex}
             selectedPageNumbers={selectedPageNumbers}
+            focusMode={focusMode}
           />
         </section>
 
