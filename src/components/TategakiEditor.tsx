@@ -474,7 +474,11 @@ export default function TategakiEditor({
 
       <main
         ref={mainRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden pr-4 pb-4 md:flex-row md:gap-2 md:pr-6 md:pb-6"
+        // Narrow (< md): Editor / Preview stack vertically and their combined
+        // height exceeds the (viewport-locked) shell, so `<main>` itself owns a
+        // vertical scroll path between the two panes. Wide (md+): unchanged —
+        // side-by-side, fixed to the viewport, each pane scrolls internally.
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pr-4 pb-4 md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6"
       >
         <section
           style={
@@ -482,7 +486,10 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`flex min-h-[40vh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${
+          // Narrow: fixed, usably-tall block (`<main>` scrolls past it to the
+          // Preview). Wide: `md:h-full` / `md:flex-none` restore the current
+          // viewport-fitted, width-controlled pane.
+          className={`flex h-[70dvh] min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"
           }`}
         >
@@ -525,7 +532,7 @@ export default function TategakiEditor({
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
           className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
-          } ${isMobilePreviewOpen ? "flex max-h-[85vh] shrink-0 flex-col overflow-y-auto" : "hidden"}`}
+          } ${isMobilePreviewOpen ? "flex h-[85dvh] shrink-0 flex-col overflow-y-auto" : "hidden"}`}
         >
           <PreviewPane
             content={content}
