@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ALLOWED_IMAGE_MIME,
+  BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   FEEDBACK_FAILURE_MESSAGE,
   FEEDBACK_GUIDANCE,
   FEEDBACK_IMAGE_HINT,
@@ -232,6 +233,11 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                 className="w-full resize-y rounded border border-ink/20 bg-base p-2 text-sm text-ink outline-none focus:border-ink/40"
               />
 
+              {/* TSP-LOOP-014: 画像添付は公開β直前に一時無効化。
+                  BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED を true に戻すと
+                  この UI（ヒント文・プレビュー・追加ボタン・file input）が
+                  そのまま復活する。実装は削除していない。 */}
+              {BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs text-ink/60">{FEEDBACK_IMAGE_HINT}</p>
                 <p className="text-[11px] text-amber-700">{FEEDBACK_IMAGE_PRIVACY_NOTICE}</p>
@@ -281,6 +287,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                   onChange={(e) => handlePickFiles(e.target.files)}
                 />
               </div>
+              )}
 
               {feedbackError && (
                 <p className="text-xs text-red-600">{feedbackError}</p>

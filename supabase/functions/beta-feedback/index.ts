@@ -25,6 +25,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 /* ------------------------------ constants ------------------------------ */
 
+// TSP-LOOP-014 — 公開β直前の一時無効化。src/lib/betaFeedback.ts の
+// BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED と必ず同じ値にすること
+// （verify-beta-feedback.mjs が両者の一致を突き合わせる）。false の間、
+// 画像フィールドを含むリクエストは 415 で安全に拒否し、Storage には一切
+// 書き込まない。テキストのフィードバック / review は通常どおり受理する。
+// 実装（storeImages / bucket / migration / 既存画像）は削除しない。
+const IMAGE_ATTACHMENTS_ENABLED = false;
+
 const MAX_FEEDBACK_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -392,6 +400,11 @@ Deno.serve(async (req) => {
       for (let i = 0; i < MAX_FEEDBACK_IMAGES; i++) {
         const f = form.get(`image${i}`);
         if (!(f instanceof File)) continue;
+        // TSP-LOOP-014: 添付が一時無効の間は、画像付きリクエストを安全に拒否
+        // （Storage には触れない）。テキストのみのリクエストはここを通らない。
+        if (!IMAGE_ATTACHMENTS_ENABLED) {
+          return json({ ok: false, error: "image_attachments_disabled" }, 415, origin);
+        }
         const buf = new Uint8Array(await f.arrayBuffer());
         total += buf.byteLength;
         if (buf.byteLength > MAX_IMAGE_BYTES || total > MAX_TOTAL_IMAGE_BYTES) {

@@ -10,6 +10,7 @@
 import {
   BETA_FEEDBACK_APP_VERSION,
   BETA_FEEDBACK_FUNCTION_PATH,
+  BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   type BetaFeedbackClientContext,
   type BetaFeedbackSubmission,
 } from "./betaFeedback";
@@ -66,9 +67,12 @@ export async function submitBetaFeedback(
         clientContext: context,
       })
     );
-    submission.images.slice(0, 4).forEach((file, i) => {
-      form.set(`image${i}`, file, file.name || `image${i}`);
-    });
+    // TSP-LOOP-014: 添付が一時無効の間は、submission に画像があっても送らない。
+    if (BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED) {
+      submission.images.slice(0, 4).forEach((file, i) => {
+        form.set(`image${i}`, file, file.name || `image${i}`);
+      });
+    }
     body = form;
     // multipart の boundary はブラウザに任せる（Content-Type を手で付けない）。
   } else {

@@ -22,6 +22,19 @@
 export const BETA_FEEDBACK_ENABLED =
   process.env.NEXT_PUBLIC_BETA_FEEDBACK_ENABLED === "true";
 
+/**
+ * TSP-LOOP-014 — 公開 β 直前の一時無効化フラグ。
+ *
+ * X 公開に伴うスパム／悪質・不適切画像リスクを避けるため、フィードバックの
+ * 画像添付を一時的に無効化する。**可逆的な一時措置**であり、実装（アップロード
+ * コード / Storage bucket / migration / 既存画像）は一切削除しない。復帰時は
+ * ここを `true` に戻し、Edge Function 側の同名フラグと verify の assertion を
+ * 併せて戻すだけ。false の間: 添付 UI 非表示・クライアントは画像を送らない・
+ * Edge Function は画像付きリクエストを安全に拒否。テキストのフィードバックと
+ * review は通常どおり動作する。
+ */
+export const BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED = false;
+
 /** レポートに載せるアプリバージョン（CI が sha を注入可能）。 */
 export const BETA_FEEDBACK_APP_VERSION =
   process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0-beta";
@@ -179,6 +192,10 @@ export function validateSubmissionShape(
   submission: BetaFeedbackSubmission
 ): { ok: true } | { ok: false; reason: string } {
   if (submission.type === "feedback") {
+    // TSP-LOOP-014: 添付が一時無効のときは、UI を経由しない画像も弾く。
+    if (!BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED && submission.images.length > 0) {
+      return { ok: false, reason: "現在、画像の添付は一時的に受け付けていません。" };
+    }
     if (!canSubmitFeedback(submission.message, submission.images.length)) {
       return { ok: false, reason: "本文または画像のどちらかを入力してください。" };
     }

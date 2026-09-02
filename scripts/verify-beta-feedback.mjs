@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ALLOWED_IMAGE_MIME,
+  BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   BETA_FEEDBACK_TYPES,
   MAX_FEEDBACK_IMAGES,
   MAX_IMAGE_BYTES,
@@ -212,6 +213,101 @@ check(
     const reviewChunk = modal.slice(modal.indexOf("REVIEW_CHECKLIST_ITEMS.map"));
     return !/type="file"/.test(reviewChunk);
   })()
+);
+
+/* ============= TSP-LOOP-014: image attachments TEMPORARILY DISABLED ============= *
+ *  Reversible pre-public-beta measure. This block guards against silent
+ *  re-enable and confirms text feedback + review are unaffected. To restore
+ *  attachments: flip BOTH flags to true and revert checks 14.1 / 14.2.
+ * ------------------------------------------------------------------------------- */
+
+check(
+  "14.1 lib: BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED is currently false",
+  BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED === false
+);
+check(
+  "14.2 edge: mirrors the disable — IMAGE_ATTACHMENTS_ENABLED = false",
+  /const IMAGE_ATTACHMENTS_ENABLED = false;/.test(edge)
+);
+check(
+  "14.3 modal: the whole image-attachment UI is gated by the flag",
+  /\{BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED && \([\s\S]{0,120}<div className="flex flex-col gap-2">/.test(
+    modal
+  ) &&
+    // the gate closes before the error/success block
+    modal.indexOf("BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED &&") <
+      modal.indexOf("{feedbackError && (")
+);
+check(
+  "14.4 modal: no image-attachment control reachable while disabled (add button / file input only inside the gated block)",
+  (() => {
+    const gateAt = modal.indexOf("{BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED && (");
+    const addBtnAt = modal.indexOf("＋ 画像を追加");
+    const fileInputAt = modal.indexOf('type="file"');
+    const errBlockAt = modal.indexOf("{feedbackError && (");
+    return (
+      gateAt !== -1 &&
+      gateAt < addBtnAt && addBtnAt < errBlockAt &&
+      gateAt < fileInputAt && fileInputAt < errBlockAt
+    );
+  })()
+);
+check(
+  "14.5 client: images are only appended to FormData when the flag is on",
+  /if \(BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED\) \{[\s\S]{0,160}form\.set\(`image\$\{i\}`/.test(
+    client
+  )
+);
+check(
+  "14.6 edge: an image field on a disabled request is rejected inside the parse loop, before storeImages() is ever called",
+  (() => {
+    const loopStart = edge.indexOf("for (let i = 0; i < MAX_FEEDBACK_IMAGES; i++)");
+    const rejectAt = edge.indexOf('"image_attachments_disabled"');
+    const bufReadAt = edge.indexOf("await f.arrayBuffer()");
+    const storeCallAt = edge.indexOf("await storeImages(supabase");
+    return (
+      loopStart !== -1 &&
+      rejectAt > loopStart &&
+      // rejected before the file body is even read and before the store call
+      rejectAt < bufReadAt &&
+      rejectAt < storeCallAt &&
+      /if \(!IMAGE_ATTACHMENTS_ENABLED\) \{\s*return json\(\{ ok: false, error: "image_attachments_disabled" \}, 415, origin\);\s*\}/.test(
+        edge.replace(/\s+/g, " ")
+      )
+    );
+  })()
+);
+check(
+  "14.7 lib: validateSubmissionShape rejects a feedback submission that carries images while disabled",
+  (() => {
+    const fakeFile = { type: "image/png", size: 10 };
+    const r = validateSubmissionShape({
+      type: "feedback",
+      message: "hi",
+      images: [fakeFile],
+    });
+    return r.ok === false;
+  })()
+);
+check(
+  "14.8 text-only feedback is unaffected — passes shape validation",
+  validateSubmissionShape({ type: "feedback", message: "テキストのみ", images: [] }).ok === true &&
+    canSubmitFeedback("テキストのみ", 0) === true &&
+    canSubmitFeedback("", 0) === false
+);
+check(
+  "14.9 review is unaffected",
+  validateSubmissionShape({ type: "review", checkedItems: ["ルビ"], note: "" }).ok === true
+);
+check(
+  "14.10 implementation NOT deleted — upload code, bucket, migration still present",
+  /async function storeImages\(/.test(edge) &&
+    /from\(STORAGE_BUCKET\)\s*\n?\s*\.upload/.test(edge) &&
+    /'beta-feedback-images'/.test(sql) &&
+    /storage\.buckets/.test(sql) &&
+    MAX_FEEDBACK_IMAGES === 4 &&
+    /type="file"/.test(modal) &&
+    /handlePickFiles/.test(modal)
 );
 
 /* ===================== MAGIC BYTES / VALIDATION ===================== */
