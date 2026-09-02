@@ -145,6 +145,28 @@ check(
   !/process\.env\.NEXT_PUBLIC_BASE_PATH/.test(read("src/components/HelpModal.tsx") ?? "x")
 );
 
+/* ---------------- 4d. legacy-root redirect is basepath-only ---------------- */
+
+const buildBp = read("scripts/build-basepath.mjs") ?? "";
+// isolate what build:basepath actually writes into _redirects
+const writeCall =
+  buildBp.match(/writeFileSync\(\s*redirectsPath\s*,\s*(`[^`]*`)\s*\)/)?.[1] ?? "";
+check(
+  "4d. build:basepath writes out/_redirects after the nest-export step",
+  buildBp.indexOf("nest-export.mjs") <
+    buildBp.indexOf('writeFileSync(redirectsPath') &&
+    /path\.join\(outDir,\s*"_redirects"\)/.test(buildBp)
+);
+check(
+  "4d-i. the written redirect is exactly the narrow bare-root 302 — no catch-all/splat",
+  writeCall === "`/ /${base}/ 302\\n`"
+);
+check(
+  "4d-ii. the root build stays plain `next build`; no public/_redirects, no basepath work in it",
+  pkg.scripts.build === "next build" &&
+    !fs.existsSync(path.join(repoRoot, "public/_redirects"))
+);
+
 /* ---------------- 5. optional: structural check of a basePath build ---------------- */
 
 const wantBuild = process.argv.includes("--build");
@@ -182,8 +204,34 @@ if (fs.existsSync(nested)) {
     })
   );
   check(
-    "5c. basePath build: out/ contains ONLY the nested tatespun/ dir",
-    fs.readdirSync(outDir).filter((n) => n !== ".gitkeep").join(",") === "tatespun"
+    "5c. basePath build: out/ top level is exactly { tatespun/, _redirects }",
+    fs
+      .readdirSync(outDir)
+      .filter((n) => n !== ".gitkeep")
+      .sort()
+      .join(",") === "_redirects,tatespun"
+  );
+
+  const redirectsAtRoot = path.join(outDir, "_redirects");
+  const redirectsNested = path.join(nested, "_redirects");
+  check(
+    "5d. out/_redirects exists at the build root and NOT inside out/tatespun/",
+    fs.existsSync(redirectsAtRoot) && !fs.existsSync(redirectsNested)
+  );
+  check(
+    "5e. out/_redirects content is exactly `/ /tatespun/ 302` + newline",
+    fs.existsSync(redirectsAtRoot) &&
+      fs.readFileSync(redirectsAtRoot, "utf8") === "/ /tatespun/ 302\n"
+  );
+  check(
+    "5f. out/_redirects has no catch-all rule",
+    fs.existsSync(redirectsAtRoot) &&
+      !/^\s*\/\*\s/m.test(fs.readFileSync(redirectsAtRoot, "utf8"))
+  );
+  check(
+    "5g. out/tatespun/ is still the app root (index.html present, not a redirect)",
+    fs.existsSync(path.join(nested, "index.html")) &&
+      !fs.readFileSync(path.join(nested, "index.html"), "utf8").startsWith("/")
   );
 } else {
   console.log("SKIP: 5* structural build checks (no out/tatespun/ — pass --build or run `npm run build:basepath` first)");
