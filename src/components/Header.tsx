@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 import { AuthModal } from './AuthModal';
 import { ProjectListModal } from './ProjectListModal';
@@ -49,6 +50,10 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
 
 export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, variant = 'editor' }: HeaderProps) {
   const isHome = variant === 'home';
+  // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
+  // ログイン状態や作品数に関わらず表示しない（空の本棚でも重複表示しない）。
+  const pathname = usePathname();
+  const isWorksListRoute = pathname === '/';
   const { user, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalNotice, setAuthModalNotice] = useState<string | null>(null);
@@ -131,7 +136,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             : 'flex w-full min-w-0 flex-wrap items-center gap-3 gap-y-2 sm:w-auto'
         }
       >
-        {!isHome && (
+        {!isHome && !isWorksListRoute && (
           <Link
             href="/"
             className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
