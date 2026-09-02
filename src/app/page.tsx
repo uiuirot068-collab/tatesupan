@@ -415,6 +415,39 @@ export default function Home() {
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">本棚・エディタ・書き出し</small>
             </button>
           </div>
+
+          {/* TSP-LOOP-008: 画像保存仕様の常時表示カード。折りたたみ・modalにせず、
+              「できること」の機能カードとは別枠の案内として左アクセント罫で区別する。
+              72時間で期限切れになるのは「クラウド上の一時コピー」で、ブラウザ内の
+              元画像は自動削除されない、という区別を崩さない文言。 */}
+          <aside
+            aria-labelledby="image-storage-note-title"
+            className="mx-auto mt-[26px] max-w-[760px] rounded-[14px] border border-[rgba(31,42,68,0.14)] border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.06)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.05)]"
+          >
+            <h3
+              id="image-storage-note-title"
+              className="mb-3 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
+            >
+              ◇ 画像の保存について
+            </h3>
+            <div className="space-y-3 text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
+              <p>
+                Guest（未登録）の画像は、このブラウザ内に保存されます。TateSpun側で72時間後に削除されることはありません。
+              </p>
+              <p>
+                Memberも元画像はブラウザ内に保存され、「クラウドに保存」を行った画像のコピーだけが72時間の一時クラウド保存になります。
+              </p>
+              <p>
+                画像を含むクラウド保存に再度成功すると、保存期限はその時点から72時間に更新されます。
+              </p>
+              <p>
+                クラウド上の画像が期限切れになっても、同じブラウザ内に残っている元画像をTateSpunが自動で削除することはありません。
+              </p>
+              <p>
+                ただし、ブラウザデータの削除・別ブラウザ・別端末などでは、ローカル画像を引き継げない場合があります。大切な元画像は必ずお手元にも保管してください。
+              </p>
+            </div>
+          </aside>
         </section>
 
         <section

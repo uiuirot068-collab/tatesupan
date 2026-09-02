@@ -566,6 +566,60 @@ check(
     /contentHasImages\(project\.content\)/.test(editor)
 );
 
+/* ============ TSP-LOOP-008: image-storage information (docs/UI only) ============ */
+
+const help = read("public/docs/help.md");
+
+check(
+  "L8-1. top page: always-visible '◇ 画像の保存について' card (not a fold / not a modal)",
+  /◇ 画像の保存について/.test(homePage) &&
+    /id="image-storage-note-title"/.test(homePage) &&
+    // the <aside> is a direct child of the quick-actions <section>, not gated on user/state
+    /<\/div>\s*\n\s*\{\/\* TSP-LOOP-008[\s\S]{0,400}<aside\s*\n\s*aria-labelledby="image-storage-note-title"/.test(homePage) &&
+    !/isModalOpen|isFold|collapsed|showImageStorage/i.test(homePage.slice(homePage.indexOf("image-storage-note-title") - 400, homePage.indexOf("image-storage-note-title") + 400))
+);
+check(
+  "L8-2. top card: 72時間 stated, Guest + Member both explained, distinction kept",
+  /72時間/.test(homePage) &&
+    /Guest（未登録）の画像は、このブラウザ内に保存されます/.test(homePage) &&
+    /「クラウドに保存」を行った画像のコピーだけが72時間の一時クラウド保存/.test(homePage) &&
+    /元画像をTateSpunが自動で削除することはありません/.test(homePage)
+);
+check(
+  "L8-3. top card: browser-data-deletion / other-device caveat + keep-your-own-copy",
+  /ブラウザデータの削除・別ブラウザ・別端末などでは/.test(homePage) &&
+    /大切な元画像は必ずお手元にも保管してください/.test(homePage)
+);
+check(
+  "L8-4. top card: no emoji added (◇ is allowed; no emoji codepoints in the aside)",
+  (() => {
+    const a = homePage.slice(homePage.indexOf('aria-labelledby="image-storage-note-title"'));
+    const aside = a.slice(0, a.indexOf("</aside>"));
+    return !/\p{Extended_Pictographic}/u.test(aside);
+  })()
+);
+check(
+  "L8-5. help.md: '## 画像の保存場所と72時間ルール' section with Guest / Member / 72h-passed / warning / other-device subsections",
+  /^## 画像の保存場所と72時間ルール$/m.test(help) &&
+    /^### Guest（未登録）の場合$/m.test(help) &&
+    /^### Memberの場合$/m.test(help) &&
+    /^### 72時間を過ぎるとどうなりますか？$/m.test(help) &&
+    /^### 画像に警告が表示された場合$/m.test(help) &&
+    /^### 別端末でも使いたい場合$/m.test(help)
+);
+check(
+  "L8-6. help.md: keeps the 'expiry is the cloud copy, not your original' distinction; no forbidden absolutes",
+  /期限が切れるのは、クラウド上に一時保存している画像コピーです/.test(help) &&
+    /元画像を、TateSpunが72時間後に自動削除することはありません/.test(help) &&
+    /Guestの画像に、TateSpun側の「72時間」の保存期限はありません/.test(help) &&
+    !/画像は永久に保存されます|絶対に消えません|72時間後に画像が全部削除されます/.test(help)
+);
+check(
+  "L8-7. help.md: export is stopped while an image is unresolved, restored after re-place/re-sync",
+  /JPG・PDFなどの書き出しを停止します/.test(help) &&
+    /警告が解消されれば通常どおり書き出せます/.test(help)
+);
+
 /* ===================== done ===================== */
 
 console.log("");
