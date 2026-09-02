@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -12,10 +13,12 @@ import {
   listDocuments,
 } from "@/lib/db";
 import { CombineModal } from "@/components/CombineModal";
+import HelpModal from "@/components/HelpModal";
 import { Header } from "@/components/Header";
 import { Bookshelf } from "@/components/bookshelf/Bookshelf";
 import { useAuth } from "@/components/AuthProvider";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
+import { INQUIRY_FORM_URL } from "@/components/legal/LegalArticle";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
 import {
@@ -40,6 +43,7 @@ export default function Home() {
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [localOnlyNotice, setLocalOnlyNotice] = useState<{ count: number } | null>(null);
   const [selectedBookshelfTab, setSelectedBookshelfTab] = useState<BookshelfTab | null>(null);
   const [cloudResult, setCloudResult] = useState<{
@@ -402,13 +406,12 @@ export default function Home() {
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">短編集・再録集を編成する</small>
             </button>
 
-            {/* 「使い方を見る」: page.tsx / Header.tsx に既存のguide/help導線が
-                見当たらないため、リンク先を推測せず非活性表示のみとする。 */}
+            {/* 「使い方を見る」: 新規ガイドページは作らず、ヘッダーの「？」と同じ
+                既存の HelpModal（使い方ガイド）を開く。 */}
             <button
               type="button"
-              disabled
-              title="使い方導線は準備中です"
-              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7]"
+              onClick={() => setIsHelpOpen(true)}
+              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
             >
               <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">?</span>
               <strong className="text-lg">使い方を見る</strong>
@@ -494,15 +497,26 @@ export default function Home() {
             className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-start"
             aria-label="フッター"
           >
-            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+            <Link
+              href="/terms"
+              className="text-sm text-ink/60 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+            >
               利用規約
-            </span>
-            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-sm text-ink/60 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+            >
               プライバシーポリシー
-            </span>
-            <span title="準備中のページです" className="cursor-default text-sm text-ink/55 opacity-60 dark:text-[#939DAF]">
+            </Link>
+            <a
+              href={INQUIRY_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-ink/60 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+            >
               お問い合わせ
-            </span>
+            </a>
           </nav>
 
           <button
@@ -570,6 +584,8 @@ export default function Home() {
         documents={documents ?? []}
         userStatus={{ plan: user ? cloudPlan : null }}
       />
+
+      {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
 
       {isLimitModalOpen && (
         <div
