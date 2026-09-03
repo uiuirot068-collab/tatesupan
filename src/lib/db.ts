@@ -6,6 +6,7 @@ import {
 } from "./pageLayout";
 import { createGuideColophonSettings, normalizeColophonSettings } from "./colophon";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
+import { isEphemeralDocId } from "@/constants/demoData";
 
 export interface DocumentRecord {
   id: number;
@@ -154,7 +155,9 @@ export async function saveDocument(
   plotNote: string,
   collection?: { isCollection?: boolean; includedDocumentIds?: number[] }
 ): Promise<void> {
-  if (id === SAMPLE_PROJECT.id) return;
+  // The 使い方ガイド (-1) and the TSP-024 おためしデモ (-2) are in-memory only —
+  // never write a row for them.
+  if (isEphemeralDocId(id)) return;
   await db.documents.put({
     id,
     title,
@@ -168,7 +171,7 @@ export async function saveDocument(
 }
 
 export async function deleteDocument(id: number): Promise<void> {
-  if (id === SAMPLE_PROJECT.id) return;
+  if (isEphemeralDocId(id)) return;
   await db.documents.delete(id);
 }
 

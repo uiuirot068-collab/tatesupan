@@ -1510,6 +1510,7 @@ export default function PreviewPane({
               type="button"
               onClick={onToggleCollapse}
               data-preview-collapse-toggle=""
+              data-demo-target="preview-collapse"
               aria-expanded
               aria-label="プレビューを右側に格納"
               title="プレビューを右側に格納"
@@ -1572,6 +1573,7 @@ export default function PreviewPane({
           <span className="relative flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"
+              data-demo-target="export"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
               disabled={isExporting || pages.length === 0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"

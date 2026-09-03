@@ -174,6 +174,7 @@ export default function EditorPane({
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="ドキュメント・タイトル名"
+          data-demo-target="title"
           className="w-full min-w-0 bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
         />
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -271,6 +272,7 @@ export default function EditorPane({
         )}
         <textarea
           ref={textareaRef}
+          data-demo-target="editor"
           value={content}
           onChange={(e) => {
             onContentChange(e.target.value);

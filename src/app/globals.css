@@ -37,6 +37,16 @@
    JPG or PDF, and it is never written into the document text. The overlay
    div's own text is transparent, so only this decoration shows through the
    transparent textarea sitting on top of it. */
+/* TSP-LOOP-024 — おためしデモ spotlight. Applied only while the demo tour is
+   pointing at a real control; removed on step change / demo exit. Purely a
+   visual ring — never changes layout or focusability. */
+.tsp-demo-spotlight {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+  scroll-margin: 6rem;
+}
+
 .tsp-writing-wavy {
   text-decoration-line: underline;
   text-decoration-style: wavy;
@@ -55,8 +65,14 @@ body {
   box-sizing: border-box;
 }
 
+/* Ordinary scrolling document (opt-out of the app-shell viewport lock above).
+   Bookshelf uses `[data-bookshelf-page]`; TSP-LOOP-024's feature guide
+   (/guide) uses `[data-guide-page]` — without this it inherits
+   `body { overflow: hidden }` and cannot scroll past the first viewport. */
 html:has([data-bookshelf-page]),
-body:has([data-bookshelf-page]) {
+body:has([data-bookshelf-page]),
+html:has([data-guide-page]),
+body:has([data-guide-page]) {
   width: 100%;
   height: auto;
   min-height: 100%;
