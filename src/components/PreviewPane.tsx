@@ -38,7 +38,9 @@ import {
   measureCaptureSize,
   measureTrimGuideRatioRect,
   prewarmExportFonts,
+  prewarmExportImage,
 } from "@/utils/exportCapture";
+import { withBasePath } from "@/lib/basePath";
 import {
   buildPageJpgFileName,
   buildPdfFileName,
@@ -761,7 +763,11 @@ export default function PreviewPane({
     if (typeof window === "undefined") return;
     let cancelled = false;
     const run = () => {
-      if (!cancelled) prewarmExportFonts();
+      if (cancelled) return;
+      prewarmExportFonts();
+      // TSP-LOOP-022: warm the Web閲覧用 footer logo's inlined data URL too,
+      // so the first Safari export never races a cold fetch of it.
+      prewarmExportImage(withBasePath("/caroad_main2.png"));
     };
     const hasIdleCallback = typeof window.requestIdleCallback === "function";
     const handle = hasIdleCallback ? window.requestIdleCallback(run) : window.setTimeout(run, 0);

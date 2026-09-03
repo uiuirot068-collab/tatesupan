@@ -93,6 +93,99 @@ export function measureTrimGuideRatioRect(root: HTMLElement): RelativeRect | nul
   };
 }
 
+// TSP-LOOP-022: every `<img>` that reaches the page raster except one is
+// already a `data:` URL — inserted manuscript images are stored/decoded as
+// data URLs (see PreviewPane), so html-to-image never has to fetch them and
+// they survive the SVG-`<foreignObject>` rasterization on every engine. The
+// lone exception is the Web閲覧用 footer's TateSpun logo
+// (`WebFooterOverlay` → `<img src={withBasePath("/caroad_main2.png")}>`): a
+// real URL html-to-image must fetch + inline at capture time. On WebKit
+// (iPad / iPhone Safari) that fetch-and-embed step is unreliable — the logo
+// drops from the JPG/PDF while the footer text survives — even though it
+// works in Chromium. HUMAN QA on iPad mini Safari reproduced exactly this.
+//
+// Fix: before `toCanvas`, swap any non-`data:` `<img src>` inside the target
+// for an inlined `data:` URL we fetch ourselves (module-cached by original
+// src, so repeated page captures don't re-fetch), then restore the original
+// src in `finally`. The image then rasterizes identically to the inserted
+// images — no engine-specific fetch inside html-to-image. No browser
+// sniffing, no markup change, no data-model change.
+const inlinedImageCache = new Map<string, Promise<string>>();
+
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const res = await fetch(url, { cache: "force-cache" });
+  if (!res.ok) throw new Error(`fetch ${url} → ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function inlineImageDataUrl(url: string): Promise<string> {
+  let p = inlinedImageCache.get(url);
+  if (!p) {
+    p = fetchAsDataUrl(url).catch((err) => {
+      // Leave the cache primed with a rejected promise? No — drop it so a
+      // later export can retry (e.g. transient offline). Fall back to the
+      // original URL so behaviour is never worse than before this fix.
+      inlinedImageCache.delete(url);
+      throw err;
+    });
+    inlinedImageCache.set(url, p);
+  }
+  return p;
+}
+
+/**
+ * Replaces every `<img>` inside `root` whose `src` is a real URL (not already
+ * `data:`) with an inlined `data:` URL, returning a function that restores the
+ * originals. Used only for the moment of an export capture — same
+ * save-mutate-restore pattern as the `transform`/`margin-top` neutralization
+ * in `capturePageToCanvas`. Best-effort: an image that can't be fetched keeps
+ * its original src (no regression vs. the pre-fix behaviour).
+ */
+async function inlineUrlImagesForCapture(root: HTMLElement): Promise<() => void> {
+  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img")).filter(
+    (img) => {
+      const raw = img.getAttribute("src");
+      return !!raw && !raw.startsWith("data:");
+    }
+  );
+  if (imgs.length === 0) return () => {};
+
+  const restores: Array<() => void> = [];
+  await Promise.all(
+    imgs.map(async (img) => {
+      const original = img.getAttribute("src")!;
+      try {
+        const dataUrl = await inlineImageDataUrl(new URL(original, document.baseURI).href);
+        img.setAttribute("src", dataUrl);
+        // Wait for the swapped-in data URL to actually decode so the live
+        // node (which html-to-image reads) is paint-ready at capture time.
+        if (typeof img.decode === "function") await img.decode().catch(() => {});
+        restores.push(() => img.setAttribute("src", original));
+      } catch {
+        /* keep original src — best effort */
+      }
+    })
+  );
+  return () => {
+    for (const restore of restores) restore();
+  };
+}
+
+/**
+ * Warms {@link inlinedImageCache} for a URL (e.g. the Web閲覧用 footer logo)
+ * so the first export doesn't pay the fetch. Safe to call repeatedly; failures
+ * are swallowed. Paired with {@link prewarmExportFonts}.
+ */
+export function prewarmExportImage(url: string): void {
+  void inlineImageDataUrl(new URL(url, document.baseURI).href).catch(() => {});
+}
+
 let cachedFontEmbedCssKey: string | null = null;
 let cachedFontEmbedCssPromise: Promise<string> | null = null;
 
@@ -253,6 +346,12 @@ export async function capturePageToCanvas(
   const previousMarginTop = target.style.marginTop;
   target.style.marginTop = '0px';
 
+  // TSP-LOOP-022: inline any real-URL <img> (currently just the Web閲覧用
+  // footer logo) as a data: URL so html-to-image never has to fetch it —
+  // that fetch-and-embed step silently drops the image on WebKit exports.
+  // Restored in `finally`, same as the transform / margin-top resets above.
+  const restoreInlinedImages = await inlineUrlImagesForCapture(target);
+
   let tFontsReady = tResolved;
   let tMeasured = tResolved;
   let tFontEmbedReady = tResolved;
@@ -356,6 +455,7 @@ export async function capturePageToCanvas(
     tCaptured = performance.now();
     return canvas;
   } finally {
+    restoreInlinedImages();
     if (scaleRoot) {
       scaleRoot.style.transform = previousTransform;
       scaleRoot.style.transition = previousTransition;

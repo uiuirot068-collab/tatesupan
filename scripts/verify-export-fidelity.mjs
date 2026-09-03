@@ -88,6 +88,35 @@ function cdp(ws, method, params = {}, sessionId) {
 let failures = 0;
 const check = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}: ${name}${detail ? `  (${detail})` : ""}`); if (!ok) failures++; };
 
+/* ---------------- static: Safari export web-icon contract (TSP-LOOP-022) --------------- */
+// The Web閲覧用 footer's TateSpun logo is the only <img> in the exported page
+// that reaches the raster as a real URL (inserted images are already data:
+// URLs). html-to-image must fetch+embed it, and that step drops the image on
+// WebKit exports. capturePageToCanvas must pre-inline every non-data <img>
+// as a data: URL (then restore) so the logo rasterizes like any other image.
+{
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1"), "..");
+  const readSrc = (rel) => { try { return fs.readFileSync(path.join(repoRoot, rel), "utf8"); } catch { return null; } };
+  const cap = readSrc("src/utils/exportCapture.ts");
+  const pageCard = readSrc("src/components/PageCard.tsx");
+  const preview = readSrc("src/components/PreviewPane.tsx");
+
+  check("static: Web閲覧用 footer still renders the logo <img> in preview (icon not removed)",
+    !!pageCard && /<img\s+src=\{withBasePath\("\/caroad_main2\.png"\)\}/.test(pageCard) && /data-logo-img="true"/.test(pageCard));
+  check("static: capturePageToCanvas inlines non-data <img> as data: URLs before toCanvas",
+    !!cap &&
+      /async function inlineUrlImagesForCapture\(/.test(cap) &&
+      /!raw\.startsWith\("data:"\)/.test(cap) &&
+      /readAsDataURL\(blob\)/.test(cap) &&
+      /const restoreInlinedImages = await inlineUrlImagesForCapture\(target\)/.test(cap));
+  check("static: inlined <img> src is restored after capture (save/mutate/restore)",
+    !!cap && /restoreInlinedImages\(\);/.test(cap) && /img\.setAttribute\("src", original\)/.test(cap));
+  check("static: no browser/device name sniffing added to the export path",
+    !!cap && !/navigator\.(userAgent|platform|vendor)/.test(cap) && !/\bwebkit\b/i.test(cap.replace(/WebKit/g, "")));
+  check("static: the footer logo data URL is prewarmed alongside the fonts",
+    !!preview && /prewarmExportImage\(withBasePath\("\/caroad_main2\.png"\)\)/.test(preview));
+}
+
 async function main() {
   if (!BROWSER) { console.error("SKIP: no Chrome/Edge binary. Set GRID_QA_BROWSER."); process.exit(0); }
   try {
