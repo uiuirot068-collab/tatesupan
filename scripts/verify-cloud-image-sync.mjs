@@ -571,48 +571,69 @@ check(
 const help = read("public/docs/help.md");
 
 check(
-  "L8-1. top page: always-visible '◇ 画像の保存について' card (not a fold / not a modal)",
-  /◇ 画像の保存について/.test(homePage) &&
+  "L8-1. top page: always-visible image-storage card (not a fold / not a modal) — TSP-LOOP-021 §1",
+  /◇ 画像はどこに保存される？/.test(homePage) &&
     /id="image-storage-note-title"/.test(homePage) &&
     // the <aside> is a direct child of the quick-actions <section>, not gated on user/state
-    /<\/div>\s*\n\s*\{\/\* TSP-LOOP-008[\s\S]{0,400}<aside\s*\n\s*aria-labelledby="image-storage-note-title"/.test(homePage) &&
+    /<\/div>\s*\n\s*\{\/\* TSP-LOOP-008[\s\S]{0,600}<aside\s*\n\s*aria-labelledby="image-storage-note-title"/.test(homePage) &&
     !/isModalOpen|isFold|collapsed|showImageStorage/i.test(homePage.slice(homePage.indexOf("image-storage-note-title") - 400, homePage.indexOf("image-storage-note-title") + 400))
 );
 check(
-  "L8-2. top card: 72時間 stated, Guest + Member both explained, distinction kept",
-  /72時間/.test(homePage) &&
-    /Guest（未登録）の画像は、このブラウザ内に保存されます/.test(homePage) &&
-    /「クラウドに保存」を行った画像のコピーだけが72時間の一時クラウド保存/.test(homePage) &&
-    /元画像をTateSpunが自動で削除することはありません/.test(homePage)
-);
-check(
-  "L8-3. top card: browser-data-deletion / other-device caveat + keep-your-own-copy",
-  /ブラウザデータの削除・別ブラウザ・別端末などでは/.test(homePage) &&
-    /大切な元画像は必ずお手元にも保管してください/.test(homePage)
-);
-check(
-  "L8-4. top card: no emoji added (◇ is allowed; no emoji codepoints in the aside)",
+  "L8-2. top card: leads with the save model, 72h scoped to the cloud temp copy (not the original), TSP-LOOP-021 §1 order",
   (() => {
     const a = homePage.slice(homePage.indexOf('aria-labelledby="image-storage-note-title"'));
     const aside = a.slice(0, a.indexOf("</aside>"));
-    return !/\p{Extended_Pictographic}/u.test(aside);
+    const idxBrowser = aside.indexOf("この端末のブラウザに保存");
+    const idxCloud = aside.indexOf("クラウド保存を使うと");
+    const idx72 = aside.indexOf("72時間");
+    return (
+      idxBrowser >= 0 &&
+      idxCloud > idxBrowser &&
+      idx72 > idxCloud && // 72h only appears AFTER the save model is explained
+      /一時的な同期用コピー/.test(aside) &&
+      /端末側の元画像や原稿を72時間後に削除するという意味ではありません/.test(aside) &&
+      !/72時間後に(原稿|作品)が消え|ブラウザ保存だから絶対に消えません|永久に保存されます/.test(aside)
+    );
   })()
 );
 check(
-  "L8-5. help.md: '## 画像の保存場所と72時間ルール' section with Guest / Member / 72h-passed / warning / other-device subsections",
-  /^## 画像の保存場所と72時間ルール$/m.test(help) &&
-    /^### Guest（未登録）の場合$/m.test(help) &&
-    /^### Memberの場合$/m.test(help) &&
-    /^### 72時間を過ぎるとどうなりますか？$/m.test(help) &&
+  "L8-3. top area: browser-data-loss caveat + a manuscript-backup reminder (TSP-LOOP-021 §3)",
+  /ブラウザのデータを消去したり端末が故障・初期化されたりすると/.test(homePage) &&
+    /id="backup-reminder-title"/.test(homePage) &&
+    /大切な原稿は、ときどきバックアップを/.test(homePage) &&
+    /PDF・JPG.{0,6}などの書き出しデータを、別の場所にも保存/.test(homePage) &&
+    // the illustration is gated behind a PENDING flag, never an unconditional <img>
+    /BACKUP_ILLUSTRATION_AVAILABLE\s*&&/.test(homePage) &&
+    /const BACKUP_ILLUSTRATION_AVAILABLE = false;/.test(homePage)
+);
+check(
+  "L8-4. top cards: no emoji added (◇ is allowed; no emoji codepoints in either aside)",
+  (() => {
+    const chunk = homePage.slice(
+      homePage.indexOf('aria-labelledby="image-storage-note-title"'),
+      homePage.indexOf('id="backup-reminder-title"') + 800
+    );
+    return !/\p{Extended_Pictographic}/u.test(chunk);
+  })()
+);
+check(
+  "L8-5. help.md: '## 画像の保存とバックアップ' section — save model first, then 72h, then backup reminder",
+  /^## 画像の保存とバックアップ$/m.test(help) &&
+    /^### まず、画像はどこに保存される？$/m.test(help) &&
+    /^### β版のクラウド一時画像は72時間で消えます$/m.test(help) &&
+    /^### ブラウザ保存も、絶対ではありません$/m.test(help) &&
+    /^### 大切な原稿は、ときどきバックアップを$/m.test(help) &&
     /^### 画像に警告が表示された場合$/m.test(help) &&
-    /^### 別端末でも使いたい場合$/m.test(help)
+    /^### 別端末でも使いたい場合$/m.test(help) &&
+    // save model is documented before the 72h subsection
+    help.indexOf("### まず、画像はどこに保存される？") < help.indexOf("### β版のクラウド一時画像は72時間で消えます")
 );
 check(
   "L8-6. help.md: keeps the 'expiry is the cloud copy, not your original' distinction; no forbidden absolutes",
-  /期限が切れるのは、クラウド上に一時保存している画像コピーです/.test(help) &&
-    /元画像を、TateSpunが72時間後に自動削除することはありません/.test(help) &&
-    /Guestの画像に、TateSpun側の「72時間」の保存期限はありません/.test(help) &&
-    !/画像は永久に保存されます|絶対に消えません|72時間後に画像が全部削除されます/.test(help)
+  /端末側の元画像や原稿を72時間後に削除するという意味ではありません/.test(help) &&
+    /消えるのは「クラウド上の一時コピー」だけです/.test(help) &&
+    /Guest（未登録）の画像はクラウドへ同期されないため、この「72時間」の対象外です/.test(help) &&
+    !/画像は永久に保存されます|絶対に消えません|72時間後に(画像が全部|原稿が)削除されます|ブラウザ保存だから絶対に消えません/.test(help)
 );
 check(
   "L8-7. help.md: export is stopped while an image is unresolved, restored after re-place/re-sync",

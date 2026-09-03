@@ -12,9 +12,19 @@ export interface ColophonData {
 
 /**
  * 扉（タイトルページ）テキストの生成
+ *
+ * - 先頭に見出し記号（`# `）は付けない。縦書きプレビュー／書き出しは
+ *   Markdown を解釈せず `#` をそのまま1文字として描画してしまうため、扉に
+ *   ユーザーが打っていない `#` が残る（TSP-LOOP-021 §9）。扉タイトルは
+ *   目次の見出しとして拾う対象でもないので、素のタイトル行として出力する。
+ * - 著者名が空 or 空白のみのときは「著：」行そのものを出力しない。
+ *   `著：著者名未設定` のようなプレースホルダーは絶対に書き込まない
+ *   （TSP-LOOP-021 §8）。タイトルだけでも成立する扉になる。
  */
 export function generateTitlePageText(title: string, author: string): string {
-  return `# ${title}\n\n  著：${author}\n\n【改ページ】\n\n`;
+  const trimmedAuthor = author.trim();
+  const authorLine = trimmedAuthor ? `\n\n  著：${trimmedAuthor}` : "";
+  return `${title}${authorLine}\n\n【改ページ】\n\n`;
 }
 
 /**

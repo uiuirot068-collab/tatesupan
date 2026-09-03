@@ -1149,6 +1149,9 @@ export function NombreOverlay({
   fontFamily: string;
   bleedMm: number;
 }) {
+  // §7B: 極端に小さいノンブルを避ける下限（6pt）。
+  const nombreFontSizePt = Math.max(fontSize ?? 8, 6);
+
   // Web閲覧用のノンブルは左下に固定表示する。
   if (position === "left") {
     const webStyle: CSSProperties = {
@@ -1157,7 +1160,7 @@ export function NombreOverlay({
       bottom: "15px",
       writingMode: "horizontal-tb",
       color: "#000000",
-      fontSize: `${fontSize ?? 8}pt`,
+      fontSize: `${nombreFontSizePt}pt`,
       fontFamily,
     };
 
@@ -1181,6 +1184,12 @@ export function NombreOverlay({
           ? "flex-start"
           : "flex-end";
 
+  // TSP-LOOP-021 §7D: ノド／小口寄せのノンブルは、カード外形（塗り足し込み）の
+  // 端から内側へ「塗り足し + 2mm」空ける。以前は端から 2mm しか空けておらず、
+  // 数字の外側 1mm 分が塗り足し（仕上がり線の外）に食い込み、プレビューでは
+  // 点線をまたぎ、JPG/PDF の仕上がり／断ち落としクロップでは実際に切れていた。
+  const inset = (bleedMm + 2) * PX_PER_MM;
+
   const style: CSSProperties = {
     position: "absolute",
     left: 0,
@@ -1190,9 +1199,9 @@ export function NombreOverlay({
     alignItems: "center",
     justifyContent,
     writingMode: "horizontal-tb",
-    padding: `0 ${2 * PX_PER_MM}px`,
+    padding: `0 ${inset}px`,
     color: "#000000",
-    fontSize: `${fontSize ?? 8}pt`,
+    fontSize: `${nombreFontSizePt}pt`,
     fontFamily,
   };
 
@@ -1206,6 +1215,11 @@ export function NombreOverlay({
 /**
  * 隠しノンブル: 表示・非表示設定に関わらず、製本時の突き合わせ用にノド側の
  * 断ち切り境界付近（余白の外側端）へ小さく薄く常時焼き込む慣行的な表示。
+ *
+ * TSP-LOOP-021 §7 注: テスターの報告は「ノド／小口を選ぶと通常ノンブルが
+ * 点線に被る」であり、隠しノンブルは点線の意味を推測する手掛かりとして
+ * 言及されただけ。隠しノンブルの位置は「ノドの断ち切り境界すぐ内側」という
+ * 意図どおりで、プレビュー／JPG／PDF いずれでも欠けは再現しないため変更しない。
  */
 function HiddenNombreOverlay({
   value,

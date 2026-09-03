@@ -85,7 +85,9 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
       alert('作品タイトルを入力してください。');
       return;
     }
-    const text = generateTitlePageText(currentTitle, titleAuthor || '著者名未設定');
+    // 著者名は空欄可。空欄なら generateTitlePageText 側で「著：」行ごと省く。
+    // プレースホルダー文字列で埋めない（TSP-LOOP-021 §8）。
+    const text = generateTitlePageText(currentTitle, titleAuthor);
     onInsert(text, 'start');
     onClose();
   };
@@ -224,10 +226,10 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
               />
             </div>
             <div>
-              <label className="block font-semibold mb-1">著者名</label>
+              <label className="block font-semibold mb-1">著者名（任意）</label>
               <input
                 type="text"
-                placeholder="著者名を入力"
+                placeholder="著者名を入力（空欄なら著者行は入りません）"
                 value={titleAuthor}
                 onChange={(e) => setTitleAuthor(e.target.value)}
                 className="w-full px-3 py-1.5 rounded-md border border-gray-300 dark:border-neutral-700 dark:bg-neutral-800"

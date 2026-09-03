@@ -214,13 +214,22 @@ export interface MasterPageSettings {
   // FONT_FAMILY_OPTIONS の CSS font-family 文字列。位置・サイズ・組版には
   // 一切影響しない（見た目の書体だけ）。
   nombreFontFamily?: string;
+  // TSP-LOOP-021 §7C: ユーザーがノンブルの位置・サイズを手動で変更したか。
+  // 省略(undefined)/false = 未カスタム → 用紙サイズ preset を切り替えると、
+  // その preset 推奨のノンブル位置・距離・サイズが自動で追従する。
+  // true = カスタム済み → preset を切り替えてもユーザーの指定を維持する
+  // （上書きしない）。旧レコードはキーが無く false 扱い（後方互換）。
+  nombreLayoutCustomized?: boolean;
 }
 
 export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   nombrePosition: "center",
   hideNombreOnFirstPage: false,
   nombreStart: 1,
-  nombreBottomMargin: 8,
+  // 文庫（既定用紙）1段組の推奨ノンブル距離と一致させる（TSP-LOOP-021 §7B）。
+  // 以前の 8mm は既定の地余白 12mm と近く、中央ノンブルが本文最終行へ
+  // 迫って見えていた。
+  nombreBottomMargin: 6,
   showHiddenNombre: false,
   hashiraOdd: "",
   hashiraEven: "",
@@ -228,6 +237,7 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   headerFontSize: 8,
   nombreFontSize: 8,
   nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
+  nombreLayoutCustomized: false,
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {

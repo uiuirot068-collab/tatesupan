@@ -31,6 +31,12 @@ import type { Project } from "@/types/database";
 // ローカル（このブラウザの IndexedDB）に保存できる作品数の上限。
 // 全プラン共通（Traveler / Resident / Light / Unlimited）。サンプル（使い方ガイド）は含まない。
 const LOCAL_DOCUMENT_LIMIT = 60;
+
+// public/help/backup-caroad.png — HUMAN ASSET PENDING（TSP-LOOP-021 §3）。
+// 透過PNG（目安 800×800、〜500KB）が入ったら true にすれば、下の
+// バックアップ案内カードにイラストが表示される。未提供の間はテキストのみで
+// 成立させる（壊れた <img> は出さない）。
+const BACKUP_ILLUSTRATION_AVAILABLE = false;
 type BookshelfTab = "local" | "cloud";
 
 export default function Home() {
@@ -83,7 +89,7 @@ export default function Home() {
     };
   }, [session, user]);
 
-  // 短編集・再録本メーカー（PREMIUM機能）の利用可否判定用。
+  // 短編集・再録本メーカー（今後リリース予定）の利用可否判定用。
   // 未ログイン時は下記 userStatus の算出側で null（Traveler）扱いにするため、
   // ここではログイン時のみ取得すれば足りる。
   useEffect(() => {
@@ -420,10 +426,12 @@ export default function Home() {
             </button>
           </div>
 
-          {/* TSP-LOOP-008: 画像保存仕様の常時表示カード。折りたたみ・modalにせず、
-              「できること」の機能カードとは別枠の案内として左アクセント罫で区別する。
-              72時間で期限切れになるのは「クラウド上の一時コピー」で、ブラウザ内の
-              元画像は自動削除されない、という区別を崩さない文言。 */}
+          {/* TSP-LOOP-008 / TSP-LOOP-021 §1: 画像保存の説明。まず「保存モデル」
+              （端末のブラウザに保存 → 会員はクラウドにも → クラウド同期用の
+              画像は一時コピー）を示し、そのあとで β の「72時間」に触れる。
+              72時間で消えるのは “クラウド上の一時コピー” であって、端末側の
+              原稿・元画像ではない、という区別を崩さない。「ブラウザ保存だから
+              絶対に消えない」とは書かない。 */}
           <aside
             aria-labelledby="image-storage-note-title"
             className="mx-auto mt-[26px] max-w-[760px] rounded-[14px] border border-[rgba(31,42,68,0.14)] border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.06)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.05)]"
@@ -432,23 +440,52 @@ export default function Home() {
               id="image-storage-note-title"
               className="mb-3 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
             >
-              ◇ 画像の保存について
+              ◇ 画像はどこに保存される？
             </h3>
             <div className="space-y-3 text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
               <p>
-                Guest（未登録）の画像は、このブラウザ内に保存されます。TateSpun側で72時間後に削除されることはありません。
+                挿入した画像はまず、この端末のブラウザに保存され、作品にそのまま使われます。
               </p>
               <p>
-                Memberも元画像はブラウザ内に保存され、「クラウドに保存」を行った画像のコピーだけが72時間の一時クラウド保存になります。
+                会員がクラウド保存を使うと、別の端末でも続きを編集できるよう、作品データと画像がクラウドにも保存されます。
               </p>
               <p>
-                画像を含むクラウド保存に再度成功すると、保存期限はその時点から72時間に更新されます。
+                このとき端末をまたいで同期するためにアップロードされる画像は、あくまで一時的な同期用コピーです。
               </p>
               <p>
-                クラウド上の画像が期限切れになっても、同じブラウザ内に残っている元画像をTateSpunが自動で削除することはありません。
+                β版では、クラウド上へ一時保存された画像は72時間で自動削除されます。これは端末側の元画像や原稿を72時間後に削除するという意味ではありません。画像を含むクラウド保存に再度成功すると、期限はその時点から72時間に延長されます。
               </p>
               <p>
-                ただし、ブラウザデータの削除・別ブラウザ・別端末などでは、ローカル画像を引き継げない場合があります。大切な元画像は必ずお手元にも保管してください。
+                なお、ブラウザのデータを消去したり端末が故障・初期化されたりすると、ブラウザ保存の作品・画像は失われることがあります。ブラウザ保存が永久に残ることを保証するものではありません。
+              </p>
+            </div>
+          </aside>
+
+          {/* TSP-LOOP-021 §3: 原稿バックアップのやさしい注意喚起（法的な免責文では
+              なく、友達口調のリマインド）。イラスト backup-caroad.png は
+              HUMAN ASSET PENDING のため、当面はテキストのみで成立させる。 */}
+          <aside
+            aria-labelledby="backup-reminder-title"
+            className="mx-auto mt-[14px] flex max-w-[760px] items-center gap-4 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.5)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:bg-[#171C26]"
+          >
+            {BACKUP_ILLUSTRATION_AVAILABLE && (
+              <Image
+                src={withBasePath("/help/backup-caroad.png")}
+                alt=""
+                width={200}
+                height={200}
+                className="hidden h-auto w-[120px] shrink-0 sm:block sm:w-[160px] md:w-[200px]"
+              />
+            )}
+            <div>
+              <h3
+                id="backup-reminder-title"
+                className="mb-2 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
+              >
+                ◇ 大切な原稿は、ときどきバックアップを
+              </h3>
+              <p className="text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
+                ブラウザのデータ削除や端末トラブルに備えて、本文の控えや、PDF・JPGなどの書き出しデータを、別の場所にも保存しておくと安心です。
               </p>
             </div>
           </aside>
