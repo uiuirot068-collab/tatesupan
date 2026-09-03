@@ -39,7 +39,13 @@ import BetaFeedbackModal from "./BetaFeedbackModal";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
 import MobileEditorNav from "./MobileEditorNav";
-import { SAMPLE_PROJECT } from "@/constants/sampleData";
+import {
+  DEMO_PROJECT,
+  DEMO_SEED_CONTENT,
+  isEphemeralDocId,
+} from "@/constants/demoData";
+import { useAuth } from "./AuthProvider";
+import DemoTour from "./DemoTour";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -48,19 +54,30 @@ const AUTOSAVE_DELAY_MS = 1500;
 export default function TategakiEditor({
   documentId,
   cloudProjectId,
+  demoMode = false,
 }: {
   documentId?: number;
   cloudProjectId?: string;
+  /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
+  demoMode?: boolean;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [docId, setDocId] = useState<number | null>(
-    documentId && Number.isFinite(documentId) ? documentId : null
+    demoMode
+      ? DEMO_PROJECT.id
+      : documentId && Number.isFinite(documentId)
+        ? documentId
+        : null
   );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [plotNote, setPlotNote] = useState("");
-  const isSampleRoute = documentId === SAMPLE_PROJECT.id;
-  const [settings, setSettings] = useEditorSettings({ persist: !isSampleRoute });
+  // The 使い方ガイド (SAMPLE_PROJECT) and the おためしデモ both run the real
+  // editor with a document that lives only in memory — every persistence path
+  // below is a no-op for them.
+  const isEphemeralRoute = demoMode || isEphemeralDocId(documentId);
+  const [settings, setSettings] = useEditorSettings({ persist: !isEphemeralRoute });
   const [images, setImages] = useState<Record<string, string>>({});
   // Front/back stacking rank per image id, sourced from ImageRecord.layerOrder
   // (see lib/db.ts) — kept entirely separate from `content`/IMG markers so
@@ -185,7 +202,7 @@ export default function TategakiEditor({
   const mainRef = useRef<HTMLElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
-  const isSampleDocument = docId === SAMPLE_PROJECT.id;
+  const isSampleDocument = demoMode || isEphemeralDocId(docId);
 
   // pageOverrides は1始まりの印刷ページ番号でキーされる一方、selectedPages
   // （PreviewPaneの選択状態）は0-basedなインデックス——ここで一度だけ変換する。
@@ -215,6 +232,25 @@ export default function TategakiEditor({
     setSaveStatus("loading");
 
     async function run() {
+      if (demoMode) {
+        // TSP-LOOP-024: seed the disposable demo entirely in memory. No
+        // loadDocument, no createDocument — nothing is read from or written
+        // to IndexedDB, so the demo can never become a bookshelf project.
+        setTitle("");
+        setContent(DEMO_SEED_CONTENT);
+        setSettings(DEFAULT_PAGE_SETTINGS);
+        setPlotNote("");
+        setImages({});
+        setImageLayerOrder({});
+        setUnresolvedCloudImages(null);
+        setCurrentProjectId(null);
+        loadedDocIdRef.current = DEMO_PROJECT.id;
+        setDocId(DEMO_PROJECT.id);
+        hasLoadedRef.current = true;
+        setSaveStatus("saved");
+        return;
+      }
+
       if (cloudProjectId) {
         const project = await getProjectById(cloudProjectId);
         if (cancelled) return;
@@ -283,7 +319,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, cloudProjectId, documentId, router, setSettings]);
+  }, [applyCloudProject, cloudProjectId, demoMode, documentId, router, setSettings]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -350,7 +386,7 @@ export default function TategakiEditor({
     // still hold the previous document's fields for one tick after docId
     // changes but before the new document's data has fully loaded.
     if (loadedDocIdRef.current !== docId) return;
-    if (docId === SAMPLE_PROJECT.id) return;
+    if (isSampleDocument) return;
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -541,7 +577,9 @@ export default function TategakiEditor({
 
       {isSampleDocument && (
         <p className="mx-auto -my-3 rounded-full bg-[#c5a059]/15 px-3 py-1 text-xs font-medium text-[#6f5727]">
-          使い方ガイドでの編集内容は保存されません
+          {demoMode
+            ? "おためしデモの内容は保存されません（本棚にも残りません）"
+            : "使い方ガイドでの編集内容は保存されません"}
         </p>
       )}
 
@@ -751,6 +789,20 @@ export default function TategakiEditor({
         <div className="pointer-events-none fixed bottom-4 right-4 z-50 rounded-lg border border-ink/10 bg-ink px-4 py-2 text-sm text-base shadow-lg">
           {toast}
         </div>
+      )}
+
+      {demoMode && (
+        <DemoTour
+          isMember={!!user}
+          onPrepare={(view) => setMobileView(view)}
+          onExit={() => router.push("/")}
+          onExitToBookshelf={() => router.push("/")}
+          onExitToNewProject={async () => {
+            const id = await createDocument();
+            router.push(`/editor?id=${id}`);
+          }}
+          onOpenFeatureGuide={() => router.push("/guide")}
+        />
       )}
 
       {cloudLimitPlan && cloudLimitPlan !== "unlimited" && (

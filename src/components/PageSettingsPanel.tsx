@@ -510,6 +510,7 @@ export default function PageSettingsPanel({
       <div className="grid grid-cols-4">
         <button
           type="button"
+          data-demo-target="page-settings"
           onClick={() => toggleTab("page")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "page"
@@ -521,6 +522,7 @@ export default function PageSettingsPanel({
         </button>
         <button
           type="button"
+          data-demo-target="nombre-settings"
           onClick={() => toggleTab("master")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "master"

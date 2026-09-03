@@ -202,6 +202,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             data-focus-mode-toggle=""
+            data-demo-target="focus-mode"
             onClick={focusMode ? onExitFocus : onEnterFocus}
             aria-pressed={!!focusMode}
             title={
@@ -222,6 +223,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         {onOpenHelp && (
           <button
             type="button"
+            data-demo-target="help"
             onClick={onOpenHelp}
             aria-label="ヘルプ"
             title="ヘルプ"
@@ -234,6 +236,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         {onSave && (
           <button
             type="button"
+            data-demo-target="cloud-save"
             onClick={handleSaveClick}
             disabled={isSaving}
             // TSP-LOOP-022: phone gets クラウド保存 from the sticky

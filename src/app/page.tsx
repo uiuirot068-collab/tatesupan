@@ -16,6 +16,7 @@ import { CombineModal } from "@/components/CombineModal";
 import HelpModal from "@/components/HelpModal";
 import { Header } from "@/components/Header";
 import { Bookshelf } from "@/components/bookshelf/Bookshelf";
+import DemoEntryCard from "@/components/DemoEntryCard";
 import { useAuth } from "@/components/AuthProvider";
 import { withBasePath } from "@/lib/basePath";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
@@ -213,6 +214,7 @@ export default function Home() {
                 総集編を編成する
               </button>
             </div>
+            <DemoEntryCard className="mt-4" />
           </div>
         ) : (
           <div className="mb-8 flex w-full flex-col items-center gap-8 text-center min-[921px]:flex-row min-[921px]:items-center min-[921px]:justify-center min-[921px]:gap-20 min-[921px]:text-left">
@@ -232,6 +234,7 @@ export default function Home() {
               >
                 + 新しい作品を作成する
               </button>
+              <DemoEntryCard className="mt-4" />
             </div>
 
             <Image
