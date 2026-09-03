@@ -140,41 +140,133 @@ function inlineImageDataUrl(url: string): Promise<string> {
 }
 
 /**
- * Replaces every `<img>` inside `root` whose `src` is a real URL (not already
- * `data:`) with an inlined `data:` URL, returning a function that restores the
- * originals. Used only for the moment of an export capture — same
- * save-mutate-restore pattern as the `transform`/`margin-top` neutralization
- * in `capturePageToCanvas`. Best-effort: an image that can't be fetched keeps
- * its original src (no regression vs. the pre-fix behaviour).
+ * A URL `<img>` inside the capture target (currently only the Web閲覧用 footer
+ * logo) that will be composited straight onto the output canvas after capture.
  */
-async function inlineUrlImagesForCapture(root: HTMLElement): Promise<() => void> {
+interface ImageComposite {
+  /** Decoded image element holding the inlined data-URL pixels. */
+  image: HTMLImageElement;
+  /** Rect relative to the capture target, as [0,1] ratios (scale-invariant). */
+  xr: number;
+  yr: number;
+  wr: number;
+  hr: number;
+  /** Computed `object-fit` of the live `<img>` (only "contain" is special-cased). */
+  objectFit: string;
+}
+
+/**
+ * Prepares every real-URL `<img>` inside `root` for a capture:
+ *   1. swaps its `src` for an inlined `data:` URL (helps html-to-image on
+ *      engines that handle foreignObject raster images) — restored afterwards;
+ *   2. records a decoded `HTMLImageElement` + the img's rect ratio so the
+ *      caller can draw it directly onto the output canvas.
+ *
+ * TSP-LOOP-022 remediation: real iPad Safari drops raster `<img>`s from the
+ * SVG `<foreignObject>` html-to-image rasterizes **even when the src is a
+ * `data:` URL** (Preview + Chromium keep it; Safari JPG loses it — confirmed
+ * by HUMAN QA after the src-inlining fix alone). Compositing the pixels onto
+ * the finished canvas is deterministic on every engine.
+ *
+ * Best-effort: an image that can't be fetched keeps its original src and is
+ * skipped from compositing (never worse than before).
+ */
+async function prepareUrlImagesForCapture(
+  root: HTMLElement
+): Promise<{ restore: () => void; composites: ImageComposite[] }> {
   const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img")).filter(
     (img) => {
       const raw = img.getAttribute("src");
       return !!raw && !raw.startsWith("data:");
     }
   );
-  if (imgs.length === 0) return () => {};
+  if (imgs.length === 0) return { restore: () => {}, composites: [] };
 
+  const rootRect = root.getBoundingClientRect();
   const restores: Array<() => void> = [];
+  const composites: ImageComposite[] = [];
+
   await Promise.all(
     imgs.map(async (img) => {
       const original = img.getAttribute("src")!;
       try {
-        const dataUrl = await inlineImageDataUrl(new URL(original, document.baseURI).href);
+        const dataUrl = await inlineImageDataUrl(
+          new URL(original, document.baseURI).href
+        );
         img.setAttribute("src", dataUrl);
-        // Wait for the swapped-in data URL to actually decode so the live
-        // node (which html-to-image reads) is paint-ready at capture time.
         if (typeof img.decode === "function") await img.decode().catch(() => {});
         restores.push(() => img.setAttribute("src", original));
+
+        if (rootRect.width > 0 && rootRect.height > 0) {
+          const r = img.getBoundingClientRect();
+          const decoded = new Image();
+          decoded.src = dataUrl;
+          if (typeof decoded.decode === "function") {
+            await decoded.decode().catch(() => {});
+          }
+          composites.push({
+            image: decoded,
+            xr: (r.left - rootRect.left) / rootRect.width,
+            yr: (r.top - rootRect.top) / rootRect.height,
+            wr: r.width / rootRect.width,
+            hr: r.height / rootRect.height,
+            objectFit: window.getComputedStyle(img).objectFit || "fill",
+          });
+        }
       } catch {
         /* keep original src — best effort */
       }
     })
   );
-  return () => {
-    for (const restore of restores) restore();
+
+  return {
+    restore: () => {
+      for (const restore of restores) restore();
+    },
+    composites,
   };
+}
+
+/**
+ * Draws each {@link ImageComposite} onto `canvas` at its recorded ratio rect,
+ * replicating `object-fit: contain` (letterbox + centre) when the source
+ * `<img>` used it. Idempotent on engines that already rasterized the image
+ * (same pixels, same place); the fix that matters is on Safari, where the
+ * canvas arrives without it.
+ */
+function compositeImagesOntoCanvas(
+  canvas: HTMLCanvasElement,
+  composites: ImageComposite[]
+): void {
+  if (composites.length === 0) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  for (const c of composites) {
+    const nw = c.image.naturalWidth;
+    const nh = c.image.naturalHeight;
+    if (!nw || !nh) continue;
+    const boxX = c.xr * canvas.width;
+    const boxY = c.yr * canvas.height;
+    const boxW = c.wr * canvas.width;
+    const boxH = c.hr * canvas.height;
+    if (boxW <= 0 || boxH <= 0) continue;
+    if (c.objectFit === "contain") {
+      const scale = Math.min(boxW / nw, boxH / nh);
+      const dw = nw * scale;
+      const dh = nh * scale;
+      try {
+        ctx.drawImage(c.image, boxX + (boxW - dw) / 2, boxY + (boxH - dh) / 2, dw, dh);
+      } catch {
+        /* tainted / not decoded — leave whatever html-to-image produced */
+      }
+    } else {
+      try {
+        ctx.drawImage(c.image, boxX, boxY, boxW, boxH);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 /**
@@ -346,11 +438,12 @@ export async function capturePageToCanvas(
   const previousMarginTop = target.style.marginTop;
   target.style.marginTop = '0px';
 
-  // TSP-LOOP-022: inline any real-URL <img> (currently just the Web閲覧用
-  // footer logo) as a data: URL so html-to-image never has to fetch it —
-  // that fetch-and-embed step silently drops the image on WebKit exports.
-  // Restored in `finally`, same as the transform / margin-top resets above.
-  const restoreInlinedImages = await inlineUrlImagesForCapture(target);
+  // TSP-LOOP-022 (+ HUMAN-QA remediation): inline any real-URL <img> (only the
+  // Web閲覧用 footer logo) as a data: URL AND record its geometry — Safari
+  // drops it from the foreignObject raster even as a data: URL, so it is
+  // composited straight onto the finished canvas below. Restored in `finally`.
+  const { restore: restoreInlinedImages, composites: imageComposites } =
+    await prepareUrlImagesForCapture(target);
 
   let tFontsReady = tResolved;
   let tMeasured = tResolved;
@@ -452,6 +545,10 @@ export async function capturePageToCanvas(
         background: '#ffffff',
       },
     });
+    // Safari-safe: draw the footer logo (and any other URL image) onto the
+    // finished canvas at its measured position. No-op on engines that already
+    // rasterized it.
+    compositeImagesOntoCanvas(canvas, imageComposites);
     tCaptured = performance.now();
     return canvas;
   } finally {

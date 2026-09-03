@@ -105,12 +105,18 @@ const applyPaperTemplate = (
   // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -3pt
   // （最小 6pt。TSP-LOOP-021 §4）を版面から導出する（§7B: 全 preset 同一座標に
   // しない）。
+  // TSP-LOOP-022 HUMAN-QA: preset ごとに明示された nombreFontSize /
+  // headerFontSize を優先し、無い preset は従来どおり本文 -3pt へフォールバック。
   const nombreOverrides: Partial<MasterPageSettings> = base.masterPage.nombreLayoutCustomized
     ? {}
     : {
         nombrePosition: profile.nombrePosition as NombrePosition,
         nombreBottomMargin: profile.nombreDistance,
-        nombreFontSize: recommendedNombreFontSizePt(profile.fontSizePt),
+        nombreFontSize:
+          profile.nombreFontSize ?? recommendedNombreFontSizePt(profile.fontSizePt),
+        ...(profile.headerFontSize != null
+          ? { headerFontSize: profile.headerFontSize }
+          : {}),
       };
   return {
     ...base,
@@ -139,6 +145,9 @@ const NOMBRE_LAYOUT_KEYS = new Set<keyof MasterPageSettings>([
   "nombreBottomMargin",
   "nombreFontSize",
   "nombreFontFamily",
+  // TSP-LOOP-022 HUMAN-QA: 柱の文字サイズもここに含める——手動で触ったら以後の
+  // 用紙 preset 切り替えで preset 値（Web閲覧用 20pt 等）に上書きさせない。
+  "headerFontSize",
 ]);
 
 export default function PageSettingsPanel({

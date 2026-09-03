@@ -161,9 +161,11 @@ check(
     /const outerEdgePx = \(marginOuterMm \+ bleedMm\) \* PX_PER_MM;/.test(pageCard)
 );
 check(
-  "14b. TSP-022 touch-safe page reorder + Safari export footer-logo fix intact",
+  "14b. TSP-022 touch-safe page reorder + Safari export footer-logo fix intact (incl. 8a884e1 canvas composite)",
   !!pageCard && /1ページ前へ移動/.test(pageCard) && /1ページ後ろへ移動/.test(pageCard) &&
-    !!exportCapture && /inlineUrlImagesForCapture/.test(exportCapture)
+    !!exportCapture &&
+    /prepareUrlImagesForCapture/.test(exportCapture) &&
+    /compositeImagesOntoCanvas\(canvas, imageComposites\)/.test(exportCapture)
 );
 check(
   "14c. title-page creation UI still hidden; PSD help still accurate",

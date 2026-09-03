@@ -105,16 +105,27 @@ const check = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}:
     !!pageCard && /<img\s+src=\{withBasePath\("\/caroad_main2\.png"\)\}/.test(pageCard) && /data-logo-img="true"/.test(pageCard));
   check("static: capturePageToCanvas inlines non-data <img> as data: URLs before toCanvas",
     !!cap &&
-      /async function inlineUrlImagesForCapture\(/.test(cap) &&
+      /async function prepareUrlImagesForCapture\(/.test(cap) &&
       /!raw\.startsWith\("data:"\)/.test(cap) &&
       /readAsDataURL\(blob\)/.test(cap) &&
-      /const restoreInlinedImages = await inlineUrlImagesForCapture\(target\)/.test(cap));
+      /const \{ restore: restoreInlinedImages, composites: imageComposites \} =\s*\n?\s*await prepareUrlImagesForCapture\(target\)/.test(cap));
   check("static: inlined <img> src is restored after capture (save/mutate/restore)",
     !!cap && /restoreInlinedImages\(\);/.test(cap) && /img\.setAttribute\("src", original\)/.test(cap));
   check("static: no browser/device name sniffing added to the export path",
     !!cap && !/navigator\.(userAgent|platform|vendor)/.test(cap) && !/\bwebkit\b/i.test(cap.replace(/WebKit/g, "")));
   check("static: the footer logo data URL is prewarmed alongside the fonts",
     !!preview && /prewarmExportImage\(withBasePath\("\/caroad_main2\.png"\)\)/.test(preview));
+  // TSP-LOOP-022 HUMAN-QA remediation: real iPad Safari drops the raster
+  // <img> from the foreignObject even as a data: URL — so the pixels are
+  // composited straight onto the finished canvas.
+  check("static: URL images are composited onto the output canvas after toCanvas (Safari-safe)",
+    !!cap &&
+      /function compositeImagesOntoCanvas\(/.test(cap) &&
+      /canvas\.getContext\("2d"\)/.test(cap) &&
+      /ctx\.drawImage\(/.test(cap) &&
+      /compositeImagesOntoCanvas\(canvas, imageComposites\);/.test(cap));
+  check("static: composite replicates object-fit: contain (footer logo isn't stretched)",
+    !!cap && /c\.objectFit === "contain"/.test(cap) && /Math\.min\(boxW \/ nw, boxH \/ nh\)/.test(cap));
 }
 
 async function main() {
