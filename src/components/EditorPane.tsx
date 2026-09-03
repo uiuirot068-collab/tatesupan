@@ -180,10 +180,10 @@ export default function EditorPane({
           <button
             type="button"
             onClick={onOpenBookParts}
-            title="奥付（縦／横）・扉・目次を作成"
+            title="奥付（縦／横）・目次を作成"
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
-            📖 扉・奥付
+            📖 奥付・目次
           </button>
           <button
             type="button"

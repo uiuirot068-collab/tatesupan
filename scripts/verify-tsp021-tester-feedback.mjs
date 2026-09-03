@@ -33,17 +33,22 @@ const bookParts = read("src/components/BookPartsModal.tsx");
 const pageLayout = read("src/lib/pageLayout.ts");
 const pageSettings = read("src/components/PageSettingsPanel.tsx");
 const pageCard = read("src/components/PageCard.tsx");
+const preview = read("src/components/PreviewPane.tsx");
 const helpAsset = read("public/help/README.md");
 
 /* ---------------- 1. image save / 72-hour explanation ---------------- */
 
 check(
-  "1a. home image card leads with the save model, THEN β 72h (never 'original disappears in 72h')",
+  "1a. home image card: §5 heading + A(この端末)/B(クラウド) split; 72h scoped; 'nothing to do in 72h' spelled out",
   !!homePage &&
-    /◇ 画像はどこに保存される？/.test(homePage) &&
-    homePage.indexOf("この端末のブラウザに保存") <
-      homePage.indexOf("クラウド上へ一時保存された画像は72時間で自動削除") &&
-    /端末側の元画像や原稿を72時間後に削除するという意味ではありません/.test(homePage)
+    /◇ TateSpunは画像挿入が可能！/.test(homePage) &&
+    /でも、画像はどこに保存される？/.test(homePage) &&
+    /A\. この端末で使うとき/.test(homePage) &&
+    /B\. クラウド保存を使うとき/.test(homePage) &&
+    homePage.indexOf("A. この端末で使うとき") < homePage.indexOf("B. クラウド保存を使うとき") &&
+    /72時間で削除されるのは、クラウド上の一時コピーです。/.test(homePage) &&
+    /72時間以内に何かをする必要はありません/.test(homePage) &&
+    /この端末の画像を72時間後に削除するという意味ではありません/.test(homePage)
 );
 check(
   "1b. no forbidden absolutes / alarming phrasings anywhere in home or help",
@@ -56,13 +61,14 @@ check(
     (homePage + help).split("\n").every((line) => !/永久/.test(line) || /ではありません|保証するものではありません/.test(line))
 );
 check(
-  "1c. help.md section renamed + ordered: save model -> 72h -> browser-loss -> backup",
+  "1c. help.md §5: '## TateSpunは画像挿入が可能！でも、画像はどこに保存される？' with A / B subsections + the 72h callout",
   !!help &&
-    /^## 画像の保存とバックアップ$/m.test(help) &&
-    help.indexOf("### まず、画像はどこに保存される？") <
-      help.indexOf("### β版のクラウド一時画像は72時間で消えます") &&
-    help.indexOf("### β版のクラウド一時画像は72時間で消えます") <
-      help.indexOf("### ブラウザ保存も、絶対ではありません")
+    /^## TateSpunは画像挿入が可能！でも、画像はどこに保存される？$/m.test(help) &&
+    /^### A\. この端末で使うとき$/m.test(help) &&
+    /^### B\. クラウド保存を使うとき（会員）$/m.test(help) &&
+    help.indexOf("### A. この端末で使うとき") < help.indexOf("### B. クラウド保存を使うとき（会員）") &&
+    /> \*\*72時間で削除されるのは、クラウド上の一時コピーです。\*\*/.test(help) &&
+    /72時間以内に何かをする必要はありません/.test(help)
 );
 
 /* ---------------- 2. まとめ機能: no premature plan wording ---------------- */
@@ -95,18 +101,37 @@ check(
     /別の場所にも保存しておくと安心です/.test(homePage)
 );
 check(
-  "3b. backup illustration is a gated slot, never an unconditional <img> (asset is PENDING)",
+  "3b. §6: backup illustration received — rendered (basePath-safe, alt text, no gating flag left)",
   !!homePage &&
-    /const BACKUP_ILLUSTRATION_AVAILABLE = false;/.test(homePage) &&
-    /BACKUP_ILLUSTRATION_AVAILABLE\s*&&\s*\(/.test(homePage) &&
-    /withBasePath\("\/help\/backup-caroad\.png"\)/.test(homePage) &&
-    !/withBasePath\("\/tatespun\/help/.test(homePage)
+    /src=\{withBasePath\("\/help\/backup-caroad\.png"\)\}/.test(homePage) &&
+    /alt="原稿のバックアップをすすめる、カロードのイラスト"/.test(homePage) &&
+    !/BACKUP_ILLUSTRATION_AVAILABLE/.test(homePage) &&
+    !/withBasePath\("\/tatespun\/help/.test(homePage) &&
+    // help.md wires it too, via a root-absolute markdown path (HelpModal adds basePath)
+    /!\[原稿のバックアップをすすめる[^\]]*\]\(\/help\/backup-caroad\.png\)/.test(help ?? "") &&
+    !!read("public/help/backup-caroad.png")
 );
 check(
-  "3c. public/help/README documents the two PENDING human assets",
+  "3b2. §6: preview-drag.gif optimized + integrated — file present, ≤3MB, live markdown image in help.md (no hold comment)",
+  (() => {
+    const gif = read("public/help/preview-drag.gif");
+    if (!gif) return false;
+    if (gif.length > 3 * 1024 * 1024) return false;
+    const h = help ?? "";
+    const stripped = h.replace(/<!--[\s\S]*?-->/g, "");
+    // referenced as a live markdown image (survives comment stripping), root-absolute
+    return (
+      /!\[[^\]]*\]\(\/help\/preview-drag\.gif\)/.test(stripped) &&
+      !/仕様外|保留|再書き出し/.test(h)
+    );
+  })()
+);
+check(
+  "3c. public/help/README documents both human assets as integrated (neither held)",
   !!helpAsset &&
     /backup-caroad\.png/.test(helpAsset) &&
-    /preview-drag\.gif/.test(helpAsset)
+    /preview-drag\.gif/.test(helpAsset) &&
+    !/仕様外|保留/.test(helpAsset)
 );
 
 /* ---------------- 4. preview movement help (no 「パン」) ---------------- */
@@ -118,11 +143,31 @@ check(
     !/パン/.test(help)
 );
 check(
-  "4b. help.md: describes drag-to-move + where zoom lives; optional gif is a comment slot only",
+  "4b. help.md: describes drag-to-move + where zoom lives; the operation gif is a live image (no hold comment)",
   !!help &&
     /ドラッグ（マウスで押したまま動かす/.test(help) &&
-    /preview-drag\.gif/.test(help) &&
-    /<!--[\s\S]*preview-drag\.gif[\s\S]*-->/.test(help)
+    /!\[[^\]]*\]\(\/help\/preview-drag\.gif\)/.test(help.replace(/<!--[\s\S]*?-->/g, ""))
+);
+
+/* ---------------- PSD help: accurate, no drag-and-drop claim ---------------- */
+
+check(
+  "PSD-1. help.md has a PSD insertion section: selectable via image insertion, converted to PNG, NO drag-and-drop claim",
+  !!help &&
+    /## PSDファイルの挿入/.test(help) &&
+    /画像挿入から[^。]*`\.psd`/.test(help) &&
+    /PNGへ変換/.test(help) &&
+    /ドラッグ＆ドロップ[^。]*対応していません/.test(help) &&
+    // stale wording must not return
+    !/PSDファイルの直接挿入/.test(help) &&
+    !/そのままプレビューへドラッグ/.test(help) &&
+    !/高画質(?:な)?PNG/.test(help)
+);
+check(
+  "PSD-2. ordinary (non-PSD) image insertion help still present",
+  !!help &&
+    /## ページの複数選択/.test(help) &&
+    /画像は［天側］［中央］|画像を挿入|画像の配置|挿絵/.test((sample ?? "") + help)
 );
 
 /* ---------------- 5. help guide opening is structurally clear ---------------- */
@@ -160,15 +205,25 @@ check(
   !!pageLayout && /nombreBottomMargin: 6,/.test(pageLayout)
 );
 check(
-  "7b. NombreOverlay: ノド/小口 nombre inset by (bleed + 2mm) — stays inside the trim line, was crossing it",
+  "7b. §3: ノド/小口 nombre anchored to the TEXT-FRAME edge (marginGutter/marginOuter + bleed), not the paper edge + inset",
   !!pageCard &&
-    /const inset = \(bleedMm \+ 2\) \* PX_PER_MM;/.test(pageCard) &&
-    // odd/even mirroring for gutter vs outer is still driven by isOddPage
-    /position === "gutter"[\s\S]{0,80}isOddPage/.test(pageCard)
+    /const outerEdgePx = \(marginOuterMm \+ bleedMm\) \* PX_PER_MM;/.test(pageCard) &&
+    /const gutterEdgePx = \(marginGutterMm \+ bleedMm\) \* PX_PER_MM;/.test(pageCard) &&
+    // odd/even mirroring: outer→(odd left / even right); gutter→(odd right / even left)
+    /position === "outer"[\s\S]{0,60}isOddPage[\s\S]{0,40}"left"[\s\S]{0,20}"right"[\s\S]{0,40}isOddPage[\s\S]{0,40}"right"[\s\S]{0,20}"left"/.test(pageCard) &&
+    /const anchorPx = position === "outer" \? outerEdgePx : gutterEdgePx;/.test(pageCard) &&
+    // no more "paper edge + fixed inset" datum
+    !/const inset = \(bleedMm \+ 2\) \* PX_PER_MM;/.test(pageCard) &&
+    // both callers pass the margins through
+    /marginGutterMm=\{settings\.marginGutter\}/.test(pageCard) &&
+    !!read("src/components/ColophonPageCard.tsx") &&
+    /marginGutterMm=\{settings\.marginGutter\}/.test(read("src/components/ColophonPageCard.tsx"))
 );
 check(
-  "7c. NombreOverlay: minimum rendered nombre size is clamped (>= 6pt)",
-  !!pageCard && /Math\.max\(fontSize \?\? 8, 6\)/.test(pageCard)
+  "7c. NombreOverlay: minimum rendered nombre size is clamped (>= 6pt); user vertical-distance slider still drives 'bottom'",
+  !!pageCard &&
+    /Math\.max\(fontSize \?\? 8, 6\)/.test(pageCard) &&
+    /const bottomPx = \(bottomMarginMm \+ bleedMm\) \* PX_PER_MM;/.test(pageCard)
 );
 check(
   "7d. HiddenNombreOverlay: position UNCHANGED (report was about ノド/小口, not the hidden folio)",
@@ -184,10 +239,13 @@ check(
     /nombreLayoutCustomized: false,/.test(pageLayout)
 );
 check(
-  "7f. §7C: applyPaperTemplate only re-applies preset nombre defaults when NOT customized",
-  !!pageSettings &&
+  "7f. §7C + §4: applyPaperTemplate re-applies preset nombre defaults only when NOT customized; recommended size = body − 3pt / min 6pt",
+  !!pageSettings && !!pageLayout &&
     /base\.masterPage\.nombreLayoutCustomized\s*\n?\s*\?\s*\{\}/.test(pageSettings) &&
-    /nombreFontSize: Math\.max\(6, Math\.round\(profile\.fontSizePt - 1\)\)/.test(pageSettings)
+    /nombreFontSize: recommendedNombreFontSizePt\(profile\.fontSizePt\)/.test(pageSettings) &&
+    /export function recommendedNombreFontSizePt\(bodyFontSizePt: number\): number \{\s*\n?\s*return Math\.max\(6, Math\.round\(bodyFontSizePt - 3\)\);/.test(pageLayout) &&
+    // new project default is body(9) − 3 = 6
+    /nombreFontSize: 6,/.test(pageLayout)
 );
 check(
   "7g. §7C: editing a nombre position/size field marks the layout as customized",
@@ -251,41 +309,83 @@ function renderTitle(title, author) {
   return `${title}${authorLine}\n\n【改ページ】\n\n`;
 }
 
-/* ---------------- A. mobile per-page preview controls ---------------- */
+/* ---------------- A. per-page controls: C pattern, one arrangement PC + mobile ---------------- */
 
 check(
-  "A1. phone per-page toolbar: state-labelled toggle buttons, not double-negative checkboxes",
+  "A1. one compact ⋮ per page (no permanently-repeated control row); PC + mobile identical (no md: split of the pattern)",
   !!pageCard &&
-    /md:hidden[\s\S]{0,4000}aria-pressed=\{!hideNombre\}/.test(pageCard) &&
-    /hideNombre \? "非表示" : "表示"/.test(pageCard) &&
-    /hideHashira \? "非表示" : "表示"/.test(pageCard)
+    /aria-label=\{`\$\{pageNumber\}ページの操作メニュー`\}/.test(pageCard) &&
+    /aria-expanded=\{isMenuOpen\}/.test(pageCard) &&
+    // the previous per-page toggle-button row / desktop checkbox toolbar are gone
+    !/md:hidden[\s\S]{0,4000}aria-pressed=\{!hideNombre\}/.test(pageCard) &&
+    !/hidden w-full items-center justify-between px-1 md:flex/.test(pageCard) &&
+    !/ノンブル非表示\s*<\/label>/.test(pageCard)
 );
 check(
-  "A2. desktop checkbox toolbar kept, just gated to md+ (no behaviour change on desktop)",
+  "A2. export-target checkbox stays PERMANENTLY visible (outside ⋮), left of the ⋮ button — multi-page export flow",
   !!pageCard &&
-    /hidden w-full items-center justify-between px-1 md:flex/.test(pageCard) &&
-    /ノンブル非表示\s*<\/label>/.test(pageCard)
+    (() => {
+      const row = pageCard.match(/data-page-menu-root=""[\s\S]{0,2800}?<\/div>/);
+      if (!row) return false;
+      return (
+        /checked=\{selected\}/.test(row[0]) &&
+        /onClick=\{onToggleCheckbox\}/.test(row[0]) &&
+        /\{selected \? "選択中" : "選択"\}/.test(row[0]) &&
+        // checkbox appears BEFORE the ⋮ button in the row
+        row[0].indexOf("checked={selected}") < row[0].indexOf("aria-label={`${pageNumber}ページの操作メニュー`}")
+      );
+    })()
 );
 check(
-  "A3. 画像 stays visible on phone; 選択 / 並べ替え move under a ⋮ disclosure (state never hidden there)",
+  "A3. the ⋮ menu holds ノンブル / 柱 / 画像 + a reorder note; selection is NOT duplicated inside it",
   !!pageCard &&
-    /mobileFileInputRef\.current\?\.click\(\)/.test(pageCard) &&
-    /setMobilePageMenuOpen\(\(open\) => !open\)/.test(pageCard) &&
-    /mobilePageMenuOpen &&[\s\S]{0,1200}このページを選択（書き出し対象）/.test(pageCard)
+    (() => {
+      const menu = pageCard.match(/id=\{`page-menu-\$\{pageNumber\}`\}[\s\S]{0,3400}?<\/div>\s*\n\s*\)\}/);
+      if (!menu) return false;
+      return (
+        /ノンブル（ページ番号）/.test(menu[0]) &&
+        /柱（ヘッダー）/.test(menu[0]) &&
+        /このページに画像を挿入/.test(menu[0]) &&
+        /ページの並べ替えは、ページをドラッグ/.test(menu[0]) &&
+        // selection toggle is not repeated in the panel
+        !/onToggleCheckbox\(\)/.test(menu[0]) &&
+        !/書き出し対象にする/.test(menu[0])
+      );
+    })()
 );
 check(
-  "A4. phone toggles carry a full-sentence aria-label with the current state",
+  "A4. no unsolicited emoji in the per-page controls (⋮ and ⠿ are UI glyphs, not emoji)",
   !!pageCard &&
-    /aria-label=\{\s*hideNombre\s*\?\s*"このページのノンブルを表示する（現在: 非表示）"/.test(pageCard) &&
-    /min-h-\[40px\]/.test(pageCard)
+    (() => {
+      const block = pageCard.slice(
+        pageCard.indexOf("data-page-menu-root=\"\""),
+        pageCard.indexOf("id={`page-menu-${pageNumber}`}") + 2600,
+      );
+      return !/👁|🚫|🖼|📄|✏️|📝/.test(block) && !/\p{Extended_Pictographic}/u.test(block);
+    })()
 );
 check(
-  "A5. per-page data semantics unchanged — still the same onHideNombreChange / onHideHashiraChange props",
+  "A5. per-page data semantics unchanged — same onToggleCheckbox / onHideNombreChange / onHideHashiraChange / onInsertImage props; no new persisted field",
   !!pageCard &&
     /onHideNombreChange\(!hideNombre\)/.test(pageCard) &&
     /onHideHashiraChange\(!hideHashira\)/.test(pageCard) &&
-    // no new persisted field / pageOverride shape
-    !/pageOverrides\[/.test(pageCard)
+    /onClick=\{onToggleCheckbox\}/.test(pageCard) &&
+    /fileInputRef\.current\?\.click\(\)/.test(pageCard) &&
+    !/pageOverrides\[/.test(pageCard) &&
+    // menu open state is lifted to PreviewPane (one at a time), not per-card local
+    !/useState\(false\)\s*;?\s*\/\/.*menu/i.test(pageCard) &&
+    /isMenuOpen = false,\s*\n\s*onToggleMenu,/.test(pageCard)
+);
+check(
+  "A6. PreviewPane lifts the ⋮ open state (one menu at a time) + closes on outside pointerdown / Escape; Shift-range + 全選択/全解除 untouched",
+  !!preview &&
+    /const \[openPageMenuIndex, setOpenPageMenuIndex\] = useState<number \| null>\(null\)/.test(preview) &&
+    /stableTogglePageMenu/.test(preview) &&
+    /data-page-menu-root/.test(preview) &&
+    /\bkey === "Escape"/.test(preview) &&
+    // existing selection machinery still present
+    /全選択/.test(preview) && /全解除/.test(preview) &&
+    /rangeIndices|handleToggleSelect/.test(preview)
 );
 
 /* ---------------- B. vertical glyph substitution (…／‥／―／—) ---------------- */
@@ -298,14 +398,15 @@ check(
     /VERT_LEADER_TEST\.test\(slot\.text\)/.test(pageCard)
 );
 check(
-  "B1b. the leader wrapper re-asserts font-feature-settings: normal (+ fvea normal) and does NOT override text-orientation to mixed",
+  "B1b. the leader wrapper overrides text-orientation: mixed (+ -webkit-) — the Apple-WebKit-safe path — and clears the fixed-slot feature list",
   !!pageCard &&
     (() => {
-      const m = pageCard.match(/data-vertical-leader=""[\s\S]{0,320}?\}\}/);
+      const m = pageCard.match(/data-vertical-leader=""[\s\S]{0,420}?\}\}/);
       return !!m &&
+        /textOrientation: "mixed"/.test(m[0]) &&
+        /WebkitTextOrientation: "mixed"/.test(m[0]) &&
         /fontFeatureSettings: "normal"/.test(m[0]) &&
-        /fontVariantEastAsian: "normal"/.test(m[0]) &&
-        !/textOrientation: "mixed"/.test(m[0]);
+        /fontVariantEastAsian: "normal"/.test(m[0]);
     })()
 );
 check(
@@ -321,11 +422,18 @@ check(
   })()
 );
 check(
-  "B3. …… / ―― (2+) protected run is UNCHANGED — text-orientation: upright + explicit font-feature-settings: normal (works on mobile Safari; keeps Zen Old centred)",
-  !!pageCard &&
-    /data-protected-run-wrapper=\{run\.kind\}/.test(pageCard) &&
-    /if \(slotCount >= 2\)/.test(pageCard) &&
-    /textOrientation: "upright",\s*\n\s*WebkitTextOrientation: "upright",\s*\n\s*fontFeatureSettings: "normal",\s*\n\s*fontVariantEastAsian: "normal"/.test(pageCard)
+  "B3. protected run: text-orientation: mixed; ―― stays ONE text run, …… is rendered PER CHARACTER",
+  (() => {
+    if (!pageCard) return false;
+    const runBlock = pageCard.slice(pageCard.indexOf("data-protected-run-wrapper=\{run.kind\}"));
+    return (
+      /if \(slotCount >= 2\)/.test(pageCard) &&
+      /textOrientation: "mixed",[\s\S]{0,60}WebkitTextOrientation: "mixed",/.test(runBlock) &&
+      /run\.kind === "ellipsis" \?/.test(runBlock) &&
+      /Array\.from\(run\.text\)\.map\(\(ch, i\)/.test(runBlock) &&
+      /<span data-protected-run-glyph=\{run\.kind\}>\{run\.text\}<\/span>/.test(runBlock)
+    );
+  })()
 );
 check(
   "B4. legacy TokenView flow also re-sets a lone bar/leader (Preview / JPG / PDF agree, desktop / mobile agree)",

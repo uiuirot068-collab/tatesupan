@@ -32,11 +32,9 @@ import type { Project } from "@/types/database";
 // 全プラン共通（Traveler / Resident / Light / Unlimited）。サンプル（使い方ガイド）は含まない。
 const LOCAL_DOCUMENT_LIMIT = 60;
 
-// public/help/backup-caroad.png — HUMAN ASSET PENDING（TSP-LOOP-021 §3）。
-// 透過PNG（目安 800×800、〜500KB）が入ったら true にすれば、下の
-// バックアップ案内カードにイラストが表示される。未提供の間はテキストのみで
-// 成立させる（壊れた <img> は出さない）。
-const BACKUP_ILLUSTRATION_AVAILABLE = false;
+// public/help/backup-caroad.png — TSP-LOOP-021 §6 で受領済み（1036×816 透過PNG,
+// 〜154KB）。バックアップ案内カードのイラストとして表示する。差し替え時も
+// このカードだけを見ればよいよう、参照は withBasePath("/help/…") 経由で統一。
 type BookshelfTab = "local" | "cloud";
 
 export default function Home() {
@@ -426,11 +424,11 @@ export default function Home() {
             </button>
           </div>
 
-          {/* TSP-LOOP-008 / TSP-LOOP-021 §1: 画像保存の説明。まず「保存モデル」
-              （端末のブラウザに保存 → 会員はクラウドにも → クラウド同期用の
-              画像は一時コピー）を示し、そのあとで β の「72時間」に触れる。
-              72時間で消えるのは “クラウド上の一時コピー” であって、端末側の
-              原稿・元画像ではない、という区別を崩さない。「ブラウザ保存だから
+          {/* TSP-LOOP-008 / TSP-LOOP-021 §1 / §5: 画像保存の説明。
+              「この端末で使うとき（A）」と「クラウド保存を使うとき（B）」を
+              はっきり分ける。72時間タイマーはBのクラウド一時コピーだけに
+              かかる。実機テスターが「72時間以内に触らないと画像が消える？」と
+              誤解したため、"何もしなくて大丈夫" を明示する。「ブラウザ保存だから
               絶対に消えない」とは書かない。 */}
           <aside
             aria-labelledby="image-storage-note-title"
@@ -438,45 +436,52 @@ export default function Home() {
           >
             <h3
               id="image-storage-note-title"
-              className="mb-3 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
+              className="mb-1 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
             >
-              ◇ 画像はどこに保存される？
+              ◇ TateSpunは画像挿入が可能！
             </h3>
-            <div className="space-y-3 text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
-              <p>
-                挿入した画像はまず、この端末のブラウザに保存され、作品にそのまま使われます。
-              </p>
-              <p>
-                会員がクラウド保存を使うと、別の端末でも続きを編集できるよう、作品データと画像がクラウドにも保存されます。
-              </p>
-              <p>
-                このとき端末をまたいで同期するためにアップロードされる画像は、あくまで一時的な同期用コピーです。
-              </p>
-              <p>
-                β版では、クラウド上へ一時保存された画像は72時間で自動削除されます。これは端末側の元画像や原稿を72時間後に削除するという意味ではありません。画像を含むクラウド保存に再度成功すると、期限はその時点から72時間に延長されます。
-              </p>
-              <p>
-                なお、ブラウザのデータを消去したり端末が故障・初期化されたりすると、ブラウザ保存の作品・画像は失われることがあります。ブラウザ保存が永久に残ることを保証するものではありません。
+            <p className="mb-4 font-serif text-base text-ink/80 dark:text-[#B9C2D0]">
+              でも、画像はどこに保存される？
+            </p>
+
+            <div className="space-y-4 text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
+              <div>
+                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">A. この端末で使うとき</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>挿入した画像は、TateSpunがこの端末のブラウザに保存する作業データと一緒に保存され、作品にそのまま使われます。</li>
+                  <li>この端末内の画像には、下記の「クラウド一時コピーの72時間」は関係ありません。TateSpun側でこの端末の画像を72時間後に削除することはありません。</li>
+                  <li>ただし、ブラウザのデータ削除・別のブラウザ・別の端末・端末の故障や初期化などでは、この作業データを引き継げないことがあります。ブラウザ保存が永久に残ることを保証するものではありません。</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">B. クラウド保存を使うとき（会員）</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>別の端末でも作品を復元できるよう、画像の一時コピーがクラウドへアップロードされます。</li>
+                  <li>β版では、このクラウド上の一時コピーの寿命は72時間です。</li>
+                  <li>画像を含むクラウド保存に再度成功すると、期限はその時点から72時間に更新されます。</li>
+                </ul>
+              </div>
+
+              <p className="rounded-[10px] border border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.1)] px-4 py-3 font-medium text-ink dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.08)] dark:text-[#D4DBE7]">
+                72時間で削除されるのは、クラウド上の一時コピーです。原稿本文や、この端末の画像を72時間後に削除するという意味ではありません。この端末で作業を続けるだけなら、72時間以内に何かをする必要はありません。
               </p>
             </div>
           </aside>
 
-          {/* TSP-LOOP-021 §3: 原稿バックアップのやさしい注意喚起（法的な免責文では
-              なく、友達口調のリマインド）。イラスト backup-caroad.png は
-              HUMAN ASSET PENDING のため、当面はテキストのみで成立させる。 */}
+          {/* TSP-LOOP-021 §3 / §6: 原稿バックアップのやさしい注意喚起（法的な
+              免責文ではなく、友達口調のリマインド）。イラストは受領済み。 */}
           <aside
             aria-labelledby="backup-reminder-title"
             className="mx-auto mt-[14px] flex max-w-[760px] items-center gap-4 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.5)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:bg-[#171C26]"
           >
-            {BACKUP_ILLUSTRATION_AVAILABLE && (
-              <Image
-                src={withBasePath("/help/backup-caroad.png")}
-                alt=""
-                width={200}
-                height={200}
-                className="hidden h-auto w-[120px] shrink-0 sm:block sm:w-[160px] md:w-[200px]"
-              />
-            )}
+            <Image
+              src={withBasePath("/help/backup-caroad.png")}
+              alt="原稿のバックアップをすすめる、カロードのイラスト"
+              width={1036}
+              height={816}
+              className="h-auto w-[120px] shrink-0 sm:w-[150px] md:w-[180px]"
+            />
             <div>
               <h3
                 id="backup-reminder-title"

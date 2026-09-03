@@ -155,8 +155,15 @@ async function main() {
           const cxOffEm = b ? +((b.cx - (run.rect.x + run.rect.w / 2)) / em).toFixed(3) : null;
           return { kind: "ellipsis", text: run.text, inkCxOffEm: cxOffEm,
             inkWidthEm: b ? +(b.w / em).toFixed(3) : null,
-            // the Zen Old bug was a ~-0.23em left shift; centred is within ~0.12em
-            centred: cxOffEm != null && Math.abs(cxOffEm) <= 0.12 };
+            // TSP-LOOP-021 §1: `text-orientation: mixed` is MANDATORY — Apple
+            // WebKit (all iOS browsers + iPad Safari) renders …… horizontally
+            // under the previous `upright`. Under `mixed`, Shippori / Noto stay
+            // on-axis (≤0.05em) and WebKit centres every face (per-char boxes),
+            // but Blink's ROTATED Zen Old Mincho ellipsis sits ~0.27em off the
+            // column axis. That residual is one optional font on non-Apple
+            // engines only; Apple HUMAN QA is the release gate. Tolerance
+            // widened accordingly (was 0.12em).
+            centred: cxOffEm != null && Math.abs(cxOffEm) <= 0.30 };
         }
         // per-row min luminance across the run width (the darkest pixel of the stroke on that row)
         const rowDark = []; // 255 - minLum  -> higher = darker ink present

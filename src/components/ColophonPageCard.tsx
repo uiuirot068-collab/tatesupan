@@ -238,6 +238,8 @@ export default function ColophonPageCard({
             }
             isOddPage={colophonNombre.isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
+            marginGutterMm={settings.marginGutter}
+            marginOuterMm={settings.marginOuter}
             fontSize={masterPage.nombreFontSize}
             // ページ番号は本全体で一貫させる: 本文ページと同じ解決規則
             // （明示指定があればそれ、なければ本文フォント）を使う——奥付の

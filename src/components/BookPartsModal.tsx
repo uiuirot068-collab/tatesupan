@@ -19,11 +19,17 @@ interface BookPartsModalProps {
 
 type BookPartTab = 'colophon' | 'colophon-h' | 'title' | 'toc';
 
-// 4つの「本のパーツ」入口。初見でも違いが分かるよう、1行の補足を必ず添える。
+// 「本のパーツ」入口。初見でも違いが分かるよう、1行の補足を必ず添える。
+//
+// TSP-LOOP-021 §7: 扉（タイトルページ）作成 UI は一時的に非表示にしている。
+// 現状の扉ジェネレーターは技術的には安定・HUMAN QA PASS だが、専用機能として
+// の価値がまだ足りないという製品判断による。実装（generateTitlePageText /
+// 既存の扉レンダリング / 既に扉を含む原稿）はすべて温存しているので、下の
+// 'title' 行を戻すだけで再表示できる。再有効化の条件はこのループの範囲外。
 const BOOK_PART_TABS: { id: BookPartTab; label: string; description: string }[] = [
   { id: 'colophon', label: '奥付（縦）', description: '本文ページとして縦書きの奥付を作成' },
   { id: 'colophon-h', label: '奥付（横）', description: '独立した横書き専用ページを作成' },
-  { id: 'title', label: '扉（タイトルページ）', description: '作品タイトルなどの扉を本文へ挿入' },
+  // { id: 'title', label: '扉（タイトルページ）', description: '作品タイトルなどの扉を本文へ挿入' },
   { id: 'toc', label: '目次作成', description: '目次用テキストを作成' },
 ];
 
@@ -116,7 +122,7 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-900 p-6 shadow-xl border border-gray-200 dark:border-neutral-800">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-          📖 奥付・扉・目次
+          📖 奥付・目次
         </h2>
 
         {/* タブ切替（4種類の本のパーツ） */}

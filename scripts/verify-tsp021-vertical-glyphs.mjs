@@ -171,15 +171,17 @@ async function main() {
       seen[tgt.t] = tgt;
       const label = `${tgt.kind === "run" ? "run " : "lone "}"${tgt.t}"  wm=${tgt.wm} to=${tgt.to} ffs=${(tgt.ffs || "").slice(0, 12)}  ink ${ink.width.toFixed(1)}w×${ink.height.toFixed(1)}h  h/w=${ratio.toFixed(2)}`;
       if (/[…‥―—]/.test(tgt.t)) {
-        // the CONFIRMED class (tester-reported): leaders + bars MUST read
-        // vertically AND turn `vert` back on via an explicit
-        // font-feature-settings: normal (keeping the inherited upright — a
-        // `mixed` rotation shifts Zen Old's U+2026 off-axis).
+        // the CONFIRMED class (Apple HUMAN QA): leaders + bars MUST read
+        // vertically. `text-orientation: mixed` is the only value that works
+        // on Apple WebKit (all iOS browsers + iPad Safari) — `upright` disables
+        // `vert` there per spec. NOTE: this CDP harness drives Chromium/Blink,
+        // which renders vertically under either value; the Apple retest is the
+        // real gate (see verify-tsp021-webkit-glyphs for the WebKit pass).
         check(`vertical typesetting: ${label}`, ratio >= 1.4, `want h/w ≥ 1.4`);
-        check(`   ↳ carries an explicit font-feature-settings: normal (restores vert on every engine)`,
+        check(`   ↳ carries an explicit font-feature-settings: normal`,
           /\bnormal\b/.test(tgt.ffs || ""), `font-feature-settings=${tgt.ffs}`);
-        check(`   ↳ text-orientation NOT overridden to mixed (no cross-font rotation shift — see verify-cross-font-dash)`,
-          tgt.to !== "mixed", `text-orientation=${tgt.to}`);
+        check(`   ↳ text-orientation overridden to mixed (Apple WebKit needs it; the spec-defined path)`,
+          tgt.to === "mixed", `text-orientation=${tgt.to}`);
       } else if (/[ー〜～]/.test(tgt.t)) {
         // same UTR#50 "R" class, NOT tester-reported → audit-only. Report the
         // rendered orientation + mechanism; if a mobile-Safari HUMAN QA shows

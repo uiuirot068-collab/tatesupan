@@ -11,6 +11,7 @@ import {
   type PageLayout,
   type PageSettings,
   type PaperSizeKey,
+  recommendedNombreFontSizePt,
   resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
@@ -93,14 +94,15 @@ const applyPaperTemplate = (
   // TSP-LOOP-021 §7C: ノンブルの位置・地からの距離・文字サイズは、ユーザーが
   // まだ手動で触っていない（nombreLayoutCustomized !== true）ときだけ、切り
   // 替えた用紙 preset の推奨値へ追従させる。カスタム済みなら一切上書きしない。
-  // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -1pt
-  // （最小 6pt）を版面から導出する（§7B: 全 preset 同一座標にしない）。
+  // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -3pt
+  // （最小 6pt。TSP-LOOP-021 §4）を版面から導出する（§7B: 全 preset 同一座標に
+  // しない）。
   const nombreOverrides: Partial<MasterPageSettings> = base.masterPage.nombreLayoutCustomized
     ? {}
     : {
         nombrePosition: profile.nombrePosition as NombrePosition,
         nombreBottomMargin: profile.nombreDistance,
-        nombreFontSize: Math.max(6, Math.round(profile.fontSizePt - 1)),
+        nombreFontSize: recommendedNombreFontSizePt(profile.fontSizePt),
       };
   return {
     ...base,

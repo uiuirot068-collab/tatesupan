@@ -78,10 +78,40 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5
                 [&_li]:leading-relaxed
                 [&_strong]:font-semibold
+                [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:bg-ink/[0.04] [&_blockquote]:py-2 [&_blockquote]:pl-3 [&_blockquote]:pr-2 [&_blockquote]:text-[13px]
+                [&_img]:my-2 [&_img]:block [&_img]:h-auto [&_img]:rounded
                 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs
                 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink/10 [&_pre]:p-2 [&_pre]:text-xs"
             >
-              <ReactMarkdown>{markdown}</ReactMarkdown>
+              <ReactMarkdown
+                components={{
+                  // help.md asset paths are written root-absolute (/help/…);
+                  // prepend the deploy basePath so they resolve under /tatespun/.
+                  img: ({ src, alt }) => {
+                    const resolved =
+                      typeof src === "string" ? withBasePath(src) : src;
+                    // Instructional animation fills the help column; small
+                    // supporting illustrations (e.g. backup-caroad) stay compact.
+                    const isWide =
+                      typeof src === "string" && /preview-drag\.gif(\?|$)/.test(src);
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={resolved}
+                        alt={alt ?? ""}
+                        loading="lazy"
+                        className={
+                          isWide
+                            ? "w-full max-w-full"
+                            : "mx-auto w-full max-w-[220px]"
+                        }
+                      />
+                    );
+                  },
+                }}
+              >
+                {markdown}
+              </ReactMarkdown>
             </div>
           )}
         </div>
