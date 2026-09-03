@@ -140,7 +140,9 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         {!isHome && !isWorksListRoute && (
           <Link
             href="/"
-            className="shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline"
+            // TSP-LOOP-022: the phone's sticky MobileEditorNav already has a
+            // 「← 一覧」 link — don't duplicate it in the (non-sticky) header.
+            className="hidden shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline md:inline"
           >
             ← 作品一覧
           </Link>
@@ -194,7 +196,8 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             onClick={onOpenHelp}
             aria-label="ヘルプ"
             title="ヘルプ"
-            className="flex h-7 w-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+            // TSP-LOOP-022: phone gets ？ from the sticky MobileEditorNav.
+            className="hidden h-7 w-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100 md:flex"
           >
             ？
           </button>
@@ -204,7 +207,9 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             type="button"
             onClick={handleSaveClick}
             disabled={isSaving}
-            className="text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0"
+            // TSP-LOOP-022: phone gets クラウド保存 from the sticky
+            // MobileEditorNav — this header button is md+ only.
+            className="hidden text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0 md:inline-flex"
           >
             {isSaving ? '保存中...' : 'クラウドに保存'}
           </button>

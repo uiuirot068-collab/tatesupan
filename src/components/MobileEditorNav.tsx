@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
-type MobileView = "editor" | "preview";
+type MobileView = "editor" | "preview" | "settings";
 
 const SAVE_TEXT: Record<SaveStatus, string> = {
   loading: "読み込み中…",
@@ -26,8 +26,10 @@ interface MobileEditorNavProps {
   onShowEditor: () => void;
   /** Show the vertical-writing preview. */
   onShowPreview: () => void;
-  /** Show the editor and open + scroll to the page-settings panel. */
+  /** Show the dedicated 設定 workspace. */
   onShowSettings: () => void;
+  /** Open the help guide (same modal the desktop header's ？ opens). */
+  onOpenHelp?: () => void;
   /** Whether the narrow-viewport 集中モード is active. */
   focusMode: boolean;
   onEnterFocus: () => void;
@@ -65,6 +67,7 @@ export default function MobileEditorNav({
   onShowEditor,
   onShowPreview,
   onShowSettings,
+  onOpenHelp,
   focusMode,
   onEnterFocus,
   onExitFocus,
@@ -92,14 +95,22 @@ export default function MobileEditorNav({
         >
           ← 一覧
         </Link>
-        <div className="flex flex-1 items-center gap-1 rounded-lg bg-ink/5 p-0.5">
+        {/* TSP-LOOP-022: the three primary phone workspaces. Plain labels
+            (the emoji were decorative and added visual noise); the active
+            workspace is shown by fill + weight + aria-pressed, not colour
+            alone. */}
+        <div
+          role="group"
+          aria-label="表示する画面"
+          className="flex flex-1 items-center gap-1 rounded-lg bg-ink/5 p-0.5"
+        >
           <button
             type="button"
             onClick={onShowEditor}
             aria-pressed={mobileView === "editor"}
             className={tab(mobileView === "editor")}
           >
-            ✏️ 本文
+            本文
           </button>
           <button
             type="button"
@@ -107,16 +118,29 @@ export default function MobileEditorNav({
             aria-pressed={mobileView === "preview"}
             className={tab(mobileView === "preview")}
           >
-            👁️ プレビュー
+            プレビュー
           </button>
           <button
             type="button"
             onClick={onShowSettings}
-            className={tab(false)}
+            aria-pressed={mobileView === "settings"}
+            className={tab(mobileView === "settings")}
           >
-            ⚙️ 設定
+            設定
           </button>
         </div>
+
+        {onOpenHelp && (
+          <button
+            type="button"
+            onClick={onOpenHelp}
+            aria-label="ヘルプ"
+            title="ヘルプ"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ink/15 text-xs font-semibold text-ink/70 hover:bg-ink/5"
+          >
+            ？
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-xs">
