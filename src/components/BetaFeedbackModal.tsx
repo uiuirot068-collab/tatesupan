@@ -6,6 +6,7 @@ import {
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   FEEDBACK_FAILURE_MESSAGE,
   FEEDBACK_GUIDANCE,
+  FEEDBACK_HONEYPOT_FIELD,
   FEEDBACK_IMAGE_HINT,
   FEEDBACK_IMAGE_PRIVACY_NOTICE,
   FEEDBACK_SUCCESS_MESSAGE,
@@ -17,6 +18,7 @@ import {
   validateSubmissionShape,
 } from "@/lib/betaFeedback";
 import { submitBetaFeedback } from "@/lib/betaFeedbackClient";
+import { useTurnstile } from "@/lib/turnstile";
 
 /**
  * TSP-LOOP-006 — 「β版フィードバック」モーダル。
@@ -53,6 +55,17 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [note, setNote] = useState("");
   const [reviewState, setReviewState] = useState<SendState>("idle");
+  const reviewSendingRef = useRef(false);
+
+  // --- TSP-LOOP-019: Turnstile（両タブ共通）+ honeypot ---
+  const {
+    mount: turnstileMount,
+    token: turnstileToken,
+    status: turnstileStatus,
+    reset: resetTurnstile,
+  } = useTurnstile();
+  const [honeypot, setHoneypot] = useState("");
+  const turnstileReady = turnstileStatus === "verified" && turnstileToken.length > 0;
 
   // 現在の添付を ref で追跡し、閉じる／アンマウント時に確実に revoke する
   // （deps 固定 effect のクロージャ問題を避ける）。
@@ -136,7 +149,8 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   };
 
   const handleSendFeedback = async () => {
-    if (sendingRef.current || !canSend) return;
+    // 二重送信ガード（ref）＋送信可否＋Turnstile 検証済みを必須にする。
+    if (sendingRef.current || !canSend || !turnstileReady) return;
     const submission = {
       type: "feedback" as const,
       message,
@@ -150,8 +164,13 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     sendingRef.current = true;
     setFeedbackState("sending");
     setFeedbackError(null);
-    const { ok } = await submitBetaFeedback(submission);
+    const { ok } = await submitBetaFeedback(submission, {
+      turnstileToken,
+      honeypot,
+    });
     sendingRef.current = false;
+    // トークンは1回で使い切る。成否に関わらず必ず新しいトークンを要求する。
+    resetTurnstile();
     if (ok) {
       attachments.forEach((a) => URL.revokeObjectURL(a.url));
       setMessage("");
@@ -164,7 +183,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   };
 
   const handleSendReview = async () => {
-    if (reviewState === "sending") return;
+    if (reviewSendingRef.current || !turnstileReady) return;
     const submission = {
       type: "review" as const,
       checkedItems: [...checkedItems],
@@ -175,8 +194,14 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
       setReviewState("error");
       return;
     }
+    reviewSendingRef.current = true;
     setReviewState("sending");
-    const { ok } = await submitBetaFeedback(submission);
+    const { ok } = await submitBetaFeedback(submission, {
+      turnstileToken,
+      honeypot,
+    });
+    reviewSendingRef.current = false;
+    resetTurnstile();
     if (ok) {
       setChecked({});
       setNote("");
@@ -188,7 +213,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
       onClick={handleClose}
     >
       <div
@@ -289,28 +314,6 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               </div>
               )}
 
-              {feedbackError && (
-                <p className="text-xs text-red-600">{feedbackError}</p>
-              )}
-              {feedbackState === "success" && (
-                <p className="text-xs font-medium text-emerald-700">
-                  {FEEDBACK_SUCCESS_MESSAGE}
-                </p>
-              )}
-              {feedbackState === "error" && (
-                <p className="whitespace-pre-line text-xs text-red-600">
-                  {FEEDBACK_FAILURE_MESSAGE}
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleSendFeedback}
-                disabled={!canSend || feedbackState === "sending"}
-                className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
-              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -341,7 +344,40 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                   className="w-full resize-y rounded border border-ink/20 bg-base p-2 text-sm text-ink outline-none focus:border-ink/40"
                 />
               </label>
+            </div>
+          )}
+        </div>
 
+        {/* TSP-LOOP-019A: 送信アクション行。スクロール領域の外に置き、モバイルでも
+            送信ボタンと状態表示が常に見えるようにする。デスクトップの表示順は従来どおり
+            （入力 → 送信ボタン → 区切り → Turnstile）。 */}
+        <div className="mt-3 flex shrink-0 flex-col gap-1.5">
+          {tab === "feedback" ? (
+            <>
+              {feedbackError && (
+                <p className="text-xs text-red-600">{feedbackError}</p>
+              )}
+              {feedbackState === "success" && (
+                <p className="text-xs font-medium text-emerald-700">
+                  {FEEDBACK_SUCCESS_MESSAGE}
+                </p>
+              )}
+              {feedbackState === "error" && (
+                <p className="whitespace-pre-line text-xs text-red-600">
+                  {FEEDBACK_FAILURE_MESSAGE}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleSendFeedback}
+                disabled={!canSend || feedbackState === "sending" || !turnstileReady}
+                className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
+              </button>
+            </>
+          ) : (
+            <>
               {reviewState === "success" && (
                 <p className="text-xs font-medium text-emerald-700">
                   {FEEDBACK_SUCCESS_MESSAGE}
@@ -350,16 +386,50 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               {reviewState === "error" && (
                 <p className="text-xs text-red-600">{FEEDBACK_FAILURE_MESSAGE}</p>
               )}
-
               <button
                 type="button"
                 onClick={handleSendReview}
-                disabled={reviewState === "sending"}
+                disabled={reviewState === "sending" || !turnstileReady}
                 className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {reviewState === "sending" ? "送信中…" : "reviewを送信"}
               </button>
-            </div>
+            </>
+          )}
+        </div>
+
+        {/* TSP-LOOP-019: 送信前の確認（両タブ共通）+ bot 検出用の非表示フィールド。 */}
+        <div className="mt-3 flex shrink-0 flex-col gap-1.5 border-t border-ink/10 pt-3">
+          {/* honeypot — 実ユーザーには見えず、キーボード遷移・オートフィルからも外す。
+              CSS で丸ごと非表示にすると一部 bot が無視するため、画面外へ逃がす方式。 */}
+          <div aria-hidden="true" className="pointer-events-none absolute h-px w-px -m-px overflow-hidden">
+            <label htmlFor="bf-hp">Website</label>
+            <input
+              id="bf-hp"
+              type="text"
+              name={FEEDBACK_HONEYPOT_FIELD}
+              tabIndex={-1}
+              autoComplete="off"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+            />
+          </div>
+
+          <div ref={turnstileMount} />
+          {turnstileStatus === "unconfigured" && (
+            <p className="text-xs text-red-600">
+              いま送信の確認を利用できません。時間をおいて再度お試しください。
+            </p>
+          )}
+          {turnstileStatus === "error" && (
+            <p className="text-xs text-red-600">
+              確認に失敗しました。ページを再読み込みしてお試しください。
+            </p>
+          )}
+          {turnstileStatus === "expired" && (
+            <p className="text-xs text-ink/60">
+              確認の有効期限が切れました。もう一度チェックしてください。
+            </p>
           )}
         </div>
       </div>

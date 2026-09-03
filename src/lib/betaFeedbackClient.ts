@@ -11,9 +11,20 @@ import {
   BETA_FEEDBACK_APP_VERSION,
   BETA_FEEDBACK_FUNCTION_PATH,
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
+  FEEDBACK_HONEYPOT_FIELD,
   type BetaFeedbackClientContext,
   type BetaFeedbackSubmission,
 } from "./betaFeedback";
+
+/**
+ * TSP-LOOP-019: 送信に必ず添える anti-abuse フィールド。
+ * - turnstileToken: Cloudflare Turnstile の使い捨てトークン（毎回新規）。
+ * - honeypot: bot 専用の非表示フィールドの値（正規ユーザーは常に空）。
+ */
+export interface BetaFeedbackSecurity {
+  turnstileToken: string;
+  honeypot: string;
+}
 
 function readClientContext(): BetaFeedbackClientContext {
   let path = "";
@@ -40,15 +51,22 @@ function functionUrl(): string | null {
  * 汎用文言）。呼び出し側は失敗時に入力内容を保持する。
  */
 export async function submitBetaFeedback(
-  submission: BetaFeedbackSubmission
+  submission: BetaFeedbackSubmission,
+  security: BetaFeedbackSecurity
 ): Promise<{ ok: boolean }> {
   const url = functionUrl();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {
     return { ok: false };
   }
+  // TSP-LOOP-019: Turnstile トークンなしでは送信しない（サーバも必須で拒否する）。
+  if (!security.turnstileToken) {
+    return { ok: false };
+  }
 
   const context = readClientContext();
+  const turnstileToken = security.turnstileToken;
+  const honeypot = security.honeypot;
 
   let body: BodyInit;
   const headers: Record<string, string> = {
@@ -65,6 +83,8 @@ export async function submitBetaFeedback(
         type: "feedback",
         message: submission.message,
         clientContext: context,
+        turnstileToken,
+        [FEEDBACK_HONEYPOT_FIELD]: honeypot,
       })
     );
     // TSP-LOOP-014: 添付が一時無効の間は、submission に画像があっても送らない。
@@ -82,6 +102,8 @@ export async function submitBetaFeedback(
       checkedItems: submission.checkedItems,
       note: submission.note,
       clientContext: context,
+      turnstileToken,
+      [FEEDBACK_HONEYPOT_FIELD]: honeypot,
     });
   }
 

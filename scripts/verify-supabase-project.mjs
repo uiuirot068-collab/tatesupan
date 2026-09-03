@@ -32,17 +32,15 @@ const check = (name, cond) => {
   if (!cond) failures += 1;
 };
 
-function readEnvLocalUrl() {
+function readEnvLocalVar(name) {
   const p = path.join(repoRoot, ".env.local");
   if (!fs.existsSync(p)) return null;
-  const line = fs
-    .readFileSync(p, "utf8")
-    .split(/\r?\n/)
-    .find((l) => /^\s*NEXT_PUBLIC_SUPABASE_URL\s*=/.test(l));
+  const re = new RegExp(`^\\s*${name}\\s*=`);
+  const line = fs.readFileSync(p, "utf8").split(/\r?\n/).find((l) => re.test(l));
   return line ? line.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "") : null;
 }
 
-const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || readEnvLocalUrl() || "").trim();
+const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || readEnvLocalVar("NEXT_PUBLIC_SUPABASE_URL") || "").trim();
 const ref = (url.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co\/?$/i) || [])[1] || null;
 
 console.log(`source URL: ${url || "(none found — set NEXT_PUBLIC_SUPABASE_URL or .env.local)"}`);
@@ -82,6 +80,27 @@ walk(path.join(repoRoot, "src"));
 check(
   "4. no Supabase project ref hard-coded in src/ (must stay NEXT_PUBLIC_SUPABASE_URL-only)",
   srcHits.length === 0 || (console.log(`   hard-coded in: ${srcHits.join(", ")}`), false),
+);
+
+// TSP-LOOP-019 — β feedback は Turnstile 必須。フラグを true にしたビルドで
+// NEXT_PUBLIC_TURNSTILE_SITE_KEY が無いと、デプロイ後のフィードバックモーダルが
+// トークンを作れず、サーバ検証が全リクエストを拒否してしまう。site key は
+// 公開値なのでここで存在チェックのみ（値はハードコードしない）。
+const feedbackEnabled =
+  (process.env.NEXT_PUBLIC_BETA_FEEDBACK_ENABLED ??
+    readEnvLocalVar("NEXT_PUBLIC_BETA_FEEDBACK_ENABLED") ??
+    "").trim() === "true";
+const turnstileSiteKey = (
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ??
+  readEnvLocalVar("NEXT_PUBLIC_TURNSTILE_SITE_KEY") ??
+  ""
+).trim();
+const placeholderKey = turnstileSiteKey === "" || turnstileSiteKey === "your-turnstile-site-key";
+check(
+  feedbackEnabled
+    ? "5. β feedback ENABLED ⇒ NEXT_PUBLIC_TURNSTILE_SITE_KEY is set (Turnstile protection)"
+    : "5. β feedback disabled — Turnstile site key not required for this build",
+  !feedbackEnabled || !placeholderKey,
 );
 
 console.log("");
