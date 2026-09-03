@@ -47,6 +47,7 @@ const settingsPanel = read("src/components/PageSettingsPanel.tsx");
 const nav = read("src/components/MobileEditorNav.tsx");
 const header = read("src/components/Header.tsx");
 const globals = read("src/app/globals.css");
+const pageCard = read("src/components/PageCard.tsx");
 
 /* ---------------- 1. three phone workspaces, one lifted state ---------------- */
 
@@ -195,9 +196,52 @@ check(
     /集中モード/.test(nav)
 );
 
+/* ---------------- 5f. touch-safe page reorder in the ⋮ menu ---------------- */
+
+check(
+  "5f. the ⋮ menu carries explicit 「1ページ前へ移動 / 後ろへ移動」 reorder buttons (touch-safe alt to drag)",
+  !!pageCard &&
+    />\s*1ページ前へ移動\s*</.test(pageCard) &&
+    />\s*1ページ後ろへ移動\s*</.test(pageCard) &&
+    /onMovePageBackward\?\.\(\)/.test(pageCard) &&
+    /onMovePageForward\?\.\(\)/.test(pageCard)
+);
+check(
+  "5g. first/last page: the edge command renders a real <button disabled>, not hidden",
+  !!pageCard &&
+    /disabled=\{!canMovePageBackward\}/.test(pageCard) &&
+    /disabled=\{!canMovePageForward\}/.test(pageCard) &&
+    // both buttons show whenever either handler is present (edge state = disabled)
+    /\(onMovePageBackward \|\| onMovePageForward\) &&/.test(pageCard)
+);
+check(
+  "5h. PreviewPane routes both commands through the canonical reorder pipeline (reorderByDrag + applyReorder), no second model",
+  !!preview &&
+    /const movePageBy = \(bodyIndex: number, direction: -1 \| 1\) => \{/.test(preview) &&
+    /reorderByDrag\(pages, new Set\(\[bodyIndex\]\), insertionIndex\)/.test(preview) &&
+    /applyReorder\(nextPages, new Set\(\[target\]\)\)/.test(preview) &&
+    // first/last gated by the caller AND re-checked in movePageBy
+    /if \(target < 0 \|\| target >= pages\.length\) return;/.test(preview) &&
+    /canMovePageBackward=\{canReorder && bodyIndex > 0\}/.test(preview) &&
+    /canMovePageForward=\{canReorder && bodyIndex < pages\.length - 1\}/.test(preview)
+);
+check(
+  "5i. the move commands close the menu after a move; desktop drag reorder untouched",
+  !!preview &&
+    /const movePageBy = [\s\S]{0,700}setOpenPageMenuIndex\(null\);/.test(preview) &&
+    /const handleDrop = \(index: number\) => \(event: DragEvent\) => \{/.test(preview) &&
+    /reorderByDrag\(pages, movingSet, insertionIndex\)/.test(preview)
+);
+check(
+  "5j. reorder adds no persisted field — pageOverrides / selection semantics reused as-is",
+  !!preview &&
+    !/movePageBy[\s\S]{0,600}pageOverrides:/.test(preview) &&
+    // still the same selection Set, still driven by applyReorder→setSelected
+    /applyReorder = \([\s\S]{0,160}setSelected\(nextSelected\)/.test(preview)
+);
+
 /* ---------------- 6. TSP-021 invariants still present ---------------- */
 
-const pageCard = read("src/components/PageCard.tsx");
 const helpMd = read("public/docs/help.md");
 const bookParts = read("src/components/BookPartsModal.tsx");
 check(

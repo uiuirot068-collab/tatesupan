@@ -265,6 +265,20 @@ interface PageCardProps {
    */
   isMenuOpen?: boolean;
   onToggleMenu?: () => void;
+  /**
+   * TSP-LOOP-022: touch-safe page reorder. The `⋮` menu carries an explicit
+   * "move one page earlier / later" pair as a reliable alternative to HTML5
+   * drag-and-drop, which is unusable on a touch device where the preview
+   * itself also owns drag/pan gestures. Both route through the SAME canonical
+   * reorder pipeline as the drag handle (PreviewPane `movePageBy` →
+   * `reorderByDrag` → `applyReorder`) — no second data model. Present on
+   * interactive previews only; `canMovePage*` is false at the first / last
+   * page so the corresponding button renders disabled (not hidden).
+   */
+  onMovePageBackward?: () => void;
+  onMovePageForward?: () => void;
+  canMovePageBackward?: boolean;
+  canMovePageForward?: boolean;
 }
 
 function PageCard({
@@ -298,6 +312,10 @@ function PageCard({
   chromeScale = 1,
   isMenuOpen = false,
   onToggleMenu,
+  onMovePageBackward,
+  onMovePageForward,
+  canMovePageBackward = false,
+  canMovePageForward = false,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Which of this page's inserted images the 挿絵 control bar below currently
@@ -708,6 +726,32 @@ function PageCard({
             >
               {/* Page selection is NOT here — it stays permanently visible in
                   the row above (multi-page export flow). */}
+              {(onMovePageBackward || onMovePageForward) && (
+                <div className="flex flex-col gap-1 border-b border-ink/10 pb-1">
+                  <button
+                    type="button"
+                    disabled={!canMovePageBackward}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMovePageBackward?.();
+                    }}
+                    className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    1ページ前へ移動
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canMovePageForward}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMovePageForward?.();
+                    }}
+                    className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    1ページ後ろへ移動
+                  </button>
+                </div>
+              )}
               {onHideNombreChange && (
                 <button
                   type="button"
@@ -750,7 +794,7 @@ function PageCard({
                 </button>
               )}
               <p className="hidden px-2 pt-0.5 text-[11px] text-ink/40 md:block">
-                ページの並べ替えは、ページをドラッグして行います。
+                パソコンでは、ページを直接ドラッグしても並べ替えられます。
               </p>
             </div>
           )}
@@ -1190,7 +1234,15 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     onHideHashiraChangeEqual;
   const nombreHashiraEqual = prev.hideNombre === next.hideNombre && prev.hideHashira === next.hideHashira;
   // TSP-LOOP-021 §2: the per-page ⋮ menu open state + toggle callback.
-  const menuEqual = prev.isMenuOpen === next.isMenuOpen && prev.onToggleMenu === next.onToggleMenu;
+  // TSP-LOOP-022: + the touch-safe reorder commands (stable per-index refs)
+  // and their first/last-page enabled flags.
+  const menuEqual =
+    prev.isMenuOpen === next.isMenuOpen &&
+    prev.onToggleMenu === next.onToggleMenu &&
+    prev.onMovePageBackward === next.onMovePageBackward &&
+    prev.onMovePageForward === next.onMovePageForward &&
+    prev.canMovePageBackward === next.canMovePageBackward &&
+    prev.canMovePageForward === next.canMovePageForward;
   const otherEqual = prev.chromeScale === next.chromeScale;
 
   const equal =
