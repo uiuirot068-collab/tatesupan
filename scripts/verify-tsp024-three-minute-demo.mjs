@@ -203,6 +203,33 @@ check(
     // and the title-page creation UI is still hidden upstream
     /\/\/ \{ id: 'title'/.test(read("src/components/BookPartsModal.tsx") ?? "")
 );
+check(
+  "18b. HUMAN-QA: mobile STEP 7 points at the UPPER workspace bar (no 「下のバー」 anywhere)",
+  !!demoData &&
+    !/下のバー/.test(demoData) &&
+    (() => {
+      const s7 = demoData.match(/n:\s*7,[\s\S]{0,700}?\n  \},/);
+      return !!s7 && /上のバー/.test(s7[0]) && /本文/.test(s7[0]) && /プレビュー/.test(s7[0]);
+    })()
+);
+check(
+  "18c. HUMAN-QA: /guide is a scrolling document (data-guide-page + globals opt-out) — not clipped by the app-shell overflow lock",
+  !!guide && /data-guide-page=""/.test(guide) &&
+    (() => {
+      const g = read("src/app/globals.css") ?? "";
+      return /:has\(\[data-guide-page\]\)[\s\S]{0,120}overflow-y:\s*visible\s*!important/.test(g);
+    })()
+);
+check(
+  "18d. HUMAN-QA: β card 「報告する」 reuses the existing BetaFeedbackModal — no second feedback form / submit path",
+  !!guide &&
+    /data-guide-feedback-cta=""/.test(guide) &&
+    />\s*報告する\s*</.test(guide) &&
+    /import BetaFeedbackModal from "@\/components\/BetaFeedbackModal"/.test(guide) &&
+    /BETA_FEEDBACK_ENABLED && feedbackOpen && \(\s*\n?\s*<BetaFeedbackModal onClose=/.test(guide) &&
+    // no bespoke submit / Supabase write in the guide page
+    !/betaFeedbackClient|submitBetaFeedback|supabase|functions\.invoke/i.test(guide)
+);
 
 /* ---------------- 7. audited copy claims ---------------- */
 

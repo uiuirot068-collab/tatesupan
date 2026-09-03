@@ -65,8 +65,14 @@ body {
   box-sizing: border-box;
 }
 
+/* Ordinary scrolling document (opt-out of the app-shell viewport lock above).
+   Bookshelf uses `[data-bookshelf-page]`; TSP-LOOP-024's feature guide
+   (/guide) uses `[data-guide-page]` — without this it inherits
+   `body { overflow: hidden }` and cannot scroll past the first viewport. */
 html:has([data-bookshelf-page]),
-body:has([data-bookshelf-page]) {
+body:has([data-bookshelf-page]),
+html:has([data-guide-page]),
+body:has([data-guide-page]) {
   width: 100%;
   height: auto;
   min-height: 100%;

@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
+import BetaFeedbackModal from "@/components/BetaFeedbackModal";
 
 /**
  * TSP-LOOP-024 —「もっと詳しく TateSpun の機能を見る」feature guide.
@@ -79,8 +81,15 @@ const CARDS: Card[] = [
 ];
 
 export default function FeatureGuidePage() {
+  // TSP-LOOP-024 HUMAN-QA: the β card's「報告する」reuses the exact same
+  // BetaFeedbackModal the editor's「報告」button opens — no second form,
+  // no duplicated submit/validation logic.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
-    <main className="mx-auto min-h-[100dvh] w-full max-w-3xl px-4 py-8">
+    <main
+      data-guide-page=""
+      className="mx-auto min-h-[100dvh] w-full max-w-3xl px-4 py-8"
+    >
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-ink">TateSpun でできること</h1>
         <Link
@@ -121,8 +130,16 @@ export default function FeatureGuidePage() {
             β版を一緒に育ててもらえたらうれしいです
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-amber-900/80">
-            「気になる事」や review を、編集画面の「報告」ボタンから TateSpun 内で送れます。
+            「気になる事」や review を、TateSpun 内から送れます。
           </p>
+          <button
+            type="button"
+            data-guide-feedback-cta=""
+            onClick={() => setFeedbackOpen(true)}
+            className="mt-2.5 inline-flex items-center rounded-full border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+          >
+            報告する
+          </button>
         </section>
       )}
 
@@ -140,6 +157,10 @@ export default function FeatureGuidePage() {
           本棚へ戻る
         </Link>
       </div>
+
+      {BETA_FEEDBACK_ENABLED && feedbackOpen && (
+        <BetaFeedbackModal onClose={() => setFeedbackOpen(false)} />
+      )}
     </main>
   );
 }
