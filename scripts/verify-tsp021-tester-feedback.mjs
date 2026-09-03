@@ -239,13 +239,15 @@ check(
     /nombreLayoutCustomized: false,/.test(pageLayout)
 );
 check(
-  "7f. §7C + §4: applyPaperTemplate re-applies preset nombre defaults only when NOT customized; recommended size = body − 3pt / min 6pt",
+  "7f. §7C + §4 (+ TSP-022 HUMAN-QA): applyPaperTemplate re-applies preset nombre/柱 defaults only when NOT customized; per-preset nombreFontSize with body−3pt/min6 fallback",
   !!pageSettings && !!pageLayout &&
     /base\.masterPage\.nombreLayoutCustomized\s*\n?\s*\?\s*\{\}/.test(pageSettings) &&
-    /nombreFontSize: recommendedNombreFontSizePt\(profile\.fontSizePt\)/.test(pageSettings) &&
+    // per-preset explicit value, fall back to the recommended formula
+    /nombreFontSize:\s*\n?\s*profile\.nombreFontSize \?\? recommendedNombreFontSizePt\(profile\.fontSizePt\)/.test(pageSettings) &&
+    /profile\.headerFontSize != null/.test(pageSettings) &&
     /export function recommendedNombreFontSizePt\(bodyFontSizePt: number\): number \{\s*\n?\s*return Math\.max\(6, Math\.round\(bodyFontSizePt - 3\)\);/.test(pageLayout) &&
-    // new project default is body(9) − 3 = 6
-    /nombreFontSize: 6,/.test(pageLayout)
+    // new-project (文庫) default — TSP-022 HUMAN-QA lowered 6 → 5
+    /nombreFontSize: 5,/.test(pageLayout)
 );
 check(
   "7g. §7C: editing a nombre position/size field marks the layout as customized",
@@ -337,19 +339,26 @@ check(
     })()
 );
 check(
-  "A3. the ⋮ menu holds ノンブル / 柱 / 画像 + a reorder note; selection is NOT duplicated inside it",
+  "A3. the ⋮ menu holds page-move + ノンブル / 柱 / 画像 + a desktop-drag note; selection is NOT duplicated inside it",
   !!pageCard &&
     (() => {
-      const menu = pageCard.match(/id=\{`page-menu-\$\{pageNumber\}`\}[\s\S]{0,3400}?<\/div>\s*\n\s*\)\}/);
-      if (!menu) return false;
+      // menu panel = from its id to the file <input> that immediately follows it
+      const start = pageCard.indexOf("id={`page-menu-${pageNumber}`}");
+      const end = pageCard.indexOf("ref={fileInputRef}", start);
+      if (start < 0 || end < 0) return false;
+      const menu = pageCard.slice(start, end);
       return (
-        /ノンブル（ページ番号）/.test(menu[0]) &&
-        /柱（ヘッダー）/.test(menu[0]) &&
-        /このページに画像を挿入/.test(menu[0]) &&
-        /ページの並べ替えは、ページをドラッグ/.test(menu[0]) &&
+        /ノンブル（ページ番号）/.test(menu) &&
+        /柱（ヘッダー）/.test(menu) &&
+        /このページに画像を挿入/.test(menu) &&
+        // TSP-LOOP-022: touch-safe reorder commands + the desktop-drag note
+        // (reworded: drag is now an *additional* desktop path, not the only one)
+        /1ページ前へ移動/.test(menu) &&
+        /1ページ後ろへ移動/.test(menu) &&
+        /ドラッグ(?:して|しても)/.test(menu) &&
         // selection toggle is not repeated in the panel
-        !/onToggleCheckbox\(\)/.test(menu[0]) &&
-        !/書き出し対象にする/.test(menu[0])
+        !/onToggleCheckbox\(\)/.test(menu) &&
+        !/書き出し対象にする/.test(menu)
       );
     })()
 );

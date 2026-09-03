@@ -213,9 +213,14 @@ export default function EditorPane({
         </div>
       </div>
 
+      {/* TSP-LOOP-022: on a phone 設定 is its own workspace (rendered by
+          TategakiEditor, `md:hidden`), so this inline settings strip is
+          desktop / tablet-wide only. The phone editor surface is now just
+          title + toolbar + manuscript, with no settings panel to scroll past.
+          At md+ this is exactly the strip it always was. */}
       <div
         id="tsp-settings"
-        className={`flex-none scroll-mt-28 md:scroll-mt-0 ${focusMode ? "max-md:hidden" : ""}`}
+        className="hidden flex-none md:block"
       >
         <PageSettingsPanel
           settings={settings}
@@ -251,9 +256,11 @@ export default function EditorPane({
           read-only, pointer-events-none mirror rendered behind it (only the
           red wavy underline is visible); it shares the textarea's wrapping
           box via the same p-4/font-mono/text-sm/leading-relaxed classes.
-          Phone: a fixed-height (56dvh) intentional manuscript scroll surface
-          inside the scrolling document; desktop: flex-1 fills the pane. */}
-      <div className="relative min-h-0 max-md:h-[56dvh] md:flex-1">
+          Phone: a fixed-height intentional manuscript scroll surface inside
+          the scrolling document (TSP-022 gave it more of the viewport now
+          that the settings strip is a separate workspace); desktop: flex-1
+          fills the pane. */}
+      <div className="relative min-h-0 max-md:h-[62dvh] md:flex-1">
         {writingCheckEnabled && (
           <WritingCheckOverlay
             textareaRef={textareaRef}

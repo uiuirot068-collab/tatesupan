@@ -29,6 +29,7 @@ import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/ma
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
+import PageSettingsPanel from "./PageSettingsPanel";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
@@ -66,11 +67,16 @@ export default function TategakiEditor({
   // reordering layers never touches document text, tokenLength, or
   // pagination. Images with no entry here fall back to document/token order.
   const [imageLayerOrder, setImageLayerOrder] = useState<Record<string, number>>({});
-  // TSP-LOOP-020: which pane the phone (`< md`) layout shows. Editor and
-  // preview are mutually exclusive on a phone (no scrolling past a 70dvh pane
-  // to reach the other); at `md+` this is ignored and both panes render
-  // side-by-side exactly as before.
-  const [mobileView, setMobileView] = useState<"editor" | "preview">("editor");
+  // TSP-LOOP-020 / TSP-LOOP-022: which primary workspace the phone (`< md`)
+  // layout shows. On a phone the three main activities — 本文 / プレビュー /
+  // 設定 — are mutually exclusive full-width surfaces (no scrolling past one
+  // pane to reach another). TSP-022 promoted 設定 from "scroll to a strip
+  // inside the editor" to a first-class workspace of its own. At `md+` this
+  // is ignored: the editor+preview split and the inline settings strip render
+  // exactly as before.
+  const [mobileView, setMobileView] = useState<"editor" | "preview" | "settings">(
+    "editor"
+  );
   // TSP-LOOP-012: narrow-viewport「集中モード」. Per-device localStorage
   // preference only (never Supabase / manuscript data); default OFF. Every
   // consumer of `focusMode` is scoped to md- via `md:hidden` / `max-md:` /
@@ -93,19 +99,23 @@ export default function TategakiEditor({
       })
     );
   };
+  const scrollWindowTop = () =>
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   const showEditorView = () => {
     setMobileView("editor");
     scrollMobileTo("tsp-manuscript");
   };
   const showPreviewView = () => {
     setMobileView("preview");
-    // Jump to the top of the preview pane rather than wherever the document
-    // was scrolled to under the editor.
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    // Jump to the top of the preview workspace rather than wherever the
+    // document was scrolled to under the previous workspace.
+    scrollWindowTop();
   };
   const showSettingsView = () => {
-    setMobileView("editor");
-    scrollMobileTo("tsp-settings");
+    // TSP-LOOP-022: 設定 is its own workspace now — no longer "switch to the
+    // editor and scroll down to a strip".
+    setMobileView("settings");
+    scrollWindowTop();
   };
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
@@ -491,7 +501,10 @@ export default function TategakiEditor({
     >
       {/* Focus mode collapses the full header on narrow viewports only; at md+
           the wrapper is `display:contents`, so the header lays out exactly as
-          before on desktop / tablet-wide. */}
+          before on desktop / tablet-wide. TSP-LOOP-022: on a phone the Header
+          keeps only identity + account / theme / 保存作品一覧 — its 一覧 link,
+          save button and ？ (all duplicated by the sticky MobileEditorNav) are
+          `md+` only, so the phone header stops being a tall wrapped block. */}
       <div className={focusMode ? "hidden md:contents" : "contents"}>
         <Header
           onSave={isSampleDocument ? undefined : handleSave}
@@ -543,6 +556,7 @@ export default function TategakiEditor({
         saveStatus={isSampleDocument ? undefined : saveStatus}
         onSave={isSampleDocument ? undefined : handleSave}
         isSaving={isSaving}
+        onOpenHelp={() => setIsHelpOpen(true)}
         onOpenFeedback={
           BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined
         }
@@ -567,10 +581,10 @@ export default function TategakiEditor({
           }
           // Narrow: a natural-height block in the scrolling document; the
           // textarea inside owns an intentional manuscript scroll (see
-          // EditorPane). Hidden entirely when the phone is showing the
-          // preview. Wide: md overrides restore the fitted, viewport-locked
-          // pane unchanged.
-          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView === "preview" ? "max-md:hidden" : ""} ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          // EditorPane). Hidden whenever the phone is showing another
+          // workspace (プレビュー or 設定). Wide: md overrides restore the
+          // fitted, viewport-locked pane unchanged.
+          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             title={title}
@@ -630,6 +644,34 @@ export default function TategakiEditor({
             onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
             selected={selectedPages}
             onSelectedChange={setSelectedPages}
+          />
+        </section>
+
+        {/* TSP-LOOP-022 — dedicated phone 設定 workspace. `md:hidden`, so the
+            desktop side-by-side layout (which keeps its settings strip inside
+            EditorPane) is untouched. A natural-height block in the scrolling
+            document, exactly like the phone 本文 surface — it uses the same
+            controlled PageSettingsPanel as desktop (shared settings + onChange,
+            no duplicated logic), just composed as its own full-width surface
+            instead of a strip the user scrolls past. Kept mounted (only
+            `hidden` toggles) so an in-progress settings draft / open tab
+            survives switching to 本文 or プレビュー and back. */}
+        <section
+          id="tsp-settings-view"
+          aria-label="設定"
+          className={`scroll-mt-28 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:hidden ${
+            mobileView === "settings" ? "" : "hidden"
+          }`}
+        >
+          <PageSettingsPanel
+            settings={settings}
+            layout={layout}
+            onChange={setSettings}
+            plotNote={plotNote}
+            onPlotNoteChange={setPlotNote}
+            onOpenHelp={() => setIsHelpOpen(true)}
+            selectedPageNumbers={selectedPageNumbers}
+            mobileSurface
           />
         </section>
       </main>

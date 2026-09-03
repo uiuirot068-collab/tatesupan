@@ -80,7 +80,19 @@ body:has([data-bookshelf-page]) {
     height: auto;
     min-height: 100%;
     overflow-x: clip !important;
+  }
+  /* The document scroll lives on <html>. TSP-LOOP-022: <body> must NOT also
+     be `overflow-y: auto` — pairing it with `overflow-x: clip` makes the
+     used value of overflow-x compute to `hidden` (CSS Overflow 3 §3.2),
+     which turns <body> into a scroll container and silently defeats the
+     `position: sticky` MobileEditorNav (it then scrolls away with the page
+     instead of pinning). `overflow-y: visible` keeps <body> a plain box; the
+     horizontal `clip` still contains any stray fixed-width overflow. */
+  html:has([data-editor-shell]) {
     overflow-y: auto !important;
+  }
+  body:has([data-editor-shell]) {
+    overflow-y: visible !important;
   }
 }
 

@@ -38,7 +38,9 @@ import {
   measureCaptureSize,
   measureTrimGuideRatioRect,
   prewarmExportFonts,
+  prewarmExportImage,
 } from "@/utils/exportCapture";
+import { withBasePath } from "@/lib/basePath";
 import {
   buildPageJpgFileName,
   buildPdfFileName,
@@ -186,6 +188,11 @@ interface PageSlotProps {
   /** TSP-LOOP-021 §2: per-page ⋮ menu open state, lifted here so only one opens at a time. */
   isMenuOpen: boolean;
   onToggleMenu?: () => void;
+  /** TSP-LOOP-022: touch-safe reorder commands in the ⋮ menu. */
+  onMovePageBackward?: () => void;
+  onMovePageForward?: () => void;
+  canMovePageBackward?: boolean;
+  canMovePageForward?: boolean;
 }
 
 const PageSlot = memo(function PageSlot({
@@ -222,6 +229,10 @@ const PageSlot = memo(function PageSlot({
   chromeScale,
   isMenuOpen,
   onToggleMenu,
+  onMovePageBackward,
+  onMovePageForward,
+  canMovePageBackward,
+  canMovePageForward,
 }: PageSlotProps) {
   return (
     <div ref={registerRef} className="relative flex shrink-0">
@@ -271,6 +282,10 @@ const PageSlot = memo(function PageSlot({
         chromeScale={chromeScale}
         isMenuOpen={isMenuOpen}
         onToggleMenu={onToggleMenu}
+        onMovePageBackward={onMovePageBackward}
+        onMovePageForward={onMovePageForward}
+        canMovePageBackward={canMovePageBackward}
+        canMovePageForward={canMovePageForward}
       />
     </div>
   );
@@ -748,7 +763,11 @@ export default function PreviewPane({
     if (typeof window === "undefined") return;
     let cancelled = false;
     const run = () => {
-      if (!cancelled) prewarmExportFonts();
+      if (cancelled) return;
+      prewarmExportFonts();
+      // TSP-LOOP-022: warm the Web閲覧用 footer logo's inlined data URL too,
+      // so the first Safari export never races a cold fetch of it.
+      prewarmExportImage(withBasePath("/caroad_main2.png"));
     };
     const hasIdleCallback = typeof window.requestIdleCallback === "function";
     const handle = hasIdleCallback ? window.requestIdleCallback(run) : window.setTimeout(run, 0);
@@ -1206,6 +1225,28 @@ export default function PreviewPane({
     applyReorder(items, nextSelected);
   };
 
+  // TSP-LOOP-022: touch-safe single-page reorder from the ⋮ menu. HTML5
+  // drag-and-drop is unusable on a touch device (the preview itself owns
+  // drag/pan), so 「1ページ前へ移動 / 後ろへ移動」 nudge exactly one page by one
+  // slot. Routes through the SAME pipeline as the drag handle —
+  // `reorderByDrag` for the sequence, `applyReorder`
+  // (→ `buildReorderedContent`) for the document text — so 改ページ markers,
+  // per-page pageOverrides, image placement and export order all behave
+  // identically to a drag. Selection follows the moved page to its new slot,
+  // matching `handleDrop`. Callers gate the first/last page; this re-checks.
+  const movePageBy = (bodyIndex: number, direction: -1 | 1) => {
+    if (!onContentChange) return;
+    const target = bodyIndex + direction;
+    if (target < 0 || target >= pages.length) return;
+    // `reorderByDrag` inserts the moving block immediately *before* the item
+    // at `insertionIndex` (original indices): −1 → before the previous page,
+    // +1 → before the page two slots ahead (i.e. after the next page).
+    const insertionIndex = direction === -1 ? bodyIndex - 1 : bodyIndex + 2;
+    const nextPages = reorderByDrag(pages, new Set([bodyIndex]), insertionIndex);
+    applyReorder(nextPages, new Set([target]));
+    setOpenPageMenuIndex(null);
+  };
+
   const clearSelection = () => setSelected(new Set());
 
   const selectAll = () => setSelected(new Set(pages.map((_, i) => i)));
@@ -1390,6 +1431,12 @@ export default function PreviewPane({
   const togglePageMenu = (bodyIndex: number) => () =>
     setOpenPageMenuIndex((current) => (current === bodyIndex ? null : bodyIndex));
   const stableTogglePageMenu = useStableIndexedCallback(togglePageMenu);
+  // TSP-LOOP-022: stable per-index refs for the ⋮ menu's reorder commands so
+  // PageCard's memo comparator isn't defeated every render.
+  const movePageBackward = (bodyIndex: number) => () => movePageBy(bodyIndex, -1);
+  const movePageForward = (bodyIndex: number) => () => movePageBy(bodyIndex, 1);
+  const stableMovePageBackward = useStableIndexedCallback(movePageBackward);
+  const stableMovePageForward = useStableIndexedCallback(movePageForward);
 
   if (isCollapsed) {
     return (
@@ -1808,6 +1855,14 @@ export default function PreviewPane({
                     chromeScale={chromeScale}
                     isMenuOpen={canReorder && openPageMenuIndex === bodyIndex}
                     onToggleMenu={canReorder ? stableTogglePageMenu(bodyIndex) : undefined}
+                    onMovePageBackward={
+                      canReorder ? stableMovePageBackward(bodyIndex) : undefined
+                    }
+                    onMovePageForward={
+                      canReorder ? stableMovePageForward(bodyIndex) : undefined
+                    }
+                    canMovePageBackward={canReorder && bodyIndex > 0}
+                    canMovePageForward={canReorder && bodyIndex < pages.length - 1}
                   />
                 );
               })}

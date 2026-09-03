@@ -265,6 +265,20 @@ interface PageCardProps {
    */
   isMenuOpen?: boolean;
   onToggleMenu?: () => void;
+  /**
+   * TSP-LOOP-022: touch-safe page reorder. The `⋮` menu carries an explicit
+   * "move one page earlier / later" pair as a reliable alternative to HTML5
+   * drag-and-drop, which is unusable on a touch device where the preview
+   * itself also owns drag/pan gestures. Both route through the SAME canonical
+   * reorder pipeline as the drag handle (PreviewPane `movePageBy` →
+   * `reorderByDrag` → `applyReorder`) — no second data model. Present on
+   * interactive previews only; `canMovePage*` is false at the first / last
+   * page so the corresponding button renders disabled (not hidden).
+   */
+  onMovePageBackward?: () => void;
+  onMovePageForward?: () => void;
+  canMovePageBackward?: boolean;
+  canMovePageForward?: boolean;
 }
 
 function PageCard({
@@ -298,6 +312,10 @@ function PageCard({
   chromeScale = 1,
   isMenuOpen = false,
   onToggleMenu,
+  onMovePageBackward,
+  onMovePageForward,
+  canMovePageBackward = false,
+  canMovePageForward = false,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Which of this page's inserted images the 挿絵 control bar below currently
@@ -699,8 +717,17 @@ function PageCard({
               data-page-menu-root=""
               role="group"
               aria-label={`${pageNumber}ページの操作`}
-              className="no-print flex flex-col gap-1 rounded-md border border-ink/15 bg-ink/[0.03] px-1.5 py-1.5 text-xs text-ink/70"
-              style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+              // TSP-LOOP-022 (HUMAN-QA polish): a compact right-aligned
+              // dropdown under the ⋮ button — not a page-wide panel. Capped at
+              // 240px (never wider than the page), `bg-base` + shadow so it
+              // reads as a menu; rows keep a 40px touch target with slightly
+              // larger text.
+              className="no-print flex flex-col gap-0.5 self-end rounded-lg border border-ink/20 bg-base px-1 py-1 text-[13px] text-ink/80 shadow-lg"
+              style={{
+                width:
+                  Math.min(240, sheetStyle.width as number) / (chromeScale || 1),
+                zoom: chromeScale,
+              }}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {
                 if (event.key === "Escape") onToggleMenu?.();
@@ -708,6 +735,32 @@ function PageCard({
             >
               {/* Page selection is NOT here — it stays permanently visible in
                   the row above (multi-page export flow). */}
+              {(onMovePageBackward || onMovePageForward) && (
+                <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-0.5">
+                  <button
+                    type="button"
+                    disabled={!canMovePageBackward}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMovePageBackward?.();
+                    }}
+                    className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    1ページ前へ移動
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canMovePageForward}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMovePageForward?.();
+                    }}
+                    className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    1ページ後ろへ移動
+                  </button>
+                </div>
+              )}
               {onHideNombreChange && (
                 <button
                   type="button"
@@ -716,7 +769,7 @@ function PageCard({
                     event.stopPropagation();
                     onHideNombreChange(!hideNombre);
                   }}
-                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                  className="flex min-h-[38px] items-center justify-between gap-2 rounded px-2.5 text-left hover:bg-ink/[0.06]"
                 >
                   <span>ノンブル（ページ番号）</span>
                   <span className="shrink-0 font-semibold">{hideNombre ? "非表示" : "表示"}</span>
@@ -730,7 +783,7 @@ function PageCard({
                     event.stopPropagation();
                     onHideHashiraChange(!hideHashira);
                   }}
-                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                  className="flex min-h-[38px] items-center justify-between gap-2 rounded px-2.5 text-left hover:bg-ink/[0.06]"
                 >
                   <span>柱（ヘッダー）</span>
                   <span className="shrink-0 font-semibold">{hideHashira ? "非表示" : "表示"}</span>
@@ -744,13 +797,13 @@ function PageCard({
                     event.stopPropagation();
                     fileInputRef.current?.click();
                   }}
-                  className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:opacity-40"
+                  className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:opacity-40"
                 >
                   {insertingImage ? "画像を変換中…" : "このページに画像を挿入"}
                 </button>
               )}
-              <p className="hidden px-2 pt-0.5 text-[11px] text-ink/40 md:block">
-                ページの並べ替えは、ページをドラッグして行います。
+              <p className="hidden px-2.5 pt-1 text-[11px] leading-snug text-ink/45 md:block">
+                パソコンでは、ページを直接ドラッグしても並べ替えられます。
               </p>
             </div>
           )}
@@ -1190,7 +1243,15 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     onHideHashiraChangeEqual;
   const nombreHashiraEqual = prev.hideNombre === next.hideNombre && prev.hideHashira === next.hideHashira;
   // TSP-LOOP-021 §2: the per-page ⋮ menu open state + toggle callback.
-  const menuEqual = prev.isMenuOpen === next.isMenuOpen && prev.onToggleMenu === next.onToggleMenu;
+  // TSP-LOOP-022: + the touch-safe reorder commands (stable per-index refs)
+  // and their first/last-page enabled flags.
+  const menuEqual =
+    prev.isMenuOpen === next.isMenuOpen &&
+    prev.onToggleMenu === next.onToggleMenu &&
+    prev.onMovePageBackward === next.onMovePageBackward &&
+    prev.onMovePageForward === next.onMovePageForward &&
+    prev.canMovePageBackward === next.canMovePageBackward &&
+    prev.canMovePageForward === next.canMovePageForward;
   const otherEqual = prev.chromeScale === next.chromeScale;
 
   const equal =

@@ -27,6 +27,14 @@ interface PageSettingsPanelProps {
   onOpenHelp: () => void;
   /** 1-based printed page numbers currently selected in the preview. */
   selectedPageNumbers: number[];
+  /**
+   * TSP-LOOP-022: rendered as the phone's dedicated 設定 workspace (not the
+   * collapsible strip that sits above the desktop editor). In that mode the
+   * panel opens on its first tab by default — the whole surface exists to
+   * show settings, so the "collapse on narrow viewports" behaviour that made
+   * sense for the inline strip is skipped.
+   */
+  mobileSurface?: boolean;
 }
 
 type SettingsTab = "page" | "master" | "plot";
@@ -97,12 +105,18 @@ const applyPaperTemplate = (
   // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -3pt
   // （最小 6pt。TSP-LOOP-021 §4）を版面から導出する（§7B: 全 preset 同一座標に
   // しない）。
+  // TSP-LOOP-022 HUMAN-QA: preset ごとに明示された nombreFontSize /
+  // headerFontSize を優先し、無い preset は従来どおり本文 -3pt へフォールバック。
   const nombreOverrides: Partial<MasterPageSettings> = base.masterPage.nombreLayoutCustomized
     ? {}
     : {
         nombrePosition: profile.nombrePosition as NombrePosition,
         nombreBottomMargin: profile.nombreDistance,
-        nombreFontSize: recommendedNombreFontSizePt(profile.fontSizePt),
+        nombreFontSize:
+          profile.nombreFontSize ?? recommendedNombreFontSizePt(profile.fontSizePt),
+        ...(profile.headerFontSize != null
+          ? { headerFontSize: profile.headerFontSize }
+          : {}),
       };
   return {
     ...base,
@@ -131,6 +145,9 @@ const NOMBRE_LAYOUT_KEYS = new Set<keyof MasterPageSettings>([
   "nombreBottomMargin",
   "nombreFontSize",
   "nombreFontFamily",
+  // TSP-LOOP-022 HUMAN-QA: 柱の文字サイズもここに含める——手動で触ったら以後の
+  // 用紙 preset 切り替えで preset 値（Web閲覧用 20pt 等）に上書きさせない。
+  "headerFontSize",
 ]);
 
 export default function PageSettingsPanel({
@@ -141,6 +158,7 @@ export default function PageSettingsPanel({
   onPlotNoteChange,
   onOpenHelp,
   selectedPageNumbers,
+  mobileSurface = false,
 }: PageSettingsPanelProps) {
   // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
   // 同じ "page" に固定し、window/localStorage に依存する判定は
@@ -149,6 +167,9 @@ export default function PageSettingsPanel({
   const [plotMode, setPlotMode] = useState<"edit" | "preview">("edit");
 
   useEffect(() => {
+    // TSP-LOOP-022: the dedicated phone 設定 workspace keeps its default open
+    // tab — it isn't a strip stacked above the manuscript any more.
+    if (mobileSurface) return;
     // モバイル画面（768px未満）は過去の閲覧履歴に関わらず必ず閉じる
     if (window.innerWidth < 768) {
       setActiveTab(null);
@@ -160,7 +181,7 @@ export default function PageSettingsPanel({
       return; // 初回はオープンのまま
     }
     setActiveTab(null); // 2回目以降は閉じる
-  }, []);
+  }, [mobileSurface]);
 
   const toggleTab = (tab: SettingsTab) => {
     setActiveTab((current) => (current === tab ? null : tab));
