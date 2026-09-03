@@ -13,13 +13,17 @@ import {
   ALLOWED_IMAGE_MIME,
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   BETA_FEEDBACK_TYPES,
+  FEEDBACK_HONEYPOT_FIELD,
   MAX_FEEDBACK_IMAGES,
   MAX_IMAGE_BYTES,
   MAX_TOTAL_IMAGE_BYTES,
   MAX_MESSAGE_LENGTH,
   REVIEW_CHECKLIST_ITEMS,
+  TURNSTILE_ACTION,
   canSubmitFeedback,
+  isAllowedTurnstileHostname,
   isValidImage,
+  sanitizeSheetCell,
   sniffImageMime,
   validateSubmissionShape,
 } from "../src/lib/betaFeedback.ts";
@@ -38,7 +42,9 @@ const tategaki = read("src/components/TategakiEditor.tsx");
 const modal = read("src/components/BetaFeedbackModal.tsx");
 const client = read("src/lib/betaFeedbackClient.ts");
 const lib = read("src/lib/betaFeedback.ts");
+const turnstileHook = read("src/lib/turnstile.ts");
 const edge = read("supabase/functions/beta-feedback/index.ts");
+const verifySupabase = read("scripts/verify-supabase-project.mjs");
 const sql = read("docs/supabase/migrations/20260901000000_beta_feedback_storage.sql");
 const help = read("public/docs/help.md");
 const envExample = read(".env.example");
@@ -115,7 +121,10 @@ check(
   /個人情報が含まれていないか、送信前にご確認ください/.test(lib) &&
     /\{FEEDBACK_IMAGE_PRIVACY_NOTICE\}/.test(modal)
 );
-check("feedback: anonymous — no name input field", !/type="text"[\s\S]{0,120}(お名前|名前|name)/i.test(modal));
+check(
+  "feedback: anonymous — no user-facing name input field (honeypot is hidden & bot-only)",
+  !/type="text"[\s\S]{0,120}(お名前|氏名|ペンネーム|placeholder="[^"]*名前)/i.test(modal)
+);
 check(
   "feedback: anonymous — no email input field",
   !/type="email"/.test(modal) && !/inputMode="email"/.test(modal)
@@ -132,7 +141,7 @@ check(
 );
 check(
   "feedback: send button disabled when cannot send or while sending",
-  /disabled=\{!canSend \|\| feedbackState === "sending"\}/.test(modal)
+  /disabled=\{!canSend \|\| feedbackState === "sending"( \|\| !turnstileReady)?\}/.test(modal)
 );
 check(
   "feedback: duplicate prevention guard (sendingRef)",
@@ -580,6 +589,218 @@ check("sql: non-destructive (no drop/truncate/delete statements)", (() => {
   const stripped = sql.replace(/--.*$/gm, ""); // drop SQL line comments
   return !/\b(drop\s+table|truncate|delete\s+from)\b/i.test(stripped);
 })());
+
+/* ================= TSP-LOOP-019: FEEDBACK HARDENING ================= *
+ *  Cloudflare Turnstile (mandatory) + honeypot + Sheet formula-injection.
+ *  Both submit types are covered by one Turnstile widget. Tokens are single-use.
+ * ------------------------------------------------------------------- */
+
+// ---- Turnstile: shared constants agree frontend <-> Edge Function ----
+check("19 turnstile: fixed action id is 'tatespun-feedback'", TURNSTILE_ACTION === "tatespun-feedback");
+check(
+  "19 turnstile: Edge Function uses the same TURNSTILE_ACTION",
+  new RegExp(`TURNSTILE_ACTION\\s*=\\s*"${TURNSTILE_ACTION}"`).test(edge),
+);
+check(
+  "19 turnstile: hostname allowlist = spuntales.net / tatespun.pages.dev / *.tatespun.pages.dev",
+  isAllowedTurnstileHostname("spuntales.net") &&
+    isAllowedTurnstileHostname("tatespun.pages.dev") &&
+    isAllowedTurnstileHostname("deploy-preview-7.tatespun.pages.dev") &&
+    !isAllowedTurnstileHostname("evil.com") &&
+    !isAllowedTurnstileHostname("spuntales.net.evil.com") &&
+    !isAllowedTurnstileHostname("tatespun.pages.dev.evil.com"),
+);
+check(
+  "19 turnstile: Edge Function mirrors the same hostname allowlist",
+  /h === "spuntales\.net"/.test(edge) &&
+    /h === "tatespun\.pages\.dev"/.test(edge) &&
+    /h\.endsWith\("\.tatespun\.pages\.dev"\)/.test(edge),
+);
+
+// ---- Turnstile: frontend sends a token in BOTH payloads ----
+check(
+  "19 turnstile: client puts turnstileToken in the feedback (multipart) payload",
+  /form\.set\(\s*"payload",\s*JSON\.stringify\(\{[\s\S]{0,220}turnstileToken/.test(client),
+);
+check(
+  "19 turnstile: client puts turnstileToken in the review (json) payload",
+  /type:\s*"review",[\s\S]{0,220}turnstileToken/.test(client),
+);
+check(
+  "19 turnstile: client refuses to send without a token",
+  /if \(!security\.turnstileToken\)\s*\{\s*return \{ ok: false \};/.test(client.replace(/\s+/g, " ").replace(/ \{ /g, " {\n").replace(/if \(!security\.turnstileToken\) \{ return \{ ok: false \}; \}/, "if (!security.turnstileToken) {\n    return { ok: false };\n  }")) ||
+    /!security\.turnstileToken[\s\S]{0,60}return \{ ok: false \}/.test(client),
+);
+check(
+  "19 turnstile: modal gates BOTH submit buttons on a verified token",
+  (modal.match(/disabled=\{[^}]*turnstileReady[^}]*\}/g) || []).length >= 2 &&
+    /turnstileReady =\s*turnstileStatus === "verified" && turnstileToken\.length > 0/.test(modal),
+);
+check(
+  "19 turnstile: modal renders ONE widget container, shared by both tabs (outside the tab conditional)",
+  (modal.match(/ref=\{turnstileMount\}/g) || []).length === 1 &&
+    modal.indexOf("ref={turnstileMount}") > modal.lastIndexOf('reviewを送信'),
+);
+check(
+  "19 turnstile: token is single-use — reset after EVERY completed submit attempt (both handlers)",
+  (modal.match(/resetTurnstile\(\)/g) || []).length >= 2 &&
+    /await submitBetaFeedback\(submission, \{[\s\S]{0,120}\}\);\s*sendingRef\.current = false;\s*[\s\S]{0,80}resetTurnstile\(\)/.test(modal) &&
+    /await submitBetaFeedback\(submission, \{[\s\S]{0,120}\}\);\s*reviewSendingRef\.current = false;\s*resetTurnstile\(\)/.test(modal),
+);
+check(
+  "19 turnstile: hook clears token on expired / timeout / error callbacks",
+  /"expired-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook) &&
+    /"timeout-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook) &&
+    /"error-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook),
+);
+check(
+  "19 turnstile: hook loads the official Cloudflare script only (no new npm dep), render=explicit",
+  /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit/.test(turnstileHook) &&
+    !/from "@?[a-z].*turnstile/i.test(turnstileHook),
+);
+check(
+  "19 turnstile: no client file READS a turnstile secret (comment mentioning its name is ok)",
+  ![modal, client, turnstileHook].some((s) =>
+    /(process\.env\.[A-Z_]*TURNSTILE_SECRET|Deno\.env|env\(["'][A-Z_]*TURNSTILE_SECRET)/.test(s)
+  ) && !/TURNSTILE_SECRET[A-Z_]*\s*=\s*process\.env/.test(lib),
+);
+check(
+  "19 turnstile: site key comes from NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+  /process\.env\.NEXT_PUBLIC_TURNSTILE_SITE_KEY/.test(lib) &&
+    /TURNSTILE_SITE_KEY/.test(turnstileHook),
+);
+
+// ---- Turnstile: Edge Function verification, fail-closed ----
+{
+  const h = edge.slice(edge.indexOf("async function verifyTurnstile"), edge.indexOf("function sanitizeSheetCell"));
+  check("19 turnstile server: missing TURNSTILE_SECRET_KEY → fail closed", /if \(!TURNSTILE_SECRET_KEY\) return \{ ok: false, retriable: true \}/.test(h));
+  check("19 turnstile server: missing token → reject", /if \(!token\) return \{ ok: false, retriable: false \}/.test(h));
+  check("19 turnstile server: siteverify non-200 → fail closed", /if \(!res\.ok\) return \{ ok: false, retriable: true \}/.test(h));
+  check("19 turnstile server: siteverify network error → fail closed", /catch \{\s*return \{ ok: false, retriable: true \}/.test(h));
+  check("19 turnstile server: rejects success:false / action mismatch / hostname mismatch", /data\.success !== true/.test(h) && /data\.action !== TURNSTILE_ACTION/.test(h) && /!isAllowedTurnstileHostname\(data\.hostname\)/.test(h));
+  check("19 turnstile server: does NOT send the user's IP (no remoteip param)", !/remoteip/i.test(h));
+  check("19 turnstile server: never logs token / secret / siteverify body", !/console\.(log|error)/.test(h));
+}
+const edgeHandler = edge.slice(edge.indexOf("Deno.serve(async (req)"));
+check(
+  "19 turnstile server: verified BEFORE any Discord / Spreadsheet / Storage / createClient",
+  (() => {
+    const verifyAt = edgeHandler.indexOf("const ts = await verifyTurnstile(");
+    return (
+      verifyAt !== -1 &&
+      verifyAt < edgeHandler.indexOf("createClient(SUPABASE_URL, SERVICE_ROLE_KEY") &&
+      verifyAt < edgeHandler.indexOf("await notifyDiscordFeedback(") &&
+      verifyAt < edgeHandler.indexOf("await appendToSpreadsheet(") &&
+      verifyAt < edgeHandler.indexOf("await storeImages(supabase")
+    );
+  })(),
+);
+check(
+  "19 turnstile server: client gets only a generic error (no sub-reason leaked)",
+  /json\(\s*\{ ok: false, error: "verification_failed" \}/.test(edge) &&
+    !/error: "(hostname|action|spent|expired)"/.test(edge),
+);
+check(
+  "19 turnstile server: anonymous endpoint stays verify_jwt=false (feature is intentionally anonymous)",
+  /verify_jwt = false/.test(read("supabase/config.toml")),
+);
+
+// ---- Honeypot ----
+check("19 honeypot: field name shared constant is 'website'", FEEDBACK_HONEYPOT_FIELD === "website");
+check(
+  "19 honeypot: modal has an invisible, non-tabbable, autocomplete-off input",
+  /name=\{FEEDBACK_HONEYPOT_FIELD\}/.test(modal) &&
+    /tabIndex=\{-1\}/.test(modal) &&
+    /autoComplete="off"/.test(modal) &&
+    /aria-hidden="true"/.test(modal.slice(modal.indexOf("honeypot"), modal.indexOf("turnstile.containerRef"))),
+);
+check(
+  "19 honeypot: NOT display:none (uses off-screen / clip so bots still see it)",
+  (() => {
+    const hp = modal.slice(modal.indexOf("bf-hp") - 400, modal.indexOf("bf-hp") + 200);
+    // `overflow-hidden` is fine; reject only display:none or the `hidden` class/attr.
+    return !/display:\s*none/.test(hp) && !/(?<![-\w])hidden(?![-\w])/.test(hp) &&
+      /-m-px|absolute|overflow-hidden/.test(hp);
+  })(),
+);
+check(
+  "19 honeypot: client sends the honeypot value in both payloads",
+  (client.match(/\[FEEDBACK_HONEYPOT_FIELD\]:\s*honeypot/g) || []).length === 2,
+);
+check(
+  "19 honeypot server: any value → reject BEFORE downstream, generic error",
+  (() => {
+    const hpAt = edgeHandler.indexOf('if (honeypot.trim() !== "")');
+    return (
+      hpAt !== -1 &&
+      /return json\(\{ ok: false, error: "rejected" \}, 400, origin\);/.test(edgeHandler) &&
+      hpAt < edgeHandler.indexOf("const ts = await verifyTurnstile(") &&
+      hpAt < edgeHandler.indexOf("createClient(SUPABASE_URL, SERVICE_ROLE_KEY") &&
+      hpAt < edgeHandler.indexOf("await notifyDiscordFeedback(") &&
+      hpAt < edgeHandler.indexOf("await appendToSpreadsheet(")
+    );
+  })(),
+);
+check("19 honeypot server: parsed from BOTH multipart and json payloads", (edge.match(/honeypot = str\(payload\.website\)/g) || []).length === 2);
+
+// ---- Spreadsheet formula injection ----
+check("19 sheet: =SUM(1,2) is neutralised to text", sanitizeSheetCell("=SUM(1,2)") === "'=SUM(1,2)");
+check("19 sheet: +cmd neutralised", sanitizeSheetCell("+cmd") === "'+cmd");
+check("19 sheet: -1+1 neutralised", sanitizeSheetCell("-1+1") === "'-1+1");
+check("19 sheet: @something neutralised", sanitizeSheetCell("@something") === "'@something");
+check("19 sheet: leading whitespace before = still neutralised", sanitizeSheetCell("   =A1") === "'   =A1");
+check("19 sheet: leading tab neutralised", sanitizeSheetCell("\tvalue") === "'\tvalue");
+check(
+  "19 sheet: ordinary Japanese text is unchanged",
+  sanitizeSheetCell("ここに不具合の説明です。=は含みません") === "ここに不具合の説明です。=は含みません" &&
+    sanitizeSheetCell("プレビューが崩れる") === "プレビューが崩れる" &&
+    sanitizeSheetCell("") === "",
+);
+check(
+  "19 sheet: Edge Function has an identical sanitizer + applies it to Apps Script payload only",
+  /function sanitizeSheetCell\(value: string\): string/.test(edge) &&
+    /message: sanitizeSheetCell\(message\)/.test(edge) &&
+    /note: sanitizeSheetCell\(note\)/.test(edge) &&
+    /appVersion: sanitizeSheetCell\(appVersion\)/.test(edge),
+);
+check(
+  "19 sheet: Discord text is NOT run through the sanitizer (raw message/note)",
+  (() => {
+    const fb = edge.slice(edge.indexOf('if (type === "feedback")'), edge.indexOf("/* ---------------------------- review"));
+    return /notifyDiscordFeedback\(reportId, appVersion, message, stored\)/.test(fb) &&
+      !/notifyDiscordFeedback\([^)]*sanitizeSheetCell/.test(edge) &&
+      !/notifyDiscordReview\([^)]*sanitizeSheetCell/.test(edge);
+  })(),
+);
+
+// ---- Double-submit / rate limit ----
+check("19 double-submit: review handler now guards with a ref (not just state)", /reviewSendingRef\.current/.test(modal) && /const reviewSendingRef = useRef\(false\)/.test(modal));
+check("19 double-submit: feedback handler keeps its sendingRef guard", /if \(sendingRef\.current \|\| !canSend \|\| !turnstileReady\) return;/.test(modal));
+check("19 rate limit: server best-effort limiter kept, threshold not weakened (RATE_MAX <= 6)", /const RATE_MAX = ([0-6]);/.test(edge));
+check("19 rate limit: still no persistent IP table / fingerprinting", !/create table[\s\S]{0,120}ip\b/i.test(edge) && !/fingerprint/i.test(edge) && /IP は保存しない/.test(edge));
+
+// ---- Build guard ----
+check(
+  "19 build guard: verify-supabase-project.mjs fails when feedback ENABLED but Turnstile site key missing/placeholder",
+  /NEXT_PUBLIC_BETA_FEEDBACK_ENABLED/.test(verifySupabase) &&
+    /NEXT_PUBLIC_TURNSTILE_SITE_KEY/.test(verifySupabase) &&
+    /your-turnstile-site-key/.test(verifySupabase) &&
+    /!feedbackEnabled \|\| !placeholderKey/.test(verifySupabase),
+);
+check(
+  "19 build guard: .env.example documents the public var name only (no real key, secret named as Supabase-only)",
+  /NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-turnstile-site-key/.test(envExample) &&
+    /TURNSTILE_SECRET_KEY.*Supabase Edge Function/.test(envExample),
+);
+
+/* ==================== TSP-019 REGRESSION GUARD ==================== */
+check("19 regress: image attachments still disabled (both flags)", BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED === false && /const IMAGE_ATTACHMENTS_ENABLED = false;/.test(edge));
+check("19 regress: 15 checklist items unchanged", REVIEW_CHECKLIST_ITEMS.length === 15);
+check("19 regress: feedback + review shape validation still passes for normal input", validateSubmissionShape({ type: "feedback", message: "テスト", images: [] }).ok === true && validateSubmissionShape({ type: "review", checkedItems: ["ルビ"], note: "" }).ok === true);
+check("19 regress: CORS still an allowlist, no wildcard", /ALLOWED_ORIGINS\.includes\(origin\)/.test(edge) && !/Access-Control-Allow-Origin["']?\s*[:,]\s*["']\*/.test(edge));
+check("19 regress: Discord mentions still disabled everywhere", (edge.match(/allowed_mentions: ALLOWED_MENTIONS_NONE/g) || []).length >= 2);
+check("19 regress: Spreadsheet still the canonical success condition", (edge.match(/if \(!sheetOk\)/g) || []).length >= 2 && /return json\(\{ ok: true, reportId \}, 200, origin\);/.test(edge));
+check("19 regress: server-generated reportId + receivedAt unchanged", /const reportId = crypto\.randomUUID\(\)/.test(edge) && /const receivedAt = new Date\(\)\.toISOString\(\)/.test(edge));
 
 /* ============================ HELP ============================ */
 

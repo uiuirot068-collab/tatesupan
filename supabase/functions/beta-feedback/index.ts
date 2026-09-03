@@ -20,6 +20,15 @@
 //  - Discord へは allowed_mentions:{parse:[]}。@everyone/@here/<@id> を無効化。
 //  - 原稿本文・タイトル・ドキュメント ID 等は受け取っても無視（スキーマ外）。
 //  - IP は rate-limit の一時参照のみ。保存・ログ・下流送信しない。
+//
+// TSP-LOOP-019 hardening:
+//  - Cloudflare Turnstile を**必須**。missing / invalid / expired / action 不一致 /
+//    hostname 不一致 → 拒否。TURNSTILE_SECRET_KEY 欠如・siteverify 通信失敗は
+//    fail-closed。token / secret / siteverify raw は絶対に log しない。
+//  - honeypot（bot 専用の非表示フィールド）に値があれば downstream を一切
+//    実行せず汎用エラー。
+//  - Spreadsheet セルの式インジェクション対策（Apps Script payload のみ。
+//    Discord 本文は不変）。
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -83,6 +92,13 @@ const DISCORD_FEEDBACK_WEBHOOK_URL = env("DISCORD_FEEDBACK_WEBHOOK_URL");
 const DISCORD_REVIEW_WEBHOOK_URL = env("DISCORD_REVIEW_WEBHOOK_URL");
 const GOOGLE_APPS_SCRIPT_URL = env("GOOGLE_APPS_SCRIPT_URL");
 const GOOGLE_APPS_SCRIPT_SECRET = env("GOOGLE_APPS_SCRIPT_SECRET");
+// TSP-LOOP-019: Cloudflare Turnstile。secret key はここでのみ読む。フロントの
+// src/lib/betaFeedback.ts TURNSTILE_ACTION / isAllowedTurnstileHostname と一致
+// させること（verify-beta-feedback.mjs が突き合わせる）。
+const TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY");
+const TURNSTILE_ACTION = "tatespun-feedback";
+const TURNSTILE_VERIFY_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const ALLOWED_ORIGINS = (env("BETA_FEEDBACK_ALLOWED_ORIGINS")
   ? env("BETA_FEEDBACK_ALLOWED_ORIGINS").split(",").map((s) => s.trim())
   : DEFAULT_ALLOWED_ORIGINS
@@ -111,6 +127,64 @@ function json(
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
   });
+}
+
+/* --- TSP-LOOP-019: Turnstile server verification (fail-closed) --- */
+
+function isAllowedTurnstileHostname(hostname: unknown): boolean {
+  const h = (typeof hostname === "string" ? hostname : "").trim().toLowerCase();
+  return (
+    h === "spuntales.net" ||
+    h === "tatespun.pages.dev" ||
+    h.endsWith(".tatespun.pages.dev")
+  );
+}
+
+/**
+ * token を Cloudflare siteverify で検証する。secret / token / raw response は
+ * 一切 log しない。ユーザー IP は下流へ送らない（remoteip を付けない）。
+ * 返り値の `code` は内部診断用のみ——クライアントへは汎用エラーだけ返す。
+ */
+async function verifyTurnstile(
+  token: string,
+): Promise<{ ok: true } | { ok: false; retriable: boolean }> {
+  if (!TURNSTILE_SECRET_KEY) return { ok: false, retriable: true }; // fail-closed
+  if (!token) return { ok: false, retriable: false };
+
+  let data: { success?: boolean; action?: string; hostname?: string } | null = null;
+  try {
+    const body = new URLSearchParams();
+    body.set("secret", TURNSTILE_SECRET_KEY);
+    body.set("response", token);
+    const res = await fetch(TURNSTILE_VERIFY_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!res.ok) return { ok: false, retriable: true }; // fail-closed
+    data = await res.json();
+  } catch {
+    return { ok: false, retriable: true }; // fail-closed
+  }
+
+  if (!data || data.success !== true) return { ok: false, retriable: false };
+  if (data.action !== TURNSTILE_ACTION) return { ok: false, retriable: false };
+  if (!isAllowedTurnstileHostname(data.hostname)) return { ok: false, retriable: false };
+  return { ok: true };
+}
+
+/**
+ * TSP-LOOP-019: Google Sheets / Excel 式インジェクション対策。値が（先頭の
+ * 空白・制御文字を除いて）`= + - @` で始まる、またはタブ / CR で始まる場合、
+ * アポストロフィを前置してテキストとして扱わせる。内容は削らない。
+ * **Apps Script payload を組む時だけ**使う——Discord 本文には適用しない。
+ * src/lib/betaFeedback.ts sanitizeSheetCell と同一ロジック。
+ */
+function sanitizeSheetCell(value: string): string {
+  if (typeof value !== "string" || value === "") return value;
+  const stripped = value.replace(/^[\s\u0000-\u001f\u0085\u00a0\uFEFF]+/, "");
+  if (/^[=+\-@]/.test(stripped) || /^[\t\r]/.test(value)) return `'${value}`;
+  return value;
 }
 
 function sniffImageMime(bytes: Uint8Array): AllowedMime | null {
@@ -385,7 +459,10 @@ Deno.serve(async (req) => {
   let checkedItems: string[] = [];
   let note = "";
   let clientContext: { appVersion?: string; path?: string; viewport?: string } = {};
+  let turnstileToken = "";
+  let honeypot = ""; // TSP-LOOP-019: bot 専用フィールド。値があれば拒否。
   const rawImages: { bytes: Uint8Array; mime: AllowedMime }[] = [];
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
 
   try {
     const ct = req.headers.get("content-type") ?? "";
@@ -396,6 +473,8 @@ Deno.serve(async (req) => {
       type = String(payload.type ?? "");
       message = typeof payload.message === "string" ? payload.message : "";
       clientContext = payload.clientContext ?? {};
+      turnstileToken = str(payload.turnstileToken);
+      honeypot = str(payload.website);
       let total = 0;
       for (let i = 0; i < MAX_FEEDBACK_IMAGES; i++) {
         const f = form.get(`image${i}`);
@@ -425,6 +504,8 @@ Deno.serve(async (req) => {
         : [];
       note = typeof payload.note === "string" ? payload.note : "";
       clientContext = payload.clientContext ?? {};
+      turnstileToken = str(payload.turnstileToken);
+      honeypot = str(payload.website);
     } else {
       return json({ ok: false, error: "unsupported_content_type" }, 415, origin);
     }
@@ -437,6 +518,22 @@ Deno.serve(async (req) => {
   }
   if (rawImages.length > MAX_FEEDBACK_IMAGES) {
     return json({ ok: false, error: "too_many_images" }, 400, origin);
+  }
+
+  // TSP-LOOP-019: anti-abuse — Discord / Spreadsheet / Storage いずれの前に。
+  // 1) honeypot に値があれば bot。汎用エラーで拒否（詳細は開示しない）。
+  if (honeypot.trim() !== "") {
+    return json({ ok: false, error: "rejected" }, 400, origin);
+  }
+  // 2) Turnstile は必須。missing/invalid/expired/action/hostname → 403、
+  //    secret 欠如・siteverify 通信失敗 → fail-closed 503。
+  const ts = await verifyTurnstile(turnstileToken);
+  if (!ts.ok) {
+    return json(
+      { ok: false, error: "verification_failed" },
+      ts.retriable ? 503 : 403,
+      origin,
+    );
   }
 
   const appVersion = String(clientContext.appVersion ?? "").slice(0, 64);
@@ -472,14 +569,16 @@ Deno.serve(async (req) => {
 
     // 3. Spreadsheet append (canonical success condition)
     const imagePaths = stored.map((s) => s.path);
+    // TSP-LOOP-019: Sheet セルへ渡すユーザー由来文字列だけ式インジェクション
+    // 無害化（Discord 本文・reportId/receivedAt はそのまま）。
     const sheetOk = await appendToSpreadsheet({
       type: "feedback",
       receivedAt,
       reportId,
-      appVersion,
-      path,
-      viewport,
-      message,
+      appVersion: sanitizeSheetCell(appVersion),
+      path: sanitizeSheetCell(path),
+      viewport: sanitizeSheetCell(viewport),
+      message: sanitizeSheetCell(message),
       images: imagePaths,
       discordStatus,
     });
@@ -519,12 +618,12 @@ Deno.serve(async (req) => {
     type: "review",
     receivedAt,
     reportId,
-    appVersion,
-    path,
-    viewport,
+    appVersion: sanitizeSheetCell(appVersion),
+    path: sanitizeSheetCell(path),
+    viewport: sanitizeSheetCell(viewport),
     checkedCount,
-    reviewItems,
-    note,
+    reviewItems: sanitizeSheetCell(reviewItems),
+    note: sanitizeSheetCell(note),
     discordStatus,
   });
 

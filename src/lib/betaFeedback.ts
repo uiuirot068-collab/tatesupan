@@ -42,6 +42,56 @@ export const BETA_FEEDBACK_APP_VERSION =
 export const BETA_FEEDBACK_FUNCTION_PATH = "/functions/v1/beta-feedback";
 
 /* ------------------------------------------------------------------ *
+ *  TSP-LOOP-019 — 公開β hardening（Turnstile / honeypot / Sheet 安全化）
+ *  Edge Function 側でも必ず再検証・再定義し、verify-beta-feedback.mjs が
+ *  両者の一致を突き合わせる。
+ * ------------------------------------------------------------------ */
+
+/**
+ * Cloudflare Turnstile の公開 site key（ビルド時に静的置換）。
+ * secret key（TURNSTILE_SECRET_KEY）は Supabase Edge Function 環境のみ——
+ * クライアント／repo／ログには絶対に出さない。
+ */
+export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+/** この機能専用の固定 Turnstile action。フロントは render 時、サーバは検証時にこれを使う。 */
+export const TURNSTILE_ACTION = "tatespun-feedback";
+
+/**
+ * Turnstile siteverify が返す `hostname` の許可判定。
+ * spuntales.net / tatespun.pages.dev / *.tatespun.pages.dev（Preview デプロイ）のみ。
+ * 任意ホストは受理しない。
+ */
+export function isAllowedTurnstileHostname(hostname: string): boolean {
+  const h = (typeof hostname === "string" ? hostname : "").trim().toLowerCase();
+  return (
+    h === "spuntales.net" ||
+    h === "tatespun.pages.dev" ||
+    h.endsWith(".tatespun.pages.dev")
+  );
+}
+
+/**
+ * bot 専用の非表示フィールド名（BetaFeedbackModal で視覚的に隠す）。
+ * 送信 payload に値が入っていたら bot 判定 → サーバは downstream 一切実行せず
+ * 汎用エラーで拒否する（詳細な anti-bot ロジックは開示しない）。
+ */
+export const FEEDBACK_HONEYPOT_FIELD = "website";
+
+/**
+ * Google Sheets / Excel の式インジェクション対策。セル値が（先頭の空白・制御
+ * 文字を除いて）`= + - @` で始まる、またはタブ / CR で始まる場合、式として
+ * 実行され得るのでアポストロフィを前置してテキストのまま残す。内容は削らない。
+ * **Apps Script payload を組む時だけ**適用する——Discord 本文は一切変更しない。
+ */
+export function sanitizeSheetCell(value: string): string {
+  if (typeof value !== "string" || value === "") return value;
+  const stripped = value.replace(/^[\s\u0000-\u001f\u0085\u00a0\uFEFF]+/, "");
+  if (/^[=+\-@]/.test(stripped) || /^[\t\r]/.test(value)) return `'${value}`;
+  return value;
+}
+
+/* ------------------------------------------------------------------ *
  *  上限値 / allowlist（Edge Function 側でも必ず再検証する）
  * ------------------------------------------------------------------ */
 
