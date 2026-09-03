@@ -247,8 +247,8 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   hashiraEven: "",
   hashiraPosition: "top",
   headerFontSize: 8,
-  // 文庫（既定用紙）1段組の本文9pt − 3pt = 6pt（TSP-LOOP-021 §4）。
-  nombreFontSize: 6,
+  // 文庫（既定用紙）の preset 値。TSP-LOOP-022 HUMAN-QA で 6pt → 5pt。
+  nombreFontSize: 5,
   nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
   nombreLayoutCustomized: false,
 };

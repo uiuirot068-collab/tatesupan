@@ -25,6 +25,14 @@ export interface PaperSizeColumnProfile {
   linesPerColumn: number; // 1段の行数
   nombrePosition: PaperSizeNombrePosition; // ノンブル表示位置
   nombreDistance: number; // ノンブル: 地からの距離 (mm)
+  /**
+   * ノンブルの文字サイズ (pt)。TSP-LOOP-022 HUMAN-QA: preset ごとに明示。
+   * 省略時は本文フォント -3pt / 最小6pt（recommendedNombreFontSizePt）へ
+   * フォールバック。ユーザー手動変更後は保持（nombreLayoutCustomized）。
+   */
+  nombreFontSize?: number;
+  /** 柱（ヘッダー）の文字サイズ (pt)。省略時は既定 8pt を維持。 */
+  headerFontSize?: number;
   /** 本文グリッドの字送り方式。省略時は "justified"（従来挙動）。 */
   gridMode?: PaperSizeGridMode;
 }
@@ -55,6 +63,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 22,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 8,
       // TSP-LOOP-003: A5 1段組は charsPerLine(53) が版面高(174mm)を割り切らず、
       // justified だと字送りが 1.03em に広がって本文が疎らに見える。ベタ組み
       // (1em 固定グリッド) に切り替え、余りは地側の余白として残す。A5 1段組限定。
@@ -72,6 +81,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 24,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 8,
     },
   },
   'B5': {
@@ -90,6 +100,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 26,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 8,
     },
     cols2: {
       marginTop: 18,
@@ -103,6 +114,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 28,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 8,
     },
   },
   'B6': {
@@ -121,6 +133,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 18,
       nombrePosition: 'center',
       nombreDistance: 7,
+      nombreFontSize: 6,
     },
     cols2: {
       marginTop: 14,
@@ -134,6 +147,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 20,
       nombrePosition: 'center',
       nombreDistance: 7,
+      nombreFontSize: 6,
     },
   },
   '新書': {
@@ -152,6 +166,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 15,
       nombrePosition: 'center',
       nombreDistance: 7,
+      nombreFontSize: 6,
     },
     cols2: {
       marginTop: 13,
@@ -165,6 +180,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 17,
       nombrePosition: 'center',
       nombreDistance: 7,
+      nombreFontSize: 6,
     },
   },
   'A6': {
@@ -214,6 +230,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 16,
       nombrePosition: 'center',
       nombreDistance: 6,
+      nombreFontSize: 5,
     },
     cols2: {
       marginTop: 12,
@@ -227,6 +244,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 18,
       nombrePosition: 'center',
       nombreDistance: 6,
+      nombreFontSize: 5,
     },
   },
   'Web閲覧用': {
@@ -237,8 +255,8 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
     cols1: {
       marginTop: 40,
       marginBottom: 40,
-      marginGutter: 30,
-      marginOuter: 30,
+      marginGutter: 20,
+      marginOuter: 20,
       fontSizePt: 36,
       lineSpacing: 1.8,
       columnGap: 0,
@@ -252,12 +270,14 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 12,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 15,
+      headerFontSize: 20,
     },
     cols2: {
       marginTop: 40,
       marginBottom: 20,
-      marginGutter: 30,
-      marginOuter: 30,
+      marginGutter: 20,
+      marginOuter: 20,
       fontSizePt: 32,
       lineSpacing: 1.75,
       columnGap: 10,
@@ -266,6 +286,8 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       linesPerColumn: 14,
       nombrePosition: 'center',
       nombreDistance: 8,
+      nombreFontSize: 15,
+      headerFontSize: 20,
     },
   },
 };

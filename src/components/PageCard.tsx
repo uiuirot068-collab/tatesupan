@@ -717,8 +717,17 @@ function PageCard({
               data-page-menu-root=""
               role="group"
               aria-label={`${pageNumber}ページの操作`}
-              className="no-print flex flex-col gap-1 rounded-md border border-ink/15 bg-ink/[0.03] px-1.5 py-1.5 text-xs text-ink/70"
-              style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+              // TSP-LOOP-022 (HUMAN-QA polish): a compact right-aligned
+              // dropdown under the ⋮ button — not a page-wide panel. Capped at
+              // 240px (never wider than the page), `bg-base` + shadow so it
+              // reads as a menu; rows keep a 40px touch target with slightly
+              // larger text.
+              className="no-print flex flex-col gap-0.5 self-end rounded-lg border border-ink/20 bg-base px-1 py-1 text-[13px] text-ink/80 shadow-lg"
+              style={{
+                width:
+                  Math.min(240, sheetStyle.width as number) / (chromeScale || 1),
+                zoom: chromeScale,
+              }}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {
                 if (event.key === "Escape") onToggleMenu?.();
@@ -727,7 +736,7 @@ function PageCard({
               {/* Page selection is NOT here — it stays permanently visible in
                   the row above (multi-page export flow). */}
               {(onMovePageBackward || onMovePageForward) && (
-                <div className="flex flex-col gap-1 border-b border-ink/10 pb-1">
+                <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-0.5">
                   <button
                     type="button"
                     disabled={!canMovePageBackward}
@@ -735,7 +744,7 @@ function PageCard({
                       event.stopPropagation();
                       onMovePageBackward?.();
                     }}
-                    className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                    className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     1ページ前へ移動
                   </button>
@@ -746,7 +755,7 @@ function PageCard({
                       event.stopPropagation();
                       onMovePageForward?.();
                     }}
-                    className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                    className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     1ページ後ろへ移動
                   </button>
@@ -760,7 +769,7 @@ function PageCard({
                     event.stopPropagation();
                     onHideNombreChange(!hideNombre);
                   }}
-                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                  className="flex min-h-[38px] items-center justify-between gap-2 rounded px-2.5 text-left hover:bg-ink/[0.06]"
                 >
                   <span>ノンブル（ページ番号）</span>
                   <span className="shrink-0 font-semibold">{hideNombre ? "非表示" : "表示"}</span>
@@ -774,7 +783,7 @@ function PageCard({
                     event.stopPropagation();
                     onHideHashiraChange(!hideHashira);
                   }}
-                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                  className="flex min-h-[38px] items-center justify-between gap-2 rounded px-2.5 text-left hover:bg-ink/[0.06]"
                 >
                   <span>柱（ヘッダー）</span>
                   <span className="shrink-0 font-semibold">{hideHashira ? "非表示" : "表示"}</span>
@@ -788,12 +797,12 @@ function PageCard({
                     event.stopPropagation();
                     fileInputRef.current?.click();
                   }}
-                  className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:opacity-40"
+                  className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06] disabled:opacity-40"
                 >
                   {insertingImage ? "画像を変換中…" : "このページに画像を挿入"}
                 </button>
               )}
-              <p className="hidden px-2 pt-0.5 text-[11px] text-ink/40 md:block">
+              <p className="hidden px-2.5 pt-1 text-[11px] leading-snug text-ink/45 md:block">
                 パソコンでは、ページを直接ドラッグしても並べ替えられます。
               </p>
             </div>
