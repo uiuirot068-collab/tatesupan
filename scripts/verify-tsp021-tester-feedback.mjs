@@ -239,13 +239,15 @@ check(
     /nombreLayoutCustomized: false,/.test(pageLayout)
 );
 check(
-  "7f. §7C + §4: applyPaperTemplate re-applies preset nombre defaults only when NOT customized; recommended size = body − 3pt / min 6pt",
+  "7f. §7C + §4 (+ TSP-022 HUMAN-QA): applyPaperTemplate re-applies preset nombre/柱 defaults only when NOT customized; per-preset nombreFontSize with body−3pt/min6 fallback",
   !!pageSettings && !!pageLayout &&
     /base\.masterPage\.nombreLayoutCustomized\s*\n?\s*\?\s*\{\}/.test(pageSettings) &&
-    /nombreFontSize: recommendedNombreFontSizePt\(profile\.fontSizePt\)/.test(pageSettings) &&
+    // per-preset explicit value, fall back to the recommended formula
+    /nombreFontSize:\s*\n?\s*profile\.nombreFontSize \?\? recommendedNombreFontSizePt\(profile\.fontSizePt\)/.test(pageSettings) &&
+    /profile\.headerFontSize != null/.test(pageSettings) &&
     /export function recommendedNombreFontSizePt\(bodyFontSizePt: number\): number \{\s*\n?\s*return Math\.max\(6, Math\.round\(bodyFontSizePt - 3\)\);/.test(pageLayout) &&
-    // new project default is body(9) − 3 = 6
-    /nombreFontSize: 6,/.test(pageLayout)
+    // new-project (文庫) default — TSP-022 HUMAN-QA lowered 6 → 5
+    /nombreFontSize: 5,/.test(pageLayout)
 );
 check(
   "7g. §7C: editing a nombre position/size field marks the layout as customized",
