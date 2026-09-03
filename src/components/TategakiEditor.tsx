@@ -37,7 +37,7 @@ import HelpModal from "./HelpModal";
 import BetaFeedbackModal from "./BetaFeedbackModal";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
-import MobileFocusBar from "./MobileFocusBar";
+import MobileEditorNav from "./MobileEditorNav";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
@@ -66,7 +66,11 @@ export default function TategakiEditor({
   // reordering layers never touches document text, tokenLength, or
   // pagination. Images with no entry here fall back to document/token order.
   const [imageLayerOrder, setImageLayerOrder] = useState<Record<string, number>>({});
-  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
+  // TSP-LOOP-020: which pane the phone (`< md`) layout shows. Editor and
+  // preview are mutually exclusive on a phone (no scrolling past a 70dvh pane
+  // to reach the other); at `md+` this is ignored and both panes render
+  // side-by-side exactly as before.
+  const [mobileView, setMobileView] = useState<"editor" | "preview">("editor");
   // TSP-LOOP-012: narrow-viewport「集中モード」. Per-device localStorage
   // preference only (never Supabase / manuscript data); default OFF. Every
   // consumer of `focusMode` is scoped to md- via `md:hidden` / `max-md:` /
@@ -74,9 +78,35 @@ export default function TategakiEditor({
   const [focusMode, setFocusMode] = useMobileFocusMode();
   const enterFocusMode = () => {
     setFocusMode(true);
-    setIsMobilePreviewOpen(false);
+    setMobileView("editor");
   };
   const exitFocusMode = () => setFocusMode(false);
+
+  // ---- TSP-LOOP-020 phone navigation (all no-ops of the DOM at md+) ----
+  const scrollMobileTo = (id: string) => {
+    // Double rAF so React has committed the view switch (the target may have
+    // been `display:none` a moment ago) and layout is settled before we
+    // scroll. `scroll-mt-28` on the targets keeps them clear of the sticky nav.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      })
+    );
+  };
+  const showEditorView = () => {
+    setMobileView("editor");
+    scrollMobileTo("tsp-manuscript");
+  };
+  const showPreviewView = () => {
+    setMobileView("preview");
+    // Jump to the top of the preview pane rather than wherever the document
+    // was scrolled to under the editor.
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  };
+  const showSettingsView = () => {
+    setMobileView("editor");
+    scrollMobileTo("tsp-settings");
+  };
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
@@ -450,7 +480,15 @@ export default function TategakiEditor({
   };
 
   return (
-    <div className="box-border flex h-screen w-screen flex-col gap-6 overflow-hidden bg-canvas px-6 pb-6 pt-4 md:pl-8 md:pr-10 md:pb-10 md:pt-6">
+    // TSP-LOOP-020 — `data-editor-shell` opts this route out of the global
+    // `html/body { overflow:hidden; height:100vh }` viewport lock **only at
+    // `< 768px`** (see globals.css), so a phone gets an ordinary scrolling
+    // document. At `md+` every `md:` class below restores the original
+    // viewport-locked, internally-scrolled workspace unchanged.
+    <div
+      data-editor-shell
+      className="box-border flex w-full min-h-[100dvh] flex-col gap-3 bg-canvas px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:h-screen md:w-screen md:gap-6 md:overflow-hidden md:pl-8 md:pr-10 md:pt-6 md:pb-10"
+    >
       {/* Focus mode collapses the full header on narrow viewports only; at md+
           the wrapper is `display:contents`, so the header lays out exactly as
           before on desktop / tablet-wide. */}
@@ -489,35 +527,50 @@ export default function TategakiEditor({
         <BetaFeedbackModal onClose={() => setIsBetaFeedbackOpen(false)} />
       )}
 
+      {/* Phone-only sticky nav. A direct shell child (not inside <main>) so its
+          only scroll ancestor is the document — `position:sticky; top:0`
+          therefore pins it to the VIEWPORT and it stays reachable no matter
+          which inner surface (textarea, preview canvas) owns a touch gesture.
+          `md:hidden`, so desktop layout is untouched. */}
+      <MobileEditorNav
+        mobileView={mobileView}
+        onShowEditor={showEditorView}
+        onShowPreview={showPreviewView}
+        onShowSettings={showSettingsView}
+        focusMode={focusMode}
+        onEnterFocus={enterFocusMode}
+        onExitFocus={exitFocusMode}
+        saveStatus={isSampleDocument ? undefined : saveStatus}
+        onSave={isSampleDocument ? undefined : handleSave}
+        isSaving={isSaving}
+        onOpenFeedback={
+          BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined
+        }
+      />
+
       <main
         ref={mainRef}
-        // Narrow (< md): Editor / Preview stack vertically and their combined
-        // height exceeds the (viewport-locked) shell, so `<main>` itself owns a
-        // vertical scroll path between the two panes. Wide (md+): unchanged —
-        // side-by-side, fixed to the viewport, each pane scrolls internally.
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pr-4 pb-4 md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6"
+        // Narrow (< md): an ordinary block in the scrolling document with NO
+        // overflow of its own (the body's `overflow-x: clip` from globals.css
+        // handles horizontal), so the page — not a nested container —
+        // scrolls. Editor / Preview are mutually exclusive here (mobileView).
+        // Wide (md+): unchanged — side-by-side, viewport-locked, panes scroll
+        // internally.
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6"
       >
-        <MobileFocusBar
-          focusMode={focusMode}
-          onEnterFocus={enterFocusMode}
-          onExitFocus={exitFocusMode}
-          saveStatus={isSampleDocument ? undefined : saveStatus}
-          onSave={isSampleDocument ? undefined : handleSave}
-          isSaving={isSaving}
-          onOpenFeedback={
-            BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined
-          }
-        />
-
         <section
+          id="tsp-manuscript"
           style={
             {
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          // Narrow: fixed h-[70dvh] block; `<main>` scrolls past it (focus mode
-          // adds max-md:grow). Wide: md overrides restore the fitted pane.
-          className={`flex h-[70dvh] min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:h-full md:min-h-full md:flex-none ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}${focusMode ? " max-md:grow" : ""}`}
+          // Narrow: a natural-height block in the scrolling document; the
+          // textarea inside owns an intentional manuscript scroll (see
+          // EditorPane). Hidden entirely when the phone is showing the
+          // preview. Wide: md overrides restore the fitted, viewport-locked
+          // pane unchanged.
+          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView === "preview" ? "max-md:hidden" : ""} ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             title={title}
@@ -539,15 +592,6 @@ export default function TategakiEditor({
           />
         </section>
 
-        <button
-          type="button"
-          onClick={() => setIsMobilePreviewOpen((prev) => !prev)}
-          className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-ink/10 bg-base px-4 py-2.5 text-sm font-medium text-ink/70 shadow-lg md:hidden"
-        >
-          <span aria-hidden>👁️</span>
-          {isMobilePreviewOpen ? "プレビューを閉じる" : "プレビューを見る"}
-        </button>
-
         {!isPreviewCollapsed && (
           <div
             onMouseDown={handleDividerMouseDown}
@@ -557,9 +601,14 @@ export default function TategakiEditor({
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none ${
+          // Narrow: a viewport-tall pane shown only when mobileView==="preview".
+          // `max-md:overflow-hidden` on a fixed-height box clips any transient
+          // spread overflow before the width-fit lands — PreviewPane owns the
+          // single inner scroll/pan surface. Wide: md overrides restore the
+          // side-by-side pane unchanged.
+          className={`min-h-0 min-w-0 transition-all duration-200 max-md:overflow-hidden md:flex md:h-full md:flex-none ${
             isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
-          } ${isMobilePreviewOpen ? "flex h-[85dvh] shrink-0 flex-col overflow-y-auto" : "hidden"}`}
+          } ${mobileView === "preview" ? "flex h-[calc(100dvh-9rem)] shrink-0 flex-col" : "max-md:hidden"}`}
         >
           <PreviewPane
             content={content}

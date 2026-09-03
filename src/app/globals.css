@@ -64,6 +64,26 @@ body:has([data-bookshelf-page]) {
   overflow-y: visible !important;
 }
 
+/* TSP-LOOP-020 — mobile editor scroll model. On a phone-width viewport the
+   editor stops being a viewport-locked, internally-scrolled app shell and
+   becomes an ordinary vertically-scrolling document (header → editor →
+   bottom breathing room), so a normal swipe anywhere reliably scrolls the
+   page and the user is never trapped behind a nested overflow container.
+   Desktop / tablet-wide (>=768px) keeps the original `overflow:hidden`
+   viewport lock untouched — the rule is scoped both to `max-width:767px`
+   and to `:has([data-editor-shell])` (only TategakiEditor's shell). This
+   mirrors the existing `[data-bookshelf-page]` / `[data-renderer-poc-page]`
+   opt-out pattern. */
+@media (max-width: 767px) {
+  html:has([data-editor-shell]),
+  body:has([data-editor-shell]) {
+    height: auto;
+    min-height: 100%;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+  }
+}
+
 body {
   background: var(--canvas);
   color: var(--ink);

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -17,6 +17,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "タテスパン | 縦書き小説PDF組版ツール",
   description: "Web上で簡単に縦書きWeb小説のPDF組み換えができるツールです。",
+};
+
+// TSP-LOOP-020 — `viewportFit: "cover"` is what makes `env(safe-area-inset-*)`
+// resolve to real values on notched / rounded phones; without it every
+// safe-area inset is 0 and the editor's mobile bottom breathing room can't
+// clear Safari's dynamic bottom toolbar. `width=device-width, initial-scale=1`
+// is Next's default and is kept explicit here.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

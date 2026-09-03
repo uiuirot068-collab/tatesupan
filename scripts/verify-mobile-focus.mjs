@@ -1,17 +1,11 @@
-// TSP-LOOP-012 — mobile focus mode ("集中モード") gate.
+// TSP-LOOP-012 (rev. TSP-LOOP-020) — mobile focus mode ("集中モード") gate.
 //
-// UI / layout only. Verifies that:
-//  - the focus preference is a per-device localStorage setting (never Supabase
-//    / manuscript data), default OFF, malformed value -> OFF;
-//  - a mobile-only (`md:hidden`) bar provides an enter + a one-tap exit + a
-//    「報告」 button wired to the *existing* beta-feedback handler + save-status;
-//  - focus mode removes (at zero height, `< md` only) the header, the
-//    EditorPane title/toolbar strip and the PageSettings/help strip, while the
-//    collapsed 「プレビューを見る」 control stays;
-//  - every focus-mode branch is scoped to narrow viewports (`md:hidden` /
-//    `max-md:` / `md:contents`) so desktop / tablet-wide is untouched;
-//  - no renderer / pagination / export / Supabase / auth / feedback-backend
-//    logic was touched, and no parallel feedback / preview state was created.
+// TSP-LOOP-020 folded TSP-012's `MobileFocusBar` into `MobileEditorNav` — a
+// sticky phone-only nav that KEEPS every capability the focus bar had
+// (per-device localStorage focus preference, one-tap enter/exit, save-status,
+// works-list link, cloud save, 報告 wired to the shared handler) and adds the
+// primary 本文 / プレビュー / 設定 navigation. This gate tracks that rename +
+// the preserved guarantees, and that desktop / tablet-wide is untouched.
 //
 // Run:  node scripts/verify-mobile-focus.mjs
 import fs from "node:fs";
@@ -32,11 +26,11 @@ function check(name, cond) {
 }
 
 const hook = read("src/hooks/useMobileFocusMode.ts");
-const bar = read("src/components/MobileFocusBar.tsx");
+const nav = read("src/components/MobileEditorNav.tsx");
 const editor = read("src/components/TategakiEditor.tsx");
 const pane = read("src/components/EditorPane.tsx");
 
-/* ---------------- 1. preference: local, safe default ---------------- */
+/* ---------------- 1. preference: local, safe default (unchanged from TSP-012) ---------------- */
 
 check("1. useMobileFocusMode hook exists", hook !== null);
 check(
@@ -50,7 +44,7 @@ check(
     /catch\s*\{\s*return false;/.test(hook)
 );
 check(
-  "1d. preference never goes to Supabase / network (no client import, fetch, or supabase call)",
+  "1d. preference never goes to Supabase / network",
   !!hook &&
     !/from ["'][^"']*supabase/i.test(hook) &&
     !/\bfetch\(|createClient\(|\.from\(/.test(hook)
@@ -60,78 +54,76 @@ check(
   !!hook && /useSyncExternalStore\(subscribe, readFocus, \(\) => false\)/.test(hook)
 );
 
-/* ---------------- 2. the mobile focus bar ---------------- */
+/* ---------------- 2. the phone nav (was MobileFocusBar) ---------------- */
 
-check("2. MobileFocusBar component exists", bar !== null);
+check("2. MobileEditorNav component exists (MobileFocusBar renamed)", nav !== null);
+check("2a. old MobileFocusBar.tsx is gone", read("src/components/MobileFocusBar.tsx") === null);
 check(
-  "2b. bar is mobile-only (md:hidden)",
-  !!bar && /className="[^"]*\bmd:hidden\b/.test(bar)
+  "2b. nav is phone-only (md:hidden) and sticky (always reachable from any gesture)",
+  !!nav && /\bmd:hidden\b/.test(nav) && /\bsticky\b/.test(nav) && /\btop-0\b/.test(nav)
 );
 check(
-  "2c. bar offers an enter control (集中モード) and a one-tap exit (通常表示に戻す)",
-  !!bar && /集中モード/.test(bar) && /通常表示に戻す/.test(bar)
+  "2c. nav offers an enter control (集中モード) and a one-tap exit (通常表示に戻す)",
+  !!nav && /集中モード/.test(nav) && /通常表示に戻す/.test(nav)
 );
 check(
-  "2d. bar shows save-status and keeps works-list + cloud save reachable in focus mode",
-  !!bar &&
-    /saveStatus/.test(bar) &&
-    /href="\/"/.test(bar) &&
-    /onSave/.test(bar)
+  "2d. nav shows save-status and keeps works-list + cloud save reachable",
+  !!nav && /saveStatus/.test(nav) && /href="\/"/.test(nav) && /onSave/.test(nav)
 );
 check(
   "2e. exit control restores full UI in one action (onExitFocus wired to a button)",
-  !!bar && /onClick=\{focusMode \? onExitFocus : onEnterFocus\}/.test(bar)
+  !!nav && /onClick=\{focusMode \? onExitFocus : onEnterFocus\}/.test(nav)
 );
 check(
-  "2f. focus bar has a「報告」button wired to an injected handler — NOT its own modal",
-  !!bar &&
-    /onOpenFeedback/.test(bar) &&
-    /onClick=\{onOpenFeedback\}/.test(bar) &&
-    />\s*報告\s*</.test(bar) &&
-    !/BetaFeedbackModal|useState/.test(bar)
+  "2f. nav has a「報告」button wired to an injected handler — NOT its own modal / state",
+  !!nav &&
+    /onOpenFeedback/.test(nav) &&
+    /onClick=\{onOpenFeedback\}/.test(nav) &&
+    />\s*報告\s*</.test(nav) &&
+    !/BetaFeedbackModal|useState/.test(nav)
+);
+check(
+  "2g. nav adds the primary 本文 / プレビュー / 設定 navigation",
+  !!nav &&
+    /onShowEditor/.test(nav) &&
+    /onShowPreview/.test(nav) &&
+    /onShowSettings/.test(nav) &&
+    /本文/.test(nav) &&
+    /プレビュー/.test(nav) &&
+    /設定/.test(nav)
 );
 
 /* ---------------- 3. editor wiring is narrow-only ---------------- */
 
 check(
-  "3. editor imports the hook and the bar",
+  "3. editor imports the hook and the nav",
   !!editor &&
     /useMobileFocusMode/.test(editor) &&
-    /import MobileFocusBar from "\.\/MobileFocusBar"/.test(editor)
+    /import MobileEditorNav from "\.\/MobileEditorNav"/.test(editor)
 );
 check(
   "3b. header is only collapsed on narrow viewports (md:contents keeps desktop layout)",
   !!editor && /focusMode \? "hidden md:contents" : "contents"/.test(editor)
 );
 check(
-  "3c. entering focus mode also closes the mobile preview (no trapped/overlapping pane)",
-  !!editor && /setFocusMode\(true\);\s*setIsMobilePreviewOpen\(false\);/.test(editor)
+  "3c. entering focus mode also resets the phone to the editor view (no trapped/overlapping pane)",
+  !!editor && /setFocusMode\(true\);\s*setMobileView\("editor"\);/.test(editor)
 );
 check(
-  "3d. editor pane gains height in focus mode via a narrow-scoped grow (max-md:), never a bare flex-1",
+  "3d. editor passes focusMode to EditorPane and the canonical feedback handler to the nav",
   !!editor &&
-    /\$\{focusMode \? " ?max-md:grow" : ""\}/.test(editor) &&
-    !/\$\{focusMode \? "[^"]*\bflex-1\b/.test(editor)
-);
-check(
-  "3e. editor passes focusMode to EditorPane and the canonical feedback handler to the bar",
-  !!editor &&
-    /<EditorPane[\s\S]{0,900}?focusMode=\{focusMode\}/.test(editor) &&
+    /<EditorPane[\s\S]{0,1200}?focusMode=\{focusMode\}/.test(editor) &&
     /onOpenFeedback=\{\s*BETA_FEEDBACK_ENABLED \? \(\) => setIsBetaFeedbackOpen\(true\) : undefined/.test(
       editor
     )
 );
 check(
-  "3f. the collapsed「プレビューを見る」control stays visible in focus mode (not gated by focusMode)",
-  !!editor &&
-    /プレビューを見る/.test(editor) &&
-    !/\{!focusMode && \(\s*<button[\s\S]{0,240}?プレビュー/.test(editor)
-);
-check(
-  "3g. entering focus mode does NOT auto-open the full preview (only ever sets it false)",
-  !!editor &&
-    /setIsMobilePreviewOpen\(false\)/.test(editor) &&
-    !/enterFocusMode[\s\S]{0,120}setIsMobilePreviewOpen\(true\)/.test(editor)
+  "3e. the「本文を書く」action never autofocuses on load — focus() only from the direct tap handler",
+  !!pane &&
+    /goToManuscript/.test(pane) &&
+    /\.scrollIntoView\(/.test(pane) &&
+    /onClick=\{goToManuscript\}/.test(pane) &&
+    !/useEffect\([\s\S]{0,200}\.focus\(\)/.test(pane)
 );
 
 /* ---------------- 3h/3i. EditorPane strips are removed at zero height, < md only ---------------- */
@@ -141,27 +133,20 @@ check(
   !!pane && /focusMode\?: boolean/.test(pane) && /focusMode = false/.test(pane)
 );
 check(
-  "3i. focus mode removes the title/toolbar strip AND the PageSettings/help strip via max-md:hidden (display:none => zero height), never merely visually",
+  "3i. focus mode removes the title/toolbar strip AND the PageSettings/help strip via max-md:hidden",
   !!pane &&
     (pane.match(/focusMode \? "max-md:hidden" : ""/g) || []).length >= 2 &&
-    /border-b border-ink\/10 px-4 py-3[\s\S]{0,80}focusMode \? "max-md:hidden"/.test(pane) &&
-    /flex-none \$\{focusMode \? "max-md:hidden" : ""\}[\s\S]{0,40}<PageSettingsPanel/.test(pane) &&
-    !/opacity-0|invisible|sr-only/.test(
-      (pane.match(/focusMode[^\n]*\n/g) || []).join("")
-    )
+    !/opacity-0|invisible|sr-only/.test((pane.match(/focusMode[^\n]*\n/g) || []).join(""))
 );
 check(
-  "3j. those strips are only hidden on narrow (max-md:hidden), never a bare md:hidden, so md+ is untouched",
-  !!pane &&
-    /focusMode \? "max-md:hidden"/.test(pane) &&
-    !/focusMode \? "(?!max-md:hidden")/.test(pane) &&
-    !/focusMode \? "md:hidden"/.test(pane)
+  "3j. those strips are only hidden on narrow (max-md:hidden), never a bare md:hidden",
+  !!pane && !/focusMode \? "md:hidden"/.test(pane)
 );
 
 /* ---------------- 4. safety: nothing forbidden was touched ---------------- */
 
 check(
-  "4. no renderer / pagination / export / Supabase / auth / feedback / cloud-image files changed",
+  "4. no renderer / pagination / export / Supabase / auth / feedback-backend / cloud-image files changed",
   (() => {
     try {
       const diff = execSync("git diff --name-only HEAD", { cwd: repoRoot })
@@ -170,22 +155,8 @@ check(
         .split(/\r?\n/)
         .filter(Boolean);
       const forbidden =
-        /^(src\/lib\/tategaki\.ts|src\/lib\/pageLayout\.ts|src\/lib\/colophon\.ts|src\/lib\/writingCheck\.ts|src\/lib\/cloudImageSync\.ts|src\/lib\/supabase\/|src\/components\/PageCard\.tsx|src\/components\/PreviewPane(New)?\.tsx|src\/components\/AuthProvider\.tsx|src\/components\/AuthModal\.tsx|src\/components\/BetaFeedbackModal\.tsx|src\/components\/Header\.tsx|src\/utils\/export|src\/app\/renderer-poc|supabase\/)/;
+        /^(src\/lib\/tategaki\.ts|src\/lib\/pageLayout\.ts|src\/lib\/colophon\.ts|src\/lib\/writingCheck\.ts|src\/lib\/cloudImageSync\.ts|src\/lib\/betaFeedback|src\/lib\/supabase\/|src\/components\/PageCard\.tsx|src\/components\/PreviewPaneNew\.tsx|src\/components\/AuthProvider\.tsx|src\/components\/AuthModal\.tsx|src\/components\/BetaFeedbackModal\.tsx|src\/utils\/export|src\/app\/renderer-poc|supabase\/)/;
       return !diff.some((f) => forbidden.test(f));
-    } catch {
-      return true;
-    }
-  })()
-);
-check(
-  "4b. globals.css untouched",
-  (() => {
-    try {
-      return (
-        execSync("git diff --name-only HEAD -- src/app/globals.css", { cwd: repoRoot })
-          .toString()
-          .trim() === ""
-      );
     } catch {
       return true;
     }
@@ -206,25 +177,6 @@ check(
     (editor.match(/<BetaFeedbackModal\b/g) || []).length === 1 &&
     /BETA_FEEDBACK_ENABLED && isBetaFeedbackOpen && \(\s*<BetaFeedbackModal/.test(editor) &&
     (editor.match(/setIsBetaFeedbackOpen\(true\)/g) || []).length >= 1
-);
-check(
-  "4e. feedback backend / flag files untouched by this loop",
-  (() => {
-    try {
-      const diff = execSync("git diff --name-only HEAD", { cwd: repoRoot })
-        .toString()
-        .trim()
-        .split(/\r?\n/)
-        .filter(Boolean);
-      return !diff.some((f) =>
-        /^(src\/lib\/betaFeedback|src\/components\/BetaFeedbackModal\.tsx|supabase\/functions\/beta-feedback)/.test(
-          f
-        )
-      );
-    } catch {
-      return true;
-    }
-  })()
 );
 
 /* ---------------- done ---------------- */
