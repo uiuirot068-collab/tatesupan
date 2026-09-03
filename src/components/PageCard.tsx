@@ -142,6 +142,30 @@ const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 const DASH_CHAR_TEST = /[―—]/;
 const ELLIPSIS_CHAR_TEST = /[…‥]/;
 
+// TSP-LOOP-021 §B: the glyph class that needs the font's vertical form
+// (`vert` substitution) — the bars ―／— and the leaders …／‥.
+//
+// `.page-card` sets `text-orientation: upright` AND the fixed-slot body sets
+// `font-feature-settings: '"vpal" 0, …'` (an explicit value that omits `vert`).
+// A bare glyph of this class then inherits BOTH — `upright` plus a
+// non-`normal` feature list that never turns `vert` back on — and mobile
+// Safari (spec-compliant) renders it horizontally across the column (the
+// real-device report: "… and ― render horizontally on mobile"; Chrome applies
+// `vert` regardless, so it only shows on mobile).
+//
+// Fix: render this class through a wrapper that re-asserts
+// `font-feature-settings: normal` + `font-variant-east-asian: normal` while
+// KEEPING the inherited `text-orientation: upright`. That is the exact recipe
+// the 2+ protected run already uses (and which the tester confirmed renders
+// correctly on their Safari). `text-orientation: mixed` would also restore the
+// vertical form but ROTATES the glyph, which left Zen Old Mincho's U+2026
+// ~0.29em off the column axis — so upright + explicit features is the one that
+// is both engine-portable and cross-font centred. The manuscript source text
+// is never rewritten.
+// (ー／〜／～ are a related class; audited, left as-is until a mobile-Safari
+// HUMAN QA confirms they regress — see verify-tsp021-vertical-glyphs.)
+const VERT_LEADER_TEST = /[―—…‥]/;
+
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
 
@@ -264,6 +288,10 @@ function PageCard({
   chromeScale = 1,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mobileFileInputRef = useRef<HTMLInputElement>(null);
+  // TSP-LOOP-021 §A: phone-only per-page control bar — the ⋮ disclosure that
+  // holds the less-frequent 選択 / 並べ替え actions. UI-only, never persisted.
+  const [mobilePageMenuOpen, setMobilePageMenuOpen] = useState(false);
   // Which of this page's inserted images the 挿絵 control bar below currently
   // operates on. UI-only (not persisted) — deliberately not lifted to
   // PreviewPane/document state, since a page's own image list already fully
@@ -591,58 +619,60 @@ function PageCard({
       onDragEnd={onDragEnd}
     >
       {isInteractive && (
-        <div data-no-print="true" className="no-print flex w-full items-center justify-between px-1">
-          <label
-            className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
-            style={{ transform: `scale(${chromeScale})`, transformOrigin: "left center" }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              data-no-print="true"
-              checked={selected}
-              onChange={() => {}}
-              onClick={onToggleCheckbox}
-              className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
-            />
-            選択
-          </label>
-          <div
-            className="flex items-center gap-2"
-            style={{ transform: `scale(${chromeScale})`, transformOrigin: "right center" }}
-          >
-            {onHideNombreChange && (
-              <label
-                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  data-no-print="true"
-                  checked={hideNombre}
-                  onChange={(event) => onHideNombreChange(event.target.checked)}
-                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
-                />
-                ノンブル非表示
-              </label>
-            )}
-            {onHideHashiraChange && (
-              <label
-                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  data-no-print="true"
-                  checked={hideHashira}
-                  onChange={(event) => onHideHashiraChange(event.target.checked)}
-                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
-                />
-                柱非表示
-              </label>
-            )}
-            {onInsertImage && (
-              <>
+        <>
+          {/* Desktop / tablet-wide (md+): unchanged toolbar — checkbox row.
+              TSP-LOOP-021 §A restricts the mobile redesign below to < md. */}
+          <div data-no-print="true" className="no-print hidden w-full items-center justify-between px-1 md:flex">
+            <label
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
+              style={{ transform: `scale(${chromeScale})`, transformOrigin: "left center" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                data-no-print="true"
+                checked={selected}
+                onChange={() => {}}
+                onClick={onToggleCheckbox}
+                className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
+              />
+              選択
+            </label>
+            <div
+              className="flex items-center gap-2"
+              style={{ transform: `scale(${chromeScale})`, transformOrigin: "right center" }}
+            >
+              {onHideNombreChange && (
+                <label
+                  className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    data-no-print="true"
+                    checked={hideNombre}
+                    onChange={(event) => onHideNombreChange(event.target.checked)}
+                    className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
+                  />
+                  ノンブル非表示
+                </label>
+              )}
+              {onHideHashiraChange && (
+                <label
+                  className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    data-no-print="true"
+                    checked={hideHashira}
+                    onChange={(event) => onHideHashiraChange(event.target.checked)}
+                    className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
+                  />
+                  柱非表示
+                </label>
+              )}
+              {onInsertImage && (
                 <button
                   type="button"
                   onClick={(event) => {
@@ -655,24 +685,154 @@ function PageCard({
                 >
                   {insertingImage ? "PSDを変換中…" : "画像挿入"}
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.psd"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) onInsertImage(file);
-                    event.target.value = "";
-                  }}
-                />
-              </>
-            )}
-            <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
-              ⠿
-            </span>
+              )}
+              <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
+                ⠿
+              </span>
+            </div>
           </div>
-        </div>
+
+          {/* Phone (< md), TSP-LOOP-021 §A: state-labelled toggle buttons
+              instead of double-negative checkboxes that wrapped badly at 320px.
+              Each button shows the CURRENT state as a word (表示 / 非表示) — no
+              reliance on colour. 画像 stays visible; the less-frequent 選択 /
+              並べ替え move under ⋮ (state of ノンブル/柱 is never hidden there).
+              `zoom` + pre-zoom width mirror the 挿絵 panel below so the row lands
+              back at exactly one page's width whatever chromeScale is. */}
+          <div
+            data-no-print="true"
+            className="no-print flex items-stretch gap-1 px-1 text-[10px] md:hidden"
+            style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+            onClick={(event) => event.stopPropagation()}
+            draggable={false}
+            onDragStart={(event) => event.stopPropagation()}
+          >
+            {onHideNombreChange && (
+              <button
+                type="button"
+                aria-pressed={!hideNombre}
+                aria-label={
+                  hideNombre
+                    ? "このページのノンブルを表示する（現在: 非表示）"
+                    : "このページのノンブルを非表示にする（現在: 表示）"
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onHideNombreChange(!hideNombre);
+                }}
+                className={`flex min-h-[40px] flex-1 items-center justify-center gap-0.5 whitespace-nowrap rounded border px-1 leading-none ${
+                  hideNombre
+                    ? "border-ink/15 text-ink/45"
+                    : "border-ink/25 bg-ink/[0.06] text-ink/80"
+                }`}
+              >
+                <span aria-hidden="true">{hideNombre ? "🚫" : "👁"}</span>
+                <span>ノンブル</span>
+                <span className="font-semibold">{hideNombre ? "非表示" : "表示"}</span>
+              </button>
+            )}
+            {onHideHashiraChange && (
+              <button
+                type="button"
+                aria-pressed={!hideHashira}
+                aria-label={
+                  hideHashira
+                    ? "このページの柱を表示する（現在: 非表示）"
+                    : "このページの柱を非表示にする（現在: 表示）"
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onHideHashiraChange(!hideHashira);
+                }}
+                className={`flex min-h-[40px] flex-1 items-center justify-center gap-0.5 whitespace-nowrap rounded border px-1 leading-none ${
+                  hideHashira
+                    ? "border-ink/15 text-ink/45"
+                    : "border-ink/25 bg-ink/[0.06] text-ink/80"
+                }`}
+              >
+                <span aria-hidden="true">{hideHashira ? "🚫" : "👁"}</span>
+                <span>柱</span>
+                <span className="font-semibold">{hideHashira ? "非表示" : "表示"}</span>
+              </button>
+            )}
+            {onInsertImage && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  mobileFileInputRef.current?.click();
+                }}
+                disabled={insertingImage}
+                className="flex min-h-[40px] shrink-0 items-center justify-center rounded border border-ink/25 px-2 leading-none text-ink/80 disabled:opacity-40"
+                title="このページに画像を挿入"
+              >
+                {insertingImage ? "変換中…" : "🖼 画像"}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-expanded={mobilePageMenuOpen}
+              aria-label="このページのその他の操作"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMobilePageMenuOpen((open) => !open);
+              }}
+              className="flex min-h-[40px] w-9 shrink-0 items-center justify-center rounded border border-ink/25 text-ink/80"
+            >
+              ⋮
+            </button>
+          </div>
+          {mobilePageMenuOpen && (
+            <div
+              data-no-print="true"
+              className="no-print flex flex-col gap-1 px-2 py-1 text-[10px] text-ink/60 md:hidden"
+              style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  data-no-print="true"
+                  checked={selected}
+                  onChange={() => {}}
+                  onClick={onToggleCheckbox}
+                  className="no-print h-4 w-4 cursor-pointer accent-accent"
+                />
+                このページを選択（書き出し対象）
+              </label>
+              <span className="text-ink/40">
+                ページの並べ替えは、パソコンでのドラッグ操作に対応しています。
+              </span>
+            </div>
+          )}
+
+          {onInsertImage && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.psd"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onInsertImage(file);
+                event.target.value = "";
+              }}
+            />
+          )}
+          {onInsertImage && (
+            <input
+              ref={mobileFileInputRef}
+              type="file"
+              accept="image/*,.psd"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onInsertImage(file);
+                event.target.value = "";
+              }}
+            />
+          )}
+        </>
       )}
       {isInteractive && imageTokens.length > 0 && selectedImage && (
         <>
@@ -1854,6 +2014,35 @@ function FixedSlotLine({
             >
               {slot.text}
             </span>
+          ) : VERT_LEADER_TEST.test(slot.text) ? (
+            // TSP-LOOP-021 §B: a lone bar (―／—) or leader (…／‥). A run of 2+
+            // is already handled as a protected run above. Re-assert
+            // `font-feature-settings: normal` + `font-variant-east-asian:
+            // normal` so the font's vertical `vert` glyph is used on every
+            // engine (the inherited `"vpal" 0, …` list + `text-orientation:
+            // upright` otherwise let mobile Safari fall back to the horizontal
+            // form). `text-orientation` is left INHERITED (upright) — matching
+            // the protected run and keeping the glyph centred on the column
+            // axis for every shipped face (a `mixed` override rotates it and
+            // shifts Zen Old Mincho's U+2026 ~0.29em off-axis). The SOURCE text
+            // is never substituted to a presentation-form codepoint.
+            <span
+              data-vertical-leader=""
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                height: "100%",
+                writingMode: "vertical-rl",
+                WebkitWritingMode: "vertical-rl",
+                fontFeatureSettings: "normal",
+                fontVariantEastAsian: "normal",
+                lineHeight: 1,
+              }}
+            >
+              {slot.text}
+            </span>
           ) : (
             slot.text
           )}
@@ -1867,10 +2056,16 @@ function FixedSlotLine({
         // glyphs out with the font's own vertical metrics — exactly as a
         // browser-native 縦組み block does — so ―― connects and …… stays
         // column-centred in every shipped face, with no per-glyph slot boxes,
-        // no optical nudge, and no per-font profile. `fontFeatureSettings`
-        // and `fontVariantEastAsian` are reset so the font's `vert` glyphs
-        // are used; `overflow: hidden` keeps any sub-pixel ink overshoot
-        // inside the reserved slots, like `[data-latin-run]`.
+        // no optical nudge, and no per-font profile. `text-orientation: upright`
+        // + reset `fontFeatureSettings: normal` / `fontVariantEastAsian: normal`
+        // make the font's `vert` glyphs render on EVERY engine including mobile
+        // Safari (TSP-LOOP-021 §B: the explicit `font-feature-settings: normal`
+        // is what turns `vert` back on — the fixed-slot body's inherited
+        // `"vpal" 0, …` list is what suppressed it for a bare glyph; a `mixed`
+        // override would also work but rotates the glyph and shifts Zen Old
+        // Mincho's U+2026 off the column axis). `overflow: hidden` keeps any
+        // sub-pixel ink overshoot inside the reserved slots, like
+        // `[data-latin-run]`.
         //
         // The run text is ONE inline run (single text node in a single span) —
         // NOT one span per character. Splitting ―― into per-glyph boxes breaks
@@ -2014,20 +2209,65 @@ function TokenView({
 }
 
 /**
+ * TSP-LOOP-021 §B: one lone bar (―／—) or leader (…／‥) in the legacy
+ * TokenView flow — matches FixedSlotLine's `[data-vertical-leader]`. The
+ * `.tategaki-line` div's inherited `"vpal" 0, …` feature list + `text-
+ * orientation: upright` let mobile Safari render this class horizontally
+ * across the column. Re-asserting `font-feature-settings: normal` +
+ * `font-variant-east-asian: normal` (keeping the inherited upright) turns the
+ * font's vertical `vert` glyph back on, on every engine, without the Zen Old
+ * off-axis shift a `mixed` rotation would cause. Source text is untouched.
+ * A run of 2+ is handled by `renderNowrapProtected`'s nowrap span, not here.
+ */
+function renderVerticalLeader(text: string, key: string | number): ReactNode {
+  return (
+    <span
+      key={key}
+      data-vertical-leader=""
+      style={{
+        writingMode: "vertical-rl",
+        WebkitWritingMode: "vertical-rl",
+        fontFeatureSettings: "normal",
+        fontVariantEastAsian: "normal",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+const LONE_LEADER_SPLIT = /([―—…‥])/;
+
+/** Splits a non-run text fragment, wrapping each lone bar/leader via renderVerticalLeader. */
+function withLoneLeaders(part: string, keyBase: number): ReactNode {
+  if (!LONE_LEADER_SPLIT.test(part)) return <Fragment key={keyBase}>{part}</Fragment>;
+  return (
+    <Fragment key={keyBase}>
+      {part.split(LONE_LEADER_SPLIT).map((sub, subIndex) =>
+        sub.length === 1 && VERT_LEADER_TEST.test(sub)
+          ? renderVerticalLeader(sub, `${keyBase}-${subIndex}`)
+          : <Fragment key={`${keyBase}-${subIndex}`}>{sub}</Fragment>
+      )}
+    </Fragment>
+  );
+}
+
+/**
  * Wraps 2+ character runs of ――（ダッシュ）/ ……（三点リーダー）in a
  * `white-space: nowrap` inline-block so the vertical-writing line wrap never
- * splits a single dash/leader off onto the next line by itself.
+ * splits a single dash/leader off onto the next line by itself. A lone …／‥
+ * (not part of a run) is additionally re-set for vertical typesetting.
  */
 function renderNowrapProtected(value: string): ReactNode {
   const parts = value.split(NOWRAP_RUN_PATTERN);
-  if (parts.length <= 1) return value;
+  if (parts.length <= 1 && !LONE_LEADER_SPLIT.test(value)) return value;
   return parts.map((part, index) =>
     NOWRAP_RUN_TEST.test(part) ? (
       <span key={index} style={{ whiteSpace: "nowrap", display: "inline-block" }}>
         {part}
       </span>
     ) : (
-      <Fragment key={index}>{part}</Fragment>
+      withLoneLeaders(part, index)
     )
   );
 }

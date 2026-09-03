@@ -653,12 +653,17 @@ async function main() {
     // run each, with the run text as ONE inline run (a single text node in a
     // single glyph span) so the font connects the em dashes; per-glyph boxes
     // break that connection and re-open the cross-font joint gap.
+    // TSP-LOOP-021 §B: the run keeps text-orientation: upright but relies on its
+    // explicit font-feature-settings: normal to keep `vert` on for every engine
+    // (mobile Safari included) — a `mixed` override rotates and shifts Zen Old
+    // Mincho's ellipsis off-axis, so upright + explicit features is the choice.
     const dashRuns0 = dom.runs.filter((r) => r.kind === "dash");
     const ellipsisRuns0 = dom.runs.filter((r) => r.kind === "ellipsis");
     check("―― / …… render as one native vertical-rl run with one inline text run",
       dashRuns0.length > 0 &&
       [...dashRuns0, ...ellipsisRuns0].every((r) =>
         /vertical-rl/.test(r.writingMode) && r.textOrientation === "upright" &&
+        /\bnormal\b/.test(r.fontFeatureSettings) &&
         r.alignItems === "center" && r.justifyContent === "center" && r.overflow === "hidden" &&
         r.fontVariantEastAsian === "normal" && r.glyphRects.length === 1),
       JSON.stringify([...dashRuns0, ...ellipsisRuns0].map((r) => ({ k: r.kind, wm: r.writingMode, to: r.textOrientation, ai: r.alignItems, jc: r.justifyContent, of: r.overflow, fvea: r.fontVariantEastAsian, g: r.glyphRects.length, s: r.slotCount }))));

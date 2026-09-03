@@ -251,6 +251,90 @@ function renderTitle(title, author) {
   return `${title}${authorLine}\n\n【改ページ】\n\n`;
 }
 
+/* ---------------- A. mobile per-page preview controls ---------------- */
+
+check(
+  "A1. phone per-page toolbar: state-labelled toggle buttons, not double-negative checkboxes",
+  !!pageCard &&
+    /md:hidden[\s\S]{0,4000}aria-pressed=\{!hideNombre\}/.test(pageCard) &&
+    /hideNombre \? "非表示" : "表示"/.test(pageCard) &&
+    /hideHashira \? "非表示" : "表示"/.test(pageCard)
+);
+check(
+  "A2. desktop checkbox toolbar kept, just gated to md+ (no behaviour change on desktop)",
+  !!pageCard &&
+    /hidden w-full items-center justify-between px-1 md:flex/.test(pageCard) &&
+    /ノンブル非表示\s*<\/label>/.test(pageCard)
+);
+check(
+  "A3. 画像 stays visible on phone; 選択 / 並べ替え move under a ⋮ disclosure (state never hidden there)",
+  !!pageCard &&
+    /mobileFileInputRef\.current\?\.click\(\)/.test(pageCard) &&
+    /setMobilePageMenuOpen\(\(open\) => !open\)/.test(pageCard) &&
+    /mobilePageMenuOpen &&[\s\S]{0,1200}このページを選択（書き出し対象）/.test(pageCard)
+);
+check(
+  "A4. phone toggles carry a full-sentence aria-label with the current state",
+  !!pageCard &&
+    /aria-label=\{\s*hideNombre\s*\?\s*"このページのノンブルを表示する（現在: 非表示）"/.test(pageCard) &&
+    /min-h-\[40px\]/.test(pageCard)
+);
+check(
+  "A5. per-page data semantics unchanged — still the same onHideNombreChange / onHideHashiraChange props",
+  !!pageCard &&
+    /onHideNombreChange\(!hideNombre\)/.test(pageCard) &&
+    /onHideHashiraChange\(!hideHashira\)/.test(pageCard) &&
+    // no new persisted field / pageOverride shape
+    !/pageOverrides\[/.test(pageCard)
+);
+
+/* ---------------- B. vertical glyph substitution (…／‥／―／—) ---------------- */
+
+check(
+  "B1. lone bar/leader class ―—…‥ is re-set for vertical typesetting via [data-vertical-leader]",
+  !!pageCard &&
+    /const VERT_LEADER_TEST = \/\[―—…‥\]\/;/.test(pageCard) &&
+    /data-vertical-leader/.test(pageCard) &&
+    /VERT_LEADER_TEST\.test\(slot\.text\)/.test(pageCard)
+);
+check(
+  "B1b. the leader wrapper re-asserts font-feature-settings: normal (+ fvea normal) and does NOT override text-orientation to mixed",
+  !!pageCard &&
+    (() => {
+      const m = pageCard.match(/data-vertical-leader=""[\s\S]{0,320}?\}\}/);
+      return !!m &&
+        /fontFeatureSettings: "normal"/.test(m[0]) &&
+        /fontVariantEastAsian: "normal"/.test(m[0]) &&
+        !/textOrientation: "mixed"/.test(m[0]);
+    })()
+);
+check(
+  "B2. fix is render-layer only — no source-text character replacement of …／― anywhere in src",
+  (() => {
+    const files = ["src/lib/tategaki.ts", "src/components/PageCard.tsx", "src/lib/writingCheck.ts"]
+      .map(read)
+      .filter(Boolean)
+      .join("\n");
+    return !/["'`][…‥―—]["'`]\s*[,)]\s*["'`][︙⋮⋯｜│]["'`]/.test(files) &&
+      !/replace\([^)]*[…‥―—][^)]*[︙⋮⋯｜│]/.test(files) &&
+      !/[…‥―—]\s*(->|→)\s*[︙⋮⋯｜│|]/.test(files);
+  })()
+);
+check(
+  "B3. …… / ―― (2+) protected run is UNCHANGED — text-orientation: upright + explicit font-feature-settings: normal (works on mobile Safari; keeps Zen Old centred)",
+  !!pageCard &&
+    /data-protected-run-wrapper=\{run\.kind\}/.test(pageCard) &&
+    /if \(slotCount >= 2\)/.test(pageCard) &&
+    /textOrientation: "upright",\s*\n\s*WebkitTextOrientation: "upright",\s*\n\s*fontFeatureSettings: "normal",\s*\n\s*fontVariantEastAsian: "normal"/.test(pageCard)
+);
+check(
+  "B4. legacy TokenView flow also re-sets a lone bar/leader (Preview / JPG / PDF agree, desktop / mobile agree)",
+  !!pageCard &&
+    /const LONE_LEADER_SPLIT = \/\(\[―—…‥\]\)\/;/.test(pageCard) &&
+    /sub\.length === 1 && VERT_LEADER_TEST\.test\(sub\)/.test(pageCard) &&
+    /withLoneLeaders\(part, index\)/.test(pageCard)
+);
+
 /* ---------------- done ---------------- */
 
 console.log("");

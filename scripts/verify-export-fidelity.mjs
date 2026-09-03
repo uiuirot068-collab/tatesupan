@@ -227,6 +227,9 @@ async function main() {
       protectedMarkup.every((tag) =>
         /writing-mode:\s*vertical-rl/.test(tag) &&
         /text-orientation:\s*upright/.test(tag) &&
+        // TSP-LOOP-021 §B: font-feature-settings: normal is what keeps `vert` on
+        // for every engine (mobile Safari included) under upright — the export
+        // clone must carry it.
         /font-feature-settings:\s*normal/.test(tag) &&
         !/margin-(?:top|bottom):\s*[^;]*[1-9]/.test(tag)) &&
       protectedMarkup.some((tag) => /data-protected-run-wrapper="dash"/.test(tag) && /data-run-slot-count="2"/.test(tag)),
