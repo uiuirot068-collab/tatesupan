@@ -213,7 +213,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
       onClick={handleClose}
     >
       <div
@@ -314,28 +314,6 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               </div>
               )}
 
-              {feedbackError && (
-                <p className="text-xs text-red-600">{feedbackError}</p>
-              )}
-              {feedbackState === "success" && (
-                <p className="text-xs font-medium text-emerald-700">
-                  {FEEDBACK_SUCCESS_MESSAGE}
-                </p>
-              )}
-              {feedbackState === "error" && (
-                <p className="whitespace-pre-line text-xs text-red-600">
-                  {FEEDBACK_FAILURE_MESSAGE}
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleSendFeedback}
-                disabled={!canSend || feedbackState === "sending" || !turnstileReady}
-                className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
-              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -366,7 +344,40 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                   className="w-full resize-y rounded border border-ink/20 bg-base p-2 text-sm text-ink outline-none focus:border-ink/40"
                 />
               </label>
+            </div>
+          )}
+        </div>
 
+        {/* TSP-LOOP-019A: 送信アクション行。スクロール領域の外に置き、モバイルでも
+            送信ボタンと状態表示が常に見えるようにする。デスクトップの表示順は従来どおり
+            （入力 → 送信ボタン → 区切り → Turnstile）。 */}
+        <div className="mt-3 flex shrink-0 flex-col gap-1.5">
+          {tab === "feedback" ? (
+            <>
+              {feedbackError && (
+                <p className="text-xs text-red-600">{feedbackError}</p>
+              )}
+              {feedbackState === "success" && (
+                <p className="text-xs font-medium text-emerald-700">
+                  {FEEDBACK_SUCCESS_MESSAGE}
+                </p>
+              )}
+              {feedbackState === "error" && (
+                <p className="whitespace-pre-line text-xs text-red-600">
+                  {FEEDBACK_FAILURE_MESSAGE}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleSendFeedback}
+                disabled={!canSend || feedbackState === "sending" || !turnstileReady}
+                className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
+              </button>
+            </>
+          ) : (
+            <>
               {reviewState === "success" && (
                 <p className="text-xs font-medium text-emerald-700">
                   {FEEDBACK_SUCCESS_MESSAGE}
@@ -375,7 +386,6 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               {reviewState === "error" && (
                 <p className="text-xs text-red-600">{FEEDBACK_FAILURE_MESSAGE}</p>
               )}
-
               <button
                 type="button"
                 onClick={handleSendReview}
@@ -384,12 +394,12 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               >
                 {reviewState === "sending" ? "送信中…" : "reviewを送信"}
               </button>
-            </div>
+            </>
           )}
         </div>
 
         {/* TSP-LOOP-019: 送信前の確認（両タブ共通）+ bot 検出用の非表示フィールド。 */}
-        <div className="mt-3 flex flex-col gap-1.5 border-t border-ink/10 pt-3">
+        <div className="mt-3 flex shrink-0 flex-col gap-1.5 border-t border-ink/10 pt-3">
           {/* honeypot — 実ユーザーには見えず、キーボード遷移・オートフィルからも外す。
               CSS で丸ごと非表示にすると一部 bot が無視するため、画面外へ逃がす方式。 */}
           <div aria-hidden="true" className="pointer-events-none absolute h-px w-px -m-px overflow-hidden">
