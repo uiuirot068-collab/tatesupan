@@ -141,29 +141,60 @@ function isAllowedTurnstileHostname(hostname: unknown): boolean {
 }
 
 /**
+ * TSP-LOOP-019B: Turnstile 検証のインフラ障害だけを安全に分類してログする。
+ * 出せるのは理由コードと（HTTP エラー時のみ）数値 status だけ。
+ * secret / token / request body / siteverify の raw response・error-codes・
+ * ユーザー IP は絶対にここへ入れない。クライアントには一切出さない。
+ */
+function logTurnstileInfraFailure(
+  reason:
+    | "turnstile_secret_missing"
+    | "turnstile_siteverify_http_error"
+    | "turnstile_siteverify_network_error",
+  status?: number,
+): void {
+  console.error(JSON.stringify({
+    event: "turnstile_verify_infrastructure_failure",
+    reason,
+    ...(typeof status === "number" ? { status } : {}),
+  }));
+}
+
+/**
  * token を Cloudflare siteverify で検証する。secret / token / raw response は
  * 一切 log しない。ユーザー IP は下流へ送らない（remoteip を付けない）。
- * 返り値の `code` は内部診断用のみ——クライアントへは汎用エラーだけ返す。
+ * インフラ障害時のみ logTurnstileInfraFailure で安全な理由コードを残す
+ * ——クライアントへは汎用エラーだけ返す。
  */
 async function verifyTurnstile(
   token: string,
 ): Promise<{ ok: true } | { ok: false; retriable: boolean }> {
-  if (!TURNSTILE_SECRET_KEY) return { ok: false, retriable: true }; // fail-closed
+  if (!TURNSTILE_SECRET_KEY) {
+    logTurnstileInfraFailure("turnstile_secret_missing");
+    return { ok: false, retriable: true }; // fail-closed
+  }
   if (!token) return { ok: false, retriable: false };
 
   let data: { success?: boolean; action?: string; hostname?: string } | null = null;
   try {
-    const body = new URLSearchParams();
-    body.set("secret", TURNSTILE_SECRET_KEY);
-    body.set("response", token);
+    // TSP-LOOP-019B 本番 hotfix: Cloudflare / Supabase の siteverify ドキュメント
+    // どおり FormData（multipart）で送る。以前の URLSearchParams + 明示
+    // content-type は Edge Runtime 経由で siteverify が非 2xx を返し、
+    // fail-closed 503 で本番フィードバックが全面停止していた。ユーザー IP は送らない。
+    const body = new FormData();
+    body.append("secret", TURNSTILE_SECRET_KEY);
+    body.append("response", token);
     const res = await fetch(TURNSTILE_VERIFY_URL, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
       body,
     });
-    if (!res.ok) return { ok: false, retriable: true }; // fail-closed
+    if (!res.ok) {
+      logTurnstileInfraFailure("turnstile_siteverify_http_error", res.status);
+      return { ok: false, retriable: true }; // fail-closed
+    }
     data = await res.json();
   } catch {
+    logTurnstileInfraFailure("turnstile_siteverify_network_error");
     return { ok: false, retriable: true }; // fail-closed
   }
 

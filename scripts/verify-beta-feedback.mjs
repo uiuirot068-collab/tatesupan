@@ -672,14 +672,52 @@ check(
 
 // ---- Turnstile: Edge Function verification, fail-closed ----
 {
-  const h = edge.slice(edge.indexOf("async function verifyTurnstile"), edge.indexOf("function sanitizeSheetCell"));
-  check("19 turnstile server: missing TURNSTILE_SECRET_KEY → fail closed", /if \(!TURNSTILE_SECRET_KEY\) return \{ ok: false, retriable: true \}/.test(h));
+  const edgeN = edge.replace(/\r\n/g, "\n");
+  const h = edgeN.slice(edgeN.indexOf("async function verifyTurnstile"), edgeN.indexOf("function sanitizeSheetCell"));
+  // TSP-LOOP-019B: fail-closed の返り値は不変。診断ログ用に early-return が
+  // ブロック化されても、retriable: true で閉じることだけ担保する。
+  check("19 turnstile server: missing TURNSTILE_SECRET_KEY → fail closed", /if \(!TURNSTILE_SECRET_KEY\) \{[\s\S]*?return \{ ok: false, retriable: true \}/.test(h));
   check("19 turnstile server: missing token → reject", /if \(!token\) return \{ ok: false, retriable: false \}/.test(h));
-  check("19 turnstile server: siteverify non-200 → fail closed", /if \(!res\.ok\) return \{ ok: false, retriable: true \}/.test(h));
-  check("19 turnstile server: siteverify network error → fail closed", /catch \{\s*return \{ ok: false, retriable: true \}/.test(h));
+  check("19 turnstile server: siteverify non-200 → fail closed", /if \(!res\.ok\) \{[\s\S]*?return \{ ok: false, retriable: true \}/.test(h));
+  check("19 turnstile server: siteverify network error → fail closed", /catch \{[\s\S]*?return \{ ok: false, retriable: true \}/.test(h));
   check("19 turnstile server: rejects success:false / action mismatch / hostname mismatch", /data\.success !== true/.test(h) && /data\.action !== TURNSTILE_ACTION/.test(h) && /!isAllowedTurnstileHostname\(data\.hostname\)/.test(h));
   check("19 turnstile server: does NOT send the user's IP (no remoteip param)", !/remoteip/i.test(h));
-  check("19 turnstile server: never logs token / secret / siteverify body", !/console\.(log|error)/.test(h));
+  // TSP-LOOP-019B: siteverify request は Cloudflare / Supabase ドキュメントどおり
+  // FormData（multipart）。URLSearchParams + 明示 content-type には戻さない。
+  check(
+    "19B turnstile server: siteverify body is FormData, not URLSearchParams",
+    /new FormData\(\)/.test(h) &&
+      /body\.append\("secret", TURNSTILE_SECRET_KEY\)/.test(h) &&
+      /body\.append\("response", token\)/.test(h) &&
+      !/new URLSearchParams\(\)/.test(h) &&
+      !/application\/x-www-form-urlencoded/.test(h),
+  );
+  // TSP-LOOP-019B: インフラ障害の診断ログは許可。3 つの理由コードだけを分類し、
+  // HTTP エラー時のみ数値 status を添える。
+  const infraLogStart = edgeN.indexOf("function logTurnstileInfraFailure");
+  const infraLog = edgeN.slice(infraLogStart, edgeN.indexOf("\n}\n", infraLogStart) + 3);
+  check(
+    "19B turnstile server: infra-failure diagnostics carry only a reason code (+ numeric status)",
+    /"turnstile_secret_missing"/.test(infraLog) &&
+      /"turnstile_siteverify_http_error"/.test(infraLog) &&
+      /"turnstile_siteverify_network_error"/.test(infraLog) &&
+      /event:\s*"turnstile_verify_infrastructure_failure"/.test(infraLog) &&
+      /logTurnstileInfraFailure\("turnstile_secret_missing"\)/.test(h) &&
+      /logTurnstileInfraFailure\("turnstile_siteverify_http_error", res\.status\)/.test(h) &&
+      /logTurnstileInfraFailure\("turnstile_siteverify_network_error"\)/.test(h),
+  );
+  // verifyTurnstile 本体は console を呼ばない（ログは helper 経由のみ）。
+  // helper を含む全 console 呼び出しに secret / token / request body /
+  // siteverify raw response・error-codes / ユーザー IP を渡さない。
+  const consoleCalls = edgeN.match(/console\.[a-z]+\([\s\S]*?\)\s*\)?;/g) || [];
+  check(
+    "19 turnstile server: never logs token / secret / siteverify body / IP",
+    !/console\.(log|error)/.test(h) &&
+      consoleCalls.length > 0 &&
+      consoleCalls.every((c) =>
+        !/TURNSTILE_SECRET_KEY|turnstileToken|\bsecret\b|\btoken\b|siteverify|\bdata\b|res\.(text|json|headers|body)|error-?codes|remoteip|cf-connecting-ip|x-forwarded-for/i.test(c)
+      ),
+  );
 }
 const edgeHandler = edge.slice(edge.indexOf("Deno.serve(async (req)"));
 check(
