@@ -18,6 +18,14 @@ interface HeaderProps {
   isSaving?: boolean;
   saveStatus?: SaveStatus;
   onOpenHelp?: () => void;
+  /**
+   * TSP-LOOP-023: desktop「集中モード」toggle. Present only on the editor
+   * route. The button is `md+` only — on a phone the sticky MobileEditorNav
+   * already owns the 集中モード / 通常表示に戻す control.
+   */
+  focusMode?: boolean;
+  onEnterFocus?: () => void;
+  onExitFocus?: () => void;
   /** 'editor'（既定・従来どおり「←作品一覧」を表示）/ 'home'（NON-EMPTY Home専用: 兄弟サービス表記、back linkなし） */
   variant?: 'editor' | 'home';
 }
@@ -49,7 +57,7 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
   );
 }
 
-export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, variant = 'editor' }: HeaderProps) {
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
   const isHome = variant === 'home';
   // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
   // ログイン状態や作品数に関わらず表示しない（空の本棚でも重複表示しない）。
@@ -190,6 +198,27 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <span className="hidden sm:inline whitespace-nowrap flex-shrink-0 text-sm font-semibold text-gray-700">画面モード</span>
           <ThemeToggle />
         </div>
+        {!isHome && (onEnterFocus || onExitFocus) && (
+          <button
+            type="button"
+            data-focus-mode-toggle=""
+            onClick={focusMode ? onExitFocus : onEnterFocus}
+            aria-pressed={!!focusMode}
+            title={
+              focusMode
+                ? '通常のレイアウトに戻す'
+                : '設定を隠して本文を広く表示（プレビューは右側に格納）'
+            }
+            // md+ only: the phone gets this from the sticky MobileEditorNav.
+            className={`hidden shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:inline-flex ${
+              focusMode
+                ? 'border-[#c5a059] bg-[#c5a059]/10 text-[#8a6d34] hover:bg-[#c5a059]/20'
+                : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            {focusMode ? '通常に戻す' : '集中モード'}
+          </button>
+        )}
         {onOpenHelp && (
           <button
             type="button"

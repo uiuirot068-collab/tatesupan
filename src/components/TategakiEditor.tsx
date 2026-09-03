@@ -77,16 +77,37 @@ export default function TategakiEditor({
   const [mobileView, setMobileView] = useState<"editor" | "preview" | "settings">(
     "editor"
   );
-  // TSP-LOOP-012: narrow-viewport「集中モード」. Per-device localStorage
-  // preference only (never Supabase / manuscript data); default OFF. Every
-  // consumer of `focusMode` is scoped to md- via `md:hidden` / `max-md:` /
-  // `md:contents`, so the desktop / tablet-wide layout is untouched.
+  // 「集中モード」— a per-device localStorage-only UI preference (never
+  // Supabase / manuscript data; default OFF). TSP-LOOP-012 introduced it for
+  // narrow viewports; TSP-LOOP-023 extends the SAME flag to desktop:
+  //  - `< md`  : the existing behaviour — header + editor toolbar strip hide,
+  //              MobileEditorNav keeps 通常表示に戻す.
+  //  - `md+`   : the desktop inline settings strip hides, the manuscript
+  //              editor grows to (near) full width, and Preview is tucked to
+  //              the right rail (kept one click away — same collapse
+  //              affordance as the normal desktop preview-collapse), with the
+  //              centre resize divider removed. The user's normal split width
+  //              (`editorWidthPercent`) is never written by focus mode, so
+  //              exiting restores it exactly.
   const [focusMode, setFocusMode] = useMobileFocusMode();
+  // Whether Preview was collapsed *before* focus mode tucked it, so exiting
+  // focus mode puts it back exactly as the user left it (not force-open).
+  const preFocusPreviewCollapsedRef = useRef<boolean | null>(null);
   const enterFocusMode = () => {
+    if (preFocusPreviewCollapsedRef.current === null) {
+      preFocusPreviewCollapsedRef.current = isPreviewCollapsed;
+    }
+    setIsPreviewCollapsed(true);
     setFocusMode(true);
     setMobileView("editor");
   };
-  const exitFocusMode = () => setFocusMode(false);
+  const exitFocusMode = () => {
+    setFocusMode(false);
+    if (preFocusPreviewCollapsedRef.current !== null) {
+      setIsPreviewCollapsed(preFocusPreviewCollapsedRef.current);
+      preFocusPreviewCollapsedRef.current = null;
+    }
+  };
 
   // ---- TSP-LOOP-020 phone navigation (all no-ops of the DOM at md+) ----
   const scrollMobileTo = (id: string) => {
@@ -512,6 +533,9 @@ export default function TategakiEditor({
           isSaving={isSaving}
           saveStatus={isSampleDocument ? undefined : saveStatus}
           onOpenHelp={() => setIsHelpOpen(true)}
+          focusMode={focusMode}
+          onEnterFocus={enterFocusMode}
+          onExitFocus={exitFocusMode}
         />
       </div>
 
@@ -584,7 +608,7 @@ export default function TategakiEditor({
           // EditorPane). Hidden whenever the phone is showing another
           // workspace (プレビュー or 設定). Wide: md overrides restore the
           // fitted, viewport-locked pane unchanged.
-          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             title={title}
@@ -606,7 +630,7 @@ export default function TategakiEditor({
           />
         </section>
 
-        {!isPreviewCollapsed && (
+        {!isPreviewCollapsed && !focusMode && (
           <div
             onMouseDown={handleDividerMouseDown}
             className="hidden w-1 shrink-0 cursor-col-resize bg-ink/10 transition-all hover:w-2 hover:bg-accent/60 active:bg-accent md:block"
@@ -620,8 +644,17 @@ export default function TategakiEditor({
           // spread overflow before the width-fit lands — PreviewPane owns the
           // single inner scroll/pan surface. Wide: md overrides restore the
           // side-by-side pane unchanged.
+          // TSP-LOOP-023: in desktop focus mode an *expanded* Preview is a
+          // capped-width side panel (`md:flex-none`, ~38% up to 480px) so the
+          // manuscript editor stays dominant; collapsed it is the same thin
+          // rail as the normal desktop collapse. Outside focus mode the normal
+          // split (`--preview-w` / `md:flex-1`) is unchanged.
           className={`min-h-0 min-w-0 transition-all duration-200 max-md:overflow-hidden md:flex md:h-full md:flex-none ${
-            isPreviewCollapsed ? "md:w-12" : "md:w-[var(--preview-w)] md:flex-1"
+            isPreviewCollapsed
+              ? "md:w-12"
+              : focusMode
+                ? "md:w-[38%] md:max-w-[480px]"
+                : "md:w-[var(--preview-w)] md:flex-1"
           } ${mobileView === "preview" ? "flex h-[calc(100dvh-9rem)] shrink-0 flex-col" : "max-md:hidden"}`}
         >
           <PreviewPane
@@ -640,7 +673,9 @@ export default function TategakiEditor({
             onImageLayerChange={handleImageLayerChange}
             cursorIndex={cursorIndex}
             onBodyPageCountChange={setBodyPageCount}
-            isCollapsed={isPreviewCollapsed}
+            // On a phone showing the プレビュー workspace the preview is always
+            // full — the collapse rail is a desktop-only affordance.
+            isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
             onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
             selected={selectedPages}
             onSelectedChange={setSelectedPages}

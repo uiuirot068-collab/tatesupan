@@ -215,12 +215,13 @@ export default function EditorPane({
 
       {/* TSP-LOOP-022: on a phone 設定 is its own workspace (rendered by
           TategakiEditor, `md:hidden`), so this inline settings strip is
-          desktop / tablet-wide only. The phone editor surface is now just
-          title + toolbar + manuscript, with no settings panel to scroll past.
-          At md+ this is exactly the strip it always was. */}
+          desktop / tablet-wide only. TSP-LOOP-023: it also hides in desktop
+          「集中モード」 — the whole point of focus mode is to give the
+          manuscript this space; the settings data is untouched and the strip
+          returns on exit. */}
       <div
         id="tsp-settings"
-        className="hidden flex-none md:block"
+        className={`flex-none ${focusMode ? "hidden" : "hidden md:block"}`}
       >
         <PageSettingsPanel
           settings={settings}

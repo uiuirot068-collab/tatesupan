@@ -1439,18 +1439,25 @@ export default function PreviewPane({
   const stableMovePageForward = useStableIndexedCallback(movePageForward);
 
   if (isCollapsed) {
+    // Right-edge affordance for the collapsed preview — shared by the normal
+    // desktop preview-collapse and TSP-LOOP-023 focus mode. One real button
+    // (label + arrow), keyboard-reachable, state announced via aria-expanded.
+    // `data-preview-collapsed-toggle` is a stable hook for the TSP-024 tour.
     return (
-      <div className="flex h-full w-full flex-col items-center gap-4 rounded-2xl border border-ink/10 bg-base py-4 shadow-sm">
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          title="プレビューを展開"
-          className="rounded border border-ink/20 p-1.5 text-ink/60 hover:bg-ink/5"
-        >
-          ◀
-        </button>
-        <span className="text-xs text-ink/60 [writing-mode:vertical-rl]">プレビュー</span>
-      </div>
+      <button
+        type="button"
+        onClick={onToggleCollapse}
+        data-preview-collapsed-toggle=""
+        aria-expanded={false}
+        aria-label="プレビューを開く"
+        title="プレビューを開く"
+        className="flex h-full w-full flex-col items-center gap-3 rounded-2xl border border-ink/15 bg-base py-4 text-ink/60 shadow-sm transition-colors hover:bg-ink/5"
+      >
+        <span aria-hidden="true" className="text-sm leading-none">◀</span>
+        <span aria-hidden="true" className="text-xs [writing-mode:vertical-rl]">
+          プレビュー
+        </span>
+      </button>
     );
   }
 
@@ -1502,10 +1509,13 @@ export default function PreviewPane({
             <button
               type="button"
               onClick={onToggleCollapse}
-              title="プレビューを折りたたむ"
+              data-preview-collapse-toggle=""
+              aria-expanded
+              aria-label="プレビューを右側に格納"
+              title="プレビューを右側に格納"
               className="hidden flex-shrink-0 rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/60 hover:bg-ink/5 md:inline-flex"
             >
-              ▶
+              <span aria-hidden="true">▶</span>
             </button>
           )}
           <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
