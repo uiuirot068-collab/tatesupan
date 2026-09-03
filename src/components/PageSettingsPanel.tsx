@@ -11,6 +11,7 @@ import {
   type PageLayout,
   type PageSettings,
   type PaperSizeKey,
+  recommendedNombreFontSizePt,
   resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
@@ -90,6 +91,19 @@ const applyPaperTemplate = (
 ): PageSettings => {
   const template = PAPER_SIZE_TEMPLATES[paperSize];
   const profile = columnCount === 2 ? template.cols2 : template.cols1;
+  // TSP-LOOP-021 §7C: ノンブルの位置・地からの距離・文字サイズは、ユーザーが
+  // まだ手動で触っていない（nombreLayoutCustomized !== true）ときだけ、切り
+  // 替えた用紙 preset の推奨値へ追従させる。カスタム済みなら一切上書きしない。
+  // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -3pt
+  // （最小 6pt。TSP-LOOP-021 §4）を版面から導出する（§7B: 全 preset 同一座標に
+  // しない）。
+  const nombreOverrides: Partial<MasterPageSettings> = base.masterPage.nombreLayoutCustomized
+    ? {}
+    : {
+        nombrePosition: profile.nombrePosition as NombrePosition,
+        nombreBottomMargin: profile.nombreDistance,
+        nombreFontSize: recommendedNombreFontSizePt(profile.fontSizePt),
+      };
   return {
     ...base,
     paperSize,
@@ -105,11 +119,19 @@ const applyPaperTemplate = (
     linesPerColumn: profile.linesPerColumn,
     masterPage: {
       ...base.masterPage,
-      nombrePosition: profile.nombrePosition as NombrePosition,
-      nombreBottomMargin: profile.nombreDistance,
+      ...nombreOverrides,
     },
   };
 };
+
+// TSP-LOOP-021 §7C: これらのフィールドをユーザーが変更したら「ノンブル配置を
+// カスタムした」とみなし、以後の用紙 preset 切り替えで上書きしないようにする。
+const NOMBRE_LAYOUT_KEYS = new Set<keyof MasterPageSettings>([
+  "nombrePosition",
+  "nombreBottomMargin",
+  "nombreFontSize",
+  "nombreFontFamily",
+]);
 
 export default function PageSettingsPanel({
   settings,
@@ -366,7 +388,13 @@ export default function PageSettingsPanel({
   ) => {
     onChange({
       ...settings,
-      masterPage: { ...settings.masterPage, [key]: value },
+      masterPage: {
+        ...settings.masterPage,
+        [key]: value,
+        // §7C: ノンブルの位置・距離・サイズ・書体を触ったら「カスタム済み」に
+        // 印を付け、以後の用紙 preset 切り替えでユーザーの指定を保持する。
+        ...(NOMBRE_LAYOUT_KEYS.has(key) ? { nombreLayoutCustomized: true } : {}),
+      },
     });
   };
 

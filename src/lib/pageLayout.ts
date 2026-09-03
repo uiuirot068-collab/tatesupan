@@ -209,25 +209,48 @@ export interface MasterPageSettings {
   hashiraEven: string; // 偶数ページ柱（例: 章名）
   hashiraPosition: HashiraPosition;
   headerFontSize?: number; // 柱のフォントサイズ (pt, デフォルト: 8)
-  nombreFontSize?: number; // ノンブルのフォントサイズ (pt, デフォルト: 8)
+  // ノンブルのフォントサイズ (pt)。推奨デフォルトは本文フォント -3pt / 最小6pt
+  // （recommendedNombreFontSizePt。TSP-LOOP-021 §4）。手動変更後は保持される。
+  nombreFontSize?: number;
   // ノンブル（ページ番号）のフォント。"" = 本文と同じ（既定）。それ以外は
   // FONT_FAMILY_OPTIONS の CSS font-family 文字列。位置・サイズ・組版には
   // 一切影響しない（見た目の書体だけ）。
   nombreFontFamily?: string;
+  // TSP-LOOP-021 §7C: ユーザーがノンブルの位置・サイズを手動で変更したか。
+  // 省略(undefined)/false = 未カスタム → 用紙サイズ preset を切り替えると、
+  // その preset 推奨のノンブル位置・距離・サイズが自動で追従する。
+  // true = カスタム済み → preset を切り替えてもユーザーの指定を維持する
+  // （上書きしない）。旧レコードはキーが無く false 扱い（後方互換）。
+  nombreLayoutCustomized?: boolean;
+}
+
+/**
+ * TSP-LOOP-021 §4: recommended default page-number size — body font size
+ * minus 3pt, never below 6pt (e.g. 10pt→7, 9pt→6, 8pt→6). Applied only to a
+ * layout the user has NOT customised (see MasterPageSettings.nombreLayoutCustomized);
+ * a manual choice is always preserved, including across a paper-preset switch.
+ */
+export function recommendedNombreFontSizePt(bodyFontSizePt: number): number {
+  return Math.max(6, Math.round(bodyFontSizePt - 3));
 }
 
 export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   nombrePosition: "center",
   hideNombreOnFirstPage: false,
   nombreStart: 1,
-  nombreBottomMargin: 8,
+  // 文庫（既定用紙）1段組の推奨ノンブル距離と一致させる（TSP-LOOP-021 §7B）。
+  // 以前の 8mm は既定の地余白 12mm と近く、中央ノンブルが本文最終行へ
+  // 迫って見えていた。
+  nombreBottomMargin: 6,
   showHiddenNombre: false,
   hashiraOdd: "",
   hashiraEven: "",
   hashiraPosition: "top",
   headerFontSize: 8,
-  nombreFontSize: 8,
+  // 文庫（既定用紙）1段組の本文9pt − 3pt = 6pt（TSP-LOOP-021 §4）。
+  nombreFontSize: 6,
   nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
+  nombreLayoutCustomized: false,
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {

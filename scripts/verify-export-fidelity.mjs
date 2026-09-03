@@ -226,7 +226,10 @@ async function main() {
       protectedKinds.includes("dash") && (!expectsEllipsis || protectedKinds.includes("ellipsis")) &&
       protectedMarkup.every((tag) =>
         /writing-mode:\s*vertical-rl/.test(tag) &&
-        /text-orientation:\s*upright/.test(tag) &&
+        // TSP-LOOP-021 §1: text-orientation: mixed so the font's vertical glyphs
+        // render on Apple WebKit (which disables `vert` under `upright` per
+        // spec) — the export clone must carry the same value the preview uses.
+        /text-orientation:\s*mixed/.test(tag) &&
         /font-feature-settings:\s*normal/.test(tag) &&
         !/margin-(?:top|bottom):\s*[^;]*[1-9]/.test(tag)) &&
       protectedMarkup.some((tag) => /data-protected-run-wrapper="dash"/.test(tag) && /data-run-slot-count="2"/.test(tag)),

@@ -649,18 +649,24 @@ async function main() {
       ellipsisM.xOffsets.n === 0 || Math.abs(ellipsisM.xOffsets.mean - bodyXMean) <= xTol,
       ellipsisM.xOffsets.n === 0 ? "no ellipsis in fixture — skipped"
         : `ellipsis=${ellipsisM.xOffsets.mean}px body=${bodyXMean}px deviation=${(ellipsisM.xOffsets.mean - bodyXMean).toFixed(3)}px (tol ${xTol.toFixed(2)})`);
-    // TSP-LOOP-003 cross-font: ―― / …… are ONE native writing-mode:vertical-rl
-    // run each, with the run text as ONE inline run (a single text node in a
-    // single glyph span) so the font connects the em dashes; per-glyph boxes
-    // break that connection and re-open the cross-font joint gap.
+    // TSP-LOOP-003 / TSP-LOOP-021 §1: ―― / …… are ONE native
+    // writing-mode:vertical-rl run each, with `text-orientation: mixed` (not
+    // `upright`) so the font's vertical glyphs render on Apple WebKit too (all
+    // iOS browsers + iPad Safari disable `vert` under `upright` per spec).
+    //  - dash: still ONE inline text run (single [data-protected-run-glyph]
+    //    span) so U+2015 connects cross-font.
+    //  - ellipsis: rendered PER CHARACTER (one 1-slot box per dot-leader) — the
+    //    lone-… `mixed` context, which keeps every face on the column axis.
     const dashRuns0 = dom.runs.filter((r) => r.kind === "dash");
     const ellipsisRuns0 = dom.runs.filter((r) => r.kind === "ellipsis");
-    check("―― / …… render as one native vertical-rl run with one inline text run",
+    check("―― / …… render as one native vertical-rl run (dash=1 text run, ellipsis=per-char boxes), text-orientation: mixed",
       dashRuns0.length > 0 &&
       [...dashRuns0, ...ellipsisRuns0].every((r) =>
-        /vertical-rl/.test(r.writingMode) && r.textOrientation === "upright" &&
+        /vertical-rl/.test(r.writingMode) && r.textOrientation === "mixed" &&
+        /\bnormal\b/.test(r.fontFeatureSettings) &&
         r.alignItems === "center" && r.justifyContent === "center" && r.overflow === "hidden" &&
-        r.fontVariantEastAsian === "normal" && r.glyphRects.length === 1),
+        r.fontVariantEastAsian === "normal" &&
+        r.glyphRects.length === (r.kind === "ellipsis" ? r.slotCount : 1)),
       JSON.stringify([...dashRuns0, ...ellipsisRuns0].map((r) => ({ k: r.kind, wm: r.writingMode, to: r.textOrientation, ai: r.alignItems, jc: r.justifyContent, of: r.overflow, fvea: r.fontVariantEastAsian, g: r.glyphRects.length, s: r.slotCount }))));
     check("protected-run glyphs carry no per-glyph margin or transform nudge",
       [...dashM.styles, ...ellipsisM.styles].length > 0 &&

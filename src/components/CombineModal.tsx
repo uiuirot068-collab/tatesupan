@@ -78,7 +78,9 @@ export const CombineModal: React.FC<CombineModalProps> = ({
 
   const handleCombine = async () => {
     if (!isAllowed) {
-      alert('短編集・再録本メーカーはLightプラン以上でご利用いただけます。');
+      // TSP-LOOP-021 §2: 未リリース機能。プラン名（Light 等）は出さず、
+      // 「今後リリース予定」として案内する。
+      alert('短編集・再録本メーカーは現在準備中です。今後のアップデートで公開予定です。');
       return;
     }
     if (selectedIds.length < 2) {
@@ -143,20 +145,22 @@ export const CombineModal: React.FC<CombineModalProps> = ({
         )}
 
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-          📚 短編集・再録本メーカー <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-normal">PREMIUM</span>
+          📚 短編集・再録本メーカー <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300 font-normal">今後リリース予定</span>
         </h2>
 
         {!isAllowed ? (
           <>
+            {/* TSP-LOOP-021 §2: 未リリース機能。プラン名（Light / Premium）は
+                出さず、中立的な「今後リリース予定」の案内にとどめる。 */}
             <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">
-              短編集・再録本メーカーは
+              短編集・再録本メーカーは現在準備中です。
               <br />
-              Lightプラン以上で利用できます。
+              今後のアップデートで公開予定です。
             </p>
             <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
               複数の作品を選び、
               <br />
-              一冊の短編集・再録本にまとめられます。
+              一冊の短編集・再録本にまとめられるようになります。
             </p>
             <div className="mt-6 flex justify-end">
               <button

@@ -26,11 +26,11 @@ const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 2. 上部の「ドキュメント名」はファイルの保存名になります
 
 ■ 設定メニューの使い方
-上部のメニューから以下の調整が行えます：
+編集画面のメニューから以下の調整が行えます：
 ・① ページ設定：用紙サイズ・余白・フォント・段組みの変更
 ・② ノンブル・柱：ページ番号やヘッダー／フッターの表示設定
 ・③ メモ：プロットや執筆メモの記録
-・④ ヘルプ（？）：ショートカットキーや特殊記法の使い方
+・④ ヘルプ：ショートカットキーや特殊記法の使い方（「？」マークからも開けます）
 
 ■ 特殊記法・装飾
 1. 改ページ（記法は【改ページ】。＃改ページは使いません）
@@ -180,10 +180,10 @@ export default function EditorPane({
           <button
             type="button"
             onClick={onOpenBookParts}
-            title="奥付（縦／横）・扉・目次を作成"
+            title="奥付（縦／横）・目次を作成"
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
-            📖 扉・奥付
+            📖 奥付・目次
           </button>
           <button
             type="button"

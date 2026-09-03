@@ -192,8 +192,8 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             onClick={onOpenHelp}
-            aria-label="使い方"
-            title="使い方"
+            aria-label="ヘルプ"
+            title="ヘルプ"
             className="flex h-7 w-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100"
           >
             ？

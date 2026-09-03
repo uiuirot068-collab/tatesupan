@@ -183,6 +183,9 @@ interface PageSlotProps {
   onHideHashiraChange?: (hideHashira: boolean) => void;
   hashiraOverride?: string;
   chromeScale: number;
+  /** TSP-LOOP-021 §2: per-page ⋮ menu open state, lifted here so only one opens at a time. */
+  isMenuOpen: boolean;
+  onToggleMenu?: () => void;
 }
 
 const PageSlot = memo(function PageSlot({
@@ -217,6 +220,8 @@ const PageSlot = memo(function PageSlot({
   onHideHashiraChange,
   hashiraOverride,
   chromeScale,
+  isMenuOpen,
+  onToggleMenu,
 }: PageSlotProps) {
   return (
     <div ref={registerRef} className="relative flex shrink-0">
@@ -264,6 +269,8 @@ const PageSlot = memo(function PageSlot({
         onHideHashiraChange={onHideHashiraChange}
         hashiraOverride={hashiraOverride}
         chromeScale={chromeScale}
+        isMenuOpen={isMenuOpen}
+        onToggleMenu={onToggleMenu}
       />
     </div>
   );
@@ -501,6 +508,28 @@ export default function PreviewPane({
       </button>
     </span>
   ) : null;
+
+  // TSP-LOOP-021 §2: which page's ⋮ menu is open (bodyIndex), or null. Lifted
+  // here so opening one closes any other, and so an outside pointerdown /
+  // Escape closes it. UI-only, never persisted.
+  const [openPageMenuIndex, setOpenPageMenuIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (openPageMenuIndex === null) return;
+    const close = () => setOpenPageMenuIndex(null);
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t || !t.closest("[data-page-menu-root]")) close();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [openPageMenuIndex]);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -1357,6 +1386,10 @@ export default function PreviewPane({
   const stableImageLayerChange = useStableCallback(handleImageLayerChange);
   const stableHideNombreChange = useStableIndexedCallback(handleHideNombreChange);
   const stableHideHashiraChange = useStableIndexedCallback(handleHideHashiraChange);
+  // TSP-LOOP-021 §2: toggle this page's ⋮ menu (closes any other page's menu).
+  const togglePageMenu = (bodyIndex: number) => () =>
+    setOpenPageMenuIndex((current) => (current === bodyIndex ? null : bodyIndex));
+  const stableTogglePageMenu = useStableIndexedCallback(togglePageMenu);
 
   if (isCollapsed) {
     return (
@@ -1773,6 +1806,8 @@ export default function PreviewPane({
                     }
                     hashiraOverride={settings.pageOverrides[bodyIndex + 1]?.hashiraOverride}
                     chromeScale={chromeScale}
+                    isMenuOpen={canReorder && openPageMenuIndex === bodyIndex}
+                    onToggleMenu={canReorder ? stableTogglePageMenu(bodyIndex) : undefined}
                   />
                 );
               })}

@@ -142,6 +142,31 @@ const NOWRAP_RUN_TEST = /^(?:[―—]{2,}|[…‥]{2,})$/;
 const DASH_CHAR_TEST = /[―—]/;
 const ELLIPSIS_CHAR_TEST = /[…‥]/;
 
+// TSP-LOOP-021 §B / §1: the glyph class that needs the font's vertical form
+// (`vert` substitution) — the bars ―／— and the leaders …／‥.
+//
+// `.page-card` sets `text-orientation: upright` (needed for the upright-CJK
+// fixed-slot grid). Per the CSS Writing Modes spec, `upright` DISABLES the
+// `vert` OpenType feature for this class. Blink (desktop Chrome, Android
+// Chrome/Pixel) ignores that and substitutes anyway; Apple WebKit — which is
+// the engine behind EVERY iOS browser (Safari, Chrome, Firefox…) and iPad
+// Safari — complies, so a bare glyph renders its horizontal form ACROSS the
+// column on Apple devices. Real-device HUMAN QA: iPhone 15 Safari + Chrome,
+// iPad mini 7 Safari all FAIL; Pixel 10 Chrome PASSes. `font-feature-settings:
+// normal` alone does NOT re-enable `vert` under `upright` on WebKit.
+//
+// Fix: render this class through a nested wrapper with an explicit
+// `text-orientation: mixed` (+ `-webkit-`), the standards-defined way to get
+// the vertical form on every engine — the same override `[data-latin-run]`
+// already uses in this component. `font-feature-settings: normal` +
+// `font-variant-east-asian: normal` clear the fixed-slot body's `"vpal" 0, …`
+// list. The manuscript source text is never rewritten to a presentation form.
+// (ー／〜／～ are the same UTR#50 class; the Playwright-WebKit audit shows they
+// render horizontally on WebKit too, but they are not tester-reported — a
+// one-char extension of this regex behind explicit Apple HUMAN QA. See
+// verify-tsp021-vertical-glyphs.)
+const VERT_LEADER_TEST = /[―—…‥]/;
+
 type ImageToken = Extract<TategakiToken, { type: "image" }>;
 type FlowToken = Exclude<TategakiToken, { type: "image" }>;
 
@@ -231,6 +256,15 @@ interface PageCardProps {
    * today's behavior unchanged.
    */
   chromeScale?: number;
+  /**
+   * TSP-LOOP-021 §2: the per-page "⋮" menu is a C pattern — one compact button
+   * per page, opening an inline panel with that page's actions. The open state
+   * is lifted to PreviewPane (`openPageMenuIndex`) so only one page menu is
+   * ever open at once; PageCard just reflects/toggles it. Undefined on
+   * non-interactive previews.
+   */
+  isMenuOpen?: boolean;
+  onToggleMenu?: () => void;
 }
 
 function PageCard({
@@ -262,6 +296,8 @@ function PageCard({
   onHideHashiraChange,
   hashiraOverride,
   chromeScale = 1,
+  isMenuOpen = false,
+  onToggleMenu,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Which of this page's inserted images the 挿絵 control bar below currently
@@ -591,93 +627,153 @@ function PageCard({
       onDragEnd={onDragEnd}
     >
       {isInteractive && (
-        <div data-no-print="true" className="no-print flex w-full items-center justify-between px-1">
-          <label
-            className="flex cursor-pointer items-center gap-1.5 text-xs text-ink/60"
-            style={{ transform: `scale(${chromeScale})`, transformOrigin: "left center" }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              data-no-print="true"
-              checked={selected}
-              onChange={() => {}}
-              onClick={onToggleCheckbox}
-              className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
-            />
-            選択
-          </label>
+        <>
+          {/* TSP-LOOP-021 §2: C pattern. Only the export-target checkbox stays
+              permanently visible (LEFT) because users routinely select several
+              pages before an export; every other per-page action lives under
+              the compact ⋮ (RIGHT). No decorative emoji. `zoom` + pre-zoom
+              width keep the row exactly one page wide whatever chromeScale is
+              (same technique as the 挿絵 panel), so it can never overlap the
+              neighbouring spread page. `data-page-menu-root` lets PreviewPane
+              close the menu on an outside pointerdown. */}
           <div
-            className="flex items-center gap-2"
-            style={{ transform: `scale(${chromeScale})`, transformOrigin: "right center" }}
+            data-no-print="true"
+            data-page-menu-root=""
+            className="no-print flex items-center justify-between gap-1.5 px-1"
+            style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+            onClick={(event) => event.stopPropagation()}
+            draggable={false}
+            onDragStart={(event) => event.stopPropagation()}
           >
-            {onHideNombreChange && (
+            {onToggleCheckbox ? (
               <label
-                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
+                className="flex min-h-[36px] cursor-pointer select-none items-center gap-1.5 rounded px-1 text-xs text-ink/70 hover:bg-ink/5"
                 onClick={(event) => event.stopPropagation()}
               >
                 <input
                   type="checkbox"
                   data-no-print="true"
-                  checked={hideNombre}
-                  onChange={(event) => onHideNombreChange(event.target.checked)}
-                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
+                  checked={selected}
+                  onChange={() => {}}
+                  onClick={onToggleCheckbox}
+                  className="no-print h-4 w-4 cursor-pointer accent-accent"
                 />
-                ノンブル非表示
+                {selected ? "選択中" : "選択"}
               </label>
+            ) : (
+              <span />
             )}
-            {onHideHashiraChange && (
-              <label
-                className="flex cursor-pointer items-center gap-1 text-[10px] text-ink/60"
-                onClick={(event) => event.stopPropagation()}
+            <span className="flex items-center gap-1.5">
+              {/* drag affordance — desktop only (HTML5 drag has no touch equivalent) */}
+              <span
+                className="hidden cursor-grab select-none px-1 text-ink/35 active:cursor-grabbing md:inline"
+                title="ドラッグでページを並べ替え"
+                aria-hidden="true"
               >
-                <input
-                  type="checkbox"
-                  data-no-print="true"
-                  checked={hideHashira}
-                  onChange={(event) => onHideHashiraChange(event.target.checked)}
-                  className="no-print h-3.5 w-3.5 cursor-pointer accent-accent"
-                />
-                柱非表示
-              </label>
-            )}
-            {onInsertImage && (
-              <>
+                ⠿
+              </span>
+              <button
+                type="button"
+                aria-expanded={isMenuOpen}
+                aria-controls={`page-menu-${pageNumber}`}
+                aria-label={`${pageNumber}ページの操作メニュー`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleMenu?.();
+                }}
+                className={`flex min-h-[36px] min-w-[36px] items-center justify-center rounded border px-2 text-sm leading-none ${
+                  isMenuOpen
+                    ? "border-accent bg-ink/[0.06] text-ink"
+                    : "border-ink/25 text-ink/70 hover:bg-ink/5"
+                }`}
+              >
+                <span aria-hidden="true">⋮</span>
+              </button>
+            </span>
+          </div>
+
+          {isMenuOpen && (
+            <div
+              id={`page-menu-${pageNumber}`}
+              data-no-print="true"
+              data-page-menu-root=""
+              role="group"
+              aria-label={`${pageNumber}ページの操作`}
+              className="no-print flex flex-col gap-1 rounded-md border border-ink/15 bg-ink/[0.03] px-1.5 py-1.5 text-xs text-ink/70"
+              style={{ width: (sheetStyle.width as number) / (chromeScale || 1), zoom: chromeScale }}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") onToggleMenu?.();
+              }}
+            >
+              {/* Page selection is NOT here — it stays permanently visible in
+                  the row above (multi-page export flow). */}
+              {onHideNombreChange && (
                 <button
                   type="button"
+                  aria-pressed={!hideNombre}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onHideNombreChange(!hideNombre);
+                  }}
+                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                >
+                  <span>ノンブル（ページ番号）</span>
+                  <span className="shrink-0 font-semibold">{hideNombre ? "非表示" : "表示"}</span>
+                </button>
+              )}
+              {onHideHashiraChange && (
+                <button
+                  type="button"
+                  aria-pressed={!hideHashira}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onHideHashiraChange(!hideHashira);
+                  }}
+                  className="flex min-h-[40px] items-center justify-between gap-2 rounded px-2 text-left hover:bg-ink/5"
+                >
+                  <span>柱（ヘッダー）</span>
+                  <span className="shrink-0 font-semibold">{hideHashira ? "非表示" : "表示"}</span>
+                </button>
+              )}
+              {onInsertImage && (
+                <button
+                  type="button"
+                  disabled={insertingImage}
                   onClick={(event) => {
                     event.stopPropagation();
                     fileInputRef.current?.click();
                   }}
-                  disabled={insertingImage}
-                  className="rounded border border-ink/20 px-1.5 py-0.5 text-[10px] text-ink/60 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
-                  title="このページに画像を挿入"
+                  className="flex min-h-[40px] items-center rounded px-2 text-left hover:bg-ink/5 disabled:opacity-40"
                 >
-                  {insertingImage ? "PSDを変換中…" : "画像挿入"}
+                  {insertingImage ? "画像を変換中…" : "このページに画像を挿入"}
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.psd"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) onInsertImage(file);
-                    event.target.value = "";
-                  }}
-                />
-              </>
-            )}
-            <span className="cursor-grab select-none text-ink/40 active:cursor-grabbing" title="ドラッグで並べ替え">
-              ⠿
-            </span>
-          </div>
-        </div>
+              )}
+              <p className="hidden px-2 pt-0.5 text-[11px] text-ink/40 md:block">
+                ページの並べ替えは、ページをドラッグして行います。
+              </p>
+            </div>
+          )}
+
+          {onInsertImage && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.psd"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onInsertImage(file);
+                event.target.value = "";
+              }}
+            />
+          )}
+        </>
       )}
       {isInteractive && imageTokens.length > 0 && selectedImage && (
         <>
-          {/* Separates the normal per-page toolbar above (選択/ノンブル非表示/画像挿入)
-              from the 挿絵 operation panel below, so the two don't read as one
+          {/* Separates the per-page ⋮ menu row above from the 挿絵 operation
+              panel below, so the two don't read as one
               blended control group. */}
           <div className="my-0.5 w-full border-t border-ink/10" aria-hidden="true" />
           <div
@@ -999,6 +1095,8 @@ function PageCard({
             position={showWebFooter ? "left" : (nombrePosition as "center" | "gutter" | "outer")}
             isOddPage={isOddPage}
             bottomMarginMm={masterPage.nombreBottomMargin}
+            marginGutterMm={settings.marginGutter}
+            marginOuterMm={settings.marginOuter}
             fontSize={masterPage.nombreFontSize}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
@@ -1091,6 +1189,8 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     onHideNombreChangeEqual &&
     onHideHashiraChangeEqual;
   const nombreHashiraEqual = prev.hideNombre === next.hideNombre && prev.hideHashira === next.hideHashira;
+  // TSP-LOOP-021 §2: the per-page ⋮ menu open state + toggle callback.
+  const menuEqual = prev.isMenuOpen === next.isMenuOpen && prev.onToggleMenu === next.onToggleMenu;
   const otherEqual = prev.chromeScale === next.chromeScale;
 
   const equal =
@@ -1103,6 +1203,7 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     activeEqual &&
     callbacksEqual &&
     nombreHashiraEqual &&
+    menuEqual &&
     otherEqual;
 
   return equal;
@@ -1134,6 +1235,8 @@ export function NombreOverlay({
   position,
   isOddPage,
   bottomMarginMm,
+  marginGutterMm,
+  marginOuterMm,
   fontSize,
   fontFamily,
   bleedMm,
@@ -1142,6 +1245,10 @@ export function NombreOverlay({
   position: "center" | "gutter" | "outer" | "left";
   isOddPage: boolean;
   bottomMarginMm: number;
+  /** ノド（綴じ側）余白 mm。ノド寄せノンブルの水平アンカーに使う。 */
+  marginGutterMm: number;
+  /** 小口（外側）余白 mm。小口寄せノンブルの水平アンカーに使う。 */
+  marginOuterMm: number;
   fontSize?: number;
   // Resolved page-number font — either an explicit choice or the body font
   // (see resolveNombreFontFamily). Affects the glyph face only; position,
@@ -1149,6 +1256,9 @@ export function NombreOverlay({
   fontFamily: string;
   bleedMm: number;
 }) {
+  // §7B: 極端に小さいノンブルを避ける下限（6pt）。
+  const nombreFontSizePt = Math.max(fontSize ?? 8, 6);
+
   // Web閲覧用のノンブルは左下に固定表示する。
   if (position === "left") {
     const webStyle: CSSProperties = {
@@ -1157,7 +1267,7 @@ export function NombreOverlay({
       bottom: "15px",
       writingMode: "horizontal-tb",
       color: "#000000",
-      fontSize: `${fontSize ?? 8}pt`,
+      fontSize: `${nombreFontSizePt}pt`,
       fontFamily,
     };
 
@@ -1168,36 +1278,57 @@ export function NombreOverlay({
     );
   }
 
-  // ノド(綴じ側): 奇数ページ(左)は右寄せ、偶数ページ(右)は左寄せ。
-  // 小口(外側): 奇数ページ(左)は左寄せ、偶数ページ(右)は右寄せ。
-  const justifyContent =
-    position === "center"
-      ? "center"
-      : position === "gutter"
-        ? isOddPage
-          ? "flex-end"
-          : "flex-start"
-        : isOddPage
-          ? "flex-start"
-          : "flex-end";
-
-  const style: CSSProperties = {
+  // 地の余白帯の中、本文フレームの下端より下。既存の
+  // masterPage.nombreBottomMargin（ユーザー調整可）がそのまま距離を決める。
+  const bottomPx = (bottomMarginMm + bleedMm) * PX_PER_MM;
+  const baseStyle: CSSProperties = {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: (bottomMarginMm + bleedMm) * PX_PER_MM,
-    display: "flex",
-    alignItems: "center",
-    justifyContent,
+    bottom: bottomPx,
+    display: "inline-block",
     writingMode: "horizontal-tb",
-    padding: `0 ${2 * PX_PER_MM}px`,
     color: "#000000",
-    fontSize: `${fontSize ?? 8}pt`,
+    fontSize: `${nombreFontSizePt}pt`,
     fontFamily,
+    lineHeight: 1,
   };
 
+  if (position === "center") {
+    // ページ中央（本文フレーム基準ではなく紙面中央 — 慣例どおり）。
+    return (
+      <div
+        data-nombre=""
+        style={{ ...baseStyle, left: 0, right: 0, display: "flex", justifyContent: "center" }}
+        className="pointer-events-none select-none"
+      >
+        {value}
+      </div>
+    );
+  }
+
+  // TSP-LOOP-021 §3: ノド／小口ノンブルは「紙の端＋インセット」ではなく、
+  // 実際の本文フレームの端を水平アンカーにする。フレームの端は塗り足し込み
+  // カード端から（小口側 = marginOuter+bleed / ノド側 = marginGutter+bleed）。
+  // 右綴じ縦組み: 奇数ページ(recto)は小口=左・ノド=右、偶数ページ(verso)は逆。
+  // ノンブルはそのフレーム端に外側を揃え、内側（本文側）へ伸びる。
+  // → 版面のすぐ下に置かれ、紙の端には貼り付かず、断ち切りも越えない。
+  const outerEdgePx = (marginOuterMm + bleedMm) * PX_PER_MM;
+  const gutterEdgePx = (marginGutterMm + bleedMm) * PX_PER_MM;
+  const anchoredSide: "left" | "right" =
+    position === "outer"
+      ? isOddPage
+        ? "left"
+        : "right"
+      : isOddPage
+        ? "right"
+        : "left";
+  const anchorPx = position === "outer" ? outerEdgePx : gutterEdgePx;
+
   return (
-    <div data-nombre="" style={style} className="pointer-events-none select-none">
+    <div
+      data-nombre=""
+      style={{ ...baseStyle, [anchoredSide]: anchorPx }}
+      className="pointer-events-none select-none"
+    >
       {value}
     </div>
   );
@@ -1206,6 +1337,11 @@ export function NombreOverlay({
 /**
  * 隠しノンブル: 表示・非表示設定に関わらず、製本時の突き合わせ用にノド側の
  * 断ち切り境界付近（余白の外側端）へ小さく薄く常時焼き込む慣行的な表示。
+ *
+ * TSP-LOOP-021 §7 注: テスターの報告は「ノド／小口を選ぶと通常ノンブルが
+ * 点線に被る」であり、隠しノンブルは点線の意味を推測する手掛かりとして
+ * 言及されただけ。隠しノンブルの位置は「ノドの断ち切り境界すぐ内側」という
+ * 意図どおりで、プレビュー／JPG／PDF いずれでも欠けは再現しないため変更しない。
  */
 function HiddenNombreOverlay({
   value,
@@ -1840,6 +1976,39 @@ function FixedSlotLine({
             >
               {slot.text}
             </span>
+          ) : VERT_LEADER_TEST.test(slot.text) ? (
+            // TSP-LOOP-021 §B / §1: a lone bar (―／—) or leader (…／‥). A run of
+            // 2+ is handled by the protected run below. `.page-card` sets
+            // `text-orientation: upright`, which per the CSS Writing Modes spec
+            // disables the font's `vert` substitution for this class. Blink
+            // (desktop Chrome, Android) ignores that and still substitutes;
+            // Apple WebKit (every iOS browser — Safari, Chrome, Firefox — and
+            // iPad Safari) complies, so a bare glyph renders horizontally
+            // ACROSS the column on Apple devices (real-device HUMAN QA:
+            // iPhone 15 Safari + Chrome, iPad mini 7 Safari FAIL; Pixel PASS).
+            // Overriding to `text-orientation: mixed` is the standards-defined
+            // way to get the vertical form on every engine (same as
+            // `[data-latin-run]`). The SOURCE text is never substituted to a
+            // presentation-form codepoint.
+            <span
+              data-vertical-leader=""
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                height: "100%",
+                writingMode: "vertical-rl",
+                WebkitWritingMode: "vertical-rl",
+                textOrientation: "mixed",
+                WebkitTextOrientation: "mixed",
+                fontFeatureSettings: "normal",
+                fontVariantEastAsian: "normal",
+                lineHeight: 1,
+              }}
+            >
+              {slot.text}
+            </span>
           ) : (
             slot.text
           )}
@@ -1849,23 +2018,23 @@ function FixedSlotLine({
         // TSP-LOOP-003 cross-font: one native `writing-mode: vertical-rl`
         // object per ―― / …… run, flex-centred in the run's own unchanged
         // canonical slot rectangle (top / height / lane width / slotCount all
-        // identical to the fixed-slot model). The browser lays the run's
-        // glyphs out with the font's own vertical metrics — exactly as a
-        // browser-native 縦組み block does — so ―― connects and …… stays
-        // column-centred in every shipped face, with no per-glyph slot boxes,
-        // no optical nudge, and no per-font profile. `fontFeatureSettings`
-        // and `fontVariantEastAsian` are reset so the font's `vert` glyphs
-        // are used; `overflow: hidden` keeps any sub-pixel ink overshoot
-        // inside the reserved slots, like `[data-latin-run]`.
+        // identical to the fixed-slot model).
         //
-        // The run text is ONE inline run (single text node in a single span) —
-        // NOT one span per character. Splitting ―― into per-glyph boxes breaks
-        // the font's cross-glyph connection: U+2015 is designed to abut its
-        // neighbour within a run, and in every face except Shippori Mincho the
-        // per-glyph split leaves a visible white joint gap (measured: joint
-        // darkness collapses to ~3% of the stroke). Kept as one run, the em
-        // dashes connect for all 5 faces (verify-punct-optical / -export-
-        // fidelity assert the joint's luminance continuity from the screenshot).
+        // TSP-LOOP-021 §1: `text-orientation: mixed` (not `upright`) — Apple
+        // WebKit (every iOS browser + iPad Safari) follows the spec and
+        // disables `vert` under `upright`, so the run rendered horizontally on
+        // Apple devices; `mixed` is the standards-defined path that works on
+        // every engine.
+        //  - dash (―― / ——): kept as ONE text node so U+2015 abuts its
+        //    neighbour and the vertical rule stays continuous cross-font (a
+        //    per-glyph split re-opens the ~3%-stroke white joint gap that
+        //    verify-punct-optical / -export-fidelity guard).
+        //  - ellipsis (…… / ‥‥): rendered PER CHARACTER, each dot-leader in
+        //    its own one-slot `mixed` box — the same context as a lone …, which
+        //    stays column-centred on WebKit where a single `mixed` span for the
+        //    whole run drifts a font's rotated ellipsis off the column axis.
+        // `overflow: hidden` keeps any sub-pixel ink overshoot inside the
+        // reserved slots, like `[data-latin-run]`.
         <span
           key={run.key}
           data-protected-run-wrapper={run.kind}
@@ -1883,15 +2052,41 @@ function FixedSlotLine({
             justifyContent: "center",
             writingMode: "vertical-rl",
             WebkitWritingMode: "vertical-rl",
-            textOrientation: "upright",
-            WebkitTextOrientation: "upright",
+            textOrientation: "mixed",
+            WebkitTextOrientation: "mixed",
             fontFeatureSettings: "normal",
             fontVariantEastAsian: "normal",
             lineHeight: 1,
             overflow: "hidden",
           }}
         >
-          <span data-protected-run-glyph={run.kind}>{run.text}</span>
+          {run.kind === "ellipsis" ? (
+            // `writing-mode: vertical-rl` + default flex-direction:row → the
+            // per-char boxes stack top-to-bottom (the inline axis), filling the
+            // run's slotCount slots.
+            Array.from(run.text).map((ch, i) => (
+              <span
+                key={i}
+                data-protected-run-glyph="ellipsis"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: slotExtentPx,
+                  width: "100%",
+                  writingMode: "vertical-rl",
+                  WebkitWritingMode: "vertical-rl",
+                  textOrientation: "mixed",
+                  WebkitTextOrientation: "mixed",
+                  lineHeight: 1,
+                }}
+              >
+                {ch}
+              </span>
+            ))
+          ) : (
+            <span data-protected-run-glyph={run.kind}>{run.text}</span>
+          )}
         </span>
       ))}
       {latinRuns.map((run) => (
@@ -2000,20 +2195,66 @@ function TokenView({
 }
 
 /**
+ * TSP-LOOP-021 §B / §1: one lone bar (―／—) or leader (…／‥) in the legacy
+ * TokenView flow — matches FixedSlotLine's `[data-vertical-leader]`. The
+ * `.tategaki-line` div's inherited `text-orientation: upright` disables `vert`
+ * for this class on spec-compliant engines (Apple WebKit / all iOS browsers /
+ * iPad Safari), so a bare glyph renders horizontally there. An explicit
+ * `text-orientation: mixed` (+ `-webkit-`) is the standards-defined way to get
+ * the vertical form on every engine. Source text is untouched. A run of 2+ is
+ * handled by `renderNowrapProtected`'s nowrap span, not here.
+ */
+function renderVerticalLeader(text: string, key: string | number): ReactNode {
+  return (
+    <span
+      key={key}
+      data-vertical-leader=""
+      style={{
+        writingMode: "vertical-rl",
+        WebkitWritingMode: "vertical-rl",
+        textOrientation: "mixed",
+        WebkitTextOrientation: "mixed",
+        fontFeatureSettings: "normal",
+        fontVariantEastAsian: "normal",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+const LONE_LEADER_SPLIT = /([―—…‥])/;
+
+/** Splits a non-run text fragment, wrapping each lone bar/leader via renderVerticalLeader. */
+function withLoneLeaders(part: string, keyBase: number): ReactNode {
+  if (!LONE_LEADER_SPLIT.test(part)) return <Fragment key={keyBase}>{part}</Fragment>;
+  return (
+    <Fragment key={keyBase}>
+      {part.split(LONE_LEADER_SPLIT).map((sub, subIndex) =>
+        sub.length === 1 && VERT_LEADER_TEST.test(sub)
+          ? renderVerticalLeader(sub, `${keyBase}-${subIndex}`)
+          : <Fragment key={`${keyBase}-${subIndex}`}>{sub}</Fragment>
+      )}
+    </Fragment>
+  );
+}
+
+/**
  * Wraps 2+ character runs of ――（ダッシュ）/ ……（三点リーダー）in a
  * `white-space: nowrap` inline-block so the vertical-writing line wrap never
- * splits a single dash/leader off onto the next line by itself.
+ * splits a single dash/leader off onto the next line by itself. A lone …／‥
+ * (not part of a run) is additionally re-set for vertical typesetting.
  */
 function renderNowrapProtected(value: string): ReactNode {
   const parts = value.split(NOWRAP_RUN_PATTERN);
-  if (parts.length <= 1) return value;
+  if (parts.length <= 1 && !LONE_LEADER_SPLIT.test(value)) return value;
   return parts.map((part, index) =>
     NOWRAP_RUN_TEST.test(part) ? (
       <span key={index} style={{ whiteSpace: "nowrap", display: "inline-block" }}>
         {part}
       </span>
     ) : (
-      <Fragment key={index}>{part}</Fragment>
+      withLoneLeaders(part, index)
     )
   );
 }

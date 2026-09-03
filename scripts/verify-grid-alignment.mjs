@@ -326,11 +326,17 @@ async function main() {
         const glyphCxDev = run.glyphRects.length
           ? Math.max(...run.glyphRects.map((g) => Math.abs(g.x + g.w / 2 - laneCx))) : NaN;
         console.log(`${rk} wrapper: startBoundary=${startBoundary.toFixed(3)}px endBoundary=${endBoundary.toFixed(3)}px glyphCxDev=${glyphCxDev.toFixed(3)}px slots=${run.slotCount}`);
-        // TSP-LOOP-003 cross-font: the run text is ONE inline run (a single
-        // [data-protected-run-glyph] span holding the whole ―― / …… string) —
-        // per-glyph boxes break the font's cross-glyph connection.
-        check(`${rk} — one native run (single inline text run) consuming ${run.slotCount} solid canonical slots`,
-          run.slotCount >= 2 && run.glyphRects.length === 1 &&
+        // TSP-LOOP-003 / TSP-LOOP-021 §1: the DASH run text stays ONE inline
+        // run (a single [data-protected-run-glyph] span holding the whole ――
+        // string) so U+2015 abuts its neighbour and the vertical rule connects.
+        // The ELLIPSIS run is one native vertical-rl wrapper but rendered PER
+        // CHARACTER (one 1-slot [data-protected-run-glyph] box each) — the same
+        // `text-orientation: mixed` context as a lone …, which keeps every
+        // dot-leader on the column axis where a single span for the whole run
+        // drifts a rotated ellipsis off-axis on WebKit.
+        check(`${rk} — native vertical-rl run consuming ${run.slotCount} solid canonical slots (${rk === "ellipsis" ? "per-char boxes" : "one text run"})`,
+          run.slotCount >= 2 &&
+          run.glyphRects.length === (rk === "ellipsis" ? run.slotCount : 1) &&
           Math.abs(run.rect.h - fontPxScaled * run.slotCount) <= TOL,
           `slots=${run.slotCount} glyphSpans=${run.glyphRects.length} h=${run.rect.h.toFixed(2)} vs ${(fontPxScaled * run.slotCount).toFixed(2)}`);
         check(`${rk} — run text run is centred on the column axis (flex, no per-glyph offset)`,

@@ -262,7 +262,7 @@ check(
   check("createDefaultColophonSettings stays OFF (guide is the only opt-in)", createDefaultColophonSettings().enabled === false);
   const g = createGuideColophonSettings();
   check("guide colophon: end position, safe default placement, standard template", g.pagePosition.mode === "end" && deepEqual(g.placement, DEFAULT_COLOPHON_PLACEMENT) && COLOPHON_TEMPLATE_IDS.includes(g.templateId));
-  check("guide freeText names the 📖 扉・奥付 → 奥付（横） entry point", /📖 扉・奥付/.test(g.freeText) && /奥付（横）/.test(g.freeText));
+  check("guide freeText names the 📖 奥付・目次 → 奥付（横） entry point", /📖 奥付・目次/.test(g.freeText) && /奥付（横）/.test(g.freeText));
   check("guide freeText contains 注意事項 ① (1 file 1 page)", /1ファイルにつき1ページ/.test(g.freeText));
   check("guide freeText contains 注意事項 ② (no vertical text / images)", /縦書きのテキストや画像を入れられません/.test(g.freeText));
   check("guide colophon survives a save/reload round-trip", deepEqual(normalizeColophonSettings(JSON.parse(JSON.stringify(g))), g));
@@ -388,23 +388,28 @@ check(
 
   const editor = fs.readFileSync(path.join(repoRoot, "src/components/EditorPane.tsx"), "utf8");
   // The standalone 📖 奥付 toolbar button (and its onOpenColophon prop) is removed —
-  // the single book-parts entry point is the existing 📖 扉・奥付 button.
-  check("EditorPane has NO standalone 📖 奥付 button / onOpenColophon prop", !/onOpenColophon/.test(editor) && !/>\s*📖 奥付\s*</.test(editor));
-  check("EditorPane keeps the 📖 扉・奥付 button (single book-parts entry)", /📖 扉・奥付/.test(editor) && /onOpenBookParts/.test(editor));
-  // 📖 扉・奥付 must sit before the 改ページ挿入 button (button text, not the
-  // "改ページを挿入" title attr, which differs by one character).
-  const bpBtn = editor.indexOf("📖 扉・奥付");
+  // the single book-parts entry point is the 📖 奥付・目次 button (TSP-LOOP-021 §7
+  // renamed it from 📖 扉・奥付 when 扉 creation was hidden).
+  check("EditorPane has NO standalone onOpenColophon prop", !/onOpenColophon/.test(editor));
+  check("EditorPane keeps the 📖 奥付・目次 button (single book-parts entry)", /📖 奥付・目次/.test(editor) && /onOpenBookParts/.test(editor));
+  check("EditorPane no longer advertises 扉 in the book-parts button", !/📖 扉・奥付/.test(editor) && !/扉・目次/.test(editor));
+  // the book-parts button must sit before the 改ページ挿入 button.
+  const bpBtn = editor.indexOf("📖 奥付・目次");
   const brkBtn = editor.indexOf("改ページ挿入");
-  check("📖 扉・奥付 button comes before the 改ページ挿入 button", bpBtn !== -1 && brkBtn !== -1 && bpBtn < brkBtn);
+  check("📖 奥付・目次 button comes before the 改ページ挿入 button", bpBtn !== -1 && brkBtn !== -1 && bpBtn < brkBtn);
 
   const bp = fs.readFileSync(path.join(repoRoot, "src/components/BookPartsModal.tsx"), "utf8");
   check(
-    "BookPartsModal offers 奥付（縦）/ 奥付（横）/ 扉（タイトルページ）/ 目次作成",
-    /奥付（縦）/.test(bp) && /奥付（横）/.test(bp) && /扉（タイトルページ）/.test(bp) && /目次作成/.test(bp)
+    "BookPartsModal offers 奥付（縦）/ 奥付（横）/ 目次作成 (扉 tab hidden — TSP-LOOP-021 §7)",
+    /奥付（縦）/.test(bp) && /奥付（横）/.test(bp) && /目次作成/.test(bp)
+  );
+  check(
+    "BookPartsModal: the 扉（タイトルページ） tab entry is commented out, not deleted",
+    /\/\/\s*\{ id: 'title'.*扉（タイトルページ）/.test(bp)
   );
   check("BookPartsModal 奥付（縦） still uses the existing body-text path", /generateColophonText/.test(bp) && /handleInsertColophon/.test(bp));
   check("BookPartsModal 奥付（横） opens the existing ColophonModal via onOpenColophonModal", /onOpenColophonModal/.test(bp) && !/import ColophonModal/.test(bp));
-  check("BookPartsModal keeps 扉 + 目次 insert logic", /generateTitlePageText/.test(bp) && /generateTocText/.test(bp));
+  check("BookPartsModal keeps the 扉 + 目次 insert IMPLEMENTATION intact (only the UI tab is hidden)", /generateTitlePageText/.test(bp) && /generateTocText/.test(bp));
   check("BookPartsModal shows a one-line description per part", /本文ページとして縦書きの奥付を作成/.test(bp) && /独立した横書き専用ページを作成/.test(bp));
 
   const modal = fs.readFileSync(path.join(repoRoot, "src/components/ColophonModal.tsx"), "utf8");
@@ -429,7 +434,7 @@ check(
   const help = fs.readFileSync(path.join(repoRoot, "public/docs/help.md"), "utf8");
   const sec = help.slice(help.indexOf("## 奥付"), help.indexOf("## キーボードショートカット"));
   check("help.md has a 奥付 section", sec.startsWith("## 奥付"));
-  check("help.md: names the 📖 扉・奥付 entry point", /📖 扉・奥付/.test(sec) && !/📖 奥付[^・]/.test(sec));
+  check("help.md: names the 📖 奥付・目次 entry point (扉 removed)", /📖 奥付・目次/.test(sec) && !/📖 扉・奥付/.test(sec));
   check("help.md: documents 奥付（縦） as a normal editable body page", /### 奥付（縦）/.test(sec) && /通常の本文ページとして/.test(sec) && /縦書き本文として自由に編集/.test(sec));
   check("help.md: documents 奥付（横） as an independent horizontal page", /### 奥付（横）/.test(sec) && /独立した横書き/.test(sec));
   check(
@@ -443,7 +448,7 @@ check(
   check("help.md: nombre follows the physical (作品) page order", /続きのページ番号/.test(sec) && /物理ページ順/.test(sec));
   check("help.md: one horizontal colophon per file", /1ファイルにつき1ページ/.test(sec));
   check("help.md: no vertical text / no images in the horizontal colophon", /縦書きのテキストや画像を入れられません/.test(sec));
-  check("help.md: re-editable from the same 📖 扉・奥付 button", /再編集も同じ「📖 扉・奥付」/.test(sec));
+  check("help.md: re-editable from the same 📖 奥付・目次 button", /再編集も同じ「📖 奥付・目次」/.test(sec));
   check("help.md: lists the initial item names and that they are editable", /書名/.test(sec) && /項目名そのものを変更できます/.test(sec));
   check("help.md: names all 4 templates", /標準/.test(sec) && /中央/.test(sec) && /ミニマル/.test(sec) && /クラシック/.test(sec));
   check("help.md: template change keeps entered info + placement", /テンプレートを変更しても.*配置は維持/.test(sec));
