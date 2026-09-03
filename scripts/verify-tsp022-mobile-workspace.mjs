@@ -79,7 +79,13 @@ check(
 check(
   "2. EditorPane's inline settings strip is md+ only (phone 本文 surface has no settings panel to scroll past)",
   !!editorPane &&
-    /id="tsp-settings"\s*\n\s*className="hidden flex-none md:block"/.test(editorPane)
+    (() => {
+      // The strip's className: base `hidden` (phone never shows it), `md:block`
+      // only when NOT in focus mode. TSP-LOOP-023 also hides it in desktop
+      // 集中モード — that keeps the "phone: hidden" contract and adds one more.
+      const m = editorPane.match(/id="tsp-settings"\s*\n\s*className=(?:"[^"]*"|\{`[^`]*`\})/);
+      return !!m && /\bhidden\b/.test(m[0]) && /md:block/.test(m[0]) && !/md:hidden/.test(m[0]);
+    })()
 );
 check(
   "2b. TategakiEditor renders a phone-only 設定 workspace with the shared PageSettingsPanel",
