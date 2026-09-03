@@ -96,6 +96,17 @@ export default function EditorPane({
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // TSP-LOOP-020: explicit "本文を書く" action (phone only). scrollIntoView is
+  // always done; focus() is only ever called from this direct user tap —
+  // never on project load / mount — so it can't trigger a Safari
+  // keyboard/viewport jump on open.
+  const goToManuscript = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus({ preventScroll: true });
+  };
+
   // ---- TSP-LOOP-004 「文章チェック β」 (local, deterministic, no network) ----
   const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
   const isComposingRef = useRef(false);
@@ -202,7 +213,10 @@ export default function EditorPane({
         </div>
       </div>
 
-      <div className={`flex-none ${focusMode ? "max-md:hidden" : ""}`}>
+      <div
+        id="tsp-settings"
+        className={`flex-none scroll-mt-28 md:scroll-mt-0 ${focusMode ? "max-md:hidden" : ""}`}
+      >
         <PageSettingsPanel
           settings={settings}
           layout={layout}
@@ -214,11 +228,32 @@ export default function EditorPane({
         />
       </div>
 
+      {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved
+          work the user must immediately see "this is where I continue
+          writing". `md:hidden` — desktop never shows this tutorial line. */}
+      <div className="flex flex-none items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2 md:hidden">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">✏️ 本文を書く</p>
+          <p className="text-[11px] leading-snug text-ink/55">
+            ここに原稿を入力すると、縦書きプレビューに反映されます。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={goToManuscript}
+          className="shrink-0 whitespace-nowrap rounded-full border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 hover:bg-ink/5"
+        >
+          本文を書く
+        </button>
+      </div>
+
       {/* The textarea stays the sole input surface. WritingCheckOverlay is a
           read-only, pointer-events-none mirror rendered behind it (only the
           red wavy underline is visible); it shares the textarea's wrapping
-          box via the same p-4/font-mono/text-sm/leading-relaxed classes. */}
-      <div className="relative flex-1 min-h-0">
+          box via the same p-4/font-mono/text-sm/leading-relaxed classes.
+          Phone: a fixed-height (56dvh) intentional manuscript scroll surface
+          inside the scrolling document; desktop: flex-1 fills the pane. */}
+      <div className="relative min-h-0 max-md:h-[56dvh] md:flex-1">
         {writingCheckEnabled && (
           <WritingCheckOverlay
             textareaRef={textareaRef}

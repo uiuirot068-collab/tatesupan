@@ -57,6 +57,7 @@ import {
   type PageSettings,
 } from "@/lib/pageLayout";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import ExportProgressModal from "./ExportProgressModal";
 import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
@@ -526,6 +527,9 @@ export default function PreviewPane({
   // only this initial mount value changes.
   const [zoomScale, setZoomScale] = useState<number>(0.5);
 
+  // TSP-LOOP-020 — phone-width flag. Drives the width-fit branch below.
+  const isNarrow = useIsNarrowViewport();
+
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
 
@@ -606,11 +610,6 @@ export default function PreviewPane({
     return referenceFitScale * webPreviewBaseScale;
   }, [containerWidth, containerHeight, fitUnitWidthPx, fitUnitHeightPx, webPreviewBaseScale, isWebPreset]);
 
-  // Presentation scale actually applied to the preview: toolbar 100% means
-  // userZoom(=zoomScale) 1.0 on top of the paper-size-dependent
-  // baseAutoFitScale baseline — never a literal canonical-CSS-px 1:1 view.
-  const presentationScale = zoomScale * baseAutoFitScale;
-
   // Reference paper for editor-chrome sizing: A5 is the size the user
   // already found comfortable before any of this scaling existed, so chrome
   // is pinned to "how big it would be if A5 were the current preset in this
@@ -649,7 +648,8 @@ export default function PreviewPane({
   // inputs), so this is exactly 1 and A5's own chrome is completely
   // unaffected; for every other preset it instead renders at "the size A5's
   // chrome would be in this pane," which is what actually needs to change.
-  const chromeScale = baseAutoFitScale > 0 ? chromeReferenceFitScale / baseAutoFitScale : 1;
+  // (`chromeScale` is defined together with `presentationScale` below, once
+  // `naturalContentSize` — needed for the phone width-fit — is measured.)
 
   // `data-export-scale-root` (below) holds every spread stacked at its
   // *natural*, untransformed size — for a canonical-px-heavy preset like
@@ -680,6 +680,32 @@ export default function PreviewPane({
     observer.observe(content);
     return () => observer.disconnect();
   }, []);
+
+  // TSP-LOOP-020 — phone-width preview fit. On `< md` the initial view must
+  // fit the WHOLE spread column to the available preview width (never a
+  // desktop-sized canvas cropped past the right edge). `naturalContentSize`
+  // is the untransformed spread-column width, so `availableWidth / that` is
+  // the scale at which it exactly fills the pane; `zoomScale` then multiplies
+  // it so the user can still zoom in. Desktop keeps `baseAutoFitScale`
+  // (single-page-basis) untouched. Spread SEMANTICS are unchanged — this only
+  // changes the viewing scale, never pagination / export.
+  const narrowFitScale = useMemo(() => {
+    if (!isNarrow || !containerWidth || !naturalContentSize || naturalContentSize.width <= 0) {
+      return null;
+    }
+    const availableWidth = containerWidth - SCROLL_CONTAINER_PADDING_X_PX;
+    if (availableWidth <= 0) return null;
+    return availableWidth / naturalContentSize.width;
+  }, [isNarrow, containerWidth, naturalContentSize]);
+
+  const effectiveFitScale = narrowFitScale ?? baseAutoFitScale;
+  // On a phone the preview never opens smaller than "spread fitted to width"
+  // (the desktop 50% overview default would leave half the pane empty), but
+  // the user can still zoom IN. `Math.max(zoomScale, 1)` is a pure derivation
+  // — no zoom-reset effect / setState-in-effect needed.
+  const effectiveZoom = narrowFitScale != null ? Math.max(zoomScale, 1) : zoomScale;
+  const presentationScale = effectiveZoom * effectiveFitScale;
+  const chromeScale = effectiveFitScale > 0 ? chromeReferenceFitScale / effectiveFitScale : 1;
 
   // Export用fontEmbedCSSのバックグラウンド先読み: exportCapture.tsの
   // キャッシュ済みPromiseを、ユーザーが実際にexportボタンを押すより前に
@@ -1031,6 +1057,10 @@ export default function PreviewPane({
 
   const handlePanMouseDown = (event: MouseEvent) => {
     if (event.button !== 0 && event.button !== 1) return;
+    // TSP-LOOP-020: on a phone, dragging = native touch scroll of the
+    // container (touch-action: pan-x pan-y). Don't also run the mouse-driven
+    // pan off synthesized post-touch mouse events.
+    if (isNarrow) return;
     const container = scrollContainerRef.current;
     if (!container) return;
     isPanningRef.current = true;
@@ -1351,7 +1381,7 @@ export default function PreviewPane({
   // completely untouched by this branch existing.
   if (activeRenderer === "new") {
     return (
-      <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-y-auto max-h-[85vh] md:max-h-none md:overflow-y-visible md:overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+      <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
         <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
           <div className="flex flex-wrap items-center gap-2">
             {onToggleCollapse && (
@@ -1385,7 +1415,7 @@ export default function PreviewPane({
   }
 
   return (
-    <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-y-auto max-h-[85vh] md:max-h-none md:overflow-y-visible md:overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+    <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           {onToggleCollapse && (
@@ -1581,8 +1611,14 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
-        className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-auto p-6"
-        style={{ cursor: "grab" }}
+        // TSP-LOOP-020 — this is the ONE scroll/pan surface for the preview
+        // (the outer section and the pane root no longer nest their own
+        // scrollers on a phone). `overscroll-contain` keeps a swipe that
+        // reaches an edge here from yanking the whole document; the sticky
+        // MobileEditorNav is always on screen to leave. `touch-action`
+        // pan-x/pan-y = drag to move the page, pinch-zoom still native.
+        className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-auto overscroll-contain p-6"
+        style={{ cursor: "grab", touchAction: "pan-x pan-y" }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}
         onMouseUp={stopPanning}

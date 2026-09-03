@@ -79,7 +79,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
 
   return (
     <header
-      className={`mx-4 my-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : ''}`}
+      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : ''}`}
     >
       {isHome && (
         <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">
@@ -170,7 +170,13 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           </span>
           <span className="hidden sm:block whitespace-nowrap flex-shrink-0 text-xs text-gray-500">縦書きWebエディタ</span>
         </div>
-        {saveStatus && <SaveStatusLabel status={saveStatus} />}
+        {/* TSP-LOOP-020: on a phone the sticky MobileEditorNav already shows
+            save status — don't duplicate it in the (scrolled-away) header. */}
+        {saveStatus && (
+          <span className="hidden md:contents">
+            <SaveStatusLabel status={saveStatus} />
+          </span>
+        )}
       </div>
       <div
         className={isHome ? 'hidden' : 'flex w-full flex-wrap items-center gap-4 gap-y-2 sm:w-auto'}
