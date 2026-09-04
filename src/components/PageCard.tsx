@@ -12,7 +12,11 @@ import {
 } from "react";
 import { withBasePath } from "@/lib/basePath";
 import {
+  AUTO_INDENT_CHAR,
   computeParagraphStartFlags,
+  isHangingCloseBracket,
+  isHangingPunctuation,
+  paragraphNeedsAutoIndent,
   tokenLength,
   type ImagePosition,
   type TategakiPage,
@@ -22,10 +26,6 @@ import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/p
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 
-// 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
-// 対象となる開き括弧類。地文の段落先頭にはここに含まれない場合のみ、
-// 全角スペース1文字ぶんの字下げを描画時に補う（元テキストは変更しない）。
-const OPENING_BRACKETS = "「『（〈《【〔［｛“‘";
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
 // 漢字/かな but *discards the font's designed in-cell position* for 約物, so
@@ -53,7 +53,8 @@ const YAKUMONO_HANG_END_TEST = /[「『（〈《【〔［｛｟“‘]/u;
 // vertical font's uneven per-glyph baselines. Multi-character ASCII is handled
 // as a sideways run instead (see ASCII_RUN_* / LatinRun below).
 const ASCII_VERTICAL_GLYPH_TEST = /^[\x21-\x7e]$/;
-const INDENT_SPACE = "　";
+// TSP-LOOP-029: same U+3000 cell tategaki.ts reserves in the pagination budget.
+const INDENT_SPACE = AUTO_INDENT_CHAR;
 
 // TSP-LOOP-003 mixed-script run model. A maximal stretch of 2+ printable-ASCII
 // characters (spaces allowed inside, at least one non-space) is set as ONE
@@ -444,7 +445,13 @@ function PageCard({
     whiteSpace: "pre-wrap",
     width: textAreaWidthPx,
     height: textAreaHeightPx,
-    overflow: "hidden",
+    // TSP-LOOP-029: `clip` + clip margin, matching FixedSlotLine. Tolerates a
+    // flush edge glyph's sub-pixel ink overshoot the export rasterizer would
+    // otherwise clip, and gives a hanging 。/、 — plus, R3, an optional trailing
+    // closing bracket (`。」`) — room in the 天地 margin. Two slots + one glyph,
+    // still inside the ~26px page 天地 margins; no glyph moves.
+    overflow: "clip",
+    overflowClipMargin: `${Math.ceil(2 * canonicalSlotExtentPx + fontSizePx)}px`,
   };
 
   const lineStyle: CSSProperties = {
@@ -1575,10 +1582,14 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
  * 手動字下げの上に自動字下げが重なり、2slot分の字下げになってしまう
  * （実ブラウザDOM調査で確認済み）。ユーザーが入力したU+3000そのものは一切
  * 変更・削除せず、そのまま1文字分のslotとして描画される。
+ *
+ * TSP-LOOP-029: the decision is `paragraphNeedsAutoIndent` in tategaki.ts —
+ * the SAME predicate `paginateTokensByLines` uses to reserve the indent cell
+ * in the line's charsPerLine budget, so pagination and this renderer can never
+ * disagree about whether a paragraph-first line loses one content cell.
  */
 function needsAutoIndent(token: Exclude<TategakiToken, { type: "image" }>): boolean {
-  const first = firstVisibleChar(token);
-  return !OPENING_BRACKETS.includes(first) && first !== INDENT_SPACE;
+  return paragraphNeedsAutoIndent(firstVisibleChar(token));
 }
 
 /**
@@ -1697,6 +1708,8 @@ function buildLineSlots(
   latinRuns: LatinRun[];
   rubyAnnotations: RubyAnnotation[];
   tcyCells: TcyCell[];
+  /** TSP-LOOP-029 issue A: slotIndex(es) of a hanging 。/、 (+ optional closing bracket, R3). */
+  hangingSlotIndices: number[];
 } {
   const slots: LineSlot[] = [];
   const protectedRuns: ProtectedRun[] = [];
@@ -1791,12 +1804,52 @@ function buildLineSlots(
     rubyAnnotations.push({ key: `${flatIndex}-rt`, startSlot, slotCount, rt: token.rt });
   });
 
+  // TSP-LOOP-029 issue A — ぶら下げ組: `paginateTokensByLines` may leave a
+  // lone 。/、 at slotIndex === charsPerLine (a full line whose next source
+  // char was 句読点), optionally followed by ONE closing bracket at
+  // charsPerLine + 1 (`。」` hangs as a unit, R3). Those 1–2 slots are
+  // legitimately kept and drawn in the hanging position (past the grid, into
+  // the 天地 margin) — see FixedSlotLine.
+  const overCap = slots
+    .filter((s) => s.slotIndex >= charsPerLine)
+    .sort((a, b) => a.slotIndex - b.slotIndex);
+  const hangingSlots: LineSlot[] =
+    overCap.length >= 1 &&
+    overCap.length <= 2 &&
+    overCap[0].slotIndex === charsPerLine &&
+    isHangingPunctuation(overCap[0].text) &&
+    (overCap.length === 1 ||
+      (overCap[1].slotIndex === charsPerLine + 1 &&
+        isHangingCloseBracket(overCap[1].text)))
+      ? overCap
+      : [];
+  const hangingSlotSet = new Set(hangingSlots);
+
+  // TSP-LOOP-029: pagination reserves the 一字下げ cell in a paragraph-first
+  // line's budget, so a NON-hanging source-bearing slot can no longer land at
+  // slotIndex === charsPerLine. In dev, one that does means pagination and
+  // this renderer have drifted (a silently dropped manuscript character) —
+  // surface it loudly instead of hiding it.
+  if (process.env.NODE_ENV !== "production") {
+    const dropped = overCap.filter((s) => !hangingSlotSet.has(s));
+    if (dropped.length > 0) {
+      console.error(
+        `[TSP-029] FixedSlotLine dropped ${dropped.length} source slot(s) past charsPerLine=${charsPerLine}:`,
+        dropped.map((s) => `${s.slotIndex}:"${s.text}"`).join(" "),
+        "— pagination/render grid mismatch.",
+      );
+    }
+  }
+
   return {
-    slots: slots.filter((slot) => slot.slotIndex < charsPerLine),
+    slots: slots.filter(
+      (slot) => slot.slotIndex < charsPerLine || hangingSlotSet.has(slot),
+    ),
     protectedRuns: protectedRuns.filter((run) => run.startSlot < charsPerLine),
     latinRuns: latinRuns.filter((run) => run.startSlot < charsPerLine),
     rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
     tcyCells: tcyCells.filter((cell) => cell.slotIndex < charsPerLine),
+    hangingSlotIndices: hangingSlots.map((s) => s.slotIndex),
   };
 }
 
@@ -1861,8 +1914,11 @@ function FixedSlotRubyAnnotation({
   rubyLaneWidthPx: number;
   fontSizePx: number;
 }) {
-  const baseStartTop = annotation.startSlot * slotExtentPx;
-  const baseExtentPx = annotation.slotCount * slotExtentPx;
+  // TSP-LOOP-029: same integer-rounded slot ladder as FixedSlotLine, so the
+  // rt block sits on the exact base-slot edges Preview and export agree on.
+  const baseStartTop = Math.round(annotation.startSlot * slotExtentPx);
+  const baseExtentPx =
+    Math.round((annotation.startSlot + annotation.slotCount) * slotExtentPx) - baseStartTop;
 
   const rubyFontSizePx = fontSizePx / 2;
   const rubyTrackingPx = rubyFontSizePx * 0.1;
@@ -1921,10 +1977,13 @@ function FixedSlotTcy({
     <span
       style={{
         position: "absolute",
-        top: cell.slotIndex * slotExtentPx,
+        // TSP-LOOP-029: integer-rounded slot ladder (see FixedSlotLine).
+        top: Math.round(cell.slotIndex * slotExtentPx),
         left: 0,
         width: baseGlyphLaneWidthPx,
-        height: slotExtentPx,
+        height:
+          Math.round((cell.slotIndex + 1) * slotExtentPx) -
+          Math.round(cell.slotIndex * slotExtentPx),
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1965,13 +2024,29 @@ function FixedSlotLine({
   fontFeatureSettings: string;
 }) {
   useLatinRunFontSync();
-  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells } = buildLineSlots(
-    line,
-    flatIndexBase,
-    paragraphStarts,
-    charsPerLine,
-    (text) => latinRunSlotCount(text, fontSizePx, fontFamily)
-  );
+  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells, hangingSlotIndices } =
+    buildLineSlots(
+      line,
+      flatIndexBase,
+      paragraphStarts,
+      charsPerLine,
+      (text) => latinRunSlotCount(text, fontSizePx, fontFamily)
+    );
+
+  // TSP-LOOP-029: the canonical slot pitch `textAreaHeightPx / charsPerLine`
+  // is a non-integer CSS px value (e.g. 6.9949px at the 文庫 default). The live
+  // browser paints `i * pitch` sub-pixel-precise, but the SVG-`<foreignObject>`
+  // rasterizer used by every export (JPG/PDF) snaps each absolutely-positioned
+  // slot to the device-pixel grid *independently* — so exported inter-glyph
+  // gaps alternate between ⌊pitch⌋ and ⌈pitch⌉ (visible uneven rhythm) and the
+  // last slot, pinned flush against the line's `overflow` clip, loses its
+  // glyph. Deriving every slot edge from ONE integer-rounded ladder makes the
+  // grid identical in Preview and export: `slotTop(i)` is monotone, the tiny
+  // (≤1px) per-cell height variance is centred out, and no cumulative drift
+  // (each edge is `round(i * pitch)`, not a running sum).
+  const slotTop = (index: number): number => Math.round(index * slotExtentPx);
+  const slotSpanPx = (startIndex: number, count: number): number =>
+    slotTop(startIndex + count) - slotTop(startIndex);
 
   // container幅は常にcolumnThicknessPx固定 — rubyの有無で変えない（rubyの
   // ためにこの論理行自身のlayout widthを広げると、後続の論理行がすべて
@@ -1988,7 +2063,16 @@ function FixedSlotLine({
     position: "relative",
     width: columnThicknessPx,
     height: heightPx,
-    overflow: "hidden",
+    // TSP-LOOP-029: `clip` + clip margin (vs the old bare `hidden`). Every
+    // child is an absolutely-positioned slot inside `[0, charsPerLine]` — the
+    // container has no runaway flow content to hide, so its only jobs are (a)
+    // tolerating a flush edge glyph's sub-pixel ink overshoot that the export
+    // rasterizer would otherwise clip, and (b) letting a hanging 。/、 (issue A,
+    // slot charsPerLine) — plus, R3, an optional trailing closing bracket at
+    // charsPerLine + 1 (`。」`) — sit in the 天地 margin. The margin is two full
+    // slots + one glyph, still inside the ~26px page 天地 margins.
+    overflow: "clip",
+    overflowClipMargin: `${Math.ceil(2 * slotExtentPx + fontSizePx)}px`,
     fontSize: `${fontSizePx}px`,
     fontFamily,
     color: "#000000",
@@ -2001,12 +2085,18 @@ function FixedSlotLine({
       {slots.map((slot) => (
         <span
           key={slot.key}
+          // TSP-LOOP-029 issue A: the hanging 。/、 slot (index === charsPerLine)
+          // and, R3, an optional closing bracket at charsPerLine + 1 are
+          // positioned by the same `slotTop` ladder — one/two cells past the
+          // grid, into the 天地 margin — and made visible by the container's
+          // clip margin.
+          data-hanging-punctuation={hangingSlotIndices.includes(slot.slotIndex) ? "" : undefined}
           style={{
             position: "absolute",
-            top: slot.slotIndex * slotExtentPx,
+            top: slotTop(slot.slotIndex),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: slotExtentPx,
+            height: slotSpanPx(slot.slotIndex, 1),
             display: "flex",
             alignItems: "center",
             // 約物は字形クラスごとにセルの端へ寄せる（下記 YAKUMONO_HANG_*）。
@@ -2104,10 +2194,10 @@ function FixedSlotLine({
           data-run-slot-count={run.slotCount}
           style={{
             position: "absolute",
-            top: run.startSlot * slotExtentPx,
+            top: slotTop(run.startSlot),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: run.slotCount * slotExtentPx,
+            height: slotSpanPx(run.startSlot, run.slotCount),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2133,7 +2223,7 @@ function FixedSlotLine({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  height: slotExtentPx,
+                  height: slotSpanPx(run.startSlot + i, 1),
                   width: "100%",
                   writingMode: "vertical-rl",
                   WebkitWritingMode: "vertical-rl",
@@ -2158,10 +2248,10 @@ function FixedSlotLine({
           data-run-slot-count={run.slotCount}
           style={{
             position: "absolute",
-            top: run.startSlot * slotExtentPx,
+            top: slotTop(run.startSlot),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: run.slotCount * slotExtentPx,
+            height: slotSpanPx(run.startSlot, run.slotCount),
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-start",

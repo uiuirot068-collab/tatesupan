@@ -264,8 +264,13 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   columnCount: 1,
   columnGapMm: 8,
   fontFamily: "'Shippori Mincho', serif",
-  charsPerLine: 40,
-  linesPerColumn: 17,
+  // TSP-LOOP-029 issue C: self-consistent with the geometry above — 文庫
+  // (105×148) minus 天地12 at 9pt holds 39 lines-of-characters, minus ノド12/
+  // 小口10 at line-height 1.7 holds 15 columns. `computePageLayout` used to
+  // clamp the old 40/17 targets down to these while the Settings panel kept
+  // showing 40/17, disagreeing with the Preview status ("39字×15行").
+  charsPerLine: 39,
+  linesPerColumn: 15,
   layoutMode: "capacity",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
