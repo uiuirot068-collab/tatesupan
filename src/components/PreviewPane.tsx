@@ -314,6 +314,13 @@ interface PreviewPaneProps {
   /** 本文の総ページ数（pagination 結果）が変わったら通知する——奥付編集ポップアップの
    *  「本文の何ページ後」入力の上限目安・範囲外警告に使う。 */
   onBodyPageCountChange?: (count: number) => void;
+  /**
+   * TSP-LOOP-028: fired once after a canonical PDF export succeeds
+   * (`exportCustomPdf` resolved — every page captured, `pdf.save()` fired).
+   * NOT fired for JPG / Web閲覧用 / a failed or blocked export. The parent
+   * owns the post-export filename notice.
+   */
+  onPdfExportSuccess?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
@@ -337,6 +344,7 @@ export default function PreviewPane({
   onImageLayerChange,
   cursorIndex,
   onBodyPageCountChange,
+  onPdfExportSuccess,
   isCollapsed = false,
   onToggleCollapse,
   selected,
@@ -1069,7 +1077,14 @@ export default function PreviewPane({
         scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
       });
+      // Success boundary: exportCustomPdf resolved — every page was captured
+      // and jsPDF's `pdf.save()` download trigger fired without throwing. The
+      // browser cannot know whether the OS finished writing the file, so this
+      // is the latest reliable application-level success point. Only here (not
+      // for JPG / Web閲覧用, not on throw) do we notify the parent, which owns
+      // the post-export filename notice.
       setIsPdfModalOpen(false);
+      onPdfExportSuccess?.();
     } catch (err) {
       alert(err instanceof Error ? err.message : "PDF書き出しに失敗しました。");
     } finally {
