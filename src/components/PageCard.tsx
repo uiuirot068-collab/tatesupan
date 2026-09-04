@@ -12,7 +12,9 @@ import {
 } from "react";
 import { withBasePath } from "@/lib/basePath";
 import {
+  AUTO_INDENT_CHAR,
   computeParagraphStartFlags,
+  paragraphNeedsAutoIndent,
   tokenLength,
   type ImagePosition,
   type TategakiPage,
@@ -22,10 +24,6 @@ import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/p
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 
-// 会話文（かぎ括弧などで始まる段落）は一字下げを行わない、という組版慣行の
-// 対象となる開き括弧類。地文の段落先頭にはここに含まれない場合のみ、
-// 全角スペース1文字ぶんの字下げを描画時に補う（元テキストは変更しない）。
-const OPENING_BRACKETS = "「『（〈《【〔［｛“‘";
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
 // 漢字/かな but *discards the font's designed in-cell position* for 約物, so
@@ -53,7 +51,8 @@ const YAKUMONO_HANG_END_TEST = /[「『（〈《【〔［｛｟“‘]/u;
 // vertical font's uneven per-glyph baselines. Multi-character ASCII is handled
 // as a sideways run instead (see ASCII_RUN_* / LatinRun below).
 const ASCII_VERTICAL_GLYPH_TEST = /^[\x21-\x7e]$/;
-const INDENT_SPACE = "　";
+// TSP-LOOP-029: same U+3000 cell tategaki.ts reserves in the pagination budget.
+const INDENT_SPACE = AUTO_INDENT_CHAR;
 
 // TSP-LOOP-003 mixed-script run model. A maximal stretch of 2+ printable-ASCII
 // characters (spaces allowed inside, at least one non-space) is set as ONE
@@ -1582,10 +1581,14 @@ function firstVisibleChar(token: Exclude<TategakiToken, { type: "image" }>): str
  * 手動字下げの上に自動字下げが重なり、2slot分の字下げになってしまう
  * （実ブラウザDOM調査で確認済み）。ユーザーが入力したU+3000そのものは一切
  * 変更・削除せず、そのまま1文字分のslotとして描画される。
+ *
+ * TSP-LOOP-029: the decision is `paragraphNeedsAutoIndent` in tategaki.ts —
+ * the SAME predicate `paginateTokensByLines` uses to reserve the indent cell
+ * in the line's charsPerLine budget, so pagination and this renderer can never
+ * disagree about whether a paragraph-first line loses one content cell.
  */
 function needsAutoIndent(token: Exclude<TategakiToken, { type: "image" }>): boolean {
-  const first = firstVisibleChar(token);
-  return !OPENING_BRACKETS.includes(first) && first !== INDENT_SPACE;
+  return paragraphNeedsAutoIndent(firstVisibleChar(token));
 }
 
 /**
@@ -1797,6 +1800,24 @@ function buildLineSlots(
     }
     rubyAnnotations.push({ key: `${flatIndex}-rt`, startSlot, slotCount, rt: token.rt });
   });
+
+  // TSP-LOOP-029: pagination (paginateTokensByLines) now reserves the 一字下げ
+  // cell in a paragraph-first line's charsPerLine budget, so a source-bearing
+  // slot can no longer land at slotIndex === charsPerLine. This filter is kept
+  // only as a defensive clamp for the non-1:1 run tokens (ruby / latin / ――)
+  // — in dev, an over-range plain-text slot means pagination and this renderer
+  // have drifted and MUST be reconciled (a silently dropped manuscript
+  // character), so surface it loudly instead of hiding it.
+  if (process.env.NODE_ENV !== "production") {
+    const dropped = slots.filter((s) => s.slotIndex >= charsPerLine);
+    if (dropped.length > 0) {
+      console.error(
+        `[TSP-029] FixedSlotLine dropped ${dropped.length} source slot(s) past charsPerLine=${charsPerLine}:`,
+        dropped.map((s) => `${s.slotIndex}:"${s.text}"`).join(" "),
+        "— pagination/render grid mismatch.",
+      );
+    }
+  }
 
   return {
     slots: slots.filter((slot) => slot.slotIndex < charsPerLine),

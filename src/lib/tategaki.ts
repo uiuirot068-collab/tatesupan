@@ -538,6 +538,38 @@ function adjustLineSplit(
   return j;
 }
 
+/** Full-width space (U+3000): one grid cell of 一字下げ on a paragraph's first line. */
+export const AUTO_INDENT_CHAR = "　";
+// 会話文（かぎ括弧などで始まる段落）は一字下げしない、という組版慣行。
+const AUTO_INDENT_EXEMPT_OPENERS = "「『（〈《【〔［｛“‘";
+
+/**
+ * TSP-LOOP-029: whether a paragraph whose first visible character is
+ * `firstChar` gets an automatic one-cell 一字下げ.
+ *
+ * The renderer (PageCard.buildLineSlots) prepends that cell to the paragraph's
+ * first rendered line, so `paginateTokensByLines` / `computePageSourceRanges`
+ * must reserve it in that line's `charsPerLine` budget — otherwise a full
+ * paragraph-first line consumes `charsPerLine` source characters but the
+ * renderer only has room for `charsPerLine - 1` and silently drops the last
+ * one (the character on either side of the following line break).
+ */
+export function paragraphNeedsAutoIndent(firstChar: string): boolean {
+  return (
+    firstChar.length > 0 &&
+    !AUTO_INDENT_EXEMPT_OPENERS.includes(firstChar) &&
+    firstChar !== AUTO_INDENT_CHAR
+  );
+}
+
+/** First visible character of a token (for the 一字下げ exemption check). */
+function firstVisibleTokenChar(token: TategakiToken): string {
+  if (token.type === "ruby") return token.base.charAt(0);
+  if (token.type === "text") return token.value.charAt(0);
+  if (token.type === "tcy") return token.value.charAt(0);
+  return "";
+}
+
 function paginateTokensByLines(
   tokens: TategakiToken[],
   charsPerLine: number,
@@ -558,6 +590,14 @@ function paginateTokensByLines(
   // the current (still-open) line.
   let lineIndex = 0;
   let lineChars = 0;
+  // TSP-LOOP-029: the renderer prepends a one-cell 一字下げ to a paragraph's
+  // first rendered line, so that line's real content budget is one shorter.
+  // `pendingParagraphStart` mirrors computeParagraphStartFlags — true at the
+  // document start and after every EMITTED "\n" token (not a redundant one),
+  // consumed by the first content placed on the next line. `lineIndentCells`
+  // is that line's reservation (0 or 1), fixed for the line's whole life.
+  let pendingParagraphStart = true;
+  let lineIndentCells = 0;
   // True immediately after the line just closed was ended because content
   // filled it to exactly `charsPerLine` (an auto-wrap), as opposed to being
   // ended by an explicit "\n" in the source. A single "\n" found right after
@@ -640,10 +680,28 @@ function paginateTokensByLines(
     currentLine = [];
     lineIndex += 1;
     lineChars = 0;
+    lineIndentCells = 0;
     lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
       lastSoftClosedPage = pushPage();
     }
+  };
+
+  // TSP-LOOP-029: call when the first content of a line is about to be placed.
+  // If the line opens a paragraph and its first visible character takes an
+  // auto-indent, reserve one cell for the whole line and clear the pending
+  // flag. Returns the line's content budget (charsPerLine minus the reserved
+  // indent cell).
+  const openLineBudget = (firstChar: string): number => {
+    if (
+      lineChars === 0 &&
+      pendingParagraphStart &&
+      paragraphNeedsAutoIndent(firstChar)
+    ) {
+      lineIndentCells = 1;
+    }
+    pendingParagraphStart = false;
+    return charsPerLine - lineIndentCells;
   };
 
   for (const token of tokens) {
@@ -702,6 +760,7 @@ function paginateTokensByLines(
           placeToken({ type: "text", value: "\n" });
           i += 1;
           breakLine();
+          pendingParagraphStart = true;
           continue;
         }
         // Real content is being placed on the current line now, so whatever
@@ -713,7 +772,11 @@ function paginateTokensByLines(
         // "the next line" — there is no next line yet, so that would just
         // spin forever. Only a line that already holds something may defer.
         const isFreshLine = lineChars === 0;
-        const room = charsPerLine - lineChars;
+        // TSP-LOOP-029: a paragraph's first line reserves one cell for 一字下げ.
+        const lineBudget = isFreshLine
+          ? openLineBudget(value[i])
+          : charsPerLine - lineIndentCells;
+        const room = lineBudget - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
@@ -729,7 +792,7 @@ function paginateTokensByLines(
         // kinsoku protection) — that still has to force a break so the
         // outer loop makes progress instead of spinning forever on the
         // same index.
-        const wasFilled = lineChars >= charsPerLine;
+        const wasFilled = lineChars >= lineBudget;
         if (wasFilled || j === startI) {
           breakLine();
           lineFilledByWrap = wasFilled;
@@ -742,12 +805,18 @@ function paginateTokensByLines(
     // handled above: start a fresh line first if it wouldn't fit on the
     // remainder of the current one.
     const length = tokenLength(token);
-    if (lineChars > 0 && lineChars + length > charsPerLine) {
+    // TSP-LOOP-029: same one-cell 一字下げ reservation on a paragraph's first
+    // line (a paragraph can begin with a ruby / 縦中横 token).
+    const atomicBudget =
+      lineChars === 0
+        ? openLineBudget(firstVisibleTokenChar(token))
+        : charsPerLine - lineIndentCells;
+    if (lineChars > 0 && lineChars + length > atomicBudget) {
       breakLine();
     }
     placeToken(token);
     lineChars += length;
-    const wasFilled = lineChars >= charsPerLine;
+    const wasFilled = lineChars >= atomicBudget;
     lineFilledByWrap = false;
     if (wasFilled) {
       breakLine();
@@ -789,6 +858,10 @@ export function computePageSourceRanges(
   let pageEnd = 0;
   let lineIndex = 0;
   let lineChars = 0;
+  // TSP-LOOP-029: mirrors paginateTokensByLines — a paragraph's first line
+  // reserves one cell for 一字下げ, so its content budget is one shorter.
+  let pendingParagraphStart = true;
+  let lineIndentCells = 0;
   // Mirrors paginateTokensByLines's lineFilledByWrap: true right after a line
   // was closed by filling to charsPerLine, so the very next "\n" — redundant
   // with that break — can be skipped instead of being counted as its own line.
@@ -827,10 +900,24 @@ export function computePageSourceRanges(
   const breakLine = () => {
     lineIndex += 1;
     lineChars = 0;
+    lineIndentCells = 0;
     lineFilledByWrap = false;
     if (lineIndex >= linesPerPage) {
       lastSoftClosedRange = pushPage();
     }
+  };
+
+  // TSP-LOOP-029: mirror of paginateTokensByLines.openLineBudget.
+  const openLineBudget = (firstChar: string): number => {
+    if (
+      lineChars === 0 &&
+      pendingParagraphStart &&
+      paragraphNeedsAutoIndent(firstChar)
+    ) {
+      lineIndentCells = 1;
+    }
+    pendingParagraphStart = false;
+    return charsPerLine - lineIndentCells;
   };
 
   for (const { token, start, end } of offsetTokens) {
@@ -879,12 +966,16 @@ export function computePageSourceRanges(
           mark(start + i, start + i + 1);
           i += 1;
           breakLine();
+          pendingParagraphStart = true;
           continue;
         }
         lineFilledByWrap = false;
         const startI = i;
         const isFreshLine = lineChars === 0;
-        const room = charsPerLine - lineChars;
+        const lineBudget = isFreshLine
+          ? openLineBudget(value[i])
+          : charsPerLine - lineIndentCells;
+        const room = lineBudget - lineChars;
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
@@ -895,7 +986,7 @@ export function computePageSourceRanges(
           lineChars += j - i;
           i = j;
         }
-        const wasFilled = lineChars >= charsPerLine;
+        const wasFilled = lineChars >= lineBudget;
         if (wasFilled || j === startI) {
           breakLine();
           lineFilledByWrap = wasFilled;
@@ -906,12 +997,16 @@ export function computePageSourceRanges(
 
     // ruby or tcy — image/pageBreak already handled above.
     const length = tokenLength(token);
-    if (lineChars > 0 && lineChars + length > charsPerLine) {
+    const atomicBudget =
+      lineChars === 0
+        ? openLineBudget(firstVisibleTokenChar(token))
+        : charsPerLine - lineIndentCells;
+    if (lineChars > 0 && lineChars + length > atomicBudget) {
       breakLine();
     }
     mark(start, end);
     lineChars += length;
-    const wasFilled = lineChars >= charsPerLine;
+    const wasFilled = lineChars >= atomicBudget;
     lineFilledByWrap = false;
     if (wasFilled) {
       breakLine();

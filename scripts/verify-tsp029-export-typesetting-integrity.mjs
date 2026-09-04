@@ -27,6 +27,7 @@ const check = (name, cond) => {
 const pageCard = read("src/components/PageCard.tsx");
 const pcCode = code(pageCard);
 const tategaki = read("src/lib/tategaki.ts");
+const tgCode = code(tategaki);
 const exportCapture = read("src/utils/exportCapture.ts");
 const exportPdf = read("src/utils/exportPdf.ts");
 const exportImage = read("src/utils/exportImage.ts");
@@ -80,18 +81,51 @@ check(
     })(),
 );
 
-/* ---------- 7. pagination / index integrity unchanged ---------- */
+/* ---------- 7. line-boundary SOURCE COVERAGE: pagination reserves the 一字下げ cell ---------- */
 
 check(
-  "7. tategaki tokenizer/pagination not modified by this loop (no source char drop)",
+  "7. one canonical 一字下げ predicate (paragraphNeedsAutoIndent) shared by pagination + renderer",
   !!tategaki &&
-    /export function tokenizeTategakiWithOffsets/.test(tategaki) &&
-    /computePageSourceRanges/.test(tategaki),
+    /export function paragraphNeedsAutoIndent\(firstChar: string\): boolean/.test(tategaki) &&
+    /export const AUTO_INDENT_CHAR = /.test(tategaki) &&
+    !!pageCard &&
+    /import \{[\s\S]*?paragraphNeedsAutoIndent[\s\S]*?\} from "@\/lib\/tategaki"/.test(pageCard) &&
+    /return paragraphNeedsAutoIndent\(firstVisibleChar\(token\)\)/.test(pageCard),
 );
 check(
-  "8. buildLineSlots still keeps exactly [0, charsPerLine) and advances slotCursor by tokenLength",
+  "8. paginateTokensByLines shortens a paragraph-first line's budget by the indent cell",
+  !!tategaki &&
+    (() => {
+      const fn = tgCode.slice(
+        tgCode.indexOf("function paginateTokensByLines"),
+        tgCode.indexOf("export function computePageSourceRanges"),
+      );
+      return (
+        /const openLineBudget = \(firstChar: string\): number =>/.test(fn) &&
+        /lineIndentCells = 1;/.test(fn) &&
+        /const lineBudget = isFreshLine\s*\n?\s*\? openLineBudget\(value\[i\]\)/.test(fn) &&
+        /const wasFilled = lineChars >= lineBudget;/.test(fn) &&
+        /pendingParagraphStart = true;/.test(fn)
+      );
+    })(),
+);
+check(
+  "8b. computePageSourceRanges applies the IDENTICAL indent budget (cursor↔page map can't drift)",
+  !!tategaki &&
+    (() => {
+      const fn = tgCode.slice(tgCode.indexOf("export function computePageSourceRanges"));
+      return (
+        /const openLineBudget = \(firstChar: string\): number =>/.test(fn) &&
+        /const wasFilled = lineChars >= lineBudget;/.test(fn) &&
+        /lineIndentCells = 0;/.test(fn)
+      );
+    })(),
+);
+check(
+  "8c. buildLineSlots no longer SILENTLY drops an over-range plain-text slot (dev console.error)",
   !!pageCard &&
-    /slots\.filter\(\(slot\) => slot\.slotIndex < charsPerLine\)/.test(pageCard) &&
+    /\[TSP-029\] FixedSlotLine dropped/.test(pageCard) &&
+    /pagination\/render grid mismatch/.test(pageCard) &&
     /slotCursor \+= tokenLength\(token\)/.test(pageCard),
 );
 
