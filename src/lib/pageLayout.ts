@@ -353,6 +353,55 @@ export function computeAutoLinesPerColumn(
   return Math.max(rawLines, 1);
 }
 
+/**
+ * TSP-LOOP-031: floating-point slack added on top of the exact boundary a
+ * required-size formula solves for, so 1-decimal margin rounding downstream
+ * can never eat back into the space a target 文字数・行数 needs. Deliberately
+ * larger than PAGE_SAFETY_MARGIN_CHARS's own epsilon (0.001) — that one only
+ * guards a single floor() boundary, this one also has to survive a later
+ * mm-value round-trip through display rounding.
+ */
+const REQUIRED_FRAME_SIZE_EPSILON_MM = 0.01;
+
+/**
+ * TSP-LOOP-031: exact inverse of the *actual* clamp `computePageLayout` uses
+ * for a positive (non-auto) `settings.charsPerLine` target — `maxCapacityChars
+ * = Math.floor(textAreaHeightMm / fontSizeMm)`, checked against the FULL
+ * 天地 text-area height, not the per-column height, and with no
+ * PAGE_SAFETY_MARGIN_CHARS subtraction. (That safety-margined, per-column
+ * `computeAutoCharsPerLine` formula is a different code path — it only feeds
+ * the *fallback* value used when `charsPerLine` is 0/auto, not the cap
+ * applied to a target the user actually typed.) DEFAULT_PAGE_SETTINGS itself
+ * (文庫, 39字) only clears the `maxCapacityChars` gate, not the stricter one —
+ * confirmed by `computePageLayout(DEFAULT_PAGE_SETTINGS).charsPerLine === 39`
+ * — so mirroring the safety-margined formula here would derive a frame
+ * visibly larger (and free margin visibly smaller) than what's already
+ * shipped and verified. See MATH CONTRACT §4: use the existing calc as
+ * source of truth, don't invent a stricter one.
+ */
+export function computeRequiredTextAreaHeightMm(
+  charsPerLine: number,
+  fontSizeMm: number
+): number {
+  return charsPerLine * fontSizeMm + REQUIRED_FRAME_SIZE_EPSILON_MM;
+}
+
+/**
+ * TSP-LOOP-031: exact inverse of `computeAutoLinesPerColumn` — which, for a
+ * positive (non-auto) `settings.linesPerColumn` target, is ALSO the real
+ * clamp `computePageLayout` applies (not just the auto-fallback value), and
+ * already carries no PAGE_SAFETY_MARGIN_CHARS term and no columnCount
+ * dependency (縦書きの段組みは天地方向のスタックで、幅方向は段数の影響を
+ * 受けない — computeAutoLinesPerColumn's own unused `columnCount` parameter
+ * confirms this).
+ */
+export function computeRequiredTextAreaWidthMm(
+  linesPerColumn: number,
+  linePitchMm: number
+): number {
+  return linesPerColumn * linePitchMm + REQUIRED_FRAME_SIZE_EPSILON_MM;
+}
+
 export interface PageLayout {
   paper: PaperSize;
   fontSizeMm: number;
