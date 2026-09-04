@@ -105,6 +105,28 @@ export const MAX_MESSAGE_LENGTH = 4000;
 /** review メモの最大文字数。 */
 export const MAX_REVIEW_NOTE_LENGTH = 2000;
 
+/**
+ * TSP-LOOP-030: 送信時に本文へ自動追記する「使用環境（自動取得）」ブロックの
+ * 上限見積り。ユーザーが入力できる文字数は
+ * `MAX_MESSAGE_LENGTH - FEEDBACK_ENV_BLOCK_RESERVE`（review は
+ * `MAX_REVIEW_NOTE_LENGTH - …`）に制限し、追記後も必ずサーバ上限に収める。
+ * UA 文字列（〜300字前後）＋メタ行で通常 500 字未満、長い UA でも 700 字強。
+ */
+export const FEEDBACK_ENV_BLOCK_RESERVE = 800;
+
+/**
+ * TSP-LOOP-030: ユーザー入力テキストの末尾へ「使用環境（自動取得）」ブロックを
+ * 1 回だけ連結する。既存の送信トランスポート（message / note フィールド）を
+ * そのまま使い、Edge Function / スキーマ / Discord フォーマットには一切触れない。
+ * `detail` が空なら何もしない（環境検出失敗でも送信をブロックしない）。
+ */
+export function appendEnvironmentBlock(text: string, detail: string): string {
+  if (!detail.trim()) return text;
+  const base = text.replace(/\s+$/u, "");
+  const sep = base ? "\n\n" : "";
+  return `${base}${sep}----------\n${detail}`;
+}
+
 /** 添付を許可する画像 MIME。SVG / HTML / PDF / 任意バイナリは不可。 */
 export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
 export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME)[number];

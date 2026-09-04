@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ALLOWED_IMAGE_MIME,
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
+  FEEDBACK_ENV_BLOCK_RESERVE,
   FEEDBACK_FAILURE_MESSAGE,
   FEEDBACK_GUIDANCE,
   FEEDBACK_HONEYPOT_FIELD,
@@ -12,12 +13,21 @@ import {
   FEEDBACK_SUCCESS_MESSAGE,
   MAX_FEEDBACK_IMAGES,
   MAX_IMAGE_BYTES,
+  MAX_MESSAGE_LENGTH,
+  MAX_REVIEW_NOTE_LENGTH,
   REVIEW_CHECKLIST_ITEMS,
   REVIEW_INTRO,
+  appendEnvironmentBlock,
   canSubmitFeedback,
   validateSubmissionShape,
 } from "@/lib/betaFeedback";
 import { submitBetaFeedback } from "@/lib/betaFeedbackClient";
+import {
+  collectFeedbackEnvironment,
+  feedbackEnvironmentDetail,
+  feedbackEnvironmentSummary,
+  type FeedbackEnvironment,
+} from "@/lib/feedbackEnvironment";
 import { useTurnstile } from "@/lib/turnstile";
 
 /**
@@ -66,6 +76,20 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   } = useTurnstile();
   const [honeypot, setHoneypot] = useState("");
   const turnstileReady = turnstileStatus === "verified" && turnstileToken.length > 0;
+
+  // --- TSP-LOOP-030: 使用環境（自動取得）---
+  // プロンプト無し・権限無し・通信無し。送信時に本文へ 1 度だけ追記され、既存
+  // トランスポートで Discord / スプレッドシートへ届く。このモーダルは「報告」
+  // クリック後にクライアントでのみマウントされる（初期ツリーに無い）ため、遅延
+  // 初期化子でそのまま収集してよい。`browserEnvSource()` は navigator/window が
+  // 無い環境でも空値を返すので throw しない＝検出失敗でも送信はブロックされない。
+  const [environment] = useState<FeedbackEnvironment>(() =>
+    collectFeedbackEnvironment()
+  );
+  const envSummary = feedbackEnvironmentSummary(environment);
+  const envDetail = feedbackEnvironmentDetail(environment);
+  const messageMaxLen = MAX_MESSAGE_LENGTH - FEEDBACK_ENV_BLOCK_RESERVE;
+  const noteMaxLen = MAX_REVIEW_NOTE_LENGTH - FEEDBACK_ENV_BLOCK_RESERVE;
 
   // 現在の添付を ref で追跡し、閉じる／アンマウント時に確実に revoke する
   // （deps 固定 effect のクロージャ問題を避ける）。
@@ -153,7 +177,9 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     if (sendingRef.current || !canSend || !turnstileReady) return;
     const submission = {
       type: "feedback" as const,
-      message,
+      // TSP-LOOP-030: append the auto-collected environment block once, here at
+      // submit time — the textarea itself only ever holds the user's words.
+      message: appendEnvironmentBlock(message, envDetail),
       images: attachments.map((a) => a.file),
     };
     const shape = validateSubmissionShape(submission);
@@ -187,7 +213,8 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     const submission = {
       type: "review" as const,
       checkedItems: [...checkedItems],
-      note,
+      // TSP-LOOP-030: same auto-collected environment block, appended once.
+      note: appendEnvironmentBlock(note, envDetail),
     };
     const shape = validateSubmissionShape(submission);
     if (!shape.ok) {
@@ -254,9 +281,16 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
+                maxLength={messageMaxLen}
                 placeholder="ここに入力してください"
                 className="w-full resize-y rounded border border-ink/20 bg-base p-2 text-sm text-ink outline-none focus:border-ink/40"
               />
+
+              {/* TSP-LOOP-030: 自動取得した使用環境の要約。読み取り専用・入力不要。
+                  詳細ブロックは送信時に本文へ 1 度だけ追記される。 */}
+              <p className="whitespace-pre-line text-[11px] leading-relaxed text-ink/45">
+                {`使用環境（自動取得）\n${envSummary}`}
+              </p>
 
               {/* TSP-LOOP-014: 画像添付は公開β直前に一時無効化。
                   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED を true に戻すと
@@ -341,9 +375,15 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
+                  maxLength={noteMaxLen}
                   className="w-full resize-y rounded border border-ink/20 bg-base p-2 text-sm text-ink outline-none focus:border-ink/40"
                 />
               </label>
+
+              {/* TSP-LOOP-030: 自動取得した使用環境の要約（review タブでも同じ）。 */}
+              <p className="whitespace-pre-line text-[11px] leading-relaxed text-ink/45">
+                {`使用環境（自動取得）\n${envSummary}`}
+              </p>
             </div>
           )}
         </div>
