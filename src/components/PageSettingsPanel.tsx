@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   computePageLayout,
+  deriveMaxCapacityFromMargins,
   updatePageOverrides,
   type ColumnCount,
   type HashiraPosition,
@@ -206,14 +207,18 @@ export default function PageSettingsPanel({
 
   // layoutMode === "margin"（余白から設定する）のときだけ使う逆算:
   // 天地・ノド・小口余白 → charsPerLine / linesPerColumn。
-  // layoutMode === "capacity" 側の4余白算出は commitDraft 内で
+  // TSP-LOOP-031B: 「その余白に実際に入る最大」を返す deriveMaxCapacityFromMargins
+  // を使う——安全マージン込みの calculateCapacityFromMargins（auto-fallback用の
+  // 控えめな値）は使わない。余白モードでは「どれだけ入れるか」を隠れた
+  // 別設定として残さず、常に現在の余白の最大値を採用する（§ final product
+  // principle）。layoutMode === "capacity" 側の4余白算出は commitDraft 内で
   // deriveFrameMargins（TSP-LOOP-031: 版面の位置）が直接受け持つ。
   const applyLayoutModeAdjustment = (
     next: PageSettings,
     changedKey: keyof PageSettings
   ): PageSettings | null => {
     if (next.layoutMode === "margin" && MARGIN_MODE_TRIGGER_KEYS.has(changedKey)) {
-      const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
+      const { charsPerLine, linesPerColumn } = deriveMaxCapacityFromMargins({
         paperSize: next.paperSize,
         marginTop: next.marginTop,
         marginBottom: next.marginBottom,
@@ -241,6 +246,24 @@ export default function PageSettingsPanel({
   // 「marginOuter=15と表示されているのにcharsPerLine/linesPerColumnはそれと
   // 無関係な旧値のまま」という不整合が、preset適用の入り口で発生しなくなる。
   const deriveCapacityFromCurrentMargins = (base: PageSettings): PageSettings => {
+    // TSP-LOOP-031B: 余白モードでは「そのpresetの余白に実際に入る最大」を
+    // 採用する（安全マージン込みの calculateCapacityFromMargins ではなく
+    // deriveMaxCapacityFromMargins）。文字数・行数モードは無変更
+    // （calculateCapacityFromMargins のまま——capacity mode changed: NO）。
+    if (base.layoutMode === "margin") {
+      const { charsPerLine, linesPerColumn } = deriveMaxCapacityFromMargins({
+        paperSize: base.paperSize,
+        marginTop: base.marginTop,
+        marginBottom: base.marginBottom,
+        marginGutter: base.marginGutter,
+        marginOuter: base.marginOuter,
+        fontSizePt: base.fontSizePt,
+        lineHeightRatio: base.lineHeightRatio,
+        columnCount: base.columnCount,
+        columnGapMm: base.columnGapMm,
+      });
+      return { ...base, charsPerLine, linesPerColumn };
+    }
     const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
       paperSize: base.paperSize,
       marginTop: base.marginTop,
@@ -365,6 +388,65 @@ export default function PageSettingsPanel({
           verticalAnchorMargin: Number(verticalAnchorDraft),
           horizontalAnchorMargin: Number(horizontalAnchorDraft),
         })
+      : null;
+
+  // TSP-LOOP-031B: 余白から設定するモードのライブサマリー——draft の余白/
+  // タイポグラフィから「この設定で入る本文」の最大値を、Applyを押す前から
+  // 都度算出しておく（§3 LIVE DRAFT: settings/Preview/pagination は一切
+  // 変更しない、ローカル計算のみ）。無効なら ok:false とその理由を返し、
+  // Apply不可の表示にそのまま使う。
+  type MarginCapacityPreview =
+    | ({ ok: true } & ReturnType<typeof deriveMaxCapacityFromMargins>)
+    | { ok: false; reason: string };
+  const marginCapacityPreview: MarginCapacityPreview | null =
+    settings.layoutMode === "margin"
+      ? (() => {
+          const marginTop = Number(draft.marginTop);
+          const marginBottom = Number(draft.marginBottom);
+          const marginGutter = Number(draft.marginGutter);
+          const marginOuter = Number(draft.marginOuter);
+          const fontSizePt = Number(draft.fontSizePt);
+          const lineHeightRatio = Number(draft.lineHeightRatio);
+          const columnGapMm = Number(draft.columnGapMm);
+          if (
+            !Number.isFinite(marginTop) ||
+            !Number.isFinite(marginBottom) ||
+            !Number.isFinite(marginGutter) ||
+            !Number.isFinite(marginOuter) ||
+            !Number.isFinite(fontSizePt) ||
+            !Number.isFinite(lineHeightRatio) ||
+            !Number.isFinite(columnGapMm)
+          ) {
+            return { ok: false, reason: "数値として認識できない値があります。" };
+          }
+          if (marginTop < 0 || marginBottom < 0 || marginGutter < 0 || marginOuter < 0) {
+            return { ok: false, reason: "余白は0以上の値を指定してください。" };
+          }
+          if (fontSizePt <= 0) {
+            return { ok: false, reason: "フォントサイズは0より大きい値を指定してください。" };
+          }
+          if (lineHeightRatio <= 0) {
+            return { ok: false, reason: "行間倍率は0より大きい値を指定してください。" };
+          }
+          if (columnGapMm < 0) {
+            return { ok: false, reason: "段間は0以上の値を指定してください。" };
+          }
+          const result = deriveMaxCapacityFromMargins({
+            paperSize: settings.paperSize,
+            marginTop,
+            marginBottom,
+            marginGutter,
+            marginOuter,
+            fontSizePt,
+            lineHeightRatio,
+            columnCount: settings.columnCount,
+            columnGapMm,
+          });
+          if (result.charsPerLine < 1 || result.linesPerColumn < 1) {
+            return { ok: false, reason: "この余白では本文領域を確保できません。値を見直してください。" };
+          }
+          return { ok: true, ...result };
+        })()
       : null;
 
   const setDraftField = (key: DraftFieldKey, raw: string) => {
@@ -875,41 +957,72 @@ export default function PageSettingsPanel({
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">1行の文字数</span>
-          <input
-            type="number"
-            min={10}
-            max={60}
-            value={draft.charsPerLine}
-            disabled={settings.layoutMode === "margin"}
-            onChange={(e) => setDraftField("charsPerLine", e.target.value)}
-            onKeyDown={handleDraftKeyDown}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
-          />
-        </label>
+        {settings.layoutMode === "margin" ? (
+          // TSP-LOOP-031B: 余白モードでは1行の文字数・1段の行数を独立入力
+          // させない（隠れた別設定として残さない）——draft の余白から
+          // 実際に入る最大値を読み取り専用サマリーとして示す。
+          <div className="col-span-2 flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-ink/60">この設定で入る本文</span>
+            {marginCapacityPreview?.ok ? (
+              <>
+                <span className="text-sm font-medium text-ink">
+                  {marginCapacityPreview.charsPerLine}字 × {marginCapacityPreview.linesPerColumn}行
+                </span>
+                <span className="text-[11px] text-ink/50">
+                  設定上の最大 {marginCapacityPreview.maxBodyCharsPerPage}字／ページ
+                </span>
+                {(marginCapacityPreview.charsPerLine !== displaySettings.charsPerLine ||
+                  marginCapacityPreview.linesPerColumn !== displaySettings.linesPerColumn) && (
+                  <span className="text-[11px] text-ink/50">
+                    現在 {displaySettings.charsPerLine}字×{displaySettings.linesPerColumn}行 → 反映後{" "}
+                    {marginCapacityPreview.charsPerLine}字×{marginCapacityPreview.linesPerColumn}行
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-red-600">{marginCapacityPreview?.reason ?? ""}</span>
+            )}
+          </div>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink/60">1行の文字数</span>
+              <input
+                type="number"
+                min={10}
+                max={60}
+                value={draft.charsPerLine}
+                onChange={(e) => setDraftField("charsPerLine", e.target.value)}
+                onKeyDown={handleDraftKeyDown}
+                className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              />
+            </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">1段の行数</span>
-          <input
-            type="number"
-            min={5}
-            max={40}
-            value={draft.linesPerColumn}
-            disabled={settings.layoutMode === "margin"}
-            onChange={(e) => setDraftField("linesPerColumn", e.target.value)}
-            onKeyDown={handleDraftKeyDown}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
-          />
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink/60">1段の行数</span>
+              <input
+                type="number"
+                min={5}
+                max={40}
+                value={draft.linesPerColumn}
+                onChange={(e) => setDraftField("linesPerColumn", e.target.value)}
+                onKeyDown={handleDraftKeyDown}
+                className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              />
+            </label>
+          </>
+        )}
 
-        {/* grid-cols-4 上で「段間mm・1行の文字数・1段の行数」が3枠を占め、
-            このセルが同じ行の空いた4枠目へ自然に収まる（col-spanなし）。 */}
+        {/* grid-cols-4 上で「段間mm・(1行の文字数・1段の行数 or 本文サマリー)」が
+            2〜3枠を占め、このセルが同じ行の空いた枠へ自然に収まる（col-spanなし）。 */}
         <div className="flex flex-col justify-end gap-1">
           <button
             type="button"
             onClick={commitDraft}
-            disabled={settings.layoutMode === "capacity" && derivedPreview !== null && !derivedPreview.ok}
+            disabled={
+              (settings.layoutMode === "capacity" && derivedPreview !== null && !derivedPreview.ok) ||
+              (settings.layoutMode === "margin" && marginCapacityPreview !== null && !marginCapacityPreview.ok)
+            }
             className="cursor-pointer select-none rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             設定を反映
@@ -918,6 +1031,8 @@ export default function PageSettingsPanel({
             <span className="text-xs text-red-600">{commitError}</span>
           ) : settings.layoutMode === "capacity" && derivedPreview && !derivedPreview.ok ? (
             <span className="text-xs text-red-600">{derivedPreview.reason}</span>
+          ) : settings.layoutMode === "margin" && marginCapacityPreview && !marginCapacityPreview.ok ? (
+            <span className="text-xs text-red-600">{marginCapacityPreview.reason}</span>
           ) : commitNote ? (
             <span className="text-xs text-ink/60">{commitNote}</span>
           ) : isDraftDirty ? (

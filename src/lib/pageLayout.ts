@@ -402,6 +402,22 @@ export function computeRequiredTextAreaWidthMm(
   return linesPerColumn * linePitchMm + REQUIRED_FRAME_SIZE_EPSILON_MM;
 }
 
+/**
+ * TSP-LOOP-031B: the actual clamp `computePageLayout` applies to a positive
+ * (non-auto) `settings.charsPerLine` target — extracted out of
+ * `computePageLayout` so a second call site (余白から設定するモードの
+ * 「最大」算出, see `deriveMaxCapacityFromMargins`) can call the exact same
+ * formula instead of re-deriving it and risking the kind of ~1.5mm drift
+ * TSP-031 already caught once. Deliberately unchanged from the inline
+ * expression this replaces: checked against the FULL 天地 text-area height
+ * (not the per-column height — see computeRequiredTextAreaHeightMm's own
+ * comment for why that's the established, already-verified clamp dimension),
+ * no PAGE_SAFETY_MARGIN_CHARS subtraction.
+ */
+export function computeMaxCapacityChars(textAreaHeightMm: number, fontSizeMm: number): number {
+  return fontSizeMm > 0 ? Math.floor(textAreaHeightMm / fontSizeMm) : 0;
+}
+
 export interface PageLayout {
   paper: PaperSize;
   fontSizeMm: number;
@@ -476,7 +492,7 @@ export function computePageLayout(settings: PageSettings): PageLayout {
   const autoCharsPerLine = computeAutoCharsPerLine(columnHeightMm, fontSizeMm, columnCount);
   const rawCharsPerLine =
     settings.charsPerLine > 0 ? settings.charsPerLine : autoCharsPerLine;
-  const maxCapacityChars = Math.floor(textAreaHeightMm / fontSizeMm);
+  const maxCapacityChars = computeMaxCapacityChars(textAreaHeightMm, fontSizeMm);
   const charsPerLine = Math.min(rawCharsPerLine, maxCapacityChars);
 
   // 縦書き2段組は上下スタック（上段・下段）であり、幅方向は段数で分割しない。
@@ -503,5 +519,59 @@ export function computePageLayout(settings: PageSettings): PageLayout {
     charsPerColumn,
     linesPerPage,
     charsPerPage: charsPerLine * linesPerPage,
+  };
+}
+
+export interface MaxCapacityFromMarginsInput {
+  paperSize: PaperSizeKey;
+  marginTop: number;
+  marginBottom: number;
+  marginGutter: number;
+  marginOuter: number;
+  fontSizePt: number;
+  lineHeightRatio: number;
+  columnCount: ColumnCount;
+  columnGapMm: number;
+}
+
+export interface MaxCapacityFromMarginsResult {
+  charsPerLine: number;
+  linesPerColumn: number;
+  /** charsPerLine * linesPerColumn * columnCount — display-only, see §11: never feed into pagination. */
+  maxBodyCharsPerPage: number;
+}
+
+/**
+ * TSP-LOOP-031B: 余白から設定するモード用 —— 現在の余白・タイポグラフィが
+ * 実際に保持できる最大の charsPerLine / linesPerColumn を算出する。
+ *
+ * MATH CONTRACT: 新しい式を発明せず、`computePageLayout` が明示的な
+ * （0/autoでない）ターゲットに対して実際に適用するclampをそのまま呼ぶ——
+ * charsPerLine は computeMaxCapacityChars（computePageLayout 内で使われる
+ * のと同一関数）、linesPerColumn は computeAutoLinesPerColumn（同関数が
+ * auto-fallbackと明示ターゲットclampの両方に使われることは pageLayout.ts
+ * 内の computeRequiredTextAreaWidthMm のコメントで確認済み）。
+ * これにより、ここで返した値をそのまま settings.charsPerLine /
+ * linesPerColumn へ書き戻して computePageLayout に渡しても、追加の
+ * clamp/downshiftは一切発生しない（derived value + 1 は逆に必ず
+ * clampされ、これが「maximum」の証明になる）。
+ */
+export function deriveMaxCapacityFromMargins(
+  input: MaxCapacityFromMarginsInput
+): MaxCapacityFromMarginsResult {
+  const paper = resolvePaperSize(input.paperSize);
+  const fontSizeMm = computeFontSizeMm(input.fontSizePt);
+  const linePitchMm = computeLinePitchMm(input.fontSizePt, input.lineHeightRatio);
+
+  const textAreaWidthMm = computeTextAreaWidthMm(paper, input.marginGutter, input.marginOuter);
+  const textAreaHeightMm = Math.max(paper.heightMm - input.marginTop - input.marginBottom, 0);
+
+  const charsPerLine = computeMaxCapacityChars(textAreaHeightMm, fontSizeMm);
+  const linesPerColumn = computeAutoLinesPerColumn(textAreaWidthMm, linePitchMm, input.columnCount);
+
+  return {
+    charsPerLine,
+    linesPerColumn,
+    maxBodyCharsPerPage: charsPerLine * linesPerColumn * input.columnCount,
   };
 }
