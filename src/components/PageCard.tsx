@@ -444,7 +444,14 @@ function PageCard({
     whiteSpace: "pre-wrap",
     width: textAreaWidthPx,
     height: textAreaHeightPx,
-    overflow: "hidden",
+    // TSP-LOOP-029: `clip` + one glyph of clip margin, matching FixedSlotLine.
+    // The grid never overflows the text area by a whole glyph — this only
+    // tolerates the sub-pixel ink overshoot of a slot pinned flush against the
+    // top / bottom edge, which the export rasterizer would otherwise clip
+    // (dropping the first / last character of a line). No glyph moves; the
+    // 天/地 margins absorb the margin.
+    overflow: "clip",
+    overflowClipMargin: `${Math.ceil(fontSizePx)}px`,
   };
 
   const lineStyle: CSSProperties = {
@@ -1861,8 +1868,11 @@ function FixedSlotRubyAnnotation({
   rubyLaneWidthPx: number;
   fontSizePx: number;
 }) {
-  const baseStartTop = annotation.startSlot * slotExtentPx;
-  const baseExtentPx = annotation.slotCount * slotExtentPx;
+  // TSP-LOOP-029: same integer-rounded slot ladder as FixedSlotLine, so the
+  // rt block sits on the exact base-slot edges Preview and export agree on.
+  const baseStartTop = Math.round(annotation.startSlot * slotExtentPx);
+  const baseExtentPx =
+    Math.round((annotation.startSlot + annotation.slotCount) * slotExtentPx) - baseStartTop;
 
   const rubyFontSizePx = fontSizePx / 2;
   const rubyTrackingPx = rubyFontSizePx * 0.1;
@@ -1921,10 +1931,13 @@ function FixedSlotTcy({
     <span
       style={{
         position: "absolute",
-        top: cell.slotIndex * slotExtentPx,
+        // TSP-LOOP-029: integer-rounded slot ladder (see FixedSlotLine).
+        top: Math.round(cell.slotIndex * slotExtentPx),
         left: 0,
         width: baseGlyphLaneWidthPx,
-        height: slotExtentPx,
+        height:
+          Math.round((cell.slotIndex + 1) * slotExtentPx) -
+          Math.round(cell.slotIndex * slotExtentPx),
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1973,6 +1986,21 @@ function FixedSlotLine({
     (text) => latinRunSlotCount(text, fontSizePx, fontFamily)
   );
 
+  // TSP-LOOP-029: the canonical slot pitch `textAreaHeightPx / charsPerLine`
+  // is a non-integer CSS px value (e.g. 6.9949px at the 文庫 default). The live
+  // browser paints `i * pitch` sub-pixel-precise, but the SVG-`<foreignObject>`
+  // rasterizer used by every export (JPG/PDF) snaps each absolutely-positioned
+  // slot to the device-pixel grid *independently* — so exported inter-glyph
+  // gaps alternate between ⌊pitch⌋ and ⌈pitch⌉ (visible uneven rhythm) and the
+  // last slot, pinned flush against the line's `overflow` clip, loses its
+  // glyph. Deriving every slot edge from ONE integer-rounded ladder makes the
+  // grid identical in Preview and export: `slotTop(i)` is monotone, the tiny
+  // (≤1px) per-cell height variance is centred out, and no cumulative drift
+  // (each edge is `round(i * pitch)`, not a running sum).
+  const slotTop = (index: number): number => Math.round(index * slotExtentPx);
+  const slotSpanPx = (startIndex: number, count: number): number =>
+    slotTop(startIndex + count) - slotTop(startIndex);
+
   // container幅は常にcolumnThicknessPx固定 — rubyの有無で変えない（rubyの
   // ためにこの論理行自身のlayout widthを広げると、後続の論理行がすべて
   // 横方向にずれて連鎖し、text areaの収まりやページ最終行のclipにまで
@@ -1988,7 +2016,16 @@ function FixedSlotLine({
     position: "relative",
     width: columnThicknessPx,
     height: heightPx,
-    overflow: "hidden",
+    // TSP-LOOP-029: `clip` + a one-glyph clip margin (vs the old bare
+    // `hidden`). Every child is an absolutely-positioned slot inside
+    // `[0, charsPerLine)`, so the container never has runaway content to
+    // hide — its only job was catching sub-pixel overshoot. A flush edge
+    // glyph whose ink spills a fraction past slot 0 / the last slot is now
+    // tolerated by the export rasterizer instead of being clipped; the
+    // 天/地 page margins (well over one glyph each) absorb it invisibly and
+    // no glyph moves.
+    overflow: "clip",
+    overflowClipMargin: `${Math.ceil(fontSizePx)}px`,
     fontSize: `${fontSizePx}px`,
     fontFamily,
     color: "#000000",
@@ -2003,10 +2040,10 @@ function FixedSlotLine({
           key={slot.key}
           style={{
             position: "absolute",
-            top: slot.slotIndex * slotExtentPx,
+            top: slotTop(slot.slotIndex),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: slotExtentPx,
+            height: slotSpanPx(slot.slotIndex, 1),
             display: "flex",
             alignItems: "center",
             // 約物は字形クラスごとにセルの端へ寄せる（下記 YAKUMONO_HANG_*）。
@@ -2104,10 +2141,10 @@ function FixedSlotLine({
           data-run-slot-count={run.slotCount}
           style={{
             position: "absolute",
-            top: run.startSlot * slotExtentPx,
+            top: slotTop(run.startSlot),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: run.slotCount * slotExtentPx,
+            height: slotSpanPx(run.startSlot, run.slotCount),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2133,7 +2170,7 @@ function FixedSlotLine({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  height: slotExtentPx,
+                  height: slotSpanPx(run.startSlot + i, 1),
                   width: "100%",
                   writingMode: "vertical-rl",
                   WebkitWritingMode: "vertical-rl",
@@ -2158,10 +2195,10 @@ function FixedSlotLine({
           data-run-slot-count={run.slotCount}
           style={{
             position: "absolute",
-            top: run.startSlot * slotExtentPx,
+            top: slotTop(run.startSlot),
             left: 0,
             width: baseGlyphLaneWidthPx,
-            height: run.slotCount * slotExtentPx,
+            height: slotSpanPx(run.startSlot, run.slotCount),
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-start",
