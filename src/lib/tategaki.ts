@@ -456,6 +456,19 @@ export function isHangingPunctuation(char: string): boolean {
 }
 
 /**
+ * TSP-LOOP-029 R3 — closing brackets that hang TOGETHER with a preceding
+ * hanging 句読点 (`。」` / `、）` as a unit), so the bracket is never left alone
+ * at the next line's head (行頭禁則). Bounded on purpose: only a single
+ * closing bracket, only directly after a hanging 。/、 — not a general
+ * line-breaking engine.
+ */
+const HANGING_CLOSE_BRACKETS = new Set("」』）］｝〕〉》】〙〗");
+
+export function isHangingCloseBracket(char: string): boolean {
+  return HANGING_CLOSE_BRACKETS.has(char);
+}
+
+/**
  * Adjusts a naive split point `splitIndex` (`value.slice(minIndex,
  * splitIndex)` is about to become this line's content) so it never leaves
  * an opening bracket as the line's last character, nor a closing bracket /
@@ -801,6 +814,9 @@ function paginateTokensByLines(
         // push a character onto the next line. It consumes its source offset
         // exactly once and does NOT count toward lineChars, so the next line's
         // capacity is unchanged.
+        // R3: a single closing bracket immediately after the 句読点 hangs with
+        // it (`。」` as a unit) so the bracket is never orphaned at the next
+        // line's head.
         if (
           j - i >= room &&
           lineChars + (j - i) >= lineBudget &&
@@ -813,7 +829,12 @@ function paginateTokensByLines(
             lineChars += j - i;
           }
           placeToken({ type: "text", value: value[j] });
-          i = j + 1;
+          let hangEnd = j + 1;
+          if (isHangingCloseBracket(value[hangEnd] ?? "")) {
+            placeToken({ type: "text", value: value[hangEnd] });
+            hangEnd += 1;
+          }
+          i = hangEnd;
           breakLine();
           lineFilledByWrap = true;
           continue;
@@ -1019,8 +1040,9 @@ export function computePageSourceRanges(
           j += 1;
         }
         // TSP-LOOP-029 issue A — mirror of paginateTokensByLines's ぶら下げ
-        // branch: a lone hanging 。/、 stays on the full line, so its source
-        // offset belongs to THIS page's range, not the next line's.
+        // branch: a lone hanging 。/、 (+ an optional single closing bracket,
+        // R3) stays on the full line, so its source offset belongs to THIS
+        // page's range, not the next line's.
         if (
           j - i >= room &&
           lineChars + (j - i) >= lineBudget &&
@@ -1028,9 +1050,11 @@ export function computePageSourceRanges(
           isHangingPunctuation(value[j]) &&
           !isHangingPunctuation(value[j + 1] ?? "")
         ) {
-          mark(start + i, start + j + 1);
+          let hangEnd = j + 1;
+          if (isHangingCloseBracket(value[hangEnd] ?? "")) hangEnd += 1;
+          mark(start + i, start + hangEnd);
           lineChars += j - i;
-          i = j + 1;
+          i = hangEnd;
           breakLine();
           lineFilledByWrap = true;
           continue;

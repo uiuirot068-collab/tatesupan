@@ -57,19 +57,19 @@ check(
 /* ---------- 4. clip no longer coincides with the grid extent ---------- */
 
 check(
-  "4. FixedSlotLine container: overflow clip + a clip margin of one slot + one glyph (was bare `hidden`; slot term added for the issue-A hanging 。/、)",
+  "4. FixedSlotLine container: overflow clip + a clip margin of two slots + one glyph (was bare `hidden`; 2-slot term for the issue-A hanging 。/、 + R3 optional 」)",
   !!pageCard &&
-    /overflow:\s*"clip"[\s\S]{0,160}overflowClipMargin:\s*`\$\{Math\.ceil\(slotExtentPx \+ fontSizePx\)\}px`/.test(pageCard),
+    /overflow:\s*"clip"[\s\S]{0,200}overflowClipMargin:\s*`\$\{Math\.ceil\(2 \* slotExtentPx \+ fontSizePx\)\}px`/.test(pageCard),
 );
 check(
-  "5. text-area container: same overflow clip + one-slot-plus-one-glyph clip margin (canonical pitch)",
+  "5. text-area container: same overflow clip + two-slot-plus-one-glyph clip margin (canonical pitch)",
   !!pageCard &&
     (() => {
       const m = pageCard.match(/const textContainerStyle: CSSProperties = \{[\s\S]*?\};/);
       return (
         !!m &&
         /overflow:\s*"clip"/.test(m[0]) &&
-        /overflowClipMargin:\s*`\$\{Math\.ceil\(canonicalSlotExtentPx \+ fontSizePx\)\}px`/.test(m[0])
+        /overflowClipMargin:\s*`\$\{Math\.ceil\(2 \* canonicalSlotExtentPx \+ fontSizePx\)\}px`/.test(m[0])
       );
     })(),
 );
@@ -199,7 +199,7 @@ check(
     !/HANGING_PUNCTUATION[\s\S]{0,40}[「『（【〈《〔］｝！？ー々]/.test(tategaki),
 );
 check(
-  "17. paginateTokensByLines hangs a LONE trailing 。/、 on the full line (not a run of them), consuming it once",
+  "17. paginateTokensByLines hangs a LONE trailing 。/、 (not a run) on the full line, consuming it once; R3: absorbs at most ONE trailing closing bracket",
   !!tategaki &&
     (() => {
       const fn = tgCode.slice(
@@ -210,35 +210,46 @@ check(
         /isHangingPunctuation\(value\[j\]\)/.test(fn) &&
         /!isHangingPunctuation\(value\[j \+ 1\] \?\? ""\)/.test(fn) &&
         /placeToken\(\{ type: "text", value: value\[j\] \}\);/.test(fn) &&
-        /i = j \+ 1;/.test(fn)
+        /let hangEnd = j \+ 1;/.test(fn) &&
+        /if \(isHangingCloseBracket\(value\[hangEnd\] \?\? ""\)\) \{/.test(fn) &&
+        /i = hangEnd;/.test(fn)
       );
     })(),
 );
 check(
-  "18. computePageSourceRanges mirrors the hang branch — the 。/、 offset is marked on THIS page exactly once, cursor advances past it",
+  "18. computePageSourceRanges mirrors the hang branch — the 。/、 (+ optional 」) offset is marked on THIS page exactly once, cursor advances past it",
   !!tategaki &&
     (() => {
       const fn = tgCode.slice(tgCode.indexOf("export function computePageSourceRanges"));
       return (
         /isHangingPunctuation\(value\[j\]\)/.test(fn) &&
         /!isHangingPunctuation\(value\[j \+ 1\] \?\? ""\)/.test(fn) &&
-        /mark\(start \+ i, start \+ j \+ 1\);/.test(fn) &&
-        /i = j \+ 1;/.test(fn)
+        /if \(isHangingCloseBracket\(value\[hangEnd\] \?\? ""\)\) hangEnd \+= 1;/.test(fn) &&
+        /mark\(start \+ i, start \+ hangEnd\);/.test(fn) &&
+        /i = hangEnd;/.test(fn)
       );
     })(),
 );
 check(
-  "19. buildLineSlots keeps exactly ONE over-capacity slot iff it is a lone hanging 。/、 (slotIndex === charsPerLine); ordinary letters still filtered",
-  !!pageCard &&
-    /const overCap = slots\.filter\(\(s\) => s\.slotIndex >= charsPerLine\)/.test(pageCard) &&
-    /overCap\.length === 1 &&\s*\n?\s*overCap\[0\]\.slotIndex === charsPerLine &&\s*\n?\s*isHangingPunctuation\(overCap\[0\]\.text\)/.test(pageCard) &&
-    /slot\.slotIndex < charsPerLine \|\| slot === hangingSlot/.test(pageCard) &&
-    /hangingSlotIndex: hangingSlot \? hangingSlot\.slotIndex : null/.test(pageCard),
+  "18b. isHangingCloseBracket is a bounded closing-bracket set (」』）］｝ …), NOT the whole 行頭禁則 class",
+  !!tategaki &&
+    /const HANGING_CLOSE_BRACKETS = new Set\("」』）］｝〕〉》】〙〗"\)/.test(tategaki) &&
+    /export function isHangingCloseBracket\(char: string\): boolean/.test(tategaki) &&
+    !/HANGING_CLOSE_BRACKETS[\s\S]{0,30}[、。ぁぃぅっ]/.test(tategaki),
 );
 check(
-  "20. the hanging slot is drawn on the SAME rounded ladder (slotTop) one cell past the grid, tagged data-hanging-punctuation",
+  "19. buildLineSlots keeps 1–2 over-capacity slots iff a lone hanging 。/、 at charsPerLine (+ optional closing bracket at charsPerLine+1); ordinary letters still filtered",
   !!pageCard &&
-    /data-hanging-punctuation=\{slot\.slotIndex === hangingSlotIndex \? "" : undefined\}/.test(pageCard) &&
+    /const overCap = slots\s*\n?\s*\.filter\(\(s\) => s\.slotIndex >= charsPerLine\)/.test(pageCard) &&
+    /overCap\[0\]\.slotIndex === charsPerLine &&\s*\n?\s*isHangingPunctuation\(overCap\[0\]\.text\)/.test(pageCard) &&
+    /isHangingCloseBracket\(overCap\[1\]\.text\)/.test(pageCard) &&
+    /slot\.slotIndex < charsPerLine \|\| hangingSlotSet\.has\(slot\)/.test(pageCard) &&
+    /hangingSlotIndices: hangingSlots\.map\(\(s\) => s\.slotIndex\)/.test(pageCard),
+);
+check(
+  "20. the hanging slot(s) are drawn on the SAME rounded ladder (slotTop) past the grid, tagged data-hanging-punctuation",
+  !!pageCard &&
+    /data-hanging-punctuation=\{hangingSlotIndices\.includes\(slot\.slotIndex\) \? "" : undefined\}/.test(pageCard) &&
     /top: slotTop\(slot\.slotIndex\)/.test(pageCard),
 );
 check(

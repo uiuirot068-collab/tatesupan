@@ -14,6 +14,7 @@ import { withBasePath } from "@/lib/basePath";
 import {
   AUTO_INDENT_CHAR,
   computeParagraphStartFlags,
+  isHangingCloseBracket,
   isHangingPunctuation,
   paragraphNeedsAutoIndent,
   tokenLength,
@@ -446,11 +447,11 @@ function PageCard({
     height: textAreaHeightPx,
     // TSP-LOOP-029: `clip` + clip margin, matching FixedSlotLine. Tolerates a
     // flush edge glyph's sub-pixel ink overshoot the export rasterizer would
-    // otherwise clip, and gives a hanging 。/、 (issue A) room in the 天地
-    // margin. One slot + one glyph, well inside the ~26px page 天地 margins;
-    // no glyph moves.
+    // otherwise clip, and gives a hanging 。/、 — plus, R3, an optional trailing
+    // closing bracket (`。」`) — room in the 天地 margin. Two slots + one glyph,
+    // still inside the ~26px page 天地 margins; no glyph moves.
     overflow: "clip",
-    overflowClipMargin: `${Math.ceil(canonicalSlotExtentPx + fontSizePx)}px`,
+    overflowClipMargin: `${Math.ceil(2 * canonicalSlotExtentPx + fontSizePx)}px`,
   };
 
   const lineStyle: CSSProperties = {
@@ -1707,8 +1708,8 @@ function buildLineSlots(
   latinRuns: LatinRun[];
   rubyAnnotations: RubyAnnotation[];
   tcyCells: TcyCell[];
-  /** TSP-LOOP-029 issue A: slotIndex of a lone hanging 。/、, or null. */
-  hangingSlotIndex: number | null;
+  /** TSP-LOOP-029 issue A: slotIndex(es) of a hanging 。/、 (+ optional closing bracket, R3). */
+  hangingSlotIndices: number[];
 } {
   const slots: LineSlot[] = [];
   const protectedRuns: ProtectedRun[] = [];
@@ -1803,17 +1804,26 @@ function buildLineSlots(
     rubyAnnotations.push({ key: `${flatIndex}-rt`, startSlot, slotCount, rt: token.rt });
   });
 
-  // TSP-LOOP-029 issue A — ぶら下げ組: `paginateTokensByLines` may leave ONE
+  // TSP-LOOP-029 issue A — ぶら下げ組: `paginateTokensByLines` may leave a
   // lone 。/、 at slotIndex === charsPerLine (a full line whose next source
-  // char was 句読点). That single slot is legitimately kept and drawn in the
-  // hanging position (past the grid, into the 天地 margin) — see FixedSlotLine.
-  const overCap = slots.filter((s) => s.slotIndex >= charsPerLine);
-  const hangingSlot =
-    overCap.length === 1 &&
+  // char was 句読点), optionally followed by ONE closing bracket at
+  // charsPerLine + 1 (`。」` hangs as a unit, R3). Those 1–2 slots are
+  // legitimately kept and drawn in the hanging position (past the grid, into
+  // the 天地 margin) — see FixedSlotLine.
+  const overCap = slots
+    .filter((s) => s.slotIndex >= charsPerLine)
+    .sort((a, b) => a.slotIndex - b.slotIndex);
+  const hangingSlots: LineSlot[] =
+    overCap.length >= 1 &&
+    overCap.length <= 2 &&
     overCap[0].slotIndex === charsPerLine &&
-    isHangingPunctuation(overCap[0].text)
-      ? overCap[0]
-      : null;
+    isHangingPunctuation(overCap[0].text) &&
+    (overCap.length === 1 ||
+      (overCap[1].slotIndex === charsPerLine + 1 &&
+        isHangingCloseBracket(overCap[1].text)))
+      ? overCap
+      : [];
+  const hangingSlotSet = new Set(hangingSlots);
 
   // TSP-LOOP-029: pagination reserves the 一字下げ cell in a paragraph-first
   // line's budget, so a NON-hanging source-bearing slot can no longer land at
@@ -1821,7 +1831,7 @@ function buildLineSlots(
   // this renderer have drifted (a silently dropped manuscript character) —
   // surface it loudly instead of hiding it.
   if (process.env.NODE_ENV !== "production") {
-    const dropped = overCap.filter((s) => s !== hangingSlot);
+    const dropped = overCap.filter((s) => !hangingSlotSet.has(s));
     if (dropped.length > 0) {
       console.error(
         `[TSP-029] FixedSlotLine dropped ${dropped.length} source slot(s) past charsPerLine=${charsPerLine}:`,
@@ -1833,13 +1843,13 @@ function buildLineSlots(
 
   return {
     slots: slots.filter(
-      (slot) => slot.slotIndex < charsPerLine || slot === hangingSlot,
+      (slot) => slot.slotIndex < charsPerLine || hangingSlotSet.has(slot),
     ),
     protectedRuns: protectedRuns.filter((run) => run.startSlot < charsPerLine),
     latinRuns: latinRuns.filter((run) => run.startSlot < charsPerLine),
     rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
     tcyCells: tcyCells.filter((cell) => cell.slotIndex < charsPerLine),
-    hangingSlotIndex: hangingSlot ? hangingSlot.slotIndex : null,
+    hangingSlotIndices: hangingSlots.map((s) => s.slotIndex),
   };
 }
 
@@ -2014,7 +2024,7 @@ function FixedSlotLine({
   fontFeatureSettings: string;
 }) {
   useLatinRunFontSync();
-  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells, hangingSlotIndex } =
+  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells, hangingSlotIndices } =
     buildLineSlots(
       line,
       flatIndexBase,
@@ -2057,11 +2067,12 @@ function FixedSlotLine({
     // child is an absolutely-positioned slot inside `[0, charsPerLine]` — the
     // container has no runaway flow content to hide, so its only jobs are (a)
     // tolerating a flush edge glyph's sub-pixel ink overshoot that the export
-    // rasterizer would otherwise clip, and (b) letting a hanging 。/、 (issue
-    // A, slot index === charsPerLine) sit in the 天地 margin. The margin is
-    // one full slot + one glyph, well inside the ~26px page 天地 margins.
+    // rasterizer would otherwise clip, and (b) letting a hanging 。/、 (issue A,
+    // slot charsPerLine) — plus, R3, an optional trailing closing bracket at
+    // charsPerLine + 1 (`。」`) — sit in the 天地 margin. The margin is two full
+    // slots + one glyph, still inside the ~26px page 天地 margins.
     overflow: "clip",
-    overflowClipMargin: `${Math.ceil(slotExtentPx + fontSizePx)}px`,
+    overflowClipMargin: `${Math.ceil(2 * slotExtentPx + fontSizePx)}px`,
     fontSize: `${fontSizePx}px`,
     fontFamily,
     color: "#000000",
@@ -2074,11 +2085,12 @@ function FixedSlotLine({
       {slots.map((slot) => (
         <span
           key={slot.key}
-          // TSP-LOOP-029 issue A: the lone hanging 。/、 slot (index ===
-          // charsPerLine) is positioned by the same `slotTop` ladder — one
-          // cell past the grid, i.e. into the 天地 margin — and made visible
-          // by the container's clip margin.
-          data-hanging-punctuation={slot.slotIndex === hangingSlotIndex ? "" : undefined}
+          // TSP-LOOP-029 issue A: the hanging 。/、 slot (index === charsPerLine)
+          // and, R3, an optional closing bracket at charsPerLine + 1 are
+          // positioned by the same `slotTop` ladder — one/two cells past the
+          // grid, into the 天地 margin — and made visible by the container's
+          // clip margin.
+          data-hanging-punctuation={hangingSlotIndices.includes(slot.slotIndex) ? "" : undefined}
           style={{
             position: "absolute",
             top: slotTop(slot.slotIndex),
