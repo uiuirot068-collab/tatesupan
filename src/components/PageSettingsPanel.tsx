@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   computePageLayout,
+  deriveMaxCapacityFromMargins,
   updatePageOverrides,
   type ColumnCount,
   type HashiraPosition,
@@ -12,11 +13,21 @@ import {
   type PageSettings,
   type PaperSizeKey,
   recommendedNombreFontSizePt,
-  resolvePaperSize,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { FONT_FAMILY_OPTIONS, NOMBRE_FONT_SAME_AS_BODY } from "@/constants/fonts";
-import { calculateCapacityFromMargins, calculateCustomLayout } from "@/utils/layoutCalculator";
+import { calculateCapacityFromMargins } from "@/utils/layoutCalculator";
+import {
+  HORIZONTAL_ANCHORS,
+  HORIZONTAL_ANCHOR_LABELS,
+  VERTICAL_ANCHORS,
+  VERTICAL_ANCHOR_LABELS,
+  deriveFrameMargins,
+  inferPositionFromMargins,
+  positionLabel,
+  positionsEqual,
+  type TextFramePosition,
+} from "@/lib/textFramePosition";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -50,17 +61,11 @@ const MARGIN_MODE_TRIGGER_KEYS = new Set<keyof PageSettings>([
   "fontSizePt",
 ]);
 
-// layoutMode === "capacity"（文字数・行数から設定する）のとき、これらの
-// フィールドが変更されたら1行の文字数・1段の行数から小口余白
-// （marginOuter）を逆算して settings に反映する。
-const CAPACITY_MODE_TRIGGER_KEYS = new Set<keyof PageSettings>([
-  "charsPerLine",
-  "linesPerColumn",
-  "fontSizePt",
-  "marginTop",
-  "marginBottom",
-  "marginGutter",
-]);
+// layoutMode === "capacity"（文字数・行数から設定する）では、天地・ノド・
+// 小口の4余白を個別入力させず、代わりに「版面の位置」（TSP-LOOP-031: 3×3
+// アンカー選択 + 基準余白最大2個）から src/lib/textFramePosition.ts の
+// deriveFrameMargins で一括算出する——applyLayoutModeAdjustment 側の
+// 逆算トリガーは不要（commitDraft 内で直接分岐する）。
 
 // 数値1文字ぶんの入力途中（"4" → "42" の途中で "" や "4" を経由する等）で
 // geometry/pagination の再計算が走ってUIが固まるのを防ぐため、これらの
@@ -200,20 +205,20 @@ export default function PageSettingsPanel({
     setActiveTab((current) => (current === tab ? null : tab));
   };
 
-  // layoutMode に応じて、片方のパラメータ変更からもう片方を自動逆算する。
-  // - "margin": 天地・ノド・小口余白 → charsPerLine / linesPerColumn
-  // - "capacity": charsPerLine / linesPerColumn → marginOuter（小口余白）
-  //
-  // 戻り値が null の場合は「capacity → margin の逆算が物理的に成立しない」
-  // ことを意味し、呼び出し側は next の一部（marginOuterだけ等）を差し替えて
-  // 適用してはいけない。marginだけ旧値・capacityだけ新値という自己矛盾した
-  // settingsを作らないよう、変更全体を丸ごと不採用にする。
+  // layoutMode === "margin"（余白から設定する）のときだけ使う逆算:
+  // 天地・ノド・小口余白 → charsPerLine / linesPerColumn。
+  // TSP-LOOP-031B: 「その余白に実際に入る最大」を返す deriveMaxCapacityFromMargins
+  // を使う——安全マージン込みの calculateCapacityFromMargins（auto-fallback用の
+  // 控えめな値）は使わない。余白モードでは「どれだけ入れるか」を隠れた
+  // 別設定として残さず、常に現在の余白の最大値を採用する（§ final product
+  // principle）。layoutMode === "capacity" 側の4余白算出は commitDraft 内で
+  // deriveFrameMargins（TSP-LOOP-031: 版面の位置）が直接受け持つ。
   const applyLayoutModeAdjustment = (
     next: PageSettings,
     changedKey: keyof PageSettings
   ): PageSettings | null => {
     if (next.layoutMode === "margin" && MARGIN_MODE_TRIGGER_KEYS.has(changedKey)) {
-      const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
+      const { charsPerLine, linesPerColumn } = deriveMaxCapacityFromMargins({
         paperSize: next.paperSize,
         marginTop: next.marginTop,
         marginBottom: next.marginBottom,
@@ -225,41 +230,6 @@ export default function PageSettingsPanel({
         columnGapMm: next.columnGapMm,
       });
       return { ...next, charsPerLine, linesPerColumn };
-    }
-    if (next.layoutMode === "capacity" && CAPACITY_MODE_TRIGGER_KEYS.has(changedKey)) {
-      const paper = resolvePaperSize(next.paperSize);
-      const { marginEdge, textAreaWidthMm } = calculateCustomLayout({
-        paperWidth: paper.widthMm,
-        marginGutter: next.marginGutter,
-        fontSizePt: next.fontSizePt,
-        lineHeightRatio: next.lineHeightRatio,
-        linesPerColumn: next.linesPerColumn,
-        columnsPerPage: next.columnCount,
-        columnGapMm: next.columnGapMm,
-      });
-      // Invariant, two failure modes:
-      // 1. `paper.widthMm - marginGutter - textAreaWidthMm < 0` — the
-      //    requested linesPerColumn needs a column wider than the paper
-      //    itself has room for at all (e.g. linesPerColumn=500 at a normal
-      //    font size). calculateCustomLayout's own `Math.max(0, …)` clamps
-      //    this to marginEdge=0 internally, which — checked in isolation —
-      //    looks like a perfectly ordinary "zero margin" result instead of
-      //    the physically-impossible target it actually is, so this must be
-      //    detected here from the *unclamped* quantities, not from marginEdge.
-      // 2. An outer margin wider than the text column it borders is never a
-      //    well-formed page (the "frame" bigger than the "picture") — e.g. a
-      //    linesPerColumn target far narrower than what marginGutter/
-      //    marginOuter would otherwise allow on that paper's width.
-      // Either way, returning null here (rather than silently keeping the
-      // old marginOuter while still applying the new charsPerLine/
-      // linesPerColumn in `next`) lets the caller reject the *entire*
-      // candidate settings object, so margin and capacity never end up
-      // describing two different, inconsistent page layouts at once.
-      const fitsOnPaper = paper.widthMm - next.marginGutter - textAreaWidthMm >= 0;
-      if (!fitsOnPaper || marginEdge > textAreaWidthMm) {
-        return null;
-      }
-      return { ...next, marginOuter: marginEdge };
     }
     return next;
   };
@@ -276,6 +246,24 @@ export default function PageSettingsPanel({
   // 「marginOuter=15と表示されているのにcharsPerLine/linesPerColumnはそれと
   // 無関係な旧値のまま」という不整合が、preset適用の入り口で発生しなくなる。
   const deriveCapacityFromCurrentMargins = (base: PageSettings): PageSettings => {
+    // TSP-LOOP-031B: 余白モードでは「そのpresetの余白に実際に入る最大」を
+    // 採用する（安全マージン込みの calculateCapacityFromMargins ではなく
+    // deriveMaxCapacityFromMargins）。文字数・行数モードは無変更
+    // （calculateCapacityFromMargins のまま——capacity mode changed: NO）。
+    if (base.layoutMode === "margin") {
+      const { charsPerLine, linesPerColumn } = deriveMaxCapacityFromMargins({
+        paperSize: base.paperSize,
+        marginTop: base.marginTop,
+        marginBottom: base.marginBottom,
+        marginGutter: base.marginGutter,
+        marginOuter: base.marginOuter,
+        fontSizePt: base.fontSizePt,
+        lineHeightRatio: base.lineHeightRatio,
+        columnCount: base.columnCount,
+        columnGapMm: base.columnGapMm,
+      });
+      return { ...base, charsPerLine, linesPerColumn };
+    }
     const { charsPerLine, linesPerColumn } = calculateCapacityFromMargins({
       paperSize: base.paperSize,
       marginTop: base.marginTop,
@@ -301,6 +289,34 @@ export default function PageSettingsPanel({
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitNote, setCommitNote] = useState<string | null>(null);
 
+  // TSP-LOOP-031: 「文字数・行数から設定する」モードの「版面の位置」——
+  // UI-derived な一時state（§6 EXISTING DOCUMENT COMPATIBILITY: 新しい
+  // 永続フィールドは追加しない）。§6.1 の推定は、既存4余白が実際に変わった
+  // 時（下のuseEffect、draftと同じ依存配列）だけ行い、position/anchor
+  // ボタンをいじっただけの間は保持する（「設定を反映」を押すまでsettings
+  // は一切変更しない）。
+  const [position, setPosition] = useState<TextFramePosition>(
+    () => inferPositionFromMargins(settings).position
+  );
+  const [verticalAnchorDraft, setVerticalAnchorDraft] = useState<string>(() =>
+    String(inferPositionFromMargins(settings).verticalAnchorMargin)
+  );
+  const [horizontalAnchorDraft, setHorizontalAnchorDraft] = useState<string>(() =>
+    String(inferPositionFromMargins(settings).horizontalAnchorMargin)
+  );
+
+  // TSP-LOOP-031: §6.1 の推定は「小さい方の余白＝アンカー側」という
+  // ヒューリスティックであり厳密な逆関数ではない——例えば「天寄せ12mm」で
+  // 天(12)が地(9)より大きくなる入力も有効（大きな天空きを意図的に取りたい
+  // ケース）だが、この場合 inferPositionFromMargins は素直に「地寄せ9mm」
+  // だと推定してしまう。commitDraft成功直後にそのままこの推定を settings
+  // へ再適用すると、ユーザーが選んだ「天×ノド」がApply直後に「地×小口」へ
+  // 勝手に切り替わって見える（数値としては等価だが選択がジャンプする）。
+  // このrefが立っている間は「直前に自分がApplyした値」であることが分かって
+  // いるので、position/anchorの再推定をスキップし、ユーザーが選んだ表示を
+  // そのまま保つ。
+  const justCommittedPositionRef = useRef(false);
+
   // settings側のこれらのフィールドが実際に変わった時だけ（用紙サイズpreset
   // 適用・段数変更・このパネル自身のコミット成功時など）draftを追従させる。
   // settings全体を依存にすると、他パネル発の無関係な変更（例:
@@ -309,6 +325,18 @@ export default function PageSettingsPanel({
     setDraft(toDraftValues(effectiveGrid(settings, layout)));
     setCommitError(null);
     setCommitNote(null);
+    if (justCommittedPositionRef.current) {
+      // 直前の commitDraft (capacity mode) がまさに選んだ position/anchor
+      // 自身なので、再推定で上書きしない——ユーザーの選択をそのまま保つ。
+      justCommittedPositionRef.current = false;
+      return;
+    }
+    // 版面の位置を既存4余白から再推定する（用紙preset切替・別パネル発の
+    // 変更・ドキュメントの読み込みなど、このパネル発以外の変更のときのみ）。
+    const inferred = inferPositionFromMargins(settings);
+    setPosition(inferred.position);
+    setVerticalAnchorDraft(String(inferred.verticalAnchorMargin));
+    setHorizontalAnchorDraft(String(inferred.horizontalAnchorMargin));
   }, [
     settings.marginTop,
     settings.marginBottom,
@@ -324,6 +352,102 @@ export default function PageSettingsPanel({
     layout.charsPerLine,
     layout.linesPerColumn,
   ]);
+
+  const setPositionField = (next: TextFramePosition) => {
+    setPosition(next);
+    setCommitError(null);
+    setCommitNote(null);
+  };
+
+  const setVerticalAnchorField = (raw: string) => {
+    setVerticalAnchorDraft(raw);
+    setCommitError(null);
+    setCommitNote(null);
+  };
+
+  const setHorizontalAnchorField = (raw: string) => {
+    setHorizontalAnchorDraft(raw);
+    setCommitError(null);
+    setCommitNote(null);
+  };
+
+  // §8.1 のライブサマリー（「自動計算: 地 18.4 / 小口 10.2mm」）用に、
+  // 現在のdraft値からApplyした場合の結果をApply前でも計算しておく。
+  // 無効なら derivedPreview.ok が false になり、Apply不可の理由をそのまま表示できる。
+  const derivedPreview =
+    settings.layoutMode === "capacity"
+      ? deriveFrameMargins({
+          paperSize: settings.paperSize,
+          fontSizePt: Number(draft.fontSizePt),
+          lineHeightRatio: Number(draft.lineHeightRatio),
+          columnCount: settings.columnCount,
+          columnGapMm: Number(draft.columnGapMm),
+          charsPerLine: Number(draft.charsPerLine),
+          linesPerColumn: Number(draft.linesPerColumn),
+          position,
+          verticalAnchorMargin: Number(verticalAnchorDraft),
+          horizontalAnchorMargin: Number(horizontalAnchorDraft),
+        })
+      : null;
+
+  // TSP-LOOP-031B: 余白から設定するモードのライブサマリー——draft の余白/
+  // タイポグラフィから「この設定で入る本文」の最大値を、Applyを押す前から
+  // 都度算出しておく（§3 LIVE DRAFT: settings/Preview/pagination は一切
+  // 変更しない、ローカル計算のみ）。無効なら ok:false とその理由を返し、
+  // Apply不可の表示にそのまま使う。
+  type MarginCapacityPreview =
+    | ({ ok: true } & ReturnType<typeof deriveMaxCapacityFromMargins>)
+    | { ok: false; reason: string };
+  const marginCapacityPreview: MarginCapacityPreview | null =
+    settings.layoutMode === "margin"
+      ? (() => {
+          const marginTop = Number(draft.marginTop);
+          const marginBottom = Number(draft.marginBottom);
+          const marginGutter = Number(draft.marginGutter);
+          const marginOuter = Number(draft.marginOuter);
+          const fontSizePt = Number(draft.fontSizePt);
+          const lineHeightRatio = Number(draft.lineHeightRatio);
+          const columnGapMm = Number(draft.columnGapMm);
+          if (
+            !Number.isFinite(marginTop) ||
+            !Number.isFinite(marginBottom) ||
+            !Number.isFinite(marginGutter) ||
+            !Number.isFinite(marginOuter) ||
+            !Number.isFinite(fontSizePt) ||
+            !Number.isFinite(lineHeightRatio) ||
+            !Number.isFinite(columnGapMm)
+          ) {
+            return { ok: false, reason: "数値として認識できない値があります。" };
+          }
+          if (marginTop < 0 || marginBottom < 0 || marginGutter < 0 || marginOuter < 0) {
+            return { ok: false, reason: "余白は0以上の値を指定してください。" };
+          }
+          if (fontSizePt <= 0) {
+            return { ok: false, reason: "フォントサイズは0より大きい値を指定してください。" };
+          }
+          if (lineHeightRatio <= 0) {
+            return { ok: false, reason: "行間倍率は0より大きい値を指定してください。" };
+          }
+          if (columnGapMm < 0) {
+            return { ok: false, reason: "段間は0以上の値を指定してください。" };
+          }
+          const result = deriveMaxCapacityFromMargins({
+            paperSize: settings.paperSize,
+            marginTop,
+            marginBottom,
+            marginGutter,
+            marginOuter,
+            fontSizePt,
+            lineHeightRatio,
+            columnCount: settings.columnCount,
+            columnGapMm,
+          });
+          if (result.charsPerLine < 1 || result.linesPerColumn < 1) {
+            return { ok: false, reason: "この余白では本文領域を確保できません。値を見直してください。" };
+          }
+          return { ok: true, ...result };
+        })()
+      : null;
 
   const setDraftField = (key: DraftFieldKey, raw: string) => {
     setDraft((prev) => ({ ...prev, [key]: raw }));
@@ -377,30 +501,76 @@ export default function PageSettingsPanel({
       return;
     }
 
-    const rawCandidate: PageSettings = {
-      ...settings,
-      marginTop: parsed.marginTop,
-      marginBottom: parsed.marginBottom,
-      marginGutter: parsed.marginGutter,
-      marginOuter: parsed.marginOuter,
-      fontSizePt: parsed.fontSizePt,
-      lineHeightRatio: parsed.lineHeightRatio,
-      columnGapMm: parsed.columnGapMm,
-      charsPerLine: parsed.charsPerLine,
-      linesPerColumn: parsed.linesPerColumn,
-    };
-    // "marginTop" は MARGIN_MODE_TRIGGER_KEYS / CAPACITY_MODE_TRIGGER_KEYS の
-    // 両方に含まれるため、現在の layoutMode に対応する方の逆算だけが働く。
-    const candidate = applyLayoutModeAdjustment(rawCandidate, "marginTop");
-    if (!candidate) {
-      // capacity → margin の逆算が成立しない（小口が本文領域より広くなる
-      // 等）。marginだけ前回値・capacityだけ入力値、という自己矛盾した
-      // settingsを絶対に作らないため、変更全体を丸ごと不採用にし、
-      // 直前の正常な settings をそのまま維持する。
-      setCommitError(
-        "指定した文字数・行数では、現在の余白に収まる版面になりません。値を見直してください。"
-      );
-      return;
+    let candidate: PageSettings | null;
+
+    if (settings.layoutMode === "capacity") {
+      // TSP-LOOP-031: 天地・ノド・小口は個別入力させず、「版面の位置」
+      // （3×3アンカー + 基準余白最大2個）から一括算出する。
+      const verticalRaw = verticalAnchorDraft.trim();
+      const horizontalRaw = horizontalAnchorDraft.trim();
+      if (position.vertical !== "center" && verticalRaw === "") {
+        setCommitError(`${VERTICAL_ANCHOR_LABELS[position.vertical]}の余白を入力してください。`);
+        return;
+      }
+      if (position.horizontal !== "center" && horizontalRaw === "") {
+        setCommitError(`${HORIZONTAL_ANCHOR_LABELS[position.horizontal]}の余白を入力してください。`);
+        return;
+      }
+      const verticalAnchorMargin = verticalRaw === "" ? 0 : Number(verticalRaw);
+      const horizontalAnchorMargin = horizontalRaw === "" ? 0 : Number(horizontalRaw);
+      if (!Number.isFinite(verticalAnchorMargin) || !Number.isFinite(horizontalAnchorMargin)) {
+        setCommitError("数値として認識できない値があります。");
+        return;
+      }
+
+      const derived = deriveFrameMargins({
+        paperSize: settings.paperSize,
+        fontSizePt: parsed.fontSizePt,
+        lineHeightRatio: parsed.lineHeightRatio,
+        columnCount: settings.columnCount,
+        columnGapMm: parsed.columnGapMm,
+        charsPerLine: parsed.charsPerLine,
+        linesPerColumn: parsed.linesPerColumn,
+        position,
+        verticalAnchorMargin,
+        horizontalAnchorMargin,
+      });
+      if (!derived.ok) {
+        // §5 INVALID STATE CONTRACT: 無音clampせず、変更全体を丸ごと不採用に
+        // して直前の正常な settings をそのまま維持する。
+        setCommitError(derived.reason);
+        return;
+      }
+      candidate = {
+        ...settings,
+        marginTop: derived.marginTop,
+        marginBottom: derived.marginBottom,
+        marginGutter: derived.marginGutter,
+        marginOuter: derived.marginOuter,
+        fontSizePt: parsed.fontSizePt,
+        lineHeightRatio: parsed.lineHeightRatio,
+        columnGapMm: parsed.columnGapMm,
+        charsPerLine: parsed.charsPerLine,
+        linesPerColumn: parsed.linesPerColumn,
+      };
+    } else {
+      const rawCandidate: PageSettings = {
+        ...settings,
+        marginTop: parsed.marginTop,
+        marginBottom: parsed.marginBottom,
+        marginGutter: parsed.marginGutter,
+        marginOuter: parsed.marginOuter,
+        fontSizePt: parsed.fontSizePt,
+        lineHeightRatio: parsed.lineHeightRatio,
+        columnGapMm: parsed.columnGapMm,
+        charsPerLine: parsed.charsPerLine,
+        linesPerColumn: parsed.linesPerColumn,
+      };
+      candidate = applyLayoutModeAdjustment(rawCandidate, "marginTop");
+      if (!candidate) {
+        setCommitError("この余白では文字数・行数を計算できません。値を見直してください。");
+        return;
+      }
     }
 
     const candidateLayout = computePageLayout(candidate);
@@ -434,6 +604,12 @@ export default function PageSettingsPanel({
             " です。入力値を自動調整しました。"
         : null,
     );
+    if (settings.layoutMode === "capacity") {
+      // このApplyが原因で settings.marginTop 等が変わっても、次の同期
+      // effectで position/anchor を再推定してユーザーの選択を上書きしない
+      // （justCommittedPositionRef宣言のコメント参照）。
+      justCommittedPositionRef.current = true;
+    }
     onChange(committed);
   };
 
@@ -665,31 +841,47 @@ export default function PageSettingsPanel({
           </div>
         </div>
 
-        <MarginField
-          label="天（上）"
-          value={draft.marginTop}
-          onChange={(v) => setDraftField("marginTop", v)}
-          onKeyDown={handleDraftKeyDown}
-        />
-        <MarginField
-          label="地（下）"
-          value={draft.marginBottom}
-          onChange={(v) => setDraftField("marginBottom", v)}
-          onKeyDown={handleDraftKeyDown}
-        />
-        <MarginField
-          label="ノド（閉じ側）"
-          value={draft.marginGutter}
-          onChange={(v) => setDraftField("marginGutter", v)}
-          onKeyDown={handleDraftKeyDown}
-        />
-        <MarginField
-          label="小口（外側）"
-          value={draft.marginOuter}
-          onChange={(v) => setDraftField("marginOuter", v)}
-          onKeyDown={handleDraftKeyDown}
-          disabled={settings.layoutMode === "capacity"}
-        />
+        {settings.layoutMode === "margin" ? (
+          <>
+            <MarginField
+              label="天（上）"
+              value={draft.marginTop}
+              onChange={(v) => setDraftField("marginTop", v)}
+              onKeyDown={handleDraftKeyDown}
+            />
+            <MarginField
+              label="地（下）"
+              value={draft.marginBottom}
+              onChange={(v) => setDraftField("marginBottom", v)}
+              onKeyDown={handleDraftKeyDown}
+            />
+            <MarginField
+              label="ノド（閉じ側）"
+              value={draft.marginGutter}
+              onChange={(v) => setDraftField("marginGutter", v)}
+              onKeyDown={handleDraftKeyDown}
+            />
+            <MarginField
+              label="小口（外側）"
+              value={draft.marginOuter}
+              onChange={(v) => setDraftField("marginOuter", v)}
+              onKeyDown={handleDraftKeyDown}
+            />
+          </>
+        ) : (
+          <div className="col-span-2 sm:col-span-4">
+            <TextFramePositionField
+              position={position}
+              onPositionChange={setPositionField}
+              verticalAnchorValue={verticalAnchorDraft}
+              onVerticalAnchorChange={setVerticalAnchorField}
+              horizontalAnchorValue={horizontalAnchorDraft}
+              onHorizontalAnchorChange={setHorizontalAnchorField}
+              onKeyDown={handleDraftKeyDown}
+              derivedPreview={derivedPreview}
+            />
+          </div>
+        )}
 
         <label className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">フォント</span>
@@ -765,46 +957,82 @@ export default function PageSettingsPanel({
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">1行の文字数</span>
-          <input
-            type="number"
-            min={10}
-            max={60}
-            value={draft.charsPerLine}
-            disabled={settings.layoutMode === "margin"}
-            onChange={(e) => setDraftField("charsPerLine", e.target.value)}
-            onKeyDown={handleDraftKeyDown}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
-          />
-        </label>
+        {settings.layoutMode === "margin" ? (
+          // TSP-LOOP-031B: 余白モードでは1行の文字数・1段の行数を独立入力
+          // させない（隠れた別設定として残さない）——draft の余白から
+          // 実際に入る最大値を読み取り専用サマリーとして示す。
+          <div className="col-span-2 flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs text-ink/60">この設定で入る本文</span>
+            {marginCapacityPreview?.ok ? (
+              <>
+                <span className="text-sm font-medium text-ink">
+                  {marginCapacityPreview.charsPerLine}字 × {marginCapacityPreview.linesPerColumn}行
+                </span>
+                <span className="text-[11px] text-ink/50">
+                  設定上の最大 {marginCapacityPreview.maxBodyCharsPerPage}字／ページ
+                </span>
+                {(marginCapacityPreview.charsPerLine !== displaySettings.charsPerLine ||
+                  marginCapacityPreview.linesPerColumn !== displaySettings.linesPerColumn) && (
+                  <span className="text-[11px] text-ink/50">
+                    現在 {displaySettings.charsPerLine}字×{displaySettings.linesPerColumn}行 → 反映後{" "}
+                    {marginCapacityPreview.charsPerLine}字×{marginCapacityPreview.linesPerColumn}行
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-red-600">{marginCapacityPreview?.reason ?? ""}</span>
+            )}
+          </div>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink/60">1行の文字数</span>
+              <input
+                type="number"
+                min={10}
+                max={60}
+                value={draft.charsPerLine}
+                onChange={(e) => setDraftField("charsPerLine", e.target.value)}
+                onKeyDown={handleDraftKeyDown}
+                className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              />
+            </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">1段の行数</span>
-          <input
-            type="number"
-            min={5}
-            max={40}
-            value={draft.linesPerColumn}
-            disabled={settings.layoutMode === "margin"}
-            onChange={(e) => setDraftField("linesPerColumn", e.target.value)}
-            onKeyDown={handleDraftKeyDown}
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
-          />
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink/60">1段の行数</span>
+              <input
+                type="number"
+                min={5}
+                max={40}
+                value={draft.linesPerColumn}
+                onChange={(e) => setDraftField("linesPerColumn", e.target.value)}
+                onKeyDown={handleDraftKeyDown}
+                className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              />
+            </label>
+          </>
+        )}
 
-        {/* grid-cols-4 上で「段間mm・1行の文字数・1段の行数」が3枠を占め、
-            このセルが同じ行の空いた4枠目へ自然に収まる（col-spanなし）。 */}
+        {/* grid-cols-4 上で「段間mm・(1行の文字数・1段の行数 or 本文サマリー)」が
+            2〜3枠を占め、このセルが同じ行の空いた枠へ自然に収まる（col-spanなし）。 */}
         <div className="flex flex-col justify-end gap-1">
           <button
             type="button"
             onClick={commitDraft}
-            className="cursor-pointer select-none rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90"
+            disabled={
+              (settings.layoutMode === "capacity" && derivedPreview !== null && !derivedPreview.ok) ||
+              (settings.layoutMode === "margin" && marginCapacityPreview !== null && !marginCapacityPreview.ok)
+            }
+            className="cursor-pointer select-none rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             設定を反映
           </button>
           {commitError ? (
             <span className="text-xs text-red-600">{commitError}</span>
+          ) : settings.layoutMode === "capacity" && derivedPreview && !derivedPreview.ok ? (
+            <span className="text-xs text-red-600">{derivedPreview.reason}</span>
+          ) : settings.layoutMode === "margin" && marginCapacityPreview && !marginCapacityPreview.ok ? (
+            <span className="text-xs text-red-600">{marginCapacityPreview.reason}</span>
           ) : commitNote ? (
             <span className="text-xs text-ink/60">{commitNote}</span>
           ) : isDraftDirty ? (
@@ -1202,5 +1430,103 @@ function MarginField({
         className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
       />
     </label>
+  );
+}
+
+/**
+ * TSP-LOOP-031: 「文字数・行数から設定する」モード専用の版面配置UI。
+ * TateSpun独自の3×3「版面の位置」セレクタ + 選択に応じた基準余白入力
+ * （最大2個、中央軸は入力自体を出さない — §8.2）+ 自動算出される反対側の
+ * 余白のライブサマリー。Adobe InDesignの「グリッド開始位置」ドロップダウン
+ * とは構成・名称・見た目を独自に設計している（§9 ORIGINALITY GUARDRAIL）。
+ */
+function TextFramePositionField({
+  position,
+  onPositionChange,
+  verticalAnchorValue,
+  onVerticalAnchorChange,
+  horizontalAnchorValue,
+  onHorizontalAnchorChange,
+  onKeyDown,
+  derivedPreview,
+}: {
+  position: TextFramePosition;
+  onPositionChange: (next: TextFramePosition) => void;
+  verticalAnchorValue: string;
+  onVerticalAnchorChange: (value: string) => void;
+  horizontalAnchorValue: string;
+  onHorizontalAnchorChange: (value: string) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  derivedPreview: ReturnType<typeof deriveFrameMargins> | null;
+}) {
+  const summaryParts: string[] = [];
+  if (derivedPreview?.ok) {
+    if (position.vertical === "top") summaryParts.push(`地 ${derivedPreview.marginBottom.toFixed(1)}mm`);
+    if (position.vertical === "bottom") summaryParts.push(`天 ${derivedPreview.marginTop.toFixed(1)}mm`);
+    if (position.vertical === "center") summaryParts.push(`天地 ${derivedPreview.marginTop.toFixed(1)}mm（均等）`);
+    if (position.horizontal === "gutter") summaryParts.push(`小口 ${derivedPreview.marginOuter.toFixed(1)}mm`);
+    if (position.horizontal === "outer") summaryParts.push(`ノド ${derivedPreview.marginGutter.toFixed(1)}mm`);
+    if (position.horizontal === "center") summaryParts.push(`ノド・小口 ${derivedPreview.marginGutter.toFixed(1)}mm（均等）`);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded border border-ink/15 bg-ink/[0.03] p-3 sm:flex-row sm:items-start sm:gap-4">
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-xs text-ink/60">版面の位置</span>
+        <div role="radiogroup" aria-label="版面の位置" className="grid w-[132px] grid-cols-3 gap-1">
+          {VERTICAL_ANCHORS.flatMap((vertical) =>
+            HORIZONTAL_ANCHORS.map((horizontal) => {
+              const cell: TextFramePosition = { vertical, horizontal };
+              const selected = positionsEqual(position, cell);
+              return (
+                <button
+                  key={`${vertical}-${horizontal}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={positionLabel(cell)}
+                  title={positionLabel(cell)}
+                  onClick={() => onPositionChange(cell)}
+                  className={`h-10 w-10 cursor-pointer select-none rounded border text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    selected
+                      ? "border-accent bg-accent text-paper-ink"
+                      : "border-ink/20 bg-base text-ink/40 hover:bg-ink/10"
+                  }`}
+                >
+                  {selected ? "●" : ""}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <span className="text-xs font-medium text-ink">{positionLabel(position)}</span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2">
+        <div className="flex flex-wrap gap-3">
+          {position.vertical !== "center" && (
+            <MarginField
+              label={`${VERTICAL_ANCHOR_LABELS[position.vertical]}の余白`}
+              value={verticalAnchorValue}
+              onChange={onVerticalAnchorChange}
+              onKeyDown={onKeyDown}
+            />
+          )}
+          {position.horizontal !== "center" && (
+            <MarginField
+              label={`${HORIZONTAL_ANCHOR_LABELS[position.horizontal]}の余白`}
+              value={horizontalAnchorValue}
+              onChange={onHorizontalAnchorChange}
+              onKeyDown={onKeyDown}
+            />
+          )}
+        </div>
+        {position.vertical === "center" && position.horizontal === "center" ? (
+          <span className="text-xs text-ink/60">天地・ノド・小口とも自動的に均等配分されます。</span>
+        ) : derivedPreview?.ok ? (
+          <span className="text-xs text-ink/60">自動計算: {summaryParts.join(" / ")}</span>
+        ) : null /* invalid-state reason is shown once, next to 「設定を反映」below */}
+      </div>
+    </div>
   );
 }
