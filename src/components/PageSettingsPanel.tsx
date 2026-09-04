@@ -85,6 +85,19 @@ type DraftValues = Record<DraftFieldKey, string>;
 const toDraftValues = (settings: PageSettings): DraftValues =>
   Object.fromEntries(DRAFT_FIELD_KEYS.map((key) => [key, String(settings[key])])) as DraftValues;
 
+/**
+ * TSP-LOOP-029 issue C: 1行の文字数 / 1段の行数 are TARGET values — the physical
+ *版面 (paper − 余白, at the chosen font / line-height) may hold fewer, and
+ * `computePageLayout` clamps them. The panel must show that clamped EFFECTIVE
+ * value so it never disagrees with the Preview status / pagination / export
+ * ("40字×17行 と表示しているのに実際は 39字×15行 で組む" was the bug).
+ */
+const effectiveGrid = (settings: PageSettings, layout: PageLayout): PageSettings => ({
+  ...settings,
+  charsPerLine: layout.charsPerLine,
+  linesPerColumn: layout.linesPerColumn,
+});
+
 // 用紙サイズ・段数（1段/2段）の組み合わせごとの版面パラメータ一式を
 // PAPER_SIZE_TEMPLATES の cols1/cols2 から取り出して settings に反映する。
 // これらの値（marginTop/Bottom/Gutter/Outer=mm, fontSizePt=pt）は用紙が
@@ -281,16 +294,21 @@ export default function PageSettingsPanel({
   // computePageLayout/paginateTokens を毎回再計算させると、値によっては
   // プレビュー全体が固まる（UXとして危険）ため、ここではdraftだけを更新し、
   // 「設定を反映」（またはEnter）を押した時に限り一括で settings へコミットする。
-  const [draft, setDraft] = useState<DraftValues>(() => toDraftValues(settings));
+  // TSP-LOOP-029 issue C: seed / sync the draft from the EFFECTIVE grid so the
+  // input never shows a target (40) the 版面 can't hold while Preview shows 39.
+  const displaySettings = effectiveGrid(settings, layout);
+  const [draft, setDraft] = useState<DraftValues>(() => toDraftValues(displaySettings));
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [commitNote, setCommitNote] = useState<string | null>(null);
 
   // settings側のこれらのフィールドが実際に変わった時だけ（用紙サイズpreset
   // 適用・段数変更・このパネル自身のコミット成功時など）draftを追従させる。
   // settings全体を依存にすると、他パネル発の無関係な変更（例:
   // PreviewPaneのノンブル非表示チェック）のたびに入力中のdraftが上書きされてしまう。
   useEffect(() => {
-    setDraft(toDraftValues(settings));
+    setDraft(toDraftValues(effectiveGrid(settings, layout)));
     setCommitError(null);
+    setCommitNote(null);
   }, [
     settings.marginTop,
     settings.marginBottom,
@@ -301,14 +319,21 @@ export default function PageSettingsPanel({
     settings.columnGapMm,
     settings.charsPerLine,
     settings.linesPerColumn,
+    // effective values can move without a settings change (font/margin edits),
+    // so keep the input in sync with what Preview actually composes.
+    layout.charsPerLine,
+    layout.linesPerColumn,
   ]);
 
   const setDraftField = (key: DraftFieldKey, raw: string) => {
     setDraft((prev) => ({ ...prev, [key]: raw }));
     setCommitError(null);
+    setCommitNote(null);
   };
 
-  const isDraftDirty = DRAFT_FIELD_KEYS.some((key) => draft[key] !== String(settings[key]));
+  const isDraftDirty = DRAFT_FIELD_KEYS.some(
+    (key) => draft[key] !== String(displaySettings[key]),
+  );
 
   const commitDraft = () => {
     const parsed = {} as Record<DraftFieldKey, number>;
@@ -389,8 +414,27 @@ export default function PageSettingsPanel({
       return;
     }
 
+    // TSP-LOOP-029 issue C: store the EFFECTIVE grid (what pagination / Preview /
+    // export actually use), never a target the 版面 can't hold. Tell the user
+    // when their value was adjusted, and by what.
+    const committed: PageSettings = {
+      ...candidate,
+      charsPerLine: candidateLayout.charsPerLine,
+      linesPerColumn: candidateLayout.linesPerColumn,
+    };
+    const charsClamped = candidate.charsPerLine > candidateLayout.charsPerLine;
+    const linesClamped = candidate.linesPerColumn > candidateLayout.linesPerColumn;
     setCommitError(null);
-    onChange(candidate);
+    setCommitNote(
+      charsClamped || linesClamped
+        ? "この余白・文字サイズでは、" +
+            (charsClamped ? `1行 最大 ${candidateLayout.charsPerLine} 字` : "") +
+            (charsClamped && linesClamped ? "・" : "") +
+            (linesClamped ? `1段 最大 ${candidateLayout.linesPerColumn} 行` : "") +
+            " です。入力値を自動調整しました。"
+        : null,
+    );
+    onChange(committed);
   };
 
   const handleDraftKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -761,6 +805,8 @@ export default function PageSettingsPanel({
           </button>
           {commitError ? (
             <span className="text-xs text-red-600">{commitError}</span>
+          ) : commitNote ? (
+            <span className="text-xs text-ink/60">{commitNote}</span>
           ) : isDraftDirty ? (
             <span className="text-xs text-ink/50">未反映の変更があります</span>
           ) : null}

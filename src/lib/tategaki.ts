@@ -444,6 +444,18 @@ export function isLineEndProhibited(char: string): boolean {
 }
 
 /**
+ * TSP-LOOP-029 issue A — ぶら下げ組: the句読点 that may hang in ONE dedicated
+ * slot past a full line's normal capacity instead of pushing a character to
+ * the next line (追い出し). Deliberately ONLY 。 and 、 (both half- and
+ * full-width forms) — brackets / ！？ / small kana keep the existing 追い出し.
+ */
+const HANGING_PUNCTUATION = new Set("、。，．");
+
+export function isHangingPunctuation(char: string): boolean {
+  return HANGING_PUNCTUATION.has(char);
+}
+
+/**
  * Adjusts a naive split point `splitIndex` (`value.slice(minIndex,
  * splitIndex)` is about to become this line's content) so it never leaves
  * an opening bracket as the line's last character, nor a closing bracket /
@@ -781,6 +793,32 @@ function paginateTokensByLines(
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
         }
+
+        // TSP-LOOP-029 issue A — ぶら下げ組: the naïve fill reached the line's
+        // capacity and the very next source character is a LONE 。/、. Keep it
+        // on this line in the dedicated hanging slot (drawn past charsPerLine
+        // by the renderer, into the 天地 margin) instead of letting 追い出し
+        // push a character onto the next line. It consumes its source offset
+        // exactly once and does NOT count toward lineChars, so the next line's
+        // capacity is unchanged.
+        if (
+          j - i >= room &&
+          lineChars + (j - i) >= lineBudget &&
+          j < value.length &&
+          isHangingPunctuation(value[j]) &&
+          !isHangingPunctuation(value[j + 1] ?? "")
+        ) {
+          if (j > i) {
+            placeToken({ type: "text", value: value.slice(i, j) });
+            lineChars += j - i;
+          }
+          placeToken({ type: "text", value: value[j] });
+          i = j + 1;
+          breakLine();
+          lineFilledByWrap = true;
+          continue;
+        }
+
         j = adjustLineSplit(value, i, j, !isFreshLine);
         if (j > i) {
           placeToken({ type: "text", value: value.slice(i, j) });
@@ -979,6 +1017,23 @@ export function computePageSourceRanges(
         let j = i;
         while (j < value.length && value[j] !== "\n" && j - i < room) {
           j += 1;
+        }
+        // TSP-LOOP-029 issue A — mirror of paginateTokensByLines's ぶら下げ
+        // branch: a lone hanging 。/、 stays on the full line, so its source
+        // offset belongs to THIS page's range, not the next line's.
+        if (
+          j - i >= room &&
+          lineChars + (j - i) >= lineBudget &&
+          j < value.length &&
+          isHangingPunctuation(value[j]) &&
+          !isHangingPunctuation(value[j + 1] ?? "")
+        ) {
+          mark(start + i, start + j + 1);
+          lineChars += j - i;
+          i = j + 1;
+          breakLine();
+          lineFilledByWrap = true;
+          continue;
         }
         j = adjustLineSplit(value, i, j, !isFreshLine);
         if (j > i) {

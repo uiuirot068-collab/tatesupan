@@ -57,16 +57,20 @@ check(
 /* ---------- 4. clip no longer coincides with the grid extent ---------- */
 
 check(
-  "4. FixedSlotLine container: overflow clip + a >=1-glyph clip margin (was bare `hidden`)",
+  "4. FixedSlotLine container: overflow clip + a clip margin of one slot + one glyph (was bare `hidden`; slot term added for the issue-A hanging 。/、)",
   !!pageCard &&
-    /overflow:\s*"clip"[\s\S]{0,120}overflowClipMargin:\s*`\$\{Math\.ceil\(fontSizePx\)\}px`/.test(pageCard),
+    /overflow:\s*"clip"[\s\S]{0,160}overflowClipMargin:\s*`\$\{Math\.ceil\(slotExtentPx \+ fontSizePx\)\}px`/.test(pageCard),
 );
 check(
-  "5. text-area container: same overflow clip + clip margin",
+  "5. text-area container: same overflow clip + one-slot-plus-one-glyph clip margin (canonical pitch)",
   !!pageCard &&
     (() => {
       const m = pageCard.match(/const textContainerStyle: CSSProperties = \{[\s\S]*?\};/);
-      return !!m && /overflow:\s*"clip"/.test(m[0]) && /overflowClipMargin:\s*`\$\{Math\.ceil\(fontSizePx\)\}px`/.test(m[0]);
+      return (
+        !!m &&
+        /overflow:\s*"clip"/.test(m[0]) &&
+        /overflowClipMargin:\s*`\$\{Math\.ceil\(canonicalSlotExtentPx \+ fontSizePx\)\}px`/.test(m[0])
+      );
     })(),
 );
 check(
@@ -181,6 +185,97 @@ check(
     /export const PX_PER_MM = 2\.2;/.test(pageLayout) &&
     /export const PDF_EXPORT_DPI = 600;/.test(pageLayout) &&
     /export const PRINT_JPG_LONG_SIDE_PX = 1600;/.test(pageLayout),
+);
+
+/* ---------- 16. issue A — ぶら下げ組 (hanging 。/、), scoped and mirrored ---------- */
+
+const pageSettingsPanel = read("src/components/PageSettingsPanel.tsx");
+
+check(
+  "16. isHangingPunctuation covers ONLY 。、，． — no brackets / ！？ / small kana / ー",
+  !!tategaki &&
+    /const HANGING_PUNCTUATION = new Set\("、。，．"\)/.test(tategaki) &&
+    /export function isHangingPunctuation\(char: string\): boolean/.test(tategaki) &&
+    !/HANGING_PUNCTUATION[\s\S]{0,40}[「『（【〈《〔］｝！？ー々]/.test(tategaki),
+);
+check(
+  "17. paginateTokensByLines hangs a LONE trailing 。/、 on the full line (not a run of them), consuming it once",
+  !!tategaki &&
+    (() => {
+      const fn = tgCode.slice(
+        tgCode.indexOf("function paginateTokensByLines"),
+        tgCode.indexOf("export function computePageSourceRanges"),
+      );
+      return (
+        /isHangingPunctuation\(value\[j\]\)/.test(fn) &&
+        /!isHangingPunctuation\(value\[j \+ 1\] \?\? ""\)/.test(fn) &&
+        /placeToken\(\{ type: "text", value: value\[j\] \}\);/.test(fn) &&
+        /i = j \+ 1;/.test(fn)
+      );
+    })(),
+);
+check(
+  "18. computePageSourceRanges mirrors the hang branch — the 。/、 offset is marked on THIS page exactly once, cursor advances past it",
+  !!tategaki &&
+    (() => {
+      const fn = tgCode.slice(tgCode.indexOf("export function computePageSourceRanges"));
+      return (
+        /isHangingPunctuation\(value\[j\]\)/.test(fn) &&
+        /!isHangingPunctuation\(value\[j \+ 1\] \?\? ""\)/.test(fn) &&
+        /mark\(start \+ i, start \+ j \+ 1\);/.test(fn) &&
+        /i = j \+ 1;/.test(fn)
+      );
+    })(),
+);
+check(
+  "19. buildLineSlots keeps exactly ONE over-capacity slot iff it is a lone hanging 。/、 (slotIndex === charsPerLine); ordinary letters still filtered",
+  !!pageCard &&
+    /const overCap = slots\.filter\(\(s\) => s\.slotIndex >= charsPerLine\)/.test(pageCard) &&
+    /overCap\.length === 1 &&\s*\n?\s*overCap\[0\]\.slotIndex === charsPerLine &&\s*\n?\s*isHangingPunctuation\(overCap\[0\]\.text\)/.test(pageCard) &&
+    /slot\.slotIndex < charsPerLine \|\| slot === hangingSlot/.test(pageCard) &&
+    /hangingSlotIndex: hangingSlot \? hangingSlot\.slotIndex : null/.test(pageCard),
+);
+check(
+  "20. the hanging slot is drawn on the SAME rounded ladder (slotTop) one cell past the grid, tagged data-hanging-punctuation",
+  !!pageCard &&
+    /data-hanging-punctuation=\{slot\.slotIndex === hangingSlotIndex \? "" : undefined\}/.test(pageCard) &&
+    /top: slotTop\(slot\.slotIndex\)/.test(pageCard),
+);
+check(
+  "21. hang branch never fires for an ordinary next char (guarded by isHangingPunctuation) and never zero-widths punctuation globally",
+  !!pageCard &&
+    !/letterSpacing:\s*`?-/.test(pcCode) &&
+    !/width:\s*0[^-.\d]/.test(pcCode.replace(/border[^;]*/g, "")),
+);
+
+/* ---------- 22. issue C — Page Settings shows the EFFECTIVE grid, never an unreachable target ---------- */
+
+check(
+  "22. DEFAULT_PAGE_SETTINGS is self-consistent with its own geometry (39×15, not the old clamp-bait 40×17)",
+  !!pageLayout &&
+    /charsPerLine:\s*39,/.test(pageLayout) &&
+    /linesPerColumn:\s*15,/.test(pageLayout) &&
+    !/charsPerLine:\s*40,/.test(pageLayout) &&
+    !/linesPerColumn:\s*17,/.test(pageLayout),
+);
+check(
+  "23. PageSettingsPanel seeds / syncs / dirties the draft from the EFFECTIVE grid (layout.charsPerLine / linesPerColumn), so the input can't show 40 while Preview composes 39",
+  !!pageSettingsPanel &&
+    /const effectiveGrid = \(settings: PageSettings, layout: PageLayout\): PageSettings/.test(pageSettingsPanel) &&
+    /charsPerLine: layout\.charsPerLine/.test(pageSettingsPanel) &&
+    /linesPerColumn: layout\.linesPerColumn/.test(pageSettingsPanel) &&
+    /const displaySettings = effectiveGrid\(settings, layout\)/.test(pageSettingsPanel) &&
+    /toDraftValues\(effectiveGrid\(settings, layout\)\)/.test(pageSettingsPanel) &&
+    /draft\[key\] !== String\(displaySettings\[key\]\)/.test(pageSettingsPanel),
+);
+check(
+  "24. commitDraft stores the clamped effective grid AND surfaces a note when the user's value was auto-adjusted (never a silent clamp)",
+  !!pageSettingsPanel &&
+    /const committed: PageSettings = \{[\s\S]{0,160}charsPerLine: candidateLayout\.charsPerLine,[\s\S]{0,80}linesPerColumn: candidateLayout\.linesPerColumn,/.test(pageSettingsPanel) &&
+    /const charsClamped = candidate\.charsPerLine > candidateLayout\.charsPerLine/.test(pageSettingsPanel) &&
+    /setCommitNote\(/.test(pageSettingsPanel) &&
+    /onChange\(committed\)/.test(pageSettingsPanel) &&
+    !/onChange\(candidate\)/.test(pageSettingsPanel),
 );
 
 /* ---------- done ---------- */

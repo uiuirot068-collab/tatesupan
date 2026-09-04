@@ -82,36 +82,45 @@ await page.evaluate(async (s) => {
 }, text.slice(0, 300));
 await sleep(2500);
 
-// Force every page into the DOM: scroll the preview scroller to the bottom in
-// steps so any virtualised page mounts, then read all lines in DOM order.
-await page.evaluate(async () => {
-  const sc =
-    document.querySelector(".page-card")?.closest("[data-export-scale-root]")
-      ?.parentElement ||
-    document.querySelector('[class*="overflow"]');
-  for (let k = 0; k < 30; k++) {
-    (sc || document.scrollingElement).scrollBy(0, 4000);
-    await new Promise((r) => setTimeout(r, 120));
-  }
-});
-await sleep(600);
-const rendered = await page.evaluate(() => {
-  // page-cards can be laid out as 見開き spreads (right page before left in
-  // reading order but not always in DOM order) — order them by their nombre.
-  const cards = [...document.querySelectorAll(".page-card")].map((card, domIdx) => {
-    const nombre = card.querySelector("[data-nombre]")?.textContent?.trim();
-    const n = nombre && /^\d+$/.test(nombre) ? +nombre : domIdx + 1;
-    let text = "";
-    card.querySelectorAll(".tategaki-line").forEach((ln) => {
-      [...ln.children].forEach((sp) => {
-        text += sp.textContent || "";
+// Force every page into the DOM and read it while it is mounted. Aggressive
+// blind scrollBy() on a guessed scroller can over-shoot and unmount a
+// virtualised page before it is read (silently losing that page's tail) —
+// instead walk every .page-card, scroll IT into view, wait, then read it.
+// page-cards can be laid out as 見開き spreads whose DOM order is not reading
+// order, so key each read by its nombre and re-assemble in nombre order.
+const byNombre = new Map();
+for (let pass = 0; pass < 3; pass++) {
+  const chunk = await page.evaluate(async () => {
+    const out = [];
+    const cards = [...document.querySelectorAll(".page-card")];
+    for (let idx = 0; idx < cards.length; idx++) {
+      const card = cards[idx];
+      card.scrollIntoView({ block: "center" });
+      await new Promise((r) => setTimeout(r, 180));
+      const nombre = card.querySelector("[data-nombre]")?.textContent?.trim();
+      const n = nombre && /^\d+$/.test(nombre) ? +nombre : null;
+      let text = "";
+      card.querySelectorAll(".tategaki-line").forEach((ln) => {
+        [...ln.children].forEach((sp) => {
+          text += sp.textContent || "";
+        });
       });
-    });
-    return { n, domIdx, text };
+      out.push({ n, domIdx: idx, text });
+    }
+    return out;
   });
-  cards.sort((a, b) => a.n - b.n || a.domIdx - b.domIdx);
-  return cards.map((c) => c.text).join("");
-});
+  for (const c of chunk) {
+    const key = c.n != null ? `n${c.n}` : `d${c.domIdx}`;
+    const prev = byNombre.get(key);
+    // keep the longest read seen for a page (a mid-virtualisation read can be
+    // short; a fully mounted read is complete)
+    if (!prev || c.text.length > prev.text.length) byNombre.set(key, c);
+  }
+}
+const rendered = [...byNombre.values()]
+  .sort((a, b) => (a.n ?? a.domIdx + 1) - (b.n ?? b.domIdx + 1) || a.domIdx - b.domIdx)
+  .map((c) => c.text)
+  .join("");
 const pageCount = await page.evaluate(
   () => document.querySelectorAll(".page-card").length,
 );
