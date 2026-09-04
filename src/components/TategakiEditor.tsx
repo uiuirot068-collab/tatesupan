@@ -35,6 +35,8 @@ import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
 import HelpModal from "./HelpModal";
+import PdfExportNoticeModal from "./PdfExportNoticeModal";
+import { useShowPdfFilenameNotice } from "@/hooks/useShowPdfFilenameNotice";
 import BetaFeedbackModal from "./BetaFeedbackModal";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
@@ -163,6 +165,13 @@ export default function TategakiEditor({
   // 「本文の何ページ後」入力の目安・範囲外警告に使う。
   const [bodyPageCount, setBodyPageCount] = useState(0);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  // TSP-LOOP-028: post-export filename reminder. The notice is app-level (not
+  // scoped to the preview pane) so it stays visible whatever the phone
+  // workspace does after export. `showPdfFilenameNotice` is a per-device
+  // localStorage preference — default ON, never manuscript / cloud data.
+  const [showPdfFilenameNotice, setShowPdfFilenameNotice] =
+    useShowPdfFilenameNotice();
+  const [isPdfNoticeOpen, setIsPdfNoticeOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
@@ -711,6 +720,9 @@ export default function TategakiEditor({
             onImageLayerChange={handleImageLayerChange}
             cursorIndex={cursorIndex}
             onBodyPageCountChange={setBodyPageCount}
+            onPdfExportSuccess={() => {
+              if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
+            }}
             // On a phone showing the プレビュー workspace the preview is always
             // full — the collapse rail is a desktop-only affordance.
             isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
@@ -757,6 +769,18 @@ export default function TategakiEditor({
             setIsSearchOpen(false);
           }}
           onClose={() => setIsSearchOpen(false)}
+        />
+      )}
+
+      {isPdfNoticeOpen && (
+        <PdfExportNoticeModal
+          initialKeepShowing={showPdfFilenameNotice}
+          onClose={(keepShowing) => {
+            // Every dismiss path (閉じる / ✕ / Escape / backdrop) commits the
+            // checkbox exactly as it stands — a toggle alone never persists.
+            setShowPdfFilenameNotice(keepShowing);
+            setIsPdfNoticeOpen(false);
+          }}
         />
       )}
 
