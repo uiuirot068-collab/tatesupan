@@ -1,8 +1,9 @@
 # TateSpun TYPESETTING ENGINE v2 RULES MASTER
 
 - Status: APPROVED BASELINE
-- Version: v1.6
+- Version: v1.7
 - Established: 2026-09-05
+- Updated: 2026-09-06 — Phase 3 P3-L02 Canonical Logical Typesetting Core Contract FROZEN for implementation planning (§27): Core/Normalizer/Measurement-Provider/Renderer authority boundaries made explicit (Core decides composition; Renderer never re-decides a break, ruby grouping, or logical position); source addressing fixed at Unicode code-point offsets with grapheme-safe unit boundaries; canonical geometry fixed at integer micrometer ticks (1 tick = 0.001mm, hardened from an initial 0.01mm proposal) with mm as the display/documentation unit only; Japanese character-class/kinsoku rules represented as versioned data, not conditionals; BreakOpportunity/BreakDecision separated (candidate vs. actual, with reasons); ruby ATOMIC/JUKUGO capability frozen, with jukugo segmentation *discovery* explicitly placed upstream of the Core (Normalizer/Logical Analysis, mechanism itself not yet chosen — new Phase 3 open item P3-O14) while the Core only ever honors provided segment boundaries and never guesses a split; ruby class-aware overhang mechanism frozen per HG-4 (exact budget values remain the pre-existing open item); Natural Pitch, decision trace, determinism, versioning, and a structured Warning/Error/HOLD model (Publication approval may be withheld) all made contractual; 12 Core Invariants recorded, plus a 13th precision invariant added at this closeout. This is a documentation/contract freeze — **Phase 3 Core engine implementation has not begun.** New Phase 3 open items P3-O14 (jukugo segmentation mechanism) and P3-O15 (group-ruby's own break-rule, carried from P3-L01) added; neither blocks Core Contract review or a future Core implementation plan.
 - Updated: 2026-09-05 — Phase 3 P3-L01 Japanese Rule Freeze Human Gate CLOSED (HG-1–HG-4, §26): kinsoku line-start prohibition for cl-05 middle-dots and cl-12/13 abbreviations set to jlreq's stricter base-level policy as the v2 Core default (superseding legacy looser behavior); jukugo-ruby internal-breakability Core capability approved (Phase 2's atomic mono-ruby/group-ruby behavior retained, not replaced); character-class-aware ruby overhang budgets approved in principle, layered on the retained Phase 2 geometry clamp, with exact numeric budget values deliberately left open pending a future narrower Human decision; the prior invalid "jlreq §3.1.10" dash/ellipsis citation (§19/§24) is corrected — the real rule is verified via jlreq anchors `#cl-08`/`#notes_a3`. Phase 3 Open Items P3-O01/P3-O02/P3-O06 updated accordingly (P3-O01/P3-O06: resolved to Core-Contract-ready with one narrow residual item each; P3-O02: resolved). This is a rule/policy freeze, not Core code — Phase 3 Core implementation has not yet begun.
 - Updated: 2026-09-05 — repository/worktree/integration rule clarified
 - Updated: 2026-09-05 — Phase 0 Human Decisions frozen (HD-001–HD-009); Editor/Settings switching UI direction added; Memo-in-Editor requirement added; 柱/奥付 font inheritance + override requirement added
@@ -858,6 +859,12 @@ Engine v2は以下を満たして初めてProduction候補となる。
 64. HG-4 — character-class-aware ruby overhang budgets approved in principle, layered on top of the retained (not replaced) Phase 2 geometry clamp (§25.6); exact numeric budget/convention values explicitly NOT frozen, left open for a future narrower Human decision: YES (principle only)
 65. Dash/ellipsis semantic run-inseparability rule (cl-08) resolved with a corrected primary-source citation, superseding the invalid "jlreq §3.1.10" reference in §19/§24: YES
 
+2026-09-06 Phase 3 P3-L02 Core Contract freeze (see §27):
+
+66. Canonical Logical Typesetting Core Contract (Core/Renderer/Normalizer/Measurement-Provider authority, source model, Japanese rule data model, ruby ATOMIC/JUKUGO capability with segmentation explicitly upstream, Natural Pitch, decision trace, determinism, versioning, Warning/Error/HOLD model, 13 Core Invariants) FROZEN for implementation planning; no new Human Product Decision required — every choice traces to an already-frozen decision or a low-risk engineering default: YES
+67. Canonical geometry precision hardened to integer micrometer ticks (1 tick = 0.001mm), superseding the initial 0.01mm proposal: YES
+68. Jukugo-ruby segmentation *discovery* placed explicitly upstream of the Core (Normalizer/Logical Analysis); mechanism itself not yet chosen (new open item P3-O14); Core never guesses a segmentation split: YES
+
 ---
 
 # 19. CURRENT STATUS
@@ -889,8 +896,11 @@ COMPLETE (2026-09-05) — HD-015 through HD-021 recorded in §25. C1-NATURAL app
 Phase 3 P3-L01 Japanese Rule-Freeze Human Gate:
 COMPLETE (2026-09-05) — HG-1 through HG-4 recorded in §26. Full jlreq cl-01–cl-30 kinsoku class table and TateSpun-relevant break rules directly verified from the primary source; dash/ellipsis cl-08 inseparability rule recovered with a corrected citation (the old "§3.1.10" reference is retired, not merely re-flagged); kinsoku conformance-level defaults (cl-05, cl-12/13) set to jlreq's stricter base level; jukugo-ruby internal-breakability Core capability approved (Phase 2's atomic ruby behavior retained); ruby class-aware overhang approved in principle only, exact numeric budgets deliberately left open. Full evidence: `typesetting-v2/docs/standards/PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`, `P3_KINSOKU_RULE_FREEZE_CANDIDATE.md`, `P3_DASH_ELLIPSIS_RULE_FREEZE_CANDIDATE.md`, `P3_RUBY_STANDARDS_REVIEW.md`, `typesetting-v2/research/phase3/P3_L01_PRIMARY_SOURCE_LEDGER.md`, `typesetting-v2/research/PHASE3_LOOP_LOG.md`. This is a rule/policy freeze only — **Phase 3 Core implementation has not begun.**
 
+Phase 3 P3-L02 Core Contract:
+FROZEN for implementation planning (2026-09-06) — see §27. No Human Gate was required (every design choice was either a restatement of an already-frozen decision or a low-risk, evidence-backed engineering default). Full documents: `typesetting-v2/docs/core/TATESPUN_V2_CORE_CONTRACT.md`, `TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md`, `CORE_RESPONSIBILITY_MATRIX.md`, `CORE_INVARIANTS.md`. **Phase 3 Core engine implementation has NOT begun** — this is a contract/data-model freeze only.
+
 Next authorized action:
-Phase 3 — Core Typesetting Engine (Core Contract, P3-L02), informed by the now-largely-resolved `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md` (P3-O01/P3-O02/P3-O06 resolved or narrowed to Core-Contract-ready; remaining items are Renderer-level, Publication/Preview-technology, or Editor-side and do not block Core Contract per that register).
+Phase 3 — Core Implementation Plan (P3-L03), building against the frozen Core Contract (§27) and informed by `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md` (P3-O01/P3-O02/P3-O06 resolved or narrowed to Core-Contract-ready; P3-O14/P3-O15 newly added and non-blocking; remaining items are Renderer-level, Publication/Preview-technology, or Editor-side).
 
 Not yet authorized:
 - Engine v2 implementation in `src/` (Phase 3 begins in `typesetting-v2/` per §13, same as prior phases)
@@ -1322,6 +1332,72 @@ Master §19/§24で記録されていた「jlreq §3.1.10」という引用は�
 ## 26.5 Scope note
 
 本§26はPhase 3のルール・ポリシー凍結であり、Canonical Layout ModelのCore実装そのものではない。Phase 3 Core Contract（P3-L02）は本§26の内容を前提として開始できる状態にあるが、実装コードは本更新の時点で一切作成されていない。
+
+---
+
+# 27. PHASE 3 P3-L02 CANONICAL LOGICAL TYPESETTING CORE CONTRACT (v1.7)
+
+2026-09-06、Phase 3 P3-L02によりCanonical Logical Typesetting Core Contractが確定した。これはCore実装が完了したことを意味しない — **Phase 3 Coreのエンジン実装はまだ開始されていない。** 本節はContractの内容を承認・記録するものである。
+
+Full evidence: `typesetting-v2/docs/core/TATESPUN_V2_CORE_CONTRACT.md`（32節＋8ケースの検証付録）、`TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md`（疑似コード）、`CORE_RESPONSIBILITY_MATRIX.md`（責任分界）、`CORE_INVARIANTS.md`（INV-001〜INV-013）、生ログ `typesetting-v2/research/PHASE3_LOOP_LOG.md` P3-L02。
+
+## 27.1 Core / Renderer / Normalizer / Measurement Provider の権限境界
+
+C1-NATURAL（§25.1、既承認、本節では再検討しない）に基づき、以下を確定する：
+
+- **Logical Core**は、page/column/line構造、break決定、日本語組版規則の適用、ruby/TCY/dash/ellipsisの論理単位、source-mapped配置単位、決定論的な正準座標、およびlayout decision traceを所有する。
+- **Renderer**（Preview／Publication）は、すでに確定した配置の描画方法のみを所有する。Renderer は break決定・ruby分割・論理位置を独自に変更してはならない。
+- **Normalizer**（Core上流）は、TateSpun記法の認識（ルビ記法、手動改ページマーカー、画像マーカー）、source span生成、意味的正規化を担う。
+- **Measurement Provider**は、版のフォント測定・ルビ読み幅・画像固有サイズ等の事実を、バージョン管理された入力として供給する。Rendererが独自に再測定してlayoutを変更することは禁止する（INV-009）。
+
+## 27.2 Source addressing / grapheme安全性
+
+Source Spanのオフセット単位はUnicodeコードポイントとする（UTF-16コード単位でもgraphemeクラスタ単位でもない、意図的な決定）。LogicalUnitの境界は、拡張grapheme クラスタ境界より細かく分割してはならない（サロゲートペア・結合文字列・異体字セレクタ・絵文字ZWJシーケンスを破壊しない、INV-011）。
+
+## 27.3 正準ジオメトリ精度（0.001mm整数ティック）
+
+Canonical Layoutの物理ジオメトリ（座標・送り・行/段の範囲・ルビ範囲・残余スペース）は、**整数マイクロメートル・ティック（1ティック＝0.001mm）**として正準的に保持する。当初提案されていた0.01mmから、出版品質を最優先するMaster §3の原則に基づき精度を強化した。表示・診断用途では"mm"表記を用いてよいが、それは正準保存値ではない（INV-013）。Renderer側でのtick→px／tick→pt変換は、Renderer自身の描画境界でのみ行い、その変換結果がCanonical Layoutの決定にフィードバックされてはならない。
+
+## 27.4 日本語文字クラス／禁則のデータ駆動表現
+
+cl-01〜cl-30の文字クラス、HG-1／HG-2で確定した行頭禁則既定値、cl-08の分離禁止ペア規則、ぶら下げ組の適用範囲（cl-06／cl-07）は、すべて`RuleSetVersion`としてバージョン管理されたデータで表現し、`if (char === ...)`のような条件分岐の連鎖にしない。
+
+## 27.5 BreakOpportunity と BreakDecision の分離
+
+「ここで改行しうるか（候補）」と「実際にどこで改行したか（決定）」を明確に分離したモデルを確定する。将来のDecision Traceにおいて「ここでの改行は検討されたが、Xの理由で却下された」という説明が可能になる。
+
+## 27.6 Ruby: ATOMIC／JUKUGO capability と segmentation の権限境界
+
+Master §26.2（HG-3）で承認されたjukugo-ruby internal breakability capabilityを、Core Contract上で以下のように明確化する：
+
+- **Coreの責務**：すでに提供された`segments`配列（親文字セグメントと対応するルビセグメントの組）を尊重し、セグメント間の境界を`RUBY_INTERNAL_ALLOWED`、セグメント内部を`RUBY_INTERNAL_PROHIBITED`として扱う。
+- **Coreの責務ではないもの**：熟語の読みをどこで親文字ごとに分割するか（segmentation）を言語的に発見すること。これはCoreより上流のNormalizer／Logical Analysisの責務であり、その具体的な仕組み（明示的記法／決定的ローカルパーサ／辞書補助ローカル解析等）は本節では選定しない。ネットワーク・外部AI処理は使用しない（Master §12.1／§20.3）。
+- `segments`が提供されない熟語ルビ候補は、**ATOMIC（分割不可）として扱う**。Coreがsegment境界を無断で推測することはない。
+- この境界の未決定は、Core ContractレビューやCoreスケルトン実装を妨げない。新規Phase 3 open item **P3-O14**（jukugo-ruby segmentation policy/analyzer）として記録する。
+
+グループルビ（グループルビ）固有の分割規則は、P3-L01で概念のみ確認され規則が未特定のまま、新規Phase 3 open item **P3-O15**として引き続きOPENとする（既存のP3-O06/HD-Q4の残課題である正確なルビ掛かり量の数値予算とは区別する）。
+
+## 27.7 Natural Pitch / Decision Trace / Determinism / Versioning / Warning-Error-HOLD
+
+以下をContract上で確定する（いずれもMaster既存原則の具体化であり、新原則ではない）：
+
+- Natural Pitch（§18）はデフォルトの組版原則であり、版面を埋めるための伸縮は行わない。余白は`residualSpaceTick`として明示的に保持する。
+- Decision Trace（§23）は、source range・適用規則・代替案・採否理由を記録するエンジンエビデンス契約である。
+- Determinism（§24）は、同一の正規化済み原稿・設定・RuleSetVersion・MeasurementFactsから同一の論理レイアウトが得られることを要求する。Renderer側のラスタライズ差異はこれを損なわない。
+- Versioning（§25）は、`coreSchemaVersion`／`ruleSetVersion`／`settingsVersion`／`measurementIdentity`をCanonical Layout出力に含めることを要求する。
+- Warning／Error／HOLDモデル（§26）は、未解決の重大なlayout条件がある場合、Publication承認を保留（HOLD）できることを要求する。沈黙のフォールバックは禁止する。
+
+## 27.8 Core Invariants
+
+`CORE_INVARIANTS.md`にINV-001〜INV-013として記録する。追加されたINV-013（精度不変条件）を含め、いずれもCore実装が将来にわたって遵守すべき性質であり、変更する場合はDecision Record（Master §16）を要する。
+
+## 27.9 Human Gate
+
+本Core Contractの確定にあたり、新規のHuman Product Decisionは不要であった。すべての設計判断は、既に確定済みのMaster／P3-L01決定の具体化、またはリスクの低いエンジニアリング上の既定選択（根拠付き）である。真に未解決な項目（P3-O14、P3-O15、既存のP3-O06残課題、P3-O07、P3-O12）は、Core Contractの完成を妨げるものではなく、そのまま繰り越す。
+
+## 27.10 適用範囲
+
+本節はContractの確定であり、Canonical Logical CoreのCore実装そのものではない。Phase 3 Core Contractは、次のCore Implementation Plan（P3-L03）の開始条件を満たす状態にあるが、実装コードは本更新の時点で一切作成されていない。
 
 ---
 

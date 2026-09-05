@@ -121,4 +121,51 @@
 | P3-L01-D Rule classification/packaging | ACCEPT |
 | P3-L01 Human Rule-Freeze Gate closeout | **PASS — 4/4 HG decisions APPROVED (HG-1, HG-2, HG-3, HG-4-in-principle)** |
 
+---
+
+## P3-L02 — Canonical Logical Typesetting Core Contract
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `323d4451f7b20c7bed8db86d9d4db26e4cb4888d` (matches expected checkpoint "TSP v2: freeze Phase 3 Japanese rule decisions"), worktree clean before start.
+
+**QUESTION:** Can TateSpun define a renderer-independent, deterministic, source-mapped Canonical Logical Core contract before implementing the engine?
+
+**HYPOTHESIS:** Yes — the Phase 2 C1-NATURAL evidence and the P3-L01 rule freeze (Master v1.6 §26) are sufficient to specify Core responsibilities and data boundaries without selecting final renderer technology.
+
+**METHOD:** Contract modeling against Master §2/§5.2/§14/§25/§26 and the P3-L01 freeze documents; a responsibility audit (one owner per concern, no shared ownership); read-only inspection of `src/lib/pageLayout.ts` (confirmed existing mm/pt-based physical unit model — informs §21's unit recommendation) and `src/lib/tategaki.ts` (confirmed manual-break marker three-case disambiguation and image marker syntax — informs §13/§14); eight representative manuscript-case walkthroughs (Contract Appendix) exercising every major unit kind without rendering anything.
+
+**PRIMARY EVIDENCE:** `docs/core/TATESPUN_V2_CORE_CONTRACT.md` (32 sections + 8-case appendix), `TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md` (pseudocode shapes), `CORE_RESPONSIBILITY_MATRIX.md` (one owner per row, one explicit CONTRACT GAP — jukugo segmentation — left unowned rather than assigned arbitrarily), `CORE_INVARIANTS.md` (12 invariants, INV-001–INV-012).
+
+**RESULT:** A complete, source-grounded contract was produced without needing to force a Human Gate — every design choice was either a direct restatement of an already-frozen Master/P3-L01 decision, or an engineering-internal detail with a low-risk, evidence-backed default (source-offset unit = code points; geometry unit = mm, fixed-point, informed directly by `pageLayout.ts`'s existing mm-based model; ruby-overhang table shape without inventing values). One deliberate scope boundary was drawn rather than designed around: jukugo-ruby's automatic per-kanji segmentation algorithm is recorded as an explicit CONTRACT GAP (unowned in the Responsibility Matrix), per the loop brief's own instruction not to design automatic segmentation in this loop.
+
+**DECISION: PASS.**
+
+**WHY:** All 20 acceptance-criteria items (loop brief) are met: Core/Renderer/Normalizer/Measurement-Provider authority is explicit (§2, Responsibility Matrix); source mapping, logical units, ruby atomic/jukugo, break decisions, character-class data boundary, measurement boundary, Natural Pitch, page/column/line hierarchy, decision trace, determinism, versioning, and error/hold model all have contract sections; the coordinate/unit question was resolved by evidence-backed recommendation rather than either an arbitrary choice or an unnecessary Human Gate; every required existing TateSpun feature is either SUPPORTED BY CONTRACT or an explicitly named CONTRACT GAP (§30); no renderer technology was accidentally selected; no source code was written; Master was not touched (stays v1.6); nothing was committed.
+
+**NEXT:** P3-L03 should pick a first vertical slice to actually implement against this contract — the loop brief's own walkthrough cases (Appendix) are a natural starting scope (CASE 1 kinsoku + CASE 6 manual break are the smallest, most self-contained slice). The jukugo-ruby segmentation CONTRACT GAP should get its own research/design loop before jukugo-ruby is usable end-to-end, though it does not block starting elsewhere.
+
+---
+
+---
+
+## P3-L02 — Closeout: Contract Freeze + Precision Hardening (2026-09-06)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `323d4451f7b20c7bed8db86d9d4db26e4cb4888d` (matches expected checkpoint), worktree clean before start (only P3-L02's own uncommitted drafts present).
+
+**Human decision questions:** NONE. Contract review outcome: ACKNOWLEDGED / APPROVED FOR FREEZE, no Product decision needed.
+
+**Corrections applied:**
+
+1. **Precision hardening:** the Core Contract's original 0.01mm fixed-point recommendation is superseded by **integer micrometer ticks (1 tick = 0.001mm)** as the canonical storage/comparison unit for all layout geometry (coordinates, advances, extents, residual space); mm remains the Product-facing/display unit only. Applied consistently across `TATESPUN_V2_CORE_CONTRACT.md` §21, `TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md` (new `GeometryTick` type; `PlacedUnit.xTick/yTick`, `CanonicalColumn.residualSpaceTick`, `MeasurementFacts.*Tick`, `RuleSetVersion.rubyOverhangAllowance`), and `CORE_INVARIANTS.md` (new INV-013).
+2. **Jukugo segmentation ownership sharpened:** the Core's responsibility is now stated explicitly as "honor provided `segments`, never discover them" — segmentation *discovery* is an upstream Normalizer/Logical Analysis responsibility, mechanism not yet chosen (no candidate selected; no network/AI, per Master §12.1/§20.3). An un-segmented jukugo candidate defaults to `ATOMIC`, never a guessed split. This removed the prior "CONTRACT GAP — unowned" phrasing from `CORE_RESPONSIBILITY_MATRIX.md` in favor of an explicit two-row split (discovery vs. honoring). New Phase 3 open item **P3-O14** created for the segmentation mechanism itself; group-ruby's own break-rule (P3-L01's separate, pre-existing gap) is now similarly tracked as its own item, **P3-O15**, rather than only living inside P3-O06's prose.
+
+**Contract freeze:** Core/Renderer/Normalizer/Measurement-Provider authority boundaries, source addressing (Unicode code-point offsets, grapheme-safe unit boundaries), the data-driven Japanese character-class model, the BreakOpportunity/BreakDecision split, ruby ATOMIC/JUKUGO capability, Natural Pitch, decision trace, determinism, versioning, and the Warning/Error/HOLD model are all recorded as **FROZEN for implementation planning** — restated, not newly invented, in `docs/core/TATESPUN_V2_CORE_CONTRACT.md` §32 and Master §27. **Core engine implementation has not begun.**
+
+**DECISION: P3-L02 — CLOSED. Core Contract: FROZEN.**
+
+**WHY:** Both corrections were evidence/principle-driven (Master §3's Publication-Quality priority for the precision hardening; the loop brief's own "Core does not discover, only honors" instruction for the segmentation boundary), not arbitrary — and both were applied consistently across every document that referenced the old values, not just the primary contract file, avoiding the exact kind of drift a closeout audit exists to catch.
+
+**NEXT:** Master updated to v1.7 (§27). `PHASE3_OPEN_ITEMS.md` updated (P3-O14, P3-O15 added, history preserved). **P3-L03 (Core Implementation Plan) is ready to begin** — it may plan directories/modules, implementation sequence, tests, fixtures, rollout boundaries, migration-from-PoC strategy, and further loop breakdown, but must not deploy Production. Neither the jukugo segmentation mechanism (P3-O14) nor any other remaining Renderer/Publication/Preview-level open item blocks starting P3-L03, provided the segmentation interface stays explicit (i.e. `segments` optional, `ATOMIC` default) rather than silently assumed away.
+
+---
+
 No rejected hypothesis is silently reopened without new evidence, per the loop-engineering rule established in Phase 1/2.
