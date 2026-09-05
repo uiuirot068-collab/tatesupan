@@ -1,0 +1,5 @@
+# PoC-only isolated dependencies (see candidates/c2-dedicated-shaping/package.json).
+# Root .gitignore only anchors /node_modules at repo root, so this nested one
+# is needed to stop these from ever being accidentally staged.
+node_modules/
+*.log

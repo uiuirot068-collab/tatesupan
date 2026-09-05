@@ -1,0 +1,2354 @@
+{
+  "poc": "TSP-V2 Phase 2 P2-L01 Candidate 2 — HarfBuzz-via-WASM shaping evidence",
+  "generatedAt": "2026-09-05T02:51:12.136Z",
+  "font": {
+    "path": "C:\\Users\\PC_User\\AppData\\Local\\Temp\\claude\\D--Dropbox-neuneunet-Dropbox-------molnatu----2026--------tate-tate-typesetting-v2-worktree\\fb308635-b9d1-48b0-9d04-841a6f68246f\\scratchpad\\fonts\\ShipporiMincho-Regular.ttf",
+    "family": "Shippori Mincho",
+    "note": "Downloaded from google/fonts GitHub mirror (OFL) into an out-of-repo scratch location for this PoC only; not committed."
+  },
+  "harfbuzzjsVersion": "0.4.15",
+  "fontDeclaredOpenTypeFeatures_GSUB_GPOS": [
+    "GPOS:abvm",
+    "GPOS:mark",
+    "GPOS:mkmk",
+    "GPOS:palt",
+    "GPOS:vpal",
+    "GSUB:aalt",
+    "GSUB:ccmp",
+    "GSUB:dlig",
+    "GSUB:frac",
+    "GSUB:fwid",
+    "GSUB:hwid",
+    "GSUB:jp78",
+    "GSUB:jp83",
+    "GSUB:liga",
+    "GSUB:nlck",
+    "GSUB:ordn",
+    "GSUB:salt",
+    "GSUB:ss01",
+    "GSUB:ss02",
+    "GSUB:sups",
+    "GSUB:vert",
+    "GSUB:vkna",
+    "GSUB:vrt2"
+  ],
+  "canonicalSentence": "「気が合った、と言ってしまえばそれまでだ。けれど気づけば、どこへ行くにも二人でいることが当たり前になっていた。」",
+  "focusSequences": {
+    "daketo": "それまでだ。けれど",
+    "bado": "気づけば、どこへ"
+  },
+  "shapes": {
+    "daketo": {
+      "sourceText": "それまでだ。けれど",
+      "byFeatureSet": {
+        "default (harfbuzz auto, no explicit features)": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vert=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vrt2=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vpal=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 17
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 43
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 4
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -53
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 24
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -11
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 29
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 43
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 3
+          }
+        ],
+        "vpal=0 explicit (force off)": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vhal=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vhal=0 explicit (force off)": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vchw=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vkrn=1 explicit": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vpal=1,vhal=1,vkrn=1 combined": [
+          {
+            "sourceChar": "そ",
+            "cluster": 0,
+            "glyphId": 15470,
+            "glyphName": "uni305D.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 17
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 1,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 43
+          },
+          {
+            "sourceChar": "ま",
+            "cluster": 2,
+            "glyphId": 15503,
+            "glyphName": "uni307E.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 4
+          },
+          {
+            "sourceChar": "で",
+            "cluster": 3,
+            "glyphId": 15480,
+            "glyphName": "uni3067.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -53
+          },
+          {
+            "sourceChar": "だ",
+            "cluster": 4,
+            "glyphId": 15473,
+            "glyphName": "uni3060.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 24
+          },
+          {
+            "sourceChar": "。",
+            "cluster": 5,
+            "glyphId": 15943,
+            "glyphName": "uniFE12",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -11
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 6,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 29
+          },
+          {
+            "sourceChar": "れ",
+            "cluster": 7,
+            "glyphId": 15517,
+            "glyphName": "uni308C.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 43
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 8,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 3
+          }
+        ]
+      }
+    },
+    "bado": {
+      "sourceText": "気づけば、どこへ",
+      "byFeatureSet": {
+        "default (harfbuzz auto, no explicit features)": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vert=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vrt2=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vpal=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 103
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 29
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 2
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -6
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 3
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 125
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 268
+          }
+        ],
+        "vpal=0 explicit (force off)": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vhal=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vhal=0 explicit (force off)": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vchw=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vkrn=1 explicit": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          }
+        ],
+        "vpal=1,vhal=1,vkrn=1 combined": [
+          {
+            "sourceChar": "気",
+            "cluster": 0,
+            "glyphId": 6160,
+            "glyphName": "uni6C17",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 0
+          },
+          {
+            "sourceChar": "づ",
+            "cluster": 1,
+            "glyphId": 15478,
+            "glyphName": "uni3065.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 103
+          },
+          {
+            "sourceChar": "け",
+            "cluster": 2,
+            "glyphId": 15457,
+            "glyphName": "uni3051.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 29
+          },
+          {
+            "sourceChar": "ば",
+            "cluster": 3,
+            "glyphId": 15489,
+            "glyphName": "uni3070.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 2
+          },
+          {
+            "sourceChar": "、",
+            "cluster": 4,
+            "glyphId": 15941,
+            "glyphName": "uniFE11",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": -6
+          },
+          {
+            "sourceChar": "ど",
+            "cluster": 5,
+            "glyphId": 15482,
+            "glyphName": "uni3069.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 3
+          },
+          {
+            "sourceChar": "こ",
+            "cluster": 6,
+            "glyphId": 15460,
+            "glyphName": "uni3053.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 125
+          },
+          {
+            "sourceChar": "へ",
+            "cluster": 7,
+            "glyphId": 15497,
+            "glyphName": "uni3078.vert",
+            "xAdvance": 0,
+            "yAdvance": -1000,
+            "xOffset": 0,
+            "yOffset": 268
+          }
+        ]
+      }
+    }
+  },
+  "canonicalSentenceShape_defaultFeatures": [
+    {
+      "sourceChar": "「",
+      "cluster": 0,
+      "glyphId": 15844,
+      "glyphName": "uniFE41",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "気",
+      "cluster": 1,
+      "glyphId": 6160,
+      "glyphName": "uni6C17",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "が",
+      "cluster": 2,
+      "glyphId": 15452,
+      "glyphName": "uni304C.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "合",
+      "cluster": 3,
+      "glyphId": 1816,
+      "glyphName": "uni5408",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "っ",
+      "cluster": 4,
+      "glyphId": 15477,
+      "glyphName": "uni3063.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "た",
+      "cluster": 5,
+      "glyphId": 15472,
+      "glyphName": "uni305F.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "、",
+      "cluster": 6,
+      "glyphId": 15941,
+      "glyphName": "uniFE11",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "と",
+      "cluster": 7,
+      "glyphId": 15481,
+      "glyphName": "uni3068.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "言",
+      "cluster": 8,
+      "glyphId": 11217,
+      "glyphName": "uni8A00",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "っ",
+      "cluster": 9,
+      "glyphId": 15477,
+      "glyphName": "uni3063.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "て",
+      "cluster": 10,
+      "glyphId": 15479,
+      "glyphName": "uni3066.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "し",
+      "cluster": 11,
+      "glyphId": 15464,
+      "glyphName": "uni3057.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ま",
+      "cluster": 12,
+      "glyphId": 15503,
+      "glyphName": "uni307E.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "え",
+      "cluster": 13,
+      "glyphId": 15446,
+      "glyphName": "uni3048.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ば",
+      "cluster": 14,
+      "glyphId": 15489,
+      "glyphName": "uni3070.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "そ",
+      "cluster": 15,
+      "glyphId": 15470,
+      "glyphName": "uni305D.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "れ",
+      "cluster": 16,
+      "glyphId": 15517,
+      "glyphName": "uni308C.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ま",
+      "cluster": 17,
+      "glyphId": 15503,
+      "glyphName": "uni307E.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "で",
+      "cluster": 18,
+      "glyphId": 15480,
+      "glyphName": "uni3067.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "だ",
+      "cluster": 19,
+      "glyphId": 15473,
+      "glyphName": "uni3060.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "。",
+      "cluster": 20,
+      "glyphId": 15943,
+      "glyphName": "uniFE12",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "け",
+      "cluster": 21,
+      "glyphId": 15457,
+      "glyphName": "uni3051.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "れ",
+      "cluster": 22,
+      "glyphId": 15517,
+      "glyphName": "uni308C.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ど",
+      "cluster": 23,
+      "glyphId": 15482,
+      "glyphName": "uni3069.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "気",
+      "cluster": 24,
+      "glyphId": 6160,
+      "glyphName": "uni6C17",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "づ",
+      "cluster": 25,
+      "glyphId": 15478,
+      "glyphName": "uni3065.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "け",
+      "cluster": 26,
+      "glyphId": 15457,
+      "glyphName": "uni3051.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ば",
+      "cluster": 27,
+      "glyphId": 15489,
+      "glyphName": "uni3070.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "、",
+      "cluster": 28,
+      "glyphId": 15941,
+      "glyphName": "uniFE11",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "ど",
+      "cluster": 29,
+      "glyphId": 15482,
+      "glyphName": "uni3069.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "こ",
+      "cluster": 30,
+      "glyphId": 15460,
+      "glyphName": "uni3053.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "へ",
+      "cluster": 31,
+      "glyphId": 15497,
+      "glyphName": "uni3078.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "行",
+      "cluster": 32,
+      "glyphId": 10934,
+      "glyphName": "uni884C",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "く",
+      "cluster": 33,
+      "glyphId": 15455,
+      "glyphName": "uni304F.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "に",
+      "cluster": 34,
+      "glyphId": 15484,
+      "glyphName": "uni306B.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "も",
+      "cluster": 35,
+      "glyphId": 15507,
+      "glyphName": "uni3082.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "二",
+      "cluster": 36,
+      "glyphId": 709,
+      "glyphName": "uni4E8C",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "人",
+      "cluster": 37,
+      "glyphId": 742,
+      "glyphName": "uni4EBA",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "で",
+      "cluster": 38,
+      "glyphId": 15480,
+      "glyphName": "uni3067.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "い",
+      "cluster": 39,
+      "glyphId": 15442,
+      "glyphName": "uni3044.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "る",
+      "cluster": 40,
+      "glyphId": 15516,
+      "glyphName": "uni308B.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "こ",
+      "cluster": 41,
+      "glyphId": 15460,
+      "glyphName": "uni3053.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "と",
+      "cluster": 42,
+      "glyphId": 15481,
+      "glyphName": "uni3068.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "が",
+      "cluster": 43,
+      "glyphId": 15452,
+      "glyphName": "uni304C.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "当",
+      "cluster": 44,
+      "glyphId": 3722,
+      "glyphName": "uni5F53",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "た",
+      "cluster": 45,
+      "glyphId": 15472,
+      "glyphName": "uni305F.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "り",
+      "cluster": 46,
+      "glyphId": 15515,
+      "glyphName": "uni308A.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "前",
+      "cluster": 47,
+      "glyphId": 1459,
+      "glyphName": "uni524D",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "に",
+      "cluster": 48,
+      "glyphId": 15484,
+      "glyphName": "uni306B.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "な",
+      "cluster": 49,
+      "glyphId": 15483,
+      "glyphName": "uni306A.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "っ",
+      "cluster": 50,
+      "glyphId": 15477,
+      "glyphName": "uni3063.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "て",
+      "cluster": 51,
+      "glyphId": 15479,
+      "glyphName": "uni3066.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "い",
+      "cluster": 52,
+      "glyphId": 15442,
+      "glyphName": "uni3044.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "た",
+      "cluster": 53,
+      "glyphId": 15472,
+      "glyphName": "uni305F.vert",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "。",
+      "cluster": 54,
+      "glyphId": 15943,
+      "glyphName": "uniFE12",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    },
+    {
+      "sourceChar": "」",
+      "cluster": 55,
+      "glyphId": 15845,
+      "glyphName": "uniFE42",
+      "xAdvance": 0,
+      "yAdvance": -1000,
+      "xOffset": 0,
+      "yOffset": 0
+    }
+  ]
+}

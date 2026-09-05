@@ -1,0 +1,11 @@
+{
+  "name": "phase2-c2-dedicated-shaping-poc",
+  "private": true,
+  "version": "0.0.0",
+  "description": "PoC-only isolated package for TSP-V2 Phase 2 P2-L01 Candidate 2 (HarfBuzz-via-WASM shaping spike). NOT a production dependency. Not intended to be committed as a resolved architecture choice.",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "harfbuzzjs": "^0.4.9",
+    "opentype.js": "^1.3.4"
+  }
+}

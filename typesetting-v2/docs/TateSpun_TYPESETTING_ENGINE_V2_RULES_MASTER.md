@@ -1,12 +1,13 @@
 # TateSpun TYPESETTING ENGINE v2 RULES MASTER
 
 - Status: APPROVED BASELINE
-- Version: v1.4
+- Version: v1.5
 - Established: 2026-09-05
 - Updated: 2026-09-05 — repository/worktree/integration rule clarified
 - Updated: 2026-09-05 — Phase 0 Human Decisions frozen (HD-001–HD-009); Editor/Settings switching UI direction added; Memo-in-Editor requirement added; 柱/奥付 font inheritance + override requirement added
 - Updated: 2026-09-05 — Phase 1 UI Human QA decision frozen (HD-010–HD-013): Settings-drawer-while-Editor-visible direction selected (existing TateSpun visual identity NOT superseded by prototype visuals); Editor default-horizontal/optional-vertical direction added as a research item; limited/disclosed emoji policy added; image-insert/undo/redo recorded as high-value Editor requirements; Phase 1 jlreq standards-verification caveats (dash/ellipsis citation correction, partial kinsoku-class confirmation) recorded as pre-Phase-3 blockers
 - Updated: 2026-09-05 — Final Phase 1 emoji Human QA completed (HD-014): ↶/↷/⏎/⚙️ approved for their stated purposes only (undo/redo/manual-page-break/settings); 💾/🖼/👁/📝/✏️ rejected (future UI must use a text label or proper design-approved icon instead); Phase 1 ready for checkpoint closure
+- Updated: 2026-09-05 — Phase 2 Architecture Human Gate approved 7/7 (HD-015–HD-021, §25): C1-NATURAL selected as the PRIMARY PHASE 3 LOGICAL-TYPESETTING-CORE DIRECTION (not a final full architecture — Preview/Publication renderer technology remains OPEN); C3 retained as browser-native control/reference and candidate painting technology, not logical authority; C2 (dedicated shaping) remains DEFERRED/REOPENABLE, not rejected; Natural Pitch (declared physical font size, no forced page-fill stretch) approved as the default v2 composition principle, no preset-specific exception authorized; Manuscript→Logical Core→Canonical Layout Model→Preview/Publication Renderer separation approved; Human-approved Phase 2 Ruby behavior recorded (§25.6) — base-position invariant, unbroken annotation run, geometry-based CENTER/START_CLAMP/END_CLAMP/OVERFLOW_OPEN policy — explicitly not a claim of full JLREQ/JIS ruby standards compliance; Editor Export Profiles added as a new Product Requirement (markup-preserving / plain-posting-friendly / future platform-specific, §25.7); Phase 3 open-item register carried forward (§25.8); Phase 2 CLOSED
 - Scope: TateSpun Typesetting Engine v2
 - Authority: This document is the highest-level design and migration rule set for Engine v2.
 - Production baseline at boundary: current production remains unchanged unless separately approved.
@@ -838,6 +839,16 @@ Engine v2は以下を満たして初めてProduction候補となる。
 52. 📝 (Memo) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
 53. ✏️ (Editor mode label) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
 
+2026-09-05 Phase 2 Architecture Human Gate (HD-015–HD-021, see §25):
+
+54. C1-NATURAL approved as the PRIMARY PHASE 3 LOGICAL-TYPESETTING-CORE DIRECTION (not a final full architecture): YES
+55. C3 (browser-native) retained as control/reference and candidate painting technology, not logical-layout authority: YES
+56. C2 (dedicated shaping) remains DEFERRED/REOPENABLE, not rejected: YES
+57. Natural Pitch (declared physical font size; no forced page-fill stretch; residual space becomes margin) approved as the default v2 composition principle; no preset-specific exception authorized: YES
+58. Manuscript → Logical Typesetting Core → Canonical Layout Model → Preview Renderer → Publication Renderer separation approved; final Preview/Publication renderer technology remains OPEN: YES
+59. Human-approved Phase 2 Ruby behavior recorded (§25.6) — base-position invariant, unbroken annotation run, geometry-based CENTER/START_CLAMP/END_CLAMP/OVERFLOW_OPEN policy; explicitly NOT a claim of full JLREQ/JIS ruby standards compliance: YES
+60. Editor Export Profiles added as a new Product Requirement (markup-preserving / plain-posting-friendly / future platform-specific), specification deferred to Phase 3 (§25.7): YES
+
 ---
 
 # 19. CURRENT STATUS
@@ -861,21 +872,26 @@ Phase 1 Final Emoji Human QA:
 COMPLETE (2026-09-05) — HD-014 recorded in §24. ↶/↷/⏎/⚙️ approved for their stated purposes only; 💾/🖼/👁/📝/✏️ rejected. Phase 1 ready for checkpoint closure.
 
 Phase 1 standards-verification status:
-OPEN — jlreq dash/ellipsis inseparability citation corrected (previously-cited "§3.1.10" not corroborated, see `typesetting-v2/research/PHASE1_LOOP_LOG.md` P1-L10a); kinsoku character-class table partially confirmed (extends to at least cl-27) but not fully retrieved. Both MUST be resolved before Phase 3 hard-codes kinsoku/dash/ellipsis behavior — not a blocker for Phase 2 typography PoC work.
+OPEN — jlreq dash/ellipsis inseparability citation corrected (previously-cited "§3.1.10" not corroborated, see `typesetting-v2/research/PHASE1_LOOP_LOG.md` P1-L10a); kinsoku character-class table partially confirmed (extends to at least cl-27) but not fully retrieved. Both MUST be resolved before Phase 3 hard-codes kinsoku/dash/ellipsis behavior — carried forward as Phase 3 open items P3-O01/P3-O02 (`typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`).
+
+Phase 2 Architecture Human Gate:
+COMPLETE (2026-09-05) — HD-015 through HD-021 recorded in §25. C1-NATURAL approved as the Phase 3 logical-typesetting-core direction (not a final full architecture); C3 retained as control/reference; C2 deferred/reopenable; Natural Pitch approved as default; renderer separation approved; Human-approved Ruby behavior recorded; Editor Export Profiles added as a new Product Requirement. Full evidence: `typesetting-v2/docs/architecture/PHASE2_ARCHITECTURE_NARROWING.md`, `PHASE2_EVIDENCE_SUMMARY.md`. Phase 2 CLOSED.
 
 Next authorized action:
-Phase 0 — Requirements Freeze (documentation update only; awaiting final Human Review sign-off before Phase 1).
+Phase 3 — Core Typesetting Engine, informed by (not blocked on) `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`.
 
 Not yet authorized:
-- Engine v2 implementation
+- Engine v2 implementation in `src/` (Phase 3 begins in `typesetting-v2/` per §13, same as prior phases)
 - production integration
-- renderer selection
+- final Preview/Publication renderer technology selection (§25.5 separates this from the logical-core direction just approved)
 - master push/deploy
 - current production replacement
 - UI implementation mechanism selection for Memo access (panel / drawer / modal / floating window — see §21.2, still undecided)
 - Visual/pixel-level design of the drawer, or any other Production UI surface (see §22.1 — interaction model only is approved)
 - Vertical Editor mode implementation (see §22.2 — research direction only, not implementation)
 - Any specific emoji's Production use (see §23 — disclosure + Human QA required per use, never blanket-approved)
+- Editor Export Profiles implementation (§25.7 — requirement recorded only, full specification is Phase 3 open item P3-O11)
+- Final JLREQ/JIS kinsoku/dash/ellipsis/ruby-distribution standards freeze (§25.6/§25.8 — Phase 3 open items P3-O01/P3-O02/P3-O06/P3-O07)
 
 ---
 
@@ -1154,6 +1170,109 @@ emojiを使用する場合、必ず：
 - 上記4件のAPPROVEDは、記載された用途に限定した承認であり、他の用途への一般化を禁止する。
 - 上記5件のREJECTEDは、将来のUIでtext labelまたは正式なdesign-approved iconに置き換えること。
 - 一般原則（§23 Limited Emoji Policy）は引き続き有効：emojiは選択的にのみ使用し、UIの主要言語にしない。新規に提案されるemojiは、その都度開示とHuman QAを要する。
+
+---
+
+# 25. PHASE 2 ARCHITECTURE NARROWING FREEZE (v1.5, HD-015–HD-021)
+
+2026-09-05、Product OwnerはPhase 2 Architecture Human Gate（7項目）を全て承認した。
+これはPhase 3のLOGICAL-TYPESETTING-CORE方向の確定であり、最終的な完全アーキテクチャの選定ではない。
+
+Full evidence: `typesetting-v2/docs/architecture/PHASE2_ARCHITECTURE_NARROWING.md`（recommendation + comparison matrix）, `PHASE2_EVIDENCE_SUMMARY.md`（loop-by-loopエビデンス）, `typesetting-v2/research/PHASE2_LOOP_LOG.md`（P2-L01〜P2-L08、生ログ）。
+
+## 25.1 HD-015 — C1-NATURAL: Phase 3 Logical-Typesetting-Core Direction
+
+C1-NATURAL（explicit deterministic logical layout + natural 1em declared-pitch composition + residual margin + renderer separation）を、**PRIMARY PHASE 3 LOGICAL-TYPESETTING-CORE DIRECTION**として承認する。
+
+意味：
+- TateSpunがpage/column/line/logical unit/source range/break decision/ruby association/TCY group/deterministic coordinatesの決定権を持つ。
+- 決定はrendering前に行われ、再現可能・source-mapped・traceableである（Phase 2 P2-L05で実証済み）。
+
+**「C1-NATURALが最終的な完全アーキテクチャである」とは書かない。** Preview/Publication rendererの技術選定は引き続きOPEN（§25.5, Phase 3 open item P3-O08/P3-O09）。
+
+## 25.2 HD-016 — C3: Control / Reference
+
+C3（browser-native）は、CONTROL/REFERENCEとして維持する。将来のPreview/Publication renderer技術の候補にはなり得るが、logical typesetting authorityとしては承認しない。
+
+C3は「rejected」ではない。視覚品質が高い場合があることは記録するが（例：B5, Web閲覧用でのHuman選好）、TateSpunが必要とするdeterministic・source-mapped・traceableな組版決定を提供しない、という理由による。
+
+## 25.3 HD-017 — C2: Deferred / Reopenable
+
+C2（dedicated shaping, HarfBuzz-via-WASM経路）は、DEFERRED/REOPENABLEとする。rejectedではない。
+
+Reopen条件：
+- C1/browser paintingでは達成できない必須のglyph-level挙動が判明した場合
+- Publication PDF pathがdedicated shaping evidenceを必要とする場合
+- 将来の機能が、他の方法では得られないshaping controlを要求する場合
+
+## 25.4 HD-018 — Natural Pitch as Default Composition Principle
+
+Natural Pitch（宣言されたphysical font sizeがそのままnatural character advanceになる。版面を埋めるためだけの伸縮をしない。余白は版面余白として残ってよい）を、v2のDEFAULT composition principleとして承認する。これはMaster §5.2の既存原則の具体化であり、新原則ではない。
+
+**Preset-specific optical pitch tuningは一切authorizeしない：**
+- 文庫-specific multiplier: NO
+- B5-specific correction: NO
+- 新書 midpoint: NO
+- その他preset別の目視補正: NO
+
+文庫でのHuman-observed mild preference for legacy justified pitch（P2-L04, stretch比約1.05×）は、エビデンスとして記録するのみであり、preset-specific exceptionの承認を意味しない。
+
+## 25.5 HD-019 — Renderer Separation
+
+以下のpipelineをapprove：
+
+```
+Manuscript
+→ Logical Typesetting Core
+→ Canonical Layout Model
+→ Preview Renderer
+→ Publication Renderer
+```
+
+Preview / Publication rendererは異なる技術を使用してよい。ただしcanonical logical結果を共有し、pixel-perfect一致は不要（Master §1.2/§1.3と整合）。ただし「別の本」に見える差は許容しない、という既存原則は変わらない。
+
+Logical layout authorityはrenderer paintingより上流にある。Preview rendererの技術（Phase 5, P3-O09）およびPublication rendererの技術（Phase 4, P3-O08）は、引き続きOPENである。
+
+## 25.6 HD-020 — Ruby: Human-Approved Phase 2 Product/Renderer Behavior
+
+Phase 2 (P2-L07〜P2-L07E) で検証・承認されたRuby挙動を記録する。**これはHuman-approved Phase 2 Product/Renderer behaviorであり、JLREQ/JIS ruby distribution標準への完全準拠を意味しない。** 最終的なruby overflow/distribution標準のレビューはPhase 3 open item（P3-O06）として残る。
+
+**Base invariant:** rubyの存在はbody text位置を一切変更しない。Human検証済み（実際のrendered DOM測定、`getBoundingClientRect`）：東京（とうきょう）の東・京、それぞれmain-axis delta 0.00px / cross-axis delta 0.00px。PASS。
+
+**Unbroken annotation run:** 1つのruby logical groupは1つの途切れないannotation runとして描画される。ruby annotationはbody flowの外側（position:absolute相当）にあり、body layoutに影響を与えない。PASS。
+
+**Overlong ruby — geometry-based centering:** ruby annotationの物理的extentがbase groupの物理的extentを超える場合、base-group中心に対してcenteringする。`baseLength == 1`等の特殊分岐は用いない（純粋にgeometry — base extent, ruby extent, line/column extentから導出）。
+
+**Boundary policy:**
+- CENTER — centering後もline/column extent内に収まる場合
+- START_CLAMP — centeringするとline/column始端を越える場合、始端に固定
+- END_CLAMP — centeringするとline/column終端を越える場合、終端に固定
+- OVERFLOW_OPEN — ruby annotation自体がline/column extentに収まらない場合（縮小・分割・wrapはしない。厳密な扱いはOPEN）
+
+Human PASS：CENTER, START_CLAMP, END_CLAMP, 其（なにがし）。
+
+## 25.7 HD-021 — Editor Export Profiles (New Product Requirement)
+
+Editor text exportにおいて、少なくとも以下2つのprofileを選択できることを、新しいProduct Requirementとして承認する。詳細仕様はPhase 3 open item（P3-O11）として別途行う。
+
+- **Profile A — 記法あり / markup-preserving**: Markdown/TateSpun記法を保持し、再編集・別editorへの移行を可能にする。
+- **Profile B — プレーンテキスト / 投稿向け**: pixiv等への投稿を想定し、不要なMarkdown風記法を除去する。
+- **Profile C（将来）— platform-specific export profiles**: pixiv等特定サイト向け変換。Phase 2では実装・約束しない。future-capable設計のみ。
+
+TXT import/export（Master §9.1, 既存承認済み要件）とExport Profile（記法変換）は別概念である。同一原稿が、どちらのprofileを経てもTXT transport formatとして書き出せる。
+
+詳細: `typesetting-v2/docs/architecture/EDITOR_EXPORT_PROFILES_MEMO.md`
+
+## 25.8 Phase 3 Open Items — Carried Forward
+
+Full register: `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`（P3-O01〜P3-O13）。要点：
+
+- **標準未確定（Phase 3 rule freeze前に解決必須）**: full kinsoku class table (P3-O01), dash/ellipsis authoritative primary-source rule (P3-O02), ruby final overflow/distribution standards (P3-O06), TCY auto-detection Product policy (P3-O07)。
+- **Renderer-level（Human Owner明示的にPhase 3へ delegate、Architecture Narrowingのblockerではない）**: TCY visual renderer (P3-O03), dash final alignment (P3-O04), ellipsis final alignment (P3-O05)。
+- **Publication/Preview technology（引き続きOPEN, Master §7 white-sheet rule）**: Publication PDF renderer選定 (P3-O08), Preview renderer実装 (P3-O09)。
+- **Editor側（Typesetting Engine coreの範囲外）**: Editor vertical-mode feasibility (P3-O10), Editor Export Profiles full specification (P3-O11)。
+
+これらはいずれもPhase 3開始のblockerではない。各々「何の前に解決が必要か」をPHASE3_OPEN_ITEMS.mdに明記する。
 
 ---
 

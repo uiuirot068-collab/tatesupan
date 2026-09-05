@@ -1,0 +1,46 @@
+[
+  {
+    "id": "F-KINSOKU",
+    "deterministic": true
+  },
+  {
+    "id": "F-LINE-END",
+    "deterministic": true
+  },
+  {
+    "id": "F-HANGING",
+    "deterministic": true
+  },
+  {
+    "id": "F-HANGING-BRACKET",
+    "deterministic": true
+  },
+  {
+    "id": "F-RUBY-SHORT",
+    "deterministic": true
+  },
+  {
+    "id": "F-RUBY-LONG",
+    "deterministic": true
+  },
+  {
+    "id": "F-RUBY-BOUNDARY",
+    "deterministic": true
+  },
+  {
+    "id": "F-TCY-BARE",
+    "deterministic": true
+  },
+  {
+    "id": "F-DASH-FIT",
+    "deterministic": true
+  },
+  {
+    "id": "F-DASH-DEFER",
+    "deterministic": true
+  },
+  {
+    "id": "F-ELLIPSIS",
+    "deterministic": true
+  }
+]

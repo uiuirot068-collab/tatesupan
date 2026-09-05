@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>TSP-V2 P2-L03 — Layout Formula Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: #fafaf7; color: #111; }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  p.intro { font-size: 12px; color: #555; max-width: 900px; line-height: 1.6; }
+  table { border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+  th { background: #eee; }
+  .ok { color: #1a7f1a; }
+  .bad { color: #a33; }
+  .live-cell { min-width: 260px; }
+</style>
+</head>
+<body>
+  <h1>P2-L03 — Layout Formula Audit: Production vs. P2-L02 PoC vs. live-measured native pitch</h1>
+  <p class="intro">
+    "Production" columns are TateSpun's actual, current formula (<code>computePageLayout</code> + <code>PageCard.tsx</code>'s <code>canonicalSlotExtentPx</code>, read read-only from <code>src/lib/pageLayout.ts</code>/<code>src/components/PageCard.tsx</code>), scaled via the real <code>PX_PER_MM=2.2</code> preview constant.
+    "PoC (P2-L02)" columns reproduce exactly what <code>scripts/build-multipreset.js</code> actually rendered, bugs included (Web閲覧用's unit-conversion bug is reproduced here, not silently fixed).
+    "Live-measured" renders a real 20-character run at Production's real font size directly in this page (hidden off-screen, measured via <code>getBoundingClientRect()</code> on load, no headless tooling) — this shows what a genuinely native/unstretched (C3-style) render actually does, for comparison against the declared "justified"-stretched slot size. See <code>evidence/P2_L03_LAYOUT_FORMULA_AUDIT.md</code> for the full write-up.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Preset</th><th>gridMode</th>
+        <th>Production fontSizePx</th><th>Production slotExtentPx</th><th>Production stretch ratio</th>
+        <th>PoC slotExtentPx</th><th>PoC stretch ratio</th><th>PoC vs Production</th>
+        <th>Live-measured native pitch vs. declared (stretched) slot</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-key="文庫">
+      <td>文庫</td>
+      <td>justified</td>
+      <td>6.60px</td>
+      <td>6.95px</td>
+      <td>1.053×</td>
+      <td>11.94px</td>
+      <td>1.053×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-文庫">measuring…</td>
+    </tr>
+<tr data-key="A5-1">
+      <td>A5 1段</td>
+      <td>solid</td>
+      <td>6.99px</td>
+      <td>6.99px</td>
+      <td>1.000×</td>
+      <td>12.00px</td>
+      <td>1.000×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-A5-1">measuring…</td>
+    </tr>
+<tr data-key="A5-2">
+      <td>A5 2段</td>
+      <td>justified</td>
+      <td>6.60px</td>
+      <td>7.48px</td>
+      <td>1.134×</td>
+      <td>26.91px</td>
+      <td>2.374×</td>
+      <td><b class="bad">DIFFERS 109.4%</b></td>
+      <td class="live-cell" id="live-A5-2">measuring…</td>
+    </tr>
+<tr data-key="B5">
+      <td>B5</td>
+      <td>justified</td>
+      <td>7.37px</td>
+      <td>10.61px</td>
+      <td>1.439×</td>
+      <td>18.23px</td>
+      <td>1.439×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-B5">measuring…</td>
+    </tr>
+<tr data-key="B6">
+      <td>B6</td>
+      <td>justified</td>
+      <td>6.99px</td>
+      <td>8.25px</td>
+      <td>1.181×</td>
+      <td>14.17px</td>
+      <td>1.181×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-B6">measuring…</td>
+    </tr>
+<tr data-key="新書">
+      <td>新書</td>
+      <td>justified</td>
+      <td>6.60px</td>
+      <td>8.36px</td>
+      <td>1.267×</td>
+      <td>14.36px</td>
+      <td>1.267×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-新書">measuring…</td>
+    </tr>
+<tr data-key="A6">
+      <td>A6</td>
+      <td>justified</td>
+      <td>6.60px</td>
+      <td>6.95px</td>
+      <td>1.053×</td>
+      <td>11.94px</td>
+      <td>1.053×</td>
+      <td><span class="ok">matches</span></td>
+      <td class="live-cell" id="live-A6">measuring…</td>
+    </tr>
+<tr data-key="Web">
+      <td>Web閲覧用</td>
+      <td>justified</td>
+      <td>27.94px</td>
+      <td>29.24px</td>
+      <td>1.047×</td>
+      <td>32.55px</td>
+      <td>0.904×</td>
+      <td><b class="bad">DIFFERS -13.6%</b></td>
+      <td class="live-cell" id="live-Web">measuring…</td>
+    </tr>
+    </tbody>
+  </table>
+  
+    <div class="measure-block" id="measure-文庫" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.5969444444444445px; width:11.214805555555555px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-A5-1" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.985px; width:11.874500000000001px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-A5-2" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.5969444444444445px; width:10.884958333333334px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-B5" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:7.373055555555556px; width:12.534194444444443px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-B6" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.985px; width:11.874500000000001px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-新書" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.5969444444444445px; width:11.214805555555555px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-A6" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:6.5969444444444445px; width:11.214805555555555px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+
+    <div class="measure-block" id="measure-Web" style="writing-mode:vertical-rl; text-orientation:mixed; font-family:'Shippori Mincho',serif; font-size:27.94px; width:50.292px; position:absolute; left:-9999px; top:0;">気合言葉行人今日花山川空水火土木金風雲</div>
+  
+  <script>
+    window.addEventListener('load', function () {
+      var data = [{"key":"文庫","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.5969444444444445,"colPitchPx":11.214805555555555,"slotExtentPx":6.947368421052632},{"key":"A5-1","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.985,"colPitchPx":11.874500000000001,"slotExtentPx":6.985},{"key":"A5-2","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.5969444444444445,"colPitchPx":10.884958333333334,"slotExtentPx":7.48},{"key":"B5","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":7.373055555555556,"colPitchPx":12.534194444444443,"slotExtentPx":10.60888888888889},{"key":"B6","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.985,"colPitchPx":11.874500000000001,"slotExtentPx":8.25},{"key":"新書","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.5969444444444445,"colPitchPx":11.214805555555555,"slotExtentPx":8.36},{"key":"A6","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":6.5969444444444445,"colPitchPx":11.214805555555555,"slotExtentPx":6.947368421052632},{"key":"Web","text":"気合言葉行人今日花山川空水火土木金風雲","fontSizePx":27.94,"colPitchPx":50.292,"slotExtentPx":29.24137931034483}];
+      data.forEach(function (t) {
+        var el = document.getElementById('measure-' + t.key);
+        var rect = el.getBoundingClientRect();
+        var charCount = Array.from(t.text).length;
+        var measuredPitchPx = rect.height / charCount;
+        var declaredSlotPx = t.slotExtentPx;
+        var diffPct = ((measuredPitchPx - declaredSlotPx) / declaredSlotPx * 100).toFixed(1);
+        var matches = Math.abs(measuredPitchPx - declaredSlotPx) < 0.05 * declaredSlotPx;
+        var cell = document.getElementById('live-' + t.key);
+        cell.innerHTML = 'native ' + measuredPitchPx.toFixed(2) + 'px vs. declared (stretched) ' + declaredSlotPx.toFixed(2) + 'px &rarr; ' +
+          (matches ? '<span class="ok">MATCH</span>' : '<b class="bad">DIFFER (' + diffPct + '%)</b>');
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>TSP-V2 P2-L05 — Japanese Typesetting Capability PoC</title>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: #fafaf7; color: #111; }
+  h1 { font-size: 17px; margin: 0 0 6px; }
+  .top-meta { font-size: 12px; color: #555; margin-bottom: 16px; line-height: 1.6; max-width: 900px; }
+  .top-meta code { background: #eee; padding: 1px 4px; }
+  .fixture { border-top: 2px solid #ccc; padding: 16px 0; }
+  .fixture h2 { font-size: 14px; margin: 0 0 4px; }
+  .purpose { font-size: 11px; color: #666; margin-bottom: 10px; max-width: 700px; }
+  .pair { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .col h3 { font-size: 12px; color: #333; margin: 0 0 6px; }
+  .c1nat { display: flex; gap: 6px; }
+  .c1col {
+    display: flex; flex-direction: column;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    font-family: 'Shippori Mincho', serif;
+    border: 1px solid #ddd; padding: 4px;
+  }
+  .cell { display: inline-block; width: 32px; height: 32px; line-height: 32px; text-align: center; font-size: 18px; box-sizing: border-box; }
+  .cell.lineStartProhibited { background: rgba(255,120,120,0.15); }
+  .cell.lineEndProhibited { background: rgba(120,160,255,0.15); }
+  .cell.hangingPunct { background: rgba(255,205,0,0.25); }
+  .cell.hangingCloseBracket { background: rgba(255,205,0,0.15); }
+  .rubyCell rt { font-size: 9px; }
+  .tcyCell { text-combine-upright: all; }
+  .runCell { letter-spacing: 0; }
+  .c3block { writing-mode: vertical-rl; text-orientation: mixed; font-family: 'Shippori Mincho', serif; font-size: 18px; color: #111; height: 256px; }
+  .trace-summary { font-size: 11px; color: #888; margin-top: 10px; }
+  .diag-control { font-size: 12px; margin: 10px 0 16px; }
+</style>
+</head>
+<body>
+  <h1>TSP-V2 Phase 2 — P2-L05: Japanese Typesetting Capability PoC (C1-NATURAL)</h1>
+  <div class="top-meta">
+    Each fixture below is rendered two ways: <b>C1-NATURAL</b> (this loop's engine — source text is tokenized into logical units, a rule-decision layer resolves kinsoku/hanging/keep-together BEFORE any position is assigned, then units are painted into an explicit per-line grid) and <b>C3</b> (plain browser-native <code>vertical-rl</code>, no rule layer — for comparison only). Highlighted cells (default off — see toggle) mark rule-relevant categories. Font: Shippori Mincho, same as prior Phase 2 loops.<br>
+    Determinism check (every fixture run twice, structural output compared): <b>ALL DETERMINISTIC</b>.<br>
+    Full break-decision trace: <code>evidence/P2_L05_BREAK_DECISION_TRACE.md</code>. Source mapping: <code>evidence/P2_L05_SOURCE_MAPPING.md</code>. Capability matrix: <code>evidence/P2_L05_JAPANESE_CAPABILITY_MATRIX.md</code>.<br>
+    <b>Standards status:</b> full kinsoku class table — OPEN. Dash/ellipsis primary-source rule — OPEN. Nothing below freezes either; see FIXTURES.md.
+  </div>
+  <div class="diag-control"><label><input type="checkbox" id="diagToggle" onchange="document.body.classList.toggle('diag', this.checked)"> 診断表示 (highlight rule-relevant cell categories)</label></div>
+  <style>body:not(.diag) .cell.lineStartProhibited, body:not(.diag) .cell.lineEndProhibited, body:not(.diag) .cell.hangingPunct, body:not(.diag) .cell.hangingCloseBracket { background: none; }</style>
+  
+  <section class="fixture">
+    <h2>F-KINSOKU</h2>
+    <div class="purpose">行頭禁則 push-out (追い出し) — source: <code>これはテストです」と彼は静かに言った</code> — demo capacity 8 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">こ</span><span class="cell" title="ordinary">れ</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">テ</span><span class="cell" title="ordinary">ス</span><span class="cell" title="ordinary">ト</span><span class="cell" title="ordinary">で</span><span class="cell" title="ordinary">す</span><span class="cell lineStartProhibited hangingCloseBracket" title="lineStartProhibited,hangingCloseBracket">」</span></div>
+<div class="c1col"><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">彼</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">に</span><span class="cell" title="ordinary">言</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">これはテストです」と彼は静かに言った</div></div>
+    </div>
+    <div class="trace-summary">3 line(s); rule decisions fired: 1</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-LINE-END</h2>
+    <div class="purpose">行末禁則 (opening bracket cannot end a line) — source: <code>すると「静かな声が聞こえた気がした</code> — demo capacity 4 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">す</span><span class="cell" title="ordinary">る</span><span class="cell" title="ordinary">と</span></div>
+<div class="c1col"><span class="cell lineEndProhibited" title="lineEndProhibited">「</span><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">な</span></div>
+<div class="c1col"><span class="cell" title="ordinary">声</span><span class="cell" title="ordinary">が</span><span class="cell" title="ordinary">聞</span><span class="cell" title="ordinary">こ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">え</span><span class="cell" title="ordinary">た</span><span class="cell" title="ordinary">気</span><span class="cell" title="ordinary">が</span></div>
+<div class="c1col"><span class="cell" title="ordinary">し</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">すると「静かな声が聞こえた気がした</div></div>
+    </div>
+    <div class="trace-summary">5 line(s); rule decisions fired: 1</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-HANGING</h2>
+    <div class="purpose">ぶら下げ (hanging 。) — source: <code>それはとても静かな夜だった。窓の外には雪が降っていた</code> — demo capacity 13 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">そ</span><span class="cell" title="ordinary">れ</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">て</span><span class="cell" title="ordinary">も</span><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">な</span><span class="cell" title="ordinary">夜</span><span class="cell" title="ordinary">だ</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span><span class="cell" title="ordinary">た</span><span class="cell lineStartProhibited hangingPunct" title="lineStartProhibited,hangingPunct">。</span></div>
+<div class="c1col"><span class="cell" title="ordinary">窓</span><span class="cell" title="ordinary">の</span><span class="cell" title="ordinary">外</span><span class="cell" title="ordinary">に</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">雪</span><span class="cell" title="ordinary">が</span><span class="cell" title="ordinary">降</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span><span class="cell" title="ordinary">て</span><span class="cell" title="ordinary">い</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">それはとても静かな夜だった。窓の外には雪が降っていた</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 1</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-HANGING-BRACKET</h2>
+    <div class="purpose">ぶら下げ + riding close-bracket — source: <code>それはとても静かな夜だった。」と彼は思った</code> — demo capacity 13 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">そ</span><span class="cell" title="ordinary">れ</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">て</span><span class="cell" title="ordinary">も</span><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">な</span><span class="cell" title="ordinary">夜</span><span class="cell" title="ordinary">だ</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span><span class="cell" title="ordinary">た</span><span class="cell lineStartProhibited hangingPunct" title="lineStartProhibited,hangingPunct">。</span><span class="cell lineStartProhibited hangingCloseBracket" title="lineStartProhibited,hangingCloseBracket">」</span></div>
+<div class="c1col"><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">彼</span><span class="cell" title="ordinary">は</span><span class="cell" title="ordinary">思</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">それはとても静かな夜だった。」と彼は思った</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 2</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-RUBY-SHORT</h2>
+    <div class="purpose">ordinary ruby — source: <code>｜東京《とうきょう》に行く用事があった</code> — demo capacity 10 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell rubyCell" title="ruby group ruby@0"><ruby>東<rt>とうきょう</rt></ruby></span><span class="cell rubyCell" title="ruby group ruby@0"><ruby>京</ruby></span><span class="cell" title="ordinary">に</span><span class="cell" title="ordinary">行</span><span class="cell" title="ordinary">く</span><span class="cell" title="ordinary">用</span><span class="cell" title="ordinary">事</span><span class="cell" title="ordinary">が</span><span class="cell" title="ordinary">あ</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">｜東京《とうきょう》に行く用事があった</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-RUBY-LONG</h2>
+    <div class="purpose">ruby longer than its base (overflow pressure) — source: <code>｜其《なにがし》という名の男が現れた</code> — demo capacity 6 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell rubyCell" title="ruby group ruby@0"><ruby>其<rt>なにがし</rt></ruby></span><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">い</span><span class="cell" title="ordinary">う</span><span class="cell" title="ordinary">名</span><span class="cell" title="ordinary">の</span></div>
+<div class="c1col"><span class="cell" title="ordinary">男</span><span class="cell" title="ordinary">が</span><span class="cell" title="ordinary">現</span><span class="cell" title="ordinary">れ</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">｜其《なにがし》という名の男が現れた</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-RUBY-BOUNDARY</h2>
+    <div class="purpose">multi-char ruby base at a naive boundary — source: <code>あ｜東京都《とうきょうと》へ行く</code> — demo capacity 4 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">あ</span><span class="cell rubyCell" title="ruby group ruby@1"><ruby>東<rt>とうきょうと</rt></ruby></span><span class="cell rubyCell" title="ruby group ruby@1"><ruby>京</ruby></span><span class="cell rubyCell" title="ruby group ruby@1"><ruby>都</ruby></span></div>
+<div class="c1col"><span class="cell" title="ordinary">へ</span><span class="cell" title="ordinary">行</span><span class="cell" title="ordinary">く</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">あ｜東京都《とうきょうと》へ行く</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-TCY-BARE</h2>
+    <div class="purpose">TCY: bare auto-detect + explicit [tate] notation — source: <code>その日は12月だった。西暦は[tate]2026[/tate]年だ</code> — demo capacity 8 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">そ</span><span class="cell" title="ordinary">の</span><span class="cell" title="ordinary">日</span><span class="cell" title="ordinary">は</span><span class="cell tcyCell" title="TCY run, 1 cell">12</span><span class="cell" title="ordinary">月</span><span class="cell" title="ordinary">だ</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">た</span><span class="cell lineStartProhibited hangingPunct" title="lineStartProhibited,hangingPunct">。</span><span class="cell" title="ordinary">西</span><span class="cell" title="ordinary">暦</span><span class="cell" title="ordinary">は</span><span class="cell tcyCell" title="TCY run, 1 cell">2026</span><span class="cell" title="ordinary">年</span><span class="cell" title="ordinary">だ</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">その日は12月だった。西暦は[tate]2026[/tate]年だ</div></div>
+    </div>
+    <div class="trace-summary">2 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-DASH-FIT</h2>
+    <div class="purpose">dash run, fits whole — source: <code>彼は――そうだ――と静かに言った</code> — demo capacity 5 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">彼</span><span class="cell" title="ordinary">は</span><span class="cell runCell" title="dashRun, 2 cells kept together">――</span><span class="cell" title="ordinary">そ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">う</span><span class="cell" title="ordinary">だ</span><span class="cell runCell" title="dashRun, 2 cells kept together">――</span><span class="cell" title="ordinary">と</span></div>
+<div class="c1col"><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">に</span><span class="cell" title="ordinary">言</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">彼は――そうだ――と静かに言った</div></div>
+    </div>
+    <div class="trace-summary">4 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-DASH-DEFER</h2>
+    <div class="purpose">dash run, must defer whole (not split) — source: <code>彼は――そうだ――と静かに言った</code> — demo capacity 3 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell" title="ordinary">彼</span><span class="cell" title="ordinary">は</span></div>
+<div class="c1col"><span class="cell runCell" title="dashRun, 2 cells kept together">――</span><span class="cell" title="ordinary">そ</span></div>
+<div class="c1col"><span class="cell" title="ordinary">う</span><span class="cell" title="ordinary">だ</span></div>
+<div class="c1col"><span class="cell runCell" title="dashRun, 2 cells kept together">――</span><span class="cell" title="ordinary">と</span></div>
+<div class="c1col"><span class="cell" title="ordinary">静</span><span class="cell" title="ordinary">か</span><span class="cell" title="ordinary">に</span></div>
+<div class="c1col"><span class="cell" title="ordinary">言</span><span class="cell lineStartProhibited" title="lineStartProhibited">っ</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">彼は――そうだ――と静かに言った</div></div>
+    </div>
+    <div class="trace-summary">6 line(s); rule decisions fired: 0</div>
+  </section>
+
+  <section class="fixture">
+    <h2>F-ELLIPSIS</h2>
+    <div class="purpose">ellipsis run — source: <code>……そうか……と彼はつぶやいた</code> — demo capacity 5 cells (PoC scale only, not a preset value)</div>
+    <div class="pair">
+      <div class="col"><h3>C1-NATURAL (engine-controlled, source-mapped)</h3><div class="c1nat"><div class="c1col"><span class="cell runCell" title="ellipsisRun, 2 cells kept together">……</span><span class="cell" title="ordinary">そ</span><span class="cell" title="ordinary">う</span><span class="cell" title="ordinary">か</span></div>
+<div class="c1col"><span class="cell runCell" title="ellipsisRun, 2 cells kept together">……</span><span class="cell" title="ordinary">と</span><span class="cell" title="ordinary">彼</span><span class="cell" title="ordinary">は</span></div>
+<div class="c1col"><span class="cell" title="ordinary">つ</span><span class="cell" title="ordinary">ぶ</span><span class="cell" title="ordinary">や</span><span class="cell" title="ordinary">い</span><span class="cell" title="ordinary">た</span></div></div></div>
+      <div class="col"><h3>C3 — browser-native (no rule layer)</h3><div class="c3block">……そうか……と彼はつぶやいた</div></div>
+    </div>
+    <div class="trace-summary">3 line(s); rule decisions fired: 0</div>
+  </section>
+</body>
+</html>
