@@ -1,8 +1,9 @@
 # TateSpun TYPESETTING ENGINE v2 RULES MASTER
 
 - Status: APPROVED BASELINE
-- Version: v1.7
+- Version: v1.8
 - Established: 2026-09-05
+- Updated: 2026-09-06 — Phase 3 P3-L03 Canonical Core Implementation Plan FROZEN (§28): the implementation plan for the Contract frozen at §27 is accepted, not yet executed. Planned isolated location `typesetting-v2/core/` (zero Production import today, verified read-only); 25-module boundary map across 12 dependency tiers with zero DOM/React/Canvas/PDF/Renderer/UI/SNS/cloud/AI dependency at any tier; a 12-Loop implementation roadmap (P3-L04–P3-L15, 45–90 min each, none >120 min) from first Core source file to a Canonical Core regression milestone; a deterministic, Core-first test strategy (type-check available today via existing `tsc --noEmit`; Vitest recommended as the sole future test-runner dependency, explicitly gated behind separate Human approval and **not installed by this freeze**); a 20-fixture (F01–F20) technical regression taxonomy kept distinct from the long Human visual-QA prose corpus; every existing Core Invariant (INV-001–INV-013, `CORE_INVARIANTS.md`) mapped to an implementing Loop, none renumbered; every open Phase 3 item (P3-O03/04/05/06 residual/07/08/09/14/15) explicitly staged as non-blocking rather than silently closed; an 8-stage migration plan (A isolated dev → H old-engine retirement, not scheduled) with the old engine preserved unmodified through every stage until an explicit future retirement gate; an explicit first-`src/`-integration entry gate (8 criteria, none satisfied by unit tests alone); Logical/Preview/Publication quality gates kept distinct (Core PASS ⇏ Preview PASS ⇏ Publication PASS); Human QA scoped to exactly one gate inside the roadmap (G1, after P3-L15, logical trace/JSON review only — no renderer exists yet to judge visually). This is a planning-freeze update — **Phase 3 Core engine implementation has not begun.**
 - Updated: 2026-09-06 — Phase 3 P3-L02 Canonical Logical Typesetting Core Contract FROZEN for implementation planning (§27): Core/Normalizer/Measurement-Provider/Renderer authority boundaries made explicit (Core decides composition; Renderer never re-decides a break, ruby grouping, or logical position); source addressing fixed at Unicode code-point offsets with grapheme-safe unit boundaries; canonical geometry fixed at integer micrometer ticks (1 tick = 0.001mm, hardened from an initial 0.01mm proposal) with mm as the display/documentation unit only; Japanese character-class/kinsoku rules represented as versioned data, not conditionals; BreakOpportunity/BreakDecision separated (candidate vs. actual, with reasons); ruby ATOMIC/JUKUGO capability frozen, with jukugo segmentation *discovery* explicitly placed upstream of the Core (Normalizer/Logical Analysis, mechanism itself not yet chosen — new Phase 3 open item P3-O14) while the Core only ever honors provided segment boundaries and never guesses a split; ruby class-aware overhang mechanism frozen per HG-4 (exact budget values remain the pre-existing open item); Natural Pitch, decision trace, determinism, versioning, and a structured Warning/Error/HOLD model (Publication approval may be withheld) all made contractual; 12 Core Invariants recorded, plus a 13th precision invariant added at this closeout. This is a documentation/contract freeze — **Phase 3 Core engine implementation has not begun.** New Phase 3 open items P3-O14 (jukugo segmentation mechanism) and P3-O15 (group-ruby's own break-rule, carried from P3-L01) added; neither blocks Core Contract review or a future Core implementation plan.
 - Updated: 2026-09-05 — Phase 3 P3-L01 Japanese Rule Freeze Human Gate CLOSED (HG-1–HG-4, §26): kinsoku line-start prohibition for cl-05 middle-dots and cl-12/13 abbreviations set to jlreq's stricter base-level policy as the v2 Core default (superseding legacy looser behavior); jukugo-ruby internal-breakability Core capability approved (Phase 2's atomic mono-ruby/group-ruby behavior retained, not replaced); character-class-aware ruby overhang budgets approved in principle, layered on the retained Phase 2 geometry clamp, with exact numeric budget values deliberately left open pending a future narrower Human decision; the prior invalid "jlreq §3.1.10" dash/ellipsis citation (§19/§24) is corrected — the real rule is verified via jlreq anchors `#cl-08`/`#notes_a3`. Phase 3 Open Items P3-O01/P3-O02/P3-O06 updated accordingly (P3-O01/P3-O06: resolved to Core-Contract-ready with one narrow residual item each; P3-O02: resolved). This is a rule/policy freeze, not Core code — Phase 3 Core implementation has not yet begun.
 - Updated: 2026-09-05 — repository/worktree/integration rule clarified
@@ -1398,6 +1399,62 @@ Master §26.2（HG-3）で承認されたjukugo-ruby internal breakability capab
 ## 27.10 適用範囲
 
 本節はContractの確定であり、Canonical Logical CoreのCore実装そのものではない。Phase 3 Core Contractは、次のCore Implementation Plan（P3-L03）の開始条件を満たす状態にあるが、実装コードは本更新の時点で一切作成されていない。
+
+---
+
+# 28. PHASE 3 P3-L03 CANONICAL CORE IMPLEMENTATION PLAN FREEZE (v1.8)
+
+2026-09-06、Phase 3 P3-L03によりCanonical Core Implementation Planが確定した。これは§27で凍結されたContractの実装計画の承認であり、**Core実装コードは本更新の時点で一切作成されていない。**
+
+Full evidence: `typesetting-v2/docs/implementation/P3_CORE_IMPLEMENTATION_PLAN.md`、`CORE_MODULE_MAP.md`、`P3_CORE_LOOP_ROADMAP.md`、`CORE_TEST_STRATEGY.md`、`CORE_MIGRATION_ROLLBACK_PLAN.md`、`CORE_IMPLEMENTATION_RISK_REGISTER.md`、生ログ `typesetting-v2/research/PHASE3_LOOP_LOG.md` P3-L03。
+
+## 28.1 実装配置
+
+Core実装は`typesetting-v2/core/`に隔離配置する（計画のみ、ディレクトリ未作成）。既存の`src/`はこのパスを一切参照しておらず（読み取り専用調査で確認済み）、リポジトリ既存の`tsc --noEmit`が追加設定なしにこの配置を型検査できる。Production統合は§28.9の明示的ゲートを経るまで発生しない。
+
+## 28.2 モジュール境界と依存方向
+
+Contract（§27）の各節・`CORE_RESPONSIBILITY_MATRIX.md`の各行に対応する25モジュール、12依存層のDAGとして計画する。Coreはいかなる層においてもDOM／React／Canvas／PDFライブラリ／Renderer実装／UI状態／SNS／クラウド／外部AI／ネットワーク原稿処理に依存しない。単一の巨大`typesettingEngine.ts`は作らない。
+
+## 28.3 実装ロードマップ
+
+P3-L04（Core Foundation）からP3-L15（Canonical Regression Suite / 8-preset論理検証、マイルストーン）まで、12個の独立したLoopとして計画する。各Loopの上限は90分、いかなるLoopも120分を超えて不透明に継続しない。各Loopはテスト・スコープ監査・（該当する場合のみ）Human Gate・チェックポイントコミットで終える。P3-L04／L05／L06のような複数Loopを単一の実装タスクに統合しない。
+
+## 28.4 テスト戦略とVitex依存ゲート
+
+Core実装は決定論的な単体テスト・フィクスチャテスト・正準構造出力テスト・source-span／break-decision／trace／GeometryTick／HOLD／determinismテストを優先し、スクリーンショット・ブラウザラスタテスト・ヘッドレスブラウザを要求しない。現時点で専用テストランナーは未導入（`tsc --noEmit`のみ利用可能）。将来のテストランナーとしてVitestを推奨するが、**本凍結時点で導入は行っていない**。Vitest導入（`package.json`／lockfile変更を伴う）は、P3-L04開始時に別途明示的なHuman承認を要する独立したDependency Gateとして記録する。
+
+## 28.5 フィクスチャ分類
+
+F01〜F20の技術的回帰フィクスチャ分類（平叙文・行頭/行末禁則・cl-05／cl-12/13厳格方針・ぶら下げ・atomic/group ruby・jukugo ruby・overlong ruby・TCY・dash/ellipsis run・手動改ページ・画像・二段組・Unicode/grapheme安全性・HOLD・容量/残余・複数ページ長文・正準回帰文）を確定する。既存の長文Human視覚QA原稿コーパス（`REGRESSION_CORPUS_SPEC.md`）は、これとは別個に維持し、短い技術的フィクスチャで置き換えない。
+
+## 28.6 Invariantマッピング
+
+`CORE_INVARIANTS.md`のINV-001〜INV-013すべてを、実装するLoopに対応付ける。既存IDは変更しない。INV-002／INV-009はRendererが存在するまで構造的に（違反しうるコードが存在しないことで）担保され、Renderer実装段階で実テスト化する。
+
+## 28.7 Measurement戦略
+
+初期Core実装は決定論的なfake/reference MeasurementFactsプロバイダを用いる。実測技術（DOM／Canvas／HarfBuzz／WASM／PDFライブラリ等）は本計画では選定しない。RendererがCanonical Layoutを再測定・再フローすることは禁止する（INV-009）。
+
+## 28.8 Open Item staging
+
+P3-O03（TCY visual renderer）、P3-O04／O05（dash/ellipsis visual alignment）、P3-O06残課題（正確なruby overhang数値）、P3-O07（TCY自動判定）、P3-O08（Publication/PDF renderer）、P3-O09（Preview renderer）、P3-O14（jukugo segmentation policy）、P3-O15（group-ruby固有規則）は、いずれもCore skeleton実装を妨げない非ブロッキング項目として、将来のステージに明示的に割り当てる。これらを実装の都合で沈黙のうちにクローズしない。
+
+## 28.9 移行・統合ゲート・ロールバック
+
+Stage A（隔離開発）からStage H（旧エンジン退役、未スケジュール）までの8段階移行計画を確定する。旧TateSpunエンジンは、明示的な将来の退役ゲートまで、いかなるステージにおいても変更されず利用可能なまま維持する。最初の`src/`統合は、単体テストのPASSのみでは発生しない — Core invariantスイートPASS、必須論理機能の網羅、決定論的複数ページフィクスチャPASS、source mapping PASS、重大HOLDの沈黙的な格下げがないこと、比較アダプタ計画の存在、ロールバック経路の存在、統合開始への明示的Human承認、の8条件をすべて満たすことを要する。Loop単位のロールバック（各Loopのチェックポイントへの復帰）とProduct単位のロールバック（旧エンジン温存）を区別して維持する。
+
+## 28.10 品質ゲートの分離
+
+LOGICAL CORRECTNESS（Core）、VISUAL PREVIEW QUALITY（Preview）、PUBLICATION OUTPUT QUALITY（Publication）を独立した3つのゲートとして維持する。Core PASSはPreview PASSを意味せず、Preview PASSはPublication PASSを意味しない。Publication QualityはProductの最優先事項であり続ける（Master §3）。
+
+## 28.11 Human Gate
+
+本Implementation Plan自体の確定にあたり、新規のHuman Product Decisionは不要であった（既存Contract／Invariantの具体化、または低リスクな工学的既定選択のみ）。ロードマップ内で計画されるHuman Gateは、P3-L15終了後のG1（論理trace／Canonical出力のレビューのみ、視覚的判断は含まない）の1件のみであり、将来のPreview／Publication renderer段階のHuman視覚QAとは明確に区別する。
+
+## 28.12 適用範囲
+
+本節はImplementation Planの確定であり、Core実装そのものではない。P3-L04（Core Foundation）は、Vitest導入のDependency Gateが別途解決された後に開始できる状態にあるが、実装コードは本更新の時点で一切作成されていない。
 
 ---
 

@@ -169,3 +169,41 @@
 ---
 
 No rejected hypothesis is silently reopened without new evidence, per the loop-engineering rule established in Phase 1/2.
+
+---
+
+## P3-L03 — Canonical Core Implementation Plan
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `3732bb866de690ac9b885c59832ca24548c00e23` (matches expected checkpoint "TSP v2: freeze canonical core contract"), worktree clean before start.
+
+**QUESTION:** Can the frozen Canonical Core Contract be implemented as small deterministic Loops with isolated rollback and without touching Production until explicit integration gates?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Module decomposition against the frozen Contract and data-model candidate (25 modules, `CORE_MODULE_MAP.md`); dependency-DAG derivation (12 tiers, no DOM/Canvas/PDF/React/UI/SNS/cloud/AI dependency at any tier); Loop planning (12 Loops, P3-L04–P3-L15, 45–90 min each, `P3_CORE_LOOP_ROADMAP.md`); test-tooling audit (read-only — no runner currently installed; `tsc --noEmit` already works repo-wide with zero config change; Vitest recommended as the one future dependency, gated behind explicit Human approval, not installed here); fixture taxonomy (20 F-series fixtures, cross-referenced against the pre-existing `REGRESSION_CORPUS_SPEC.md` 23-category corpus); invariant test matrix (all 13 `CORE_INVARIANTS.md` entries mapped to a Loop); open-item dependency mapping (all 8 relevant OPEN items confirmed non-blocking, each given a safe default or a deferred stage); migration/rollback planning (8 stages A–H, old engine untouched through H); risk register (10 named risks with mitigation/rollback/blocking milestone).
+
+**PRIMARY EVIDENCE:** `docs/implementation/P3_CORE_IMPLEMENTATION_PLAN.md`, `CORE_MODULE_MAP.md`, `P3_CORE_LOOP_ROADMAP.md`, `CORE_TEST_STRATEGY.md`, `CORE_MIGRATION_ROLLBACK_PLAN.md`, `CORE_IMPLEMENTATION_RISK_REGISTER.md`.
+
+**RESULT: PASS.** Implementation location recommended (`typesetting-v2/core/`, isolation verified by read-only inspection — nothing in `src/` currently references `typesetting-v2/`); module boundaries and dependency direction explicit with no DOM/Renderer dependency anywhere in Core; a concrete 12-Loop sequence exists from first source file to a Canonical Core regression milestone, none exceeding 90 minutes; test strategy, fixture taxonomy, and invariant coverage all exist and are cross-mapped; the Measurement Provider strategy (fake/deterministic first, real adapter deferred) is explicit; every OPEN item is mapped to a safe stage, none silently closed; migration stages, rollback (Loop-level and Product-level), and the first `src/`-integration entry gate are all explicit; the old engine remains fully untouched; Human QA is scoped to exactly one gate inside this plan (G1, P3-L15, logical-trace review only — no rendering exists yet to judge); the PoC reuse policy classifies Phase 2 material without adopting any of it verbatim; the risk register names 10 risks with concrete mitigations. No Core implementation code was written. Master remains v1.7, unmodified. No commit, push, or deploy was performed by this Loop.
+
+**WHY:** Every module traces to a specific Core Contract section or Responsibility Matrix row (no invented scope); every Loop's dependency list traces to the dependency DAG (no Loop assumes an unbuilt prerequisite); every invariant traces to `CORE_INVARIANTS.md`'s own numbering (none renumbered); every OPEN item traces to `PHASE3_OPEN_ITEMS.md`'s existing entries (none newly invented or silently resolved by this planning pass).
+
+**DECISION: P3-L03 — PASS.**
+
+**NEXT:** Human/Product review of this implementation plan and its five companion documents. On acceptance, P3-L04 (Core Foundation) may begin — its own zeroth step is the one Human-approved dependency install (Vitest) named in `P3_CORE_LOOP_ROADMAP.md`'s pre-requisite section. No further Master version bump is implied by this Loop; Master changes only if/when the plan review itself surfaces a Product-level decision this Loop did not anticipate.
+
+---
+
+## P3-L03 — Closeout: Implementation Plan Freeze (2026-09-06)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `3732bb866de690ac9b885c59832ca24548c00e23` (matches expected checkpoint, unchanged since P3-L03 itself made no commit), worktree dirty only under `typesetting-v2/` (the six P3-L03 planning documents plus this log) before start.
+
+**RESULT: P3-L03 — PASS.** Plan review: APPROVED / FROZEN. All six companion documents (`P3_CORE_IMPLEMENTATION_PLAN.md`, `CORE_MODULE_MAP.md`, `P3_CORE_LOOP_ROADMAP.md`, `CORE_TEST_STRATEGY.md`, `CORE_MIGRATION_ROLLBACK_PLAN.md`, `CORE_IMPLEMENTATION_RISK_REGISTER.md`) had their status headers updated to "REVIEWED / FROZEN FOR IMPLEMENTATION" with "Core implementation: NOT STARTED" restated explicitly — no content was reopened or re-litigated at this closeout. Master updated **v1.7 → v1.8** (§28), recording the planning freeze: implementation location (`typesetting-v2/core/`, planned, not created), the 25-module/12-tier boundary, the 12-Loop roadmap (P3-L04–P3-L15, max 90 min, none >120 min), the deterministic Core-first test strategy, the F01–F20 fixture taxonomy (long Human prose corpus kept separate), full INV-001–013 mapping (no renumbering), all 8 relevant open items (P3-O03/04/05/06 residual/07/08/09/14/15) confirmed staged and non-blocking, the 8-stage A–H migration plan with old-engine preservation, the explicit first-`src/`-integration gate, the three-way Logical/Preview/Publication quality-gate separation, and the single Human Gate (G1, after P3-L15).
+
+**Vitest dependency gate:** RECOMMENDED, **NOT INSTALLED**. The user verbally pre-approved installing Vitest during plan review ("Vitest導入：YES"), but per this closeout's explicit write-boundary instruction, no `package.json`/lockfile change was made here — that single `npm install -D vitest` step is deliberately deferred to the start of P3-L04 itself, so it happens inside that Loop's own scope/audit/checkpoint, not folded into this documentation-only closeout. The verbal approval is recorded here so it is not lost or re-asked unnecessarily at P3-L04's start; the actual write-boundary/install action still happens there.
+
+**WHY:** Every frozen claim in Master §28 traces to one of the six companion documents produced in P3-L03's own body (no new architecture invented at closeout); no open item was silently closed; no invariant was renumbered; the old engine and `src/` remain completely unreferenced by anything written in this closeout.
+
+**DECISION: P3-L03 — CLOSED.**
+
+**NEXT:** P3-L04 (Core Foundation) — its zeroth step is resolving the Vitest dependency/write-boundary gate (already verbally approved; the install action itself happens inside that Loop), then scaffolding `typesetting-v2/core/geometry/`, `core/version/`, `core/source/span.ts`, `core/layout/schema.ts`, `core/settings/` per `P3_CORE_LOOP_ROADMAP.md`.
