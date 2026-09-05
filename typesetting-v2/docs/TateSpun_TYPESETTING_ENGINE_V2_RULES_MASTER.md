@@ -1,8 +1,9 @@
 # TateSpun TYPESETTING ENGINE v2 RULES MASTER
 
 - Status: APPROVED BASELINE
-- Version: v1.5
+- Version: v1.6
 - Established: 2026-09-05
+- Updated: 2026-09-05 — Phase 3 P3-L01 Japanese Rule Freeze Human Gate CLOSED (HG-1–HG-4, §26): kinsoku line-start prohibition for cl-05 middle-dots and cl-12/13 abbreviations set to jlreq's stricter base-level policy as the v2 Core default (superseding legacy looser behavior); jukugo-ruby internal-breakability Core capability approved (Phase 2's atomic mono-ruby/group-ruby behavior retained, not replaced); character-class-aware ruby overhang budgets approved in principle, layered on the retained Phase 2 geometry clamp, with exact numeric budget values deliberately left open pending a future narrower Human decision; the prior invalid "jlreq §3.1.10" dash/ellipsis citation (§19/§24) is corrected — the real rule is verified via jlreq anchors `#cl-08`/`#notes_a3`. Phase 3 Open Items P3-O01/P3-O02/P3-O06 updated accordingly (P3-O01/P3-O06: resolved to Core-Contract-ready with one narrow residual item each; P3-O02: resolved). This is a rule/policy freeze, not Core code — Phase 3 Core implementation has not yet begun.
 - Updated: 2026-09-05 — repository/worktree/integration rule clarified
 - Updated: 2026-09-05 — Phase 0 Human Decisions frozen (HD-001–HD-009); Editor/Settings switching UI direction added; Memo-in-Editor requirement added; 柱/奥付 font inheritance + override requirement added
 - Updated: 2026-09-05 — Phase 1 UI Human QA decision frozen (HD-010–HD-013): Settings-drawer-while-Editor-visible direction selected (existing TateSpun visual identity NOT superseded by prototype visuals); Editor default-horizontal/optional-vertical direction added as a research item; limited/disclosed emoji policy added; image-insert/undo/redo recorded as high-value Editor requirements; Phase 1 jlreq standards-verification caveats (dash/ellipsis citation correction, partial kinsoku-class confirmation) recorded as pre-Phase-3 blockers
@@ -849,6 +850,14 @@ Engine v2は以下を満たして初めてProduction候補となる。
 59. Human-approved Phase 2 Ruby behavior recorded (§25.6) — base-position invariant, unbroken annotation run, geometry-based CENTER/START_CLAMP/END_CLAMP/OVERFLOW_OPEN policy; explicitly NOT a claim of full JLREQ/JIS ruby standards compliance: YES
 60. Editor Export Profiles added as a new Product Requirement (markup-preserving / plain-posting-friendly / future platform-specific), specification deferred to Phase 3 (§25.7): YES
 
+2026-09-05 Phase 3 P3-L01 Japanese Rule-Freeze Human Gate (HG-1–HG-4, see §26):
+
+61. HG-1 — kinsoku line-start prohibition for cl-05 (middle dots ・：；): stricter jlreq base-level policy adopted as the v2 Core default, superseding legacy `tategaki.ts` looser behavior: YES
+62. HG-2 — kinsoku line-start prohibition for cl-12/13 (pre/postfixed abbreviations): stricter jlreq base-level policy adopted as the v2 Core default: YES
+63. HG-3 — jukugo-ruby internal-breakability Core capability approved (Core must be able to represent legal breaks between base-character+ruby-segment pairs within a jukugo-ruby group); Phase 2's Human-approved atomic mono-ruby/group-ruby behavior (§25.6/HD-020) explicitly retained, not replaced: YES
+64. HG-4 — character-class-aware ruby overhang budgets approved in principle, layered on top of the retained (not replaced) Phase 2 geometry clamp (§25.6); exact numeric budget/convention values explicitly NOT frozen, left open for a future narrower Human decision: YES (principle only)
+65. Dash/ellipsis semantic run-inseparability rule (cl-08) resolved with a corrected primary-source citation, superseding the invalid "jlreq §3.1.10" reference in §19/§24: YES
+
 ---
 
 # 19. CURRENT STATUS
@@ -872,13 +881,16 @@ Phase 1 Final Emoji Human QA:
 COMPLETE (2026-09-05) — HD-014 recorded in §24. ↶/↷/⏎/⚙️ approved for their stated purposes only; 💾/🖼/👁/📝/✏️ rejected. Phase 1 ready for checkpoint closure.
 
 Phase 1 standards-verification status:
-OPEN — jlreq dash/ellipsis inseparability citation corrected (previously-cited "§3.1.10" not corroborated, see `typesetting-v2/research/PHASE1_LOOP_LOG.md` P1-L10a); kinsoku character-class table partially confirmed (extends to at least cl-27) but not fully retrieved. Both MUST be resolved before Phase 3 hard-codes kinsoku/dash/ellipsis behavior — carried forward as Phase 3 open items P3-O01/P3-O02 (`typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`).
+SUPERSEDED by Phase 3 P3-L01 (below) for the kinsoku table and dash/ellipsis citation specifically. Originally: OPEN — jlreq dash/ellipsis inseparability citation corrected (previously-cited "§3.1.10" not corroborated, see `typesetting-v2/research/PHASE1_LOOP_LOG.md` P1-L10a); kinsoku character-class table partially confirmed (extends to at least cl-27) but not fully retrieved. This history is preserved for traceability; it is no longer the current status.
 
 Phase 2 Architecture Human Gate:
 COMPLETE (2026-09-05) — HD-015 through HD-021 recorded in §25. C1-NATURAL approved as the Phase 3 logical-typesetting-core direction (not a final full architecture); C3 retained as control/reference; C2 deferred/reopenable; Natural Pitch approved as default; renderer separation approved; Human-approved Ruby behavior recorded; Editor Export Profiles added as a new Product Requirement. Full evidence: `typesetting-v2/docs/architecture/PHASE2_ARCHITECTURE_NARROWING.md`, `PHASE2_EVIDENCE_SUMMARY.md`. Phase 2 CLOSED.
 
+Phase 3 P3-L01 Japanese Rule-Freeze Human Gate:
+COMPLETE (2026-09-05) — HG-1 through HG-4 recorded in §26. Full jlreq cl-01–cl-30 kinsoku class table and TateSpun-relevant break rules directly verified from the primary source; dash/ellipsis cl-08 inseparability rule recovered with a corrected citation (the old "§3.1.10" reference is retired, not merely re-flagged); kinsoku conformance-level defaults (cl-05, cl-12/13) set to jlreq's stricter base level; jukugo-ruby internal-breakability Core capability approved (Phase 2's atomic ruby behavior retained); ruby class-aware overhang approved in principle only, exact numeric budgets deliberately left open. Full evidence: `typesetting-v2/docs/standards/PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`, `P3_KINSOKU_RULE_FREEZE_CANDIDATE.md`, `P3_DASH_ELLIPSIS_RULE_FREEZE_CANDIDATE.md`, `P3_RUBY_STANDARDS_REVIEW.md`, `typesetting-v2/research/phase3/P3_L01_PRIMARY_SOURCE_LEDGER.md`, `typesetting-v2/research/PHASE3_LOOP_LOG.md`. This is a rule/policy freeze only — **Phase 3 Core implementation has not begun.**
+
 Next authorized action:
-Phase 3 — Core Typesetting Engine, informed by (not blocked on) `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`.
+Phase 3 — Core Typesetting Engine (Core Contract, P3-L02), informed by the now-largely-resolved `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md` (P3-O01/P3-O02/P3-O06 resolved or narrowed to Core-Contract-ready; remaining items are Renderer-level, Publication/Preview-technology, or Editor-side and do not block Core Contract per that register).
 
 Not yet authorized:
 - Engine v2 implementation in `src/` (Phase 3 begins in `typesetting-v2/` per §13, same as prior phases)
@@ -891,7 +903,8 @@ Not yet authorized:
 - Vertical Editor mode implementation (see §22.2 — research direction only, not implementation)
 - Any specific emoji's Production use (see §23 — disclosure + Human QA required per use, never blanket-approved)
 - Editor Export Profiles implementation (§25.7 — requirement recorded only, full specification is Phase 3 open item P3-O11)
-- Final JLREQ/JIS kinsoku/dash/ellipsis/ruby-distribution standards freeze (§25.6/§25.8 — Phase 3 open items P3-O01/P3-O02/P3-O06/P3-O07)
+- Full JLREQ/JIS standards freeze in the broadest sense: P3-O01 (900-cell pairwise grid, low-impact residual), P3-O06's exact ruby-overhang numeric budget values, and P3-O07 (TCY auto-detection threshold) remain open — P3-O01's class table/break rules and P3-O02 (dash/ellipsis) are now resolved, and P3-O06's capability-level questions (HD-Q1/HD-Q2) are now resolved, per §26
+- Phase 3 Core engine code itself (this Rule Freeze Gate is policy/documentation only, per §26 — no Canonical Layout Model implementation exists yet)
 
 ---
 
@@ -1273,6 +1286,42 @@ Full register: `typesetting-v2/docs/architecture/PHASE3_OPEN_ITEMS.md`（P3-O01�
 - **Editor側（Typesetting Engine coreの範囲外）**: Editor vertical-mode feasibility (P3-O10), Editor Export Profiles full specification (P3-O11)。
 
 これらはいずれもPhase 3開始のblockerではない。各々「何の前に解決が必要か」をPHASE3_OPEN_ITEMS.mdに明記する。
+
+---
+
+# 26. PHASE 3 P3-L01 JAPANESE RULE FREEZE (v1.6, HG-1–HG-4)
+
+2026-09-05、Product OwnerはPhase 3 P3-L01（日本語組版標準の一次資料調査）で提起された4件のHUMAN_GATE項目全てを承認した。これはPhase 3 Coreが実装すべきルール・ポリシーの確定であり、Core実装そのものの完了を意味しない。
+
+Full evidence: `typesetting-v2/docs/standards/PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`、`P3_KINSOKU_RULE_FREEZE_CANDIDATE.md`、`P3_DASH_ELLIPSIS_RULE_FREEZE_CANDIDATE.md`、`P3_RUBY_STANDARDS_REVIEW.md`、一次資料台帳 `typesetting-v2/research/phase3/P3_L01_PRIMARY_SOURCE_LEDGER.md`、生ログ `typesetting-v2/research/PHASE3_LOOP_LOG.md`（P3-L01-A〜D、Human Gate closeout）。
+
+## 26.1 HG-1/HG-2 — Kinsoku conformance-level defaults
+
+**HG-1（cl-05、中点類 ・：；の行頭禁則）**: jlreqのbase-level（最も厳格な既定水準）の行頭禁則をv2 Coreの既定値として採用する。現行`tategaki.ts`のより緩い挙動（行頭禁則対象外）は、legacy比較用の記録としてのみ保持し、v2既定値としては引き継がない。
+
+**HG-2（cl-12/13、前置・後置省略記号 ￥＄￡＃ / °′″℃￠％‰の行頭禁則）**: 同様にbase-levelの行頭禁則をv2 Coreの既定値として採用する。
+
+両決定は、jlreqが公式に提示している複数の正当な準拠水準（"very loose"/"loose"等）のうちどれをTateSpunが採用するかというPRODUCT_POLICY判断であり、STANDARD_BACKEDな根拠（jlreq `#addendum_a3`）の上に成り立つ。「jlreqがTateSpunのこの具体的構成を強制している」という主張ではない。
+
+## 26.2 HG-3 — Jukugo-ruby internal breakability (Core capability)
+
+熟語ルビ（jukugo-ruby）グループ内部で、親文字1字とそれに対応するルビ・セグメントの組同士の間に改行機会を表現できるCore capabilityを承認する。これはjlreq cl-23の規定（`#notes_a3` id597）に基づく。
+
+**重要な限定**：「ルビはどこでも分割してよい」という意味ではない。Phase 2でHuman承認済みのモノルビ・グループルビの「1つの途切れない注釈ラン」挙動（§25.6/HD-020）はそのまま維持し、上書きしない。データモデルの具体的な形はPhase 3 Core Contract（P3-L02）へ委ねる。
+
+## 26.3 HG-4 — Character-class-aware ruby overhang (principle only)
+
+隣接文字クラスに応じたルビの掛かり量（オーバーハング）の予算を、既存の（維持される）Phase 2ジオメトリ境界クランプ（CENTER/START_CLAMP/END_CLAMP/OVERFLOW_OPEN、§25.6）に重ねて導入する、という**原則**を承認する。本文位置不変の原則（ルビは本文を動かさない）も維持する。
+
+**具体的な数値・慣例は本決定では凍結しない**。jlreqは同じ状況に対して複数の正当な慣例（例：漢字への掛かりを「禁止」とするか「ルビ文字サイズの半角まで許容」とするか）を並記しており、どちらか一方を無断で選択することはしない。この点は`PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`の行22bとして引き続きOPENとし、将来の、より狭い範囲のHuman決定を要する。
+
+## 26.4 Dash / ellipsis citation correction
+
+Master §19/§24で記録されていた「jlreq §3.1.10」という引用は、本ループにより誤りであることが確定した（この版のjlreqには番号付き条項体系そのものが存在しない）。分離禁止文字（cl-08：EM DASH／HORIZONTAL ELLIPSIS／TWO DOT LEADER）の実際の規則は、jlreqのアンカー`#cl-08`／`#notes_a3`から一次資料で直接検証済みである。今後この規則を参照する場合は、この訂正後のアンカー引用を用いる。
+
+## 26.5 Scope note
+
+本§26はPhase 3のルール・ポリシー凍結であり、Canonical Layout ModelのCore実装そのものではない。Phase 3 Core Contract（P3-L02）は本§26の内容を前提として開始できる状態にあるが、実装コードは本更新の時点で一切作成されていない。
 
 ---
 
