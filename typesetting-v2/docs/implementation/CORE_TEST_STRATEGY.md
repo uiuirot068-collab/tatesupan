@@ -1,6 +1,6 @@
 # Core Test Strategy
 
-- Status: **P3-L03: REVIEWED / FROZEN FOR IMPLEMENTATION (2026-09-06, Master v1.8 §28.4).** Core implementation: NOT STARTED. No tests exist yet; no test runner is installed yet. **Correction (2026-09-06):** an earlier draft of this document stated the Product Owner had verbally pre-approved installing Vitest ("Vitest導入：YES"). That was inaccurate — the message it was based on only requested the next prompt and did not constitute explicit dependency-install approval. **Vitest dependency gate: OPEN.** Vitest remains recommended and not installed; `npm install -D vitest` (and any `package.json`/lockfile change) requires a distinct, explicit Product Owner approval, still not yet recorded, before P3-L04 may perform it — inside that Loop's own write boundary, not this planning/freeze closeout, which is scoped to `typesetting-v2/` only.
+- Status: **P3-L04: IN PROGRESS (2026-09-06).** **Vitest dependency gate: CLOSED — approved by Product Owner (2026-09-06) and installed** as the zeroth step of P3-L04 (`P3_CORE_LOOP_ROADMAP.md` pre-requisite section). `vitest@^3.2.7` was installed rather than the newest 3.x-successor major (`vitest@5`), because `vitest@5` requires `@types/node >=22.0.0` while the root project pins `@types/node@^20` — installing 5.x would have forced an unrelated, unapproved `@types/node` bump. `vitest@3.2.7` is the latest release compatible with `@types/node ^20` under the repo's current Node/TypeScript baseline. A transitive `nanoid` high-severity advisory (GHSA-2v37-7h3g-55p8, dev-only) surfaced on install and was resolved via `npm audit fix` (0 vulnerabilities remain). `npx vitest run` and `npx tsc --noEmit` both execute against `typesetting-v2/core/`; see `P3_CORE_LOOP_ROADMAP.md` for per-Loop progress.
 
 ## 1. Test tooling audit (read-only, current state)
 
@@ -12,7 +12,7 @@ Read-only inspection of the repo root (`package.json`, `tsconfig.json`) found:
 
 **Recommended runner: Vitest.** Rationale: native ESM + TS support with no transpile config needed (matches this repo's `moduleResolution: "bundler"`), fast, minimal footprint, does not require jsdom/browser environment for pure-function Core tests (Core has zero DOM dependency by contract, so a `node` test environment suffices), and is the most common modern choice for a Next.js + TS repo that has no existing test infrastructure to conflict with.
 
-**Dependency install performed in this Loop: NO.** Adding `vitest` (and `@vitest/coverage-v8` if coverage reporting is wanted later) is a single explicit Human-approved step at the start of P3-L04 (`P3_CORE_LOOP_ROADMAP.md`, pre-requisite section) — not part of P3-L03, and not silently bundled into any other change.
+**Dependency install performed in this Loop (P3-L04): YES**, per explicit Product Owner approval recorded 2026-09-06 (`vitest@^3.2.7` in `devDependencies`, `test`/`test:watch` scripts added to `package.json`, `vitest.config.ts` added at repo root scoping `include` to `typesetting-v2/core/**/*.test.ts`). `@vitest/coverage-v8` was not installed — not needed by any Loop's acceptance criteria yet; add it only if a future Loop's coverage requirement calls for it, as its own decision.
 
 ## 2. Test levels
 

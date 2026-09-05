@@ -1,18 +1,19 @@
 # P3 Core Implementation Loop Roadmap
 
-- Status: **P3-L03: REVIEWED / FROZEN FOR IMPLEMENTATION (2026-09-06, Master v1.8 §28.3).** Core implementation: NOT STARTED. Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. **No Loop in this roadmap has started.** P3-L04 status: READY AFTER DEPENDENCY GATE (see pre-requisite section immediately below — Vitest install requires separate Human approval, not yet given).
+- Status: **P3-L04: IN PROGRESS (2026-09-06).** Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. Vitest dependency gate CLOSED (see pre-requisite section immediately below). P3-L04 scaffolding (`geometry/`, `version/`, `source/span.ts`, `layout/schema.ts`, `settings/`) is written; `tsc --noEmit` and `vitest run` both pass — see that Loop's own entry below for exact acceptance-criteria status.
 - Every Loop ends with: tests PASS → scope audit (nothing outside `typesetting-v2/core/` and its docs/fixtures/tests changed) → Human Gate if marked YES → checkpoint commit (see `P3_CORE_IMPLEMENTATION_PLAN.md` §20).
 - If the same implementation failure/workaround repeats 2–3 times inside one Loop: **stop the Loop, record the blocker in `research/PHASE3_LOOP_LOG.md`, do not keep looping.** This rule applies to every Loop below without being repeated per-row.
 - No Loop below exceeds 90 minutes. None require a >120-minute opaque block; any Loop that starts to exceed 120 minutes in practice must be split into a new Loop ID, not extended.
 
 ## Pre-requisite: test runner dependency gate
 
-Before P3-L04's tests can execute (as opposed to type-check), one devDependency must be added: a lightweight TS-native test runner. See `CORE_TEST_STRATEGY.md` §1 for the recommendation (vitest) and rationale. **This single `npm install -D` action requires explicit Human approval** (it is the one dependency-install decision in this entire roadmap) and is the zeroth step of P3-L04, not part of P3-L03. Until approved, P3-L04's types/pure-functions can still be verified via `tsc --noEmit` alone.
+**CLOSED (2026-09-06).** Product Owner explicitly approved installing a test runner as the zeroth step of P3-L04. `vitest@^3.2.7` was installed (not the newest `vitest@5`, which requires `@types/node >=22` — incompatible with this repo's pinned `@types/node@^20`; installing it would have forced an unrelated, unapproved dependency bump). A transitive `nanoid` high-severity advisory surfaced on install and was resolved with `npm audit fix` (0 vulnerabilities remain). `npm run test` (`vitest run`) and `npm run test:watch` are now available; `npx tsc --noEmit` remains the zero-install baseline gate run alongside it. See `CORE_TEST_STRATEGY.md` §1 for full detail.
 
 ---
 
 ### P3-L04 — Core Foundation
 
+- **Status (2026-09-06): scaffolding complete, verifying against acceptance criteria.** `core/geometry/tick.ts`, `core/version/index.ts`, `core/source/span.ts`, `core/layout/schema.ts`, `core/settings/index.ts` written; `core/geometry/tick.test.ts` and `core/source/span.test.ts` added. `npx tsc --noEmit` and `npx vitest run` both pass (6/6 tests green). `layout/schema.ts`'s `CanonicalDocument` intentionally omits `trace`/`warnings`/`errors`/`hold` for now — those fields depend on modules (`trace/`, `diagnostics/`) that don't exist until P3-L07/P3-L14 per `CORE_MODULE_MAP.md`'s own allowed-deps table for this module (row 21: geometry/source-span/version only); adding them now would mean importing from modules that aren't there yet. Not yet done: the forbidden-import grep check and the final scope audit before checkpoint commit.
 - **Goal:** Scaffold `typesetting-v2/core/`; implement `geometry/`, `version/`, `source/span.ts`, `layout/schema.ts` (types only), `settings/` (type only). Get `tsc --noEmit` and the newly-approved test runner both running green on an empty-but-real module tree.
 - **Timebox:** 60 min.
 - **Inputs:** `TATESPUN_V2_CORE_CONTRACT.md` §4/§16/§20/§21/§25, `TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md`, `CORE_MODULE_MAP.md` rows 1–3, 21, 24.
