@@ -276,3 +276,22 @@ This section is net-new to the Freeze, added by the Phase 0 Human Decision Freez
 - Net-new MUST KEEP requirement: Memo must be directly reachable from within the Editor workflow, without requiring navigation to a Settings screen first.
 - Non-requirement: no specific mechanism (panel/drawer/modal/floating window) is chosen.
 - Standing rule: Memo must not become a Settings-only feature under whatever mechanism is eventually chosen.
+
+**Settings drawer selected (HD-010, Master §22.1, Phase 1 UI Human QA Freeze 2026-09-05):**
+- Human QA selected UI-C's interaction model: Editor stays visible as the primary workspace; Settings opens as a drawer/side panel over/beside it on PC, not a full-screen replacement. This narrows §21.1's previously-open tab/mode-button/drawer choice — drawer specifically won.
+- Explicit non-approval: ui-c.html's visual design (colors, tone, UI language) is NOT the final design — only its interaction structure carries forward. Final UI must preserve existing TateSpun visual identity.
+- Requirement, not yet mechanism: closing Settings must return immediately to writing with Editor state/scroll/cursor intact; Memo and Preview access must remain clear alongside this model.
+
+**Editor writing direction (HD-011, Master §22.2):**
+- Default remains horizontal (横書き), matching current TateSpun.
+- Optional vertical (縦書き) Editor mode is a desired direction, independent of Publication Output's own (always-vertical) orientation — explicitly not yet a commitment to implement, pending Phase 1/2 research into: shared manuscript model feasibility, cursor/selection/IME reliability in vertical mode, direction-switch state preservation, mobile and accessibility implications, and Canonical Layout Model impact.
+
+**Emoji policy (HD-012, Master §23):**
+- Limited, deliberate emoji use is permitted; emoji must never become the primary icon language (text labels/proper icon assets/SVG components remain preferred).
+- Every emoji use — in prototypes or Production — must be explicitly disclosed (exact emoji, location, purpose) and pass its own Human QA before Production adoption. No blanket approval; no silent carryover from prototype to Production.
+- Applies to all UI surfaces; does not apply to user-authored manuscript content.
+- **RESOLVED for the Phase 1 prototype set (HD-014, Master §24, 2026-09-05):** ↶ (Undo), ↷ (Redo), ⏎ (manual page break), ⚙️ (Settings) are approved for those specific purposes only. 💾 (Save), 🖼 (Image insertion), 👁 (Preview), 📝 (Memo), ✏️ (Editor mode label) are rejected — future UI must use a text label or a proper design-approved icon for these five instead. Any emoji proposed beyond this set requires fresh disclosure and its own Human QA pass.
+
+**Editor actions (HD-013):**
+- Image insertion, undo, and redo are recorded as high-value Editor interactions that must remain easy to discover from the Editor workflow — confirmed via Phase 1 UI Human QA's positive evaluation of the prototype's inclusion of these.
+- Interaction with the Session Editing Metrics Contract (§11 above), TXT I/O, ruby input, and page-break tokens remains for Phase 2+ to clarify — not resolved here.

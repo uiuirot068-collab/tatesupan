@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI-C：設定ドロワー型</title>
+<link rel="stylesheet" href="shared/base.css">
+<style>
+  /* In UI-C, Editor is the persistent primary screen — it is never
+     unmounted or hidden. Settings opens as an overlay drawer on top of it,
+     which is the key structural difference from UI-A/UI-B's mutually
+     exclusive full-screen views. */
+  .content-area {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+  .editor-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .settings-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(35,32,27,0.25);
+    display: none;
+    z-index: 30;
+  }
+  .settings-backdrop.open { display: block; }
+  .settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(420px, 92vw);
+    background: var(--panel);
+    box-shadow: -6px 0 24px rgba(0,0,0,0.18);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-drawer.open { transform: translateX(0); }
+  .settings-drawer header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-drawer header h3 { margin: 0; font-size: 0.95rem; }
+  .settings-drawer .settings-page { flex: 1; }
+  .drawer-close {
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    color: var(--ink-soft);
+    padding: 0.2rem 0.5rem;
+  }
+  @media (max-width: 600px) {
+    .settings-drawer { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="app-topbar">
+    <span>TateSpun UI比較デモ</span>
+    <span class="variant-tag">UI-C：設定ドロワー型（Editor常駐）</span>
+  </div>
+
+  <div class="content-area">
+    <div class="editor-main">
+      <div id="toolbar"></div>
+      <div id="manuscript-container"></div>
+      <div id="preview-slot" style="padding: 0 1.25rem 1.25rem;"></div>
+    </div>
+
+    <div class="settings-backdrop" id="settings-backdrop"></div>
+    <aside class="settings-drawer" id="settings-drawer">
+      <header>
+        <h3>設定</h3>
+        <button class="drawer-close" id="settings-close" aria-label="設定を閉じる">×</button>
+      </header>
+      <div id="settings-container"></div>
+    </aside>
+  </div>
+</div>
+
+<script src="shared/content.js"></script>
+<script>
+  const drawer = document.getElementById("settings-drawer");
+  const backdrop = document.getElementById("settings-backdrop");
+
+  function openSettings() {
+    drawer.classList.add("open");
+    backdrop.classList.add("open");
+    // Editor underneath is never hidden/unmounted — its scroll position and
+    // in-progress text are untouched by opening/closing the drawer, since
+    // this is an overlay, not a view swap.
+  }
+  function closeSettings() {
+    drawer.classList.remove("open");
+    backdrop.classList.remove("open");
+  }
+  document.getElementById("settings-close").addEventListener("click", closeSettings);
+  backdrop.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });
+
+  const memo = TSDemo.createMemoOverlay();
+  let previewOpen = false;
+  const previewSlot = document.getElementById("preview-slot");
+
+  TSDemo.renderToolbar(document.getElementById("toolbar"), {
+    save: () => alert("保存しました（デモ）"),
+    undo: () => {},
+    redo: () => {},
+    image: () => alert("挿絵を挿入（デモ）"),
+    pagebreak: () => alert("改ページを挿入（デモ）"),
+    preview: () => {
+      previewOpen = !previewOpen;
+      previewSlot.innerHTML = "";
+      if (previewOpen) TSDemo.renderPreviewPlaceholder(previewSlot);
+    },
+    memo: () => memo.open(), // Memo is its own overlay, independent of the Settings drawer.
+  });
+</script>
+<script>
+  // Add a dedicated 設定 trigger into the toolbar (identical label/position
+  // intent to UI-A/UI-B's Settings access, just styled as a toolbar button
+  // here since UI-C has no separate tab/mode bar).
+  (function addSettingsButton() {
+    const toolbar = document.getElementById("toolbar");
+    const btn = document.createElement("button");
+    btn.className = "toolbar-btn";
+    btn.innerHTML = '<span aria-hidden="true">⚙️</span><span class="btn-label">設定</span>';
+    btn.addEventListener("click", openSettings);
+    toolbar.appendChild(btn);
+  })();
+</script>
+<script>
+  TSDemo.renderManuscript(document.getElementById("manuscript-container"));
+  TSDemo.renderSettingsForm(document.getElementById("settings-container"));
+</script>
+</body>
+</html>

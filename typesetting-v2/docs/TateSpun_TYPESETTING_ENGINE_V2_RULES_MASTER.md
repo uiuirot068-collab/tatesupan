@@ -1,10 +1,12 @@
 # TateSpun TYPESETTING ENGINE v2 RULES MASTER
 
 - Status: APPROVED BASELINE
-- Version: v1.2
+- Version: v1.4
 - Established: 2026-09-05
 - Updated: 2026-09-05 — repository/worktree/integration rule clarified
 - Updated: 2026-09-05 — Phase 0 Human Decisions frozen (HD-001–HD-009); Editor/Settings switching UI direction added; Memo-in-Editor requirement added; 柱/奥付 font inheritance + override requirement added
+- Updated: 2026-09-05 — Phase 1 UI Human QA decision frozen (HD-010–HD-013): Settings-drawer-while-Editor-visible direction selected (existing TateSpun visual identity NOT superseded by prototype visuals); Editor default-horizontal/optional-vertical direction added as a research item; limited/disclosed emoji policy added; image-insert/undo/redo recorded as high-value Editor requirements; Phase 1 jlreq standards-verification caveats (dash/ellipsis citation correction, partial kinsoku-class confirmation) recorded as pre-Phase-3 blockers
+- Updated: 2026-09-05 — Final Phase 1 emoji Human QA completed (HD-014): ↶/↷/⏎/⚙️ approved for their stated purposes only (undo/redo/manual-page-break/settings); 💾/🖼/👁/📝/✏️ rejected (future UI must use a text label or proper design-approved icon instead); Phase 1 ready for checkpoint closure
 - Scope: TateSpun Typesetting Engine v2
 - Authority: This document is the highest-level design and migration rule set for Engine v2.
 - Production baseline at boundary: current production remains unchanged unless separately approved.
@@ -815,6 +817,27 @@ Engine v2は以下を満たして初めてProduction候補となる。
 37. Editor/Settings switching UI direction (mechanism undecided) approved, replacing "must preserve current desktop UI" as an absolute constraint: YES
 38. Memo must be reachable directly from Editor without navigating to Settings (mechanism undecided): YES
 
+2026-09-05 Phase 1 UI Human QA Freeze additions (HD-010–HD-013, see §22–§23):
+
+39. Settings opens as a drawer/side panel while Editor remains visible on PC (supersedes §21.1's open tab/mode-button/drawer choice — drawer specifically selected): YES
+40. Prototype (ui-c.html) visual design is NOT approved as final — existing TateSpun visual identity (color palette, visual tone, UI language, product character) must be preserved: YES
+41. Editor default writing direction remains horizontal (横書き): YES
+42. Optional vertical (縦書き) Editor mode is a desired direction, pending Phase 1/2 engineering research into feasibility: YES
+43. Limited, deliberate emoji use is permitted in UI, never as the primary icon language; every emoji use must be explicitly disclosed and pass Human QA before Production adoption — no emoji silently carries over from prototype to Production: YES
+44. Image insertion, undo, and redo are recorded as high-value, must-remain-easy-to-discover Editor interactions: YES
+
+2026-09-05 Final Phase 1 Emoji Human QA (HD-014, see §24):
+
+45. ↶ (Undo/戻る) approved for that stated purpose only: YES
+46. ↷ (Redo/やり直す) approved for that stated purpose only: YES
+47. ⏎ (manual page break/改ページ) approved for that stated purpose only: YES
+48. ⚙️ (Settings/設定) approved for that stated purpose only: YES
+49. 💾 (Save) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
+50. 🖼 (Image insertion) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
+51. 👁 (Preview) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
+52. 📝 (Memo) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
+53. ✏️ (Editor mode label) rejected — future UI uses a text label or design-approved icon instead: YES (rejection confirmed)
+
 ---
 
 # 19. CURRENT STATUS
@@ -831,6 +854,15 @@ DO NOT ship as part of Engine v2 decision unless separately reviewed and approve
 Phase 0 Human Decision Freeze:
 COMPLETE (2026-09-05) — HD-001 through HD-009 recorded in §20–§21.
 
+Phase 1 UI Human QA Freeze:
+COMPLETE (2026-09-05) — HD-010 through HD-013 recorded in §22–§23. UI-C's interaction model (Settings drawer, Editor stays visible) selected; its visual design is explicitly NOT final.
+
+Phase 1 Final Emoji Human QA:
+COMPLETE (2026-09-05) — HD-014 recorded in §24. ↶/↷/⏎/⚙️ approved for their stated purposes only; 💾/🖼/👁/📝/✏️ rejected. Phase 1 ready for checkpoint closure.
+
+Phase 1 standards-verification status:
+OPEN — jlreq dash/ellipsis inseparability citation corrected (previously-cited "§3.1.10" not corroborated, see `typesetting-v2/research/PHASE1_LOOP_LOG.md` P1-L10a); kinsoku character-class table partially confirmed (extends to at least cl-27) but not fully retrieved. Both MUST be resolved before Phase 3 hard-codes kinsoku/dash/ellipsis behavior — not a blocker for Phase 2 typography PoC work.
+
 Next authorized action:
 Phase 0 — Requirements Freeze (documentation update only; awaiting final Human Review sign-off before Phase 1).
 
@@ -840,7 +872,10 @@ Not yet authorized:
 - renderer selection
 - master push/deploy
 - current production replacement
-- UI implementation mechanism selection (tabs / drawer / modal / etc. for Editor⇄Settings switching or Memo access — see §21)
+- UI implementation mechanism selection for Memo access (panel / drawer / modal / floating window — see §21.2, still undecided)
+- Visual/pixel-level design of the drawer, or any other Production UI surface (see §22.1 — interaction model only is approved)
+- Vertical Editor mode implementation (see §22.2 — research direction only, not implementation)
+- Any specific emoji's Production use (see §23 — disclosure + Human QA required per use, never blanket-approved)
 
 ---
 
@@ -995,6 +1030,130 @@ Memoは、Editor workflowから直接開けることを必須要件とする。
 「Editor内からMemoを開き、原稿との行き来を妨げない」こと。
 
 MemoをSettings-only featureにしない。
+
+---
+
+# 22. PHASE 1 UI HUMAN QA FREEZE (v1.3)
+
+2026-09-05時点で、Phase 1 UI比較のHuman QAによりHD-010〜HD-011を承認済み。
+これらはinteraction-model/product requirementの確定であり、visual designや実装方式の選定ではない。
+
+## 22.1 HD-010 — Settings Drawerモデル
+
+Human Product OwnerはPC向けUI比較で **UI-C（設定ドロワー型）** のinteraction structureを選択した。
+
+理由：作業中の原稿を見ながら設定を変更できることを高く評価。
+
+承認された要件：
+- Editorが常にprimary workspaceであり続ける
+- SettingsはEditor全体を置き換えるのではなく、PC上でEditorの上／横に重なる形で開く
+- Settingsを閉じると即座に執筆に戻れる
+- Settingsを開いたことによってEditorのstate／scroll位置／カーソル位置が失われない
+- MemoはEditorから直接アクセス可能なまま維持する
+- Previewへのアクセスが明確であり続ける
+
+**重要：Phase 1のui-c.htmlプロトタイプの見た目（配色・トーン・UI言語）はfinal designとして承認されていない。**
+承認されたのは「Editorを表示したままSettingsをdrawer/side panelとして開く」というinteraction modelのみである。
+
+最終UIは既存TateSpunの以下を維持すること：
+- 配色（color palette）
+- 視覚的トーン（visual tone）
+- UI言語
+- プロダクトアイデンティティ
+- 全体的なデザイン性格
+
+drawer方式のinteraction modelを採用するのであって、プロトタイプのvisual skinを採用するのではない。
+
+## 22.2 HD-011 — Editor執筆方向（横書き／縦書き）
+
+現行TateSpunのEditorは基本的に横書きである。
+
+承認された製品方向：
+
+- **デフォルト：横書きEditor**
+- **将来的に望ましいoptional mode：縦書きEditor**
+
+ユーザーが理想的にはEditor自体の書字方向（横書き／縦書き）を選べることを目指す。
+
+これはPublication Output側の書字方向（常に縦書き前提）とは独立した、Editor UIの話である。
+「出力が縦書きだからEditorも縦書きでなければならない」という前提は置かない。
+
+Phase 1/2 engineering researchが明らかにすべき事項：
+- 横書きEditorと縦書きEditorが同一のmanuscriptモデルを共有できるか
+- 縦書きmodeでcursor／selection／IME挙動が信頼できるか
+- 方向切替時にediting position/contentを保持できるか
+- mobileへの影響
+- accessibilityへの影響
+- 縦書きEditor modeをoptionalとして安全に提供しても、Canonical Layoutに影響しないか
+
+まだ実装しない。研究方向として記録するのみ。
+
+---
+
+# 23. LIMITED EMOJI POLICY (v1.3, HD-012)
+
+TateSpun UIは限定的かつ意図的な範囲でemojiを使用してよい。
+
+許容され得る例：
+- ⚙ Settings用
+- ↩️ 等、Undo／Back系アクション用
+
+ただし：
+- emojiを過度に使用しない
+- emojiがインターフェースの主要な視覚言語にならない
+- プロトタイプおよびProduction UI提案で使用された全emojiは、その目的とともに明示的に開示する
+- 各emoji使用はProduction採用前にHuman QAを通過すること
+
+一般的なUI表現として引き続き優先されるもの：
+- テキストラベル
+- 正式なicon asset
+- SVG／iconコンポーネント
+- デザイン承認済みの画像
+
+emojiは包括的なiconシステムではなく、選択的な例外として許容される。
+
+**重要：プロトタイプで使われたemojiがProductionへ無断で引き継がれることを禁止する。**
+
+emojiを使用する場合、必ず：
+1. 使用した正確なemojiを列挙する
+2. 使用箇所（画面／場所）を列挙する
+3. 何を表しているかを説明する
+4. HUMAN-QA-REQUIREDと明記する
+5. Human QA通過までは承認済みとして扱わない
+
+このルールはprototype／将来のEngine v2 UI／Production統合すべてに適用する。
+ユーザーが執筆する原稿本文の内容には適用されない。
+
+---
+
+# 24. FINAL PHASE 1 EMOJI HUMAN QA (v1.4, HD-014)
+
+2026-09-05、Product OwnerはPhase 1 UIプロトタイプに現れる全emojiについて、個別にAPPROVED／REJECTEDを判定した。
+
+## APPROVED（記載の用途に限定して承認）
+
+| Emoji | 用途 | 判定 |
+|---|---|---|
+| ↶ | Undo／戻る | APPROVED |
+| ↷ | Redo／やり直す | APPROVED |
+| ⏎ | 改ページ（manual page break） | APPROVED |
+| ⚙️ | 設定（Settings） | APPROVED |
+
+## REJECTED（将来のUIではtext labelまたはdesign-approved iconを使用すること）
+
+| Emoji | 用途 | 判定 |
+|---|---|---|
+| 💾 | 保存（Save） | REJECTED |
+| 🖼 | 挿絵挿入（Image insertion） | REJECTED |
+| 👁 | プレビュー（Preview） | REJECTED |
+| 📝 | メモ（Memo） | REJECTED |
+| ✏️ | Editor切替ラベル | REJECTED |
+
+## 適用範囲
+
+- 上記4件のAPPROVEDは、記載された用途に限定した承認であり、他の用途への一般化を禁止する。
+- 上記5件のREJECTEDは、将来のUIでtext labelまたは正式なdesign-approved iconに置き換えること。
+- 一般原則（§23 Limited Emoji Policy）は引き続き有効：emojiは選択的にのみ使用し、UIの主要言語にしない。新規に提案されるemojiは、その都度開示とHuman QAを要する。
 
 ---
 

@@ -57,6 +57,7 @@ Columns: **ID | Requirement | Source | Phase Responsible | QA Method | Human QA 
 | V2-COMPAT-003 | Old Engine code path retained; rollback possible for a defined period post-cutover | Master §12.2–12.3, §15, §17; Freeze §14 | 9 | Rollback test (Master §17 acceptance item) | No | Approved (frozen) |
 | V2-COMPAT-004 | UI/settings changes require: justification, user-impact statement, migration method, rollback method, presented before the change | Master §8; Freeze §9 | 6 | Decision Record review | No | Approved (frozen) |
 | V2-COMPAT-005 | "1 character = 1 span" and similar are implementation details, never user-visible requirements | Master §7 (white-sheet reset); Freeze §9, §16 | — | N/A (classification rule) | No | Approved (frozen) |
+| V2-COMPAT-009 | Image insertion, undo, and redo are high-value Editor interactions that must remain easy to discover | Master §22 context (HD-013) | 6 | Manual functional test | No | Approved (Phase 1 UI Human QA Freeze 2026-09-05); interaction with session-activity counter/TXT import/ruby/page-break tokens TBD Phase 2+ |
 | V2-COMPAT-006 | Colophon (奥付) is a formal Canonical Layout Model element (page placement, pagination relation, font, layout area, export inclusion) | Master §20.6 (HD-006), §10; Freeze §9, §18 | 3 | Regression/Full Regression once corpus covers colophon | No | Approved (Human Decision Freeze 2026-09-05) |
 | V2-COMPAT-007 | 文章チェックβ stays separate from Typesetting Engine core; kept as Editor-side feature | Master §20.7 (HD-007); Freeze §9 | 6 | Manual functional test | No | Approved (Human Decision Freeze 2026-09-05) |
 | V2-COMPAT-008 | 柱/奥付 font inherits body font by default, independently overridable; current hardcoded Shippori-Mincho behavior is not a requirement | Master §20.5 (HD-005); Freeze §9 | 6 | Manual functional test | No | Approved (Human Decision Freeze 2026-09-05) |
@@ -95,6 +96,9 @@ Columns: **ID | Requirement | Source | Phase Responsible | QA Method | Human QA 
 |----|---|---|---|---|---|---|
 | V2-UI-001 | Editor⇄Settings switching model replaces simultaneous always-visible desktop layout as the UI direction (mechanism undecided) | Master §21.1 (HD-008); Freeze §18 | 6 | Manual UX review | No | Approved (Human Decision Freeze 2026-09-05); mechanism selection deferred to UI design phase |
 | V2-UI-002 | Memo must be directly reachable from Editor without navigating to Settings (mechanism undecided) | Master §21.2 (HD-009); Freeze §18 | 6 | Manual functional test | No | Approved (Human Decision Freeze 2026-09-05); mechanism selection deferred to UI design phase |
+| V2-UI-003 | Settings opens as a drawer/side panel while Editor remains visible (PC); existing TateSpun visual identity (color/tone/UI language) preserved — prototype visual skin NOT approved | Master §22.1 (HD-010); Freeze §18; `qa/human/UI_COMPARISON_SCORECARD.md` | 6 | Human Visual/UX QA | Yes | Approved (Phase 1 UI Human QA Freeze 2026-09-05) |
+| V2-UI-004 | Editor default writing direction is horizontal; optional vertical Editor mode is a desired direction pending feasibility research (shared manuscript model, cursor/IME/selection reliability, mobile/accessibility impact) | Master §22.2 (HD-011); Freeze §18 | 1–2 (research), not yet implemented | Architecture review | No | Approved (direction); feasibility genuinely open — Phase 1/2 engineering research required before any implementation |
+| V2-UI-005 | Emoji use in UI is limited/deliberate, never the primary icon language; every emoji use must be explicitly disclosed (exact emoji, location, purpose) and pass Human QA before Production adoption — no emoji carries over from prototype to Production by default | Master §23 (HD-012); `qa/human/UI_COMPARISON_SCORECARD.md` Emoji Disclosure table | 6 | Human QA per emoji use | Yes | Approved (Phase 1 UI Human QA Freeze 2026-09-05); final verdicts recorded 2026-09-05 (HD-014, Master §24): ↶/↷/⏎/⚙️ APPROVED for their stated purposes only; 💾/🖼/👁/📝/✏️ REJECTED, replace with text label or design-approved icon; any new emoji requires fresh disclosure |
 
 ## QA (V2-QA-*)
 
@@ -106,6 +110,6 @@ Columns: **ID | Requirement | Source | Phase Responsible | QA Method | Human QA 
 
 ---
 
-**Requirement count:** 45 IDs across 11 groups.
+**Requirement count:** 49 IDs across 11 groups.
 
-**Major requirement groups:** Output (4), Preview (4), Typography (10), Pagination (5), Compatibility (8), TXT I/O (2), Session Metrics (2), Privacy (1), Units (3), UI Product Direction (2), QA (3).
+**Major requirement groups:** Output (4), Preview (4), Typography (10), Pagination (5), Compatibility (9), TXT I/O (2), Session Metrics (2), Privacy (1), Units (3), UI Product Direction (5), QA (3).

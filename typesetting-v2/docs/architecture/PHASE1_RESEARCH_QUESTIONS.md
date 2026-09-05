@@ -43,6 +43,16 @@ Master §7 resets all of the following to undecided: FixedSlot, 1-char-1-span, C
 - For each candidate architecture, what does the eventual integration path into the existing TateSpun Next.js application look like (Master §13.0, §12) — as a rough shape only, not a committed design?
 - Does any candidate make the required rollback / parallel-run model (Master §12.3, Phase 8) meaningfully harder or easier?
 
+## 7a. Editor writing-direction questions (added 2026-09-05, HD-011, Master §22.2)
+
+Human Product Owner approved a direction (not an implementation): Editor default stays horizontal (横書き), with an optional vertical (縦書き) Editor mode as a desired future direction, independent of Publication Output's own always-vertical orientation. This is genuinely open engineering research, not yet answered:
+
+- Can horizontal and vertical Editor modes share the same underlying manuscript model (the plain-text-with-inline-markers representation, per the Compatibility Matrix's "Editor behavior / text model" row), or does vertical-mode editing require a materially different text representation?
+- Is `contenteditable`/textarea cursor, selection, and IME composition behavior reliable enough in `writing-mode: vertical-rl` for a production editing surface — the CSS/SVG vertical-Japanese research (`css-svg-vertical-japanese-research.md`) examined *rendering* determinism but did not specifically test live-editing interaction (caret movement, IME candidate window positioning) in vertical mode, which is a distinct and currently unresearched question?
+- Can a user switch Editor direction mid-session without losing cursor position or content?
+- What are the mobile-width and accessibility implications of a vertical-mode editing surface specifically (as opposed to a read-only vertical Preview, which is already well-precedented)?
+- Does offering vertical Editor mode as optional constrain or complicate the Canonical Layout Model (`CANONICAL_LAYOUT_MODEL_RESEARCH.md`) in any way, or is it orthogonal since the model's lower layers are already established as writing-mode-agnostic (per the Colophon research's similar finding)?
+
 ## 8. Explicitly out of scope for Phase 1
 
 - Ranking or scoring the candidates against each other (Phase 1 output is comparative research; the actual selection/ADR is a decision gated at the end of Phase 1, not embedded in this questions doc).

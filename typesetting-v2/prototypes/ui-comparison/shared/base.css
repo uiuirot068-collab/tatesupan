@@ -1,0 +1,240 @@
+/* Shared styles for UI-A / UI-B / UI-C comparison prototypes.
+   Kept identical across all three so visual differences come ONLY from
+   each variant's own switching-mechanism CSS/JS, not from divergent base styling. */
+
+:root {
+  --bg: #f6f4f0;
+  --panel: #ffffff;
+  --ink: #23201b;
+  --ink-soft: #5c574e;
+  --border: #ddd6ca;
+  --accent: #a3352a;
+  --accent-soft: #f0e2df;
+  --accent-ink: #ffffff;
+  --focus: #2b6cb0;
+  font-size: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100vh;
+}
+
+/* Top identity bar — identical in all three variants */
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: #f6f4f0;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+.app-topbar .variant-tag {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+
+/* Editor toolbar — identical button set/order/labels across variants */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  min-height: 40px;
+}
+.toolbar-btn:hover { background: var(--accent-soft); }
+.toolbar-btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.toolbar-spacer { flex: 1; }
+
+/* Editor writing area — vertical Japanese text, for visual authenticity only.
+   This prototype is a UI-flow comparison, not a typesetting-fidelity demo. */
+.editor-page {
+  flex: 1;
+  display: flex;
+  overflow: auto;
+  padding: 1.25rem;
+  background: var(--bg);
+}
+.manuscript-sheet {
+  margin: 0 auto;
+  background: #fffdf8;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  padding: 1.5rem;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  height: 70vh;
+  min-height: 360px;
+  max-width: 90vw;
+  font-size: 1.15rem;
+  line-height: 2;
+  letter-spacing: 0.05em;
+  outline: none;
+}
+.manuscript-sheet:focus { box-shadow: 0 0 0 3px var(--focus); }
+
+/* Settings form — identical field set/order/labels across variants */
+.settings-page {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem;
+  background: var(--bg);
+}
+.settings-form {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.settings-form h2 {
+  font-size: 1rem;
+  margin: 1.2rem 0 0.5rem;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3rem;
+}
+.settings-form h2:first-child { margin-top: 0; }
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.92rem;
+}
+.field-row:last-child { border-bottom: none; }
+.field-row label { color: var(--ink); }
+.field-row select,
+.field-row input[type="number"] {
+  font-family: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  min-width: 160px;
+}
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-top: -0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Preview placeholder — concept only, no real renderer yet */
+.preview-placeholder {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--ink-soft);
+  background: #fff;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+/* Memo overlay — must be reachable directly from Editor in every variant (HD-009) */
+.memo-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(35,32,27,0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+.memo-overlay.open { display: flex; }
+.memo-card {
+  background: #fffdf8;
+  border-radius: 12px;
+  width: min(480px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+.memo-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.memo-card header h3 { margin: 0; font-size: 0.95rem; }
+.memo-card textarea {
+  flex: 1;
+  border: none;
+  resize: none;
+  padding: 1rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  min-height: 220px;
+  outline: none;
+}
+.memo-close {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+  padding: 0.2rem 0.5rem;
+}
+
+/* Mobile-width behavior (shared breakpoint across all variants) */
+@media (max-width: 600px) {
+  .toolbar { gap: 0.3rem; padding: 0.4rem 0.5rem; }
+  .toolbar-btn { font-size: 0.78rem; padding: 0.4rem 0.55rem; }
+  .toolbar-btn .btn-label { display: none; }
+  .manuscript-sheet { font-size: 1rem; max-width: 100%; }
+  .settings-form { padding: 1rem; }
+  .field-row { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+  .field-row select, .field-row input[type="number"] { width: 100%; min-width: 0; }
+}

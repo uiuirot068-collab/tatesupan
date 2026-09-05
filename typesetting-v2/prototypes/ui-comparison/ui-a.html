@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI-A：タブ切替モデル</title>
+<link rel="stylesheet" href="shared/base.css">
+<style>
+  .tab-bar {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 1rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    padding: 0.7rem 1.2rem;
+    border: none;
+    background: transparent;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: bold;
+  }
+  .view { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  .view.active { display: flex; }
+  .content-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="app-topbar">
+    <span>TateSpun UI比較デモ</span>
+    <span class="variant-tag">UI-A：タブ切替モデル</span>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-editor" data-view="editor">編集</button>
+    <button class="tab-btn" id="tab-settings" data-view="settings">設定</button>
+  </div>
+
+  <div class="content-area">
+    <section class="view active" id="view-editor">
+      <div id="toolbar"></div>
+      <div id="manuscript-container"></div>
+      <div id="preview-slot" style="padding: 0 1.25rem 1.25rem;"></div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div id="settings-container"></div>
+    </section>
+  </div>
+</div>
+
+<script src="shared/content.js"></script>
+<script>
+  const tabs = document.querySelectorAll(".tab-btn");
+  const views = { editor: document.getElementById("view-editor"), settings: document.getElementById("view-settings") };
+
+  tabs.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabs.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      Object.values(views).forEach((v) => v.classList.remove("active"));
+      views[btn.dataset.view].classList.add("active");
+      // Editor DOM is never unmounted while switching tabs — its scroll
+      // position and in-progress text are preserved by construction (only
+      // CSS display toggles, no re-render), demonstrating HD-008's
+      // "switching after keeps editor position/state" requirement.
+    });
+  });
+
+  const memo = TSDemo.createMemoOverlay();
+  let previewOpen = false;
+  const previewSlot = document.getElementById("preview-slot");
+
+  TSDemo.renderToolbar(document.getElementById("toolbar"), {
+    save: () => alert("保存しました（デモ）"),
+    undo: () => {},
+    redo: () => {},
+    image: () => alert("挿絵を挿入（デモ）"),
+    pagebreak: () => alert("改ページを挿入（デモ）"),
+    preview: () => {
+      previewOpen = !previewOpen;
+      previewSlot.innerHTML = "";
+      if (previewOpen) TSDemo.renderPreviewPlaceholder(previewSlot);
+    },
+    memo: () => memo.open(), // Memo opens directly from the Editor tab — no need to visit Settings.
+  });
+
+  TSDemo.renderManuscript(document.getElementById("manuscript-container"));
+  TSDemo.renderSettingsForm(document.getElementById("settings-container"));
+</script>
+</body>
+</html>

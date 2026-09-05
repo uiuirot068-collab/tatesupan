@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI比較ハブ</title>
+<link rel="stylesheet" href="shared/base.css">
+<style>
+  body { background: var(--bg); }
+  .hub-header {
+    padding: 1.5rem 1rem 1rem;
+    text-align: center;
+  }
+  .hub-header h1 { margin: 0 0 0.3rem; font-size: 1.3rem; }
+  .hub-header p { margin: 0; color: var(--ink-soft); font-size: 0.9rem; }
+  .picker {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0 1rem 1rem;
+    flex-wrap: wrap;
+  }
+  .picker button {
+    padding: 0.6rem 1.2rem;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .picker button.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .frame-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0 1rem 1rem;
+    min-height: 0;
+  }
+  .frame-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+  .frame-toolbar a { color: var(--accent); }
+  iframe {
+    flex: 1;
+    width: 100%;
+    min-height: 520px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+  }
+  .width-controls { display: flex; gap: 0.4rem; }
+  .width-controls button {
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+  .width-controls button.active { background: var(--accent-soft); border-color: var(--accent); }
+  .fallback-note {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    text-align: center;
+    padding: 0.5rem 1rem 0;
+  }
+</style>
+</head>
+<body>
+<div class="hub-header">
+  <h1>TateSpun Engine v2 — UI比較デモ</h1>
+  <p>Editor ⇄ Settings 切替、および Memo アクセスの3案を比較します（Phase 1, HD-008 / HD-009）。</p>
+</div>
+
+<div class="picker" id="picker">
+  <button data-target="ui-a.html" class="active">UI-A：タブ切替</button>
+  <button data-target="ui-b.html">UI-B：明示モードボタン</button>
+  <button data-target="ui-c.html">UI-C：設定ドロワー</button>
+</div>
+
+<div class="frame-wrap">
+  <div class="frame-toolbar">
+    <span>幅プリセット（PC/モバイル幅の確認用）：</span>
+    <div class="width-controls">
+      <button data-w="100%" class="active">PC幅</button>
+      <button data-w="390px">モバイル幅 (390px)</button>
+    </div>
+    <a id="direct-link" href="ui-a.html" target="_blank">別タブで直接開く ↗</a>
+  </div>
+  <div style="display:flex; justify-content:center; width:100%;">
+    <iframe id="demo-frame" src="ui-a.html" style="max-width:100%;"></iframe>
+  </div>
+</div>
+
+<p class="fallback-note">
+  もしiframeが読み込まれない場合（一部ブラウザは file:// 経由のiframeを制限します）、
+  上の「別タブで直接開く」リンク、または <code>ui-a.html</code> / <code>ui-b.html</code> / <code>ui-c.html</code> を直接ブラウザで開いてください。
+</p>
+
+<script>
+  const iframe = document.getElementById("demo-frame");
+  const directLink = document.getElementById("direct-link");
+  document.querySelectorAll("#picker button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#picker button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      iframe.src = btn.dataset.target;
+      directLink.href = btn.dataset.target;
+    });
+  });
+  document.querySelectorAll(".width-controls button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".width-controls button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      iframe.style.width = btn.dataset.w;
+    });
+  });
+</script>
+</body>
+</html>
