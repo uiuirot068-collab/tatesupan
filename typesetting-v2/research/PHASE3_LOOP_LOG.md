@@ -200,10 +200,24 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 
 **RESULT: P3-L03 — PASS.** Plan review: APPROVED / FROZEN. All six companion documents (`P3_CORE_IMPLEMENTATION_PLAN.md`, `CORE_MODULE_MAP.md`, `P3_CORE_LOOP_ROADMAP.md`, `CORE_TEST_STRATEGY.md`, `CORE_MIGRATION_ROLLBACK_PLAN.md`, `CORE_IMPLEMENTATION_RISK_REGISTER.md`) had their status headers updated to "REVIEWED / FROZEN FOR IMPLEMENTATION" with "Core implementation: NOT STARTED" restated explicitly — no content was reopened or re-litigated at this closeout. Master updated **v1.7 → v1.8** (§28), recording the planning freeze: implementation location (`typesetting-v2/core/`, planned, not created), the 25-module/12-tier boundary, the 12-Loop roadmap (P3-L04–P3-L15, max 90 min, none >120 min), the deterministic Core-first test strategy, the F01–F20 fixture taxonomy (long Human prose corpus kept separate), full INV-001–013 mapping (no renumbering), all 8 relevant open items (P3-O03/04/05/06 residual/07/08/09/14/15) confirmed staged and non-blocking, the 8-stage A–H migration plan with old-engine preservation, the explicit first-`src/`-integration gate, the three-way Logical/Preview/Publication quality-gate separation, and the single Human Gate (G1, after P3-L15).
 
-**Vitest dependency gate:** RECOMMENDED, **NOT INSTALLED**. The user verbally pre-approved installing Vitest during plan review ("Vitest導入：YES"), but per this closeout's explicit write-boundary instruction, no `package.json`/lockfile change was made here — that single `npm install -D vitest` step is deliberately deferred to the start of P3-L04 itself, so it happens inside that Loop's own scope/audit/checkpoint, not folded into this documentation-only closeout. The verbal approval is recorded here so it is not lost or re-asked unnecessarily at P3-L04's start; the actual write-boundary/install action still happens there.
+**Vitest dependency gate:** RECOMMENDED, **NOT INSTALLED**, explicit Product Owner dependency approval **NOT YET RECORDED** — gate **OPEN**. **Correction (2026-09-06):** this entry originally stated the user had verbally pre-approved installing Vitest ("Vitest導入：YES"); that was inaccurate — the message it was based on only requested the next prompt and did not constitute explicit dependency-install approval. Per this closeout's explicit write-boundary instruction, no `package.json`/lockfile change was made here; that single `npm install -D vitest` step waits on a distinct, explicit approval not yet given, and then happens inside P3-L04's own scope/audit/checkpoint, not folded into this documentation-only closeout.
 
 **WHY:** Every frozen claim in Master §28 traces to one of the six companion documents produced in P3-L03's own body (no new architecture invented at closeout); no open item was silently closed; no invariant was renumbered; the old engine and `src/` remain completely unreferenced by anything written in this closeout.
 
 **DECISION: P3-L03 — CLOSED.**
 
-**NEXT:** P3-L04 (Core Foundation) — its zeroth step is resolving the Vitest dependency/write-boundary gate (already verbally approved; the install action itself happens inside that Loop), then scaffolding `typesetting-v2/core/geometry/`, `core/version/`, `core/source/span.ts`, `core/layout/schema.ts`, `core/settings/` per `P3_CORE_LOOP_ROADMAP.md`.
+**NEXT:** P3-L04 (Core Foundation) — its zeroth step is obtaining explicit Product Owner approval to install Vitest (not yet given — dependency gate OPEN), then performing that install inside that Loop's own write boundary, then scaffolding `typesetting-v2/core/geometry/`, `core/version/`, `core/source/span.ts`, `core/layout/schema.ts`, `core/settings/` per `P3_CORE_LOOP_ROADMAP.md`.
+
+---
+
+## P3-L03A — Correction: Vitest Approval Record
+
+**QUESTION:** Did the P3-L03 closeout accurately record whether the Product Owner had given explicit dependency-install approval for Vitest?
+
+**RESULT:** No. The closeout entry above and `CORE_TEST_STRATEGY.md`'s status header both stated the user had "verbally pre-approved" installing Vitest, citing "Vitest導入：YES". On review, the message this was drawn from ("プロンプト出して") only requested the next prompt in the sequence — it was not a dependency-install approval. This was a misattribution, corrected in place in both documents (no other document in `typesetting-v2/` contained the false claim — `P3_CORE_IMPLEMENTATION_PLAN.md` and `P3_CORE_LOOP_ROADMAP.md` already correctly stated approval was required and not yet given; Master §28 already correctly stated the gate requires future explicit approval without claiming one had occurred).
+
+**CORRECTED CANONICAL STATUS:** Vitest — recommended: YES; installed: NO; explicit Product Owner dependency approval: NOT YET RECORDED; dependency gate: OPEN. P3-L04 is otherwise ready to begin once that approval is obtained.
+
+**DECISION: CLOSED.** No architecture, plan content, or Master section required correction — this was a factual-attribution fix only, confined to the two documents named above.
+
+**NEXT:** Await explicit Product Owner approval before any `npm install -D vitest` / `package.json`/lockfile change is performed, at the start of P3-L04.

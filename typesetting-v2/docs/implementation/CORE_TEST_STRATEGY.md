@@ -1,6 +1,6 @@
 # Core Test Strategy
 
-- Status: **P3-L03: REVIEWED / FROZEN FOR IMPLEMENTATION (2026-09-06, Master v1.8 §28.4).** Core implementation: NOT STARTED. No tests exist yet; no test runner is installed yet. The user verbally pre-approved the Vitest dependency during plan review (2026-09-06, "Vitest導入：YES"), but the actual `npm install -D vitest` (and any `package.json`/lockfile change) is deliberately deferred to the start of P3-L04 itself, inside that Loop's own write boundary — not performed by this planning/freeze closeout, which is scoped to `typesetting-v2/` only.
+- Status: **P3-L03: REVIEWED / FROZEN FOR IMPLEMENTATION (2026-09-06, Master v1.8 §28.4).** Core implementation: NOT STARTED. No tests exist yet; no test runner is installed yet. **Correction (2026-09-06):** an earlier draft of this document stated the Product Owner had verbally pre-approved installing Vitest ("Vitest導入：YES"). That was inaccurate — the message it was based on only requested the next prompt and did not constitute explicit dependency-install approval. **Vitest dependency gate: OPEN.** Vitest remains recommended and not installed; `npm install -D vitest` (and any `package.json`/lockfile change) requires a distinct, explicit Product Owner approval, still not yet recorded, before P3-L04 may perform it — inside that Loop's own write boundary, not this planning/freeze closeout, which is scoped to `typesetting-v2/` only.
 
 ## 1. Test tooling audit (read-only, current state)
 
