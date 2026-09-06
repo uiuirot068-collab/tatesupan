@@ -982,3 +982,23 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to confirm or adjust the stroke thickness. P3-O05 (ellipsis) remains untouched and OPEN, not to be started until dash passes Human QA. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 Dash Paint Strategy Audit (2026-09-07, second review)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `83a49f5` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human rejected ALL three thickness candidates (0.03em/0.06em/0.09em) as still too thick, with no meaningful visible difference between them despite a 3x declared range. Is the painted-bar implementation itself defective, or is a different root cause responsible — and does the painted-bar strategy remain viable at all?
+
+**METHOD:** Directly audited the generated artifact and `PreviewRenderer.tsx` source (no browser, no shell probes) against 6 specific mechanical questions: glyph-hiding, single-bar-only, no-overlap, no-stray-background, no-transform-distortion, correct-per-candidate-override. All six passed clean — no implementation defect anywhere. Computed the three candidates' actual theoretical pixel widths directly from the confirmed font-size (20.999px): 0.630px / 1.260px / 1.890px — all under 2 device pixels, spanning barely more than 1 full device pixel of declared difference. This is squarely the range where standard browser rasterization for solid-fill elements at 1x device-pixel-ratio rounds/clamps toward similar effective widths — a provable-by-arithmetic, not guessed, explanation for "3x range, no visible difference." Also reconsidered whether the underlying Phase 2 P2-L06 off-center finding (measured in a different, superseded PoC structure) actually recurs in THIS renderer's structure at all — never previously tested, and directly analogous to TCY's own historical uncertainty which did NOT recur here.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` §16 (full audit table, classification, three-strategy comparison). Regenerated `qa/visual/p3-o04-dash-weight-comparison/index.html` with three genuinely different STRATEGIES (not just three more numbers): (A) corrected native glyph, no painted bar at all — real font ink, no invented value, tests whether the historical off-center problem even recurs here; (B) ultra-light geometric bar using a width just above the proven rasterization floor (0.05em) combined with reduced opacity (0.4), achieving visual lightness via alpha blending instead of further geometric shrinkage; (C) the current solid bar (0.06em), unchanged, kept for direct side-by-side comparison. 81/81 renderer/preview tests pass (unchanged count — the one comparison-generator test was rewritten in place); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` 0 new errors. No Core file touched; the main P3-O09 artifact's own dash rule left unchanged (still 0.06em) pending this strategy decision.
+
+**RESULT: Root cause classified as D (device/subpixel rasterization floor), proven by direct arithmetic on already-known values, not guessed.** Classification E (uniform bar is the wrong optical model) not ruled out as a secondary factor but is not the dominant explanation for the specific "indistinguishable candidates" symptom. Painted-bar strategy viability: UNCERTAIN on the geometric-width lever alone (further reduction repeats the same floor problem); a different lever (opacity) may remain viable, offered as Strategy B.
+
+**DECISION: P3-O04 — HOLD, Human strategy recheck required (not just a thickness pick).**
+
+**WHY:** Every claim in the audit traces to a directly-confirmed value (font-size read from the generated HTML, em-to-px arithmetic, direct CSS-rule inspection) or a well-established, non-codebase-specific rendering behavior (sub-pixel rasterization rounding) — no aspect of the "why does it still look thick" question was answered by guessing a smaller number a second time, matching the task's own explicit instruction not to repeat that pattern.
+
+**NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to choose among strategies A/B/C or describe a different direction. P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

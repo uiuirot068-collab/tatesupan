@@ -96,3 +96,49 @@ The bar's exact visual proportions (thickness, color) are a Renderer-level defau
 **DECISION: Stroke weight — INTERIM FIX APPLIED (0.06em), pending Human confirmation via the 3-candidate comparison artifact.**
 
 **Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` to pick among A/B/C (or request a different value); the main `qa/visual/p3-o09-preview/index.html` artifact currently uses candidate B (0.06em) as its interim default.
+
+## 16. Human Visual QA — All Weight Candidates Rejected (2026-09-07)
+
+**Human observation:** all three thickness candidates (0.03em / 0.06em / 0.09em) were rejected as still too thick. Critically, despite a 3x declared range, the Human reported no meaningful visible difference between them — flagged as evidence requiring a strategy audit, not another round of thickness guessing.
+
+**Question 1 — what is actually painted (audited directly from the generated artifact and `PreviewRenderer.tsx` source, no browser):**
+
+| Quantity | Value |
+|---|---|
+| Body font-size (this fixture) | 20.999055118110242px |
+| A declared width | 0.03em |
+| A theoretical px | 20.999 × 0.03 ≈ **0.630px** |
+| B declared width | 0.06em |
+| B theoretical px | 20.999 × 0.06 ≈ **1.260px** |
+| C declared width | 0.09em |
+| C theoretical px | 20.999 × 0.09 ≈ **1.890px** |
+| 1. Is the original dash glyph ink hidden? | YES (`color: transparent` on `.unit-ink` when `.semantic-dash` present, confirmed in the stylesheet) |
+| 2. Exactly ONE pseudo-element/bar painted per run? | YES (one `::after` rule, one unit per run, confirmed via direct grep of the generated HTML — no duplicate declarations) |
+| 3. Could two bars overlap? | NO (only one `::after` rule exists; each dash run is one atomic paint item, confirmed by the Ruby Placement Micro-Loop/dashVisual.test.ts's own atomicity tests) |
+| 4. Does another border/background contribute? | NO (`.unit-ink`'s own base rule is `display: block; width: 100%; height: 100%; overflow: hidden;` — no background, no border, confirmed by direct reading of `PreviewRenderer.tsx`) |
+| 5. Does transform/scaling alter cross-axis thickness? | NO (`transform: translateX(-50%)` is a pure translation for centering, never a `scale()`) |
+| 6. Does the candidate-specific CSS actually override the rule? | YES (each candidate's own `<style>` block in the generated artifact declares its own distinct `width` value; confirmed via direct grep — no cross-contamination between sections) |
+
+**No implementation defect found anywhere in the audit above** — every mechanical property is exactly as intended.
+
+**Question 2 — proven cause:** the three requested widths (0.630px / 1.260px / 1.890px) are all **under 2 device pixels**, spanning barely more than one full device pixel of DECLARED difference between the thinnest and thickest. Standard browser rasterization for solid-color CSS backgrounds at 1x device-pixel-ratio commonly rounds or clamps sub-2px widths toward similar effective rendered pixel counts (a widely-documented class of rendering behavior, not specific to this codebase) — this directly explains "3x declared range, no visible difference." **Classification: D (device/subpixel rasterization floor)**, proven by direct arithmetic on already-known values (font-size, declared em, resulting px), not by guessing. **Classification E (uniform bar is the wrong optical model) is not ruled out as a secondary factor** (a hard-edged rectangle's own "character" may differ from a font's naturally anti-aliased ink even once distinguishable), but D is the dominant, immediately provable explanation for the SPECIFIC symptom reported (candidates indistinguishable from each other).
+
+**Painted-bar strategy still viable: UNCERTAIN** — further geometric-width reduction on the SAME lever would only repeat the identical rasterization-floor problem (an even smaller value cannot render visibly thinner than the floor, and may vanish or clamp UP instead). A different lever (opacity/alpha, not geometric width) can still use the bar concept without hitting the same ceiling — offered as Strategy B below, alongside a genuine alternative (native glyph) as Strategy A.
+
+**Also reconsidered (per this task's own "Native Glyph Reconsideration" prompt):** the ORIGINAL Phase 2 P2-L06 off-center finding was measured in a **different, now-superseded PoC's own DOM/CSS structure** — exactly the same category of historical uncertainty already found NOT to recur for TCY's `text-combine-upright` in THIS renderer's own structure (P3-O03, Human-confirmed PASS despite Phase 2's own unresolved full-page-combination failure). Whether the SAME off-centering recurs in THIS renderer's structure has never actually been tested — the painted-bar strategy was adopted without first checking whether the plain native glyph already renders acceptably here.
+
+**Three STRATEGIES generated for comparison** (`typesetting-v2/qa/visual/p3-o04-dash-weight-comparison/index.html`, regenerated — same fixture "彼は――そう言った。", same font, same page scale, same canonical geometry, same source, same run length; comparison artifact replaced in place, same file path):
+
+- **A — corrected native glyph (no painted bar at all):** restores the real "――" font glyph ink (removes `color: transparent`), removes the bar (`content: none`). Uses the typeface's own natural stroke weight, no invented value, trivially Publication-portable (real text renders correctly in any PDF renderer too). Tests whether the historical off-center problem recurs here at all.
+- **B — ultra-light geometric (width just above the rasterization floor + reduced opacity):** `width: 0.05em` (≈1.05px, deliberately just ABOVE, not below, the ~1 device-pixel floor established above) combined with `opacity: 0.4` — achieves a visually LIGHTER stroke via alpha blending (partial-coverage anti-aliasing, the same mechanism a real hairline font stroke uses) instead of further geometric shrinkage, which this audit proved has no further visible effect at this scale.
+- **C — alternative geometric (current solid bar, unchanged):** the existing `0.06em` full-opacity rule, kept exactly as-is for direct side-by-side comparison — no implementation defect was found in it, only that its resulting look was rejected at every width tried; retained in case direct comparison against A/B changes that judgment.
+
+**No fixed px was introduced as the canonical visual definition** (B's `0.05em` remains a proportional, `font-size`-relative value, chosen only to sit above the empirically-established floor — not a `1px` literal). Both A and C remain Publication-portable in principle (real text, or a simple filled rectangle respectively); B (opacity-based) would need its own reproduction strategy in a future PDF/vector Publication Renderer, disclosed as an open question, not assumed solved.
+
+**Invariants (unchanged, re-verified):** `CanonicalDocument` unaffected (no Core file touched, confirmed by `git diff --stat`); surrounding text/body coordinates unaffected (the comparison artifact reuses the exact same composed `PaintDocument`, only substituting CSS text per section); line/page breaks unaffected; ellipsis behavior unaffected (not referenced anywhere in this file's changes).
+
+**Tests:** 81/81 renderer/preview tests pass (unchanged count — `generateDashWeightComparison.test.ts`'s one test was rewritten in place, not added to); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**DECISION: P3-O04 — HOLD, Human strategy recheck required.** The main `qa/visual/p3-o09-preview/index.html` artifact's own dash rule is left UNCHANGED (still 0.06em solid, the last-applied interim value) pending this strategy-level decision — changing it again without Human input would be more guessing, not a resolution.
+
+**Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` and pick among strategies A/B/C (or describe a different direction).
