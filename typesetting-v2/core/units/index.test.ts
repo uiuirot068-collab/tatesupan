@@ -5,6 +5,7 @@ import type {
   ImageUnit,
   LogicalUnit,
   ManualBreakUnit,
+  ParagraphBreakUnit,
   RubyUnit,
   SemanticRunUnit,
   TCYUnit,
@@ -13,7 +14,7 @@ import type {
 
 // Exhaustive switch: if a LogicalUnit kind is ever added or removed without
 // updating this function, TypeScript fails to compile (the `never` branch),
-// which is the type-check proof that all six kinds discriminate correctly.
+// which is the type-check proof that all seven kinds discriminate correctly.
 function describeUnit(unit: LogicalUnit): string {
   switch (unit.kind) {
     case "TEXT":
@@ -28,6 +29,8 @@ function describeUnit(unit: LogicalUnit): string {
       return "MANUAL_BREAK";
     case "IMAGE":
       return `IMAGE:${unit.refId}`;
+    case "PARAGRAPH_BREAK":
+      return "PARAGRAPH_BREAK";
     default: {
       const exhaustive: never = unit;
       throw new Error(`Unreachable — unhandled LogicalUnit kind: ${JSON.stringify(exhaustive)}`);
@@ -36,7 +39,7 @@ function describeUnit(unit: LogicalUnit): string {
 }
 
 describe("LogicalUnit discriminated union", () => {
-  it("discriminates all six kinds by `kind`", () => {
+  it("discriminates all seven kinds by `kind`", () => {
     const span: SourceSpan = { blockId: "body-1", start: 0, end: 2 };
 
     const text: TextUnit = { kind: "TEXT", span, text: "東京" };
@@ -58,8 +61,9 @@ describe("LogicalUnit discriminated union", () => {
       intrinsicHeight: 600000,
       placement: "CENTER",
     };
+    const paragraphBreak: ParagraphBreakUnit = { kind: "PARAGRAPH_BREAK", span };
 
-    const units: LogicalUnit[] = [text, ruby, tcy, semanticRun, manualBreak, image];
+    const units: LogicalUnit[] = [text, ruby, tcy, semanticRun, manualBreak, image, paragraphBreak];
     expect(units.map(describeUnit)).toEqual([
       "TEXT:東京",
       "RUBY:ATOMIC",
@@ -67,6 +71,7 @@ describe("LogicalUnit discriminated union", () => {
       "SEMANTIC_RUN:DASH",
       "MANUAL_BREAK",
       "IMAGE:cover-sketch",
+      "PARAGRAPH_BREAK",
     ]);
   });
 

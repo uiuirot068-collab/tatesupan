@@ -63,6 +63,8 @@ function comparisonKindFor(unit: LogicalUnit): ComparisonUnitKind | null {
       return "IMAGE";
     case "MANUAL_BREAK":
       return null; // zero-width marker, never a visible placed unit — mirrors legacy's pageBreak exclusion
+    case "PARAGRAPH_BREAK":
+      return null; // zero visible content (advance 0) — mirrors legacyAdapter.ts's own bare-"\n" exclusion
   }
 }
 

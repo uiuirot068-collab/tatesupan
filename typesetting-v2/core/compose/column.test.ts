@@ -28,7 +28,7 @@ const settings: ColumnCompositionSettings = {
 describe("composeColumn — fills lines to column capacity", () => {
   it("places multiple lines until the column's own capacity is reached, continuing the source stream across lines", () => {
     const unit = text("あいうえおかきくけこ", 0); // 10 cells, 3 per line -> needs 4 lines, column holds 2
-    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, settings);
+    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, settings, false);
     expect(result.hold).toBeUndefined();
     expect(result.column.lines).toHaveLength(2);
     expect(result.column.lines[0].placedUnits).toHaveLength(3);
@@ -40,7 +40,7 @@ describe("composeColumn — fills lines to column capacity", () => {
 
   it("reports residual column-width space rather than stretching line pitch (INV-004)", () => {
     const unit = text("あいう", 0); // fits in one line, column has room for 2
-    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, settings);
+    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, settings, false);
     expect(result.column.lines).toHaveLength(1);
     expect(result.column.residualSpaceTick).toBe(CELL * 1);
   });
@@ -52,7 +52,7 @@ describe("composeColumn — manual forced break closes the column immediately", 
     const manualBreak: ManualBreakUnit = { kind: "MANUAL_BREAK", span: span(1, 1) };
     const after = text("いうえ", 1);
     const units: LogicalUnit[] = [before, manualBreak, after];
-    const result = composeColumn(units, 0, DEFAULT_RULE_SET_V2, measurement, settings);
+    const result = composeColumn(units, 0, DEFAULT_RULE_SET_V2, measurement, settings, false);
     expect(result.forcedBreak).toBe(true);
     expect(result.column.lines).toHaveLength(1); // column had room for 2 lines but stopped after the forced one
     expect(result.remainingUnits[0]?.span.start).toBe(1);
@@ -63,7 +63,7 @@ describe("composeColumn — HOLD propagation", () => {
   it("propagates a line-level hold rather than silently discarding it", () => {
     const impossible: ColumnCompositionSettings = { ...settings, lineExtentTicks: 0 };
     const unit = text("あ", 0);
-    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, impossible);
+    const result = composeColumn([unit], 0, DEFAULT_RULE_SET_V2, measurement, impossible, false);
     expect(result.hold).toBeDefined();
     expect(result.column.lines).toHaveLength(0);
   });

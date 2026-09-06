@@ -219,4 +219,16 @@ Stage C's actual run (not just the prior plan's prediction) confirms: ruby logic
 
 The approved architecture (React DOM absolute-position, disposable-implementation/evolutionary-contract, `CanonicalDocument` + read-only `LogicalUnit[]` lookup, paint-only) remains valid — nothing in Root Causes A/B/C challenges any part of that decision; none of them are rendering-technology questions. **What changes is the first visual gate's interpretability**, not the architecture: Stage D can be *built* against the approved plan today, but running its first Human visual comparison and drawing conclusions from "line-break correspondence" specifically will be confounded by Root Causes A/B until Product decides whether/how v2 should represent them — a reviewer would otherwise blame the (uninvolved) renderer for a logical-layer gap.
 
+---
+
+## 17. Post-Implementation Disposition (2026-09-06)
+
+Following the Human Product Decisions approved after §16's review, Root Causes A and B were implemented (`qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` — full detail there; this section only records final disposition against §8/§9's original findings, per that document's own instruction not to rewrite historical Stage C results).
+
+- **Root Cause A (一字下げ auto-indent): RESOLVED BY PRODUCT POLICY + IMPLEMENTATION.** Confirmed by re-running the Stage C suite: every fixture whose paragraph starts with an ordinary TEXT unit now MATCHes (`baseline-ascii-kana`, `two-column-flow`, `dash-run`, `explicit-tcy`). Two narrow residuals remain, both disclosed: (a) a paragraph starting with a RUBY or SEMANTIC_RUN unit does not receive auto-indent in v2 (Core doesn't store their literal text for the exemption check — `atomic-ruby`/`ellipsis-run`, pre-declared `EXPECTED_INDENT_UNDETERMINABLE_FOR_RUBY_FIRST_UNIT`); (b) `long-non-repeating-prose` retains a smaller, **not fully diagnosed** residual difference on its second/third paragraphs, left as undeclared `UNEXPECTED_DIFFERENCE` rather than guessed at — see `PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §9 for the full, honest account.
+- **Root Cause B (bare-`\n` paragraph break): RESOLVED BY PRODUCT POLICY + IMPLEMENTATION.** `paragraph-break-gap` (re-authored to use the new `PARAGRAPH_BREAK` LogicalUnit) now MATCHes cleanly, 0 unexpected differences.
+- **Root Cause C (manual-page-break phantom empty line): KNOWN LEGACY DIFFERENCE — NOT PORTED.** Confirmed unchanged; v2 still produces no such artifact, per the Human decision not to adopt it, guarded by a regression test.
+
+**READY FOR STAGE D: YES** — see `PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §12 for the full readiness statement.
+
 

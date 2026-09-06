@@ -31,6 +31,7 @@ export type {
   ManualBreakUnit,
   ImageUnit,
   ImagePlacement,
+  ParagraphBreakUnit,
 } from "./units";
 
 export type { RuleSetVersion, CharacterClass, CharacterClassId } from "./rules/characterClass";

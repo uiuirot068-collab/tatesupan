@@ -29,7 +29,11 @@ const baseSettings: PageCompositionSettings = {
 
 describe("Single-page composition (test group A/B)", () => {
   it("fits everything on one page with one column when content is within one column's capacity", () => {
-    const unit = text("あいうえおか", 0); // 6 cells -> exactly one column (2 lines x 3)
+    // Starts with an auto-indent-exempt opening bracket (「) so this
+    // capacity-mechanics test isn't perturbed by Human Product Decision A's
+    // paragraph-first-line indent (see compose/line.ts's needsAutoIndent) —
+    // this group tests page/column capacity, not indent.
+    const unit = text("「いうえおか", 0); // 6 cells -> exactly one column (2 lines x 3)
     const result = composePages([unit], DEFAULT_RULE_SET_V2, measurement, baseSettings);
     expect(result.hold).toBeUndefined();
     expect(result.pages).toHaveLength(1);
@@ -38,7 +42,7 @@ describe("Single-page composition (test group A/B)", () => {
 
   it("fits everything on one page across two columns when columnsPerPage=2", () => {
     const twoColumn: PageCompositionSettings = { ...baseSettings, columnsPerPage: 2 };
-    const unit = text("あいうえおかきくけこさし", 0); // 12 cells -> exactly two columns
+    const unit = text("「いうえおかきくけこさし", 0); // 12 cells -> exactly two columns (indent-exempt opener, see note above)
     const result = composePages([unit], DEFAULT_RULE_SET_V2, measurement, twoColumn);
     expect(result.hold).toBeUndefined();
     expect(result.pages).toHaveLength(1);
@@ -109,7 +113,7 @@ describe("Source mapping survives page/column transitions (test group F, INV-001
 
 describe("Residual space and Natural Pitch (test group G/H, INV-004)", () => {
   it("reports column residual space without altering per-character pitch", () => {
-    const unit = text("あいう", 0); // 3 cells in a 6-cell column
+    const unit = text("「いう", 0); // 3 cells in a 6-cell column (indent-exempt opener, see note above)
     const result = composePages([unit], DEFAULT_RULE_SET_V2, measurement, baseSettings);
     const column = result.pages[0].columns[0];
     expect(column.residualSpaceTick).toBe(CELL * 1); // one line placed, one line's worth of pitch left
@@ -176,7 +180,7 @@ describe("HOLD propagation (test group L)", () => {
   it("composePage alone also surfaces the same hold", () => {
     const impossible: PageCompositionSettings = { ...baseSettings, lineExtentTicks: 0 };
     const unit = text("あ", 0);
-    const result = composePage([unit], 0, DEFAULT_RULE_SET_V2, measurement, impossible);
+    const result = composePage([unit], 0, DEFAULT_RULE_SET_V2, measurement, impossible, false);
     expect(result.hold).toBeDefined();
   });
 });

@@ -22,6 +22,9 @@ export interface PageCompositionResult {
   page: CanonicalPage;
   remainingUnits: LogicalUnit[];
   hold?: LineCompositionHold;
+  // See ColumnCompositionResult's own field of the same name — threaded
+  // across columns within this page, then onward to the next page.
+  nextLineIsParagraphStart: boolean;
 }
 
 export function composePage(
@@ -30,16 +33,19 @@ export function composePage(
   ruleSet: RuleSetVersion,
   measurement: MeasurementFacts,
   settings: PageCompositionSettings,
+  isParagraphStart: boolean,
   trace?: TraceRecorder
 ): PageCompositionResult {
   const columns: CanonicalPage["columns"] = [];
   let remaining = units;
   let hold: LineCompositionHold | undefined;
+  let currentIsParagraphStart = isParagraphStart;
 
   for (let c = 0; c < settings.columnsPerPage && remaining.length > 0; c++) {
-    const columnResult = composeColumn(remaining, c, ruleSet, measurement, settings, trace);
+    const columnResult = composeColumn(remaining, c, ruleSet, measurement, settings, currentIsParagraphStart, trace);
     columns.push(columnResult.column);
     remaining = columnResult.remainingUnits;
+    currentIsParagraphStart = columnResult.nextLineIsParagraphStart;
     if (columnResult.hold) {
       hold = columnResult.hold;
       break;
@@ -47,7 +53,12 @@ export function composePage(
     if (columnResult.forcedBreak) break; // manual break closes the page immediately, even under column capacity
   }
 
-  return { page: { id: `page-${order}`, order, columns }, remainingUnits: remaining, hold };
+  return {
+    page: { id: `page-${order}`, order, columns },
+    remainingUnits: remaining,
+    hold,
+    nextLineIsParagraphStart: currentIsParagraphStart,
+  };
 }
 
 export interface DocumentCompositionResult {
@@ -71,6 +82,11 @@ export function composePages(
   let remaining = units;
   let hold: LineCompositionHold | undefined;
   let order = 0;
+  // Human Product Decision A: the document's very first paragraph is
+  // indented too (matches legacy's own `pendingParagraphStart` starting
+  // `true` at document start, TSP-LOOP-029) — never reset by a page
+  // boundary, only by an actual PARAGRAPH_FORCED cut.
+  let isParagraphStart = true;
 
   while (remaining.length > 0) {
     // Track progress by source START OFFSET, not array length: a single
@@ -78,9 +94,10 @@ export function composePages(
     // slot, so length alone would falsely look "stuck" every time a page
     // ends mid-unit.
     const beforeOffset = remaining[0]?.span.start;
-    const pageResult = composePage(remaining, order, ruleSet, measurement, settings, trace);
+    const pageResult = composePage(remaining, order, ruleSet, measurement, settings, isParagraphStart, trace);
     pages.push(pageResult.page);
     remaining = pageResult.remainingUnits;
+    isParagraphStart = pageResult.nextLineIsParagraphStart;
     order++;
     if (pageResult.hold) {
       hold = pageResult.hold;

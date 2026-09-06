@@ -11,6 +11,7 @@ export type { TCYUnit } from "./tcyUnit";
 export type { SemanticRunKind, SemanticRunUnit } from "./semanticRunUnit";
 export type { ManualBreakUnit } from "./manualBreakUnit";
 export type { ImagePlacement, ImageUnit } from "./imageUnit";
+export type { ParagraphBreakUnit } from "./paragraphBreakUnit";
 
 import type { TextUnit } from "./textUnit";
 import type { RubyUnit } from "./rubyUnit";
@@ -18,6 +19,7 @@ import type { TCYUnit } from "./tcyUnit";
 import type { SemanticRunUnit } from "./semanticRunUnit";
 import type { ManualBreakUnit } from "./manualBreakUnit";
 import type { ImageUnit } from "./imageUnit";
+import type { ParagraphBreakUnit } from "./paragraphBreakUnit";
 
 export type LogicalUnit =
   | TextUnit
@@ -25,4 +27,5 @@ export type LogicalUnit =
   | TCYUnit
   | SemanticRunUnit
   | ManualBreakUnit
-  | ImageUnit;
+  | ImageUnit
+  | ParagraphBreakUnit;

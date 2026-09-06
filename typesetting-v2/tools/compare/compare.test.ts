@@ -208,46 +208,36 @@ describe("Stage C fixture corpus — end-to-end legacy vs. v2 comparison", () =>
     expect(concatDiff?.category).toBe("MATCH");
   });
 
-  it("two-column-flow: NEWLY DISCOVERED — legacy's 一字下げ auto-indent (TSP-LOOP-029) has no v2 equivalent, cascading a constant 1-character offset through the whole document", () => {
+  it("two-column-flow: RESOLVED by Human Product Decision A — v2 now applies the same 一字下げ auto-indent as legacy (TSP-LOOP-029)", () => {
     // Plain kana, no kinsoku/hanging/ruby/TCY involved at all — isolates
-    // the auto-indent gap from every other mechanism. Legacy reduces the
-    // very first line's budget by 1 (`paragraphNeedsAutoIndent` /
-    // `openLineBudget` in tategaki.ts); v2's compose/line.ts has no
-    // equivalent concept anywhere (confirmed by direct code reading — no
-    // "indent" match anywhere under core/compose/). The one-time -1 on
-    // line 1 then cascades: every later line boundary is offset by exactly
-    // the same 1 character for the rest of the document, since the content
-    // stream simply continues from wherever the previous engine's line
-    // left off.
+    // the auto-indent mechanism from every other one. Before Human Product
+    // Decision A's implementation, legacy's first-line -1 budget reduction
+    // (`paragraphNeedsAutoIndent`/`openLineBudget` in tategaki.ts) had no
+    // v2 equivalent, cascading a constant 1-character offset through the
+    // whole document (the original Stage C discovery this fixture is named
+    // after). `compose/line.ts`'s `needsAutoIndent` now ports the same
+    // exemption rule, so both engines reduce line 1's budget identically.
     const result = runFixture(twoColumnFlowFixture);
+    // Zero UNEXPLAINED unexpected differences: the sole remaining one
+    // (an empty trailing legacy column artifact, unrelated to indent) is
+    // pre-declared and reclassified — see fixtures.ts's own comment.
+    expect(result.classification.unexpectedDifference).toBe(0);
+    const columnArtifact = result.diffs.find((d) => d.path === "page[1].column[1]");
+    expect(columnArtifact?.category).toBe("EXPECTED_DIFFERENCE");
+    expect(columnArtifact?.reasonCode).toBe("EXPECTED_LEGACY_FIXED_COLUMN_ARRAY_ARTIFACT");
     const firstLineDiff = result.diffs.find((d) => d.path === "page[0].column[0].line[0].text");
-    expect(firstLineDiff?.category).toBe("UNEXPECTED_DIFFERENCE"); // no frozen policy explains this yet
-    // Legacy's line 1 holds exactly one FEWER character than v2's — the
-    // one-time 一字下げ reduction that applies only to a paragraph's first
-    // line. From line 2 onward both engines return to equal per-line
-    // capacity (5 characters each, this fixture's charsPerLine) — the
-    // deficit doesn't compound as a growing length difference, it
-    // persists as a constant 1-character CONTENT offset (every later line
-    // holds the same character count as its counterpart, just shifted by
-    // one position) for the rest of the document. Confirmed via this
-    // fixture's own full diff dump during this Loop's own investigation;
-    // the corpus-wide integrity test above independently confirms no
-    // content is lost or duplicated by this cascade.
-    expect(firstLineDiff?.legacyValue.length).toBe((firstLineDiff?.v2Value.length ?? 0) - 1);
-    const secondLineDiff = result.diffs.find((d) => d.path === "page[0].column[0].line[1].text");
-    expect(secondLineDiff?.legacyValue.length).toBe(secondLineDiff?.v2Value.length); // equal length, shifted content
-    expect(secondLineDiff?.category).toBe("UNEXPECTED_DIFFERENCE");
+    expect(firstLineDiff?.category).toBe("MATCH");
+    expect(firstLineDiff?.legacyValue).toBe(firstLineDiff?.v2Value);
   });
 
-  it("paragraph-break-gap: reproduces the newly-discovered gap as a genuine, undeclared UNEXPECTED_DIFFERENCE", () => {
+  it("paragraph-break-gap: RESOLVED by Human Product Decision B — legacy's forced \\n line break now MATCHes v2's PARAGRAPH_BREAK", () => {
     const result = runFixture(paragraphBreakGapFixture);
     expect(result.legacySummary.pageCount).toBe(1);
-    // Legacy's own forced "\n" line break means 2 lines on legacy's single page;
-    // v2's Natural Pitch has no equivalent forced break, so it composes 1 line.
     const lineCountDiff = result.diffs.find((d) => d.path === "page[0].column[0].lines.length");
-    expect(lineCountDiff?.category).toBe("UNEXPECTED_DIFFERENCE"); // must NOT be silently reclassified — no frozen policy explains this yet
+    expect(lineCountDiff?.category).toBe("MATCH");
     expect(lineCountDiff?.legacyValue).toBe("2");
-    expect(lineCountDiff?.v2Value).toBe("1");
+    expect(lineCountDiff?.v2Value).toBe("2");
+    expect(result.classification.unexpectedDifference).toBe(0);
   });
 
   it("supplementary-plane-char: legacy's naive UTF-16 split corrupts the emoji; v2's INV-011 keeps it intact", () => {

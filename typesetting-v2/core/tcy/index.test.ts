@@ -35,7 +35,7 @@ describe("F10 — explicit TCY unit as one logical-cell-consuming atomic group (
     const before = text("あ", 0);
     const tcy: TCYUnit = { kind: "TCY", span: span(1, 3), displayText: "12", logicalCells: 1 };
     const after = text("い", 3);
-    const result = composeLine([before, tcy, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2);
+    const result = composeLine([before, tcy, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2, false);
     // "あ" (1 cell) + TCY (1 cell, despite spanning 2 source code points) = 2
     // cells -- exactly the extent budget; "い" does not fit.
     expect(result.hold).toBeUndefined();

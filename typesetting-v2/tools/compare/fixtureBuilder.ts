@@ -44,7 +44,8 @@ export type FixturePiece =
   | { kind: "TCY"; text: string; displayText?: string; logicalCells?: number }
   | { kind: "SEMANTIC_RUN"; text: string; runKind: SemanticRunKind }
   | { kind: "IMAGE"; refId: string; intrinsicWidthTicks: number; intrinsicHeightTicks: number; placement?: ImagePlacement }
-  | { kind: "MANUAL_BREAK" };
+  | { kind: "MANUAL_BREAK" }
+  | { kind: "PARAGRAPH_BREAK"; text?: string }; // text defaults to "\n" — pass "\r\n" for a CRLF fixture
 
 // Synthetic, never-real-text placeholder occupying exactly one code point of
 // flow-coordinate space per IMAGE marker — mirrors a real 【IMG:...】 marker
@@ -140,6 +141,12 @@ export function buildFixtureUnits(blockId: string, pieces: FixturePiece[]): { un
       });
     } else if (piece.kind === "MANUAL_BREAK") {
       units.push({ kind: "MANUAL_BREAK", span: { blockId, start: cursor, end: cursor } });
+    } else if (piece.kind === "PARAGRAPH_BREAK") {
+      const text = piece.text ?? "\n";
+      const start = cursor;
+      cursor += Array.from(text).length; // 1 for "\n", 2 for "\r\n" — real source width, per Human Product Decision B
+      flow += text;
+      units.push({ kind: "PARAGRAPH_BREAK", span: { blockId, start, end: cursor } });
     }
   }
 

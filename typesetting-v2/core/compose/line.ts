@@ -49,6 +49,50 @@ export interface LineCompositionResult {
   // to close the current column AND page immediately, even under capacity
   // (Contract Appendix CASE 6), rather than starting another line here.
   forcedBreak: boolean;
+  // True only when this line ended because of a PARAGRAPH_FORCED opportunity
+  // (Human Product Decision B, `qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md`)
+  // — a bare manuscript line ending. Unlike `forcedBreak`, this never closes
+  // the column/page: it only tells the column composer that the NEXT line
+  // it composes is a fresh paragraph start (for auto-indent purposes).
+  endedAtParagraphBreak: boolean;
+}
+
+// Human Product Decision A (一字下げ): a paragraph's first line reserves one
+// character cell, UNLESS its first visible character is a conversation-
+// opening bracket (matches legacy convention — `tategaki.ts`'s own
+// AUTO_INDENT_EXEMPT_OPENERS, ported verbatim) or is itself the indent
+// character already (avoids double-indenting a manuscript that already
+// typed a leading full-width space). Ported as Core-owned data — not a
+// renderer choice, not a manuscript mutation (Contract-consistent: this
+// never touches SourceSpan or unit content, only a line's own capacity
+// budget).
+const AUTO_INDENT_EXEMPT_OPENERS = "「『（〈《【〔［｛“‘";
+const AUTO_INDENT_CHAR = "　"; // full-width space (U+3000)
+
+// The first visible character of a unit, for the auto-indent exemption
+// check only — determinable for TEXT/TCY (both store their own content
+// directly); NOT determinable for RUBY (Core's RubyUnit carries only
+// `baseSpan`, never the base text itself) or SEMANTIC_RUN (carries only
+// `length`, never its literal characters) — a known, disclosed architecture
+// constraint (`qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §5): a
+// paragraph starting with one of these two kinds will not receive
+// auto-indent in v2, unlike legacy (whose own tokens store this content
+// directly). `undefined` here mirrors legacy's own `firstVisibleTokenChar`
+// returning `""` for anything it doesn't special-case (image/pageBreak) —
+// both paths converge on "auto-indent does not apply" with no character.
+function firstVisibleCharFor(unit: LogicalUnit): string | undefined {
+  if (unit.kind === "TEXT") return Array.from(unit.text)[0];
+  if (unit.kind === "TCY") return Array.from(unit.displayText)[0];
+  return undefined;
+}
+
+function needsAutoIndent(firstChar: string | undefined): boolean {
+  return (
+    firstChar !== undefined &&
+    firstChar.length > 0 &&
+    !AUTO_INDENT_EXEMPT_OPENERS.includes(firstChar) &&
+    firstChar !== AUTO_INDENT_CHAR
+  );
 }
 
 interface CompositionAtom {
@@ -88,6 +132,10 @@ function advanceTickFor(
       return 0;
     case "IMAGE":
       return measurement.imageIntrinsicTick(unit.refId).height;
+    case "PARAGRAPH_BREAK":
+      // Zero cost, mirrors legacy's own "\n" token (tokenLength === 0 by
+      // omission — bare newlines are never counted toward line capacity).
+      return 0;
   }
 }
 
@@ -155,7 +203,11 @@ function computeAtoms(
   return { atoms };
 }
 
-type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED";
+// FORCED_PAGE (MANUAL_FORCED) and FORCED_LINE (PARAGRAPH_FORCED) both cut
+// the line at this exact boundary, but only FORCED_PAGE propagates upward
+// as `forcedBreak` (closing the column+page, Contract §13/INV-006).
+// FORCED_LINE ends only this line — ordinary column/page flow continues.
+type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED_LINE" | "FORCED_PAGE";
 
 function legalityAfter(offset: number, opportunities: BreakOpportunity[]): BoundaryLegality {
   const opportunity = opportunities.find((o) => o.position.start === offset);
@@ -165,7 +217,9 @@ function legalityAfter(offset: number, opportunities: BreakOpportunity[]): Bound
     case "RUBY_INTERNAL_ALLOWED":
       return "LEGAL";
     case "MANUAL_FORCED":
-      return "FORCED";
+      return "FORCED_PAGE";
+    case "PARAGRAPH_FORCED":
+      return "FORCED_LINE";
     case "PROHIBITED_KINSOKU":
     case "PROHIBITED_GROUP":
     case "RUBY_INTERNAL_PROHIBITED":
@@ -179,6 +233,12 @@ export function composeLine(
   measurement: MeasurementFacts,
   settings: CompositionSettings,
   lineExtentTicks: GeometryTick,
+  // Human Product Decision A (一字下げ): true when this line is the first
+  // line of a paragraph (document start, or the line immediately following
+  // a PARAGRAPH_FORCED cut) — threaded from the column composer, which
+  // tracks it across lines exactly as legacy's `pendingParagraphStart` does
+  // across its own line/page loop.
+  isParagraphStart: boolean,
   trace?: TraceRecorder
 ): LineCompositionResult {
   const streamStart = units[0]?.span.start ?? 0;
@@ -190,8 +250,14 @@ export function composeLine(
       residualSpaceTick: lineExtentTicks,
       consumedThroughOffset: streamStart,
       forcedBreak: false,
+      endedAtParagraphBreak: false,
     };
   }
+
+  const perCellAdvance = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
+  const appliesIndent = isParagraphStart && needsAutoIndent(firstVisibleCharFor(units[0]));
+  const indentTick = appliesIndent ? perCellAdvance : 0;
+  const effectiveLineExtentTicks = lineExtentTicks - indentTick;
 
   const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
   const atomResult = computeAtoms(units, opportunities, measurement, settings);
@@ -202,9 +268,10 @@ export function composeLine(
         sourceSpan: atomResult.unresolvedImageSpan,
       },
       line: { id: "line-hold", order: 0, placedUnits: [] },
-      residualSpaceTick: lineExtentTicks,
+      residualSpaceTick: effectiveLineExtentTicks,
       consumedThroughOffset: streamStart,
       forcedBreak: false,
+      endedAtParagraphBreak: false,
     };
   }
   const atoms = atomResult.atoms;
@@ -213,18 +280,25 @@ export function composeLine(
   let cutAtAtomIndex = -1; // last atom INCLUSIVE index this line takes
   let sawAnyLegalCut = false;
   let forcedCut = false;
+  let endedAtParagraphBreak = false;
 
   for (let i = 0; i < atoms.length; i++) {
     const nextUsed = used + atoms[i].advanceTick;
-    if (nextUsed > lineExtentTicks) {
+    if (nextUsed > effectiveLineExtentTicks) {
       break;
     }
     used = nextUsed;
     const legality = legalityAfter(atoms[i].sourceSpan.end, opportunities);
-    if (legality === "FORCED") {
+    if (legality === "FORCED_PAGE") {
       cutAtAtomIndex = i;
       sawAnyLegalCut = true;
       forcedCut = true;
+      break;
+    }
+    if (legality === "FORCED_LINE") {
+      cutAtAtomIndex = i;
+      sawAnyLegalCut = true;
+      endedAtParagraphBreak = true;
       break;
     }
     if (legality === "LEGAL" || i === atoms.length - 1) {
@@ -244,15 +318,16 @@ export function composeLine(
     return {
       hold: {
         reason:
-          atoms.length > 0 && atoms[0].advanceTick > lineExtentTicks
+          atoms.length > 0 && atoms[0].advanceTick > effectiveLineExtentTicks
             ? "SINGLE_ATOM_EXCEEDS_LINE_EXTENT"
             : "NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT",
         sourceSpan: failingAtom?.sourceSpan ?? { blockId, start: streamStart, end: streamStart },
       },
       line: { id: "line-hold", order: 0, placedUnits: [] },
-      residualSpaceTick: lineExtentTicks,
+      residualSpaceTick: effectiveLineExtentTicks,
       consumedThroughOffset: streamStart,
       forcedBreak: false,
+      endedAtParagraphBreak: false,
     };
   }
 
@@ -269,7 +344,7 @@ export function composeLine(
   }
 
   const usedTick = yTick;
-  const residualSpaceTick = lineExtentTicks - usedTick;
+  const residualSpaceTick = effectiveLineExtentTicks - usedTick;
   const consumedThroughOffset = atoms[cutAtAtomIndex].sourceSpan.end;
 
   trace?.record({
@@ -280,9 +355,15 @@ export function composeLine(
   });
 
   return {
-    line: { id: `line-${streamStart}-${consumedThroughOffset}`, order: 0, placedUnits },
+    line: {
+      id: `line-${streamStart}-${consumedThroughOffset}`,
+      order: 0,
+      placedUnits,
+      ...(appliesIndent ? { indentTick } : {}),
+    },
     residualSpaceTick,
     consumedThroughOffset,
     forcedBreak: forcedCut,
+    endedAtParagraphBreak,
   };
 }

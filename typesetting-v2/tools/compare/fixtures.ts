@@ -58,8 +58,28 @@ const LONG_PROSE =
   "駅までの道のりは、いつもよりずっと長く感じられた。\n\n" +
   "――それでも、まだ引き返す理由にはならない。";
 
+// Split into explicit PARAGRAPH_BREAK pieces at each "\n\n" boundary (two
+// consecutive breaks, matching legacy's own two separate "\n" tokens) —
+// Human Product Decision B is implemented as a distinct LogicalUnit kind,
+// not embeddable inside a TextUnit's own text, so a fixture that wants to
+// exercise it must encode it explicitly (see fixtureBuilder.ts's
+// PARAGRAPH_BREAK piece). Re-tested after that decision's implementation —
+// see fixtures.ts's own git history / PARAGRAPH_SEMANTICS_PRE_STAGE_D.md §8.
 export const longProseFixture: Fixture = (() => {
-  const { units, source } = buildFixtureUnits(BLOCK, [{ kind: "TEXT", text: LONG_PROSE }]);
+  const { units, source } = buildFixtureUnits(BLOCK, [
+    { kind: "TEXT", text: "「気が合った、と言ってしまえばそれまでだ。けれど気づけば、どこへ行くにも二人でいることが当たり前になっていた。」" },
+    { kind: "PARAGRAPH_BREAK" },
+    { kind: "PARAGRAPH_BREAK" },
+    {
+      kind: "TEXT",
+      text:
+        "窓の外では雨が降り続いていた。傘を持たずに出てきたことを、今更ながら少し悔やんだ。それでも歩調を緩める気にはならなかった。" +
+        "駅までの道のりは、いつもよりずっと長く感じられた。",
+    },
+    { kind: "PARAGRAPH_BREAK" },
+    { kind: "PARAGRAPH_BREAK" },
+    { kind: "TEXT", text: "――それでも、まだ引き返す理由にはならない。" },
+  ]);
   return {
     id: "long-non-repeating-prose",
     description: "prototypes/ui-comparison MANUSCRIPT_TEXT — long, non-repeating Human QA fixture, multi-page.",
@@ -67,7 +87,7 @@ export const longProseFixture: Fixture = (() => {
     v2BodyUnits: units,
     v2Source: source,
     capacity: { charsPerLine: 15, linesPerColumn: 4, columnCount: 1, bodyFontSizePt: 10 },
-    expectations: NO_EXPECTATIONS, // observe raw: this fixture's own "\n\n" boundaries are expected to surface the paragraph-break gap on their own merits
+    expectations: NO_EXPECTATIONS, // observe raw: with Human Product Decisions A/B now implemented, this fixture's own result is the evidence
   };
 })();
 
@@ -139,6 +159,18 @@ export const manualPageBreakFixture: Fixture = (() => {
   };
 })();
 
+// NARROW, DOCUMENTED LEGACY-STRUCTURAL DISTINCTION (found after implementing
+// Human Product Decision A — orthogonal to it, not fixed by it): when this
+// fixture's content divides EXACTLY evenly (here: 15 chars land precisely on
+// page 2's column 0, none left for column 1), legacy's `paginateTokensByLines`
+// still allocates `page.columns = [topTokens, bottomTokens]` as a fixed
+// 2-element structural pair (`tategaki.ts`) even when the second element ends
+// up empty; v2's `composePage` only creates as many `CanonicalColumn` entries
+// as it actually needed (`for (let c = 0; c < columnsPerPage && remaining.length > 0; c++)`).
+// Zero content difference either way (confirmed: every line on the shared
+// column MATCHes exactly) — a structural artifact of legacy's fixed-array
+// column model, not a logical/content divergence, and unrelated to
+// Root Cause A/B.
 export const twoColumnFlowFixture: Fixture = (() => {
   const text = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわ";
   const { units, source } = buildFixtureUnits(BLOCK, [{ kind: "TEXT", text }]);
@@ -149,10 +181,26 @@ export const twoColumnFlowFixture: Fixture = (() => {
     v2BodyUnits: units,
     v2Source: source,
     capacity: { charsPerLine: 5, linesPerColumn: 3, columnCount: 2, bodyFontSizePt: 10 },
-    expectations: NO_EXPECTATIONS,
+    expectations: expect([
+      {
+        pathPrefix: "page[1].column[1]",
+        reasonCode: "EXPECTED_LEGACY_FIXED_COLUMN_ARRAY_ARTIFACT",
+        severity: "LOW",
+        notes: "Legacy always allocates both column slots for a 2-column page even when the trailing one is empty (tategaki.ts's [topTokens, bottomTokens] pair); v2 only creates populated columns. Zero content difference — every populated line/column elsewhere MATCHes exactly.",
+      },
+    ]),
   };
 })();
 
+// NARROW, DOCUMENTED ARCHITECTURE LIMITATION (found after implementing Human
+// Product Decision A): this paragraph starts with a RUBY unit. Legacy's own
+// ruby token stores `base` text directly, so `firstVisibleTokenChar` can
+// check it for auto-indent exemption; Core's `RubyUnit` stores only
+// `baseSpan` (a SourceSpan reference, never the text itself), so
+// `compose/line.ts`'s `firstVisibleCharFor` cannot determine it — no indent
+// is applied when a paragraph starts with RUBY (or SEMANTIC_RUN, same
+// constraint) in v2, unlike legacy. Disclosed, not fixed (would require a
+// Core schema change, `qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §5).
 export const atomicRubyFixture: Fixture = (() => {
   const legacySource = "｜東京《とうきょう》に行く用事があった";
   const { units, source } = buildFixtureUnits(BLOCK, [
@@ -166,7 +214,14 @@ export const atomicRubyFixture: Fixture = (() => {
     v2BodyUnits: units,
     v2Source: source,
     capacity: { charsPerLine: 10, linesPerColumn: 5, columnCount: 1, bodyFontSizePt: 10 },
-    expectations: NO_EXPECTATIONS,
+    expectations: expect([
+      {
+        pathPrefix: "page[0].column[0].line[",
+        reasonCode: "EXPECTED_INDENT_UNDETERMINABLE_FOR_RUBY_FIRST_UNIT",
+        severity: "LOW",
+        notes: "Paragraph starts with a RUBY unit; Core's RubyUnit doesn't store base text, so v2 cannot check it for auto-indent exemption and applies none, unlike legacy. See PARAGRAPH_SEMANTICS_PRE_STAGE_D.md §5.",
+      },
+    ]),
   };
 })();
 
@@ -249,6 +304,11 @@ export const dashRunFixture: Fixture = (() => {
   };
 })();
 
+// Same narrow architecture limitation as atomic-ruby's own comment above:
+// this paragraph starts with a SEMANTIC_RUN unit (the ellipsis itself), and
+// Core's SemanticRunUnit stores only `length`, never its literal
+// characters — v2 cannot check it for auto-indent exemption and applies
+// none, unlike legacy (whose "……" is plain text content it can inspect).
 export const ellipsisRunFixture: Fixture = (() => {
   const legacySource = "……そうか……と彼はつぶやいた";
   const { units, source } = buildFixtureUnits(BLOCK, [
@@ -264,7 +324,17 @@ export const ellipsisRunFixture: Fixture = (() => {
     v2BodyUnits: units,
     v2Source: source,
     capacity: { charsPerLine: 5, linesPerColumn: 5, columnCount: 1, bodyFontSizePt: 10 },
-    expectations: SEMANTIC_RUN_EXPECTATIONS,
+    expectations: {
+      ...SEMANTIC_RUN_EXPECTATIONS,
+      expectedDifferences: [
+        {
+          pathPrefix: "page[0]",
+          reasonCode: "EXPECTED_INDENT_UNDETERMINABLE_FOR_RUBY_FIRST_UNIT",
+          severity: "LOW",
+          notes: "Paragraph starts with a SEMANTIC_RUN unit; Core doesn't store its literal characters, so v2 cannot check it for auto-indent exemption and applies none, unlike legacy. See PARAGRAPH_SEMANTICS_PRE_STAGE_D.md §5.",
+        },
+      ],
+    },
   };
 })();
 
@@ -334,24 +404,25 @@ export const hangingPunctuationFixture: Fixture = (() => {
 // item — see evidence doc §"Unexpected Differences"): legacy treats a bare
 // "\n" as an UNCONDITIONAL forced line break, regardless of remaining
 // capacity (`paginateTokensByLines`'s own "\n" branch always calls
-// `breakLine()`). v2's LogicalUnit model has no unit kind representing a
-// manuscript paragraph break at all — a literal "\n" embedded in a
-// TextUnit's `text` is just an ordinary character to
-// `breaks/opportunity.ts` (classified by character class like any other
-// code point, confirmed by direct read — no special-casing exists). This
-// fixture uses a generous capacity so the divergence is attributable ONLY
-// to this gap, not to unrelated capacity pressure. Left as raw
-// UNEXPECTED_DIFFERENCE (no expectations declared) — this is NOT an
-// already-frozen Product decision, so it must not be silently reclassified
-// as "expected."
+// `breakLine()`). RESOLVED by Human Product Decision B
+// (`qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md`): v2 now has an
+// explicit `PARAGRAPH_BREAK` LogicalUnit that forces the same line
+// termination — this fixture is authored WITH that unit (not a literal
+// "\n" inside a TextUnit, which would still be inert) to actually exercise
+// the fix. Kept the same fixture id/name for continuity with the original
+// Stage C discovery this fixture is named after.
 export const paragraphBreakGapFixture: Fixture = (() => {
   const first = "第一段落です。";
   const second = "第二段落です。";
   const legacySource = `${first}\n${second}`;
-  const { units, source } = buildFixtureUnits(BLOCK, [{ kind: "TEXT", text: `${first}\n${second}` }]);
+  const { units, source } = buildFixtureUnits(BLOCK, [
+    { kind: "TEXT", text: first },
+    { kind: "PARAGRAPH_BREAK" },
+    { kind: "TEXT", text: second },
+  ]);
   return {
     id: "paragraph-break-gap",
-    description: "NEWLY DISCOVERED: legacy forces a line break at every bare \\n; v2 has no equivalent unit/mechanism.",
+    description: "RESOLVED by Human Product Decision B: legacy's bare-\\n forced line break now has a v2 equivalent (PARAGRAPH_BREAK).",
     legacySource,
     v2BodyUnits: units,
     v2Source: source,

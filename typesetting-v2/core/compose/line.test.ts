@@ -29,7 +29,7 @@ function text(t: string, start: number): TextUnit {
 describe("F01 — ordinary line fills using natural advances (test group A)", () => {
   it("places every character when the whole sentence fits within the line extent", () => {
     const unit = text("あいうえお", 0); // 5 cells
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(5);
     expect(result.consumedThroughOffset).toBe(5);
@@ -39,7 +39,7 @@ describe("F01 — ordinary line fills using natural advances (test group A)", ()
 describe("Residual space is reported, never absorbed (test group B/C, INV-004)", () => {
   it("reports leftover extent as residualSpaceTick rather than stretching pitch", () => {
     const unit = text("あいう", 0); // 3 cells
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     expect(result.residualSpaceTick).toBe(CELL * 7);
     // Every placed unit's own advance is untouched -- no stretching: the
     // vertical (yTick) pitch between consecutive units is exactly one cell.
@@ -55,7 +55,7 @@ describe("Prohibited boundary is skipped in favor of an earlier legal one (test 
     // -- correct kinsoku behavior extends onto the line, it does not
     // retreat unnecessarily.
     const unit = text("あいう、え", 0);
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 4);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 4, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(4);
     expect(result.consumedThroughOffset).toBe(4);
@@ -69,7 +69,7 @@ describe("Prohibited boundary is skipped in favor of an earlier legal one (test 
     // pushing both 'う' and '、' to the next line even though 'う' alone
     // would otherwise have fit.
     const unit = text("あいう、え", 0);
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(2);
     expect(result.consumedThroughOffset).toBe(2);
@@ -86,7 +86,7 @@ describe("Atomic group is never split (test group F)", () => {
     // Extent fits "あ" (1 cell) + dash1 (1 cell) = 2 cells, but not dash2 --
     // however dash1/dash2 are PROHIBITED_GROUP (cl-08 same-kind), so the
     // composer must not cut between them; it must cut before dash1 instead.
-    const result = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2);
+    const result = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(1);
     expect(result.consumedThroughOffset).toBe(1);
@@ -109,7 +109,7 @@ describe("Jukugo ruby legal/illegal internal boundaries (test group G/H)", () =>
     // Each segment = 2 cells; extent fits exactly the first segment (2
     // cells) but not both (4 cells) -- the declared boundary at offset 2
     // makes this a legal, usable cut.
-    const result = composeLine([jukugo], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2);
+    const result = composeLine([jukugo], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2, false);
     expect(result.hold).toBeUndefined();
     expect(result.consumedThroughOffset).toBe(2);
   });
@@ -124,7 +124,7 @@ describe("Jukugo ruby legal/illegal internal boundaries (test group G/H)", () =>
     };
     // No internal boundary exists at all (undeclared -> treated as ATOMIC),
     // so a 2-cell extent cannot legally place any part of this 4-cell atom.
-    const result = composeLine([unsegmented], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2);
+    const result = composeLine([unsegmented], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 2, false);
     expect(result.hold).toBeDefined();
     expect(result.hold?.reason).toBe("SINGLE_ATOM_EXCEEDS_LINE_EXTENT");
   });
@@ -139,7 +139,7 @@ describe("Grapheme cluster is never split (test group I)", () => {
     // the same discipline.
     const combiningSequence = "e" + String.fromCharCode(0x0301);
     const unit = text(combiningSequence, 0); // one grapheme, two code points
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 1);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 1, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(1);
     expect(result.line.placedUnits[0].sourceSpan).toEqual(span(0, 2));
@@ -149,7 +149,7 @@ describe("Grapheme cluster is never split (test group I)", () => {
 describe("Too-large atomic unit produces a structured hold, never a guess (test group J)", () => {
   it("holds when a TCY unit alone exceeds the line extent", () => {
     const tcy: TCYUnit = { kind: "TCY", span: span(0, 2), displayText: "12", logicalCells: 1 };
-    const result = composeLine([tcy], DEFAULT_RULE_SET_V2, measurement, settings, 0);
+    const result = composeLine([tcy], DEFAULT_RULE_SET_V2, measurement, settings, 0, false);
     expect(result.hold).toEqual({ reason: "SINGLE_ATOM_EXCEEDS_LINE_EXTENT", sourceSpan: span(0, 2) });
     expect(result.line.placedUnits).toHaveLength(0);
   });
@@ -158,8 +158,8 @@ describe("Too-large atomic unit produces a structured hold, never a guess (test 
 describe("Determinism (test group K, INV-005)", () => {
   it("produces the same line composition across repeated runs on the same input", () => {
     const units: LogicalUnit[] = [text("あいう、えお「かき", 0)];
-    const first = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6);
-    const second = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6);
+    const first = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6, false);
+    const second = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6, false);
     expect(second).toEqual(first);
   });
 });
@@ -167,7 +167,7 @@ describe("Determinism (test group K, INV-005)", () => {
 describe("All geometry values are integer ticks (test group L, INV-013)", () => {
   it("never produces a floating-point xTick/yTick/residualSpaceTick", () => {
     const unit = text("あいうえお", 0);
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
     for (const placed of result.line.placedUnits) {
       expect(Number.isInteger(placed.xTick)).toBe(true);
       expect(Number.isInteger(placed.yTick)).toBe(true);
@@ -182,7 +182,7 @@ describe("Manual forced break ends the line unconditionally (INV-006)", () => {
     const manualBreak: ManualBreakUnit = { kind: "MANUAL_BREAK", span: span(2, 2) };
     const after = text("うえ", 2);
     const units: LogicalUnit[] = [before, manualBreak, after];
-    const result = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10);
+    const result = composeLine(units, DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     expect(result.hold).toBeUndefined();
     expect(result.consumedThroughOffset).toBe(2);
     expect(result.line.placedUnits).toHaveLength(2);
@@ -193,7 +193,7 @@ describe("Line trace identifies the chosen boundary and RuleSetVersion (test gro
   it("records which offset the line was cut at, alongside the RuleSetVersion", () => {
     const unit = text("あいう", 0);
     const recorder = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
-    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, recorder);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false, recorder);
     expect(recorder.trace.ruleSetVersion).toBe(DEFAULT_RULE_SET_V2.id);
     const cutEvent = recorder.trace.events.find((e) => e.outcome === `LINE_CUT_AT:${result.consumedThroughOffset}`);
     expect(cutEvent).toBeDefined();

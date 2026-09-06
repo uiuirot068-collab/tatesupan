@@ -42,6 +42,14 @@ export interface CanonicalLine {
   id: string;
   order: number;
   placedUnits: PlacedUnit[];
+  // Human Product Decision A (一字下げ paragraph-first-line auto-indent,
+  // `qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md`): the logical extent
+  // reserved at this line's start when it opens a new paragraph. Absent
+  // (not zero) when no indent applies — a Renderer reserves this much
+  // leading space before painting the line's placedUnits, never derives it
+  // itself (Contract-consistent: this is a Core-owned logical decision, not
+  // a renderer/CSS choice).
+  indentTick?: GeometryTick;
 }
 
 export interface CanonicalColumn {

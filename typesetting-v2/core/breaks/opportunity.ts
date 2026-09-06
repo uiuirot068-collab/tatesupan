@@ -19,7 +19,8 @@ export type BreakOpportunityReason =
   | "PROHIBITED_GROUP"
   | "RUBY_INTERNAL_ALLOWED"
   | "RUBY_INTERNAL_PROHIBITED"
-  | "MANUAL_FORCED";
+  | "MANUAL_FORCED"
+  | "PARAGRAPH_FORCED";
 
 export interface BreakOpportunity {
   position: SourceSpan; // zero-width span at the candidate boundary
@@ -133,6 +134,20 @@ export function deriveBreakOpportunities(
         ruleApplied: "Contract §13 manual page break — always forced",
         alternativesConsidered: ["MANUAL_FORCED"],
         outcome: "MANUAL_FORCED",
+      });
+    } else if (unit.kind === "PARAGRAPH_BREAK") {
+      // Positioned at the unit's own END (not start, unlike MANUAL_BREAK):
+      // a paragraph-break's own atom belongs to the LINE it terminates
+      // (Human Product Decision B — mirrors legacy's own "\n" token being
+      // the last thing placed on the line it ends), so the forced cut must
+      // land right after it, not before.
+      const position = boundarySpan(unit.span.blockId, unit.span.end);
+      opportunities.push({ position, reason: "PARAGRAPH_FORCED" });
+      trace?.record({
+        sourceSpan: position,
+        ruleApplied: "Human Product Decision B — bare manuscript line ending always ends the current line",
+        alternativesConsidered: ["PARAGRAPH_FORCED"],
+        outcome: "PARAGRAPH_FORCED",
       });
     }
     // TCY, IMAGE: no internal opportunities — each is one atomic composition
