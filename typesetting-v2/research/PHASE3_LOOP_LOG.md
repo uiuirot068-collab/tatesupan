@@ -781,3 +781,37 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **NEXT:** Human recheck of the regenerated artifact (`typesetting-v2/qa/visual/stage-d/index.html`) — paragraph-start lines should now show a visible indent band with the first glyph painted below it. This task did not touch, and does not resolve, any of P3-O03/O04/O05/O06/O08/O09, F06, the ruby-placement wiring gap, or `long-prose`'s residual. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## Stage D Human Gate — Closeout (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `a7a2558` (matches the first-line-indent checkpoint), worktree clean before start.
+
+**RESULT: Stage D Human Visual Gate — PASS. CLOSED.** Full findings recorded in `qa/evidence/STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §20, preserving §16–§19's history unmodified. Body text visible, display scale usable, font-size proportional, ordinary vertical flow readable, automatic first-line indent visible, blank paragraph preserved, manual page break correct (no phantom line), multi-column/multi-page flow correct, F20 readable. One explicit Human observation recorded as a scope boundary, not a defect: the line break separating 気づけ / ば、 is not a kinsoku failure (`ば` is not a prohibited line-start character in any frozen rule table) — it is a phrase-aware semantic line-breaking preference, and phrase-aware breaking is explicitly not part of the current frozen contract. Ruby annotation paint, TCY shaping, and dash/ellipsis optical alignment remain visibly unfinished and are recorded as **ACCEPTED PROVISIONAL NON-BLOCKERS** (P3-O03/O04/O05/O06, all still OPEN) — their logical grouping/identity is PASS; their visual quality is explicitly not called PASS.
+
+**DECISION: Stage D — CLOSED (implementation PASS + Human Visual QA PASS).**
+
+**NEXT:** P3-O09 Preview Renderer Foundation work begins immediately (see below) — Stage D remains as historical record, not deleted, and is superseded in purpose, not content.
+
+---
+
+## P3-O09 — Preview Renderer Foundation (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `a7a2558` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Can the first architectural slice of the final v2 Preview Renderer be built under `typesetting-v2/renderer/preview/`, distinct from the disposable Stage D QA adapter, without Production integration and without finishing special-unit (ruby/TCY/dash/ellipsis) visual quality?
+
+**Roadmap audit (required before implementing):** confirmed via direct read of `docs/architecture/PHASE3_OPEN_ITEMS.md` and the Master's Phase list that P3-O09 (Phase 5, Preview Renderer) is the correct frozen next item; Phase 4 (Publication Renderer, P3-O08) and Phase 5 are recorded as independent, parallel output-technology tracks (`REQUIREMENTS_TRACEABILITY.md` V2-ARCH-003: renderers may differ in technology; `PHASE3_OPEN_ITEMS.md` Notes: "output-technology decisions... deferred past Phase 2"), not a strict sequence — no contradiction found, proceeded without a Human stop. No numeric sub-loop invented; this entry uses the descriptive label "P3-O09 Preview Renderer Foundation."
+
+**METHOD:** Audited every Stage D piece (`tools/preview-dev-adapter/`) into REUSE AS-IS / REUSE CONCEPT ONLY / REWRITE / DISCARD (full table: `qa/evidence/P3_O09_PREVIEW_RENDERER_FOUNDATION.md` §3). Implemented `typesetting-v2/renderer/preview/`: `geometry.ts` (fresh one-way `tickToPx` copy, no Stage D import), `paintModel.ts` (`CanonicalDocument`+`LogicalUnit[]`→`PaintDocument`, carrying forward the STAGE-D-GLYPH-PAINT-SCALE and STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD fixes as already-correct behavior from line one, plus a new `ImageResolver` abstraction, `RubyAnnotationStatus = "PENDING"`, and a `PaintDebugInfo` per unit), `PreviewRenderer.tsx` (React painter with a real `mode: "normal" | "debug"` split — NORMAL omits every dev-only DOM node entirely, not just CSS-hidden), `fixtures.ts` (11 controlled fixtures re-declared, not imported from Stage D; builder function reused from `tools/compare/fixtureBuilder.ts`, already shared by Stage C and Stage D), `vitest.config.ts` (own scoped config, same pattern as Stage C/D), `paintModel.test.ts` (19 tests) and `generateFoundationArtifact.test.ts` (5 tests, writes NORMAL+DEBUG static HTML artifacts to `qa/visual/p3-o09-preview/`, leaving the historical Stage D artifact untouched).
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O09_PREVIEW_RENDERER_FOUNDATION.md` (19 sections, full detail). 24/24 new tests pass; all 330 Core tests, 21 Stage C tests, and 30 Stage D tests remain green (no cross-contamination — the new module has zero imports from `tools/preview-dev-adapter/` or `tools/compare/`'s non-builder files); `npx tsc --noEmit` shows 0 new errors (only the known pre-existing `src/app/layout.tsx` baseline error).
+
+**RESULT: FOUNDATION — PASS.** All 15 "MUST IMPLEMENT" normal-body items present and tested. Colophon: sufficient geometry already exists (`ColophonBlock` is structurally identical to body pages by Core's own design) — basic structural support included (`buildColophonPaintPages`, fixed horizontal orientation convention). Folio/header: Core never populates `folio` (confirmed by grep) — recorded as PENDING CORE DATA, nothing invented. Ruby: body placement PASS; annotation genuinely PENDING (`placeRuby()` confirmed never invoked by the compose pipeline) — **ruby placement micro-loop required next: YES**, a concrete technical dependency, not a Human Product question. TCY/dash/ellipsis: logical identity/order/placement preserved exactly, no optical hacks added, clean paint boundaries left for P3-O03/O04/O05. Renderer cannot mutate `CanonicalDocument`, page count, or line breaks (tests 1–3). NORMAL mode contains zero dev-only DOM nodes (test 21, verified against actual rendered class attributes, not just CSS text). No Production/`src/` file touched.
+
+**DECISION: P3-O09 Foundation — PASS. P3-O09 (full item) — IN PROGRESS, not closed.**
+
+**WHY:** Every reused piece traces to a specific Stage D file/fix already proven correct (§3's audit table); every new piece (ImageResolver, RubyAnnotationStatus, mode split, PaintDebugInfo) traces to an explicit task instruction, not invented scope; the ruby-annotation PENDING state and the folio PENDING-CORE-DATA recording both trace to a direct grep confirming the underlying Core capability genuinely does not exist yet, not a guess.
+
+**NEXT:** Ruby Placement Micro-Loop (wire `core/ruby/index.ts`'s `placeRuby()` into the compose pipeline so a `PlacedUnit` carries real annotation geometry) — chosen by dependency order (the Preview Renderer cannot paint ruby annotation in any form without it), not Human preference. P3-O03 (TCY visual)/P3-O04 (dash)/P3-O05 (ellipsis) remain independently available whenever prioritized, since they need no further Core change. P3-O08 (Publication Renderer) remains fully separate and untouched. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

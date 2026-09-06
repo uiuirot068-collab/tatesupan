@@ -232,3 +232,58 @@ Not attempted or closed by this Loop, per its own scope: P3-O03 (TCY visual shap
 **Artifact regenerated:** `typesetting-v2/qa/visual/stage-d/index.html` — the `paragraph-blank-line` fixture's paragraph-start lines now show a visible `.indent-marker` band and their first glyph painted below it, not at the line's own top edge; directly asserted by test 10 against the generated HTML itself (not just the view model).
 
 **Human recheck status: PENDING.**
+
+## 20. Human Visual Gate Final Result (2026-09-07)
+
+**Verdict: PASS.**
+
+This section closes the Stage D Human Visual Gate. It records the actual Human findings and preserves, rather than rewrites, every earlier HOLD/fix pass above (§16–§19) — nothing below supersedes or hides those observations; it is the final disposition after all of them were addressed.
+
+**History preserved, in order:**
+1. §16 — initial blank-body HOLD (manuscript text present in the DOM but invisible); root cause: `.line` elements had no explicit CSS width, so their absolutely-positioned `.unit` children never established it, collapsing width to ~0 and clipping all text via `overflow:hidden`. Fixed via `ViewLine.widthPx`.
+2. §17 — QA display scale tuned 4x → 10x → 6x → 1.5x across successive Human feedback passes, pure display constant, no canonical value touched.
+3. §18 — glyph paint size stayed fixed at 12px despite the enlarged page (a hardcoded `.unit { font-size: 12px }` CSS constant, disconnected from `scaleMultiplier`). Fixed via `PreviewViewModel.fontSizePx = tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier)`.
+4. §19 — first-line paragraph indent (一字下げ) was machine-test PASS but not visually shown. Two bugs found: (a) the Stage D view model never added `line.indentTick` to `placed.yTick` before painting (VIEW MODEL); (b) `core/compose/column.ts` incorrectly carried the pre-line paragraph-start flag forward unchanged across a `MANUAL_FORCED` cut instead of treating it as consumed (CORE). Both fixed.
+
+**Final Human PASS findings (this task, 2026-09-07):**
+
+- manuscript body visible: PASS
+- display scale usable for QA: PASS
+- body font-size proportional to canonical visual scale: PASS
+- ordinary vertical flow readable: PASS
+- character pitch: provisional PASS
+- line spacing: provisional PASS
+- automatic first-line indent: PASS
+- blank paragraph preservation: PASS
+- manual page break: PASS, no legacy phantom blank line
+- multi-column flow: PASS
+- multi-page flow: PASS
+- F20: readable as vertical composition
+
+**Explicit Human observation — not a defect:** the break
+
+```
+気づけ
+｜
+ば、
+```
+
+is **not** a kinsoku failure. `ば` is not a prohibited line-start character in any of the frozen kinsoku rule tables (`P3_KINSOKU_RULE_FREEZE_CANDIDATE.md`), so it may legally begin a line. This is a phrase-aware (semantic) line-breaking preference, not a rule violation. **Phrase-aware semantic line breaking is explicitly not part of the current frozen contract** and must not be added as a side effect of any future task unless a separate, explicit Human Product decision authorizes it.
+
+**Accepted provisional non-blockers (special units) — visibly unfinished by design, not a Stage D failure:**
+
+| Unit | Logical status | Visual status | Tracking |
+|---|---|---|---|
+| Ruby | grouping/body flow: PASS | annotation paint: provisional | P3-O06 OPEN |
+| TCY | grouping: PASS | shaping: provisional | P3-O03 OPEN |
+| Dash | semantic run: PASS | optical alignment: provisional | P3-O04 OPEN |
+| Ellipsis | semantic run: PASS | optical alignment: provisional | P3-O05 OPEN |
+| Ruby overhang/annotation placement | — | not wired | P3-O06 OPEN |
+
+These are recorded as **ACCEPTED PROVISIONAL NON-BLOCKERS** for Stage D — their visual quality is explicitly NOT called PASS, only their already-approved logical grouping/identity is.
+
+**DECISION: Stage D (implementation + Human Visual QA) — PASS. CLOSED.**
+
+**WHY:** Every PASS line above traces to a specific, already-fixed root cause recorded in §16–§19, not a new, undocumented change; the one explicit Human observation (kinsoku-vs-phrase-break) is recorded as a scope boundary, not a bug, per the frozen kinsoku rule tables; every special-unit row's provisional status traces to its own named, still-OPEN Phase 3 item, none silently upgraded to PASS.
+
+**NEXT:** Stage D, as a development/QA tool, is now CLOSED and superseded in purpose (not deleted — its evidence and artifact remain historical record) by the P3-O09 Preview Renderer Foundation (`qa/evidence/P3_O09_PREVIEW_RENDERER_FOUNDATION.md`), which begins immediately after this closeout in the same task. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
