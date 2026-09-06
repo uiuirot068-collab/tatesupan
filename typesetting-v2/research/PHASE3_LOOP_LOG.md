@@ -267,3 +267,25 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Checkpoint commit `TSP v2: implement source mapping foundation`. P3-L06 (Japanese Rule Data + Character Classes) authorized to begin.
 
 ---
+
+## P3-L05A — Grapheme Safety Hardening + Validation Closure
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `76cbca4` (matches expected P3-L05 checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun guarantee grapheme safety even when the runtime does not provide the expected segmentation capability?
+
+**HYPOTHESIS:** Yes, by failing explicitly rather than silently degrading to code-point boundaries.
+
+**METHOD:** Identified two P3-L05 gaps: (1) `graphemeBoundaryOffsets`'s fallback, when `Intl.Segmenter` is unavailable, treated every code point as its own grapheme boundary — this can incorrectly report a combining-mark/variation-selector/ZWJ sequence's interior as "safe," which is an unsafe silent guess, not a defensive default; (2) `assertGraphemeSafeSpan` validated `span.start` and `span.end` independently but never rejected a reversed span (`end < start`). Fixed (1) by replacing the module-level `Intl.Segmenter` singleton with a `SegmenterFactory` seam (`defaultSegmenterFactory` throws a new `GraphemeSegmentationUnavailableError` — a `GraphemeSafetyError` subclass — when `Intl.Segmenter` is absent, per INV-010's "no silent PASS on an unresolved serious condition") and a test-only override (`__setGraphemeSegmenterFactoryForTesting`, restored via `afterEach`) so the unavailable path is exercised without mutating the process-global `Intl` object. Fixed (2) by adding an explicit reversed-span check at the top of `assertGraphemeSafeSpan` (the only span-validating function that exists — `core/source/span.ts` itself stays an untouched pure type, per P3-L04).
+
+**PRIMARY EVIDENCE:** `core/source/graphemeSafety.ts` (modified), `core/source/graphemeSafety.test.ts` (+5 tests: reversed-span rejection, segmentation-unavailable throws `GraphemeSegmentationUnavailableError`, out-of-range check still works without a segmenter, factory-restore resumes real validation). `npx vitest run`: 31/31 pass (graphemeSafety.test.ts grew from 16 to 20 tests; units/index.test.ts, source/span.test.ts, geometry/tick.test.ts unchanged at 5+3+3 = 11; 20+11 = 31). `npx tsc --noEmit`: overall command exit non-zero, but the only reported error is the same pre-existing, unrelated `src/app/layout.tsx(33,50): TS2304 Cannot find name 'LayoutProps'` seen at P3-L04/P3-L05 — **0 new TypeScript errors from P3-L05A**, reported precisely rather than rounding the command's exit code to a bare PASS. Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only the two intended files changed.
+
+**RESULT: PASS.** No new dependency, no `package.json`/lockfile change, no LogicalUnit/composition/break-rule work introduced — scope stayed exactly to the two named gaps.
+
+**DECISION: P3-L05A — PASS. P3-L05: CLOSED (hardened).**
+
+**WHY:** The fallback-removal traces directly to INV-010 (no silent PASS on an unresolved serious condition) and INV-011 (never fracture a user-perceived character) — a guessed boundary risked violating both; the reversed-span fix traces to the original P3-L05 acceptance criteria's own "invalid source-span behavior is explicit" requirement, which the initial implementation left partially unmet.
+
+**NEXT:** Checkpoint commit `TSP v2: harden grapheme safety guarantees`. P3-L06 (Japanese Rule Data + Character Classes) authorized to begin.
+
+---

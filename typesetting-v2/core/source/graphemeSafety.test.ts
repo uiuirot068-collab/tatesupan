@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   GraphemeSafetyError,
+  GraphemeSegmentationUnavailableError,
+  __setGraphemeSegmenterFactoryForTesting,
   assertGraphemeSafeBoundary,
   assertGraphemeSafeSpan,
   codePointLength,
@@ -137,5 +139,64 @@ describe("assertGraphemeSafeSpan", () => {
     expect(() =>
       assertGraphemeSafeSpan(F16.baseCombiningMark, { blockId: "b1", start: 0, end: 1 })
     ).toThrow(GraphemeSafetyError);
+  });
+
+  it("rejects a reversed span (end before start) explicitly, never clamping or swapping", () => {
+    expect(() =>
+      assertGraphemeSafeSpan(F16.bmpJapanese, { blockId: "b1", start: 2, end: 1 })
+    ).toThrow(GraphemeSafetyError);
+  });
+});
+
+describe("grapheme segmentation unavailable — explicit failure, never a silent fallback", () => {
+  afterEach(() => {
+    // Restore the real Intl.Segmenter-backed factory after every test in
+    // this block so no other test file's run is affected.
+    __setGraphemeSegmenterFactoryForTesting(null);
+  });
+
+  it("throws GraphemeSegmentationUnavailableError instead of guessing code-point boundaries", () => {
+    __setGraphemeSegmenterFactoryForTesting(() => {
+      throw new GraphemeSegmentationUnavailableError(
+        "GRAPHEME_SEGMENTATION_UNAVAILABLE: simulated runtime with no Intl.Segmenter"
+      );
+    });
+
+    // Without a segmenter, the Core must refuse to validate rather than
+    // silently treat every code point as its own (unsafe) boundary — a
+    // base+combining-mark sequence would otherwise be wrongly reported safe.
+    expect(() => assertGraphemeSafeBoundary(F16.baseCombiningMark, 1)).toThrow(
+      GraphemeSegmentationUnavailableError
+    );
+  });
+
+  it("still performs the out-of-range check without needing a segmenter at all", () => {
+    __setGraphemeSegmenterFactoryForTesting(() => {
+      throw new GraphemeSegmentationUnavailableError(
+        "GRAPHEME_SEGMENTATION_UNAVAILABLE: simulated runtime with no Intl.Segmenter"
+      );
+    });
+
+    // Range validation doesn't need segmentation, so it fails with the
+    // ordinary GraphemeSafetyError, not the segmentation-unavailable one.
+    expect(() => assertGraphemeSafeBoundary(F16.bmpJapanese, -1)).toThrow(GraphemeSafetyError);
+    expect(() => assertGraphemeSafeBoundary(F16.bmpJapanese, -1)).not.toThrow(
+      GraphemeSegmentationUnavailableError
+    );
+  });
+
+  it("resumes real grapheme-safe validation once the factory is restored", () => {
+    __setGraphemeSegmenterFactoryForTesting(() => {
+      throw new GraphemeSegmentationUnavailableError(
+        "GRAPHEME_SEGMENTATION_UNAVAILABLE: simulated runtime with no Intl.Segmenter"
+      );
+    });
+    expect(() => assertGraphemeSafeBoundary(F16.bmpJapanese, 1)).toThrow(
+      GraphemeSegmentationUnavailableError
+    );
+
+    __setGraphemeSegmenterFactoryForTesting(null);
+    expect(() => assertGraphemeSafeBoundary(F16.bmpJapanese, 1)).not.toThrow();
+    expect(() => assertGraphemeSafeBoundary(F16.baseCombiningMark, 1)).toThrow(GraphemeSafetyError);
   });
 });

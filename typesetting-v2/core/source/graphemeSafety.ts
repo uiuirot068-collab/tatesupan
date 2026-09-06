@@ -34,27 +34,49 @@ export class GraphemeSafetyError extends Error {
   }
 }
 
-const graphemeSegmenter: Intl.Segmenter | null =
-  typeof Intl !== "undefined" && "Segmenter" in Intl
-    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-    : null;
+// Thrown instead of a boundary result whenever grapheme-cluster segmentation
+// cannot be performed at all. The Core prefers an explicit failure here over
+// silently degrading to a one-code-point-per-boundary guess (INV-010: an
+// unresolved serious condition must never silently become a PASS) — a
+// guessed boundary could report a combining-mark sequence, variation
+// selector, or ZWJ sequence as "safe" when it is not.
+export class GraphemeSegmentationUnavailableError extends GraphemeSafetyError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GraphemeSegmentationUnavailableError";
+  }
+}
+
+type SegmenterFactory = () => Intl.Segmenter;
+
+function defaultSegmenterFactory(): Intl.Segmenter {
+  if (typeof Intl === "undefined" || !("Segmenter" in Intl)) {
+    throw new GraphemeSegmentationUnavailableError(
+      "GRAPHEME_SEGMENTATION_UNAVAILABLE: Intl.Segmenter (grapheme granularity) is not available in this runtime, so grapheme-cluster boundaries cannot be validated. Refusing to guess (INV-010/INV-011)."
+    );
+  }
+  return new Intl.Segmenter(undefined, { granularity: "grapheme" });
+}
+
+let segmenterFactory: SegmenterFactory = defaultSegmenterFactory;
+
+// Test-only seam: lets the test suite exercise the "segmentation
+// unavailable" path without mutating the process-global Intl object. Never
+// called by Product code; not part of the Core's public contract. Pass
+// `null` to restore the real Intl.Segmenter-backed factory.
+export function __setGraphemeSegmenterFactoryForTesting(factory: SegmenterFactory | null): void {
+  segmenterFactory = factory ?? defaultSegmenterFactory;
+}
 
 // The set of code-point offsets into `text` that are legal extended-grapheme-
-// cluster boundaries (always includes 0 and codePointLength(text)).
+// cluster boundaries (always includes 0 and codePointLength(text)). Throws
+// GraphemeSegmentationUnavailableError if no segmenter is available — never
+// falls back to an unsafe one-code-point-per-boundary guess.
 function graphemeBoundaryOffsets(text: string): Set<number> {
-  if (!graphemeSegmenter) {
-    // No Intl.Segmenter available: fall back to treating every code point as
-    // its own boundary. This can under-merge a real cluster (e.g. a
-    // combining-mark sequence) but never reports an unsafe boundary as safe,
-    // so it never causes a false PASS on assertGraphemeSafeBoundary. Node 24
-    // and evergreen browsers ship Intl.Segmenter, so this path is a defensive
-    // fallback, not the expected runtime.
-    const length = codePointLength(text);
-    return new Set(Array.from({ length: length + 1 }, (_, i) => i));
-  }
+  const segmenter = segmenterFactory();
   const boundaries = new Set<number>([0]);
   let offset = 0;
-  for (const { segment } of graphemeSegmenter.segment(text)) {
+  for (const { segment } of segmenter.segment(text)) {
     offset += codePointLength(segment);
     boundaries.add(offset);
   }
@@ -83,6 +105,11 @@ export function assertGraphemeSafeBoundary(text: string, codePointOffset: number
 // it addresses (`text` is the span's containing block's normalizedText, or
 // any substring positioned so span.start/span.end are measured against it).
 export function assertGraphemeSafeSpan(text: string, span: SourceSpan): void {
+  if (span.end < span.start) {
+    throw new GraphemeSafetyError(
+      `SourceSpan end (${span.end}) precedes start (${span.start}); reversed spans are not valid`
+    );
+  }
   assertGraphemeSafeBoundary(text, span.start);
   assertGraphemeSafeBoundary(text, span.end);
 }
