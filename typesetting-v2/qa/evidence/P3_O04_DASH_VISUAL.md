@@ -201,3 +201,30 @@ The bar's exact visual proportions (thickness, color) are a Renderer-level defau
 **DECISION: P3-O04 — the per-glyph native-paint-with-overlap ARCHITECTURE is now the actual implementation (not just a comparison experiment); the exact overlap VALUE remains HOLD pending Human confirmation via the regenerated comparison artifact.**
 
 **Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` (now titled "P3-O04 Native Dash Seam Comparison") and judge candidates A (0.08em) / B (0.12em, current main-artifact default) / C (0.16em) specifically for: no visible white gap, no dark knot/blob at the join, no doubled-heavy stroke, no sudden width change, native font stroke character preserved.
+
+## 19. Human Visual QA — Final Selection and 3-Glyph Confirmation (2026-09-07)
+
+**Human selection: Candidate C — 0.16em inter-glyph overlap.** Judgment for the 2-glyph "――" run: seam continuity PASS; native stroke weight PASS; slight antialias/color variation at the join judged acceptable for Preview; no obvious dark knot or heavy doubled stroke. `DEFAULT_DASH_OVERLAP_EM` updated from `0.12` to `0.16` in `paintModel.ts` — this is now the shipped default, not a candidate under consideration.
+
+**Required 3-glyph confirmation ("―――"), before closing P3-O04:** the SAME deterministic `dashGlyphsFor` rule (no special-casing for N=3 — the function already generalizes to any grapheme count) was exercised against a new "彼は―――そう言った。" fixture, at the same selected 0.16em overlap, and verified against all 8 required checks:
+
+1. **Gap between glyph 1/2:** NONE — confirmed by direct geometry check (`g2.topPx < g1.topPx + g1.heightPx`).
+2. **Gap between glyph 2/3:** NONE — confirmed the same way (`g3.topPx < g2.topPx + g2.heightPx`).
+3. **Middle glyph disproportionate darkness/heaviness:** NO — the middle glyph extends by `overlapPx` total (half on each of its two sides), exactly double an end glyph's own one-sided `overlapPx/2` extension — proportionate, not disproportionate, confirmed by exact arithmetic (`g2.heightPx === g1.heightPx + overlapPx/2`, not some larger multiple).
+4. **Run becomes obviously too short:** NO — the first glyph starts at exactly `0` and the last glyph's own bottom (`topPx + heightPx`) equals the run's own canonical `heightPx` exactly, confirmed directly.
+5. **Canonical SemanticRun remains ONE unit:** YES — exactly one `SEMANTIC_RUN`-kind paint item exists for the 3-character run, carrying the full "―――" text together (never decomposed into three logical units — the paint-node split is Renderer-only, confirmed by inspecting the paint model, not Core).
+6. **SourceSpan / canonical extent unchanged:** confirmed — the paint item's `sourceSpan` matches the canonical `PlacedUnit`'s own span exactly, and `heightPx` equals exactly 3 canonical cells (`3 × fontSizePx`).
+7. **Surrounding text unchanged:** confirmed — same-line neighbor coordinates (before/after the dash run) follow the ordinary cumulative-advance relationship exactly, undisturbed by the 3-glyph internal split.
+8. **ー (U+30FC) prolonged sound mark unaffected:** confirmed directly — a fixture containing "コーヒー" composes every "ー" as an ordinary `TEXT` unit (never `SEMANTIC_RUN`, never carrying `dashGlyphs`), and the rendered HTML contains no `class="dash-glyph"` or `semantic-dash` class anywhere for that fixture. The dash-specific paint path is scoped exclusively to `SemanticRunKind === "DASH"` and was never at risk of matching the unrelated prolonged-sound-mark character, but this is now directly proven, not merely assumed.
+
+**No new candidates were created** (all 8 checks passed on the first attempt at the already-selected 0.16em value) — per instruction, the thickness/overlap strategy was not reopened.
+
+**Comparison artifact regenerated** (`qa/visual/p3-o04-dash-weight-comparison/index.html`, retitled "P3-O04 Dash Seam Final Confirmation") — no longer an A/B/C candidate comparison; now shows the approved 2-glyph "――" run and the newly-confirmed 3-glyph "―――" run side by side, both using the single shipped default (`DEFAULT_DASH_OVERLAP_EM`, omitted from the render context so the artifact reflects the actual production default, not a special-cased value).
+
+**Tests:** 88/88 renderer/preview tests pass (82 previous + 6 new 3-glyph/ー-mark checks; the prior 3-candidate comparison test was replaced by this confirmation test, net file count unchanged); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**DECISION: P3-O04 (Dash Visual) — Human Visual QA PASS. CLOSED.** Selected overlap: **0.16em**, applied as `DEFAULT_DASH_OVERLAP_EM` in `paintModel.ts`. Final architecture: real native font glyph ink, split into one paint node per grapheme (any N, generalized and confirmed for both N=2 and N=3), with a 0.16em em-relative overlap between consecutive nodes — Renderer-paint-only throughout; Core's `SemanticRunUnit`/`SourceSpan`/canonical occupancy were never touched at any point across this entire multi-review history (§§3–19).
+
+**P3-O05 (ellipsis) remains untouched and OPEN** — no shared-component behavior change was introduced for it at any point in this history.
+
+**NEXT:** P3-O05 (Ellipsis Visual) is the next active Preview Renderer item.

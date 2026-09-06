@@ -1042,3 +1042,21 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to pick among overlap candidates A (0.08em) / B (0.12em, current default) / C (0.16em). P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 — Human Visual QA Final PASS / CLOSED (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `ae7ea75` (matches expected checkpoint), worktree clean before start.
+
+**HUMAN SELECTION:** candidate C (0.16em) from the 3-way seam-overlap comparison — continuity PASS, native stroke weight PASS, slight antialias/color variation at the join accepted for Preview, no dark knot or heavy doubled stroke. `DEFAULT_DASH_OVERLAP_EM` updated from `0.12` to `0.16` in `paintModel.ts`.
+
+**REQUIRED FINAL CONFIRMATION:** before closing, a 3-glyph "―――" fixture was exercised against the SAME already-generalized `dashGlyphsFor` rule (no special-casing needed for N=3) at the selected 0.16em, and verified against all 8 required checks: no gap glyph1/2, no gap glyph2/3, middle glyph extends proportionately (not disproportionately) versus the end glyphs, run not shortened (first glyph at 0, last glyph's bottom exactly equals canonical `heightPx`), canonical `SemanticRun` remains exactly one unit, `SourceSpan`/canonical extent unchanged (3 cells exactly), surrounding text unaffected, and the ー (U+30FC) prolonged sound mark directly confirmed unaffected (composes as ordinary `TEXT`, never gets `semantic-dash`/`dashGlyphs`). All 8 passed on the first attempt — no new candidates were created, per instruction not to reopen the strategy.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` §19 (full checklist, before/after values). Comparison artifact regenerated and retitled "P3-O04 Dash Seam Final Confirmation," now showing the approved 2-glyph and newly-confirmed 3-glyph runs side by side at the single shipped default (no longer an A/B/C pick). 88/88 renderer/preview tests pass (82 previous + 6 new); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` 0 new errors. No Core file touched throughout this entire multi-review history.
+
+**DECISION: P3-O04 (Dash Visual) — Human Visual QA PASS. CLOSED.** Final architecture: real native font glyph ink, split into one Renderer-only paint node per grapheme (any N), with a 0.16em overlap between consecutive nodes. `PHASE3_OPEN_ITEMS.md` row P3-O04 updated to CLOSED/PASS. **P3-O05 (ellipsis) remains untouched and OPEN** — no shared-component behavior change was introduced for it at any point across this history.
+
+**WHY:** Every one of the 8 required checks traces to a directly-computed value or a passing regression test against the actual generalized implementation (not a special N=3 code path) — the closure is backed by proof the same rule generalizes correctly, not by assumption.
+
+**NEXT:** P3-O05 (Ellipsis Visual) is the next active Preview Renderer item. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

@@ -171,11 +171,13 @@ export interface PreviewRenderContext {
   dashOverlapEm?: number;
 }
 
-// Interim default (the "moderate" candidate of a 3-way Human comparison,
-// qa/visual/p3-o04-dash-weight-comparison/ — see
-// qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD sections for the full
-// history of rejected alternatives before this one).
-export const DEFAULT_DASH_OVERLAP_EM = 0.12;
+// Human Visual QA PASS (2026-09-07): candidate C (0.16em) from the 3-way
+// seam-overlap comparison (qa/visual/p3-o04-dash-weight-comparison/) was
+// selected — continuity PASS, native stroke weight PASS, no dark knot or
+// heavy doubled stroke. See qa/evidence/P3_O04_DASH_VISUAL.md for the full
+// history of rejected alternatives (two geometric-bar strategies, two
+// smaller overlap candidates) that preceded this value.
+export const DEFAULT_DASH_OVERLAP_EM = 0.16;
 
 export interface PaintDocument {
   id: string;
