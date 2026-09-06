@@ -1,6 +1,6 @@
 # P3 Core Implementation Loop Roadmap
 
-- Status: **P3-L04: IN PROGRESS (2026-09-06).** Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. Vitest dependency gate CLOSED (see pre-requisite section immediately below). P3-L04 scaffolding (`geometry/`, `version/`, `source/span.ts`, `layout/schema.ts`, `settings/`) is written; `tsc --noEmit` and `vitest run` both pass — see that Loop's own entry below for exact acceptance-criteria status.
+- Status: **P3-L04: CLOSED. P3-L05: CLOSED (2026-09-06).** Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. Vitest dependency gate CLOSED (see pre-requisite section immediately below). P3-L04's scaffolding (`geometry/`, `version/`, `source/span.ts`, `layout/schema.ts`, `settings/`) and P3-L05's `source/graphemeSafety.ts` + `units/*.ts` are both implemented; `tsc --noEmit` and `vitest run` (27/27) pass — see each Loop's own entry below for exact acceptance-criteria status.
 - Every Loop ends with: tests PASS → scope audit (nothing outside `typesetting-v2/core/` and its docs/fixtures/tests changed) → Human Gate if marked YES → checkpoint commit (see `P3_CORE_IMPLEMENTATION_PLAN.md` §20).
 - If the same implementation failure/workaround repeats 2–3 times inside one Loop: **stop the Loop, record the blocker in `research/PHASE3_LOOP_LOG.md`, do not keep looping.** This rule applies to every Loop below without being repeated per-row.
 - No Loop below exceeds 90 minutes. None require a >120-minute opaque block; any Loop that starts to exceed 120 minutes in practice must be split into a new Loop ID, not extended.
@@ -30,6 +30,7 @@
 
 ### P3-L05 — Source Mapping + Grapheme Safety + LogicalUnit Foundation
 
+- **Status (2026-09-06): CLOSED.** `core/source/graphemeSafety.ts` (+ `.test.ts`, 16 tests) and `core/units/*.ts` + `index.ts` (+ `index.test.ts`, 5 tests) implemented exactly per this entry's own spec below. `npx tsc --noEmit` and `npx vitest run` (27/27) both pass; zero forbidden imports (grep-verified); no `package.json`/lockfile/`vitest.config.ts` change. See `research/PHASE3_LOOP_LOG.md` P3-L05 entry for full evidence.
 - **Goal:** Implement `source/graphemeSafety.ts` and the `LogicalUnit` discriminated union (`units/`) with only `TextUnit` fully exercised; declare (but do not yet implement composition for) the other five kinds so later Loops extend, not restructure, the union.
 - **Timebox:** 75 min.
 - **Inputs:** Contract §5/§6, INV-011, fixture F16.

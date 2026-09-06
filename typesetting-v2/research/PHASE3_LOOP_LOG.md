@@ -221,3 +221,49 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **DECISION: CLOSED.** No architecture, plan content, or Master section required correction — this was a factual-attribution fix only, confined to the two documents named above.
 
 **NEXT:** Await explicit Product Owner approval before any `npm install -D vitest` / `package.json`/lockfile change is performed, at the start of P3-L04.
+
+---
+
+## P3-L04 — Core Foundation
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `c683088` (matches expected checkpoint "TSP v2: correct Vitest dependency gate status"), worktree clean before start.
+
+**QUESTION:** Can TateSpun close the Vitest dependency gate and scaffold the first real Core source files (`geometry/`, `version/`, `source/span.ts`, `layout/schema.ts` types, `settings/` types) with both `tsc --noEmit` and Vitest green, and zero forbidden imports?
+
+**HYPOTHESIS:** Yes — the frozen Contract/data-model candidate already specify these five modules' exact shapes; the only open item was the Vitest install itself.
+
+**METHOD:** Obtained explicit Product Owner approval to install Vitest (recorded via interactive confirmation). `npm install -D vitest` initially failed peer-dependency resolution against `vitest@5` (requires `@types/node >=22`, incompatible with this repo's pinned `@types/node@^20`); installed `vitest@^3.2.7` instead, the newest release compatible with the existing `@types/node` pin, avoiding an unrelated/unapproved dependency bump. A transitive `nanoid` high-severity advisory (GHSA-2v37-7h3g-55p8, dev-only) surfaced on install and was resolved via `npm audit fix` (0 vulnerabilities remain). Implemented the five P3-L04 modules per `TATESPUN_V2_CORE_CONTRACT.md`/`TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md`/`CORE_MODULE_MAP.md` rows 1–3, 21, 24; added `vitest.config.ts` scoping test discovery to `typesetting-v2/core/**/*.test.ts`; added `test`/`test:watch` npm scripts.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/core/geometry/tick.ts` (+ test), `core/version/index.ts`, `core/source/span.ts`, `core/layout/schema.ts`, `core/settings/index.ts`. `npx tsc --noEmit`: only pre-existing, unrelated `src/app/layout.tsx` error (`LayoutProps` — a Next.js 16 generated type absent because `.next/` hasn't been built in this worktree; confirmed via `git diff --stat HEAD -- src/` showing zero changes). `npx vitest run`: 6/6 tests pass. Grep confirmed zero DOM/React/Next/`src/` imports anywhere under `core/`.
+
+**RESULT: PASS.** `layout/schema.ts`'s `CanonicalDocument` deliberately omits `trace`/`warnings`/`errors`/`hold` for this Loop — those fields depend on `trace/` (P3-L07) and `diagnostics/` (P3-L14), which are not allowed deps for this module yet per `CORE_MODULE_MAP.md` row 21 (geometry/source-span/version only) — documented inline rather than silently under- or over-built.
+
+**DECISION: P3-L04 — CLOSED.**
+
+**WHY:** Every type traces directly to the frozen data-model candidate; the Vitest version choice traces to a concrete peer-dependency conflict, not preference; the CanonicalDocument scope-narrowing traces to the module map's own allowed-deps table.
+
+**NEXT:** Checkpoint commit `TSP v2: implement core geometry foundation` (`e1182cd`). P3-L05 (Source Mapping + Grapheme Safety + LogicalUnit Foundation) authorized to begin.
+
+---
+
+## P3-L05 — Source Mapping + Grapheme Safety + LogicalUnit Foundation
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `e1182cd` (matches expected P3-L04 checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun safely represent source positions by Unicode code-point offsets, while guaranteeing grapheme-safe logical-unit boundaries, and declare all six `LogicalUnit` kinds as a discriminated union without implementing any composition behavior?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Implemented `core/source/graphemeSafety.ts` (`codePointLength`, `codePointSlice`, `assertGraphemeSafeBoundary`, `assertGraphemeSafeSpan`, `GraphemeSafetyError`), isolating `Intl.Segmenter` (grapheme granularity) behind this module's boundary per Contract §6/INV-011 — the module validates a given boundary against already-Normalizer-processed text; it does not re-segment raw manuscript strings (`CORE_RESPONSIBILITY_MATRIX.md`). Implemented `core/units/*.ts` (`TextUnit`, `RubyUnit`+`RubySegment`, `TCYUnit`, `SemanticRunUnit`, `ManualBreakUnit`, `ImageUnit`) and `core/units/index.ts`'s `LogicalUnit` discriminated union, exactly matching the frozen data-model candidate's shapes — no new fields invented. F16 regression fixture (surrogate pair, base+combining-mark, variation-selector, emoji+modifier, ZWJ family-emoji sequences) written with explicit `\u` escapes throughout (never literal glyphs) to prevent silent editor/encoding re-normalization. An exhaustive `switch` over `LogicalUnit.kind` (with a `never`-typed default) proves the union discriminates correctly at compile time.
+
+**PRIMARY EVIDENCE:** `core/source/graphemeSafety.ts` + `.test.ts` (16 tests: code-point-vs-UTF-16-length divergence, adversarial naive-slice-vs-`codePointSlice` fixture, F16 grapheme-boundary rejection for combining marks/variation selectors/emoji modifiers/ZWJ sequences, out-of-range rejection, repeated-call determinism). `core/units/index.test.ts` (5 tests: all six kinds discriminate, `JUKUGO` with/without explicit `segments` both type-check with no fabricated split, `TextUnit` source-span/substring round-trip proves INV-001, a deliberately-fractured span is rejected by `assertGraphemeSafeSpan` proving INV-011). `npx tsc --noEmit`: only the same pre-existing unrelated `src/app/layout.tsx` error as P3-L04. `npx vitest run`: 27/27 tests pass (6 carried from P3-L04 + 21 new: 16 grapheme-safety + 5 unit-mapping). Grep confirmed zero DOM/React/Next/`src/` imports anywhere under `core/`; `git status --short` confirmed no `package.json`/lockfile/`vitest.config.ts` change — only `core/source/graphemeSafety.ts`, `.test.ts`, and `core/units/` are new.
+
+**RESULT: PASS.** No automatic jukugo segmentation, no TCY auto-detection, no break-opportunity/composition logic introduced — `RubyUnit.segments` and all other kind-specific fields remain pure data shapes, matching the roadmap's "types only, no behavior" scope for the five non-TEXT kinds.
+
+**DECISION: P3-L05 — CLOSED.**
+
+**WHY:** Every grapheme-safety test case traces to a named Unicode mechanism (surrogate pair, combining mark, variation selector, emoji modifier, ZWJ) called out by Contract §6/INV-011; every `LogicalUnit` field traces to `TATESPUN_V2_CORE_DATA_MODEL_CANDIDATE.md` verbatim; the segmentation-ownership boundary (Core validates, Normalizer segments) traces to `CORE_RESPONSIBILITY_MATRIX.md` row 1.
+
+**NEXT:** Checkpoint commit `TSP v2: implement source mapping foundation`. P3-L06 (Japanese Rule Data + Character Classes) authorized to begin.
+
+---
