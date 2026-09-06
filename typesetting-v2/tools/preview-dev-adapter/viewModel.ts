@@ -51,6 +51,7 @@ export interface ViewLine {
   id: string;
   order: number;
   rightPx: number;
+  widthPx: number;
   units: ViewPlacedUnit[];
   indentPx?: number;
 }
@@ -208,6 +209,18 @@ function buildViewLine(
     id: line.id,
     order: lineIndex,
     rightPx: tickToPx(lineIndex * ctx.linePitchTicks, ctx.scaleMultiplier),
+    // ROOT CAUSE of the blank-body Human Visual QA HOLD: every `.unit`
+    // child is `position:absolute` (deliberately, to paint exact canonical
+    // coordinates, never browser flow) — out-of-flow elements never
+    // contribute to an ancestor's auto/shrink-to-fit width. Without an
+    // explicit width here, an absolutely-positioned `.line` with no other
+    // in-flow content resolves to ~0 width, and its children's `left:0;
+    // right:0` then stretch them to that ~0 width too — `overflow:hidden`
+    // then clips every character invisible, even though the DOM/HTML
+    // genuinely contains the correct text (confirmed directly: each
+    // character IS present as its own text node — this was a pure CSS
+    // sizing bug, not a data-loss bug at any earlier layer).
+    widthPx: tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier),
     units: viewUnits,
     indentPx: line.indentTick !== undefined ? tickToPx(line.indentTick, ctx.scaleMultiplier) : undefined,
   };

@@ -95,4 +95,54 @@ describe("Stage D — renderable artifact generation", () => {
     expect(multiPage!.renderedPageCount).toBeLessThanOrEqual(MAX_PAGES);
     expect(multiPage!.renderedPageCount).toBe(Math.min(multiPage!.totalPageCount, MAX_PAGES));
   });
+
+  // Regression guard for the Human Visual QA HOLD (blank body): manuscript
+  // text was present in the DOM but invisible, clipped by a `.line`
+  // container whose width silently collapsed to ~0 (absolutely-positioned
+  // children never contribute to an ancestor's auto/shrink-to-fit width —
+  // see viewModel.ts's `ViewLine.widthPx` doc comment for the full
+  // explanation). A multi-character substring check (e.g. "これは") is
+  // NOT a valid way to detect this class of bug and must never be used
+  // here: Core atomizes TEXT per grapheme, so consecutive characters are
+  // ALWAYS in separate sibling elements and never appear contiguous in the
+  // serialized HTML, bug or no bug — that is precisely the false-negative
+  // that let this HOLD ship in the first place.
+  it("body text is present in the DOM AND every line container has a real, non-zero width (not silently clipped)", () => {
+    const viewModels = buildAllViewModels();
+
+    let bodyPaintItemCount = 0;
+    let visibleTextCharacterCount = 0;
+    for (const vm of viewModels) {
+      for (const page of vm.pages) {
+        for (const column of page.columns) {
+          for (const line of column.lines) {
+            for (const unit of line.units) {
+              if (unit.text.length > 0) {
+                bodyPaintItemCount += 1;
+                visibleTextCharacterCount += unit.text.length;
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(bodyPaintItemCount).toBeGreaterThan(0);
+    expect(visibleTextCharacterCount).toBeGreaterThan(0);
+
+    const html = ReactDOMServer.renderToStaticMarkup(PreviewApp({ viewModels }));
+    // A single-character check IS valid (unlike a multi-character
+    // substring) since Core places each grapheme as its own element.
+    expect(html).toContain(">気<"); // from F20's canonical sentence, as an isolated element's own text content
+
+    // Guard the actual root cause directly: every rendered `.line` element
+    // must declare a real, positive pixel width, never `undefined`
+    // (which React/CSS serializes as the style property being entirely
+    // absent) and never `0`.
+    const lineStyleWidths = [...html.matchAll(/class="line" style="right:[^;"]*;width:([^;"]*)px/g)].map((m) => Number(m[1]));
+    expect(lineStyleWidths.length).toBeGreaterThan(0);
+    for (const width of lineStyleWidths) {
+      expect(Number.isFinite(width)).toBe(true);
+      expect(width).toBeGreaterThan(0);
+    }
+  });
 });

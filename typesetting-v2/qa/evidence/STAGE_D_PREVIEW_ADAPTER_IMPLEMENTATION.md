@@ -1,6 +1,6 @@
 # Stage D — Preview Development Adapter Implementation
 
-- Status: **IMPLEMENTED. Human Visual QA: PENDING.** A non-Production, React absolute-position painter renders 11 fixtures (including both mandatory Human QA fixtures) from real, composed `CanonicalDocument`s into a static, self-contained HTML file a Human can open directly in any browser. No `src/`, Production, dependency, or config change.
+- Status: **IMPLEMENTED, Blank-Body HOLD FIXED (§16). Human Visual QA: PENDING (recheck requested).** A non-Production, React absolute-position painter renders 11 fixtures (including both mandatory Human QA fixtures) from real, composed `CanonicalDocument`s into a static, self-contained HTML file a Human can open directly in any browser. No `src/`, Production, dependency, or config change.
 - Preflight: branch `design/tatespun-typesetting-v2`, HEAD `597b2affb2a98d376fd28933ba88e4e0e2a57227` (matches expected checkpoint — the paragraph semantics implementation), worktree clean before start.
 
 ---
@@ -127,3 +127,30 @@ Not attempted or closed by this Loop, per its own scope: P3-O03 (TCY visual shap
 ## 15. Stage D Human Gate Status
 
 **IMPLEMENTED / awaiting Human Visual QA.** This document is not a substitute for that review — it records what was built and how to inspect it. No claim is made here about whether the painted result looks *correct* by Human judgment; that determination is explicitly reserved for the Human, per §13's instructions and the first-visual-gate criteria already on record.
+
+---
+
+## 16. Human Visual QA — Blank Body HOLD (2026-09-06)
+
+**Observed Human result:** the artifact opened successfully — page shells, borders, and column/line guide marks all rendered — but manuscript body text was completely invisible on every page.
+
+**Investigation, in order (per the exact layer-by-layer method requested):**
+1. **CanonicalDocument:** confirmed correct — real pages/columns/lines/placedUnits with correct source spans (already covered by existing tests; re-confirmed, not re-litigated).
+2. **View model:** confirmed correct by direct inspection — `buildPreviewViewModel` resolved the FULL expected text (e.g. `これは東京に行く用事があった`) across TEXT and RUBY units alike, in order, with no loss.
+3. **React server markup:** confirmed correct by direct inspection of an ISOLATED single-fixture render — every individual character (`こ`, `れ`, `は`, `東京`, `に`, `行`, …) appeared as its own element's text content, exactly as Core's grapheme-level atomization would produce (one `PlacedUnit` per character for plain TEXT).
+4. **Generated `index.html` (initial check — a dead end that had to be abandoned and is recorded here so it is not repeated):** searching the file for multi-character substrings ("これは", "あいうえお", "彼は", "第一段落", "第一章") found **zero** matches, which looked at first like conclusive proof of a data-loss bug before the render layer. It was not — see below.
+5. **CSS/coordinates:** this is where the real, confirmed root cause was found.
+
+**Root cause — PROVEN, not guessed:** `.unit` elements are deliberately `position:absolute` (correct — they must paint exact canonical coordinates, never browser flow). Out-of-flow (absolutely-positioned) elements never contribute to an ancestor's auto/shrink-to-fit width. The `.line` container had `right` positioning but **no explicit width** — its own width therefore collapsed to effectively zero (no in-flow content to size it from), and every `.unit` child's `left:0; right:0` then stretched it to that same zero width. `.unit`'s own `overflow:hidden` then clipped every character to invisible — **while the correct text remained genuinely present in the DOM the entire time.** This is a pure Stage D CSS sizing bug, not a Core defect, not a view-model defect, and not a React-rendering defect.
+
+**Why step 4's substring search produced a false "data missing" signal:** Core atomizes plain TEXT per grapheme cluster (one `PlacedUnit` per character) — `compose/line.ts`'s own internal-opportunity derivation guarantees this. Consecutive characters are therefore *always* rendered as separate sibling `<div>` elements with other markup between them, so a multi-character substring like "これは" can **never** appear contiguous in the serialized HTML, bug or no bug. Searching for one is not a valid diagnostic for this class of failure and must not be reused — the correct check is for an *individual* character as an isolated element's own text content (§ regression guard below).
+
+**Minimal fix:** added `ViewLine.widthPx` (`viewModel.ts`, `= tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier)` — the line's own already-known logical thickness, the same value already used elsewhere for column/page sizing) and used it as the `.line` element's explicit `width` in `PreviewApp.tsx`, replacing an ad hoc `width: line.units.length ? undefined : 4` special-case that was the actual source of the bug (the normal, non-empty-line path left width undefined entirely). No architectural change, no re-layout, no Core change — a one-field CSS-sizing correction confined entirely to `typesetting-v2/tools/preview-dev-adapter/`.
+
+**Regression guard added** (`generateArtifact.test.ts`): asserts `bodyPaintItemCount > 0` and `visibleTextCharacterCount > 0` across the view-model layer; asserts the generated HTML contains `>気<` (a single isolated character from F20, the only kind of substring check that is actually valid here — see above); and directly parses every rendered `.line` element's `width` out of the HTML and asserts each is a finite, positive number, guarding the exact root cause rather than only its symptom.
+
+**Artifact regenerated and directly verified:** `typesetting-v2/qa/visual/stage-d/index.html` was regenerated via `npx vitest run --config typesetting-v2/tools/preview-dev-adapter/vitest.config.ts`; direct inspection confirms every `.line` element now carries a real, non-zero pixel width.
+
+**Tests:** 18/18 Stage D tests pass (17 previous + 1 new regression guard); all 330 Core tests and all 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors (same pre-existing baseline). `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain unmodified.
+
+**Human recheck status: PENDING.** This fix addresses the specific "blank body" symptom reported. It does not itself constitute Human Visual QA sign-off — please reopen the regenerated artifact and re-run the §13 checklist.

@@ -720,3 +720,25 @@ None of these caused any source content loss or duplication anywhere in the 16-f
 **NEXT:** Human Visual QA per `STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §13 — open the artifact, compare against the current live Preview using the first-visual-gate criteria already on record. This Stage does not close P3-O03/O04/O05/O06/O08/O09, F06, or the ruby-placement wiring gap — all remain OPEN, unaffected. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## Stage D Blank-Body Visual HOLD — Root Cause + Fix (2026-09-06)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `2b458f9205a021a482ad0ad6c899ac4f9a8d8e6b` (matches the Stage D implementation checkpoint), worktree clean before start.
+
+**QUESTION:** Human Visual QA reported the Stage D artifact's page shells/guides render but manuscript body text is completely invisible — where, precisely, does it disappear, and what is the minimal fix?
+
+**HYPOTHESIS:** Unknown going in, per this task's own explicit instruction not to guess a layer — investigated in order: CanonicalDocument, view model, React server markup, generated HTML, CSS/coordinates.
+
+**METHOD:** Direct inspection at each layer. CanonicalDocument and the view model were both confirmed correct (full manuscript text present and correctly ordered). An isolated single-fixture React render was also confirmed correct (every character present as its own element). A search of the generated HTML for multi-character substrings ("これは", "あいうえお", etc.) found none — initially looked like proof of data loss, but was a dead end: Core atomizes plain TEXT per grapheme cluster, so consecutive characters are *always* separate sibling elements and a multi-character substring can never appear contiguous in the HTML regardless of any bug. The real root cause was found in CSS: `.line` elements (absolutely positioned, `right` set) had no explicit `width`; since their `.unit` children are also absolutely positioned (out of flow, by design — they must paint exact canonical coordinates), they never contribute to `.line`'s own auto/shrink-to-fit width, which collapsed to ~0 and clipped every character invisible via `.unit`'s own `overflow:hidden` — while the correct text remained genuinely present in the DOM throughout.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §16 (full layer-by-layer trace, including the substring-search dead end recorded so it is not repeated). Fix: `ViewLine.widthPx` added (`viewModel.ts`) and used as `.line`'s explicit CSS width (`PreviewApp.tsx`), replacing the ad hoc `width: line.units.length ? undefined : 4` special-case that was the actual source of the bug. New regression test directly parses every rendered `.line` element's width out of the generated HTML and asserts each is finite and positive, plus asserts a single isolated character (`>気<`) appears as element text content — the only valid kind of substring check for this failure class.
+
+**RESULT: FIXED.** 18/18 Stage D tests pass (17 previous + 1 new regression guard); all 330 Core tests and 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors. Artifact regenerated and directly re-verified (every `.line` element now carries a real, non-zero pixel width).
+
+**DECISION: Root cause — PROVEN. Blank body — FIXED. Stage D machine state — PASS. Human Visual QA — PENDING (recheck requested).**
+
+**WHY:** The fix traces to a single, precisely-identified CSS sizing defect (absolutely-positioned children never size an unsized absolutely-positioned ancestor) — no architectural change, no re-layout, no Core involvement, confined entirely to `typesetting-v2/tools/preview-dev-adapter/`. The dead-end substring-search approach is recorded, not hidden, so a future Loop doesn't waste time repeating it.
+
+**NEXT:** Human recheck of the regenerated artifact (`typesetting-v2/qa/visual/stage-d/index.html`) against the same §13 checklist. This task did not touch, and does not resolve, any of P3-O03/O04/O05/O06/O08/O09, F06, the ruby-placement wiring gap, or `long-prose`'s residual. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

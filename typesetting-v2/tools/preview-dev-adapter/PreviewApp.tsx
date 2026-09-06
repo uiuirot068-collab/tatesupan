@@ -73,7 +73,7 @@ function PageView({ page }: { page: PreviewViewModel["pages"][number] }) {
         <div key={column.id} className="column" style={{ right: column.rightPx, width: column.widthPx, height: page.heightPx }}>
           <DebugBadge text={`col ${column.order}, residual ${column.residualSpacePx.toFixed(1)}px`} />
           {column.lines.map((line) => (
-            <div key={line.id} className="line" style={{ right: line.rightPx, width: line.units.length ? undefined : 4, height: page.heightPx }}>
+            <div key={line.id} className="line" style={{ right: line.rightPx, width: line.widthPx, height: page.heightPx }}>
               <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />
               {line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
               {line.units.map((unit) => (
