@@ -191,7 +191,7 @@ describe("Trace is observational only (Contract §23)", () => {
   it("produces byte-identical BreakOpportunity output with or without a trace recorder", () => {
     const units: LogicalUnit[] = [text("abc、def「ghi", 0)];
     const withoutTrace = deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2);
-    const recorder = createTraceRecorder();
+    const recorder = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
     const withTrace = deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2, recorder);
     expect(withTrace).toEqual(withoutTrace);
     expect(recorder.trace.events.length).toBeGreaterThan(0);
@@ -199,11 +199,29 @@ describe("Trace is observational only (Contract §23)", () => {
 
   it("records a stable rule/reason id in each trace event's outcome (test group Q)", () => {
     const units: LogicalUnit[] = [text("abc、def", 0)];
-    const recorder = createTraceRecorder();
+    const recorder = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
     deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2, recorder);
     const kinsokuEvent = recorder.trace.events.find((e) => e.sourceSpan.start === 3);
     expect(kinsokuEvent?.outcome).toBe("PROHIBITED_KINSOKU");
     expect(kinsokuEvent?.ruleApplied).toContain("cl-07");
+  });
+
+  it("exposes exactly which RuleSetVersion produced the trace (P3-L06A, Contract §25 reproducibility)", () => {
+    const units: LogicalUnit[] = [text("abc、def", 0)];
+    const recorder = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
+    deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2, recorder);
+    expect(recorder.trace.ruleSetVersion).toBe("tatespun-v2-default-2026-09-06");
+    expect(recorder.trace.ruleSetVersion).toBe(DEFAULT_RULE_SET_V2.id);
+  });
+
+  it("preserves the same RuleSetVersion across a repeated analysis run", () => {
+    const units: LogicalUnit[] = [text("abc、def", 0)];
+    const first = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
+    const second = createTraceRecorder(DEFAULT_RULE_SET_V2.id);
+    deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2, first);
+    deriveBreakOpportunities(units, DEFAULT_RULE_SET_V2, second);
+    expect(second.trace.ruleSetVersion).toBe(first.trace.ruleSetVersion);
+    expect(second.trace.events).toEqual(first.trace.events);
   });
 });
 

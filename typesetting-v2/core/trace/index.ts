@@ -13,6 +13,12 @@ export interface TraceEvent {
 }
 
 export interface LayoutDecisionTrace {
+  // Which RuleSetVersion produced every event below (Contract §25
+  // reproducibility requirement, hardened at P3-L06A). Stored once on the
+  // container rather than duplicated onto every TraceEvent — a trace is
+  // always produced by exactly one analysis run against exactly one
+  // RuleSetVersion, so per-event duplication would be redundant, not safer.
+  ruleSetVersion: string;
   events: TraceEvent[];
 }
 
@@ -21,14 +27,14 @@ export interface TraceRecorder {
   readonly trace: LayoutDecisionTrace;
 }
 
-export function createTraceRecorder(): TraceRecorder {
+export function createTraceRecorder(ruleSetVersion: string): TraceRecorder {
   const events: TraceEvent[] = [];
   return {
     record(event: TraceEvent) {
       events.push(event);
     },
     get trace(): LayoutDecisionTrace {
-      return { events };
+      return { ruleSetVersion, events };
     },
   };
 }

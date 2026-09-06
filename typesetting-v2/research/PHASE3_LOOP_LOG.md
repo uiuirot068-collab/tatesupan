@@ -323,3 +323,27 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Checkpoint commit `TSP v2: implement Japanese break analysis`. P3-L07 (renumbered; originally P3-L09, Natural-Pitch Line Composer + Break Decision) authorized to begin — first Loop that may implement capacity-aware line filling and the remaining `BreakDecisionCause` values (`CAPACITY_REACHED`, `HANGING_DEFERRAL`).
 
 ---
+
+## P3-L06A — Trace Reproducibility Hardening
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `e9130d5` (matches expected P3-L06 checkpoint), worktree clean before start.
+
+**QUESTION:** Can a break-analysis trace unambiguously answer "which RuleSetVersion produced these events," and is the manual-forced-only scope of `breaks/decision.ts` an intentional contract boundary rather than an unnoticed gap?
+
+**HYPOTHESIS:** Yes to both — the fix is additive (one new field), not a redesign; the scope boundary is already implied by `CORE_MODULE_MAP.md` row 12.
+
+**METHOD:** Added `ruleSetVersion: string` to `LayoutDecisionTrace` (stored once on the container, not duplicated per-event — one analysis run always uses exactly one RuleSetVersion) and changed `createTraceRecorder()` to `createTraceRecorder(ruleSetVersion: string)`. Updated the two existing `opportunity.test.ts` call sites to pass `DEFAULT_RULE_SET_V2.id`. Audited `breaks/decision.ts`'s manual-forced-only scope directly against `CORE_MODULE_MAP.md` row 12, which assigns the full `BreakDecision` algorithm (capacity-aware) to the Natural-Pitch Line Composer's own Loop, not this one — confirmed intentional, documented in place with a new comment rather than silently left implicit.
+
+**TESTS:** Two new tests in `core/breaks/opportunity.test.ts`: trace exposes the exact `RuleSetVersion` id used; the id is preserved identically across a repeated analysis run (alongside byte-identical events). All prior P3-L06 tests remain green, unmodified in assertion content.
+
+**RESULT: PASS.** `npx vitest run`: 77/77 pass (75 prior + 2 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero forbidden imports; `git status --short` confirmed only `core/trace/index.ts`, `core/breaks/opportunity.test.ts`, `core/breaks/decision.ts` (comment only) changed.
+
+**INVARIANTS:** Contract §25 (versioning/reproducibility) now has a concrete, tested answer at the trace level, not just at the future `CanonicalDocument.version` level. No invariant renumbered; no existing invariant's test weakened.
+
+**DECISION: P3-L06A — PASS.**
+
+**COMMIT:** `TSP v2: harden break trace reproducibility`.
+
+**NEXT:** P3-L07 (Natural-Pitch Line Composer) authorized to begin.
+
+---

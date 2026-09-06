@@ -8,6 +8,16 @@
 // case: Contract §13/INV-006 require every MANUAL_FORCED opportunity to
 // always become a taken decision, unconditionally, regardless of remaining
 // capacity — so it needs no line-filling context at all.
+//
+// P3-L06A boundary audit: CONFIRMED intentional, not a naming-symmetry gap.
+// CORE_MODULE_MAP.md row 12 (breaks/decision.ts) itself assigns the full
+// BreakDecision algorithm to the Natural-Pitch Line Composer Loop, not to
+// this one — the frozen module map already draws this exact line between
+// legality analysis (BreakOpportunity, this Loop) and physical chosen break
+// (BreakDecision's CAPACITY_REACHED/HANGING_DEFERRAL causes, next Loop).
+// This file is not expanded to cover those causes merely for symmetry with
+// MANUAL_FORCE; doing so would require capacity math this Loop does not
+// have.
 
 import type { BreakOpportunity } from "./opportunity";
 
