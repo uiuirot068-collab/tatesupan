@@ -860,3 +860,23 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **NEXT:** Human recheck of the regenerated artifact (`qa/visual/p3-o09-preview/index.html`/`debug.html`). Ruby/TCY/dash/ellipsis visual-quality evaluation remains explicitly deferred until this recheck confirms ordinary body text renders without clipping. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O09 Ruby Annotation Missing HOLD (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `e20571d` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human Visual QA confirmed ordinary page-content clipping fixed, but reported the actual artifact shows ruby body text with NO visible reading annotation, and a stale fixture heading still claiming "annotation painting PENDING" — directly contradicting the prior machine report "normal ruby annotation visible: YES". Where is the discrepancy, and what is the minimal fix?
+
+**METHOD:** Directly confirmed the reading text ("とうきょう") IS present in the generated artifact HTML (one occurrence, matching prior test assertions) — ruling out missing canonical data or a missing paint item. Inspected the exact surrounding markup and CSS: `.ruby-annotation` was a DOM child of `.unit`, positioned via `left: 100%` (deliberately outside `.unit`'s own box), while `.unit` carried `overflow: hidden` (added one task earlier, for the Page Content Clipping HOLD, to clip glyph ink to its tightly-fitted paint box). CSS overflow clips all descendants regardless of their own positioning — so the annotation was unconditionally clipped by its own parent in any real browser, a class of bug the prior task's SSR-string-presence tests structurally could not detect (no real layout engine runs during `renderToStaticMarkup`).
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/RUBY_PLACEMENT_PREVIEW_MICRO_LOOP.md` "Human Visual QA — Annotation Missing HOLD" section (full trace, discrepancy explanation, root cause, fix). 5 new regression tests (`generateFoundationArtifact.test.ts`, "Ruby Annotation Missing HOLD"), all against the real `atomic-ruby` fixture through the full pipeline, asserting DOM STRUCTURE (a sibling-relationship regex requiring `.unit-ink`'s closing tag before `.ruby-annotation` opens) rather than mere string presence — the exact class of check that would have caught this originally.
+
+**RESULT: FIXED.** Introduced an inner `.unit-ink` wrapper carrying `overflow: hidden` instead of `.unit` itself; base text/image-placeholder/provisional-badge moved inside it, while `.ruby-annotation` (and debug-only decoration) remain direct children of `.unit`, siblings of `.unit-ink`, never clipped by it. Corrected the stale "annotation painting PENDING" fixture heading to "body + annotation geometry active; exact overhang/optical tuning pending — P3-O06" — accurate without claiming P3-O06 closed. No Core file touched; the Page Content Clipping HOLD's own no-overflow regression tests still pass unchanged, confirming glyph-ink clipping is preserved exactly as before.
+
+**DECISION: Ruby Annotation Missing — FIXED. P3-O09 machine state — PASS.**
+
+**WHY:** Root cause traces to a directly-inspected CSS containment conflict (overflow clips descendants regardless of their own position), not a guess; the fix is the minimal structural change (move the clip one DOM level down) that resolves the conflict without touching Core, breaks, or the already-fixed Page Content Clipping HOLD's own properties.
+
+**NEXT:** Human recheck of the regenerated artifact — ruby annotation ("とうきょう") should now be visible beside its base ("東京"). Ruby/TCY/dash/ellipsis visual-quality evaluation (P3-O03/O04/O05/O06 optical values) remains explicitly deferred until this recheck confirms. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

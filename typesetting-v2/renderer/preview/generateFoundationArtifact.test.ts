@@ -254,13 +254,112 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
     it("the generated artifact's stylesheet gives .unit a tight line-height (1) and vertical writing-mode, matching the already Human-approved Stage D rule — regression guard against the exact CSS omission that caused this HOLD", () => {
       const models = buildAllPaintDocuments();
       const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models, mode: "normal" }));
-      const unitRuleMatch = html.match(/\.unit\s*\{[^}]*\}/);
+      const unitRuleMatch = html.match(/(?<!-)\.unit\s*\{[^}]*\}/);
       expect(unitRuleMatch).not.toBeNull();
       const unitRule = unitRuleMatch![0];
       expect(unitRule).toContain("line-height: 1");
       expect(unitRule).toContain("writing-mode: vertical-rl");
       expect(unitRule).toContain("white-space: nowrap");
-      expect(unitRule).toContain("overflow: hidden");
+      // P3-O09-RUBY-ANNOTATION-MISSING-HOLD: overflow:hidden moved off
+      // .unit itself onto the inner .unit-ink wrapper, so a ruby
+      // annotation (a direct child of .unit, deliberately painted OUTSIDE
+      // .unit-ink's own box) is never clipped by its own parent.
+      expect(unitRule).not.toContain("overflow: hidden");
+      const unitInkRuleMatch = html.match(/\.unit-ink\s*\{[^}]*\}/);
+      expect(unitInkRuleMatch).not.toBeNull();
+      expect(unitInkRuleMatch![0]).toContain("overflow: hidden");
+    });
+  });
+
+  // P3-O09-RUBY-ANNOTATION-MISSING-HOLD (2026-09-07). Machine report
+  // previously claimed "normal ruby annotation visible: YES" based only on
+  // SSR string-presence checks (renderToStaticMarkup output contains the
+  // reading text) — which cannot detect CSS containment: `.ruby-annotation`
+  // was a DOM child of `.unit`, positioned via `left: 100%` (deliberately
+  // outside `.unit`'s own box), while `.unit` carried `overflow: hidden` —
+  // so the annotation was unconditionally clipped by its own parent in
+  // every real browser, regardless of font/line-height, even though its
+  // text was genuinely present in the markup. These tests exercise the
+  // ACTUAL "atomic-ruby" fixture from ALL_FIXTURES through the full
+  // artifact-generation pipeline — never an isolated synthetic RubyUnit —
+  // and assert DOM STRUCTURE (nesting order), not just string presence, so
+  // this exact class of bug cannot silently return.
+  describe("Ruby Annotation Missing HOLD (2026-09-07) — real fixture, DOM structure, not just string presence", () => {
+    function actualRubyPlacedUnit(models: PaintDocument[]) {
+      const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
+      const allUnits = rubyModel.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+      return { rubyModel, rubyUnit: allUnits.find((u) => u.kind === "RUBY")! };
+    }
+
+    it("1/2/3. the actual atomic-ruby fixture's canonical annotation placement exists, produces exactly one annotation paint item, with non-empty display text", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyUnit } = actualRubyPlacedUnit(models);
+      expect(rubyUnit).toBeDefined();
+      expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
+      if (rubyUnit.rubyAnnotation?.status === "PLACED") {
+        expect(rubyUnit.rubyAnnotation.text.length).toBeGreaterThan(0);
+        expect(rubyUnit.rubyAnnotation.text).toBe("とうきょう");
+      }
+    });
+
+    it("4. the generated NORMAL PREVIEW artifact's actual HTML contains the ruby reading content as a DIRECT SIBLING of .unit-ink, never nested inside it (the exact structural bug this HOLD fixes)", () => {
+      const models = buildAllPaintDocuments();
+      const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models, mode: "normal" }));
+      expect(html).toContain("とうきょう");
+      // Structural proof, not just string presence: the base text's own
+      // .unit-ink wrapper must be FULLY CLOSED before the .ruby-annotation
+      // span opens — proving sibling placement, not descendant placement,
+      // for THIS fixture's actual rendered markup.
+      expect(html).toMatch(/<span class="unit-ink">東京(?:<span class="provisional-badge">prov<\/span>)?<\/span><span class="ruby-annotation"[^>]*>とうきょう<\/span>/);
+    });
+
+    it("5. the annotation's painted position is plausibly adjacent to its own body run — same topPx-relative coordinate space, a small, bounded offset never far from the base's own extent", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyUnit } = actualRubyPlacedUnit(models);
+      expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
+      if (rubyUnit.rubyAnnotation?.status === "PLACED") {
+        // The annotation's own offset is relative to the base run's own
+        // topPx (Core's own "relative to the base group's own start tick"
+        // contract) — it must be a finite, non-negative-infinite value in
+        // the same small px range as the rest of this fixture's geometry,
+        // never wildly larger (which would indicate a fabricated or
+        // mis-scaled position rather than one read back from Core).
+        expect(Number.isFinite(rubyUnit.rubyAnnotation.offsetPx)).toBe(true);
+        expect(Number.isFinite(rubyUnit.rubyAnnotation.extentPx)).toBe(true);
+        expect(rubyUnit.rubyAnnotation.extentPx).toBeGreaterThan(0);
+      }
+    });
+
+    it("6. body x/y are unchanged whether or not the annotation is painted — re-rendering both modes from the same model never mutates the base unit's own topPx/sourceSpan", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyModel, rubyUnit } = actualRubyPlacedUnit(models);
+      const topBefore = rubyUnit.topPx;
+      const spanBefore = rubyUnit.sourceSpan;
+      ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "normal" }));
+      ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "debug" }));
+      const { rubyUnit: rubyUnitAfter } = actualRubyPlacedUnit(models);
+      expect(rubyUnitAfter.topPx).toBe(topBefore);
+      expect(rubyUnitAfter.sourceSpan).toEqual(spanBefore);
+    });
+
+    it("7. debug and normal modes paint the identical canonical annotation geometry — only the debug-only tooltip differs, never the offset/extent/policy/text themselves", () => {
+      const models = buildAllPaintDocuments();
+      const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
+      const normalHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "normal" }));
+      const debugHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "debug" }));
+      const extractAnnotationSpan = (html: string) => html.match(/<span class="ruby-annotation"[^>]*>とうきょう<\/span>/)?.[0].replace(/\s*title="[^"]*"/, "");
+      const normalSpan = extractAnnotationSpan(normalHtml);
+      const debugSpan = extractAnnotationSpan(debugHtml);
+      expect(normalSpan).toBeDefined();
+      expect(debugSpan).toBeDefined();
+      // With the debug-only `title` tooltip stripped out, the remaining
+      // markup (class, style — i.e. the actual painted geometry) must be
+      // byte-identical between modes.
+      expect(debugSpan).toBe(normalSpan);
+      // The fixture heading no longer misleadingly implies nothing is
+      // rendered — it must not claim final P3-O06 optical quality either.
+      expect(normalHtml).toContain("annotation geometry active");
+      expect(normalHtml).not.toContain("annotation painting PENDING");
     });
   });
 });

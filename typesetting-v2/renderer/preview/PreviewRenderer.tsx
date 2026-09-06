@@ -46,8 +46,20 @@ const STYLE = `
      white-space:nowrap prevents a multi-code-point grapheme from ever
      wrapping inside its own box. Mirrors the already Human-approved
      Stage D .unit rule (tools/preview-dev-adapter/PreviewApp.tsx), which
-     this foundation's own rewrite dropped these three properties from. */
-  .unit { position: absolute; left: 0; right: 0; overflow: hidden; writing-mode: vertical-rl; line-height: 1; white-space: nowrap; text-align: center; }
+     this foundation's own rewrite dropped these three properties from.
+     NOTE: overflow:hidden itself moved to .unit-ink below
+     (P3-O09-RUBY-ANNOTATION-MISSING-HOLD) -- .unit itself no longer
+     clips, since a ruby annotation is painted deliberately OUTSIDE this
+     box (left:100%) and must not be clipped by its own parent. */
+  .unit { position: absolute; left: 0; right: 0; writing-mode: vertical-rl; line-height: 1; white-space: nowrap; text-align: center; }
+  /* P3-O09-RUBY-ANNOTATION-MISSING-HOLD: the base glyph's own ink-clipping
+     safety net (see the .unit comment above) now lives on this INNER
+     wrapper instead of .unit itself. A ruby annotation is a SIBLING of
+     this wrapper, not a descendant of it, so it is never subject to this
+     clip -- CSS overflow only ever clips a box's own descendants, never
+     its siblings, and moving the clip one level down is the minimal way
+     to keep glyph-ink clipping while un-clipping the annotation. */
+  .unit-ink { display: block; width: 100%; height: 100%; overflow: hidden; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   .provisional-badge { display: none; }
   .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: 0.55em; white-space: nowrap; color: #444; }
@@ -77,8 +89,16 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
       : undefined;
   return (
     <div className={`unit kind-${unit.kind}`} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
-      {unit.kind === "IMAGE" ? <span className="image-placeholder" /> : unit.text}
-      {unit.provisional && <span className="provisional-badge">prov</span>}
+      {/* P3-O09-RUBY-ANNOTATION-MISSING-HOLD: the base glyph's own
+          ink-clipping (overflow:hidden) lives on this inner wrapper, not
+          on .unit itself, so a ruby annotation painted as .unit's own
+          direct child (below, deliberately positioned OUTSIDE this
+          wrapper's box) is never clipped by it — overflow only clips
+          descendants, never siblings. */}
+      <span className="unit-ink">
+        {unit.kind === "IMAGE" ? <span className="image-placeholder" /> : unit.text}
+        {unit.provisional && <span className="provisional-badge">prov</span>}
+      </span>
       {/* Ruby Placement Micro-Loop: paints the annotation at Core's own
           canonical geometry (offset/extent), read-only — never
           recalculated, never re-centered here. Visible in NORMAL PREVIEW

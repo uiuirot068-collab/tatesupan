@@ -119,7 +119,7 @@ export const ALL_FIXTURES: FoundationFixture[] = [
 
   fixture(
     "atomic-ruby",
-    "Ruby (logical placement final; annotation painting PENDING — P3-O06)",
+    "Ruby (body + annotation geometry active; exact overhang/optical tuning pending — P3-O06)",
     [
       { kind: "TEXT", text: "これは" },
       { kind: "RUBY", base: "東京", reading: "とうきょう", rubyKind: "ATOMIC" },
