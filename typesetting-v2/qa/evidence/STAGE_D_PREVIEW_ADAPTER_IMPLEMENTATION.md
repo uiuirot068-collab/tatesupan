@@ -170,3 +170,25 @@ Not attempted or closed by this Loop, per its own scope: P3-O03 (TCY visual shap
 **Tests:** 19/19 Stage D tests pass (18 previous + 1 new); all 330 Core tests and 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors.
 
 **Human recheck status: PENDING.**
+
+---
+
+## 18. Human Visual QA — Glyph Paint Scale HOLD (2026-09-06)
+
+**Observed Human result:** raising the QA scale from 4x to 10x (§17) enlarged the page, columns, and line spacing correctly — but manuscript glyph ink remained visually almost the same tiny size. Larger paper, same tiny characters. Not readable.
+
+**Root cause trace (proven, not assumed):**
+1. **Canonical/body font-size source:** `BODY_FONT_SIZE_PT = 10.5` in `fixtures.ts`, feeding `settingsFor()`'s `linePitchTicks: perCellAdvanceTick` — i.e. `linePitchTicks` (already a value every fixture's render context carries) **is** the canonical body font's own em-size, expressed in `GeometryTick`.
+2. **Page geometry scale path:** every page/column/line dimension in `viewModel.ts` is computed via `tickToPx(<tick value>, ctx.scaleMultiplier)` — correctly proportional to `scaleMultiplier`.
+3. **Glyph paint scale path (before fix):** `PreviewApp.tsx`'s `STYLE` constant contained a hardcoded `.unit { font-size: 12px; ... }` — a **fixed CSS constant**, applied identically to every `.unit` element regardless of `ctx.scaleMultiplier`.
+4. **Divergence:** (2) and (3) shared no code path at all. Geometry scaled through `tickToPx`; glyph font-size was a static number that never referenced `tickToPx`, `scaleMultiplier`, or any canonical tick value. Raising `DEFAULT_SCALE_MULTIPLIER` (§17) enlarged every box's *dimensions* but had zero effect on the *text* painted inside them — exactly the reported symptom.
+
+**Minimal fix:** added `PreviewViewModel.fontSizePx = tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier)` (`viewModel.ts`) — reusing the exact same canonical tick value and the exact same conversion function every other geometry value already uses, rather than introducing a separate or arbitrary visual font size. Removed the hardcoded `font-size: 12px` from the shared CSS `STYLE` block; `fontSizePx` is now threaded down (`FixtureSection` → `PageView` → `UnitBox`) and applied as each unit's own inline `style.fontSize`. No Core change, no new render-context field beyond reusing the settings already echoed into `PreviewRenderContext`, no re-layout, no canonical value altered.
+
+**Regression guard added** (`viewModel.test.ts`, "STAGE-D-GLYPH-PAINT-SCALE"): builds two view models of the same fixture at scale 4 and scale 10, and asserts the font-size ratio between them equals both the page-width ratio and the line-width ratio (all `toBeCloseTo` the exact `10/4` multiplier) — proving uniform scaling across geometry *and* glyph paint together, not just geometry alone (§17's own guard already covered geometry-only).
+
+**Artifact regenerated and directly verified:** `typesetting-v2/qa/visual/stage-d/index.html` — confirmed each `.unit` element now carries its own inline `font-size` (e.g. `139.99px` at the current 10x scale for the 10.5pt canonical body font — matches `tickToPx(linePitchTicks, 10)` exactly, checked by hand against the fixture's own known `BODY_FONT_SIZE_PT`).
+
+**Tests:** 20/20 Stage D tests pass (19 previous + 1 new); all 330 Core tests and 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**Human recheck status: PENDING.**

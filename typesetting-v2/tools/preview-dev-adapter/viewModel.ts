@@ -108,6 +108,14 @@ export interface PreviewViewModel {
   totalPageCount: number;
   renderedPageCount: number;
   pages: ViewPage[];
+  // Glyph paint size (STAGE-D-GLYPH-PAINT-SCALE fix): `linePitchTicks` IS
+  // the canonical body font's own em-size in ticks (see fixtures.ts's
+  // `settingsFor`: `linePitchTicks: perCellAdvanceTick`, derived directly
+  // from `BODY_FONT_SIZE_PT`) — converting it through the SAME `tickToPx`
+  // used for every other geometry value keeps glyph size on the one
+  // canonical scale path, so it enlarges proportionally with page/column/
+  // line geometry instead of drifting from a hardcoded CSS constant.
+  fontSizePx: number;
 }
 
 function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
@@ -277,5 +285,6 @@ export function buildPreviewViewModel(
     totalPageCount: document.pages.length,
     renderedPageCount: renderedPages.length,
     pages: renderedPages.map((page, i) => buildViewPage(page, manualBreaks[i] ?? false, units, source, ctx)),
+    fontSizePx: tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier),
   };
 }

@@ -180,4 +180,19 @@ describe("viewModel.ts — CanonicalDocument -> paint-only ViewModel", () => {
     expect(large.pages[0].widthPx).toBeCloseTo(small.pages[0].widthPx * ratio, 6);
     expect(large.pages[0].columns[0].lines[0].widthPx).toBeCloseTo(small.pages[0].columns[0].lines[0].widthPx * ratio, 6);
   });
+
+  it("STAGE-D-GLYPH-PAINT-SCALE: glyph font-size scales by the exact same ratio as page/line geometry", () => {
+    const { document, ctx, bodyUnits, source } = composeFixture("two-column-flow");
+    const small = buildPreviewViewModel("id", "label", document, bodyUnits, source, { ...ctx, scaleMultiplier: 4 });
+    const large = buildPreviewViewModel("id", "label", document, bodyUnits, source, { ...ctx, scaleMultiplier: 10 });
+
+    expect(small.fontSizePx).toBeGreaterThan(0);
+    const geometryRatio = large.pages[0].widthPx / small.pages[0].widthPx;
+    const lineRatio = large.pages[0].columns[0].lines[0].widthPx / small.pages[0].columns[0].lines[0].widthPx;
+    const fontRatio = large.fontSizePx / small.fontSizePx;
+
+    expect(fontRatio).toBeCloseTo(geometryRatio, 6);
+    expect(fontRatio).toBeCloseTo(lineRatio, 6);
+    expect(fontRatio).toBeCloseTo(10 / 4, 6);
+  });
 });

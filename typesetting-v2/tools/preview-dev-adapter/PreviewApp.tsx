@@ -28,7 +28,7 @@ const STYLE = `
   .page-break-marker { position: absolute; top: -3px; left: 0; right: 0; border-top: 2px dashed #c0392b; }
   .column { position: absolute; top: 0; }
   .line { position: absolute; top: 0; border-left: 1px dotted #ddd; }
-  .unit { position: absolute; left: 0; right: 0; overflow: hidden; writing-mode: vertical-rl; font-size: 12px; line-height: 1; white-space: nowrap; }
+  .unit { position: absolute; left: 0; right: 0; overflow: hidden; writing-mode: vertical-rl; line-height: 1; white-space: nowrap; }
   .unit.kind-TEXT { color: #111; }
   .unit.kind-RUBY { color: #8e44ad; background: rgba(142,68,173,0.08); }
   .unit.kind-TCY { color: #2980b9; background: rgba(41,128,185,0.08); }
@@ -46,12 +46,12 @@ function DebugBadge({ text }: { text: string }) {
   return <span className="debug-info">{text}</span>;
 }
 
-function UnitBox({ unit }: { unit: ViewPlacedUnit }) {
+function UnitBox({ unit, fontSizePx }: { unit: ViewPlacedUnit; fontSizePx: number }) {
   const debugText = `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) ${unit.heightIsApproximate ? "~h" : ""}`;
   return (
     <div
       className={`unit kind-${unit.kind}`}
-      style={{ top: unit.topPx, height: unit.heightPx }}
+      style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }}
       title={debugText}
     >
       {unit.text}
@@ -61,7 +61,7 @@ function UnitBox({ unit }: { unit: ViewPlacedUnit }) {
   );
 }
 
-function PageView({ page }: { page: PreviewViewModel["pages"][number] }) {
+function PageView({ page, fontSizePx }: { page: PreviewViewModel["pages"][number]; fontSizePx: number }) {
   return (
     <div className="page" style={{ width: page.widthPx, height: page.heightPx }}>
       <span className="page-label">
@@ -77,7 +77,7 @@ function PageView({ page }: { page: PreviewViewModel["pages"][number] }) {
               <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />
               {line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
               {line.units.map((unit) => (
-                <UnitBox key={unit.id} unit={unit} />
+                <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} />
               ))}
             </div>
           ))}
@@ -108,7 +108,7 @@ function FixtureSection({ model }: { model: PreviewViewModel }) {
       ) : (
         <div className="page-row">
           {model.pages.map((page) => (
-            <PageView key={page.id} page={page} />
+            <PageView key={page.id} page={page} fontSizePx={model.fontSizePx} />
           ))}
         </div>
       )}

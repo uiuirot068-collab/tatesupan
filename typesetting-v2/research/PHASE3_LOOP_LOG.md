@@ -742,3 +742,15 @@ None of these caused any source content loss or duplication anywhere in the 16-f
 **NEXT:** Human recheck of the regenerated artifact (`typesetting-v2/qa/visual/stage-d/index.html`) against the same §13 checklist. This task did not touch, and does not resolve, any of P3-O03/O04/O05/O06/O08/O09, F06, the ruby-placement wiring gap, or `long-prose`'s residual. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## Stage D QA Visual Scale + Glyph Paint Scale (2026-09-06)
+
+Two small, sequential Human Visual QA readability fixes to the Stage D adapter, logged together.
+
+**STAGE-D-QA-VISUAL-SCALE:** `DEFAULT_SCALE_MULTIPLIER` (`geometry.ts`) raised 4x → 10x (~2.5x larger) after Human feedback that the page was too small to judge typography. Pure display constant; `tickToPx`'s formula and every canonical value it reads are unchanged. New regression test (`viewModel.test.ts`) confirms `CanonicalDocument` is byte-identical across scales and that page/column/line/unit counts, source spans, and text are all scale-independent — only px dimensions differ, proportionally.
+
+**STAGE-D-GLYPH-PAINT-SCALE:** Human then reported the enlarged page still showed tiny, unscaled glyphs. Root cause, proven by tracing the font-size source: `PreviewApp.tsx`'s CSS had a hardcoded `.unit { font-size: 12px; }`, completely disconnected from `scaleMultiplier` — every page/column/line dimension scaled via `tickToPx`, but glyph text size was a static constant on a separate, unscaled path. Fix: `PreviewViewModel.fontSizePx = tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier)` — reusing `linePitchTicks` (already the canonical body font's own em-size in ticks, per `fixtures.ts`'s `settingsFor`) and the same conversion function every other geometry value uses, rather than inventing a separate font metric. Applied as each unit's own inline `style.fontSize`, threaded down from the view model. New regression test asserts the font-size ratio between two scales equals both the page-width ratio and the line-width ratio exactly — uniform scaling across geometry and glyph paint together.
+
+**RESULT: both PASS.** 20/20 Stage D tests pass total across both fixes; 330 Core tests and 21 Stage C tests remain green throughout; 0 new tsc errors at either step. Full detail in `qa/evidence/STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §17/§18. `src/`, Production, Core, `package.json`, the lockfile, and the root `vitest.config.ts` were never touched by either fix. Human Visual QA recheck remains PENDING.
+
+---
