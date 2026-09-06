@@ -24,6 +24,7 @@ import type { TraceRecorder } from "../trace";
 import type { CanonicalLine, PlacedUnit } from "../layout/schema";
 import { deriveBreakOpportunities, type BreakOpportunity } from "../breaks/opportunity";
 import { tcyCellCost } from "../tcy";
+import { placeRuby, resolveOverhangAllowance } from "../ruby";
 
 export interface CompositionSettings {
   bodyFontRef: string;
@@ -147,6 +148,70 @@ function findOwningUnit(units: LogicalUnit[], start: number, end: number): Logic
     );
   }
   return owner;
+}
+
+// Ruby Placement Micro-Loop. A RUBY atom's own reading text: the matching
+// segment's `readingText` when this atom's span exactly equals one declared
+// JUKUGO segment's `baseSpan` (one atom per segment — RUBY_INTERNAL_ALLOWED
+// boundaries already make segment boundaries into atom boundaries, see
+// computeAtoms's own comment); otherwise the whole unit's own `readingText`
+// (ATOMIC, or an undeclared/too-short-to-segment JUKUGO — both compose as
+// one single atom spanning the whole base, per deriveRubyBreakOpportunities).
+function rubyReadingTextForAtom(owner: LogicalUnit & { kind: "RUBY" }, atomSpan: SourceSpan): string {
+  const segment = owner.segments?.find((s) => s.baseSpan.start === atomSpan.start && s.baseSpan.end === atomSpan.end);
+  return segment ? segment.readingText : owner.readingText;
+}
+
+// The literal text an ordinary (TEXT/TCY) unit's OWN atom occupies, sliced
+// by relative code-point offset from that unit's already-stored literal
+// content — never from a raw manuscript source string, which Core never
+// receives. Returns undefined for any other kind (RUBY/SEMANTIC_RUN/IMAGE/
+// break markers never expose a classifiable literal character at their
+// boundary here — a disclosed limitation, not an approximation: their
+// adjacency simply contributes no overhang allowance, below).
+function literalTextForAtom(owner: LogicalUnit, atomSpan: SourceSpan): string | undefined {
+  const relStart = atomSpan.start - owner.span.start;
+  const relEnd = atomSpan.end - owner.span.start;
+  if (owner.kind === "TEXT") return Array.from(owner.text).slice(relStart, relEnd).join("");
+  if (owner.kind === "TCY") return Array.from(owner.displayText).slice(relStart, relEnd).join("");
+  return undefined;
+}
+
+function firstCodePointOf(text: string): string {
+  return Array.from(text)[0] ?? "";
+}
+
+function lastCodePointOf(text: string): string {
+  const chars = Array.from(text);
+  return chars[chars.length - 1] ?? "";
+}
+
+// Ruby overhang allowance resolved from the ACTUAL adjacent atom already
+// placed on this same line — never guessed, never derived from a following
+// line's content. `side: "before"` reads the neighbor's LAST character;
+// `"after"` reads its FIRST. Returns 0 (no overhang) when there is no
+// same-line neighbor (a line/column/page edge — a real, disclosed case, not
+// an approximation) or when the neighbor's own literal character cannot be
+// determined (adjacent to RUBY/SEMANTIC_RUN/IMAGE — same disclosed
+// limitation as literalTextForAtom above). The shipped rule-set overhang
+// table is empty (P3-O06 residual, HG-4 exact values still OPEN), so this
+// resolves to 0 today regardless — but the class-lookup CAPABILITY itself
+// is real and wired, not stubbed out.
+function adjacentOverhangAllowance(
+  units: LogicalUnit[],
+  atoms: CompositionAtom[],
+  neighborIndex: number,
+  side: "before" | "after",
+  ruleSet: RuleSetVersion
+): GeometryTick {
+  const neighbor = atoms[neighborIndex];
+  if (!neighbor) return 0;
+  const owner = findOwningUnit(units, neighbor.sourceSpan.start, neighbor.sourceSpan.end);
+  const text = literalTextForAtom(owner, neighbor.sourceSpan);
+  if (text === undefined || text.length === 0) return 0;
+  const char = side === "before" ? lastCodePointOf(text) : firstCodePointOf(text);
+  const cls = ruleSet.characterClassFor(char);
+  return resolveOverhangAllowance(ruleSet, cls.id);
 }
 
 // Atom boundaries are derived from unit spans PLUS every BreakOpportunity
@@ -334,13 +399,39 @@ export function composeLine(
   const placedUnits: PlacedUnit[] = [];
   let yTick = 0;
   for (let i = 0; i <= cutAtAtomIndex; i++) {
-    placedUnits.push({
-      id: `placed-${atoms[i].sourceSpan.start}-${atoms[i].sourceSpan.end}`,
-      sourceSpan: atoms[i].sourceSpan,
+    const atom = atoms[i];
+    const placed: PlacedUnit = {
+      id: `placed-${atom.sourceSpan.start}-${atom.sourceSpan.end}`,
+      sourceSpan: atom.sourceSpan,
       xTick: 0,
       yTick,
-    });
-    yTick += atoms[i].advanceTick;
+    };
+
+    // Ruby Placement Micro-Loop: annotation geometry is computed here, once,
+    // as each RUBY atom is placed — never by a Renderer. This NEVER touches
+    // `placed.xTick`/`placed.yTick` above (INV-003: the base run's own
+    // coordinates are set identically whether or not this block runs at
+    // all), only adds sibling metadata a Renderer reads back, unmodified.
+    const owner = findOwningUnit(units, atom.sourceSpan.start, atom.sourceSpan.end);
+    if (owner.kind === "RUBY") {
+      const readingText = rubyReadingTextForAtom(owner, atom.sourceSpan);
+      const readingExtentTick = measurement.rubyReadingExtentTick(settings.bodyFontRef, settings.bodyFontSizePt, readingText);
+      const overhangAllowanceBeforeTick = adjacentOverhangAllowance(units, atoms, i - 1, "before", ruleSet);
+      const overhangAllowanceAfterTick =
+        i < cutAtAtomIndex ? adjacentOverhangAllowance(units, atoms, i + 1, "after", ruleSet) : 0; // no same-line neighbor after the line's own last placed atom
+      const placement = placeRuby({
+        baseExtentTick: atom.advanceTick,
+        readingExtentTick,
+        overhangAllowanceBeforeTick,
+        overhangAllowanceAfterTick,
+      });
+      placed.rubyBoundaryPolicy = placement.policy;
+      placed.rubyReadingOffsetTick = placement.readingOffsetTick;
+      placed.rubyReadingExtentTick = readingExtentTick;
+    }
+
+    placedUnits.push(placed);
+    yTick += atom.advanceTick;
   }
 
   const usedTick = yTick;

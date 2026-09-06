@@ -74,6 +74,7 @@ describe("F07 — atomic/group ruby never internally breaks (INV-007, test group
       rubyKind: "ATOMIC",
       baseSpan: span(0, 2),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
     };
     expect(deriveBreakOpportunities([ruby], DEFAULT_RULE_SET_V2)).toEqual([]);
   });
@@ -87,9 +88,10 @@ describe("F08 — jukugo explicit legal internal boundary (test group J/K)", () 
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
       segments: [
-        { baseSpan: span(0, 2), readingSpan: span(10, 12) },
-        { baseSpan: span(2, 4), readingSpan: span(12, 15) },
+        { baseSpan: span(0, 2), readingSpan: span(10, 12), readingText: "よみ" },
+        { baseSpan: span(2, 4), readingSpan: span(12, 15), readingText: "かた" },
       ],
     };
     const opportunities = deriveBreakOpportunities([jukugo], DEFAULT_RULE_SET_V2);
@@ -103,10 +105,11 @@ describe("F08 — jukugo explicit legal internal boundary (test group J/K)", () 
       rubyKind: "JUKUGO",
       baseSpan: span(0, 6),
       readingSpan: span(10, 18),
+      readingText: "よみかたがな",
       segments: [
-        { baseSpan: span(0, 2), readingSpan: span(10, 12) },
-        { baseSpan: span(2, 4), readingSpan: span(12, 15) },
-        { baseSpan: span(4, 6), readingSpan: span(15, 18) },
+        { baseSpan: span(0, 2), readingSpan: span(10, 12), readingText: "よみ" },
+        { baseSpan: span(2, 4), readingSpan: span(12, 15), readingText: "かた" },
+        { baseSpan: span(4, 6), readingSpan: span(15, 18), readingText: "がな" },
       ],
     };
     const opportunities = deriveBreakOpportunities([jukugo], DEFAULT_RULE_SET_V2);
@@ -122,6 +125,7 @@ describe("F08 — jukugo explicit legal internal boundary (test group J/K)", () 
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
     };
     expect(deriveBreakOpportunities([unsegmented], DEFAULT_RULE_SET_V2)).toEqual([]);
   });

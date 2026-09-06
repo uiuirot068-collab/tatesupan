@@ -149,6 +149,7 @@ describe("Cross-feature regression: prose + kinsoku + ruby + TCY + dash + manual
       rubyKind: "ATOMIC",
       baseSpan: rubyBase.span,
       readingSpan: { blockId: "reading-1", start: 0, end: 5 },
+      readingText: "とうきょう",
     };
     offset = ruby.span.end;
     units.push(ruby);

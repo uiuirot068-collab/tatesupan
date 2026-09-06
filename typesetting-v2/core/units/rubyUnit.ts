@@ -8,6 +8,15 @@ export type RubyKind = "ATOMIC" | "JUKUGO";
 export interface RubySegment {
   baseSpan: SourceSpan;
   readingSpan: SourceSpan;
+  // Ruby Placement Micro-Loop: this segment's own reading, stored literally
+  // — the same convention TextUnit.text/TCYUnit.displayText already use,
+  // applied here for the one LogicalUnit kind that previously lacked it.
+  // Required because `MeasurementFacts.rubyReadingExtentTick(fontRef,
+  // sizePt, text)` needs the literal reading text, and Core never receives
+  // a raw manuscript source string (only LogicalUnit[] + spans) — without
+  // this field, Core has no route to measure a segment's own reading
+  // extent at compose time.
+  readingText: string;
 }
 
 // Contract §9. Segmentation ownership: the Core only ever HONORS an
@@ -22,5 +31,12 @@ export interface RubyUnit {
   rubyKind: RubyKind;
   baseSpan: SourceSpan;
   readingSpan: SourceSpan;
+  // Ruby Placement Micro-Loop: the whole unit's reading, stored literally
+  // (see RubySegment.readingText's doc comment for why). For a segmented
+  // JUKUGO ruby this equals the concatenation of every segment's own
+  // readingText, in order — callers are responsible for keeping the two
+  // consistent (mirrors readingSpan's own existing min/max-of-segments
+  // convention); Core itself never derives one from the other.
+  readingText: string;
   segments?: RubySegment[]; // JUKUGO only — ATOMIC ruby has no internal segmentation
 }

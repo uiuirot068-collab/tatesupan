@@ -100,23 +100,49 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
     expect(normalHtml).not.toContain('class="debug-info"');
     expect(normalHtml).not.toContain('class="page-label"');
     expect(normalHtml).not.toContain('class="indent-marker"');
-    expect(normalHtml).not.toContain("annotation pending");
+    // Ruby Placement Micro-Loop: the geometry debug tooltip (policy/offset/
+    // extent) is DEBUG-only decoration, even though the annotation text
+    // itself is real content shown in both modes (checked separately below).
+    expect(normalHtml).not.toContain("policy=OVERFLOW_OPEN");
 
     // The same content, in DEBUG mode, does carry this decoration.
     expect(debugHtml).toContain('class="debug-info"');
     expect(debugHtml).toContain('class="page-label"');
-    expect(debugHtml).toContain("annotation pending");
+    expect(debugHtml).toContain("policy=OVERFLOW_OPEN");
   });
 
-  it("provisional badge (prov) is present for RUBY/TCY/SEMANTIC_RUN/IMAGE kinds in both modes (content, not debug-only decoration) but ruby-annotation-pending text is debug-only", () => {
+  it("ruby annotation text is real content, visible in both modes; its geometry debug tooltip is debug-only (Ruby Placement Micro-Loop)", () => {
     const models = buildAllPaintDocuments();
     const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
     const normalHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "normal" }));
     const debugHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "debug" }));
-    expect(normalHtml).toContain(">東京<");
+    expect(normalHtml).toContain(">東京<"); // base text, both modes
     expect(debugHtml).toContain(">東京<");
-    expect(normalHtml).not.toContain("annotation pending");
-    expect(debugHtml).toContain("annotation pending");
+    expect(normalHtml).toContain("とうきょう"); // annotation text is real content, not dev-only chrome
+    expect(debugHtml).toContain("とうきょう");
+    expect(normalHtml).not.toContain("policy="); // geometry tooltip stays debug-only
+    expect(debugHtml).toContain("policy=");
+  });
+
+  it("19. Renderer consumes canonical ruby geometry without recalculating it — painted offset/extent/policy trace exactly to PlacedUnit's own tick fields via the single tickToPx conversion, nothing independently derived", () => {
+    const models = buildAllPaintDocuments();
+    const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
+    const allUnits = rubyModel.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+    const rubyUnit = allUnits.find((u) => u.kind === "RUBY")!;
+    expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
+    if (rubyUnit.rubyAnnotation?.status !== "PLACED") return;
+    // Re-derive the SAME fixture's raw CanonicalDocument to compare the
+    // PaintDocument's px fields directly against Core's own tick fields —
+    // proving the conversion is a pure, one-way tickToPx mapping with no
+    // independent renderer-side placement decision.
+    const fx = ALL_FIXTURES.find((f) => f.id === "atomic-ruby")!;
+    const measurement = createFakeMeasurementProvider();
+    const settings = settingsFor(fx.capacity);
+    const document = composeCanonicalDocument({ bodyUnits: fx.bodyUnits, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+    const canonicalPlaced = document.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.placedUnits))).find((p) => p.id === rubyUnit.id)!;
+    expect(canonicalPlaced.rubyBoundaryPolicy).toBe(rubyUnit.rubyAnnotation.policy);
+    expect(rubyUnit.rubyAnnotation.offsetPx).toBeCloseTo((canonicalPlaced.rubyReadingOffsetTick ?? 0) * 0.001 * (96 / 25.4) * DEFAULT_SCALE_MULTIPLIER, 6);
+    expect(rubyUnit.rubyAnnotation.extentPx).toBeCloseTo((canonicalPlaced.rubyReadingExtentTick ?? 0) * 0.001 * (96 / 25.4) * DEFAULT_SCALE_MULTIPLIER, 6);
   });
 
   it("colophon pages paint in the horizontal orientation convention, using the identical page/column/line schema as the body", () => {

@@ -34,6 +34,7 @@ const STYLE = `
   .unit { position: absolute; left: 0; right: 0; overflow: hidden; text-align: center; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   .provisional-badge { display: none; }
+  .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: 0.55em; white-space: nowrap; color: #444; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -54,11 +55,31 @@ function DebugBadge({ text }: { text: string }) {
 
 function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
   const debugText = `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}`;
+  const rubyDebugText =
+    unit.rubyAnnotation?.status === "PLACED"
+      ? `policy=${unit.rubyAnnotation.policy} offset=${unit.rubyAnnotation.offsetPx.toFixed(1)}px extent=${unit.rubyAnnotation.extentPx.toFixed(1)}px`
+      : undefined;
   return (
     <div className={`unit kind-${unit.kind}`} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
       {unit.kind === "IMAGE" ? <span className="image-placeholder" /> : unit.text}
       {unit.provisional && <span className="provisional-badge">prov</span>}
-      {mode === "debug" && unit.rubyAnnotationStatus === "PENDING" && <span className="ruby-annotation-pending">annotation pending</span>}
+      {/* Ruby Placement Micro-Loop: paints the annotation at Core's own
+          canonical geometry (offset/extent), read-only — never
+          recalculated, never re-centered here. Visible in NORMAL PREVIEW
+          because it is real content (the reading text itself), not
+          dev-only chrome; still explicitly not a claim of final
+          Publication-quality optics (P3-O06 exact overhang values remain
+          OPEN). */}
+      {unit.rubyAnnotation?.status === "PLACED" && (
+        <span
+          className="ruby-annotation"
+          style={{ top: unit.rubyAnnotation.offsetPx, height: unit.rubyAnnotation.extentPx }}
+          title={mode === "debug" ? rubyDebugText : undefined}
+        >
+          {unit.rubyAnnotation.text}
+        </span>
+      )}
+      {mode === "debug" && unit.rubyAnnotation?.status === "PENDING" && <span className="ruby-annotation-pending">annotation pending</span>}
       {mode === "debug" && <DebugBadge text={debugText} />}
     </div>
   );

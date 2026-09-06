@@ -19,6 +19,7 @@ describe("F07 — atomic/group ruby is fully unbroken (INV-007)", () => {
       rubyKind: "ATOMIC",
       baseSpan: span(0, 2),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
     };
     expect(deriveRubyBreakOpportunities(ruby)).toEqual([]);
     // Exercised through the full pipeline too, not just the ruby module in isolation.
@@ -34,9 +35,10 @@ describe("F08 — jukugo with explicit segments breaks only at declared boundari
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
       segments: [
-        { baseSpan: span(0, 2), readingSpan: span(10, 12) },
-        { baseSpan: span(2, 4), readingSpan: span(12, 15) },
+        { baseSpan: span(0, 2), readingSpan: span(10, 12), readingText: "よみ" },
+        { baseSpan: span(2, 4), readingSpan: span(12, 15), readingText: "かた" },
       ],
     };
     expect(deriveRubyBreakOpportunities(jukugo)).toEqual([{ position: span(2, 2), reason: "RUBY_INTERNAL_ALLOWED" }]);
@@ -49,9 +51,10 @@ describe("F08 — jukugo with explicit segments breaks only at declared boundari
       rubyKind: "JUKUGO",
       baseSpan: span(0, 6),
       readingSpan: span(10, 18),
+      readingText: "よみかたがな",
       segments: [
-        { baseSpan: span(0, 3), readingSpan: span(10, 13) },
-        { baseSpan: span(3, 6), readingSpan: span(13, 18) },
+        { baseSpan: span(0, 3), readingSpan: span(10, 13), readingText: "よみか" },
+        { baseSpan: span(3, 6), readingSpan: span(13, 18), readingText: "たがな" },
       ],
     };
     const opportunities = deriveRubyBreakOpportunities(jukugo);
@@ -68,6 +71,7 @@ describe("Missing-segments fallback: never a guessed split (P3-O14)", () => {
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
     };
     expect(deriveRubyBreakOpportunities(unsegmented)).toEqual([]);
   });
@@ -79,7 +83,8 @@ describe("Missing-segments fallback: never a guessed split (P3-O14)", () => {
       rubyKind: "JUKUGO",
       baseSpan: span(0, 2),
       readingSpan: span(10, 12),
-      segments: [{ baseSpan: span(0, 2), readingSpan: span(10, 12) }],
+      readingText: "よみ",
+      segments: [{ baseSpan: span(0, 2), readingSpan: span(10, 12), readingText: "よみ" }],
     };
     expect(deriveRubyBreakOpportunities(oneSegment)).toEqual([]);
   });

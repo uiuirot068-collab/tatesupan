@@ -82,6 +82,7 @@ export function buildFixtureUnits(blockId: string, pieces: FixturePiece[]): { un
         rubyKind: piece.rubyKind ?? "ATOMIC",
         baseSpan,
         readingSpan: { blockId, start: -1, end: -1 },
+        readingText: piece.reading,
       } satisfies RubyUnit);
       readingQueue.push({ text: piece.reading, unitIndex, segIndex: -1 });
     } else if (piece.kind === "RUBY_JUKUGO") {
@@ -95,7 +96,7 @@ export function buildFixtureUnits(blockId: string, pieces: FixturePiece[]): { un
         const segLen = Array.from(seg.base).length;
         const segSpan = { blockId, start: segStart, end: segStart + segLen };
         segStart += segLen;
-        return { baseSpan: segSpan, readingSpan: { blockId, start: -1, end: -1 } };
+        return { baseSpan: segSpan, readingSpan: { blockId, start: -1, end: -1 }, readingText: seg.reading };
       });
       const unitIndex = units.length;
       units.push({
@@ -104,6 +105,7 @@ export function buildFixtureUnits(blockId: string, pieces: FixturePiece[]): { un
         rubyKind: "JUKUGO",
         baseSpan,
         readingSpan: { blockId, start: -1, end: -1 },
+        readingText: piece.segments.map((s) => s.reading).join(""),
         segments,
       } satisfies RubyUnit);
       piece.segments.forEach((seg, segIndex) => readingQueue.push({ text: seg.reading, unitIndex, segIndex }));

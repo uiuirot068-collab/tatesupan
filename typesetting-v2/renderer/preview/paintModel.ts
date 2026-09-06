@@ -42,14 +42,20 @@ export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" |
 // renderer may additionally label these — see PreviewRenderer.tsx.
 const PROVISIONAL_KINDS: ReadonlySet<PaintUnitKind> = new Set(["RUBY", "TCY", "SEMANTIC_RUN", "IMAGE"]);
 
-// Ruby annotation placement is a genuine, disclosed CONTRACT GAP (P3-O06):
-// `core/ruby/index.ts`'s `placeRuby()` exists but is never invoked by the
-// compose pipeline, and `PlacedUnit.rubyBoundaryPolicy` is never populated
-// (verified by direct grep of `core/` — schema.ts is the only file that
-// mentions the field). A Renderer has no canonical annotation geometry to
-// paint and must not invent one (that would make the Renderer a second
-// typesetter). "PENDING" is the only honest state.
-export type RubyAnnotationStatus = "PENDING";
+// Ruby Placement Micro-Loop: `core/ruby/index.ts`'s `placeRuby()` is now
+// wired into `compose/line.ts`, so a RUBY-owned `PlacedUnit` carries real
+// canonical annotation geometry (`rubyBoundaryPolicy`/`rubyReadingOffsetTick`/
+// `rubyReadingExtentTick`). This Renderer only ever READS those fields and
+// converts ticks->px for painting — it never calls `placeRuby()` itself,
+// never centers/clamps/measures the annotation on its own, and never
+// chooses a ruby segment break (that would make the Renderer a second
+// typesetter). "PENDING" is kept as a defensive fallback for the
+// theoretical case where a placed atom's owner is RUBY but Core did not
+// attach placement data (should not occur post-wiring; never silently
+// treated as PLACED with fabricated geometry if it does).
+export type RubyAnnotationPaint =
+  | { status: "PENDING" }
+  | { status: "PLACED"; policy: "CENTER" | "START_CLAMP" | "END_CLAMP" | "OVERFLOW_OPEN"; offsetPx: number; extentPx: number; text: string };
 
 // A Renderer-owned abstraction boundary between "an IMAGE unit's canonical
 // occupancy" (Core-owned: refId/intrinsicWidth/intrinsicHeight/placement)
@@ -81,7 +87,7 @@ export interface PaintPlacedUnit {
   heightPx: number;
   heightIsApproximate: boolean;
   provisional: boolean;
-  rubyAnnotationStatus?: RubyAnnotationStatus; // RUBY units only
+  rubyAnnotation?: RubyAnnotationPaint; // RUBY units only
   imageResolution?: ImageResolution; // IMAGE units only
   debug: PaintDebugInfo;
 }
@@ -156,6 +162,17 @@ function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | n
   return units.find((u) => span.start >= u.span.start && span.end <= u.span.end) ?? null;
 }
 
+// Mirrors core/compose/line.ts's own `rubyReadingTextForAtom` — reads the
+// SAME already-stored literal reading text Core itself measured against
+// (never re-measures, never re-derives a segment boundary). The matching
+// segment's own text when this atom's span equals a declared JUKUGO
+// segment's baseSpan; otherwise the whole unit's own readingText (ATOMIC,
+// or an undeclared/too-short-to-segment JUKUGO composed as one atom).
+function rubyReadingTextForAtom(owner: LogicalUnit & { kind: "RUBY" }, atomSpan: SourceSpan): string {
+  const segment = owner.segments?.find((s) => s.baseSpan.start === atomSpan.start && s.baseSpan.end === atomSpan.end);
+  return segment ? segment.readingText : owner.readingText;
+}
+
 function paintKindFor(unit: LogicalUnit): PaintUnitKind {
   switch (unit.kind) {
     case "TEXT":
@@ -210,6 +227,22 @@ function detectManualBreaks(units: LogicalUnit[], pages: CanonicalPage[]): boole
   });
 }
 
+// Reads back Core's already-computed placement (never recomputes it): a
+// RUBY-owned PlacedUnit with `rubyBoundaryPolicy` set carries real geometry
+// (Ruby Placement Micro-Loop); this Renderer only converts its tick values
+// to px and resolves the matching literal reading text, exactly like any
+// other paint-time tick->px conversion in this file.
+function rubyAnnotationFor(owner: LogicalUnit & { kind: "RUBY" }, placed: PlacedUnit, ctx: PreviewRenderContext): RubyAnnotationPaint {
+  if (!placed.rubyBoundaryPolicy) return { status: "PENDING" };
+  return {
+    status: "PLACED",
+    policy: placed.rubyBoundaryPolicy,
+    offsetPx: tickToPx(placed.rubyReadingOffsetTick ?? 0, ctx.scaleMultiplier),
+    extentPx: tickToPx(placed.rubyReadingExtentTick ?? 0, ctx.scaleMultiplier),
+    text: rubyReadingTextForAtom(owner, placed.sourceSpan),
+  };
+}
+
 function buildPaintLine(
   line: CanonicalLine,
   lineIndex: number,
@@ -255,7 +288,7 @@ function buildPaintLine(
       heightPx: Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1),
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
-      ...(kind === "RUBY" ? { rubyAnnotationStatus: "PENDING" as const } : {}),
+      ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed, ctx) } : {}),
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
       debug: {
         pageOrder,

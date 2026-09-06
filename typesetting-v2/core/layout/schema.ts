@@ -35,7 +35,19 @@ export interface PlacedUnit {
   xTick: GeometryTick;
   yTick: GeometryTick;
   hanging?: boolean;
+  // Ruby Placement Micro-Loop: populated only for a placed atom owned by a
+  // RUBY LogicalUnit (one atom per segment for a segmented JUKUGO group,
+  // one atom for the whole group otherwise) — `core/ruby/index.ts`'s
+  // `placeRuby()` result, attached here rather than recomputed by a
+  // Renderer (INV-003: this never carries or implies any BASE-coordinate
+  // change — `xTick`/`yTick` above remain the base run's own placement,
+  // untouched). `rubyReadingOffsetTick` is relative to this atom's own
+  // `yTick` (mirrors placeRuby's own "relative to the base group's own
+  // start tick" contract); `rubyReadingExtentTick` is the reading's own
+  // measured extent, so a Renderer never re-measures it.
   rubyBoundaryPolicy?: "CENTER" | "START_CLAMP" | "END_CLAMP" | "OVERFLOW_OPEN";
+  rubyReadingOffsetTick?: GeometryTick;
+  rubyReadingExtentTick?: GeometryTick;
 }
 
 export interface CanonicalLine {

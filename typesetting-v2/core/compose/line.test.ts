@@ -101,9 +101,10 @@ describe("Jukugo ruby legal/illegal internal boundaries (test group G/H)", () =>
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
       segments: [
-        { baseSpan: span(0, 2), readingSpan: span(10, 12) },
-        { baseSpan: span(2, 4), readingSpan: span(12, 15) },
+        { baseSpan: span(0, 2), readingSpan: span(10, 12), readingText: "よみ" },
+        { baseSpan: span(2, 4), readingSpan: span(12, 15), readingText: "かた" },
       ],
     };
     // Each segment = 2 cells; extent fits exactly the first segment (2
@@ -121,6 +122,7 @@ describe("Jukugo ruby legal/illegal internal boundaries (test group G/H)", () =>
       rubyKind: "JUKUGO",
       baseSpan: span(0, 4),
       readingSpan: span(10, 15),
+      readingText: "よみかた",
     };
     // No internal boundary exists at all (undeclared -> treated as ATOMIC),
     // so a 2-cell extent cannot legally place any part of this 4-cell atom.

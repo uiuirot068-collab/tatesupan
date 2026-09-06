@@ -49,6 +49,7 @@ describe("LogicalUnit discriminated union", () => {
       rubyKind: "ATOMIC",
       baseSpan: span,
       readingSpan: span,
+      readingText: "とうきょう",
     };
     const tcy: TCYUnit = { kind: "TCY", span, displayText: "12", logicalCells: 1 };
     const semanticRun: SemanticRunUnit = { kind: "SEMANTIC_RUN", span, runKind: "DASH", length: 2 };
@@ -84,9 +85,10 @@ describe("LogicalUnit discriminated union", () => {
       rubyKind: "JUKUGO",
       baseSpan,
       readingSpan,
+      readingText: "よみかた",
       segments: [
-        { baseSpan: { blockId: "body-1", start: 0, end: 2 }, readingSpan: { blockId: "body-1", start: 10, end: 12 } },
-        { baseSpan: { blockId: "body-1", start: 2, end: 4 }, readingSpan: { blockId: "body-1", start: 12, end: 15 } },
+        { baseSpan: { blockId: "body-1", start: 0, end: 2 }, readingSpan: { blockId: "body-1", start: 10, end: 12 }, readingText: "よみ" },
+        { baseSpan: { blockId: "body-1", start: 2, end: 4 }, readingSpan: { blockId: "body-1", start: 12, end: 15 }, readingText: "かた" },
       ],
     };
     expect(jukugo.segments).toHaveLength(2);
@@ -100,6 +102,7 @@ describe("LogicalUnit discriminated union", () => {
       rubyKind: "JUKUGO",
       baseSpan,
       readingSpan,
+      readingText: "よみかた",
     };
     expect(unsegmented.segments).toBeUndefined();
   });

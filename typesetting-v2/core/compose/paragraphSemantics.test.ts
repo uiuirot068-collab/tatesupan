@@ -76,7 +76,7 @@ describe("Human Product Decision A — 一字下げ auto-indent", () => {
   });
 
   it("cannot determine a first character for RUBY or SEMANTIC_RUN — no indent applies (disclosed architecture limitation)", () => {
-    const ruby: RubyUnit = { kind: "RUBY", span: span(0, 2), rubyKind: "ATOMIC", baseSpan: span(0, 2), readingSpan: span(10, 15) };
+    const ruby: RubyUnit = { kind: "RUBY", span: span(0, 2), rubyKind: "ATOMIC", baseSpan: span(0, 2), readingSpan: span(10, 15), readingText: "よみかた" };
     const after = text("あいう", 2);
     const result = composeLine([ruby, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 5, true);
     expect(result.line.indentTick).toBeUndefined(); // no indent — RubyUnit stores no base text for the check

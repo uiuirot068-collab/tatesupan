@@ -166,17 +166,25 @@ describe("paintModel.ts — CanonicalDocument -> paint-only PaintDocument", () =
     expect(model.holdReasons[0]).toContain("SINGLE_ATOM_EXCEEDS_LINE_EXTENT");
   });
 
-  it("16. RUBY body position is unchanged by the annotation's PENDING state — base text paints at its own canonical yTick like any other unit", () => {
+  it("16. RUBY body position is unchanged by the annotation's placement — base text paints at its own canonical yTick like any other unit (Ruby Placement Micro-Loop)", () => {
     const { document, ctx, bodyUnits, source } = composeFixture("atomic-ruby");
     const model = buildPaintDocument("id", "label", document, bodyUnits, source, ctx);
     const allUnits = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
     const rubyUnit = allUnits.find((u) => u.kind === "RUBY");
     expect(rubyUnit).toBeDefined();
-    expect(rubyUnit!.rubyAnnotationStatus).toBe("PENDING");
     expect(rubyUnit!.text).toBe("東京");
+    // Core now wires placeRuby() into composition, so this atom carries
+    // real geometry — read back here, never recomputed by this Renderer.
+    expect(rubyUnit!.rubyAnnotation?.status).toBe("PLACED");
+    if (rubyUnit!.rubyAnnotation?.status === "PLACED") {
+      expect(rubyUnit!.rubyAnnotation.text).toBe("とうきょう");
+      // base "東京" (2 cells) vs reading "とうきょう" (5 cells) overflows
+      // with the shipped (empty, P3-O06 residual) overhang table -> OVERFLOW_OPEN.
+      expect(rubyUnit!.rubyAnnotation.policy).toBe("OVERFLOW_OPEN");
+    }
     // Body placement equals the plain tickToPx(yTick) conversion — the
-    // annotation's PENDING status carries no coordinate of its own and
-    // never shifts the base unit's own topPx.
+    // annotation carries no coordinate of its own for the BASE and never
+    // shifts the base unit's own topPx (INV-003).
     const canonicalPlaced = document.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.placedUnits))).find((p) => p.id === rubyUnit!.id)!;
     const owningLine = document.pages[0].columns[0].lines.find((l) => l.placedUnits.some((p) => p.id === rubyUnit!.id))!;
     expect(rubyUnit!.topPx).toBeCloseTo(tickToPx(canonicalPlaced.yTick + (owningLine.indentTick ?? 0), ctx.scaleMultiplier), 6);
