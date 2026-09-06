@@ -1,10 +1,13 @@
 // P3-O04 — Dash Visual regression tests. Semantic-run identity, source
 // mapping, break/atomicity behavior, and canonical occupied extent are all
 // Core-owned and already PASS (untouched by this task) — these tests cover
-// only the Renderer's own paint boundary: does it paint the already-
-// canonical DASH run as a continuous, centered, font-independent bar
-// spanning its own canonical extent, without moving anything else,
-// re-tokenizing, or touching ELLIPSIS (P3-O05, still OPEN).
+// only the Renderer's own paint boundary. Current strategy (after two
+// geometric-bar attempts were rejected by Human Visual QA, see
+// qa/evidence/P3_O04_DASH_VISUAL.md §§15-18): real font glyph ink, split
+// into one paint node per grapheme (paintModel.ts's `dashGlyphsFor`) with a
+// small em-relative overlap to close the seam a shared text node would
+// otherwise leave — without moving anything else, re-tokenizing, changing
+// canonical occupancy, or touching ELLIPSIS (P3-O05, still OPEN).
 
 import { describe, expect, it } from "vitest";
 import ReactDOMServer from "react-dom/server";
@@ -107,7 +110,7 @@ describe("P3-O04 — Dash Visual", () => {
     expect(html).toContain("runKind=DASH");
     expect(html).toContain("runBoxTop=");
     expect(html).toContain("runBoxHeight=");
-    expect(html).toContain("paintStrategy=painted-bar");
+    expect(html).toContain("paintStrategy=native-glyph, 2 paint node(s), seam overlap");
   });
 
   it("10. visual scaling is proportional — the dash run's own topPx/heightPx scale exactly with the visual scale multiplier, canonical text/span unchanged", () => {
@@ -235,19 +238,27 @@ describe("P3-O04 — Dash Visual", () => {
     for (const d of dashUnits) expect(d.text).toBe("――");
   });
 
-  it("the generated stylesheet declares the painted-bar rule scoped to .semantic-dash only, using an em (body-font-relative, proportional) width, never a fixed disconnected px value", () => {
+  it("P3-O04-DASH-SEAM-HOLD: the dash run paints one real-glyph-ink node per grapheme (never a pseudo-element bar, never opacity), the first node starts at 0 and the last node's bottom equals the run's own canonical heightPx exactly (never shortened), and consecutive nodes overlap by a small, em-relative (never fixed-px) amount", () => {
     const fx = ALL_FIXTURES.find((f) => f.id === "dash-ellipsis")!;
     const { model } = composeAndPaint(fx.bodyUnits, fx.source, fx.capacity);
+    const dash = findDashUnit(model);
+    expect(dash.dashGlyphs).toBeDefined();
+    expect(dash.dashGlyphs).toHaveLength(2);
+    const [g0, g1] = dash.dashGlyphs!;
+    expect(g0.text).toBe("―");
+    expect(g1.text).toBe("―");
+    expect(g0.topPx).toBe(0); // first glyph starts exactly at the run's own top
+    expect(g1.topPx + g1.heightPx).toBeCloseTo(dash.heightPx, 6); // last glyph ends exactly at the run's own bottom -- never shortened
+    // The two glyph boxes overlap (g1 starts before g0 ends).
+    expect(g1.topPx).toBeLessThan(g0.topPx + g0.heightPx);
+
     const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [model], mode: "normal" }));
-    expect(html).toContain(".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after");
-    const barRuleMatch = html.match(/\.unit\.kind-SEMANTIC_RUN\.semantic-dash \.unit-ink::after\s*\{[^}]*\}/);
-    expect(barRuleMatch).not.toBeNull();
-    // P3-O04-DASH-STROKE-WEIGHT-HOLD: em, relative to .unit's own inline
-    // font-size (== the canonical fontSizePx) -- proportional by
-    // construction, never a fixed px length.
-    expect(barRuleMatch![0]).toMatch(/width:\s*0\.\d+em/);
-    expect(barRuleMatch![0]).not.toMatch(/width:\s*\d+px/);
-    expect(barRuleMatch![0]).not.toContain("width: 12%"); // the Human-rejected, too-heavy original value must not recur
+    // No pseudo-element bar, no opacity trick, no color:transparent anywhere.
+    expect(html).not.toContain("::after");
+    expect(html).not.toContain("opacity:");
+    expect(html).not.toContain("color: transparent");
+    // Real glyph ink is present as actual DOM text content.
+    expect(html).toMatch(/<span class="dash-glyph"[^>]*>―<\/span>/);
   });
 
   it("does not mutate CanonicalDocument (no re-layout) — a snapshot taken before painting equals a snapshot taken after", () => {

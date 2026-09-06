@@ -1,4 +1,4 @@
-<!doctype html><html lang="ja"><head><meta charSet="utf-8"/><title>P3-O04 Native Dash Paint Comparison</title><style>body{font-family:sans-serif;margin:0;padding:20px;background:#fafafa;} h1{font-size:16px;} h2{font-size:13px;margin:24px 0 4px;} p.desc{font-size:11px;color:#666;max-width:640px;margin:0 0 8px;} .cand{border-top:2px solid #333;padding-top:8px;} .warn{color:#a00;font-weight:bold;}</style></head><body><h1>NATIVE DASH PAINT COMPARISON — real font glyph ink only (geometric-bar and opacity strategies were rejected by Human Visual QA and are not shown here)</h1><p style="font-size:12px;color:#555;">Non-Production comparison artifact. Same font, same page scale, same canonical geometry, same source, same run length throughout — only native-glyph paint-position correction differs per section. Candidate C's centering nudge is <span class="warn">experimental and unverified</span>.</p><div class="cand"><h2>A — native glyph, no correction at all (baseline)</h2><p class="desc">Real ―― font glyph ink, no painted bar, no opacity change, no letter-spacing, no transform -- exactly the same generic rendering every other unit kind already gets. Establishes whether the historical Phase 2 P2-L06 off-center/seam concerns (measured in a different, now-superseded PoC DOM structure) recur in THIS Renderer's own structure at all before any correction is attempted.</p><style>
+<!doctype html><html lang="ja"><head><meta charSet="utf-8"/><title>P3-O04 Native Dash Seam Comparison</title><style>body{font-family:sans-serif;margin:0;padding:20px;background:#fafafa;} h1{font-size:16px;} h2{font-size:13px;margin:24px 0 4px;} p.desc{font-size:11px;color:#666;max-width:640px;margin:0 0 8px;} .cand{border-top:2px solid #333;padding-top:8px;}</style></head><body><h1>P3-O04 Native Dash Seam Comparison — same phrase, same font, same scale; only inter-glyph overlap differs</h1><p style="font-size:12px;color:#555;">Non-Production comparison artifact. Real font glyph ink throughout (no geometric bar, no opacity trick, no font-size/weight change) — each candidate uses a different dashOverlapEm value only.</p><div class="cand"><h2>A — minimal overlap (0.08em)</h2><p class="desc">Smallest overlap tried. If a seam is still visible here, a larger value is needed; if the join already looks clean, prefer this one (less overlap means less risk of a doubled-ink join).</p><style>
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
   h1 { font-size: 16px; }
@@ -55,42 +55,32 @@
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
-  /* P3-O04-DASH-VISUAL: Phase 2's own frozen P2-L06 evidence measured a
-     real, non-hypothetical optical problem for dash/ellipsis runs
-     (glyph ink left-shifted within its own logical cell) and explicitly
-     applied no correction, since no Human Product decision on the exact
-     fix existed. Rather than relying on font-glyph ink at all (font
-     availability/metrics are outside this Renderer's control, and the
-     documented issue was never root-caused), DASH runs are painted as a
-     simple, centered, continuous bar spanning the run's own already-
-     canonical extent (unit-ink's box height, itself derived from
-     GeometryTick like everything else) -- guaranteed visually continuous
-     and centered by construction, never dependent on unverifiable font/
-     browser behavior. The real "――" text stays in the DOM unchanged
-     (source/semantic identity preserved) but its own ink is hidden
-     (color:transparent) since the bar is the visible representation.
-     ELLIPSIS/TWO_DOT_LEADER are explicitly untouched (P3-O05 remains its
-     own, separate, still-OPEN item).
+  /* P3-O04-DASH-VISUAL history (full detail: qa/evidence/P3_O04_DASH_VISUAL.md):
+     Phase 2's own frozen P2-L06 evidence measured a real, non-hypothetical
+     optical problem for dash/ellipsis runs (glyph ink left-shifted within
+     its own logical cell), never corrected. Two geometric-bar strategies
+     (a solid CSS bar, then an opacity-reduced variant) were tried and
+     BOTH REJECTED by Human Visual QA -- the solid bar read as a page
+     rule/border, not prose punctuation; the opacity variant read as pale/
+     blurred. Human confirmed the native font glyph's own stroke weight is
+     the right visual direction, but the SHARED-TEXT-NODE rendering left a
+     visible seam between the run's two "―" characters.
 
-     P3-O04-DASH-STROKE-WEIGHT-HOLD: Human Visual QA rejected the original
-     stroke thickness (12% of the unit's own cross-axis box width, itself
-     the line's per-cell width) as far too heavy -- it read as a page rule/
-     border, not publication-like prose punctuation. The stroke thickness
-     formula is now expressed as an em value (bodyEmPaintSize times a
-     relativeStrokeFactor) rather than a box-relative percentage: since
-     .unit's own inline font-size is already set to the canonical
-     fontSizePx, an em-unit width on this descendant resolves directly
-     against that SAME already-tickToPx-scaled body metric -- proportional
-     to Preview scale by construction, never a fixed disconnected px
-     value, and now tied explicitly to the body font metric the task's own
-     preferred formula names, not to box width (a related but indirect
-     quantity in this specific 1-cell-wide case). relativeStrokeFactor is
-     picked as the middle of a 3-candidate comparison (thin/medium-thin/
-     lighter-than-original) generated for Human confirmation -- see
-     qa/visual/p3-o04-dash-weight-comparison/ and
-     qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD section. */
+     P3-O04-DASH-SEAM-HOLD: DASH runs (only) are now split into one paint
+     node PER GRAPHEME (unit.dashGlyphs, computed in paintModel.ts's
+     dashGlyphsFor from the run's own already-canonical heightPx --
+     never a Core change, never a re-tokenization, the SemanticRunUnit
+     stays exactly one atom throughout). Each glyph node uses REAL font
+     glyph ink (no color:transparent, no painted bar, no opacity trick) --
+     .dash-glyph below only positions each grapheme; it paints nothing
+     of its own. Consecutive glyph nodes overlap by a small, em-relative
+     amount (paintModel.ts's own dashOverlapEm) to visually close the
+     seam, while the FIRST glyph's own top and the LAST glyph's own
+     bottom still span the full canonical run extent exactly -- the
+     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
+     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after { content: none; }
+  .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -124,7 +114,7 @@
   .debug .ruby-annotation-pending { font-size: 8px; color: #06c; background: #eef6ff; padding: 0 2px; }
   .debug-info { display: none; position: absolute; left: 100%; top: 0; white-space: nowrap; font-size: 9px; background: #222; color: #0f0; padding: 1px 3px; z-index: 5; pointer-events: none; }
   .debug .debug-info { display: block; }
-</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-native-comparison"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink">――<span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div><div class="cand"><h2>B — native glyph + seam-tightening only (letter-spacing, no centering change)</h2><p class="desc">Same real glyph ink as A. Adds letter-spacing:-0.05em -- a well-defined CSS lever that reduces the INLINE-axis (vertical, under writing-mode:vertical-rl) gap BETWEEN the two ― characters within their one shared text node, addressing a possible seam from the font's own glyph side-bearing without touching canonical run extent, cross-axis position, or surrounding text. No cross-axis (centering) change in this candidate.</p><style>
+</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-seam-0.08"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink"><span class="dash-glyph" style="top:0;height:21.83901732283465px">―</span><span class="dash-glyph" style="top:20.159092913385834px;height:21.83901732283465px">―</span><span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div><div class="cand"><h2>B — moderate overlap (0.12em, current interim default)</h2><p class="desc">The value currently applied to the main P3-O09 artifact by default.</p><style>
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
   h1 { font-size: 16px; }
@@ -181,42 +171,32 @@
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
-  /* P3-O04-DASH-VISUAL: Phase 2's own frozen P2-L06 evidence measured a
-     real, non-hypothetical optical problem for dash/ellipsis runs
-     (glyph ink left-shifted within its own logical cell) and explicitly
-     applied no correction, since no Human Product decision on the exact
-     fix existed. Rather than relying on font-glyph ink at all (font
-     availability/metrics are outside this Renderer's control, and the
-     documented issue was never root-caused), DASH runs are painted as a
-     simple, centered, continuous bar spanning the run's own already-
-     canonical extent (unit-ink's box height, itself derived from
-     GeometryTick like everything else) -- guaranteed visually continuous
-     and centered by construction, never dependent on unverifiable font/
-     browser behavior. The real "――" text stays in the DOM unchanged
-     (source/semantic identity preserved) but its own ink is hidden
-     (color:transparent) since the bar is the visible representation.
-     ELLIPSIS/TWO_DOT_LEADER are explicitly untouched (P3-O05 remains its
-     own, separate, still-OPEN item).
+  /* P3-O04-DASH-VISUAL history (full detail: qa/evidence/P3_O04_DASH_VISUAL.md):
+     Phase 2's own frozen P2-L06 evidence measured a real, non-hypothetical
+     optical problem for dash/ellipsis runs (glyph ink left-shifted within
+     its own logical cell), never corrected. Two geometric-bar strategies
+     (a solid CSS bar, then an opacity-reduced variant) were tried and
+     BOTH REJECTED by Human Visual QA -- the solid bar read as a page
+     rule/border, not prose punctuation; the opacity variant read as pale/
+     blurred. Human confirmed the native font glyph's own stroke weight is
+     the right visual direction, but the SHARED-TEXT-NODE rendering left a
+     visible seam between the run's two "―" characters.
 
-     P3-O04-DASH-STROKE-WEIGHT-HOLD: Human Visual QA rejected the original
-     stroke thickness (12% of the unit's own cross-axis box width, itself
-     the line's per-cell width) as far too heavy -- it read as a page rule/
-     border, not publication-like prose punctuation. The stroke thickness
-     formula is now expressed as an em value (bodyEmPaintSize times a
-     relativeStrokeFactor) rather than a box-relative percentage: since
-     .unit's own inline font-size is already set to the canonical
-     fontSizePx, an em-unit width on this descendant resolves directly
-     against that SAME already-tickToPx-scaled body metric -- proportional
-     to Preview scale by construction, never a fixed disconnected px
-     value, and now tied explicitly to the body font metric the task's own
-     preferred formula names, not to box width (a related but indirect
-     quantity in this specific 1-cell-wide case). relativeStrokeFactor is
-     picked as the middle of a 3-candidate comparison (thin/medium-thin/
-     lighter-than-original) generated for Human confirmation -- see
-     qa/visual/p3-o04-dash-weight-comparison/ and
-     qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD section. */
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; }
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after { content: none; }
+     P3-O04-DASH-SEAM-HOLD: DASH runs (only) are now split into one paint
+     node PER GRAPHEME (unit.dashGlyphs, computed in paintModel.ts's
+     dashGlyphsFor from the run's own already-canonical heightPx --
+     never a Core change, never a re-tokenization, the SemanticRunUnit
+     stays exactly one atom throughout). Each glyph node uses REAL font
+     glyph ink (no color:transparent, no painted bar, no opacity trick) --
+     .dash-glyph below only positions each grapheme; it paints nothing
+     of its own. Consecutive glyph nodes overlap by a small, em-relative
+     amount (paintModel.ts's own dashOverlapEm) to visually close the
+     seam, while the FIRST glyph's own top and the LAST glyph's own
+     bottom still span the full canonical run extent exactly -- the
+     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
+     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
+  .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -250,7 +230,7 @@
   .debug .ruby-annotation-pending { font-size: 8px; color: #06c; background: #eef6ff; padding: 0 2px; }
   .debug-info { display: none; position: absolute; left: 100%; top: 0; white-space: nowrap; font-size: 9px; background: #222; color: #0f0; padding: 1px 3px; z-index: 5; pointer-events: none; }
   .debug .debug-info { display: block; }
-</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-native-comparison"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink">――<span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div><div class="cand"><h2>C — native glyph + seam-tightening + speculative centering nudge (EXPERIMENTAL, not proven)</h2><p class="desc">Same seam correction as B, plus a small, disclosed, UNVERIFIED cross-axis nudge (transform:translateX(-0.03em)) attempting to address the P2-L06-documented off-center concern. This value is NOT backed by a live re-measurement in this Renderer's own structure (none is available in this environment) -- it is offered only as a labeled experiment for Human visual judgment, not a claimed correction. If it looks wrong, reject it -- it carries no evidentiary weight beyond 'worth trying'.</p><style>
+</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-seam-0.12"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink"><span class="dash-glyph" style="top:0;height:22.258998425196857px">―</span><span class="dash-glyph" style="top:19.739111811023626px;height:22.258998425196857px">―</span><span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div><div class="cand"><h2>C — stronger overlap (0.16em)</h2><p class="desc">Largest overlap tried. Watch specifically for a dark knot/blob at the join or a visually doubled-heavy stroke -- if present, this candidate fails regardless of continuity.</p><style>
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
   h1 { font-size: 16px; }
@@ -307,42 +287,32 @@
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
-  /* P3-O04-DASH-VISUAL: Phase 2's own frozen P2-L06 evidence measured a
-     real, non-hypothetical optical problem for dash/ellipsis runs
-     (glyph ink left-shifted within its own logical cell) and explicitly
-     applied no correction, since no Human Product decision on the exact
-     fix existed. Rather than relying on font-glyph ink at all (font
-     availability/metrics are outside this Renderer's control, and the
-     documented issue was never root-caused), DASH runs are painted as a
-     simple, centered, continuous bar spanning the run's own already-
-     canonical extent (unit-ink's box height, itself derived from
-     GeometryTick like everything else) -- guaranteed visually continuous
-     and centered by construction, never dependent on unverifiable font/
-     browser behavior. The real "――" text stays in the DOM unchanged
-     (source/semantic identity preserved) but its own ink is hidden
-     (color:transparent) since the bar is the visible representation.
-     ELLIPSIS/TWO_DOT_LEADER are explicitly untouched (P3-O05 remains its
-     own, separate, still-OPEN item).
+  /* P3-O04-DASH-VISUAL history (full detail: qa/evidence/P3_O04_DASH_VISUAL.md):
+     Phase 2's own frozen P2-L06 evidence measured a real, non-hypothetical
+     optical problem for dash/ellipsis runs (glyph ink left-shifted within
+     its own logical cell), never corrected. Two geometric-bar strategies
+     (a solid CSS bar, then an opacity-reduced variant) were tried and
+     BOTH REJECTED by Human Visual QA -- the solid bar read as a page
+     rule/border, not prose punctuation; the opacity variant read as pale/
+     blurred. Human confirmed the native font glyph's own stroke weight is
+     the right visual direction, but the SHARED-TEXT-NODE rendering left a
+     visible seam between the run's two "―" characters.
 
-     P3-O04-DASH-STROKE-WEIGHT-HOLD: Human Visual QA rejected the original
-     stroke thickness (12% of the unit's own cross-axis box width, itself
-     the line's per-cell width) as far too heavy -- it read as a page rule/
-     border, not publication-like prose punctuation. The stroke thickness
-     formula is now expressed as an em value (bodyEmPaintSize times a
-     relativeStrokeFactor) rather than a box-relative percentage: since
-     .unit's own inline font-size is already set to the canonical
-     fontSizePx, an em-unit width on this descendant resolves directly
-     against that SAME already-tickToPx-scaled body metric -- proportional
-     to Preview scale by construction, never a fixed disconnected px
-     value, and now tied explicitly to the body font metric the task's own
-     preferred formula names, not to box width (a related but indirect
-     quantity in this specific 1-cell-wide case). relativeStrokeFactor is
-     picked as the middle of a 3-candidate comparison (thin/medium-thin/
-     lighter-than-original) generated for Human confirmation -- see
-     qa/visual/p3-o04-dash-weight-comparison/ and
-     qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD section. */
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; transform: translateX(-0.03em); }
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after { content: none; }
+     P3-O04-DASH-SEAM-HOLD: DASH runs (only) are now split into one paint
+     node PER GRAPHEME (unit.dashGlyphs, computed in paintModel.ts's
+     dashGlyphsFor from the run's own already-canonical heightPx --
+     never a Core change, never a re-tokenization, the SemanticRunUnit
+     stays exactly one atom throughout). Each glyph node uses REAL font
+     glyph ink (no color:transparent, no painted bar, no opacity trick) --
+     .dash-glyph below only positions each grapheme; it paints nothing
+     of its own. Consecutive glyph nodes overlap by a small, em-relative
+     amount (paintModel.ts's own dashOverlapEm) to visually close the
+     seam, while the FIRST glyph's own top and the LAST glyph's own
+     bottom still span the full canonical run extent exactly -- the
+     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
+     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
+  .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -376,4 +346,4 @@
   .debug .ruby-annotation-pending { font-size: 8px; color: #06c; background: #eef6ff; padding: 0 2px; }
   .debug-info { display: none; position: absolute; left: 100%; top: 0; white-space: nowrap; font-size: 9px; background: #222; color: #0f0; padding: 1px 3px; z-index: 5; pointer-events: none; }
   .debug .debug-info { display: block; }
-</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-native-comparison"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink">――<span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div></body></html>
+</style><h1>P3-O09 Preview Renderer Foundation — NORMAL PREVIEW</h1><div class="app"><section class="fixture" id="dash-seam-0.16"><h2>彼は――そう言った。</h2><div class="page-row"><div class="page" style="width:62.99716535433072px;height:209.99055118110238px"><div class="column" style="right:0;width:62.99716535433072px;height:209.99055118110238px"><div class="line" style="right:0;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">彼</span></div><div class="unit kind-TEXT" style="top:41.998110236220484px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">は</span></div><div class="unit kind-SEMANTIC_RUN semantic-dash" style="top:62.99716535433072px;height:41.998110236220484px;font-size:20.999055118110242px"><span class="unit-ink"><span class="dash-glyph" style="top:0;height:22.67897952755906px">―</span><span class="dash-glyph" style="top:19.319130708661422px;height:22.67897952755906px">―</span><span class="provisional-badge">prov</span></span></div><div class="unit kind-TEXT" style="top:104.99527559055119px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">そ</span></div><div class="unit kind-TEXT" style="top:125.99433070866144px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">う</span></div><div class="unit kind-TEXT" style="top:146.99338582677166px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">言</span></div><div class="unit kind-TEXT" style="top:167.99244094488193px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">っ</span></div></div><div class="line" style="right:20.999055118110242px;width:20.999055118110242px;height:209.99055118110238px"><div class="unit kind-TEXT" style="top:0;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">た</span></div><div class="unit kind-TEXT" style="top:20.999055118110242px;height:20.999055118110242px;font-size:20.999055118110242px"><span class="unit-ink">。</span></div></div></div></div></div></section></div></div></body></html>

@@ -74,51 +74,32 @@ const STYLE = `
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
-  /* P3-O04-DASH-VISUAL: Phase 2's own frozen P2-L06 evidence measured a
-     real, non-hypothetical optical problem for dash/ellipsis runs
-     (glyph ink left-shifted within its own logical cell) and explicitly
-     applied no correction, since no Human Product decision on the exact
-     fix existed. Rather than relying on font-glyph ink at all (font
-     availability/metrics are outside this Renderer's control, and the
-     documented issue was never root-caused), DASH runs are painted as a
-     simple, centered, continuous bar spanning the run's own already-
-     canonical extent (unit-ink's box height, itself derived from
-     GeometryTick like everything else) -- guaranteed visually continuous
-     and centered by construction, never dependent on unverifiable font/
-     browser behavior. The real "――" text stays in the DOM unchanged
-     (source/semantic identity preserved) but its own ink is hidden
-     (color:transparent) since the bar is the visible representation.
-     ELLIPSIS/TWO_DOT_LEADER are explicitly untouched (P3-O05 remains its
-     own, separate, still-OPEN item).
+  /* P3-O04-DASH-VISUAL history (full detail: qa/evidence/P3_O04_DASH_VISUAL.md):
+     Phase 2's own frozen P2-L06 evidence measured a real, non-hypothetical
+     optical problem for dash/ellipsis runs (glyph ink left-shifted within
+     its own logical cell), never corrected. Two geometric-bar strategies
+     (a solid CSS bar, then an opacity-reduced variant) were tried and
+     BOTH REJECTED by Human Visual QA -- the solid bar read as a page
+     rule/border, not prose punctuation; the opacity variant read as pale/
+     blurred. Human confirmed the native font glyph's own stroke weight is
+     the right visual direction, but the SHARED-TEXT-NODE rendering left a
+     visible seam between the run's two "―" characters.
 
-     P3-O04-DASH-STROKE-WEIGHT-HOLD: Human Visual QA rejected the original
-     stroke thickness (12% of the unit's own cross-axis box width, itself
-     the line's per-cell width) as far too heavy -- it read as a page rule/
-     border, not publication-like prose punctuation. The stroke thickness
-     formula is now expressed as an em value (bodyEmPaintSize times a
-     relativeStrokeFactor) rather than a box-relative percentage: since
-     .unit's own inline font-size is already set to the canonical
-     fontSizePx, an em-unit width on this descendant resolves directly
-     against that SAME already-tickToPx-scaled body metric -- proportional
-     to Preview scale by construction, never a fixed disconnected px
-     value, and now tied explicitly to the body font metric the task's own
-     preferred formula names, not to box width (a related but indirect
-     quantity in this specific 1-cell-wide case). relativeStrokeFactor is
-     picked as the middle of a 3-candidate comparison (thin/medium-thin/
-     lighter-than-original) generated for Human confirmation -- see
-     qa/visual/p3-o04-dash-weight-comparison/ and
-     qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD section. */
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; color: transparent; }
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0.06em;
-    background: #111;
-  }
+     P3-O04-DASH-SEAM-HOLD: DASH runs (only) are now split into one paint
+     node PER GRAPHEME (unit.dashGlyphs, computed in paintModel.ts's
+     dashGlyphsFor from the run's own already-canonical heightPx --
+     never a Core change, never a re-tokenization, the SemanticRunUnit
+     stays exactly one atom throughout). Each glyph node uses REAL font
+     glyph ink (no color:transparent, no painted bar, no opacity trick) --
+     .dash-glyph below only positions each grapheme; it paints nothing
+     of its own. Consecutive glyph nodes overlap by a small, em-relative
+     amount (paintModel.ts's own dashOverlapEm) to visually close the
+     seam, while the FIRST glyph's own top and the LAST glyph's own
+     bottom still span the full canonical run extent exactly -- the
+     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
+     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
+  .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -162,7 +143,9 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
   const debugText =
     `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
     (unit.semanticRunKind
-      ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${unit.semanticRunKind === "DASH" ? "painted-bar (font-independent)" : "native-glyph"}`
+      ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${
+          unit.semanticRunKind === "DASH" ? `native-glyph, ${unit.dashGlyphs?.length ?? 0} paint node(s), seam overlap` : "native-glyph"
+        }`
       : "");
   // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: debug-only, human-readable trace of
   // the body run's own start/end alongside the annotation's, so a future
@@ -194,6 +177,17 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           // is completely untouched; this wrapper only affects how the
           // text renders WITHIN that already-fixed box.
           <span className="tcy">{unit.text}</span>
+        ) : unit.dashGlyphs ? (
+          // P3-O04-DASH-SEAM-HOLD: one real-glyph-ink paint node per
+          // grapheme, positioned by paintModel.ts's own deterministic,
+          // em-relative overlap computation — never recalculated here,
+          // never re-deriving the split itself (the grapheme list and its
+          // positions are read back exactly as computed).
+          unit.dashGlyphs.map((g, gi) => (
+            <span key={gi} className="dash-glyph" style={{ top: g.topPx, height: g.heightPx }}>
+              {g.text}
+            </span>
+          ))
         ) : (
           unit.text
         )}

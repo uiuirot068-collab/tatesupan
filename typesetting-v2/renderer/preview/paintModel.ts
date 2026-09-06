@@ -95,7 +95,21 @@ export interface PaintPlacedUnit {
   // TWO_DOT_LEADER without re-tokenizing the source, the same
   // never-recompute convention already used for ruby/image.
   semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER"; // SEMANTIC_RUN units only
+  // P3-O04-DASH-SEAM-HOLD: DASH runs only. The run's own already-canonical
+  // extent (this unit's own topPx/heightPx, from Core's yTick/advanceTick —
+  // completely unchanged) is subdivided into one paint node per grapheme,
+  // with a small deterministic overlap between consecutive glyphs to close
+  // the seam a shared-text-node rendering left visible. Paint-only: this
+  // never touches SemanticRunUnit, SourceSpan, or canonical occupancy —
+  // Core still sees and composes exactly one atomic run.
+  dashGlyphs?: DashGlyphPaint[];
   debug: PaintDebugInfo;
+}
+
+export interface DashGlyphPaint {
+  text: string; // one grapheme of the dash run's own text
+  topPx: number; // relative to this PaintPlacedUnit's own topPx (0-based)
+  heightPx: number;
 }
 
 export interface PaintLine {
@@ -149,7 +163,19 @@ export interface PreviewRenderContext {
   measurementIdentity: string;
   paintFontIdentity: string;
   imageResolver?: ImageResolver;
+  // P3-O04-DASH-SEAM-HOLD: per-seam overlap between consecutive dash-run
+  // glyph paint nodes, expressed in em (relative to the body font metric,
+  // never a fixed disconnected px value) — defaults to
+  // DEFAULT_DASH_OVERLAP_EM when omitted. Renderer-only paint tuning;
+  // never read by Core, never fed back from a browser measurement.
+  dashOverlapEm?: number;
 }
+
+// Interim default (the "moderate" candidate of a 3-way Human comparison,
+// qa/visual/p3-o04-dash-weight-comparison/ — see
+// qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD sections for the full
+// history of rejected alternatives before this one).
+export const DEFAULT_DASH_OVERLAP_EM = 0.12;
 
 export interface PaintDocument {
   id: string;
@@ -249,6 +275,41 @@ function rubyAnnotationFor(owner: LogicalUnit & { kind: "RUBY" }, placed: Placed
   };
 }
 
+// P3-O04-DASH-SEAM-HOLD: a DASH SemanticRunUnit composes as exactly one
+// atom and paints as one text node (confirmed by direct audit,
+// qa/evidence/P3_O04_DASH_VISUAL.md §17) — there is no independently-
+// positioned per-character element to "overlap." This subdivides that ONE
+// atom's own already-canonical box (`heightPx`, itself `tickToPx`-derived
+// from Core's own `advanceTick`, completely untouched) into N deterministic
+// paint slots (N = grapheme count of the run's own text — never a guessed
+// or hardcoded count), with a small overlap between consecutive slots
+// expressed in em (relative to the body font metric) to visually close the
+// seam a single shared text node would otherwise leave. The first slot
+// always starts at 0 and the last slot always ends at exactly `heightPx`
+// — the canonical run's own painted length is never shortened, only the
+// INTERNAL boundary between glyphs shifts. This is Renderer-paint-only:
+// SemanticRunUnit, SourceSpan, and canonical occupancy are never read,
+// mutated, or duplicated by this function — it only reads back the ALREADY
+// -computed `heightPx` and the already-sliced `text` string.
+function dashGlyphsFor(text: string, heightPx: number, ctx: PreviewRenderContext): DashGlyphPaint[] {
+  const graphemes = Array.from(text);
+  const n = graphemes.length;
+  if (n === 0) return [];
+  if (n === 1) return [{ text: graphemes[0], topPx: 0, heightPx }];
+
+  const fontSizePx = tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier);
+  const overlapPx = (ctx.dashOverlapEm ?? DEFAULT_DASH_OVERLAP_EM) * fontSizePx;
+  const nominalGlyphHeight = heightPx / n;
+
+  return graphemes.map((glyph, i) => {
+    const isFirst = i === 0;
+    const isLast = i === n - 1;
+    const top = i * nominalGlyphHeight - (isFirst ? 0 : overlapPx / 2);
+    const extraHeight = (isFirst ? 0 : overlapPx / 2) + (isLast ? 0 : overlapPx / 2);
+    return { text: glyph, topPx: top, heightPx: nominalGlyphHeight + extraHeight };
+  });
+}
+
 function buildPaintLine(
   line: CanonicalLine,
   lineIndex: number,
@@ -302,18 +363,22 @@ function buildPaintLine(
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
+    const text = textFor(kind, placed.sourceSpan, source);
+    const heightPx = Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1);
+    const semanticRunKind = kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? owner.runKind : undefined;
     return {
       id: placed.id,
       kind,
-      text: textFor(kind, placed.sourceSpan, source),
+      text,
       sourceSpan: placed.sourceSpan,
       topPx: tickToPx(placed.yTick + indentOffsetTicks, ctx.scaleMultiplier),
-      heightPx: Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1),
+      heightPx,
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed, ctx) } : {}),
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
-      ...(kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? { semanticRunKind: owner.runKind } : {}),
+      ...(semanticRunKind ? { semanticRunKind } : {}),
+      ...(semanticRunKind === "DASH" ? { dashGlyphs: dashGlyphsFor(text, heightPx, ctx) } : {}),
       debug: {
         pageOrder,
         columnOrder,

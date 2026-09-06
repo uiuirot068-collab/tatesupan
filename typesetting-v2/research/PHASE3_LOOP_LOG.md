@@ -1022,3 +1022,23 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to judge candidates A/B/C. P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 Native Dash Seam Continuity (2026-09-07, fourth review)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `fbb0a63` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human accepted the native-glyph stroke weight direction but found "――" visibly discontinuous (breaks in the middle). Can the seam be closed with a Renderer-internal per-glyph paint split, preserving real font ink and canonical Core semantics exactly?
+
+**METHOD:** Confirmed (again, directly) that a DASH run composes as exactly one Core atom with completely unchanged `SourceSpan`/occupancy. Implemented `paintModel.ts`'s `dashGlyphsFor(text, heightPx, ctx)`: subdivides the run's own already-canonical `heightPx` into one deterministic slot per grapheme (`Array.from(text).length`), with an em-relative overlap (`ctx.dashOverlapEm`, new optional `PreviewRenderContext` field, default `DEFAULT_DASH_OVERLAP_EM = 0.12`) between consecutive slots — the first slot starts at exactly 0, the last ends at exactly `heightPx`, so the canonical run's painted length is never shortened, only the internal glyph boundary shifts. `PreviewRenderer.tsx` renders one `<span class="dash-glyph">` per slot using real glyph ink — both prior geometric strategies (solid bar, opacity bar) were fully removed, not just deprioritized.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` §18 (full architecture description, before/after values). Regenerated the comparison artifact (retitled "P3-O04 Native Dash Seam Comparison") using the REAL mechanism (three different `dashOverlapEm` context values: 0.08/0.12/0.16em — not a CSS string hack this time). 82/82 renderer/preview tests pass (81 previous + 1 new; two existing tests updated in place to match the new mechanism); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` 0 new errors. No Core file touched.
+
+**RESULT: the per-glyph native-paint-with-overlap architecture is now the actual implementation** (confirmed by regression tests: exactly N paint nodes per N-grapheme run, first node at top 0, last node's bottom exactly equals canonical `heightPx`, genuine overlap between consecutive nodes, zero `::after`/`opacity`/`color:transparent` anywhere, canonical `heightPx` identical across all three overlap candidates). **The exact overlap value remains HOLD**, pending Human confirmation among the three regenerated candidates.
+
+**DECISION: P3-O04 — architecture resolved and implemented; overlap VALUE — HOLD, Human seam recheck required.**
+
+**WHY:** Every claim traces to a directly-computed value (grapheme count, canonical heightPx, overlap arithmetic) or a passing regression test — the architecture change (one atom, many paint nodes) was explicitly authorized by the task's own instruction that Renderer-only paint splitting is allowed as long as Core's own semantic run stays single; nothing about Core, SourceSpan, or canonical occupancy was altered.
+
+**NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to pick among overlap candidates A (0.08em) / B (0.12em, current default) / C (0.16em). P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

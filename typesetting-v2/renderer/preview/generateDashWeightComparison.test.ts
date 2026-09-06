@@ -1,30 +1,16 @@
-// P3-O04-DASH-VISUAL (third review): Human rejected BOTH geometric-bar
-// strategies previously compared here — the low-opacity bar read as pale/
-// blurred, and the solid bar read as too rule-like ("does not visually
-// belong to the surrounding typeface"). The native-glyph candidate (no
-// painted bar at all) was judged visually closer to real typography, but
-// still needs continuity (seam between the two ―― characters) and
-// centering review. Per that explicit Human direction, this file no
-// longer compares geometric-bar strategies at all — it compares three
-// NATIVE-GLYPH-based paint-position candidates only, so the primary
-// candidate always uses actual font glyph ink, never a pseudo-element
-// rectangle, never an opacity trick, never a replacement font size/weight.
-//
-// Audited first (qa/evidence/P3_O04_DASH_VISUAL.md's own §17): the "――"
-// DASH run composes as exactly ONE atom (SEMANTIC_RUN generates zero
-// internal break opportunities) and paints as ONE text node ("――", both
-// characters together) inside ONE .unit-ink box — there are no separate,
-// independently-positioned per-character elements to "overlap." The only
-// available, well-defined, canonical-extent-independent CSS lever for
-// inter-character spacing WITHIN that one text node is `letter-spacing`
-// (which works correctly along the inline axis under vertical-rl, exactly
-// like under horizontal writing). No reliable, evidence-backed CSS lever
-// for cross-axis (block-axis) centering was found without fabricating an
-// unverified pixel/em offset — Phase 2's own P2-L06 measurement was taken
-// against a different, now-superseded PoC DOM structure, not directly
-// transferable to this Renderer's own structure, and no live-browser
-// re-measurement tool is available here. Candidate C's centering nudge is
-// therefore explicitly disclosed as SPECULATIVE, not a proven correction.
+// P3-O04-DASH-SEAM-HOLD (fourth review): Human accepted the native-glyph
+// stroke weight direction but found the run visibly discontinuous — the
+// pair breaks in the middle. Root cause (qa/evidence/P3_O04_DASH_VISUAL.md
+// §17): the two dash characters shared ONE text node with no independently
+// positioned per-character elements, so there was nothing to close a seam
+// with beyond letter-spacing. This is now resolved architecturally:
+// paintModel.ts's `dashGlyphsFor` splits a DASH run's own already-canonical
+// box into one real-glyph-ink paint node per grapheme, with a small,
+// em-relative overlap between consecutive nodes — Renderer-paint-only,
+// never touching SemanticRunUnit/SourceSpan/canonical occupancy. This file
+// compares three overlap VALUES (not strategies — the strategy itself,
+// per-glyph native paint, is now the actual implementation) using the real
+// `dashOverlapEm` render-context parameter, not a CSS string hack.
 
 import { describe, expect, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -33,64 +19,32 @@ import ReactDOMServer from "react-dom/server";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
 import { PreviewFoundationArtifact } from "./PreviewRenderer";
-import { buildPaintDocument, type PreviewRenderContext } from "./paintModel";
+import { buildPaintDocument, DEFAULT_DASH_OVERLAP_EM, type PreviewRenderContext } from "./paintModel";
 import { settingsFor } from "./fixtures";
 import { DEFAULT_SCALE_MULTIPLIER } from "./geometry";
 
 const ARTIFACT_DIR = join(__dirname, "..", "..", "qa", "visual", "p3-o04-dash-weight-comparison");
 const ARTIFACT_PATH = join(ARTIFACT_DIR, "index.html");
 
-const UNIT_INK_OVERRIDE_RULE = ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; color: transparent; }";
-const AFTER_RULE_PATTERN = /\.unit\.kind-SEMANTIC_RUN\.semantic-dash \.unit-ink::after\s*\{[^}]*\}/;
-
-interface Strategy {
-  label: string;
-  description: string;
-  apply: (html: string) => string;
-}
-
-// Strips the rejected geometric-bar rules (color:transparent + ::after
-// bar), restoring the plain, already-generic `.unit-ink` rendering (real
-// glyph ink, whatever the resolved font provides) as the shared starting
-// point for every native-based candidate below.
-function withNativeGlyphBase(html: string, extraUnitInkRule: string): string {
-  if (!html.includes(UNIT_INK_OVERRIDE_RULE)) throw new Error("expected unit-ink override rule not found");
-  if (!AFTER_RULE_PATTERN.test(html)) throw new Error("expected ::after rule not found");
-  return html
-    .replace(UNIT_INK_OVERRIDE_RULE, extraUnitInkRule)
-    .replace(AFTER_RULE_PATTERN, ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after { content: none; }");
-}
-
-const STRATEGIES: Strategy[] = [
+const CANDIDATES: { label: string; description: string; overlapEm: number }[] = [
   {
-    label: "A — native glyph, no correction at all (baseline)",
-    description:
-      "Real ―― font glyph ink, no painted bar, no opacity change, no letter-spacing, no transform -- exactly the same generic rendering every other unit kind already gets. Establishes whether the historical Phase 2 P2-L06 off-center/seam concerns (measured in a different, now-superseded PoC DOM structure) recur in THIS Renderer's own structure at all before any correction is attempted.",
-    apply: (html) => withNativeGlyphBase(html, ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }"),
+    label: `A — minimal overlap (0.08em)`,
+    description: "Smallest overlap tried. If a seam is still visible here, a larger value is needed; if the join already looks clean, prefer this one (less overlap means less risk of a doubled-ink join).",
+    overlapEm: 0.08,
   },
   {
-    label: "B — native glyph + seam-tightening only (letter-spacing, no centering change)",
-    description:
-      "Same real glyph ink as A. Adds letter-spacing:-0.05em -- a well-defined CSS lever that reduces the INLINE-axis (vertical, under writing-mode:vertical-rl) gap BETWEEN the two ― characters within their one shared text node, addressing a possible seam from the font's own glyph side-bearing without touching canonical run extent, cross-axis position, or surrounding text. No cross-axis (centering) change in this candidate.",
-    apply: (html) =>
-      withNativeGlyphBase(
-        html,
-        ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; }"
-      ),
+    label: `B — moderate overlap (${DEFAULT_DASH_OVERLAP_EM}em, current interim default)`,
+    description: "The value currently applied to the main P3-O09 artifact by default.",
+    overlapEm: DEFAULT_DASH_OVERLAP_EM,
   },
   {
-    label: "C — native glyph + seam-tightening + speculative centering nudge (EXPERIMENTAL, not proven)",
-    description:
-      "Same seam correction as B, plus a small, disclosed, UNVERIFIED cross-axis nudge (transform:translateX(-0.03em)) attempting to address the P2-L06-documented off-center concern. This value is NOT backed by a live re-measurement in this Renderer's own structure (none is available in this environment) -- it is offered only as a labeled experiment for Human visual judgment, not a claimed correction. If it looks wrong, reject it -- it carries no evidentiary weight beyond 'worth trying'.",
-    apply: (html) =>
-      withNativeGlyphBase(
-        html,
-        ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; transform: translateX(-0.03em); }"
-      ),
+    label: "C — stronger overlap (0.16em)",
+    description: "Largest overlap tried. Watch specifically for a dark knot/blob at the join or a visually doubled-heavy stroke -- if present, this candidate fails regardless of continuity.",
+    overlapEm: 0.16,
   },
 ];
 
-function buildComparisonModel(id: string) {
+function buildComparisonModel(id: string, overlapEm: number) {
   const measurement = createFakeMeasurementProvider();
   const { units, source } = buildFixtureUnits("body", [
     { kind: "TEXT", text: "彼は" },
@@ -108,17 +62,16 @@ function buildComparisonModel(id: string) {
     nominalCellTicks: settings.linePitchTicks,
     measurementIdentity: document.version.measurementIdentity,
     paintFontIdentity: document.version.measurementIdentity,
+    dashOverlapEm: overlapEm,
   };
   return buildPaintDocument(id, "彼は――そう言った。", document, units, source, ctx);
 }
 
-describe("P3-O04 Native Dash Paint Comparison (Human comparison artifact, third review)", () => {
-  it("generates a 3-candidate NATIVE DASH PAINT COMPARISON — real glyph ink only, no geometric bar, no opacity trick, differing only in paint-only seam/centering correction", () => {
-    const model = buildComparisonModel("dash-native-comparison");
-    const baseHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [model], mode: "normal" }));
-
-    const sections = STRATEGIES.map(({ label, description, apply }) => {
-      const html = apply(baseHtml);
+describe("P3-O04 Native Dash Seam Comparison (Human comparison artifact, fourth review)", () => {
+  it("generates a 3-candidate seam-overlap comparison using the real dashOverlapEm render-context parameter — same phrase, same font, same scale, only overlap differs", () => {
+    const sections = CANDIDATES.map(({ label, description, overlapEm }) => {
+      const model = buildComparisonModel(`dash-seam-${overlapEm}`, overlapEm);
+      const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [model], mode: "normal" }));
       const bodyStart = html.indexOf("<body");
       const bodyContent = html.slice(html.indexOf(">", bodyStart) + 1, html.indexOf("</body>"));
       const styleMatch = html.match(/<style>[\s\S]*?<\/style>/);
@@ -126,40 +79,43 @@ describe("P3-O04 Native Dash Paint Comparison (Human comparison artifact, third 
     });
 
     const combined =
-      '<!doctype html><html lang="ja"><head><meta charSet="utf-8"/><title>P3-O04 Native Dash Paint Comparison</title>' +
-      "<style>body{font-family:sans-serif;margin:0;padding:20px;background:#fafafa;} h1{font-size:16px;} h2{font-size:13px;margin:24px 0 4px;} p.desc{font-size:11px;color:#666;max-width:640px;margin:0 0 8px;} .cand{border-top:2px solid #333;padding-top:8px;} .warn{color:#a00;font-weight:bold;}</style>" +
+      '<!doctype html><html lang="ja"><head><meta charSet="utf-8"/><title>P3-O04 Native Dash Seam Comparison</title>' +
+      "<style>body{font-family:sans-serif;margin:0;padding:20px;background:#fafafa;} h1{font-size:16px;} h2{font-size:13px;margin:24px 0 4px;} p.desc{font-size:11px;color:#666;max-width:640px;margin:0 0 8px;} .cand{border-top:2px solid #333;padding-top:8px;}</style>" +
       "</head><body>" +
-      '<h1>NATIVE DASH PAINT COMPARISON — real font glyph ink only (geometric-bar and opacity strategies were rejected by Human Visual QA and are not shown here)</h1>' +
-      '<p style="font-size:12px;color:#555;">Non-Production comparison artifact. Same font, same page scale, same canonical geometry, same source, same run length throughout — only native-glyph paint-position correction differs per section. Candidate C\'s centering nudge is <span class="warn">experimental and unverified</span>.</p>' +
+      "<h1>P3-O04 Native Dash Seam Comparison — same phrase, same font, same scale; only inter-glyph overlap differs</h1>" +
+      '<p style="font-size:12px;color:#555;">Non-Production comparison artifact. Real font glyph ink throughout (no geometric bar, no opacity trick, no font-size/weight change) — each candidate uses a different dashOverlapEm value only.</p>' +
       sections.map((s) => `<div class="cand"><h2>${s.label}</h2><p class="desc">${s.description}</p>${s.style}${s.body}</div>`).join("") +
       "</body></html>";
 
-    expect(combined).toContain("NATIVE DASH PAINT COMPARISON");
-    expect(combined).toContain("A — native glyph, no correction at all");
-    expect(combined).toContain("B — native glyph + seam-tightening only");
-    expect(combined).toContain("C — native glyph + seam-tightening + speculative centering nudge");
-
-    // None of the three candidates may reintroduce the rejected geometric
-    // bar or an opacity trick.
-    expect(combined).not.toContain("content: \"\"");
+    expect(combined).toContain("A — minimal overlap (0.08em)");
+    expect(combined).toContain(`B — moderate overlap (${DEFAULT_DASH_OVERLAP_EM}em`);
+    expect(combined).toContain("C — stronger overlap (0.16em)");
+    expect(combined).not.toContain("::after");
     expect(combined).not.toContain("opacity:");
-    expect(combined).not.toContain("background: #111");
-
-    // A: no letter-spacing, no transform.
-    expect(combined).toContain(".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }");
-    // B: letter-spacing only, no transform.
-    expect(combined).toContain(".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; }");
-    // C: letter-spacing + transform.
-    expect(combined).toContain(
-      ".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; letter-spacing: -0.05em; transform: translateX(-0.03em); }"
-    );
-
-    // The real "――" text is preserved (source/semantic identity), visible
-    // as actual glyph ink (no color:transparent anywhere in this artifact).
     expect(combined).not.toContain("color: transparent");
-    expect(combined).toContain("――");
+    // Real "――" glyphs present, split into individual paint nodes.
+    const dashGlyphCount = (combined.match(/class="dash-glyph"/g) ?? []).length;
+    expect(dashGlyphCount).toBe(6); // 2 glyphs x 3 candidates
 
     mkdirSync(ARTIFACT_DIR, { recursive: true });
     writeFileSync(ARTIFACT_PATH, combined, "utf-8");
+  });
+
+  it("the three candidates produce genuinely different overlap geometry (not just different labels) — larger overlapEm shrinks each glyph's own start-to-start distance and increases its own height", () => {
+    const models = CANDIDATES.map((c) => buildComparisonModel(`dash-seam-${c.overlapEm}`, c.overlapEm));
+    const dashUnitsOf = (m: ReturnType<typeof buildComparisonModel>) =>
+      m.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
+
+    const [a, b, c] = models.map(dashUnitsOf);
+    // Larger overlap -> second glyph starts EARLIER (more negative offset
+    // from the nominal half-way point) and each glyph's own height grows.
+    expect(a.dashGlyphs![1].topPx).toBeGreaterThan(b.dashGlyphs![1].topPx);
+    expect(b.dashGlyphs![1].topPx).toBeGreaterThan(c.dashGlyphs![1].topPx);
+    expect(a.dashGlyphs![0].heightPx).toBeLessThan(b.dashGlyphs![0].heightPx);
+    expect(b.dashGlyphs![0].heightPx).toBeLessThan(c.dashGlyphs![0].heightPx);
+    // Canonical run extent (the unit's own heightPx) is identical across
+    // all three -- only the INTERNAL glyph split changes.
+    expect(a.heightPx).toBe(b.heightPx);
+    expect(b.heightPx).toBe(c.heightPx);
   });
 });
