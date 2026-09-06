@@ -569,3 +569,19 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` and `typesetting-v2/qa/evidence/P3_G1_CANONICAL_CORE_EVIDENCE.md` are updated to reflect both fixes. Human Gate G1 remains PENDING — no Human answer has been filled in by this or the prior session. Master is not modified. Phase 3 is not closed. No further Core Loop begins until G1 is answered.
 
 ---
+
+## P3-L15 — Human Gate G1 Closeout (2026-09-06)
+
+**QUESTION:** Has the Product Owner reviewed `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` (and its evidence companion) and rendered a decision on the Canonical Logical Core milestone?
+
+**RESULT:** Yes. The Product Owner answered "全部OK" (all OK), recorded as **9/9 YES** across the full scorecard (G1-1 through G1-9) in `P3_G1_CANONICAL_CORE_REVIEW.md` §16.
+
+**DECISION: HUMAN GATE G1 — PASS.** The Canonical Logical Core milestone (P3-L04 through P3-L15, executed numbering, plus the P3-L15A gap closure) is approved to proceed toward Renderer/comparison work. This approval is scoped exactly to what the review document evidenced — it does not itself authorize any Renderer implementation, `src/` integration, P3-O12 resolution, or F06 implementation; each remains its own future, separate decision.
+
+**OPEN ITEMS — retained, unchanged by this approval:** P3-O03 (TCY visual renderer), P3-O04 (dash visual alignment), P3-O05 (ellipsis visual alignment), P3-O06 residual (exact ruby overhang values), P3-O07 (TCY auto-detection), P3-O08 (Publication/PDF renderer), P3-O09 (Preview renderer), **P3-O12 (real preset capacity/mm geometry — still explicitly OPEN; "8-preset logical/schema support: PASS" is not "final preset geometry: PASS")**, P3-O14 (jukugo automatic segmentation), P3-O15 (group-ruby distinct rule), F06 (logical hanging composition, Category B — Expected Deferred / Later Logical Stage, still not implemented). None of these are closed, narrowed, or upgraded by G1 approval.
+
+**WHY:** The approval was given after the review document's own explicit disclosures (§14 open items, §15 P3-O12 warning) were presented, not despite them being hidden — the Human Gate exists specifically so a real person judges the *disclosed* state, and that is what happened here.
+
+**NEXT:** Renderer readiness is NOT the same as Renderer completion — no Preview or Publication Renderer work has begun. The next v2 stage (which Renderer/integration Loop to start, if any) is a separate decision, not implied by this closeout. `src/` remains untouched. Master remains v1.8, unmodified — this closeout requires no requirements change, only a Human-Gate status record.
+
+---

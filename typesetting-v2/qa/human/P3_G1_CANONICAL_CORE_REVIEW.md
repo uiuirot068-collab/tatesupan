@@ -1,8 +1,9 @@
 # P3-L15 — Canonical Core Regression Suite — Human Gate G1 Review
 
-- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PENDING.**
+- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PASS — 9/9 YES (2026-09-06).**
 - This document is written for a non-engineer reviewer. It does not require reading source code.
 - **Update (P3-L15A):** the image-placement gap first found while preparing this review (§14 below) has been fixed and re-verified — images now consume real page space. The hanging-punctuation item (§14) has been precisely classified as a deliberately deferred, already-planned future item — not a surprise gap.
+- **Human Gate G1 result:** the Product Owner reviewed this document — including the OPEN-items disclosure (§14) and the P3-O12 preset-geometry warning (§15) — and answered all 9 scorecard questions YES (recorded verbatim as "全部OK"). See the completed scorecard, §16, below. **This approval does not resolve, close, or upgrade any OPEN item** — every item listed in §14/§15 remains exactly as OPEN as before this approval; G1 approves the Canonical Logical Core milestone itself, not any of its disclosed open items.
 
 ## 1. What G1 is judging
 
@@ -115,18 +116,22 @@ This milestone proves the Core's logical machinery can accept and process all 8 
 
 **Do not read "8 presets: PASS" as "final preset page geometry is validated." It is not.**
 
-## 16. Human Gate G1 Scorecard (unanswered — awaiting your review)
+## 16. Human Gate G1 Scorecard — ANSWERED (2026-09-06)
+
+**Result: PASS — 9/9 YES.** The Product Owner answered "全部OK" (all OK) to every question below, after reviewing this document including the OPEN-items disclosure (§14) and the P3-O12 preset-geometry warning (§15).
 
 | # | Question | Answer |
 |---|---|---|
-| G1-1 | Can you follow why the Core broke the representative text where it did? | ☐ YES ☐ NO |
-| G1-2 | Does the page/column logical flow look internally consistent? | ☐ YES ☐ NO |
-| G1-3 | Is source mapping visibly preserved through the example? | ☐ YES ☐ NO |
-| G1-4 | Does Natural Pitch behave as intended (no page-fill stretching)? | ☐ YES ☐ NO |
-| G1-5 | Are Ruby / TCY / dash / ellipsis being treated as the intended logical groups? | ☐ YES ☐ NO |
-| G1-6 | Does manual page break produce the expected logical page transition? | ☐ YES ☐ NO |
-| G1-7 | Does the HOLD example correctly stop unsafe canonical approval? | ☐ YES ☐ NO |
-| G1-8 | Are the remaining OPEN items clearly distinguished from PASSed Core work? | ☐ YES ☐ NO |
-| G1-9 | Approve the Canonical Logical Core milestone to proceed toward renderer/comparison work? | ☐ YES ☐ NO |
+| G1-1 | Can you follow why the Core broke the representative text where it did? | ☑ YES ☐ NO |
+| G1-2 | Does the page/column logical flow look internally consistent? | ☑ YES ☐ NO |
+| G1-3 | Is source mapping visibly preserved through the example? | ☑ YES ☐ NO |
+| G1-4 | Does Natural Pitch behave as intended (no page-fill stretching)? | ☑ YES ☐ NO |
+| G1-5 | Are Ruby / TCY / dash / ellipsis being treated as the intended logical groups? | ☑ YES ☐ NO |
+| G1-6 | Does manual page break produce the expected logical page transition? | ☑ YES ☐ NO |
+| G1-7 | Does the HOLD example correctly stop unsafe canonical approval? | ☑ YES ☐ NO |
+| G1-8 | Are the remaining OPEN items clearly distinguished from PASSed Core work? | ☑ YES ☐ NO |
+| G1-9 | Approve the Canonical Logical Core milestone to proceed toward renderer/comparison work? | ☑ YES ☐ NO |
+
+**This approval covers the Canonical Logical Core milestone as evidenced in this document and its companion (`typesetting-v2/qa/evidence/P3_G1_CANONICAL_CORE_EVIDENCE.md`) only.** It does not authorize Renderer implementation, P3-O12 resolution, F06 implementation, Editor↔Core integration, UI-C, or any `src/` change — each remains a separate, future decision. Every item in §14/§15 remains exactly as OPEN as it was before this approval.
 
 See `typesetting-v2/qa/evidence/P3_G1_CANONICAL_CORE_EVIDENCE.md` for the full machine-checked evidence backing every claim above.
