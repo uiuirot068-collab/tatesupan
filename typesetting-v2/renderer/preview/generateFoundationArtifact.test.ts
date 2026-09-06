@@ -176,4 +176,91 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
     const bodyPaintModel = buildPaintDocument("id", "label", document, f20.bodyUnits, f20.source, ctx);
     for (const page of bodyPaintModel.pages) expect(page.orientation).toBe("vertical");
   });
+
+  // P3-O09-PAGE-CONTENT-CLIPPING-HOLD regression guards. Root cause was
+  // proven NOT to be Core/view-model geometry (every placed unit's own
+  // bottom/right edge is already <= its page's own heightPx/widthPx for
+  // every line of F20 and every page of long-prose, checked directly
+  // against PaintDocument's own px fields — Core never places content past
+  // canonical page/column/line extent, and the single tickToPx conversion
+  // is used consistently everywhere) — it was a CSS regression: `.unit`
+  // lacked `line-height: 1` (present in the already Human-approved Stage D
+  // `.unit` rule), so the browser's default line-height made each glyph's
+  // own rendered line box taller than its tightly-fitted (zero-margin,
+  // by-design) paint box, and `overflow: hidden` clipped the excess.
+  describe("Page Content Clipping HOLD (2026-09-07) — geometry and stylesheet regression guards", () => {
+    it("no placed unit's painted bottom/right edge ever exceeds its own page's heightPx/widthPx, across every fixture, page, column, and line", () => {
+      const models = buildAllPaintDocuments();
+      for (const model of models) {
+        for (const page of model.pages) {
+          for (const column of page.columns) {
+            for (const line of column.lines) {
+              for (const unit of line.units) {
+                expect(unit.topPx + unit.heightPx).toBeLessThanOrEqual(page.heightPx + 1e-6);
+              }
+            }
+            const lastLine = column.lines[column.lines.length - 1];
+            if (lastLine) {
+              expect(lastLine.rightPx + lastLine.widthPx).toBeLessThanOrEqual(page.widthPx + 1e-6);
+            }
+          }
+        }
+      }
+    });
+
+    it("F20: the last body paint item's bottom edge lands exactly at (never past) the page's own bottom edge — Natural Pitch's own zero-margin, generous-not-clipped fit", () => {
+      const models = buildAllPaintDocuments();
+      const f20Model = models.find((m) => m.id === "f20-canonical-sentence")!;
+      const firstPage = f20Model.pages[0];
+      const firstColumn = firstPage.columns[0];
+      const lastLine = firstColumn.lines[firstColumn.lines.length - 1];
+      const lastUnit = lastLine.units[lastLine.units.length - 1];
+      expect(lastUnit.topPx + lastUnit.heightPx).toBeLessThanOrEqual(firstPage.heightPx + 1e-6);
+    });
+
+    it("F20: the complete 56-character canonical sentence is reconstructable from ordered paint items across all lines/columns/pages — nothing lost, nothing duplicated", () => {
+      const fx = ALL_FIXTURES.find((f) => f.id === "f20-canonical-sentence")!;
+      const expected = (fx.bodyUnits[0] as { kind: "TEXT"; text: string }).text;
+      const models = buildAllPaintDocuments();
+      const f20Model = models.find((m) => m.id === "f20-canonical-sentence")!;
+      // TEXT is grapheme-atomized (one PaintPlacedUnit per character), so
+      // reconstruction concatenates ordered paint items rather than
+      // requiring any contiguous multi-character HTML substring — the same
+      // convention already established at Stage D for this exact reason.
+      const reconstructed = f20Model.pages
+        .flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)))
+        .sort((a, b) => a.sourceSpan.start - b.sourceSpan.start)
+        .map((u) => u.text)
+        .join("");
+      expect(reconstructed).toBe(expected);
+    });
+
+    it("long-prose page 0 and page 1: no clipping, and every line's content stays within its own page bounds", () => {
+      const models = buildAllPaintDocuments();
+      const longProseModel = models.find((m) => m.id === "long-prose")!;
+      expect(longProseModel.pages.length).toBeGreaterThanOrEqual(2); // at least page 0 and page 1 exist to check
+      for (const pageIndex of [0, 1]) {
+        const page = longProseModel.pages[pageIndex];
+        for (const column of page.columns) {
+          for (const line of column.lines) {
+            for (const unit of line.units) {
+              expect(unit.topPx + unit.heightPx).toBeLessThanOrEqual(page.heightPx + 1e-6);
+            }
+          }
+        }
+      }
+    });
+
+    it("the generated artifact's stylesheet gives .unit a tight line-height (1) and vertical writing-mode, matching the already Human-approved Stage D rule — regression guard against the exact CSS omission that caused this HOLD", () => {
+      const models = buildAllPaintDocuments();
+      const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models, mode: "normal" }));
+      const unitRuleMatch = html.match(/\.unit\s*\{[^}]*\}/);
+      expect(unitRuleMatch).not.toBeNull();
+      const unitRule = unitRuleMatch![0];
+      expect(unitRule).toContain("line-height: 1");
+      expect(unitRule).toContain("writing-mode: vertical-rl");
+      expect(unitRule).toContain("white-space: nowrap");
+      expect(unitRule).toContain("overflow: hidden");
+    });
+  });
 });

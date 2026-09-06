@@ -31,7 +31,23 @@ const STYLE = `
   .page.horizontal { writing-mode: horizontal-tb; }
   .column { position: absolute; top: 0; }
   .line { position: absolute; top: 0; }
-  .unit { position: absolute; left: 0; right: 0; overflow: hidden; text-align: center; }
+  /* P3-O09-PAGE-CONTENT-CLIPPING-HOLD: heightPx is deliberately a tight,
+     zero-margin fit (equal to fontSizePx, same tick-to-px conversion as
+     everything else -- Natural Pitch places content with no stretch, so a
+     full line's last character's bottom edge lands EXACTLY on the page's
+     own bottom edge). The browser's DEFAULT line-height for the body's
+     CJK serif stack is taller than font-size (often ~1.15-1.5x depending
+     on the resolved font), so without line-height:1 each glyph's own
+     rendered line box overflows this tightly-fitted box, and
+     overflow:hidden clips the excess -- cumulatively reading as "page
+     content is missing" even though every coordinate is correct (proven
+     by the no-overflow assertions this HOLD added). writing-mode is also
+     set explicitly here (not left to inherit from .page) and
+     white-space:nowrap prevents a multi-code-point grapheme from ever
+     wrapping inside its own box. Mirrors the already Human-approved
+     Stage D .unit rule (tools/preview-dev-adapter/PreviewApp.tsx), which
+     this foundation's own rewrite dropped these three properties from. */
+  .unit { position: absolute; left: 0; right: 0; overflow: hidden; writing-mode: vertical-rl; line-height: 1; white-space: nowrap; text-align: center; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   .provisional-badge { display: none; }
   .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: 0.55em; white-space: nowrap; color: #444; }

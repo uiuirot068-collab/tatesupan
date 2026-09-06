@@ -837,3 +837,26 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **NEXT:** P3-O03 (TCY visual) recommended next by dependency order (no further Core change needed, unlike ruby annotation which was blocked until this task); P3-O04/P3-O05 (dash/ellipsis optical) independently available after or alongside it; the P3-O06 exact overhang-value question remains a distinct, narrower Human Product decision for whenever Product priorities call for it — not required to proceed with P3-O03/04/05. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O09 Page Content Clipping HOLD (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `450332f` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human Visual QA reported manuscript content clipped/truncated at the bottom of essentially every rendered page in the P3-O09 NORMAL PREVIEW artifact (F20 and Long Non-Repeating Prose both cited) — which exact layer is responsible, and what is the minimal correction?
+
+**METHOD:** Traced F20 page 0 end-to-end (CanonicalDocument → page/line geometry → placed units → view model → CSS box), then swept EVERY placed unit across every line/column/page of F20 and all 3 pages of Long Non-Repeating Prose for a bottom/right-edge-vs-page-bounds violation. Found zero Core-level violations (Natural Pitch's own zero-stretch invariant means a full line's last character's bottom edge lands EXACTLY on the page's own bottom edge — an exact, not overflowing, fit) — ruling out Core geometry (A), Renderer scale inconsistency (B), and coordinate-origin double-counting (C). Directly diffed the P3-O09 `.unit` CSS rule against the already Human-approved Stage D `.unit` rule and found three properties missing (`line-height: 1`, `writing-mode: vertical-rl`, `white-space: nowrap`) that this foundation's own from-scratch rewrite had dropped. Separately, writing the required "no placed unit's bottom edge exceeds its page height" regression test surfaced a second, independent, smaller-magnitude bug: `paintModel.ts`'s DEV-ONLY last-atom height approximation could overestimate a line's final atom's height by borrowing an unrelated, wider preceding atom's own delta (reproduced concretely by `dash-ellipsis` and `image-placeholder`).
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O09_PREVIEW_RENDERER_FOUNDATION.md` "Human Visual QA — Page Content Clipping HOLD" section (full trace table, binary-check disposition, both root causes, both fixes). 5 new regression tests (`generateFoundationArtifact.test.ts`): a full no-overflow sweep across every fixture, an F20-specific edge-fit check, an F20 full-sentence paint-item reconstruction check, a Long-Prose page-0/page-1 sweep, and a direct stylesheet assertion that `.unit` carries the three restored CSS properties.
+
+**RESULT: FIXED (both root causes), category D (CSS clipping hiding otherwise-correct content) — Core and view-model coordinate math were proven correct throughout, never at fault.**
+
+1. **Root Cause 1 (dominant, matches the Human's "whole lower portions missing" report):** `.unit` lacked `line-height: 1`, so the browser's default line-height (taller than the deliberately zero-margin `heightPx = fontSizePx` box) made each glyph's own rendered line box overflow its tightly-fitted box, clipped by `overflow: hidden`. Fixed by restoring the three properties Stage D's own `.unit` rule already had and depended on.
+2. **Root Cause 2 (independent, smaller-magnitude, surfaced by writing the required regression test itself):** the last-atom height estimate's "borrow the previous atom's delta" fallback could overestimate when the previous atom was a wider unit. Fixed by clamping the estimate to the atom's own actual remaining line extent — it can only shrink an already-inexact guess toward safety, never grow it.
+
+**DECISION: Page Content Clipping — FIXED. P3-O09 machine state — PASS.**
+
+**WHY:** Root Cause 1 traces to a direct, provable diff against the already Human-approved Stage D baseline (not a guess); Root Cause 2 traces to a concretely reproduced numeric overshoot the new regression test itself caught (dash-ellipsis, image-placeholder), not a hypothetical. Neither fix touches Core, pagination, breaks, or `CanonicalDocument` — both are confined to `renderer/preview/PreviewRenderer.tsx` (CSS text) and `renderer/preview/paintModel.ts` (one clamped estimate).
+
+**NEXT:** Human recheck of the regenerated artifact (`qa/visual/p3-o09-preview/index.html`/`debug.html`). Ruby/TCY/dash/ellipsis visual-quality evaluation remains explicitly deferred until this recheck confirms ordinary body text renders without clipping. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

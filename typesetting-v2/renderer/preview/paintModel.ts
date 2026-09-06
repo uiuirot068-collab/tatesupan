@@ -272,11 +272,28 @@ function buildPaintLine(
     if (next) {
       extentTicks = next.yTick - placed.yTick;
       heightIsApproximate = false;
-    } else if (prev) {
-      extentTicks = placed.yTick - prev.yTick; // DEV-ONLY approximation, same as Stage D
-      heightIsApproximate = true;
     } else {
-      extentTicks = ctx.nominalCellTicks;
+      // P3-O09-PAGE-CONTENT-CLIPPING-HOLD: a line's LAST placed atom has no
+      // next atom to derive an exact delta from, so this DEV-ONLY estimate
+      // (never a fabricated "canonical" size) borrows either the previous
+      // atom's own delta, or a nominal single-cell fallback when this is
+      // the line's only atom. Both are only ever GUESSES about this atom's
+      // OWN extent — when the previous atom was a wider unit (a multi-cell
+      // SEMANTIC_RUN/TCY/IMAGE), naively reusing its delta could overshoot
+      // past the line's own remaining extent, pushing this atom's painted
+      // bottom edge past the page's own bottom edge (proven by
+      // generateFoundationArtifact.test.ts's "no placed unit... exceeds
+      // its own page's heightPx" regression: dash-ellipsis and
+      // image-placeholder both overshot before this clamp existed). Since
+      // Core guarantees `placed.yTick` never places this atom beyond the
+      // line's own true budget, clamping the estimate to the remaining
+      // line extent (at the atom's own painted position, indent included)
+      // can only ever SHRINK an already-wrong guess toward safety —
+      // it never grows it, and never claims a more exact value than the
+      // guess it is.
+      const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
+      const guess = prev ? placed.yTick - prev.yTick : ctx.nominalCellTicks;
+      extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
     return {

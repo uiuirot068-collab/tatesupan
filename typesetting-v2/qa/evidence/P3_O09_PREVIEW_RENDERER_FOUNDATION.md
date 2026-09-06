@@ -104,4 +104,52 @@ Not done by this foundation task (all explicitly out of scope per the task's own
 
 ## 19. Next Technical Task
 
-**Ruby Placement Micro-Loop** — wiring `core/ruby/index.ts`'s `placeRuby()` into the compose pipeline so a `PlacedUnit` (or a new, explicitly-scoped field) carries real annotation geometry. This is chosen over P3-O03/O04/O05 by dependency order, not Human preference: the final Preview Renderer cannot paint ruby annotation in any form — not even a provisionally-positioned one — without this Core-level wiring existing first, whereas TCY shaping, dash alignment, and ellipsis alignment are all pure Renderer-side visual polish that can proceed independently of any further Core change. This is a technical dependency conclusion, not a Product-behavior question, so no Human Product decision is requested for it; a Human Product decision would only become necessary if the wiring work surfaces a genuine undecided policy question (e.g., an exact overhang numeric value, already tracked separately as the P3-O06 residual).
+**Ruby Placement Micro-Loop** — wiring `core/ruby/index.ts`'s `placeRuby()` into the compose pipeline so a `PlacedUnit` (or a new, explicitly-scoped field) carries real annotation geometry. This is chosen over P3-O03/O04/O05 by dependency order, not Human preference: the final Preview Renderer cannot paint ruby annotation in any form — not even a provisionally-positioned one — without this Core-level wiring existing first, whereas TCY shaping, dash alignment, and ellipsis alignment are all pure Renderer-side visual polish that can proceed independently of any further Core change. This is a technical dependency conclusion, not a Product-behavior question, so no Human Product decision is requested for it; a Human Product decision would only become necessary if the wiring work surfaces a genuine undecided policy question (e.g., an exact overhang numeric value, already tracked separately as the P3-O06 residual). **Completed separately — see `qa/evidence/RUBY_PLACEMENT_PREVIEW_MICRO_LOOP.md`.**
+
+## Human Visual QA — Page Content Clipping HOLD (2026-09-07)
+
+**Human observation:** in the NORMAL PREVIEW artifact (`qa/visual/p3-o09-preview/index.html`), manuscript content appeared clipped/truncated at the bottom of essentially every rendered page — F20 and Long Non-Repeating Prose both showed page boxes ending while canonical manuscript content was visibly cut off. Flagged as NOT accepted behavior; investigation required proving the exact failure layer before any fix.
+
+**Method — controlled trace, F20 page 0, before any change:**
+
+| Quantity | Value |
+|---|---|
+| canonical `lineExtentTicks` | 51856 ticks |
+| painted `page.heightPx` | 293.9867716535433 px |
+| visual scale | 1.5x (`DEFAULT_SCALE_MULTIPLIER`) |
+| last canonical line index (col 0) | line 4 (5th and final line) |
+| last placed unit's own `yTick` (line 0, full line) | 48152 ticks |
+| last unit's painted `topPx` (line 0) | 272.9877165354331 px |
+| paint `fontSizePx` | 20.999055118110242 px |
+| last unit's `topPx + heightPx` | 293.9867716535433 px — **exactly equal to `page.heightPx`** |
+| Does the last canonical placed unit fit inside the painted page rectangle? | **YES**, with exactly zero residual margin (Natural Pitch, no stretch — a full line always fits its own capacity exactly) |
+
+A full sweep of every placed unit across every line/column/page of BOTH F20 and Long Non-Repeating Prose (all 3 of its pages) found **zero instances** of Core-canonical geometry placing content beyond its own line/column/page extent — every check was either an exact edge-to-edge fit or comfortably within bounds (a partially-filled last line, correctly NOT stretched to fill, per INV-004).
+
+**Critical binary check result: neither A nor B nor C.**
+- **A (Core places content past canonical extent): NO** — proven false by the full sweep above; Core's own `yTick` accounting never exceeds `lineExtentTicks`.
+- **B (Preview Renderer clips/mis-scales the page): ruled out as the primary cause** — page/column/line/unit dimensions all derive from the single `tickToPx(tick, ctx.scaleMultiplier)` conversion, consistently.
+- **C (view-model uses inconsistent coordinate origins/scales): NO** — `line.rightPx` (column-local), `column.rightPx` (page-local), and `placed.yTick + line.indentTick` (line-local) are each applied exactly once, at exactly one level, with no double-adding and no omission (already proven correct by the First-Line-Indent Visual HOLD fix, unaffected by this task).
+- **D (CSS paint box/overflow hides valid content): YES — two distinct, real causes found, both Renderer-CSS-layer, both fixed:**
+
+**Root cause 1 (the dominant one — matches the Human's "whole lower portions missing" description):** `.unit`'s CSS rule was missing `line-height: 1`, `writing-mode: vertical-rl`, and `white-space: nowrap` — three properties the already Human-approved Stage D `.unit` rule (`tools/preview-dev-adapter/PreviewApp.tsx`) has and depends on. Because `heightPx` is a deliberately tight, zero-margin fit (proven above: `heightPx` exactly equals `fontSizePx`, the same tick-to-px conversion used everywhere, with NO buffer — by design, Natural Pitch never stretches), the browser's DEFAULT line-height for the configured CJK serif font stack (typically 1.15–1.5x font-size) made each glyph's own rendered line box taller than its allocated box, and `.unit`'s `overflow: hidden` clipped the excess — cumulatively, across many stacked characters, reading as "the page's lower content is missing" even though every canonical coordinate was correct throughout. This is a genuine CSS regression introduced when this foundation's own `.unit` rule was written fresh instead of reusing Stage D's already-proven-correct one (§3's audit table classified this piece "REUSE CONCEPT ONLY," and the concept was re-derived incompletely). **Fixed:** restored `line-height: 1; writing-mode: vertical-rl; white-space: nowrap;` to `.unit`.
+
+**Root cause 2 (a second, independent, smaller-magnitude bug the new regression tests surfaced directly):** `paintModel.ts`'s `buildPaintLine` DEV-ONLY height-approximation for a line's LAST placed atom (used only when no "next" atom exists to derive an exact delta from) borrowed the PREVIOUS atom's own delta unconditionally. When the previous atom was a wider unit (a multi-cell `SEMANTIC_RUN`/`TCY`/`IMAGE`) while the actual last atom was a single ordinary cell, this produced an overestimated height for the last atom — concretely reproduced by `dash-ellipsis` (last atom estimated at 2 cells, actually 1) and `image-placeholder` (last atom estimated at 3 cells after a wide image, actually 1), both pushing the estimated bottom edge past the page's own `heightPx`. This is a genuine Renderer view-model defect (not Core — Core's own `yTick` values were, and remain, exactly correct; only the DERIVED, already-disclosed-as-approximate paint height was wrong). **Fixed:** the approximation is now clamped to the atom's own actual remaining line extent (`Math.min(borrowedOrNominalGuess, ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks))`) — it can only ever shrink an already-inexact guess toward safety, never grow it, and never claims more precision than the guess it is.
+
+**Font ink vs. logical extent (explicitly distinguished, per this task's own instruction):** the Human's screenshot description ("only roughly part of the intended page content is visible") matches failure category B (whole lines/content clipped), not category A (minor glyph-ink overshoot) — confirmed by Root Cause 1's mechanism (every character's line-box, not just its ink edges, was affected by the missing `line-height: 1`).
+
+**Minimal fix — Renderer-only, no Core change (none was needed or proven necessary):**
+- `renderer/preview/PreviewRenderer.tsx`: `.unit` CSS rule gains `writing-mode: vertical-rl; line-height: 1; white-space: nowrap;`.
+- `renderer/preview/paintModel.ts`: `buildPaintLine`'s last-atom height estimate is clamped to the remaining line extent.
+
+**Regression tests added** (`generateFoundationArtifact.test.ts`, new `describe` block "Page Content Clipping HOLD"): (1) no placed unit's painted bottom/right edge ever exceeds its own page's `heightPx`/`widthPx`, swept across every fixture/page/column/line; (2) F20's last body paint item's bottom edge lands exactly at (never past) the page's bottom edge; (3) the complete 56-character F20 canonical sentence is reconstructable from ordered paint items (grapheme-atomized, so reconstruction concatenates ordered items rather than requiring a contiguous HTML substring — same convention Stage D established); (4) Long Non-Repeating Prose pages 0 and 1 both pass the same no-clipping sweep; (5) the generated stylesheet's `.unit` rule is directly asserted to contain `line-height: 1`, `writing-mode: vertical-rl`, `white-space: nowrap`, and `overflow: hidden` — a direct regression guard against this exact CSS omission recurring.
+
+**Pagination/breaks/CanonicalDocument: unchanged**, confirmed by the pre-existing `paintModel.test.ts` immutability test (still passing) and by this fix touching only CSS text and one Renderer-side height estimate, never any Core file.
+
+**Ruby: not evaluated or fixed in this task** (Ruby Placement Micro-Loop remains PASS, untouched).
+
+**Tests:** 30/30 renderer/preview tests pass (24 previous + 6 new); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**Artifact regenerated:** `qa/visual/p3-o09-preview/index.html` and `debug.html`.
+
+**Human recheck status: PENDING.**
