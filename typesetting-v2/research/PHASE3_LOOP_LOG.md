@@ -455,3 +455,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** P3-L11 (renumbered; originally P3-L13, Images + Colophon + Structured Elements) authorized to begin. Per this batch's explicit instruction, STOP after P3-L11 — do not begin P3-L12.
 
 ---
+
+## P3-L11 — Images + Colophon + Structured Elements
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `492073e` (matches expected P3-L10 checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun decide image flow-placement fits-capacity/break-before/after (Contract §14) and isolate a colophon as a distinct `CanonicalDocument`-level element that never threads through body pagination (Contract §15, Master HD-006), without touching decode/paint or body composition internals?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** `measurement/fakeProvider.ts`'s `imageIntrinsicTick` previously stubbed `{width:0, height:0}` (images were explicitly out of P3-L07's scope) — updated to a deterministic, non-zero fixture derived from `refId`'s own code-point sum (never reading file bytes), since this Loop actually needs realistic fits-capacity math to test against; confirmed no existing test depended on the old zero-stub (P3-L07's `cellCountFor` for `IMAGE` always returned 0 regardless of measurement, untouched here). Implemented `core/images/index.ts` (`placeImage`): computes fit against available line extent using the image's intrinsic height (the axis compose/line.ts already measures line extent on) and decides `breakBefore`/`breakAfter` — `true` for both only under `FULL` placement, `false` for `TOP`/`CENTER`/`BOTTOM`. Implemented `core/colophon/index.ts` (`composeColophon`): a thin wrapper whose signature cannot accept or return a body `CanonicalColumn`/`CanonicalLine` at all — isolation is structural, not merely conventional. A colophon's pages come from an entirely separate `compose/page.ts` `composePages()` run over the colophon's own `SourceBlock`, never merged into the body document's own page array.
+
+**TESTS:** `core/images/index.test.ts` (5, F14): fits/doesn't-fit against intrinsic height, `FULL` forces isolation on both sides, `TOP`/`CENTER`/`BOTTOM` force neither, determinism. `core/colophon/index.test.ts` (2): composing body pages and colophon pages via two independent `composePages()` calls, then asserting by direct inspection that no placed unit in the body pages carries the colophon's `blockId` (and vice versa) — structural separation proven by walking the actual page/column/line/placed-unit tree, not asserted by convention; source mapping survives colophon composition (INV-001). `measurement/fakeProvider.test.ts` (+2): `imageIntrinsicTick` is deterministic and non-zero, and distinguishes different `refId`s (not a single hard-coded constant). All 134 pre-existing tests re-ran unmodified and green.
+
+**RESULT: PASS.** `npx vitest run`: 143/143 pass (134 prior + 9 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/images/` (new), `core/colophon/` (new), and `measurement/fakeProvider.{ts,test.ts}` (this Loop's own named dependency) changed. No image decode/paint implemented — confirmed absent, Renderer-only per Contract §14/§28.
+
+**INVARIANTS:** INV-001 (source spans survive) — PASS for both image placement and colophon composition. Contract §15 structural separation (manuscript-flow vs. page-decoration vs. colophon, three categories never mixed) — PASS, verified by direct tree inspection rather than by construction alone.
+
+**OPEN ITEMS AFFECTED:** None resolved, none fabricated. Image decode/paint remains Renderer-only and untouched.
+
+**DECISION: P3-L11 — PASS / CLOSED.**
+
+**WHY:** The colophon isolation test doesn't just trust `composeColophon`'s narrow signature — it walks both page trees and asserts by `blockId` that no cross-contamination occurred, which is the concrete evidence Contract §15's "never mixed" requirement actually demands; the image break-before/after test enumerates all four `ImagePlacement` values rather than spot-checking one.
+
+**COMMIT:** `TSP v2: implement images and colophon`.
+
+**NEXT:** Per this batch's explicit instruction, STOP here — do not begin P3-L12 without further authorization.
+
+---
