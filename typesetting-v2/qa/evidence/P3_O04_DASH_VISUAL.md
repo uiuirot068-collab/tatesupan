@@ -228,3 +228,28 @@ The bar's exact visual proportions (thickness, color) are a Renderer-level defau
 **P3-O05 (ellipsis) remains untouched and OPEN** — no shared-component behavior change was introduced for it at any point in this history.
 
 **NEXT:** P3-O05 (Ellipsis Visual) is the next active Preview Renderer item.
+
+## 20. Product Scope Clarification — Guaranteed Quality Boundary (2026-09-07)
+
+**Human decision:** the Publication-quality continuous dash treatment closed in §19 is **guaranteed only for the standard 2-glyph run "――"**. Runs of 3 or more U+2015 characters ("―――", "――――", etc.) are **explicitly OUTSIDE the guaranteed optical-continuity scope of P3-O04** — this narrows what §19's PASS actually promises; it does not reopen or weaken it for the 2-glyph case.
+
+**Requirements for 3+ runs (recorded, not newly implemented — the existing generalized `dashGlyphsFor` already satisfies every one of these by construction, confirmed by §19's own 3-glyph test):**
+- Original source preserved exactly — never rewritten.
+- `SourceSpan` preserved exactly.
+- Input never rejected (no HOLD, no error) purely for having 3+ dash characters.
+- Never automatically rewritten/truncated to 2 glyphs.
+- Rendered best-effort via the existing, already-generalized semantic-run paint path (`dashGlyphsFor`, unchanged) — no separate code path, no special-casing.
+- Continuity across every seam is **NOT guaranteed** for N≥3 (only proven/confirmed for N=2; N=3 was checked in §19 as a generalization SANITY check, not as a second guaranteed-quality tier).
+- No additional Renderer complexity was added, or should be added, solely to guarantee N≥3 continuity — the existing single deterministic rule (one paint node per grapheme, fixed em-relative overlap) is intentionally left as the entire mechanism for any N.
+
+**The ー (U+30FC) prolonged sound mark remains completely unaffected** — already directly confirmed in §19 (composes as ordinary `TEXT`, never matches the `SemanticRunKind === "DASH"` paint path) and unchanged by this scope clarification.
+
+**Final P3-O04 supported quality target (as now precisely scoped):**
+- **"――" (2-glyph dash run): HUMAN PASS / CLOSED** — publication-quality continuity guaranteed (§19).
+- **3+ consecutive dash runs: SOURCE-PRESERVED / BEST-EFFORT / QUALITY NOT GUARANTEED** — renders via the same mechanism, never rejected or rewritten, but optical continuity across every seam is not a confirmed guarantee.
+
+**No Core, `src/`, or Production change was made or is needed for this clarification** — it is a scope/documentation change only; the existing implementation already behaves exactly as newly specified above.
+
+## 21. Future Item — 文章チェックβ v2 Notice (recorded, not implemented)
+
+Recorded as a descriptive future item only (no numeric P3-O identifier assigned, no design or implementation work performed): a future 文章チェックβ (manuscript-check) v2 pass may detect **3 or more consecutive U+2015 (HORIZONTAL BAR / EM DASH) characters** in manuscript source and produce a **NOTICE_ONLY recommendation** (never an error, never a rewrite, never blocking) suggesting that standard Japanese prose typically uses the supported "――" (2-glyph) form. This is purely a future authoring-assistance idea — **not implemented in this task**, not scoped, and not connected to any existing checker/linter infrastructure in this codebase. Cross-reference alongside the existing "Non-P3-O Future Items" section in `docs/architecture/PHASE3_OPEN_ITEMS.md`.

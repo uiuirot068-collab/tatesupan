@@ -1060,3 +1060,17 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** P3-O05 (Ellipsis Visual) is the next active Preview Renderer item. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 — Product Scope Clarification (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `0b17f92` (matches expected checkpoint), worktree clean before start.
+
+**DECISION (Product/Human, not a technical finding):** the publication-quality continuous dash treatment closed in the prior entry is **guaranteed only for the standard 2-glyph run "――"**. Runs of 3+ consecutive U+2015 characters render via the SAME unmodified `dashGlyphsFor` mechanism (already generalized, no special-casing exists or is needed) — source and `SourceSpan` always preserved, input never rejected or rewritten — but seam continuity across every join is explicitly **NOT** a guaranteed-quality claim for N≥3, and no additional Renderer complexity was added or is planned solely to guarantee it. The ー (U+30FC) prolonged sound mark remains completely unaffected (already directly confirmed in the prior entry).
+
+**No code change was made or needed** — the existing implementation already behaves exactly as newly specified; this is a documentation/scope-boundary clarification only. `qa/evidence/P3_O04_DASH_VISUAL.md` §§20–21 and `docs/architecture/PHASE3_OPEN_ITEMS.md`'s P3-O04 row and "Non-P3-O Future Items" section updated accordingly.
+
+**Future item recorded (not implemented):** 文章チェックβ v2 may eventually flag 3+ consecutive U+2015 characters with a NOTICE_ONLY recommendation favoring the supported "――" form — descriptive only, no numeric identifier, no design/implementation work performed.
+
+**DECISION: P3-O04 remains CLOSED**, scope now precisely bounded. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---
