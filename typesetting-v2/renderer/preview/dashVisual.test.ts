@@ -235,15 +235,19 @@ describe("P3-O04 — Dash Visual", () => {
     for (const d of dashUnits) expect(d.text).toBe("――");
   });
 
-  it("the generated stylesheet declares the painted-bar rule scoped to .semantic-dash only, using a percentage (proportional) width, never a fixed disconnected px value", () => {
+  it("the generated stylesheet declares the painted-bar rule scoped to .semantic-dash only, using an em (body-font-relative, proportional) width, never a fixed disconnected px value", () => {
     const fx = ALL_FIXTURES.find((f) => f.id === "dash-ellipsis")!;
     const { model } = composeAndPaint(fx.bodyUnits, fx.source, fx.capacity);
     const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [model], mode: "normal" }));
     expect(html).toContain(".unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after");
     const barRuleMatch = html.match(/\.unit\.kind-SEMANTIC_RUN\.semantic-dash \.unit-ink::after\s*\{[^}]*\}/);
     expect(barRuleMatch).not.toBeNull();
-    expect(barRuleMatch![0]).toContain("width: 12%"); // proportional, not a fixed px length
+    // P3-O04-DASH-STROKE-WEIGHT-HOLD: em, relative to .unit's own inline
+    // font-size (== the canonical fontSizePx) -- proportional by
+    // construction, never a fixed px length.
+    expect(barRuleMatch![0]).toMatch(/width:\s*0\.\d+em/);
     expect(barRuleMatch![0]).not.toMatch(/width:\s*\d+px/);
+    expect(barRuleMatch![0]).not.toContain("width: 12%"); // the Human-rejected, too-heavy original value must not recur
   });
 
   it("does not mutate CanonicalDocument (no re-layout) — a snapshot taken before painting equals a snapshot taken after", () => {

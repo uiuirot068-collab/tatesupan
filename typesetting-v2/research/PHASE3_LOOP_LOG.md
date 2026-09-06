@@ -962,3 +962,23 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** Human Visual QA of the dash treatment specifically (not ellipsis — P3-O05 remains untouched and OPEN, explicitly not to be judged in this recheck). P3-O05 (ellipsis visual) is the natural next candidate by dependency order once dash is confirmed, though its own root visual problem should be independently audited rather than assumed to need the identical painted-bar treatment. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 Dash Stroke Weight HOLD (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `7db26d3` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human Visual QA confirmed dash continuity is structurally correct but rejected the painted stroke as far too thick ("heavy vertical rule, not publication-like prose punctuation"). Can the thickness be corrected to a body-font-relative value without regressing continuity, canonical bounds, or any other already-verified property?
+
+**METHOD:** Audited the current rule directly: `width: 12%` on `.unit-ink::after`, a percentage of the unit's own cross-axis box width (the line's per-cell width) — computed at the fixture's actual scale to ≈2.52px, roughly 1/8 of the full cell, visually closer to a rule/border weight than a punctuation stroke. Switched to an `em`-relative value (`width: 0.06em`), resolving directly against `.unit`'s own inline `font-size` (== the canonical `fontSizePx`) — matching the task's own preferred `dashStrokeEm = bodyEmPaintSize × relativeStrokeFactor` formula more directly than the prior box-width percentage. Since no single thickness value is objectively evidenced (Phase 2's own P2-L06 measurement concerned horizontal centering, not stroke weight, and no Human Product decision on an exact value exists), generated a small, non-Production, 3-candidate comparison artifact (`qa/visual/p3-o04-dash-weight-comparison/index.html`) of the identical fixture, differing only in stroke width (0.03em / 0.06em / 0.09em) — applying the middle candidate (0.06em) as the interim default to the main P3-O09 artifact.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` §15 (full trace, before/after values, candidate table). Updated one existing stylesheet regression test to match the new formula and explicitly assert the rejected `12%` value never recurs; added one new test generating the comparison artifact. 81/81 renderer/preview tests pass (80 previous + 1 new); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` 0 new errors.
+
+**RESULT: Interim fix applied (0.06em), pending Human confirmation via the comparison artifact.** Continuity strategy unchanged (only the `width` parameter differs); scale proportionality preserved (`em` resolves against an already-`tickToPx`-scaled `font-size`); all previously-verified invariants (canonical extent, surrounding coordinates, line/page breaks, ellipsis untouched) re-verified unchanged.
+
+**DECISION: P3-O04 stroke weight — HOLD, interim value applied, Human recheck required.**
+
+**WHY:** The prior value's root cause (percentage-of-box-width in a range that reads as a rule, not a stroke) is directly traceable to the numeric relationship computed above, not a guess; since no objective evidence pins one exact replacement value, offering 3 candidates (rather than guessing a single "correct" number a second time) directly follows this task's own explicit fallback instruction.
+
+**NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to confirm or adjust the stroke thickness. P3-O05 (ellipsis) remains untouched and OPEN, not to be started until dash passes Human QA. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

@@ -67,3 +67,32 @@ The bar's exact visual proportions (thickness, color) are a Renderer-level defau
 ## 14. Next Technical Task
 
 **Human Visual QA for the dash treatment is required** before this item can be called fully complete. Independently of its outcome, **P3-O05 (ellipsis visual)** is the natural next candidate by dependency order (same reasoning already established for TCY/Ruby/Dash: pure Renderer-side visual polish, no further Core change needed) — though its own root visual problem (also measured by Phase 2, also never corrected) should be independently audited rather than assumed to need the identical painted-bar treatment (an ellipsis's own optical concerns — three dots' own spacing/alignment — may call for a different strategy than a single continuous bar). No Human Product decision is required to proceed; one would only become necessary if Human Visual QA reveals the painted-bar's own default proportions need a different, Product-specified value.
+
+## 15. Human Visual QA — Stroke Too Heavy HOLD (2026-09-07)
+
+**Human observation:** dash continuity was structurally correct (`――` reads as one continuous run, matching §6's design goal), but the painted stroke was rejected as far too thick — "looks like a heavy vertical rule, not a publication-like Japanese prose dash."
+
+**Continuity was correct; only the stroke weight was rejected.** Per this task's own instruction, the continuous-painted-bar STRATEGY was not undone — only its thickness parameter changed.
+
+**Current thickness rule (before this HOLD):** `width: 12%` on the `.unit-ink::after` pseudo-element — a percentage of the unit's own cross-axis box width (the line's per-cell width, itself `tickToPx`-derived). At the DEFAULT_SCALE_MULTIPLIER=1.5, `BODY_FONT_SIZE_PT=10.5` fixture geometry used throughout this Renderer, one cell = 3704 ticks → `tickToPx(3704, 1.5)` ≈ 20.999px, so the painted bar was `0.12 × 20.999` ≈ **2.52px thick** — proportionally about 1/8 of the full cell width, which reads visually closer to a rule/border weight than to a fine punctuation stroke.
+
+**Root cause:** the original 12% value was a Renderer-level cosmetic default chosen without objective evidence (disclosed as such in this document's own §6 at the time) — box-width-relative percentages in the 10%+ range read as visually heavy for a stroke meant to represent a single punctuation glyph's own ink, not a rule/border. **Core defect: NO** (confirmed unaffected — this is a pure CSS/paint-value change). **Renderer optical defect: YES** — an overweighted cosmetic default, now corrected.
+
+**New relative-thickness strategy:** switched from a box-width percentage to an **em-relative value** (`width: 0.06em`), computed directly against `.unit`'s own inline `font-size` (== the canonical `fontSizePx`) rather than against box width — a more direct match to the task's own preferred formula (`dashStrokeEm = bodyEmPaintSize × relativeStrokeFactor`). `relativeStrokeFactor = 0.06` is the interim main-artifact default, chosen as the middle of a 3-candidate comparison (no single value being objectively evidenced, per this task's own explicit fallback instruction).
+
+**Comparison artifact generated:** `typesetting-v2/qa/visual/p3-o04-dash-weight-comparison/index.html` (new, non-Production, separate from the main P3-O09 artifact) — the SAME fixture ("彼は――そう言った。", same font, same page scale, same canonical geometry, same source, same run length) rendered three times, differing ONLY in the dash stroke's own `width`:
+- **Candidate A — thin:** `0.03em`
+- **Candidate B — medium-thin:** `0.06em` (the interim default now applied to the main artifact)
+- **Candidate C — lighter-than-original:** `0.09em` (still far lighter than the rejected ~0.12em-equivalent original)
+
+**Continuity preserved:** YES — the strategy itself (one continuous painted bar spanning the run's own canonical extent, centered via `left:50%; transform:translateX(-50%)`) is completely unchanged; only the `width` value differs, at every candidate.
+
+**Scale proportionality preserved:** YES — `em` units resolve against `font-size`, which is itself already `tickToPx`-scaled; a stylesheet regression test now asserts the rule's `width` matches `0\.\d+em` and explicitly asserts the old `12%` value never recurs.
+
+**Invariants (all unchanged, re-verified):** canonical run extent, surrounding body coordinates, line/page breaks, ellipsis behavior (untouched) — all still pass the full existing `dashVisual.test.ts` suite (only the one stylesheet-value test needed updating to match the new formula).
+
+**Tests:** 81/81 renderer/preview tests pass (80 previous + 1 new comparison-artifact generator; the one stylesheet test that referenced the old 12% value was updated in place, not counted as new); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**DECISION: Stroke weight — INTERIM FIX APPLIED (0.06em), pending Human confirmation via the 3-candidate comparison artifact.**
+
+**Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` to pick among A/B/C (or request a different value); the main `qa/visual/p3-o09-preview/index.html` artifact currently uses candidate B (0.06em) as its interim default.

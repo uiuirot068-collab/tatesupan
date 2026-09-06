@@ -85,14 +85,29 @@ const STYLE = `
      canonical extent (unit-ink's box height, itself derived from
      GeometryTick like everything else) -- guaranteed visually continuous
      and centered by construction, never dependent on unverifiable font/
-     browser behavior. The bar's own THICKNESS (12%) is a Renderer-level
-     cosmetic default (like choosing a stroke width), not a canonical
-     geometry claim -- it scales automatically with the box's own already-
-     proportional width, never a fixed px value. The real "――" text stays
-     in the DOM unchanged (source/semantic identity preserved) but its own
-     ink is hidden (color:transparent) since the bar is the visible
-     representation. ELLIPSIS/TWO_DOT_LEADER are explicitly untouched
-     (P3-O05 remains its own, separate, still-OPEN item). */
+     browser behavior. The real "――" text stays in the DOM unchanged
+     (source/semantic identity preserved) but its own ink is hidden
+     (color:transparent) since the bar is the visible representation.
+     ELLIPSIS/TWO_DOT_LEADER are explicitly untouched (P3-O05 remains its
+     own, separate, still-OPEN item).
+
+     P3-O04-DASH-STROKE-WEIGHT-HOLD: Human Visual QA rejected the original
+     stroke thickness (12% of the unit's own cross-axis box width, itself
+     the line's per-cell width) as far too heavy -- it read as a page rule/
+     border, not publication-like prose punctuation. The stroke thickness
+     formula is now expressed as an em value (bodyEmPaintSize times a
+     relativeStrokeFactor) rather than a box-relative percentage: since
+     .unit's own inline font-size is already set to the canonical
+     fontSizePx, an em-unit width on this descendant resolves directly
+     against that SAME already-tickToPx-scaled body metric -- proportional
+     to Preview scale by construction, never a fixed disconnected px
+     value, and now tied explicitly to the body font metric the task's own
+     preferred formula names, not to box width (a related but indirect
+     quantity in this specific 1-cell-wide case). relativeStrokeFactor is
+     picked as the middle of a 3-candidate comparison (thin/medium-thin/
+     lighter-than-original) generated for Human confirmation -- see
+     qa/visual/p3-o04-dash-weight-comparison/ and
+     qa/evidence/P3_O04_DASH_VISUAL.md's own HOLD section. */
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; color: transparent; }
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after {
     content: "";
@@ -101,7 +116,7 @@ const STYLE = `
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 12%;
+    width: 0.06em;
     background: #111;
   }
   .provisional-badge { display: none; }
