@@ -613,3 +613,23 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** `typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md` is updated (§ header + new §17) to record the Human approval and this implementation's evidence, without rewriting the original research. Editor/`src/` integration is the next possible step but requires its own future, separate authorization — not implied here. Master is not modified. Phase 3 is not closed.
 
 ---
+
+## P3-O12-D — Final Capacity Geometry Validation / Closure (2026-09-06)
+
+**QUESTION:** Does the versioned capacity policy actually preserve legacy behavior while providing physically correct, deterministic v2-native geometry?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Independently validated the already-implemented, unmodified P3-O12-C policy (`typesetting-v2/core/settings/capacity*.ts`) from a document-lifecycle/product-behavior perspective rather than re-running function-level unit assertions. Added `typesetting-v2/core/settings/capacityProductValidation.test.ts` (50 new tests, 9 `describe` groups matching the loop brief's Parts 1-9 + a new-document-readiness group), which reuses `deriveCapacityForEvent`, `initializeNewDocumentCapacity`, `deriveV2NativeCapacity`, and `deriveLegacyFrozenCapacity` exactly as a future Editor adapter would — no new capacity arithmetic was written, no Editor/`src/` integration was invented. Validated: a simulated legacy document walked through open→edit→save→reload never migrates; an exhaustive check over the policy API's own closed event set proves only `explicitGeometryCommit` ever changes formula identity; a full legacy→commit→v2-native→persist→reload lifecycle proves the migrated identity survives a reload and is never reverted by subsequent ordinary events; the two-column bug (59 chars/line, A5 2段) is proven isolated to the legacy path and structurally absent from v2-native for every 2-column mandatory preset (not just the one originally investigated); Natural Pitch residual accounting and per-axis MeasurementFacts independence were proven; Web's px→mm boundary was proven non-contaminating via a call-ordering purity test.
+
+**RESULT: PASS.** `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` baseline). `npx vitest run`: 24 test files, **315/315 passing** (265 pre-existing + 50 new). `git diff --stat`/`git status` confirm zero `src/` changes, zero Production changes, zero dependency changes.
+
+**EXISTING-DOCUMENT COMPATIBILITY CLAIM:** CONDITIONAL — PASS at the Core-policy level; conditional only on Editor-wiring facts this Loop cannot itself supply (the future adapter must call the dispatch with the correct event name for open/save vs. explicit commit, and `PageSettings`/`DocumentRecord` must gain the persisted version field). **NEW-DOCUMENT READINESS CLAIM:** CONDITIONAL, same category. Full itemized list: `typesetting-v2/qa/evidence/P3_O12_CAPACITY_GEOMETRY_VALIDATION.md` §13.
+
+**DECISION: P3-O12-D — PASS. P3-O12: CLOSED** (Core capacity-policy research/implementation/validation work item only — see validation evidence §15 for exact closure scope; Editor/`src/` integration, all Renderer work, and every other previously-disclosed open item — P3-O03/O04/O05/O06 residual/O07/O08/O09/O14/O15, F06 — remain untouched, unauthorized, and unclosed by this Loop).
+
+**WHY:** Every validation performed traces to already Human-approved evidence (the audit) and already-implemented, unmodified functions (P3-O12-C) — this Loop added test coverage from a new angle (document lifecycle, not function contracts) and found no invariant failure, so closure reflects genuine re-confirmation, not a rubber stamp.
+
+**NEXT:** `typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md`'s header is updated to record CLOSED (historical findings/sections unchanged). Master remains v1.8, unmodified — no status-only update was required or made. No Renderer, Editor↔Core integration, F06, or UI-C work has begun. `src/` remains untouched across the entire P3-O12-A/B/C/D arc.
+
+---
