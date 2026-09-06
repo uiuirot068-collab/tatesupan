@@ -42,6 +42,12 @@ export interface LineCompositionResult {
   // == the source end of the last atom this line consumed (or the stream's
   // own start, unconsumed, when `hold` is set).
   consumedThroughOffset: number;
+  // True only when this line ended because of a MANUAL_FORCED opportunity
+  // (Contract §13/INV-006) — never because of ordinary capacity or an
+  // otherwise-legal boundary. The column/page composer (P3-L08) uses this
+  // to close the current column AND page immediately, even under capacity
+  // (Contract Appendix CASE 6), rather than starting another line here.
+  forcedBreak: boolean;
 }
 
 interface CompositionAtom {
@@ -156,6 +162,7 @@ export function composeLine(
       line: { id: "line-empty", order: 0, placedUnits: [] },
       residualSpaceTick: lineExtentTicks,
       consumedThroughOffset: streamStart,
+      forcedBreak: false,
     };
   }
 
@@ -165,6 +172,7 @@ export function composeLine(
   let used = 0;
   let cutAtAtomIndex = -1; // last atom INCLUSIVE index this line takes
   let sawAnyLegalCut = false;
+  let forcedCut = false;
 
   for (let i = 0; i < atoms.length; i++) {
     const nextUsed = used + atoms[i].advanceTick;
@@ -176,6 +184,7 @@ export function composeLine(
     if (legality === "FORCED") {
       cutAtAtomIndex = i;
       sawAnyLegalCut = true;
+      forcedCut = true;
       break;
     }
     if (legality === "LEGAL" || i === atoms.length - 1) {
@@ -203,6 +212,7 @@ export function composeLine(
       line: { id: "line-hold", order: 0, placedUnits: [] },
       residualSpaceTick: lineExtentTicks,
       consumedThroughOffset: streamStart,
+      forcedBreak: false,
     };
   }
 
@@ -233,5 +243,6 @@ export function composeLine(
     line: { id: `line-${streamStart}-${consumedThroughOffset}`, order: 0, placedUnits },
     residualSpaceTick,
     consumedThroughOffset,
+    forcedBreak: forcedCut,
   };
 }

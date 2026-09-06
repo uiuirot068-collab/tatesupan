@@ -373,3 +373,29 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** P3-L08 (Canonical Column/Page Composer) authorized to begin.
 
 ---
+
+## P3-L08 — Canonical Column / Page Composer
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `f79e9dd` (matches expected P3-L07 checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun assemble deterministic CanonicalColumn/CanonicalPage flow on top of P3-L07's Line Composer, correctly closing a column/page immediately on a manual break (INV-006) even under capacity, and correctly propagating a line-level HOLD rather than silently discarding it?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Added one field to `core/compose/line.ts`'s `LineCompositionResult`: `forcedBreak: boolean`, true only when a line ended on a `MANUAL_FORCED` opportunity — the signal the column/page composer needs to distinguish "line ended because of ordinary capacity" from "line ended because of a manual break" (Contract Appendix CASE 6: the current column/page is closed even if under capacity). Implemented `core/compose/column.ts` (`composeColumn`): repeatedly calls `composeLine` against the remaining LogicalUnit stream until the column's own width capacity (`columnExtentTicks`) is exhausted, a `forcedBreak` is hit (stops immediately), or a `hold` occurs (propagated, not swallowed); `sliceUnitsFrom` re-slices a partially-consumed `TextUnit` (via `codePointSlice`, since the consumed offset is already grapheme-safe by construction) so the next line continues exactly where the last one stopped — non-`TEXT` units are never partially consumed (JUKUGO cross-line splitting is ruby-placement territory, P3-L11+, not exercised here). Implemented `core/compose/page.ts` (`composePage` for one page, `composePages` as the pure multi-page logical driver used for F19): a page fills columns up to `columnsPerPage`, stopping immediately (without starting another column) on a column's `forcedBreak` or `hold`; `composePages` loops `composePage` until the unit stream is exhausted, with a stuck-progress guard that compares the remaining stream's **source start offset** (not array length — a sliced `TextUnit` keeps its array slot, so length alone falsely looked "stuck" every time a page ended mid-unit, a bug caught by two failing tests and fixed before commit, not worked around).
+
+**TESTS:** `core/compose/column.test.ts` (4: multi-line fill with correct cross-line continuation, residual column-width space (INV-004), manual-forced immediate column closure, hold propagation). `core/compose/page.test.ts` (20, covering every required test group A–M): single-page one-column and two-column, multi-page one-column and two-column (both initially failed on the array-length progress-check bug above, fixed), manual page break force-closes a page under capacity (INV-006), source mapping is contiguous with no gap/overlap across every page/column/line transition (INV-001), residual space + unchanged per-character pitch (INV-004), all 8 mandatory presets (文庫/A5 1段/A5 2段/B5/B6/新書/A6/Web閲覧用) instantiate a valid non-hold page set under placeholder geometry (P3-O12's real capacity-formula reconciliation against production presets remains a carried-forward, non-blocking open item — not resolved here, not fabricated), the Web preset still paginates long content rather than being special-cased into one infinite page (HD-001), full-document determinism (INV-005), hold propagation at both `composePage` and `composePages` levels, and integer-tick-only geometry everywhere in the hierarchy (INV-013).
+
+**RESULT: PASS.** `npx vitest run`: 117/117 pass. `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/compose/line.ts` (the one-field addition) and the four new `core/compose/column.*`/`core/compose/page.*` files changed. No Preview/Publication renderer, ruby/TCY visual placement, or image flow implemented — explicitly out of scope, confirmed absent.
+
+**INVARIANTS:** INV-001 (source mapping through page hierarchy) — PASS, verified contiguous. INV-004 (Natural Pitch, residual reported not stretched) — PASS at both column and page level. INV-005 (determinism) — PASS. INV-006 (manual break explicit/forced) — PASS at column AND page level (both close immediately under capacity). INV-013 (integer ticks) — PASS throughout the full hierarchy.
+
+**DECISION: P3-L08 — PASS / CLOSED.**
+
+**WHY:** Every closure rule (column/page stopping on `forcedBreak` or `hold`) traces to Contract Appendix CASE 6 and INV-006; the progress-check bug was caught by tests actually asserting multi-page behavior rather than only single-page happy paths, and was fixed at its root cause (measuring the wrong quantity), not patched around it.
+
+**COMMIT:** `TSP v2: implement canonical page composition`.
+
+**NEXT:** Per this batch's explicit instruction, STOP here — do not begin P3-L09 (renumbered; originally P3-L11, Ruby Composition) without further authorization.
+
+---
