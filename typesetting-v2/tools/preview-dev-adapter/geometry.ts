@@ -20,4 +20,11 @@ export function tickToPx(tick: number, scaleMultiplier: number): number {
   return tick * MM_PER_TICK * CSS_PX_PER_MM * scaleMultiplier;
 }
 
-export const DEFAULT_SCALE_MULTIPLIER = 4;
+// Human Visual QA feedback (STAGE-D-QA-VISUAL-SCALE): 4x was too small to
+// comfortably judge character rhythm, indent, and line spacing. Raised to
+// roughly 2.5x that (~10x actual physical size) — a pure display constant,
+// not a canonical value; changing it changes only how large the same
+// GeometryTick values are drawn (verified by `viewModel.test.ts`'s own
+// scale-only conversion test and by the CanonicalDocument-immutability
+// test, neither of which depends on this specific number).
+export const DEFAULT_SCALE_MULTIPLIER = 10;

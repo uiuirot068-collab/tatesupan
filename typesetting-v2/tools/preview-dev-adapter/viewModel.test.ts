@@ -147,4 +147,37 @@ describe("viewModel.ts — CanonicalDocument -> paint-only ViewModel", () => {
     expect(matched.fontIdentityMismatch).toBe(false);
     expect(matched.pages).toEqual(vm.pages); // same canonical coordinates regardless of the paint-time font flag
   });
+
+  it("STAGE-D-QA-VISUAL-SCALE: changing the display scale changes only px values, never canonical structure", () => {
+    const { document, ctx, bodyUnits, source } = composeFixture("two-column-flow");
+    const before = JSON.parse(JSON.stringify(document));
+
+    const small = buildPreviewViewModel("id", "label", document, bodyUnits, source, { ...ctx, scaleMultiplier: 4 });
+    const large = buildPreviewViewModel("id", "label", document, bodyUnits, source, { ...ctx, scaleMultiplier: DEFAULT_SCALE_MULTIPLIER });
+
+    // The CanonicalDocument itself is never touched by building a view model at any scale.
+    expect(document).toEqual(before);
+
+    // Structure (counts, source spans, breaks) is identical regardless of scale.
+    expect(large.pages.length).toBe(small.pages.length);
+    for (let p = 0; p < small.pages.length; p++) {
+      expect(large.pages[p].manualBreakBefore).toBe(small.pages[p].manualBreakBefore);
+      expect(large.pages[p].columns.length).toBe(small.pages[p].columns.length);
+      for (let c = 0; c < small.pages[p].columns.length; c++) {
+        expect(large.pages[p].columns[c].lines.length).toBe(small.pages[p].columns[c].lines.length);
+        for (let l = 0; l < small.pages[p].columns[c].lines.length; l++) {
+          const smallLine = small.pages[p].columns[c].lines[l];
+          const largeLine = large.pages[p].columns[c].lines[l];
+          expect(largeLine.units.length).toBe(smallLine.units.length);
+          expect(largeLine.units.map((u) => u.sourceSpan)).toEqual(smallLine.units.map((u) => u.sourceSpan));
+          expect(largeLine.units.map((u) => u.text)).toEqual(smallLine.units.map((u) => u.text));
+        }
+      }
+    }
+
+    // Only the px dimensions themselves scale, proportionally, by the ratio of the two multipliers.
+    const ratio = DEFAULT_SCALE_MULTIPLIER / 4;
+    expect(large.pages[0].widthPx).toBeCloseTo(small.pages[0].widthPx * ratio, 6);
+    expect(large.pages[0].columns[0].lines[0].widthPx).toBeCloseTo(small.pages[0].columns[0].lines[0].widthPx * ratio, 6);
+  });
 });

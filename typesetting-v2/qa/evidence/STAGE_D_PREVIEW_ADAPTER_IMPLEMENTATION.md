@@ -154,3 +154,19 @@ Not attempted or closed by this Loop, per its own scope: P3-O03 (TCY visual shap
 **Tests:** 18/18 Stage D tests pass (17 previous + 1 new regression guard); all 330 Core tests and all 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors (same pre-existing baseline). `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain unmodified.
 
 **Human recheck status: PENDING.** This fix addresses the specific "blank body" symptom reported. It does not itself constitute Human Visual QA sign-off — please reopen the regenerated artifact and re-run the §13 checklist.
+
+---
+
+## 17. Human Visual QA — Display Scale (2026-09-06)
+
+**Observed Human result:** manuscript text now renders correctly (§16's fix confirmed), but the whole canonical page painted too small to comfortably judge character rhythm, indent, line spacing, punctuation, and Natural Pitch.
+
+**Fix:** `DEFAULT_SCALE_MULTIPLIER` (`geometry.ts`) raised from `4` to `10` (~2.5x larger) — a pure display constant; `tickToPx`'s own formula and every canonical value it reads are unchanged. Debug overlays (page/column/line/source-span badges) already hide by default in NORMAL VIEW via the existing CSS-only checkbox toggle (no code change needed there — confirmed by re-reading `PreviewApp.tsx`'s `.debug-info { display: none; }` rule, only shown when `#debug-toggle:checked`).
+
+**Regression guard added** (`viewModel.test.ts`, "STAGE-D-QA-VISUAL-SCALE"): composes one fixture once, builds two view models at different scales, and asserts (a) the underlying `CanonicalDocument` is byte-identical before/after (via a JSON snapshot), (b) page/column/line/unit **counts**, source spans, and text are identical between the two scales, and (c) only the px dimensions differ, scaling exactly by the ratio of the two multipliers.
+
+**Artifact regenerated:** `typesetting-v2/qa/visual/stage-d/index.html` (via the same `npx vitest run` mechanism as before).
+
+**Tests:** 19/19 Stage D tests pass (18 previous + 1 new); all 330 Core tests and 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**Human recheck status: PENDING.**
