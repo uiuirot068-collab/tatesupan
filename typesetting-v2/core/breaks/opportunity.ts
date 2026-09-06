@@ -8,8 +8,9 @@
 import { codePointSlice, graphemeBoundaries } from "../source/graphemeSafety";
 import type { SourceSpan } from "../source/span";
 import { DEFAULT_CLASS, type CharacterClass, type RuleSetVersion } from "../rules/characterClass";
-import type { LogicalUnit, RubyUnit, SemanticRunKind, TextUnit } from "../units";
+import type { LogicalUnit, SemanticRunKind, TextUnit } from "../units";
 import type { TraceRecorder } from "../trace";
+import { deriveRubyBreakOpportunities } from "../ruby";
 
 export type BreakOpportunityReason =
   | "ALLOWED"
@@ -102,33 +103,6 @@ function deriveTextUnitInternalOpportunities(
   return opportunities;
 }
 
-// RubyUnit internal opportunities (Contract §9). ATOMIC ruby, and a JUKUGO
-// ruby with no declared `segments` (defaults to ATOMIC, per Contract §9 —
-// the Core never guesses a split), generate zero internal opportunities: the
-// group is simply never decomposed, which is what makes INV-007 hold by
-// construction rather than by an explicit prohibition test. A JUKUGO ruby
-// WITH declared segments generates exactly one RUBY_INTERNAL_ALLOWED
-// opportunity per declared segment boundary (HG-3) and nothing else — no
-// opportunity is ever generated at an undeclared (intra-segment) position.
-function deriveRubyInternalOpportunities(unit: RubyUnit, trace?: TraceRecorder): BreakOpportunity[] {
-  if (unit.rubyKind !== "JUKUGO" || !unit.segments || unit.segments.length < 2) {
-    return [];
-  }
-  const opportunities: BreakOpportunity[] = [];
-  for (let i = 0; i < unit.segments.length - 1; i++) {
-    const boundaryOffset = unit.segments[i].baseSpan.end;
-    const position = boundarySpan(unit.baseSpan.blockId, boundaryOffset);
-    opportunities.push({ position, reason: "RUBY_INTERNAL_ALLOWED" });
-    trace?.record({
-      sourceSpan: position,
-      ruleApplied: "cl-23 jukugo declared segment boundary (HG-3)",
-      alternativesConsidered: ["RUBY_INTERNAL_ALLOWED", "RUBY_INTERNAL_PROHIBITED"],
-      outcome: "RUBY_INTERNAL_ALLOWED",
-    });
-  }
-  return opportunities;
-}
-
 export function deriveBreakOpportunities(
   units: LogicalUnit[],
   ruleSet: RuleSetVersion,
@@ -140,7 +114,16 @@ export function deriveBreakOpportunities(
     if (unit.kind === "TEXT") {
       opportunities.push(...deriveTextUnitInternalOpportunities(unit, ruleSet, trace));
     } else if (unit.kind === "RUBY") {
-      opportunities.push(...deriveRubyInternalOpportunities(unit, trace));
+      const rubyOpportunities = deriveRubyBreakOpportunities(unit);
+      opportunities.push(...rubyOpportunities);
+      for (const opportunity of rubyOpportunities) {
+        trace?.record({
+          sourceSpan: opportunity.position,
+          ruleApplied: "cl-23 jukugo declared segment boundary (HG-3)",
+          alternativesConsidered: ["RUBY_INTERNAL_ALLOWED", "RUBY_INTERNAL_PROHIBITED"],
+          outcome: opportunity.reason,
+        });
+      }
     } else if (unit.kind === "MANUAL_BREAK") {
       const position = boundarySpan(unit.span.blockId, unit.span.start);
       opportunities.push({ position, reason: "MANUAL_FORCED" });

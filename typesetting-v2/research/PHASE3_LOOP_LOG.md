@@ -399,3 +399,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Per this batch's explicit instruction, STOP here — do not begin P3-L09 (renumbered; originally P3-L11, Ruby Composition) without further authorization.
 
 ---
+
+## P3-L09 — Ruby Composition (Atomic + Jukugo)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `433aeb7` (matches expected P3-L08 checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun implement ruby break-opportunity mapping and geometry-clamp placement as a dedicated `ruby/` module — matching `CORE_MODULE_MAP.md` row 16's exact file boundary — while preserving INV-003 (base position never moves), INV-007 (atomic never breaks), and INV-008 (jukugo breaks only at declared boundaries), all already partially proven inline in P3-L06's `breaks/opportunity.ts`?
+
+**HYPOTHESIS:** Yes — the ruby break-opportunity logic already existed inline in `breaks/opportunity.ts` (written before this module existed) and can be extracted verbatim into `ruby/` with `breaks/opportunity.ts` calling into it, exactly as the frozen roadmap's "Files/modules expected to change" line specifies, with zero behavior change (same 128-test-minus-new baseline stays green throughout the refactor).
+
+**METHOD:** Created `core/ruby/index.ts` with two exports: `deriveRubyBreakOpportunities(unit)` (the extracted, unmodified logic — ATOMIC and undeclared-segments JUKUGO produce zero internal opportunities; declared-segments JUKUGO produces exactly one `RUBY_INTERNAL_ALLOWED` per declared boundary) and `placeRuby(input)` (new: Contract §9.1's geometry-clamp mechanism, layered on `resolveOverhangAllowance` — a trivial `RuleSetVersion.rubyOverhangAllowance` map lookup falling back to 0, never fabricating a value). `breaks/opportunity.ts` was edited to import and call `deriveRubyBreakOpportunities`, moving trace-event recording for ruby opportunities into the main loop (single recording site) rather than duplicating it inside the ruby module. `placeRuby`'s first design used a rigid 50/50 overflow split between before/after allowance, which failed two tests (a side with full allowance should absorb the whole overflow alone, not be capped at "half") — caught immediately by the test suite, fixed at the root cause (switched to greedy sequential absorption: try the preceding side's allowance first, spill remainder to the following side), not patched around.
+
+**TESTS:** `core/ruby/index.test.ts` (11 tests): F07 (zero opportunities for ATOMIC, verified both in isolation and through the full `deriveBreakOpportunities` pipeline), F08 (exactly one opportunity per declared segment boundary; never at an undeclared intra-segment position, tested with a 3-segment fixture), missing-segments and single-element-segments fallback (both ATOMIC, zero opportunities, proving no guessed split), F09 (CENTER when reading fits; `resolveOverhangAllowance` against the shipped `DEFAULT_RULE_SET_V2` confirmed to return 0 for an arbitrary class, proving no fabricated HG-4 value; OVERFLOW_OPEN with that real all-zero table; START_CLAMP and END_CLAMP exercised with locally-injected non-zero test allowances — never shipped as product data, purely fixture values proving the mechanism), a structural assertion that `placeRuby`'s return shape has no base-coordinate field at all (INV-003 by construction), and a determinism test. All 117 pre-existing tests re-ran unmodified and green throughout — this Loop changed zero existing assertions, only moved code and added new tests.
+
+**RESULT: PASS.** `npx vitest run`: 128/128 pass (117 prior + 11 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/ruby/` (new) and `core/breaks/opportunity.ts` (the exact file the roadmap names as needing extension) changed.
+
+**INVARIANTS:** INV-003 — PASS (no base-coordinate output exists in `placeRuby`'s type at all). INV-007 — PASS (unchanged, verified again post-refactor). INV-008 — PASS (unchanged, verified again post-refactor, plus a new 3-segment "never at an undeclared position" test the original P3-L06 tests didn't cover). INV-005 — PASS (determinism test on `placeRuby`).
+
+**OPEN ITEMS AFFECTED:** None resolved, none fabricated. P3-O15 (group-ruby's distinct break rule) — still treated identically to atomic mono-ruby, not designed further. P3-O06 residual / HG-4 exact overhang values — still OPEN; the shipped table is still empty, confirmed by a test reading real product data, not a mock.
+
+**DECISION: P3-L09 — PASS / CLOSED.**
+
+**WHY:** Every extracted line of `deriveRubyBreakOpportunities` is byte-identical in behavior to what P3-L06 already had (proven by the unchanged 117-test baseline staying green through the refactor); the overflow-distribution bug was caught by a test that encoded the actual Contract §9.1 expectation (one side with sufficient allowance fully resolves the overflow alone), not adjusted to match whatever the first implementation happened to produce.
+
+**COMMIT:** `TSP v2: implement ruby composition`.
+
+**NEXT:** P3-L10 (renumbered; originally P3-L12, TCY + Semantic Run Line-Composer Integration) authorized to begin.
+
+---
