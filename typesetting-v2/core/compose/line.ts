@@ -64,21 +64,30 @@ interface CompositionAtom {
 // code-point width (every base character is ordinary CJK/kana, one cell
 // each) — this file never touches ruby/TCY *placement*, only how much line
 // extent their (already-atomic) group consumes.
-function cellCountFor(unit: LogicalUnit, spanWidth: number): number {
+//
+// IMAGE is deliberately NOT a cell multiple: an image consumes its own real
+// intrinsic extent (Contract §14), read from MeasurementFacts directly, not
+// derived from the font's per-character cell size (P3-L15A — closes the gap
+// where images previously composed at zero cost, discovered at P3-L15).
+function advanceTickFor(
+  unit: LogicalUnit,
+  spanWidth: number,
+  perCellAdvance: GeometryTick,
+  measurement: MeasurementFacts
+): GeometryTick {
   switch (unit.kind) {
     case "TEXT":
-      return 1;
+      return perCellAdvance;
     case "TCY":
-      return tcyCellCost(unit);
+      return perCellAdvance * tcyCellCost(unit);
     case "SEMANTIC_RUN":
-      return unit.length;
+      return perCellAdvance * unit.length;
     case "RUBY":
-      return spanWidth;
+      return perCellAdvance * spanWidth;
     case "MANUAL_BREAK":
       return 0;
     case "IMAGE":
-      // Images are out of this Loop's scope (P3-L13) — never composed here.
-      return 0;
+      return measurement.imageIntrinsicTick(unit.refId).height;
   }
 }
 
@@ -98,13 +107,22 @@ function findOwningUnit(units: LogicalUnit[], start: number, end: number): Logic
 // (grapheme-safe, cl-08-inseparable, ruby-atomic-unless-segmented)
 // automatically consistent with P3-L06's legality analysis: an atom can
 // only ever be as fine as an actual candidate boundary already allows.
+interface AtomComputationResult {
+  atoms: CompositionAtom[];
+  // Set when an IMAGE unit's MeasurementFacts yields no resolvable intrinsic
+  // size (height <= 0) — Contract §26's own example of a LayoutError case
+  // ("an image with no resolvable intrinsic size and no MeasurementFacts
+  // entry"). Never silently treated as a zero-cost, always-fits atom.
+  unresolvedImageSpan?: SourceSpan;
+}
+
 function computeAtoms(
   units: LogicalUnit[],
   opportunities: BreakOpportunity[],
   measurement: MeasurementFacts,
   settings: CompositionSettings
-): CompositionAtom[] {
-  if (units.length === 0) return [];
+): AtomComputationResult {
+  if (units.length === 0) return { atoms: [] };
   const blockId = units[0].span.blockId;
   const boundarySet = new Set<number>();
   for (const unit of units) {
@@ -123,10 +141,18 @@ function computeAtoms(
     const end = boundaries[i + 1];
     if (end <= start) continue; // zero-width marker span (e.g. a MANUAL_BREAK) contributes no atom
     const owner = findOwningUnit(units, start, end);
-    const cells = cellCountFor(owner, end - start);
-    atoms.push({ sourceSpan: { blockId, start, end }, advanceTick: perCellAdvance * cells });
+    const sourceSpan = { blockId, start, end };
+    if (owner.kind === "IMAGE") {
+      const advanceTick = advanceTickFor(owner, end - start, perCellAdvance, measurement);
+      if (advanceTick <= 0) {
+        return { atoms, unresolvedImageSpan: sourceSpan };
+      }
+      atoms.push({ sourceSpan, advanceTick });
+      continue;
+    }
+    atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
   }
-  return atoms;
+  return { atoms };
 }
 
 type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED";
@@ -168,7 +194,20 @@ export function composeLine(
   }
 
   const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
-  const atoms = computeAtoms(units, opportunities, measurement, settings);
+  const atomResult = computeAtoms(units, opportunities, measurement, settings);
+  if (atomResult.unresolvedImageSpan) {
+    return {
+      hold: {
+        reason: "IMAGE_INTRINSIC_SIZE_UNRESOLVED",
+        sourceSpan: atomResult.unresolvedImageSpan,
+      },
+      line: { id: "line-hold", order: 0, placedUnits: [] },
+      residualSpaceTick: lineExtentTicks,
+      consumedThroughOffset: streamStart,
+      forcedBreak: false,
+    };
+  }
+  const atoms = atomResult.atoms;
 
   let used = 0;
   let cutAtAtomIndex = -1; // last atom INCLUSIVE index this line takes

@@ -150,7 +150,18 @@ export function deriveBreakOpportunities(
 
     let reason: BreakOpportunityReason;
     let ruleApplied: string;
-    if (leftEdge.semanticRunKind && rightEdge.semanticRunKind) {
+    const leftIsFullImage = left.kind === "IMAGE" && left.placement === "FULL";
+    const rightIsFullImage = right.kind === "IMAGE" && right.placement === "FULL";
+    if (leftIsFullImage || rightIsFullImage) {
+      // Contract §14: FULL placement forces isolation on both sides — the
+      // already-frozen decision core/images/placeImage() records (P3-L11).
+      // Reusing MANUAL_FORCED is a deliberate choice: it is the existing,
+      // already-tested mechanism for "this boundary is never optional,"
+      // which correctly propagates through composeLine/Column/Page to close
+      // the line/column/page immediately, not a new mechanism invented here.
+      reason = "MANUAL_FORCED";
+      ruleApplied = "Contract §14 FULL image placement forces isolation on both sides";
+    } else if (leftEdge.semanticRunKind && rightEdge.semanticRunKind) {
       const pairing = semanticRunPairRule(ruleSet, leftEdge.semanticRunKind, rightEdge.semanticRunKind);
       reason = pairing === "INSEPARABLE" ? "PROHIBITED_GROUP" : "ALLOWED";
       ruleApplied = `cl-08 pair rule: ${leftEdge.semanticRunKind}+${rightEdge.semanticRunKind} -> ${pairing}`;

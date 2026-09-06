@@ -1,6 +1,7 @@
 # P3-L15 — Canonical Core Regression Suite — Machine Evidence
 
-- Status: **AUTOMATED WORK COMPLETE. HUMAN GATE G1: PENDING.**
+- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PENDING.**
+- **P3-L15A update (2026-09-06):** closed the ImageUnit zero-cost gap this document originally disclosed (§9 below, updated in place) and completed a precise classification of the F06 Hanging partial result (§2 below, updated in place). Neither change alters P3-O12's status.
 - Companion to `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` (non-engineer summary). This document is the checked evidence backing every claim there.
 - Substitutes for `typesetting-v2/tools/core-trace-viewer/`: given this Loop's timebox, evidence is delivered as this static document (JSON/trace excerpts drawn directly from passing automated tests) rather than a separate interactive tool. No manuscript upload occurred; every value here is either a real test assertion or read-only-sourced production data, never fabricated.
 
@@ -8,11 +9,11 @@
 
 | Metric | Value |
 |---|---|
-| Starting baseline (before this Loop) | 153 / 153 PASS |
-| Ending total | 170 / 170 PASS |
-| New this Loop | 17 |
-| Regressions | 0 |
-| Weakened/deleted existing assertions | 0 |
+| Starting baseline (P3-L15) | 153 / 153 PASS |
+| P3-L15 ending | 170 / 170 PASS (+17) |
+| P3-L15A ending | 174 / 174 PASS (+4 net: 1 stale test replaced with 5 precise F14-A–G tests) |
+| Regressions (either Loop) | 0 |
+| Weakened/deleted existing assertions | 0 (the 1 replaced test's own assertions were preserved; its now-inaccurate name/framing was corrected, not weakened) |
 
 ## 2. F01–F20 fixture accounting
 
@@ -23,7 +24,7 @@
 | F03 line-end prohibition | `breaks/opportunity.test.ts` | PASS (prior) |
 | F04 strict cl-05 (HG-1) | `rules/defaultRuleSet.test.ts` | PASS (prior) |
 | F05 strict cl-12/cl-13 (HG-2) | `rules/defaultRuleSet.test.ts` | PASS (prior) |
-| F06 hanging rule capability | `rules/defaultRuleSet.test.ts` (`hangingPunctuationScope`) | PARTIAL — scope data exists (cl-06/cl-07); no eligibility-check function or physical hanging application exists yet. Not claimed as fully PASS; explicit deferral, not silent gap. |
+| F06 hanging rule capability | `rules/defaultRuleSet.test.ts` (`hangingPunctuationScope`) | PARTIAL, precisely classified at P3-L15A: **Category B — Expected Deferred / Later Logical Stage.** `P3_CORE_LOOP_ROADMAP.md` line 110 (original P3-L09 entry) explicitly scopes hanging punctuation as deferrable to "its own micro-Loop before P3-L10" — never executed as its own Loop. The F-series taxonomy (`P3_CORE_IMPLEMENTATION_PLAN.md` §10) itself tags F06 "P3-L09 (follow-up scope)," not a required Loop deliverable. Contract §12 makes clear this IS a Core decision (not Renderer-only) once built, so it is not Category A; every value it needs (cl-06/cl-07 scope, single-slot design per TSP-LOOP-029 precedent) is already frozen, so it is not Category D. **G1 blocker: NO** — its absence at this milestone is an anticipated, roadmap-scoped state, not an undiscovered gap. Recommended: a dedicated future micro-Loop, not squeezed into a gap-closure Loop past its own "no new features" boundary. |
 | F07 atomic/group ruby | `ruby/index.test.ts`, cross-feature test (this Loop) | PASS |
 | F08 explicit-segment jukugo ruby | `ruby/index.test.ts` | PASS |
 | F09 overlong ruby geometry policy | `ruby/index.test.ts` | PASS (mechanism proven; real HG-4 overhang values remain P3-O06 residual OPEN) |
@@ -31,7 +32,7 @@
 | F11 dash run | `breaks/opportunity.test.ts`, `compose/line.test.ts`, cross-feature test | PASS |
 | F12 ellipsis run | `breaks/opportunity.test.ts` | PASS |
 | F13 manual page break | `compose/page.test.ts`, cross-feature test (this Loop) | PASS |
-| F14 image (fits-capacity, break-before/after) | `images/index.test.ts` | PASS (standalone function; NOT wired into automatic page-fill — see §9 integration gap) |
+| F14 image (fits-capacity, break-before/after) | `images/index.test.ts`, `compose/line.test.ts`/`layout/composeCanonicalDocument.test.ts` F14-A–G (P3-L15A) | **PASS — gap closed at P3-L15A.** An image now consumes its own real intrinsic extent in the line/column-filling loop (not zero-cost); fits/doesn't-fit correctly determines placement; a following-text position shift is directly proven; source mapping preserved; unresolved intrinsic size produces a structured HOLD; FULL placement's isolation propagates through the real column/page composer; composition is deterministic. Image **decode/paint** remains out of scope (Renderer-only, Contract §14/§28) — not judged here. |
 | F15 two-column flow | `compose/page.test.ts`, 8-preset sweep (this Loop) | PASS |
 | F16 Unicode/grapheme safety | `source/graphemeSafety.test.ts`, `breaks/opportunity.test.ts`, `compose/line.test.ts` | PASS |
 | F17 warning/error/HOLD | `diagnostics/index.test.ts`, HOLD gate test (this Loop) | PASS |
@@ -87,9 +88,13 @@ F19's long-prose fixture (100 code points, deliberately exceeding one column's c
 
 Every `GeometryTick` field (`xTick`, `yTick`, `residualSpaceTick`) in a representative assembled multi-page document checked via `Number.isInteger` — zero floating-point canonical values found. No CSS px or renderer-native unit appears anywhere under `core/` (grep-verified, zero matches for forbidden imports every Loop including this one).
 
-## 9. Known integration gap: images
+## 9. Image integration gap — CLOSED at P3-L15A
 
-`core/images/index.ts`'s `placeImage()` (Contract §14 fits-capacity + break-before/after decision) exists and is independently tested (P3-L11/original-P3-L13) but was never wired into `compose/line.ts`'s atom-cost model — `cellCountFor` returns `0` for `IMAGE` units, meaning an image atom is always "free" and always placed regardless of its real intrinsic size. This is disclosed here as a real, named scope gap for a future Loop (most naturally alongside whichever Loop first performs full end-to-end `layout/assemble.ts` image wiring), not silently absorbed into a "PASS" claim.
+Originally disclosed here (P3-L15): `core/images/index.ts`'s `placeImage()` existed and was independently tested but was never wired into `compose/line.ts`'s atom-cost model (`cellCountFor` returned `0` for `IMAGE`, making an image atom always "free").
+
+**Fix (P3-L15A):** `compose/line.ts`'s atom-advance computation (renamed `advanceTickFor`) now reads an `IMAGE` unit's real intrinsic height directly from `MeasurementFacts.imageIntrinsicTick(refId)` instead of a cell multiple. If that height is `<= 0` ("no resolvable intrinsic size," Contract §26's own example), `composeLine` returns a structured hold (`IMAGE_INTRINSIC_SIZE_UNRESOLVED`) rather than silently treating it as free. Separately, `breaks/opportunity.ts` now marks the boundary on both sides of a `FULL`-placement image as `MANUAL_FORCED` — reusing the existing, already-tested manual-break mechanism (not a new one) so `FULL` placement's already-frozen "isolate on both sides" decision (`placeImage`, P3-L11) actually propagates through the real column/page composer, closing the column and page immediately exactly as a manual page break does.
+
+No new Product policy was introduced: every behavior wired in was already a tested, frozen decision from `core/images/index.ts` (P3-L11) or an existing mechanism (`MANUAL_FORCED`, already used for `ManualBreakUnit`). Verified by `core/layout/composeCanonicalDocument.test.ts`'s F14-A through F14-G tests (see §2 above).
 
 ## 10. P3-O12 disclosure (page-preset geometry)
 
@@ -103,20 +108,20 @@ The 8-preset sweep in this Loop uses **real** `charsPerLine`/`linesPerColumn`/`f
 | Real preset capacity/geometry formula (mm → chars/lines) | **OPEN (P3-O12)** |
 | Placeholder geometry presented as final Product authority | **NO — not claimed anywhere in this evidence** |
 
-## 11. Open items — unchanged status (none resolved, none fabricated, this Loop)
+## 11. Open items — unchanged status (none resolved, none fabricated, either Loop)
 
-P3-O03, P3-O04, P3-O05, P3-O06 residual, P3-O07, P3-O08, P3-O09, P3-O12, P3-O14, P3-O15 — all remain OPEN exactly as before this Loop. This Loop did not touch, narrow, or silently close any of them.
+P3-O03, P3-O04, P3-O05, P3-O06 residual, P3-O07, P3-O08, P3-O09, P3-O12, P3-O14, P3-O15 — all remain OPEN exactly as before P3-L15/P3-L15A. Neither Loop touched, narrowed, or silently closed any of them. F06 Hanging is now precisely classified (§2) but not implemented — still an accurately disclosed gap, not fabricated as resolved.
 
-## 12. Scope audit
+## 12. Scope audit (P3-L15A)
 
-- `npx vitest run`: 170/170 PASS.
+- `npx vitest run`: 174/174 PASS.
 - `npx tsc --noEmit`: exits non-zero; the only reported error is the pre-existing, unrelated `src/app/layout.tsx(33,50)` `LayoutProps` gap present since P3-L04 — **0 new TypeScript errors** from this Loop.
 - Forbidden-import grep (DOM/React/Next/`src/`) under `core/`: zero matches.
-- `git status --short` before commit: only `core/layout/assemble.ts` (extended with `composeCanonicalDocument`), `core/index.ts` (new, the roadmap-named public entry point), `core/layout/composeCanonicalDocument.test.ts` (new), plus this evidence pair and the loop-log/roadmap status updates. No `src/`, `package.json`, lockfile, or `vitest.config.ts` change.
+- `git status --short` before commit: only `core/compose/line.ts` (real image cost + hold-on-unresolved-size), `core/breaks/opportunity.ts` (FULL-image forced isolation), `core/layout/composeCanonicalDocument.test.ts` (F14-A–G tests replacing the now-inaccurate "gap" test), plus this evidence pair and the loop-log/roadmap status updates. No `src/`, `package.json`, lockfile, or `vitest.config.ts` change.
 - No new dependency installed.
 - No push, no deploy.
 
 ## 13. Decision
 
-**P3-L15 AUTOMATED: PASS.**
-**HUMAN GATE G1: PENDING** — awaiting Product Owner review of `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md`'s scorecard. No Human answer has been filled in by this session. Master is not modified. Phase 3 is not closed. No push, no deploy.
+**P3-L15 AUTOMATED: PASS. P3-L15A GAP CLOSURE: PASS.**
+**HUMAN GATE G1: PENDING** — awaiting Product Owner review of `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md`'s scorecard. No Human answer has been filled in by this or the prior session. Master is not modified. Phase 3 is not closed. No push, no deploy.

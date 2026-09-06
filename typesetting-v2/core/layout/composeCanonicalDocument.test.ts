@@ -206,22 +206,133 @@ describe("Cross-feature regression: prose + kinsoku + ruby + TCY + dash + manual
     expect(rubyBaseAppearsAsOrdinaryPlacement).toBe(true);
   });
 
-  it("known integration gap (disclosed, not silently papered over): ImageUnit is not yet wired into compose/line.ts's capacity math", () => {
-    // core/images/index.ts's placeImage() is a standalone Contract §14
-    // decision function (P3-L11/original-P3-L13) -- it was never wired into
-    // compose/line.ts's atom cost model (cellCountFor returns 0 for IMAGE,
-    // documented there as "images are out of this Loop's scope"). This test
-    // exists so that gap is a named, checked fact, not a silent omission
-    // this regression suite pretends doesn't exist.
+  it("F14-C/D — an image now consumes real canonical extent, changing where following text lands (P3-L15A gap closure)", () => {
+    // Previously (P3-L15), an IMAGE unit composed at zero cost -- disclosed
+    // as a named gap. P3-L15A closes it: compare composing the SAME
+    // following text with and without a preceding image of known intrinsic
+    // height, under a budget too small to fit both on one line/column.
     const blockId = "body-1";
-    const image = { kind: "IMAGE" as const, span: { blockId, start: 0, end: 1 }, refId: "x", intrinsicWidth: 1, intrinsicHeight: 1, placement: "CENTER" as const };
-    const settings = makeSettings();
-    const doc = composeCanonicalDocument({ bodyUnits: [image], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
-    // The image atom is placed at zero cost (not fits-capacity-checked by
-    // the line composer) -- this is the documented gap, verified here
-    // rather than assumed.
+    const settings = makeSettings({ lineExtentTicks: cellTicks(10) * 20, columnExtentTicks: cellTicks(10) * 3 });
+    const imageHeight = measurement.imageIntrinsicTick("cover").height;
+    expect(imageHeight).toBeGreaterThan(0); // sanity: the fake provider's fixture is non-zero
+
+    const withoutImage = text(blockId, "あいう", 0);
+    const docWithoutImage = composeCanonicalDocument({
+      bodyUnits: [withoutImage],
+      ruleSet: DEFAULT_RULE_SET_V2,
+      measurement,
+      settings,
+    });
+    // "あいう" alone fits on a single line -- no cost from anything else.
+    expect(docWithoutImage.pages[0].columns[0].lines).toHaveLength(1);
+
+    const image = {
+      kind: "IMAGE" as const,
+      span: { blockId, start: 0, end: 1 },
+      refId: "cover",
+      intrinsicWidth: 1,
+      intrinsicHeight: 1,
+      placement: "CENTER" as const,
+    };
+    const afterText = text(blockId, "あいう", 1);
+    const docWithImage = composeCanonicalDocument({
+      bodyUnits: [image, afterText],
+      ruleSet: DEFAULT_RULE_SET_V2,
+      measurement,
+      settings,
+    });
+    expect(docWithImage.hold).toBe(false);
+    // The image atom's own advance equals its real intrinsic height, not 0
+    // and not one ordinary text cell's advance.
+    const imagePlaced = docWithImage.pages[0].columns[0].lines[0].placedUnits[0];
+    const nextPlaced = docWithImage.pages[0].columns[0].lines[0].placedUnits[1];
+    expect(nextPlaced.yTick - imagePlaced.yTick).toBe(imageHeight); // F14-D: not zero-cost
+    expect(imagePlaced.sourceSpan).toEqual(image.span); // F14-E: source mapping preserved
+  });
+
+  it("F14-A/B — image fits-capacity determines whether it shares a line/column with surrounding text", () => {
+    const blockId = "body-1";
+    const imageHeight = measurement.imageIntrinsicTick("cover").height;
+    const image = {
+      kind: "IMAGE" as const,
+      span: { blockId, start: 0, end: 1 },
+      refId: "cover",
+      intrinsicWidth: 1,
+      intrinsicHeight: 1,
+      placement: "CENTER" as const,
+    };
+
+    // Fits: line extent comfortably exceeds the image's real height.
+    const fitsSettings = makeSettings({ lineExtentTicks: imageHeight * 2 });
+    const fitsDoc = composeCanonicalDocument({ bodyUnits: [image], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings: fitsSettings });
+    expect(fitsDoc.hold).toBe(false);
+    expect(fitsDoc.pages[0].columns[0].lines[0].placedUnits).toHaveLength(1);
+
+    // Does not fit at all (even alone): structured hold, never a guess/split.
+    const tooSmallSettings = makeSettings({ lineExtentTicks: imageHeight - 1 });
+    const tooSmallDoc = composeCanonicalDocument({ bodyUnits: [image], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings: tooSmallSettings });
+    expect(tooSmallDoc.hold).toBe(true);
+    expect(tooSmallDoc.errors[0].severity).toBe("BLOCKS_HOLD");
+  });
+
+  it("F14-F — an image with no resolvable intrinsic size produces a structured HOLD, never a silent zero-cost PASS", () => {
+    const blockId = "body-1";
+    const noSizeMeasurement = {
+      ...measurement,
+      imageIntrinsicTick: () => ({ width: 0, height: 0 }), // simulates "no MeasurementFacts entry" (Contract §26)
+    };
+    const image = {
+      kind: "IMAGE" as const,
+      span: { blockId, start: 0, end: 1 },
+      refId: "missing",
+      intrinsicWidth: 1,
+      intrinsicHeight: 1,
+      placement: "CENTER" as const,
+    };
+    const doc = composeCanonicalDocument({
+      bodyUnits: [image],
+      ruleSet: DEFAULT_RULE_SET_V2,
+      measurement: noSizeMeasurement,
+      settings: makeSettings(),
+    });
+    expect(doc.hold).toBe(true);
+    expect(doc.errors[0].message).toBe("IMAGE_INTRINSIC_SIZE_UNRESOLVED");
+    expect(doc.errors[0].severity).toBe("BLOCKS_HOLD");
+  });
+
+  it("F14-G — image flow composition is deterministic across repeated runs", () => {
+    const blockId = "body-1";
+    const image = {
+      kind: "IMAGE" as const,
+      span: { blockId, start: 0, end: 1 },
+      refId: "cover",
+      intrinsicWidth: 1,
+      intrinsicHeight: 1,
+      placement: "CENTER" as const,
+    };
+    const settings = makeSettings({ lineExtentTicks: cellTicks(10) * 20 });
+    const first = composeCanonicalDocument({ bodyUnits: [image], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+    const second = composeCanonicalDocument({ bodyUnits: [image], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+    expect(second).toEqual(first);
+  });
+
+  it("FULL placement forces isolation on both sides through the real composition pipeline (Contract §14)", () => {
+    const blockId = "body-1";
+    const before = text(blockId, "あ", 0);
+    const image = {
+      kind: "IMAGE" as const,
+      span: { blockId, start: 1, end: 2 },
+      refId: "spread",
+      intrinsicWidth: 1,
+      intrinsicHeight: 1,
+      placement: "FULL" as const,
+    };
+    const after = text(blockId, "いう", 2);
+    const settings = makeSettings({ lineExtentTicks: cellTicks(10) * 20, columnsPerPage: 1 });
+    const doc = composeCanonicalDocument({ bodyUnits: [before, image, after], ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
     expect(doc.hold).toBe(false);
-    expect(doc.pages[0]?.columns[0]?.lines[0]?.placedUnits[0]?.sourceSpan).toEqual(image.span);
+    // "あ" isolated before the image, the image isolated on its own, "いう" starts fresh after.
+    expect(doc.pages.length).toBeGreaterThanOrEqual(3);
   });
 });
 

@@ -541,3 +541,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Await Human Gate G1 review. Per `P3_CORE_IMPLEMENTATION_PLAN.md` §18, no `src/` integration occurs merely because this milestone's automated criteria pass — Master is not modified, Phase 3 is not closed, and no further Core Loop begins until G1 is answered.
 
 ---
+
+## P3-L15A — G1 Gap Closure (Image Flow + F06 Hanging Audit)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `2dd22f0` (matches expected P3-L15 checkpoint), worktree clean before start.
+
+**QUESTION:** Can the Canonical Core G1 milestone be considered complete when manuscript images actually participate in canonical flow, and is the remaining F06 hanging partial result inside or outside the G1 Core boundary?
+
+**HYPOTHESIS:** The image gap can be closed using the already-frozen `ImageUnit`/`MeasurementFacts` contract without a new Product decision. F06 may be an intentional later-stage partial, but this must be proven, not assumed.
+
+**METHOD — Part A (image flow):** Confirmed no Contract contradiction: Contract §14 already assigns "where in the flow the image sits and what that does to surrounding line/column/page decisions" to Core; decode/paint stays Renderer-only. Fixed `compose/line.ts`: renamed `cellCountFor` to `advanceTickFor` and made it read an `IMAGE` unit's real intrinsic height directly from `measurement.imageIntrinsicTick(refId)` instead of returning a hard-coded `0`. Added a distinct signal (`AtomComputationResult.unresolvedImageSpan`) for the case Contract §26 itself names ("an image with no resolvable intrinsic size") — `height <= 0` now produces a structured `IMAGE_INTRINSIC_SIZE_UNRESOLVED` hold rather than silently composing as free. Fixed `breaks/opportunity.ts`: a boundary on either side of a `FULL`-placement `ImageUnit` is now marked `MANUAL_FORCED` — deliberately reusing the existing, already-tested manual-break mechanism (not inventing a new one) so `placeImage()`'s already-frozen "isolate on both sides" decision (P3-L11) actually propagates through the real column/page composer. Discovered and fixed a stale test: P3-L15's own "known integration gap" test in `composeCanonicalDocument.test.ts` had assertions loose enough to keep passing even after the gap closed — its name and framing would have silently misrepresented reality had it been left as-is; replaced with 5 precise F14-A–G tests.
+
+**METHOD — Part B (F06 audit):** Direct-read `P3_CORE_LOOP_ROADMAP.md` line 110 (original P3-L09 entry): "hanging punctuation (defer to this Loop's follow-up only if time allows — otherwise its own micro-Loop before P3-L10)" — an explicit, deliberate deferral written into the frozen roadmap itself, never executed as its own Loop. Cross-checked `P3_CORE_IMPLEMENTATION_PLAN.md` §10's F-series table, which already tags F06 "P3-L09 (follow-up scope)" — never a required deliverable. Checked Contract §12: hanging *is* a Core decision once built (not Renderer-only), so not Category A; every value it needs (cl-06/cl-07 scope, single reserved-slot design per TSP-LOOP-029 precedent) is already frozen, so not Category D either. Classified as **Category B — Expected Deferred / Later Logical Stage**. Per this Loop's own "no new features past the implementation boundary" rule and the roadmap's own "its own micro-Loop" framing, did NOT implement hanging in this gap-closure Loop — recommended as a dedicated future micro-Loop instead of squeezing it in.
+
+**TESTS:** `core/layout/composeCanonicalDocument.test.ts`: F14-A/B (fits/doesn't-fit determines placement, non-fitting alone produces `BLOCKS_HOLD`), F14-C/D (with-image vs. without-image comparison directly proving the image is no longer zero-cost — the following text's `yTick` delta from the image equals the image's real intrinsic height, not 0 and not one text cell), F14-E (source mapping preserved), F14-F (simulated unresolved intrinsic size via a test-local measurement override → `IMAGE_INTRINSIC_SIZE_UNRESOLVED` `BLOCKS_HOLD` error), F14-G (determinism), and a `FULL`-placement isolation test proving ≥3 pages result (isolated-before / image-alone / isolated-after) through the real `composeCanonicalDocument` pipeline. All 170 pre-existing tests re-ran unmodified and green except the 1 stale test replaced (its assertions were preserved verbatim in spirit, only its now-inaccurate name/framing was corrected).
+
+**INVARIANTS:** INV-001 — PASS (F14-E, source mapping through image placement). INV-005 — PASS (F14-G). INV-010 — PASS (F14-F, unresolved measurement produces `BLOCKS_HOLD`, never a silent free pass). No other invariant touched; all previously-passing invariant evidence re-verified unaffected by the fix.
+
+**RESULT: PASS.** `npx vitest run`: 174/174 (170 prior − 1 stale test + 5 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep: zero forbidden imports. Scope: only `core/breaks/opportunity.ts`, `core/compose/line.ts`, `core/layout/composeCanonicalDocument.test.ts`, and the two G1 evidence documents (updated in place, not replaced) changed.
+
+**OPEN ITEMS:** None resolved by fabrication. P3-O12 untouched, still OPEN, still accurately disclosed. F06 Hanging is now precisely classified (Category B) rather than vaguely "PARTIAL" — still not implemented, still accurately disclosed as an open, deliberately-deferred item, not silently marked PASS.
+
+**DECISION: P3-L15A — PASS.**
+
+**WHY:** Every behavior wired into the image-flow fix was already a tested, frozen decision (`core/images/placeImage`, P3-L11) or an existing mechanism (`MANUAL_FORCED`) — no new Product policy was invented to close this gap. The F06 classification traces to two direct roadmap citations, not an inference.
+
+**NEXT:** `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` and `typesetting-v2/qa/evidence/P3_G1_CANONICAL_CORE_EVIDENCE.md` are updated to reflect both fixes. Human Gate G1 remains PENDING — no Human answer has been filled in by this or the prior session. Master is not modified. Phase 3 is not closed. No further Core Loop begins until G1 is answered.
+
+---

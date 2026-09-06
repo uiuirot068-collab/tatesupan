@@ -1,7 +1,8 @@
 # P3-L15 — Canonical Core Regression Suite — Human Gate G1 Review
 
-- Status: **AUTOMATED WORK COMPLETE. HUMAN GATE G1: PENDING.**
+- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PENDING.**
 - This document is written for a non-engineer reviewer. It does not require reading source code.
+- **Update (P3-L15A):** the image-placement gap first found while preparing this review (§14 below) has been fixed and re-verified — images now consume real page space. The hanging-punctuation item (§14) has been precisely classified as a deliberately deferred, already-planned future item — not a surprise gap.
 
 ## 1. What G1 is judging
 
@@ -99,9 +100,12 @@ Every composed document carries four identifying tags so this exact result could
 | **Real 文庫/A5/B5/B6/新書/A6/Web page geometry** | **OPEN — see §15 below, read this carefully** |
 | Jukugo automatic segmentation (splitting a compound word's reading automatically) | OPEN — the Core only ever honors reading splits the manuscript already declares |
 | Group-ruby's distinct break rule | OPEN — currently treated the same as ordinary ruby |
-| Image placement wired into automatic page-filling | **OPEN — see the "known integration gap" note below** |
+| Image placement wired into automatic page-filling | **FIXED (see below)** |
+| Hanging punctuation (ぶら下げ) composition decision | OPEN, but deliberately deferred — see below |
 
-**Known integration gap, disclosed rather than hidden:** an image's fits-on-page check exists as its own tested function, but it is not yet wired into the automatic line/page-filling loop — an image reference currently passes through page composition at zero cost rather than being fit-checked automatically. This is a real, named gap for a future Loop, not a silent omission.
+**Image gap: fixed.** An image now consumes its own real amount of page space when the manuscript flows around it — a following paragraph is confirmed (by test) to land in a different position depending on whether an image precedes it. An image that's too large to fit anywhere produces the same safety mechanism as any other impossible layout (see §11). Image *decode/rendering* itself is still not built — that remains a separate, later Renderer stage, not judged here.
+
+**Hanging punctuation: deliberately deferred, not a surprise gap.** TateSpun's rule for "a trailing 。or 、 hangs one extra character past the normal line end" is not yet implemented. This was **always planned as its own separate, later step** — the project's own roadmap explicitly scoped it that way from the start, and the piece of information needed to build it (which punctuation qualifies, how many characters may hang) is already decided, not an open question. It is not judged as part of this milestone.
 
 ## 15. ⚠️ Important disclosure about page presets (P3-O12)
 
