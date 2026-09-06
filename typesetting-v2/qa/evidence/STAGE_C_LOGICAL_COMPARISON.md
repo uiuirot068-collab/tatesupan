@@ -181,3 +181,42 @@ Per `CORE_MIGRATION_ROLLBACK_PLAN.md` §3 (integration entry criteria, Stage G �
 
 **RUBY PLACEMENT MICRO-LOOP REQUIRED BEFORE STAGE D: Evaluate, per the Human decision already recorded in `qa/research/PREVIEW_DEVELOPMENT_ADAPTER_PLAN.md` §0 Decision 2** — this Stage C Loop confirms the exception clause was **not** triggered (the missing ruby-placement wiring did not invalidate the logical/body-flow comparison this Loop performed).
 
+---
+
+## 16. Post-Stage-C Gap Review (2026-09-06)
+
+A follow-up pass classifying ownership and Stage D impact for each of §8's three discoveries, and re-confirming the ruby-placement decision now that Stage C has actually run. No Core/legacy/`src/` change was made in this review — classification only.
+
+### Root Cause A — 一字下げ auto-indent
+
+- **Owner:** not a bug on either side — 一字下げ is a deliberate, real Japanese typesetting convention legacy already implements (TSP-LOOP-029); v2 simply doesn't implement it yet, at any layer (Core has no such concept, and no Normalizer exists yet to own it either). Classified as **KNOWN OPEN ITEM (newly discovered by this Stage C Loop) requiring a PRODUCT POLICY DECISION** — whether v2 should replicate 一字下げ at all, and if so, whether that is a Normalizer-emitted marker or a Core `compose/line.ts` behavior, is not decided by any existing Contract section or open item.
+- **Severity:** MEDIUM — highly visible (cascades through nearly every line of a multi-line document) but never a safety/correctness issue: zero source content loss, no invariant violated, no page-break placement error.
+- **Source integrity affected:** NO. **Page break affected:** indirectly, at document scale (`long-non-repeating-prose`'s 4-vs-3 page count is partly attributable to this, compounded with Root Cause B). **Line break affected:** YES, systematically.
+- **Would Stage D visual QA be misleading if unresolved:** YES, if a reviewer is not briefed — the Preview Adapter plan's own first-visual-gate criterion "line-break correspondence (same words end each line, modulo already-approved stricter kinsoku)" has no existing carve-out for this gap, so an unbriefed side-by-side comparison would read as pervasive rendering disagreement when the actual cause is a missing logical-layer behavior, unrelated to any renderer.
+- **Requires fix before Stage D:** **NO fix** (no frozen desired behavior exists to implement) — but **YES, a Human Product decision is required** before Stage D's first visual gate can be run and interpreted correctly. This is Case 3, not Case 2: the behavior isn't frozen anywhere, so implementing it now would mean inventing Product policy, which this review does not do.
+
+### Root Cause B — bare `\n` paragraph-break forcing
+
+- **Owner:** same category as Root Cause A — **KNOWN OPEN ITEM (newly discovered) requiring PRODUCT POLICY DECISION**, specifically about the not-yet-designed Normalizer (P3-O14 already names the Normalizer itself as unowned/undesigned) — whether a manuscript's bare `\n` should become a forced-break signal, and if so what LogicalUnit/mechanism represents it, is a genuine open design question, not an implementation bug.
+- **Severity:** MEDIUM, same reasoning as Root Cause A — visible, not a correctness/safety issue, zero content loss.
+- **Source integrity affected:** NO. **Page break affected:** YES, materially (`paragraph-break-gap` fixture: 2 lines vs 1; `long-non-repeating-prose`: 4 vs 3 pages). **Line break affected:** YES.
+- **Would Stage D visual QA be misleading if unresolved:** YES, same reasoning as Root Cause A, and more visible for multi-paragraph prose specifically (which the approved long-form Human QA fixture, `prototypes/ui-comparison/shared/content.js`'s `MANUSCRIPT_TEXT`, contains — two `\n\n` boundaries).
+- **Requires fix before Stage D:** **NO fix** (same reasoning as Root Cause A — not frozen) — **YES, Human Product decision required.**
+
+### Root Cause C — manual-page-break phantom empty line
+
+- **Owner:** **KNOWN LEGACY DIFFERENCE — a legacy-only quirk, not a v2 defect.** Confirmed: v2's `ManualBreakUnit` produces no equivalent artifact, and nothing about v2's behavior here is wrong — if anything, v2's cleaner output is arguably more correct. Per this review's own instruction: not reproduced or fixed in v2, not treated as something v2 needs to replicate.
+- **Severity:** LOW — a single stray empty line, immediately after a page boundary both engines already agree on.
+- **Source integrity affected:** NO. **Page break affected:** NO (confirmed MATCH — the break lands at the identical logical position on both sides). **Line break affected:** YES, but confined to one extra empty line on legacy's side only.
+- **Would Stage D visual QA be misleading if unresolved:** NO, provided it is disclosed — a side-by-side reviewer comparing pages after a manual break may notice legacy showing one extra (empty) line; this is fully explained by existing evidence and needs only a documentation/annotation convention, not a fix. **Recommended annotation for Stage D tooling:** label this specific, known case `LEGACY EXTRA BLANK LINE` wherever a manual-break comparison is shown, rather than silently treating it as a mismatch or attempting to reproduce it in v2.
+- **Requires fix before Stage D:** NO.
+
+### Ruby placement — re-confirmed
+
+Stage C's actual run (not just the prior plan's prediction) confirms: ruby logical/body-flow comparison **PASSED** (`atomic-ruby`, `jukugo-ruby-declared-segments` — §11), and the missing `placeRuby()` Core wiring did **not** block or distort that comparison in any way. This directly re-confirms, with real evidence now in hand, the decision already recorded in `qa/research/PREVIEW_DEVELOPMENT_ADAPTER_PLAN.md` §0 Decision 2: **no ruby-placement micro-loop is required before Stage D.** Stage D's own adapter should follow that document's §9 option (b) — call Core's existing, tested `placeRuby()` directly for paint-only geometry, with a debug-overlay label making clear the placement is adapter-computed, not Core-composed — which safely avoids Stage D falsely suggesting Canonical visual ruby placement is available when it is not.
+
+### Stage D readiness
+
+The approved architecture (React DOM absolute-position, disposable-implementation/evolutionary-contract, `CanonicalDocument` + read-only `LogicalUnit[]` lookup, paint-only) remains valid — nothing in Root Causes A/B/C challenges any part of that decision; none of them are rendering-technology questions. **What changes is the first visual gate's interpretability**, not the architecture: Stage D can be *built* against the approved plan today, but running its first Human visual comparison and drawing conclusions from "line-break correspondence" specifically will be confounded by Root Causes A/B until Product decides whether/how v2 should represent them — a reviewer would otherwise blame the (uninvolved) renderer for a logical-layer gap.
+
+

@@ -660,3 +660,19 @@ None of these caused any source content loss or duplication anywhere in the 16-f
 **NEXT:** Human decision required (recorded as open questions in the evidence doc §14/§15, not resolved here): whether/how to design v2's (future) Normalizer or Core representation of 一字下げ and manuscript paragraph breaks (Root Causes A/B), and whether Root Cause C is worth a small legacy-side fix or should simply be documented as a known quirk. Stage D (visual Preview comparison) should read `STAGE_C_LOGICAL_COMPARISON.md` §14 before proceeding — a naive visual adapter reflowing manuscript text through v2 Core today will visibly disagree with legacy's Preview on nearly every paragraph for reasons unrelated to rendering technology, and a reviewer should not mistake that for a rendering bug. Master is not modified. Phase 3 is not closed. `src/`, Production, and the old engine remain fully untouched.
 
 ---
+
+## Post-Stage-C Gap Review (2026-09-06)
+
+**QUESTION:** Now that Stage C has actually run, what is each of its three discovered gaps' ownership and severity, and is Stage D (visual Preview comparison) ready to proceed?
+
+**METHOD:** Direct-read of `qa/evidence/STAGE_C_LOGICAL_COMPARISON.md` §7/§8/§9/§11/§13/§14 (no re-investigation of source code beyond what Stage C already cited — this pass classifies, it does not re-derive). No Core/legacy/`src/` change made.
+
+**RESULT:** Root Causes A (一字下げ auto-indent) and B (bare `\n` paragraph-break forcing) are both classified as **newly-discovered KNOWN OPEN ITEMS requiring a PRODUCT POLICY DECISION** — neither is a bug on either side, and neither has a frozen desired behavior anywhere in the Contract/roadmap to implement, so no fix is proposed. Root Cause C (manual-page-break phantom empty line) is classified as a **KNOWN LEGACY DIFFERENCE, legacy-only, v2 arguably more correct** — not reproduced or fixed in v2, recorded as a documentation/annotation matter for Stage D tooling (`LEGACY EXTRA BLANK LINE`) rather than a defect. Ruby placement is **re-confirmed** (with actual Stage C evidence now in hand, not just the prior plan's prediction): no micro-loop required before Stage D, per the Human decision already recorded in `qa/research/PREVIEW_DEVELOPMENT_ADAPTER_PLAN.md` §0 Decision 2. The approved Stage D architecture (React DOM absolute-position adapter) remains valid and unchallenged by any of this — what changes is only the *interpretability* of Stage D's first visual gate's "line-break correspondence" criterion, which will be confounded by Root Causes A/B until Product decides on them.
+
+**DECISION: Stage C gaps — REVIEWED, not resolved.** Full classification recorded in `qa/evidence/STAGE_C_LOGICAL_COMPARISON.md` §16.
+
+**WHY:** Root Causes A/B are genuine Product-policy questions (whether/how v2 should represent Japanese typesetting conventions no Contract section currently names) — implementing a fix here would mean inventing Product policy unilaterally, which this project's own established convention (every prior kinsoku/ruby Human-Gate decision) reserves for explicit Human approval.
+
+**NEXT: HUMAN PRODUCT DECISION REQUIRED** on Root Causes A and B (whether/how v2 should eventually represent 一字下げ auto-indent and manuscript paragraph-break forcing, and at which layer — Normalizer or Core). No corrective Core work is proposed or scheduled until that decision is made. Stage D's approved architecture may still be prepared/implemented against the existing plan, but its first visual gate should not be run and interpreted as a rendering-quality judgment until reviewers are briefed on Root Causes A/B (or Product has decided to accept/defer them). Master is not modified. Phase 3 is not closed. `src/`, Production, Core, and the old engine remain fully untouched.
+
+---
