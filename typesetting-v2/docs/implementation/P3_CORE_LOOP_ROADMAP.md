@@ -1,6 +1,6 @@
 # P3 Core Implementation Loop Roadmap
 
-- Status: **P3-L04: CLOSED. P3-L05: CLOSED (2026-09-06).** Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. Vitest dependency gate CLOSED (see pre-requisite section immediately below). P3-L04's scaffolding (`geometry/`, `version/`, `source/span.ts`, `layout/schema.ts`, `settings/`) and P3-L05's `source/graphemeSafety.ts` + `units/*.ts` are both implemented; `tsc --noEmit` and `vitest run` (27/27) pass — see each Loop's own entry below for exact acceptance-criteria status.
+- Status: **P3-L04: CLOSED. P3-L05: CLOSED (P3-L05A hardening applied). P3-L06: CLOSED (2026-09-06).** Defines every Loop from the first Core source file through the Canonical multi-page Core regression milestone. Vitest dependency gate CLOSED (see pre-requisite section immediately below). **P3-L06 re-scoping note:** at execution time, Product Owner instructions merged this roadmap's original P3-L06 (rules data only) and P3-L07 (break-opportunity derivation + trace) into one combined Loop retitled "Japanese Character Classes + Break Opportunity / Decision Foundation," and renumbered the *next* Loop (Natural-Pitch Line Composer) to P3-L07. This document's own P3-L06/P3-L07 section bodies below are updated to record what was actually built, per Loop; the numbering shift is intentional Product direction, not a drift this roadmap failed to catch. `tsc --noEmit` and `vitest run` (75/75) pass — see each Loop's own entry below for exact acceptance-criteria status.
 - Every Loop ends with: tests PASS → scope audit (nothing outside `typesetting-v2/core/` and its docs/fixtures/tests changed) → Human Gate if marked YES → checkpoint commit (see `P3_CORE_IMPLEMENTATION_PLAN.md` §20).
 - If the same implementation failure/workaround repeats 2–3 times inside one Loop: **stop the Loop, record the blocker in `research/PHASE3_LOOP_LOG.md`, do not keep looping.** This rule applies to every Loop below without being repeated per-row.
 - No Loop below exceeds 90 minutes. None require a >120-minute opaque block; any Loop that starts to exceed 120 minutes in practice must be split into a new Loop ID, not extended.
@@ -47,6 +47,7 @@
 
 ### P3-L06 — Japanese Rule Data + Character Classes
 
+- **Status (2026-09-06): CLOSED — merged with the original P3-L07 below into one executed Loop** (Product Owner re-scoping; see roadmap header). `core/rules/characterClass.ts` (generic `buildCharacterClassLookup` algorithm + `CharacterClass`/`RuleSetVersion` types) and `core/rules/defaultRuleSet.ts` (`DEFAULT_RULE_SET_V2` data: cl-01/02/04/05/06/07/09/10/11/12/13, cl-08 `cl08PairRule`, `hangingPunctuationScope`, empty `rubyOverhangAllowance`) are implemented exactly per this entry's spec, encoding only classes with a READY row in `PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md` — the full 900-cell Table-2 grid remains OPEN and was not fabricated. 24 tests pass (`core/rules/defaultRuleSet.test.ts`). See `research/PHASE3_LOOP_LOG.md` P3-L06 entry for full evidence.
 - **Goal:** Implement `rules/characterClass.ts` and `rules/defaultRuleSet.ts` — the full cl-01–cl-30 table as **data**, HG-1/HG-2 strict policy, cl-08 pair rule, hanging scope, zero-valued ruby-overhang table.
 - **Timebox:** 60 min.
 - **Inputs:** Contract §7, `PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`, P3-O01 (READY), P3-O06 (READY for capability, values OPEN).
@@ -61,8 +62,9 @@
 
 ---
 
-### P3-L07 — Break Opportunity Derivation
+### P3-L07 (original numbering) — Break Opportunity Derivation
 
+- **Status (2026-09-06): CLOSED — executed together with P3-L06 above as one combined Loop.** `core/breaks/opportunity.ts` (`deriveBreakOpportunities`, covering TEXT internal kinsoku, cl-08 semantic-run pairing, RubyUnit JUKUGO declared-segment boundaries, MANUAL_BREAK forcing) and `core/trace/` (`TraceEvent`/`LayoutDecisionTrace`/`createTraceRecorder`) are implemented. Also went beyond this entry's original scope at Product Owner's direction: a capacity-independent `core/breaks/decision.ts` (`deriveManualBreakDecisions`, INV-006) was added — the original roadmap deferred all `BreakDecision` work to a later Loop, but the manual-forced case needs no capacity math, so it was pulled forward rather than left half-designed. Every `BreakOpportunityReason` value is reached by at least one test; trace-on/trace-off byte-identical output is verified. 17+3=20 tests pass (`core/breaks/opportunity.test.ts`, `core/breaks/decision.test.ts`). The Loop that is now renumbered **P3-L07** (see roadmap header) is the original P3-L09 (Natural-Pitch Line Composer + Break Decision) — its own capacity-dependent `BreakDecision` work (`CAPACITY_REACHED`, `HANGING_DEFERRAL`) remains fully unstarted. See `research/PHASE3_LOOP_LOG.md` P3-L06 entry for full evidence (both original Loops are recorded together there, matching how they were executed).
 - **Goal:** Implement `breaks/opportunity.ts` (pure function over TEXT units + the default RuleSetVersion) and `trace/` (recorder, observational-only property enforced by test), plus the cl-08 opportunity rule for `semanticRuns/`.
 - **Timebox:** 75 min.
 - **Inputs:** Contract §8/§23, `CORE_INVARIANTS.md`.

@@ -289,3 +289,37 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Checkpoint commit `TSP v2: harden grapheme safety guarantees`. P3-L06 (Japanese Rule Data + Character Classes) authorized to begin.
 
 ---
+
+## P3-L06 — Japanese Character Classes + Break Opportunity / Decision Foundation
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `ed092f8` (matches expected P3-L05A checkpoint), worktree clean before start.
+
+**Re-scoping note:** Product Owner instructions for this Loop explicitly merged the original roadmap's P3-L06 (rules data only) and P3-L07 (break-opportunity derivation + trace) into one combined Loop, and renumbered the *next* Loop (Natural-Pitch Line Composer, originally P3-L09) to P3-L07. `P3_CORE_LOOP_ROADMAP.md`'s own P3-L06/P3-L07 section bodies were updated in place to record this rather than silently drifting from what the frozen document said.
+
+**QUESTION:** Can TateSpun convert grapheme-safe logical boundaries into deterministic, source-mapped Japanese break opportunities and explain every allowed/prohibited decision through versioned rule data?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Read the three frozen rule-freeze documents directly (`P3_KINSOKU_RULE_FREEZE_CANDIDATE.md`, `P3_DASH_ELLIPSIS_RULE_FREEZE_CANDIDATE.md`, `PHASE3_JAPANESE_RULE_FREEZE_MATRIX.md`) for exact character membership rather than inventing any — only classes with a READY row are encoded (cl-01/02/04/05/06/07/09/10/11/12/13 plus a `cl-00` "ordinary text" fallback); the 900-cell Table-2 grid stays OPEN, not fabricated. Implemented `core/rules/characterClass.ts` (generic `buildCharacterClassLookup(definitions)` — the rule-evaluation *algorithm* — plus `CharacterClass`/`RuleSetVersion` types) and `core/rules/defaultRuleSet.ts` (`DEFAULT_RULE_SET_V2`, the actual jlreq-sourced membership *data*), keeping algorithm and data in separate files per the loop brief's explicit "data-driven, not `if (char === ...)` chains" instruction. Implemented `core/trace/index.ts` (`TraceEvent`/`LayoutDecisionTrace`/`createTraceRecorder`, observational-only per Contract §23). Implemented `core/breaks/opportunity.ts` (`deriveBreakOpportunities(units, ruleSet, trace?)`): TextUnit internal candidates are enumerated exclusively via P3-L05's `graphemeBoundaries()` (extended with one new export doing the same internal enumeration P3-L05A already used, now surfaced publicly) so a candidate can never land inside a grapheme cluster by construction; cl-08 dash/ellipsis pairing is evaluated by `SemanticRunKind` identity via `cl08PairRule`, not by character class; RubyUnit ATOMIC and undeclared-JUKUGO generate zero internal opportunities (INV-007 holds by construction, not by an explicit per-position prohibition); JUKUGO-with-`segments` generates exactly one `RUBY_INTERNAL_ALLOWED` opportunity per declared boundary and nothing else (HG-3, never guesses a split); `MANUAL_BREAK` always generates a `MANUAL_FORCED` opportunity. Implemented `core/breaks/decision.ts` (`deriveManualBreakDecisions`) — deliberately narrow: the only capacity-INDEPENDENT `BreakDecision` this Loop can make without a line-filling algorithm is the manual-forced case (INV-006), so that is the only one implemented; every other reason's actual taken/not-taken decision is left to the renumbered P3-L07 (Natural-Pitch Line Composer), which needs physical capacity math this Loop explicitly does not build.
+
+**PRIMARY EVIDENCE:** `core/rules/characterClass.ts`, `core/rules/defaultRuleSet.ts` (+`.test.ts`, 24 tests: class lookup, unknown-character fallback, HG-1 cl-05 strict (F04), HG-2 cl-12/cl-13 strict (F05), cl-08 pair rule, hanging scope, empty overhang table, determinism). `core/trace/index.ts`. `core/breaks/opportunity.ts` (+`.test.ts`, 17 tests: F02 line-start, F03 line-end, F11 dash keep-together + dash/ellipsis separability, F12 ellipsis keep-together, F07 atomic ruby zero internal opportunities, F08 jukugo declared/undeclared boundaries, F10 TCY atomicity, F13 manual-forced, code-point-vs-UTF-16 source mapping, grapheme-interior-never-a-candidate, determinism, trace-on/off byte-identical output, stable rule-id in trace, ImageUnit boundary neutrality). `core/breaks/decision.ts` (+`.test.ts`, 3 tests). One small, necessary extension to `core/source/graphemeSafety.ts`: exported `graphemeBoundaries(text): number[]` (previously an unexported internal helper) — reused, not duplicated. `npx vitest run`: 75/75 pass. `npx tsc --noEmit`: only the same pre-existing, unrelated `src/app/layout.tsx` `LayoutProps` error seen at every prior Loop — 0 new errors. Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/rules/`, `core/breaks/`, `core/trace/` (new) and `core/source/graphemeSafety.ts` (the one-export addition) changed.
+
+**RESULT: PASS.**
+
+- HG-1 strict (cl-05): PASS. HG-2 strict (cl-12/13): PASS.
+- Line-start / line-end kinsoku: PASS.
+- Dash/ellipsis cl-08 keep-together: PASS.
+- Atomic ruby internal-break prohibition: PASS (by construction — zero opportunities generated, matching INV-007's "every opportunity inside is PROHIBITED_GROUP" vacuously and intentionally, a documented design choice within the loop brief's own sanctioned "do not create internal break opportunities" option).
+- Jukugo legal declared boundary: PASS. Undeclared/non-legal boundary: PASS (no opportunity generated — the loop brief explicitly sanctions "prohibited or not generated").
+- TCY atomic grouping: PASS.
+- Manual forced break + decision + trace: PASS.
+- Determinism (opportunity derivation and decision derivation): PASS.
+- No Line Composer (capacity math, `composeLine`, residual-space accounting) leaked in: confirmed absent.
+
+**DECISION: P3-L06 (combined with original P3-L07) — PASS / CLOSED.**
+
+**WHY:** Every character-class membership traces verbatim to one of the three frozen rule-freeze documents' own tables/legacy-comparison rows, not to this Loop's invention; the algorithm/data split directly answers the loop brief's explicit anti-pattern warning; every BreakOpportunityReason value is exercised by a named F-series fixture or Contract §8 case; the ruby/TCY/manual-break scope boundaries all trace to explicit "Explicitly NOT included" lines in this same entry's brief.
+
+**NEXT:** Checkpoint commit `TSP v2: implement Japanese break analysis`. P3-L07 (renumbered; originally P3-L09, Natural-Pitch Line Composer + Break Decision) authorized to begin — first Loop that may implement capacity-aware line filling and the remaining `BreakDecisionCause` values (`CAPACITY_REACHED`, `HANGING_DEFERRAL`).
+
+---

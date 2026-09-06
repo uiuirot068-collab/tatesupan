@@ -101,6 +101,17 @@ export function assertGraphemeSafeBoundary(text: string, codePointOffset: number
   }
 }
 
+// Every code-point offset into `text` that is a legal extended-grapheme-
+// cluster boundary, sorted ascending (always starts with 0, ends with
+// codePointLength(text)). Break-opportunity derivation (P3-L06) uses this to
+// enumerate candidate positions — a candidate must never fall between two
+// offsets this function would not itself produce, which is exactly what
+// keeps break candidates grapheme-safe by construction (INV-011) instead of
+// by ad hoc raw-string indexing.
+export function graphemeBoundaries(text: string): number[] {
+  return Array.from(graphemeBoundaryOffsets(text)).sort((a, b) => a - b);
+}
+
 // Convenience wrapper validating both edges of a SourceSpan against the text
 // it addresses (`text` is the span's containing block's normalizedText, or
 // any substring positioned so span.start/span.end are measured against it).
