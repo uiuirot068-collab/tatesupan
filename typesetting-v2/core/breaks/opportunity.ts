@@ -11,6 +11,7 @@ import { DEFAULT_CLASS, type CharacterClass, type RuleSetVersion } from "../rule
 import type { LogicalUnit, SemanticRunKind, TextUnit } from "../units";
 import type { TraceRecorder } from "../trace";
 import { deriveRubyBreakOpportunities } from "../ruby";
+import { semanticRunPairRule } from "../semanticRuns";
 
 export type BreakOpportunityReason =
   | "ALLOWED"
@@ -150,7 +151,7 @@ export function deriveBreakOpportunities(
     let reason: BreakOpportunityReason;
     let ruleApplied: string;
     if (leftEdge.semanticRunKind && rightEdge.semanticRunKind) {
-      const pairing = ruleSet.cl08PairRule(leftEdge.semanticRunKind, rightEdge.semanticRunKind);
+      const pairing = semanticRunPairRule(ruleSet, leftEdge.semanticRunKind, rightEdge.semanticRunKind);
       reason = pairing === "INSEPARABLE" ? "PROHIBITED_GROUP" : "ALLOWED";
       ruleApplied = `cl-08 pair rule: ${leftEdge.semanticRunKind}+${rightEdge.semanticRunKind} -> ${pairing}`;
     } else {

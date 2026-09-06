@@ -23,6 +23,7 @@ import type { LogicalUnit } from "../units";
 import type { TraceRecorder } from "../trace";
 import type { CanonicalLine, PlacedUnit } from "../layout/schema";
 import { deriveBreakOpportunities, type BreakOpportunity } from "../breaks/opportunity";
+import { tcyCellCost } from "../tcy";
 
 export interface CompositionSettings {
   bodyFontRef: string;
@@ -68,7 +69,7 @@ function cellCountFor(unit: LogicalUnit, spanWidth: number): number {
     case "TEXT":
       return 1;
     case "TCY":
-      return unit.logicalCells;
+      return tcyCellCost(unit);
     case "SEMANTIC_RUN":
       return unit.length;
     case "RUBY":

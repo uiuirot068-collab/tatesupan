@@ -427,3 +427,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** P3-L10 (renumbered; originally P3-L12, TCY + Semantic Run Line-Composer Integration) authorized to begin.
 
 ---
+
+## P3-L10 — TCY + Semantic Run Line-Composer Integration
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `ce7bcac` (matches expected P3-L09 checkpoint), worktree clean before start.
+
+**QUESTION:** Is TCY/semantic-run integration into `compose/line.ts`'s capacity math already functionally complete from P3-L06/P3-L07 (which handled both inline), and if so, can this Loop close the remaining gap — giving each its own `CORE_MODULE_MAP.md`-named module (`tcy/` row 17, `semanticRuns/` row 18) — without changing any existing behavior?
+
+**HYPOTHESIS:** Yes — `compose/line.ts`'s `cellCountFor` already treats a TCY unit as `logicalCells` cells and a `SemanticRunUnit` as `length` cells (both atomic, from P3-L07), and `breaks/opportunity.ts` already applies `RuleSetVersion.cl08PairRule` for semantic-run pairing (from P3-L06) — F10 already passed before this Loop touched anything. The gap is purely module-boundary fidelity to the frozen module map, not missing behavior.
+
+**METHOD:** Created `core/tcy/index.ts` (`tcyCellCost(unit)` — a one-line wrapper making the cl-30 cell-cost decision a named, independently testable module surface) and updated `compose/line.ts`'s `cellCountFor` to call it instead of reading `unit.logicalCells` inline. Created `core/semanticRuns/index.ts` (`semanticRunPairRule(ruleSet, a, b)` — forwards to `ruleSet.cl08PairRule`, documented explicitly as intentionally NOT a second competing rule store: the frozen Contract's data model already places cl-08 pairing on `RuleSetVersion` as versioned rule data, and this module only gives that same rule a `CORE_MODULE_MAP.md`-row-18-matching name) and updated `breaks/opportunity.ts` to call it instead of `ruleSet.cl08PairRule` directly.
+
+**TESTS:** `core/tcy/index.test.ts` (3: `tcyCellCost` returns the declared `logicalCells` regardless of `displayText` length or digit count — proving no auto-detection heuristic sneaks in, P3-O07 stays out of scope; F10 re-verified end-to-end through the real `composeLine` pipeline). `core/semanticRuns/index.test.ts` (3: `semanticRunPairRule` forwards to the exact same `RuleSetVersion.cl08PairRule` result — not a divergent decision; same-kind INSEPARABLE for all three cl-08 identities; different-kind SEPARABLE). All 128 pre-existing tests re-ran unmodified and green — this Loop changed zero existing assertions and zero existing runtime behavior, only extracted already-correct logic into properly-named, independently-testable modules.
+
+**RESULT: PASS.** `npx vitest run`: 134/134 pass (128 prior + 6 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/tcy/` (new), `core/semanticRuns/` (new), `core/compose/line.ts`, and `core/breaks/opportunity.ts` changed — exactly the files the roadmap names.
+
+**INVARIANTS:** No new invariant introduced (matches the roadmap's own "none new" note); INV-005 (determinism) re-verified unaffected by the refactor via the full unchanged test baseline.
+
+**OPEN ITEMS AFFECTED:** None resolved, none fabricated. P3-O07 (TCY auto-detection threshold) — confirmed still out of scope by a test that explicitly proves a 4-digit explicit TCY unit requires no special-casing. P3-O03/O04/O05 (visual combine/rotation/alignment) — untouched, Renderer-only.
+
+**DECISION: P3-L10 — PASS / CLOSED.**
+
+**WHY:** Zero behavior change is proven by the unchanged 128-test baseline staying green throughout — this Loop's entire contribution is giving already-correct logic the exact module homes `CORE_MODULE_MAP.md` names, with the `semanticRuns/` module's own documentation explaining why it deliberately forwards to `RuleSetVersion` rather than duplicating rule data.
+
+**COMMIT:** `TSP v2: integrate TCY and semantic run modules`.
+
+**NEXT:** P3-L11 (renumbered; originally P3-L13, Images + Colophon + Structured Elements) authorized to begin. Per this batch's explicit instruction, STOP after P3-L11 — do not begin P3-L12.
+
+---
