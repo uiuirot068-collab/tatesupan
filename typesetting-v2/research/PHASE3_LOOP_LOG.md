@@ -880,3 +880,23 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **NEXT:** Human recheck of the regenerated artifact — ruby annotation ("とうきょう") should now be visible beside its base ("東京"). Ruby/TCY/dash/ellipsis visual-quality evaluation (P3-O03/O04/O05/O06 optical values) remains explicitly deferred until this recheck confirms. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O09 Ruby Annotation Wrong Anchor HOLD (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `43693b4` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human Visual QA confirmed the ruby annotation ("とうきょう") is now visible, but reported it visually begins around the body run's second character ("京") instead of anchoring to the full "東京" run from its correct start — flagged explicitly as anchor correctness, not P3-O06 optical tuning. Where does the wrong start position originate?
+
+**METHOD:** Traced the exact atomic-ruby fixture. Confirmed the RUBY unit's own placed atom covers `sourceSpan [3,5)` and paints `text: "東京"` together as ONE atom (ATOMIC ruby never splits per grapheme) — ruling out the "annotation anchored to only 京" body-run hypothesis directly (Case: body run is a single, full-run atom, not two). Confirmed `placeRuby()`'s own inputs/outputs (`rubyReadingOffsetTick = 0`) are anchored to that same full-run atom's own `yTick` — canonical geometry was already correct. Traced the RENDERING path and found `.ruby-annotation` inherits `text-align: center` from `.unit` — and under `writing-mode: vertical-rl`, `text-align` aligns content along the INLINE axis, which for vertical-rl IS THE VERTICAL axis (not horizontal, as intuition from horizontal writing would suggest). Since the annotation's own box height (the reading's full logical extent, 5 cells) is much larger than its actual rendered text (5 characters at a smaller font, ~2.75 cells), the inherited centering visibly shifted the text's apparent start down by roughly half the unused space (~1.1 cells) — landing almost exactly at "京"'s own position.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/RUBY_PLACEMENT_PREVIEW_MICRO_LOOP.md` "Human Visual QA — Wrong Ruby Anchor HOLD" section (full trace, binary-check disposition, root cause, fix). 7 new regression tests (`generateFoundationArtifact.test.ts`, "Ruby Annotation Anchor HOLD"), all against the real fixture, directly asserting `annotationStartPx (topPx + offsetPx) === bodyRun.topPx` (never a later unit's own `topPx`) and a stylesheet check for `text-align: start`.
+
+**RESULT: FIXED. Case 2 (Renderer CSS paint mapping), never Core — canonical geometry (body-run extent, annotation offset) was correct throughout.** Added `text-align: start` to `.ruby-annotation`'s own CSS rule, anchoring its text to the beginning of the inline axis (the top, in vertical-rl) regardless of unused box height below it. Extended the DEBUG-only tooltip to show body-run text/span/top/height alongside annotation text/policy/start/extent (per the task's optional "if inexpensive" suggestion) — never shown in NORMAL PREVIEW.
+
+**DECISION: Ruby Annotation Anchor — FIXED. P3-O09 machine state — PASS.**
+
+**WHY:** Root cause traces to the CSS Writing Modes specification's own defined behavior of `text-align` under vertical writing modes (not a browser quirk or a guess), directly confirmed by computing the expected centering offset (~1.1 cells) and finding it matches the Human's "around 京" report almost exactly. The fix is the minimal, targeted override (one property, one selector) — no Core change, no redesign of ruby placement, and 東/京's own body coordinates are provably unaffected (a CSS rule on a different element).
+
+**NEXT:** Human recheck of the regenerated artifact — "とうきょう" should now visibly begin aligned with "東", not "京". If confirmed, P3-O03 (TCY visual) is the next recommended task by dependency order. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

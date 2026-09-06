@@ -362,4 +362,106 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(normalHtml).not.toContain("annotation painting PENDING");
     });
   });
+
+  // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD (2026-09-07). Human Visual QA: ruby
+  // annotation was now visible (prior HOLD fixed) but visually appeared to
+  // begin around the body run's SECOND character ("京") instead of its
+  // first ("東"). Root cause: text-align, inherited from .unit, aligns
+  // content along the INLINE axis under writing-mode:vertical-rl -- which
+  // is the VERTICAL axis, not horizontal. .ruby-annotation's own box
+  // height (extentPx, the reading's full logical extent) is deliberately
+  // larger than its actual rendered text, so inherited text-align:center
+  // visibly centered the text within that oversized box, shifting its
+  // apparent start downward. Canonical geometry (offsetPx, the base run's
+  // own yTick) was ALREADY correct throughout -- confirmed below.
+  describe("Ruby Annotation Anchor HOLD (2026-09-07) — canonical geometry was already correct; CSS text-align was the bug", () => {
+    function actualRubyPlacedUnit(models: PaintDocument[]) {
+      const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
+      const allUnits = rubyModel.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+      return { rubyModel, rubyUnit: allUnits.find((u) => u.kind === "RUBY")! };
+    }
+
+    it("1/2. the ruby body run's paint item contains BOTH characters (東 and 京) together, as the full run — never just the last grapheme", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyUnit } = actualRubyPlacedUnit(models);
+      expect(rubyUnit.text).toBe("東京");
+      expect(rubyUnit.sourceSpan).toEqual({ blockId: "body", start: 3, end: 5 });
+    });
+
+    it("3. the annotation's canonical anchor is the FULL body run's own PlacedUnit (topPx/yTick), not a separate per-grapheme unit — confirmed by there being exactly one RUBY-kind paint item on the line, carrying the annotation", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyModel } = actualRubyPlacedUnit(models);
+      const allUnits = rubyModel.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+      const rubyUnits = allUnits.filter((u) => u.kind === "RUBY");
+      expect(rubyUnits).toHaveLength(1); // ATOMIC ruby: one paint item for the whole "東京" run, never split per grapheme
+      expect(rubyUnits[0].rubyAnnotation?.status).toBe("PLACED");
+    });
+
+    it("4/5/9. the annotation's painted start (topPx + offsetPx) equals the body run's own topPx exactly (offsetPx is 0 for this fixture's CENTER/OVERFLOW_OPEN case) — the annotation is anchored to the body run's own START, adjacent to 東, never shifted toward 京", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyUnit } = actualRubyPlacedUnit(models);
+      expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
+      if (rubyUnit.rubyAnnotation?.status === "PLACED") {
+        const annotationStartPx = rubyUnit.topPx + rubyUnit.rubyAnnotation.offsetPx;
+        expect(annotationStartPx).toBeCloseTo(rubyUnit.topPx, 6);
+        // The annotation's own start must never coincide with, or be past,
+        // the body run's own END (which would mean it visually starts at
+        // or after the run's second character rather than its first).
+        expect(annotationStartPx).toBeLessThan(rubyUnit.topPx + rubyUnit.heightPx);
+      }
+    });
+
+    it("6. the Renderer's painted annotation start derives from the body run's OWN topPx (the full run's start), never substituted with a later/different unit's own topPx", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyModel, rubyUnit } = actualRubyPlacedUnit(models);
+      const allUnits = rubyModel.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+      const nextUnit = allUnits.find((u) => u.sourceSpan.start === rubyUnit.sourceSpan.end); // the "に" unit immediately after the ruby run
+      expect(nextUnit).toBeDefined();
+      expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
+      if (rubyUnit.rubyAnnotation?.status === "PLACED") {
+        const annotationStartPx = rubyUnit.topPx + rubyUnit.rubyAnnotation.offsetPx;
+        // The annotation's start must never equal a LATER unit's own
+        // topPx (which would indicate the Renderer substituted the wrong
+        // anchor) — it must equal the ruby run's OWN topPx instead.
+        expect(annotationStartPx).not.toBeCloseTo(nextUnit!.topPx, 3);
+        expect(annotationStartPx).toBeCloseTo(rubyUnit.topPx, 6);
+      }
+    });
+
+    it("7. 東/京 body coordinates (topPx/heightPx/sourceSpan) are unaffected by the text-align anchor fix — a CSS-only change to a different element (.ruby-annotation)", () => {
+      const models = buildAllPaintDocuments();
+      const { rubyUnit } = actualRubyPlacedUnit(models);
+      // Values already asserted correct/stable by the Ruby Placement
+      // Micro-Loop's own test 16 and this HOLD's own tests above; restated
+      // here as the explicit body-invariant check this task requires.
+      expect(rubyUnit.text).toBe("東京");
+      expect(rubyUnit.sourceSpan).toEqual({ blockId: "body", start: 3, end: 5 });
+      expect(rubyUnit.heightPx).toBeGreaterThan(0);
+    });
+
+    it("8/10. generated NORMAL PREVIEW contains the annotation; DEBUG mode's tooltip exposes body run text/span/top/height alongside annotation text/policy/start/extent", () => {
+      const models = buildAllPaintDocuments();
+      const rubyModel = models.find((m) => m.id === "atomic-ruby")!;
+      const normalHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "normal" }));
+      const debugHtml = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models: [rubyModel], mode: "debug" }));
+      expect(normalHtml).toContain("とうきょう");
+      // React SSR HTML-escapes quote characters inside attribute values
+      // (e.g. the `title` tooltip below), so the expected substrings use
+      // the escaped &quot; form, not a raw double-quote character.
+      expect(debugHtml).toContain("body=&quot;東京&quot;");
+      expect(debugHtml).toContain("annotation=&quot;とうきょう&quot;");
+      expect(debugHtml).toContain("annotationStart=");
+      expect(debugHtml).toContain("annotationExtent=");
+      // Debug-only trace text must not leak into NORMAL PREVIEW.
+      expect(normalHtml).not.toContain("body=&quot;東京&quot;");
+    });
+
+    it("the .ruby-annotation stylesheet rule overrides text-align to start (never leaving it inherited as center) — regression guard against the exact CSS omission that caused this HOLD", () => {
+      const models = buildAllPaintDocuments();
+      const html = ReactDOMServer.renderToStaticMarkup(PreviewFoundationArtifact({ models, mode: "normal" }));
+      const ruleMatch = html.match(/\.ruby-annotation\s*\{[^}]*\}/);
+      expect(ruleMatch).not.toBeNull();
+      expect(ruleMatch![0]).toContain("text-align: start");
+    });
+  });
 });

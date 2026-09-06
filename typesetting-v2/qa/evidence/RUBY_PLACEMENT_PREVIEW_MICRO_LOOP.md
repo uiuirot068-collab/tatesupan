@@ -105,3 +105,29 @@ With ruby annotation now visible end-to-end, the remaining special-unit visual-q
 **Artifact regenerated:** `qa/visual/p3-o09-preview/index.html` and `debug.html` — the atomic-ruby fixture now visibly shows "とうきょう" beside "東京".
 
 **Human recheck status: PENDING.**
+
+## Human Visual QA — Wrong Ruby Anchor HOLD (2026-09-07)
+
+**Human observation:** with the prior HOLD's fix applied, ruby annotation was now visible, but for the fixture 東京《とうきょう》 the reading "とうきょう" appeared to visually begin around the body run's SECOND character ("京") instead of being anchored to the full "東京" run from its correct start position. Flagged explicitly as a canonical/renderer anchor correctness issue, not P3-O06 optical fine-tuning.
+
+**Body-run check (proven, not assumed):** the RUBY unit's own placed atom covers `sourceSpan [3,5)` and paints `text: "東京"` — both characters together, as ONE atom (ATOMIC ruby composes the whole base as a single, unbroken unit — confirmed by direct trace: `placed-3-5` is the only RUBY-kind paint item on the line, never split into a separate "京"-only unit). **Full body extent: PASS** — the paint item's own `topPx`/`heightPx` span exactly 2 cells (both characters), not one.
+
+**Critical body-run check result: A is false.** `placeRuby()` receives `baseExtentTick` from the atom's own `advanceTick`, which already covers the FULL 2-cell "東京" run — not a single grapheme. Canonical annotation geometry (`rubyReadingOffsetTick = 0`, `rubyReadingExtentTick` = 5 cells for "とうきょう") is anchored to this same full-run atom's own `yTick`. **Canonical annotation start was already correct throughout.**
+
+**Binary check result: Case 2 — Preview paint coordinate mapping (CSS), not Core.** Traced the exact mechanism: `text-align`, under `writing-mode: vertical-rl`, aligns content along the INLINE axis — which for vertical-rl IS THE VERTICAL axis (text flows top-to-bottom within one line; block-axis stacking, which text-align does NOT affect, is the horizontal right-to-left direction). `.ruby-annotation` inherited `.unit`'s own `text-align: center` (originally added for ordinary body glyphs, where box height already equals content height so centering is invisible). But `.ruby-annotation`'s own box height (`extentPx`, the reading's full logical extent — 5 cells for this fixture) is deliberately larger than its actual rendered text (5 characters at a smaller `0.55em` font, needing roughly 2.75 body-cells of height) — so the inherited centering visibly shifted the text's apparent start DOWN from the box's own `top:0` (aligned with "東") by roughly half the unused space (~1.1 cells) — landing almost exactly at "京"'s own position. This exactly matches the Human's report and is a real, mechanically-provable CSS behavior (not specific to any one browser's quirk — it is the CSS Writing Modes specification's own definition of `text-align` under vertical writing modes).
+
+**Root cause:** `.ruby-annotation`'s CSS rule (`renderer/preview/PreviewRenderer.tsx`) never overrode the inherited `text-align: center`.
+
+**Minimal fix (Renderer CSS-only, no Core change):** added `text-align: start` to `.ruby-annotation`'s own rule, anchoring its text to the BEGINNING of the inline axis (the top, in vertical-rl) regardless of how much of the box's own height goes unused below it — matching `offsetPx`'s own contract (relative to the base run's own start). Also extended the DEBUG-only tooltip (`rubyDebugText`) to explicitly show the body run's own text/span/top/height alongside the annotation's text/policy/start/extent, for future diagnosability — never shown in NORMAL PREVIEW.
+
+**Body invariant:** 東/京 body coordinates (`topPx`/`heightPx`/`sourceSpan`) are unaffected — this is a CSS rule change to a different element (`.ruby-annotation`), never touching the base run's own paint fields. Line/page breaks: unchanged (no Core file touched).
+
+**Regression tests added** (`generateFoundationArtifact.test.ts`, new `describe` block "Ruby Annotation Anchor HOLD"), all against the real `atomic-ruby` fixture: (1/2) the body run's paint item contains both characters together, never split; (3) exactly one RUBY-kind paint item carries the annotation (never a separate per-grapheme anchor); (4/5/9) the annotation's painted start (`topPx + offsetPx`) equals the body run's own `topPx` exactly, and is strictly before the run's own end; (6) the annotation's start is never mistaken for a LATER unit's own `topPx`; (7) body coordinates unchanged; (8/10) NORMAL PREVIEW contains the annotation, DEBUG mode's tooltip exposes body-run and annotation start/end/extent; a direct stylesheet assertion that `.ruby-annotation` carries `text-align: start` — a regression guard against this exact CSS omission recurring.
+
+**P3-O06:** remains OPEN, unaffected — this fix corrects an anchor-position bug, not an optical/overhang tuning value.
+
+**Tests:** 42/42 renderer/preview tests pass (35 previous + 7 new); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**Artifact regenerated:** `qa/visual/p3-o09-preview/index.html` and `debug.html` — the atomic-ruby fixture's "とうきょう" now visibly begins aligned with "東", not "京".
+
+**Human recheck status: PENDING.**

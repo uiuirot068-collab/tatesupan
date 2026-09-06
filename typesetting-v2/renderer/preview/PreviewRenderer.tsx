@@ -62,7 +62,26 @@ const STYLE = `
   .unit-ink { display: block; width: 100%; height: 100%; overflow: hidden; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   .provisional-badge { display: none; }
-  .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: 0.55em; white-space: nowrap; color: #444; }
+  /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
+     mode (writing-mode:vertical-rl, inherited here from .unit) aligns
+     content along the INLINE axis -- which for vertical-rl IS THE
+     VERTICAL axis (text flows top-to-bottom within one "line"; lines
+     themselves stack right-to-left, which is the block axis). Without
+     this override, .ruby-annotation inherited .unit's own
+     text-align:center (meant for ordinary, tightly-fitted body glyphs,
+     where box height already equals content height so centering is
+     invisible) -- but the annotation's OWN box height (extentPx, the
+     reading's full logical extent, e.g. 5 cells for a 2-cell base with an
+     OVERFLOW_OPEN policy) is deliberately larger than its actual rendered
+     text (a smaller 0.55em font), so centering visibly pushed the text's
+     apparent start DOWN from the box's own top:0 (aligned with the base
+     run's own start) by roughly half the unused space -- landing near the
+     body run's SECOND character instead of its first, exactly the Human
+     Visual QA report. text-align:start anchors the annotation's text to
+     the BEGINNING of the inline axis (the top, in vertical-rl) regardless
+     of how much of the box's own height goes unused below it -- matching
+     offsetPx's own contract (relative to the base run's own start). */
+  .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: 0.55em; white-space: nowrap; color: #444; text-align: start; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -83,9 +102,14 @@ function DebugBadge({ text }: { text: string }) {
 
 function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
   const debugText = `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}`;
+  // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: debug-only, human-readable trace of
+  // the body run's own start/end alongside the annotation's, so a future
+  // anchor discrepancy can be diagnosed from this tooltip alone.
   const rubyDebugText =
     unit.rubyAnnotation?.status === "PLACED"
-      ? `policy=${unit.rubyAnnotation.policy} offset=${unit.rubyAnnotation.offsetPx.toFixed(1)}px extent=${unit.rubyAnnotation.extentPx.toFixed(1)}px`
+      ? `body="${unit.text}" [${unit.sourceSpan.start},${unit.sourceSpan.end}) bodyTop=${unit.topPx.toFixed(1)}px bodyHeight=${unit.heightPx.toFixed(1)}px ` +
+        `annotation="${unit.rubyAnnotation.text}" policy=${unit.rubyAnnotation.policy} annotationStart=${(unit.topPx + unit.rubyAnnotation.offsetPx).toFixed(1)}px ` +
+        `annotationExtent=${unit.rubyAnnotation.extentPx.toFixed(1)}px offsetFromBody=${unit.rubyAnnotation.offsetPx.toFixed(1)}px`
       : undefined;
   return (
     <div className={`unit kind-${unit.kind}`} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
