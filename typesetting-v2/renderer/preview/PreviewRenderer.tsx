@@ -74,6 +74,36 @@ const STYLE = `
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
+  /* P3-O04-DASH-VISUAL: Phase 2's own frozen P2-L06 evidence measured a
+     real, non-hypothetical optical problem for dash/ellipsis runs
+     (glyph ink left-shifted within its own logical cell) and explicitly
+     applied no correction, since no Human Product decision on the exact
+     fix existed. Rather than relying on font-glyph ink at all (font
+     availability/metrics are outside this Renderer's control, and the
+     documented issue was never root-caused), DASH runs are painted as a
+     simple, centered, continuous bar spanning the run's own already-
+     canonical extent (unit-ink's box height, itself derived from
+     GeometryTick like everything else) -- guaranteed visually continuous
+     and centered by construction, never dependent on unverifiable font/
+     browser behavior. The bar's own THICKNESS (12%) is a Renderer-level
+     cosmetic default (like choosing a stroke width), not a canonical
+     geometry claim -- it scales automatically with the box's own already-
+     proportional width, never a fixed px value. The real "――" text stays
+     in the DOM unchanged (source/semantic identity preserved) but its own
+     ink is hidden (color:transparent) since the bar is the visible
+     representation. ELLIPSIS/TWO_DOT_LEADER are explicitly untouched
+     (P3-O05 remains its own, separate, still-OPEN item). */
+  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; color: transparent; }
+  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12%;
+    background: #111;
+  }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -114,7 +144,11 @@ function DebugBadge({ text }: { text: string }) {
 }
 
 function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
-  const debugText = `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}`;
+  const debugText =
+    `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
+    (unit.semanticRunKind
+      ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${unit.semanticRunKind === "DASH" ? "painted-bar (font-independent)" : "native-glyph"}`
+      : "");
   // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: debug-only, human-readable trace of
   // the body run's own start/end alongside the annotation's, so a future
   // anchor discrepancy can be diagnosed from this tooltip alone.
@@ -124,8 +158,11 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
         `annotation="${unit.rubyAnnotation.text}" policy=${unit.rubyAnnotation.policy} annotationStart=${(unit.topPx + unit.rubyAnnotation.offsetPx).toFixed(1)}px ` +
         `annotationExtent=${unit.rubyAnnotation.extentPx.toFixed(1)}px offsetFromBody=${unit.rubyAnnotation.offsetPx.toFixed(1)}px`
       : undefined;
+  // P3-O04-DASH-VISUAL: only DASH gets the painted-bar treatment;
+  // ELLIPSIS/TWO_DOT_LEADER (P3-O05, still OPEN) are explicitly untouched.
+  const unitClassName = `unit kind-${unit.kind}${unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "DASH" ? " semantic-dash" : ""}`;
   return (
-    <div className={`unit kind-${unit.kind}`} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
+    <div className={unitClassName} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
       {/* P3-O09-RUBY-ANNOTATION-MISSING-HOLD: the base glyph's own
           ink-clipping (overflow:hidden) lives on this inner wrapper, not
           on .unit itself, so a ruby annotation painted as .unit's own

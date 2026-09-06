@@ -928,3 +928,37 @@ Human reopened the regenerated artifact and confirmed the ruby annotation ("と�
 **NEXT:** Human Visual QA of the regenerated artifact for TCY. P3-O04 (dash visual) and P3-O05 (ellipsis visual) remain available as parallel next candidates regardless of TCY's own outcome (same dependency reasoning as Ruby: pure Renderer-side visual polish, no further Core change needed) — not forced into a specific order by the frozen roadmap. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## TCY Human Visual QA — Final PASS (2026-09-07)
+
+Human reopened the regenerated artifact and confirmed the Explicit TCY fixture's "2026" appears cleanly horizontal inside the vertical line — the historical Phase 2 P2-L06B full-page-combination failure did NOT recur in this Renderer's own DOM structure. One canonical TCY unit, visually contained in its own column; surrounding text not displaced; no line/page escape; no debug decoration in NORMAL Preview. **DECISION: P3-O03 (TCY Visual) — Human Visual QA PASS. CLOSED**, recorded in `qa/evidence/P3_O03_TCY_VISUAL.md` §15. **P3-O07 (TCY auto-detection) remains explicitly OPEN** — this closure covers only visual shaping of an already-explicit TCYUnit, not recognition/threshold policy.
+
+---
+
+## Future Typography Memo — Dakuten Attachment / 濁点付与組版 (2026-09-07)
+
+Recorded as a descriptive future item, **not implemented, no numeric P3-O identifier assigned** (`docs/architecture/PHASE3_OPEN_ITEMS.md`, new "Non-P3-O Future Items" section): creative/manga-style expressive nonstandard dakuten attachment (examples: お゛, あ゛, い゛, ん゛, っ゛ — 濁点喘ぎ and similar). Desired future behavior: base glyph + dakuten should visually occupy ONE body character slot, dakuten attached to the base glyph — never a base glyph in one cell followed by a dakuten in a separate second vertical cell. A future scoping pass would need to distinguish combining dakuten (U+3099) vs. spacing dakuten (U+309B) vs. user-entered quote-like substitutes, plus normalization policy, source preservation, vertical positioning, and font support/fallback. Not classified as TCY or any existing `LogicalUnit` kind — this is purely a recorded future requirement, no design or implementation work was done.
+
+---
+
+## P3-O04 — Dash Visual (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `ba8e5c6` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Can canonical DASH semantic runs (e.g. "――") be painted as visually continuous, appropriately centered vertical dash runs in the P3-O09 Preview Renderer, resolving the frozen P2-L06 finding, without changing Core breaks, source spans, canonical occupancy, or surrounding text?
+
+**Roadmap audit:** direct-read of `docs/architecture/PHASE3_OPEN_ITEMS.md` row P3-O04 and its cited evidence confirmed the frozen finding is a real, MEASURED (not Human-perception-only) glyph-ink off-center problem, for which Phase 2 explicitly decided no correction (measurement without a correction decision). This history was followed, not re-derived or reinterpreted.
+
+**METHOD:** Audited the existing `SemanticRunUnit`/break-opportunity/canonical-extent model (all Core-owned, all already correct, confirmed untouched by `git diff --stat`). Evaluated the three listed paint strategies (native glyph / controlled-overlap wrapper / painted rule) against canonical fidelity, continuity, font independence, deterministic scale, and Publication portability — selected the painted-rule strategy specifically because it removes the ENTIRE class of font-dependent uncertainty the frozen finding names, rather than attempting an unverifiable in-browser fix. Implemented a `<span class="unit-ink">::after` pseudo-element bar (percentage-width, never fixed px) for DASH runs only, with the real text kept in the DOM (`color: transparent`) for source/semantic fidelity. Added a read-only `semanticRunKind` passthrough field to the paint model (mirrors the existing ruby/image never-recompute convention) so the Renderer can distinguish DASH from ELLIPSIS without re-tokenizing.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` (14 sections, full detail). 20 new regression tests (`renderer/preview/dashVisual.test.ts`) covering semantic identity, source span, canonical extent, break/paragraph/column/page interactions, proportional scaling, determinism, CanonicalDocument immutability, and an explicit proof that ELLIPSIS in the same fixture is never touched by the dash-specific CSS class.
+
+**RESULT: PASS (structural).** 347/347 Core, 21/21 Stage C, 30/30 Stage D, 80/80 P3-O09 renderer/preview tests pass; 0 new tsc errors. No Core file touched. The painted-bar approach is structurally guaranteed continuous and centered by construction (not dependent on unverifiable font/browser behavior) — Human Visual QA of the regenerated artifact is the remaining, distinct confirmation step (a different kind of check than TCY's, since this task does not depend on any uncertain browser mechanism the way `text-combine-upright` did).
+
+**DECISION: P3-O04 — PASS (structural). Human Visual QA pending.**
+
+**WHY:** The strategy traces directly to the frozen P2-L06 measured finding and Phase 2's own explicit "no correction decided" disposition — this task does not claim to have measured or corrected the SAME font-glyph problem, it removes the dependency on font glyph ink entirely, a categorically different and structurally verifiable approach. Every claim (continuity, centering, proportional scale, no Core change) is backed by a passing test against a real composed fixture.
+
+**NEXT:** Human Visual QA of the dash treatment specifically (not ellipsis — P3-O05 remains untouched and OPEN, explicitly not to be judged in this recheck). P3-O05 (ellipsis visual) is the natural next candidate by dependency order once dash is confirmed, though its own root visual problem should be independently audited rather than assumed to need the identical painted-bar treatment. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

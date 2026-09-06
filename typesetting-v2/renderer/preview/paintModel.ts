@@ -89,6 +89,12 @@ export interface PaintPlacedUnit {
   provisional: boolean;
   rubyAnnotation?: RubyAnnotationPaint; // RUBY units only
   imageResolution?: ImageResolution; // IMAGE units only
+  // P3-O04-DASH-VISUAL: read-only passthrough of the owning SEMANTIC_RUN
+  // unit's own already-canonical `runKind` (never re-derived/re-classified
+  // here) — lets the Renderer distinguish DASH from ELLIPSIS/
+  // TWO_DOT_LEADER without re-tokenizing the source, the same
+  // never-recompute convention already used for ruby/image.
+  semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER"; // SEMANTIC_RUN units only
   debug: PaintDebugInfo;
 }
 
@@ -307,6 +313,7 @@ function buildPaintLine(
       provisional: PROVISIONAL_KINDS.has(kind),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed, ctx) } : {}),
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
+      ...(kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? { semanticRunKind: owner.runKind } : {}),
       debug: {
         pageOrder,
         columnOrder,

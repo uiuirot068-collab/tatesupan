@@ -61,3 +61,20 @@ NORMAL PREVIEW shows only the combined `.tcy` text — no unit badge, no source 
 ## 14. Next Technical Task
 
 **Human Visual QA for TCY is required** before this item can be called PASS or before proceeding to any further TCY work. Given P3-O03's own genuine visual uncertainty, and independently of its outcome, **P3-O04 (dash visual)** and **P3-O05 (ellipsis visual)** remain available as parallel next candidates by dependency order (both are pure Renderer-side visual polish needing no further Core change, same reasoning already established at the P3-O09 Foundation and Ruby Placement Micro-Loop tasks) — the choice between them is not a technical-ordering question the frozen roadmap forces either way, and neither is blocked by TCY's own outcome. No Human Product decision is required to proceed with either; a decision is only needed if TCY's own Human Visual QA reveals the historical full-page-combination failure recurring here, at which point the next step (root-cause investigation vs. an alternative shaping strategy) would itself need Human input on how much further investigation to invest.
+
+## 15. Human Visual QA — Final Result (2026-09-07)
+
+**Verdict: PASS.**
+
+Human reopened the regenerated artifact and confirmed, for the Explicit TCY fixture ("2026" between ordinary Japanese text):
+- "2026" appears cleanly horizontal inside the vertical line (`text-combine-upright: all` DID visually combine correctly in this Renderer's structure — the historical Phase 2 P2-L06B full-page-combination failure did NOT recur here)
+- one canonical TCY unit, visually contained within its own vertical column
+- surrounding text was not displaced
+- no line/page escape
+- no debug decoration visible in NORMAL Preview
+
+**DECISION: P3-O03 (TCY Visual) — Human Visual QA PASS. CLOSED.**
+
+**P3-O07 (TCY auto-detection) remains explicitly OPEN** — this PASS covers only the visual shaping of an already-explicit TCYUnit; no digit-recognition, threshold, or auto-conversion logic exists anywhere in this codebase, and none was implied by this result.
+
+**NEXT:** P3-O04 (dash visual) is the next active Preview Renderer item.
