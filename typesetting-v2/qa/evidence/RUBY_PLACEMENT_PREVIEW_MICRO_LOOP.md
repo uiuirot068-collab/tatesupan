@@ -131,3 +131,23 @@ With ruby annotation now visible end-to-end, the remaining special-unit visual-q
 **Artifact regenerated:** `qa/visual/p3-o09-preview/index.html` and `debug.html` — the atomic-ruby fixture's "とうきょう" now visibly begins aligned with "東", not "京".
 
 **Human recheck status: PENDING.**
+
+## Human Visual QA — Final Result (2026-09-07)
+
+**Verdict: PASS.**
+
+Human reopened the regenerated artifact and confirmed:
+- reading "とうきょう" visible
+- begins aligned with the parent run "東京" (not "京")
+- follows the correct body run
+- body did not move
+- no cross-line/page displacement
+
+**DECISION: Ruby canonical placement + Preview annotation — Human Visual QA PASS. CLOSED for this micro-loop's own scope.**
+
+**P3-O06 remains explicitly OPEN** — this PASS covers canonical anchor correctness and basic visibility only, not:
+- exact class-aware overhang allowances (numeric values)
+- final START/END clamp optical tuning
+- final Publication-level spacing/typography
+
+**NEXT:** P3-O03 (TCY visual) is the next frozen Preview Renderer item, per dependency order established at the P3-O09 Foundation task.

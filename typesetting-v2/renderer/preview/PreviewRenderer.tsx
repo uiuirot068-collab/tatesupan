@@ -61,6 +61,19 @@ const STYLE = `
      to keep glyph-ink clipping while un-clipping the annotation. */
   .unit-ink { display: block; width: 100%; height: 100%; overflow: hidden; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
+  /* P3-O03-TCY-VISUAL: text-combine-upright is the standard CSS mechanism
+     for tategaki 縦中横 (Phase 2's own P2-L06B evidence already identified
+     it as the correct approach — its logical model was always PASS; only
+     full-page visual combination was left OPEN/unverified there). It
+     combines the wrapped inline content horizontally within its own
+     single em-box, scaling automatically per the CSS Writing Modes spec
+     -- no manual scaleX/font-size/letter-spacing invented here, the
+     browser's own built-in algorithm does the fitting. Applied only to
+     the TCY unit's own text wrapper, never the surrounding vertical body
+     text, and never to the .unit box itself (which must keep its normal
+     writing-mode:vertical-rl so it still occupies the correct canonical
+     GeometryTick-derived position along the line). */
+  .tcy { text-combine-upright: all; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -120,7 +133,18 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           wrapper's box) is never clipped by it — overflow only clips
           descendants, never siblings. */}
       <span className="unit-ink">
-        {unit.kind === "IMAGE" ? <span className="image-placeholder" /> : unit.text}
+        {unit.kind === "IMAGE" ? (
+          <span className="image-placeholder" />
+        ) : unit.kind === "TCY" ? (
+          // P3-O03-TCY-VISUAL: wraps ONLY the TCY unit's own text — the
+          // canonical GeometryTick-derived position/extent (`.unit`'s own
+          // top/height, set above from Core's already-composed placement)
+          // is completely untouched; this wrapper only affects how the
+          // text renders WITHIN that already-fixed box.
+          <span className="tcy">{unit.text}</span>
+        ) : (
+          unit.text
+        )}
         {unit.provisional && <span className="provisional-badge">prov</span>}
       </span>
       {/* Ruby Placement Micro-Loop: paints the annotation at Core's own

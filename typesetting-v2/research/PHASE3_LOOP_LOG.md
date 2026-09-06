@@ -900,3 +900,31 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **NEXT:** Human recheck of the regenerated artifact — "とうきょう" should now visibly begin aligned with "東", not "京". If confirmed, P3-O03 (TCY visual) is the next recommended task by dependency order. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## Ruby Human Visual QA — Final PASS (2026-09-07)
+
+Human reopened the regenerated artifact and confirmed the ruby annotation ("とうきょう") is visible, begins aligned with the parent run ("東京", not "京"), follows the correct body run, and that the body did not move with no cross-line/page displacement. **DECISION: Ruby canonical placement + Preview annotation — Human Visual QA PASS.** P3-O06 remains explicitly OPEN (exact class-aware overhang allowances, final START/END clamp optical tuning, final Publication-level spacing all remain unresolved) — recorded in `qa/evidence/RUBY_PLACEMENT_PREVIEW_MICRO_LOOP.md`'s own "Human Visual QA — Final Result" section, not silently closed.
+
+---
+
+## P3-O03 — TCY Visual (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `788fc31` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Can the already-canonical, already-atomic explicit TCYUnit be shown correctly as 縦中横 in the P3-O09 Preview Renderer, without changing TCY recognition, pagination, Core grouping, or capacity (P3-O07 auto-detection remains untouched and OPEN)?
+
+**Roadmap audit:** direct-read of `docs/architecture/PHASE3_OPEN_ITEMS.md` row P3-O03 and its cited evidence (`prototypes/phase2-japanese-capability-poc/evidence/P2_L06_SPECIAL_GLYPH_ALIGNMENT.md`, TCY section) confirmed the frozen finding: `text-combine-upright: all` is the correct, standard CSS mechanism (not invented from general CSS knowledge) — its logical model was already PASS in Phase 2, but visual combination failed in that PoC's full-page context despite working in 3 isolated tests, root cause never found. This history was followed, not re-derived from scratch.
+
+**METHOD:** Audited the existing `TCYUnit`/`tcyCellCost`/break-opportunity model (all Core-owned, all already PASS, confirmed untouched by `git diff --stat`). Wrapped only the TCY unit's own text in a new `<span className="tcy">` (`renderer/preview/PreviewRenderer.tsx`), with a new CSS rule `.tcy { text-combine-upright: all; }` — no scaleX/font-size/letter-spacing invented, the browser's own built-in fitting algorithm handles compression per the CSS Writing Modes spec. `.unit` itself (canonical position/orientation) is completely unchanged. Added 18 regression tests (`renderer/preview/tcyVisual.test.ts`) covering all 20 required interaction/invariant cases against real composed fixtures.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O03_TCY_VISUAL.md` (14 sections, full detail). 347/347 Core, 21/21 Stage C, 30/30 Stage D, 60/60 P3-O09 renderer/preview tests pass; `npx tsc --noEmit` 0 new errors. No Core file touched.
+
+**RESULT: PARTIAL, not PASS.** All machine-verifiable structural properties (DOM nesting, stylesheet declaration, atomicity, coordinate invariants, paragraph/break/column/page interaction safety, scale proportionality, NORMAL/DEBUG geometry parity) are PASS. **Visual confirmation in a real browser is not independently confirmed** — this environment cannot open a browser, and Phase 2's own historical uncertainty (does `text-combine-upright` visually combine in a full-page context, not just isolated tests?) was never resolved for the OLD PoC's DOM structure; this task's Renderer has a structurally different shape (absolute-position paint boxes), so the old failure may or may not recur here. Reported honestly as PARTIAL rather than PASS, per this task's own explicit instruction not to claim PASS merely because something horizontal appears in markup.
+
+**DECISION: P3-O03 — PARTIAL. Human Visual QA required before PASS.**
+
+**WHY:** The mechanism traces directly to the frozen P2-L06B finding (not invented), and every structural claim is backed by a passing test against a real composed fixture — but the ONE open question (does it visually work here) is exactly the kind of claim this environment cannot verify, and claiming PASS without that verification would misrepresent the actual state, matching the task's own explicit warning against exactly that.
+
+**NEXT:** Human Visual QA of the regenerated artifact for TCY. P3-O04 (dash visual) and P3-O05 (ellipsis visual) remain available as parallel next candidates regardless of TCY's own outcome (same dependency reasoning as Ruby: pure Renderer-side visual polish, no further Core change needed) — not forced into a specific order by the frozen roadmap. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---
