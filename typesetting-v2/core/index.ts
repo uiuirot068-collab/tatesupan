@@ -41,6 +41,17 @@ export { createFakeMeasurementProvider } from "./measurement/fakeProvider";
 
 export type { PageCompositionSettings } from "./compose/page";
 
+// P3-O12-C: capacity-formula policy (typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md).
+// IMPLEMENTED / READY FOR VALIDATION — not yet wired to any Editor/src/ caller.
+export type { CapacityFormulaVersion, CapacitySettingsEvent } from "./settings/capacityFormulaVersion";
+export { resolveCapacityFormulaVersion, canMigrateCapacityFormula } from "./settings/capacityFormulaVersion";
+export type { LegacyCapacityInputMm, LegacyCapacityResult } from "./settings/capacityLegacyFrozen";
+export { deriveLegacyFrozenCapacity } from "./settings/capacityLegacyFrozen";
+export type { V2NativeCapacityInputMm, V2NativeCapacityResult } from "./settings/capacityV2Native";
+export { deriveV2NativeCapacity } from "./settings/capacityV2Native";
+export type { CapacityDerivationInput, CapacityDerivationResult } from "./settings/capacityPolicy";
+export { deriveCapacityForEvent, initializeNewDocumentCapacity } from "./settings/capacityPolicy";
+
 export type { GeometryTick } from "./geometry/tick";
 export { mmToTicks } from "./geometry/tick";
 

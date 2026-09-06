@@ -585,3 +585,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Renderer readiness is NOT the same as Renderer completion — no Preview or Publication Renderer work has begun. The next v2 stage (which Renderer/integration Loop to start, if any) is a separate decision, not implied by this closeout. `src/` remains untouched. Master remains v1.8, unmodified — this closeout requires no requirements change, only a Human-Gate status record.
 
 ---
+
+## P3-O12-C — Versioned Capacity Geometry Policy Implementation (2026-09-06)
+
+**QUESTION:** Can TateSpun preserve existing document pagination while introducing a corrected v2-native capacity formula?
+
+**HYPOTHESIS:** Yes, through a versioned legacy-frozen / v2-native policy.
+
+**METHOD:** Following the Human-approved P3-O12-A/B research (`typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md`, Option B/D + the 8-point compatibility policy stress-tested in §16.8), implemented four pure, isolated modules under `typesetting-v2/core/settings/`, with zero `src/` dependency and zero Editor wiring:
+
+- `capacityFormulaVersion.ts` — `CapacityFormulaVersion` ("legacy-frozen" | "v2-1"), `resolveCapacityFormulaVersion()` (missing/unrecognized ⇒ legacy-frozen, never silently upgraded), `canMigrateCapacityFormula(event)` (true only for `"explicitGeometryCommit"`).
+- `capacityLegacyFrozen.ts` — a verbatim, float-mm port of `src/lib/pageLayout.ts`'s exact clamp chain (`computeAutoCharsPerLine`/`computeMaxCapacityChars`/`computeAutoLinesPerColumn`), deliberately preserving the `PAGE_SAFETY_MARGIN_CHARS` fudge and the audit's documented full-height two-column clamp bug — this file must never be "cleaned up."
+- `capacityV2Native.ts` — a GeometryTick-integer, `MeasurementFacts`-driven derivation that fixes the two-column bug (per-column height always), has no safety-margin fudge, and never stretches to fill (reports residual space on both axes, INV-004).
+- `capacityPolicy.ts` — `deriveCapacityForEvent()` (version resolution → single-formula dispatch → which formula ran) and `initializeNewDocumentCapacity()` (new documents start legacy-frozen, seeded from the LIVE legacy formula's own preset output, never `PAPER_SIZE_TEMPLATES`'s stale stored literals per audit §6/§10).
+- `capacityFixtures.ts` — test-fixture-only literal transcription of all 8 mandatory presets' geometry (copied from `src/constants/paperSizes.ts`, not imported).
+
+91 new tests across 4 test files exercise every required group from the loop brief (A-P): version resolution, migration-trigger semantics (open/save/unrelated-edit never migrate; explicit geometry commit does; an already-v2-1 document never reverts), legacy parity against every hand-verified number in the audit's §10 (including the A5 2段 59-chars/line bug, deliberately protected), the v2-native fix (28×23 for the same A5 2段 geometry, with a structural proof that 59 chars/line is physically impossible against the real 85mm column), GeometryTick-integer output, MeasurementFacts-driven advance, no-stretch residual accounting, determinism, and new-document initialization.
+
+**RESULT: PASS.** `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline, untouched). `npx vitest run`: 23 test files, **265/265 passing** (174 pre-existing + 91 new). All hand-computed parity numbers matched on first implementation, no numeric adjustment needed. `git diff --stat` / `git status` confirm zero `src/` changes, zero Production changes, zero dependency changes.
+
+**OPEN ITEMS:** P3-O12 moves from OPEN to **IMPLEMENTED / READY FOR VALIDATION** — explicitly NOT RESOLVED/CLOSED. Production/Editor integration (wiring `deriveCapacityForEvent` into `PageSettingsPanel.tsx`'s commit flow and adding the version field to `DocumentRecord`/`PageSettings`) is untouched and unauthorized by this Loop — it remains a separate, future, explicit gate. All other previously-disclosed open items (P3-O03, O04, O05, O06 residual, O07, O08, O09, O14, O15, F06) are untouched by this Loop.
+
+**DECISION: P3-O12-C — PASS.**
+
+**WHY:** Every design choice implemented here traces directly to Human-approved evidence: the legacy formula's exact arithmetic (audit §2/§3), the parity numbers it must reproduce (audit §10), the two-column bug it must NOT reproduce in the new path (audit §10, §16.8 point 8), and the migration-trigger boundary (audit §16.6/§16.9 Decision #6, resolved here as `capacityPolicy.ts`'s single dispatch function). No new Product policy was invented beyond what was already approved.
+
+**NEXT:** `typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md` is updated (§ header + new §17) to record the Human approval and this implementation's evidence, without rewriting the original research. Editor/`src/` integration is the next possible step but requires its own future, separate authorization — not implied here. Master is not modified. Phase 3 is not closed.
+
+---
