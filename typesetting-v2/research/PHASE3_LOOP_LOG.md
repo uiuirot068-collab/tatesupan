@@ -347,3 +347,29 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** P3-L07 (Natural-Pitch Line Composer) authorized to begin.
 
 ---
+
+## P3-L07 — Natural-Pitch Line Composer
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `86e5887` (matches expected P3-L06A checkpoint), worktree clean before start.
+
+**QUESTION:** Can TateSpun combine P3-L06's break-legality analysis with deterministic, integer-tick Natural-Pitch measurement to choose actual line content for exactly one line, never stretching to fill and never silently splitting an atomic/grapheme-safe unit?
+
+**HYPOTHESIS:** Yes — reusing P3-L06's `deriveBreakOpportunities` output directly as the atom-boundary source (rather than re-deriving decomposition rules) keeps grapheme-safety and kinsoku/group legality automatically consistent with zero duplication risk.
+
+**METHOD:** Implemented `core/measurement/facts.ts` (`MeasurementFacts` contract type, Contract §17 — a prerequisite this Loop needed that the original roadmap assigned to a separate Loop, absorbed here since the Line Composer cannot function without it) and `core/measurement/fakeProvider.ts` (`createFakeMeasurementProvider`: every character gets the same deterministic advance for a given font+size — Natural Pitch's one-cell-per-character fixture). Implemented `core/compose/line.ts` (`composeLine`): atom boundaries are derived from the UNION of {each LogicalUnit's own span edges} ∪ {every `BreakOpportunity` position `deriveBreakOpportunities` already produced} — an atom can therefore never be finer than an already-established grapheme-safe/kinsoku-legal/ruby-segment boundary, because the Line Composer never invents a boundary of its own. Cell-count per atom is unit-kind-aware (`TEXT`=1, `TCY`=`logicalCells`, `SEMANTIC_RUN`=`length`, `RUBY`=base-span code-point width, `MANUAL_BREAK`/`IMAGE`=0 — images out of this Loop's scope, P3-L13). The fill algorithm walks atoms accumulating advance, tracking the LATEST boundary seen that is both legal (`ALLOWED`/`RUBY_INTERNAL_ALLOWED`) and still within budget; a `MANUAL_FORCED` boundary cuts immediately and unconditionally (INV-006); if overflow occurs before any legal boundary was ever seen (including a single atom alone exceeding the extent), the result is a structured `hold`, never a guess or a split.
+
+**TESTS:** `core/measurement/fakeProvider.test.ts` (3: determinism, uniform per-character advance, code-point-aware ruby-extent scaling). `core/compose/line.test.ts` (13, covering every required test group A–M): ordinary fill (F01), residual space reported not absorbed (INV-004), two kinsoku cases — extending through a legally-includable prohibited-start character (offset-3-to-4 for `、`) AND retreating past it (oidashi) when extending would overflow, same-kind dash-run atomicity (never split), jukugo declared-segment legal cut vs. undeclared-segment hold, a base+combining-mark grapheme treated as one indivisible cell (built via `String.fromCharCode(0x0301)`, never a literal glyph, after an encoding mismatch on a literal `é` was caught by a failing test rather than silently passing), a too-large TCY atom producing `SINGLE_ATOM_EXCEEDS_LINE_EXTENT` hold, full-run determinism, integer-tick-only geometry (INV-013), manual-forced mid-stream cutoff (INV-006), and trace `RuleSetVersion` + chosen-boundary identification (test group M) via the same `TraceRecorder` P3-L06A hardened.
+
+**RESULT: PASS.** One test-authoring bug caught and fixed during this Loop, not silently worked around: an initial kinsoku fixture assumed the composer should retreat before a line-start-prohibited character even when extending through it and cutting after it was legal and fit exactly — that assumption was wrong (jlreq only prohibits breaking *before* the character, not including it), so the test was corrected to assert the actually-correct behavior, and a second test was added for the genuine retreat case (extent too small to include the prohibited character at all). `npx vitest run`: 93/93 pass. `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/measurement/` and `core/compose/` (both new) changed.
+
+**INVARIANTS:** INV-004 (Natural Pitch never stretches) — residual reported, never absorbed. INV-005 (determinism) — repeat-run test passes. INV-006 (manual break explicit/forced) — passes. INV-011 (grapheme safety) — passes, by construction via reused atom boundaries. INV-013 (integer ticks) — passes. No column/page composition, ruby/TCY visual placement, or image flow implemented — explicitly out of this Loop's scope, confirmed absent.
+
+**DECISION: P3-L07 — PASS / CLOSED.**
+
+**WHY:** Every atomicity guarantee traces to reusing P3-L06's own opportunity output rather than re-deciding legality; the "prefer latest legal boundary that fits" algorithm directly implements jlreq's oidashi/oikomi behavior without inventing a different policy; the caught test bug demonstrates the test suite is actually exercising jlreq semantics, not just asserting whatever the code happened to do.
+
+**COMMIT:** `TSP v2: implement natural pitch line composer`.
+
+**NEXT:** P3-L08 (Canonical Column/Page Composer) authorized to begin.
+
+---
