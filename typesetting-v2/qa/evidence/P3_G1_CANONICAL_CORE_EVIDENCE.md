@@ -1,7 +1,8 @@
 # P3-L15 — Canonical Core Regression Suite — Machine Evidence
 
-- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PENDING.**
+- Status: **AUTOMATED WORK COMPLETE (P3-L15 + P3-L15A gap closure). HUMAN GATE G1: PASS — 9/9 YES (2026-09-06).**
 - **P3-L15A update (2026-09-06):** closed the ImageUnit zero-cost gap this document originally disclosed (§9 below, updated in place) and completed a precise classification of the F06 Hanging partial result (§2 below, updated in place). Neither change alters P3-O12's status.
+- **G1 result (2026-09-06):** the Product Owner reviewed this evidence and its companion (`typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md`) and answered all 9 scorecard questions YES. See that document's §16 for the completed scorecard. This approval does not alter any technical result, test count, or OPEN-item status recorded in this document — it approves the Canonical Logical Core milestone as evidenced here, nothing more.
 - Companion to `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` (non-engineer summary). This document is the checked evidence backing every claim there.
 - Substitutes for `typesetting-v2/tools/core-trace-viewer/`: given this Loop's timebox, evidence is delivered as this static document (JSON/trace excerpts drawn directly from passing automated tests) rather than a separate interactive tool. No manuscript upload occurred; every value here is either a real test assertion or read-only-sourced production data, never fabricated.
 
@@ -124,4 +125,4 @@ P3-O03, P3-O04, P3-O05, P3-O06 residual, P3-O07, P3-O08, P3-O09, P3-O12, P3-O14,
 ## 13. Decision
 
 **P3-L15 AUTOMATED: PASS. P3-L15A GAP CLOSURE: PASS.**
-**HUMAN GATE G1: PENDING** — awaiting Product Owner review of `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md`'s scorecard. No Human answer has been filled in by this or the prior session. Master is not modified. Phase 3 is not closed. No push, no deploy.
+**HUMAN GATE G1: PASS — 9/9 YES (2026-09-06).** The Product Owner reviewed `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md`'s scorecard (§16 there) and answered every question YES. This approves the Canonical Logical Core milestone as evidenced in this document; it does not itself authorize Renderer work, `src/` integration, P3-O12 resolution, or F06 implementation — each remains a separate future decision. Master is not modified. Phase 3 is not closed. No push, no deploy.
