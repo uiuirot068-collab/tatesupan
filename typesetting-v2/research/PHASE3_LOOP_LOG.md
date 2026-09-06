@@ -513,3 +513,31 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** The only Loop remaining before P3-L15 (Canonical Regression Suite / Gate G1, explicitly excluded from this and prior batches) is P3-L15 itself. Per this batch's explicit instruction not to begin P3-L15, and since no other frozen Loop exists to fill this batch's remaining P3-L13/P3-L14 slots, the batch stops here.
 
 ---
+
+## P3-L15 — Canonical Regression Suite / 8-Preset Logical Verification (Core milestone) — AUTOMATED
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `5604be5` (matches expected P3-L12 checkpoint), worktree clean before start. Executed under this number without renumbering — this Loop's canonical roadmap name is unchanged (`### P3-L15` in `P3_CORE_LOOP_ROADMAP.md`, line 194).
+
+**QUESTION:** Does the implemented Canonical Core satisfy the frozen logical contract across the regression corpus (F01–F20), all 8 mandatory presets, cross-feature composition, and every applicable invariant — as one integrated `composeCanonicalDocument()` orchestration rather than as separately-tested modules?
+
+**HYPOTHESIS:** Yes — every module below this Loop (P3-L04 through P3-L12, executed numbering) was already independently tested; this Loop is a regression net and final assembly, not new logical rule design.
+
+**METHOD:** Implemented `core/layout/assemble.ts`'s `composeCanonicalDocument(input)`: composes body pages via `composePages`, optionally an isolated colophon via a second independent `composePages` run wrapped by `composeColophon`, converts any composition-level hold into a `BLOCKS_HOLD` `LayoutError` via `holdToLayoutError` (never silently discarded), and assembles `VersionMetadata` + `LayoutDecisionTrace` onto one `CanonicalDocument`. Implemented `core/index.ts`, the public entry point named by `CORE_MODULE_MAP.md` row 25 ("the only file anything outside `core/` may import from") — re-exports `composeCanonicalDocument` and every contract type; `src/` does not import it yet (that remains a distinct, future, explicit integration gate, not implied by this file's existence). Read production's `src/constants/paperSizes.ts` (`PAPER_SIZE_TEMPLATES`, read-only) to source REAL `charsPerLine`/`linesPerColumn`/`fontSizePt` values for the 8-preset sweep, rather than repeating P3-L08's arbitrary placeholders — explicitly not claiming this resolves P3-O12 (the mm→chars derivation *formula* itself remains unported). Sourced the actual frozen F20 sentence verbatim from `typesetting-v2/fixtures/manuscripts/REGRESSION_CORPUS_SPEC.md` §1 rather than inventing a substitute. Built one cross-feature fixture combining prose+kinsoku+ruby+TCY+dash+manual-break+two-column flow in a single `LogicalUnit` stream, and, separately, a dedicated test *disclosing* — not silently absorbing — the discovery that `ImageUnit` was never wired into `compose/line.ts`'s atom-cost model (`cellCountFor` returns 0 for `IMAGE`, a P3-L11/original-P3-L13 scope boundary already documented there but not previously surfaced as a named regression-suite finding).
+
+**TESTS:** `core/layout/composeCanonicalDocument.test.ts` (17 new): F20 (real regression sentence, zero-hold, no fractured spans), F19 (100-code-point multi-page prose, full deep-equality repeat run including trace), 8-preset sweep against real production capacity values (`it.each` over all 8 names), cross-feature regression (prose+ruby+TCY+dash+manual-break+2-column, contiguous source mapping, ruby base-position presence confirmed), the disclosed image-integration-gap test, HOLD gate end-to-end, colophon isolation through the full pipeline, versioning-field-non-empty gate, Natural Pitch residual/pitch-constancy gate, and integer-tick geometry gate. All 153 pre-existing tests re-ran unmodified and green.
+
+**INVARIANTS (G1 matrix, all 13, none renumbered):** INV-001 PASS (contiguity walk). INV-002 STRUCTURAL (no Renderer exists to violate it — same status as every prior Loop). INV-003 PASS (structural + cross-feature). INV-004 PASS (residual + pitch-constancy). INV-005 PASS (F19 full deep-equality repeat run, including trace). INV-006 PASS (cross-feature manual-break page-count assertion). INV-007 PASS (construction-level, re-verified). INV-008 PASS (re-verified). INV-009 STRUCTURAL (same as INV-002). INV-010 PASS (HOLD gate, real composition path). INV-011 PASS (F16, re-verified via F20/cross-feature spans). INV-012 STRUCTURAL (grep, zero matches). INV-013 PASS (geometry gate). 11 PASS, 2 correctly STRUCTURAL, 0 FAIL.
+
+**AUTOMATED RESULT: PASS.** `npx vitest run`: 170/170 (153 prior + 17 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline). Grep: zero forbidden imports. Scope: only `core/layout/assemble.ts`, `core/index.ts`, `core/layout/composeCanonicalDocument.test.ts`, plus the two new evidence documents and this log/roadmap status update.
+
+**HUMAN G1: PENDING.** No Human answer has been filled in anywhere in this session. `typesetting-v2/qa/human/P3_G1_CANONICAL_CORE_REVIEW.md` (non-engineer summary + unanswered scorecard) and `typesetting-v2/qa/evidence/P3_G1_CANONICAL_CORE_EVIDENCE.md` (full machine evidence) are the artifacts prepared for that review. Neither claims Gate G1 passed.
+
+**OPEN ITEMS:** None resolved, none fabricated. P3-O12 explicitly and repeatedly disclosed as still OPEN in both evidence documents, distinguished from "8-preset logical/schema support: PASS." The image/compose-line integration gap is newly *named* (not newly created — it existed since P3-L11) as a finding for a future Loop.
+
+**DECISION: P3-L15 AUTOMATED — PASS. HUMAN G1 — PENDING.**
+
+**WHY:** Every fixture traces to either the frozen F01–F20 taxonomy, the actual `REGRESSION_CORPUS_SPEC.md` §1 sentence, or read-only production preset data — nothing in this Loop's evidence is invented; the image-integration-gap test exists specifically so a real, pre-existing scope boundary becomes a checked, disclosed fact rather than something a reader would have to infer from absence.
+
+**NEXT:** Await Human Gate G1 review. Per `P3_CORE_IMPLEMENTATION_PLAN.md` §18, no `src/` integration occurs merely because this milestone's automated criteria pass — Master is not modified, Phase 3 is not closed, and no further Core Loop begins until G1 is answered.
+
+---

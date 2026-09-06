@@ -1,11 +1,19 @@
-// Version-metadata wiring only (Core Contract §25). Full CanonicalDocument
-// orchestration (composeCanonicalDocument, pages/colophon/trace/hold
-// assembly end to end) is P3-L15 — explicitly NOT this file's scope yet.
-// This file exists now only so VersionMetadata has one real, tested
-// construction path before P3-L15 needs it.
+// Top-level orchestration (Core Contract §20/§25, P3-L15). Wires the
+// Normalizer's LogicalUnit output + LayoutSettings-equivalent + RuleSetVersion
+// + MeasurementFacts into a CanonicalDocument. This is a regression-net
+// composition (every module below it was already independently tested) —
+// no new logical rule is introduced here, only assembly.
 
 import { CORE_SCHEMA_VERSION, type VersionMetadata } from "../version";
 import type { MeasurementFacts } from "../measurement/facts";
+import type { RuleSetVersion } from "../rules/characterClass";
+import type { LogicalUnit } from "../units";
+import type { BlockId } from "../source/span";
+import { composePages, type PageCompositionSettings } from "../compose/page";
+import { composeColophon } from "../colophon";
+import { createTraceRecorder } from "../trace";
+import { computeHold, holdToLayoutError } from "../diagnostics";
+import type { CanonicalDocument, LayoutError, LayoutWarning } from "./schema";
 
 // "which MeasurementFacts bundle" (Contract §25) — identified by provider +
 // version, per the Contract's own phrasing ("itself versioned/identified by
@@ -22,18 +30,14 @@ export function measurementIdentityFor(measurement: MeasurementFacts): string {
 // until P3-L09(original)'s full LayoutSettings ingestion exists — this is
 // sufficient for reproducibility comparison (same settings object ⇒ same
 // string) without claiming to be a cryptographic digest.
-export function settingsVersionFor(settings: Record<string, unknown>): string {
-  const sortedKeys = Object.keys(settings).sort();
-  const stable: Record<string, unknown> = {};
-  for (const key of sortedKeys) {
-    stable[key] = settings[key];
-  }
-  return JSON.stringify(stable);
+export function settingsVersionFor(settings: object): string {
+  const entries = Object.entries(settings).sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify(Object.fromEntries(entries));
 }
 
 export function buildVersionMetadata(
   ruleSetVersion: string,
-  settings: Record<string, unknown>,
+  settings: object,
   measurement: MeasurementFacts
 ): VersionMetadata {
   return {
@@ -41,5 +45,51 @@ export function buildVersionMetadata(
     ruleSetVersion,
     settingsVersion: settingsVersionFor(settings),
     measurementIdentity: measurementIdentityFor(measurement),
+  };
+}
+
+export interface DocumentCompositionInput {
+  bodyUnits: LogicalUnit[];
+  // If present, composed as an entirely separate, isolated ColophonBlock —
+  // never threaded through the body's own pages (Contract §15).
+  colophonUnits?: LogicalUnit[];
+  colophonBlockId?: BlockId;
+  ruleSet: RuleSetVersion;
+  measurement: MeasurementFacts;
+  settings: PageCompositionSettings;
+}
+
+// The full orchestration named by this Loop's goal. Composes body pages,
+// optionally an isolated colophon, converts any composition-level hold into
+// a document-level LayoutError (never silently discarded — INV-010),
+// and assembles VersionMetadata + Decision Trace onto one CanonicalDocument.
+export function composeCanonicalDocument(input: DocumentCompositionInput): CanonicalDocument {
+  const trace = createTraceRecorder(input.ruleSet.id);
+  const errors: LayoutError[] = [];
+  const warnings: LayoutWarning[] = [];
+
+  const bodyResult = composePages(input.bodyUnits, input.ruleSet, input.measurement, input.settings, trace);
+  if (bodyResult.hold) {
+    errors.push(holdToLayoutError(bodyResult.hold));
+  }
+
+  let colophon: CanonicalDocument["colophon"];
+  if (input.colophonUnits && input.colophonUnits.length > 0) {
+    const colophonResult = composePages(input.colophonUnits, input.ruleSet, input.measurement, input.settings, trace);
+    if (colophonResult.hold) {
+      errors.push(holdToLayoutError(colophonResult.hold));
+    }
+    const blockId = input.colophonBlockId ?? input.colophonUnits[0].span.blockId;
+    colophon = composeColophon(blockId, colophonResult.pages);
+  }
+
+  return {
+    pages: bodyResult.pages,
+    colophon,
+    version: buildVersionMetadata(input.ruleSet.id, input.settings, input.measurement),
+    warnings,
+    errors,
+    hold: computeHold(errors, warnings),
+    trace: trace.trace,
   };
 }
