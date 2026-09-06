@@ -483,3 +483,33 @@ No rejected hypothesis is silently reopened without new evidence, per the loop-e
 **NEXT:** Per this batch's explicit instruction, STOP here — do not begin P3-L12 without further authorization.
 
 ---
+
+## P3-L12 — Warnings / Errors / HOLD + Versioning Metadata
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `7d7e1e0` (matches expected P3-L11 checkpoint), worktree clean before start.
+
+**Renumbering note:** this is the roadmap's original P3-L14. Under this batch's own continued renumbering there is exactly ONE original Loop left before the excluded P3-L15/Gate-G1 milestone — the batch prompt names three slots (P3-L12/L13/L14), but the frozen roadmap has no additional Loop between this one and P3-L15. Rather than inventing two extra Loops to fill unused slots (which the batch's own "ROADMAP IS CANONICAL... do not silently redesign it" instruction forbids), this entry implements the one real remaining Loop and the batch stops here, reporting the mismatch explicitly rather than fabricating scope.
+
+**QUESTION:** Can TateSpun wire the Warning/Error/HOLD model (Contract §26, INV-010) and VersionMetadata construction (Contract §25) as their own tested modules, completing `layout/schema.ts`'s `CanonicalDocument` shape, without performing P3-L15's full `composeCanonicalDocument` orchestration?
+
+**HYPOTHESIS:** Yes.
+
+**METHOD:** Implemented `core/diagnostics/index.ts`: `computeHold(errors, warnings)` (INV-010 — any `BLOCKS_HOLD` error forces `hold=true`; a `LOCAL_ONLY` error or any warning alone never does, since Contract §26 explicitly defers exact serious-warning thresholds to implementation time) and `holdToLayoutError(hold)` (bridges `compose/line.ts`'s existing `LineCompositionHold` — already produced by every composition Loop since P3-L07 on an impossible atom or no-legal-boundary overflow — into the Contract's `LayoutError` shape, so a composition-level refusal-to-guess actually reaches the document-level HOLD mechanism instead of being silently swallowed). Implemented `core/layout/assemble.ts` (version wiring ONLY, per the roadmap's own explicit scope note — `composeCanonicalDocument` itself stays P3-L15): `measurementIdentityFor` (provider+version), `settingsVersionFor` (deterministic sorted-key JSON serialization — a reproducibility identifier, not a cryptographic hash, until a real `LayoutSettings` ingestion function exists), `buildVersionMetadata` (combines both plus `ruleSetVersion` and the existing `CORE_SCHEMA_VERSION` constant). Completed `layout/schema.ts`'s `CanonicalDocument`: added `warnings`/`errors`/`hold`/`trace` — the last of these was actually overdue from (original-numbering) P3-L07, whose own landing of `trace/` never triggered the promised follow-up edit to this file; caught and fixed in the same pass rather than left pending further. A circular-dependency risk was caught before it became a real problem: `LayoutWarning`/`LayoutError` were first drafted inside `diagnostics/`, but `CanonicalDocument` needs those same types, which would have made `layout/schema.ts` depend on `diagnostics/` while `diagnostics/` (per `CORE_MODULE_MAP.md` row 23's own allowed-deps list) is supposed to depend on `layout/schema.ts` — moved the two type definitions into `layout/schema.ts` itself, with `diagnostics/` importing and re-exporting them, restoring the one-directional dependency the module map actually specifies.
+
+**TESTS:** `core/diagnostics/index.test.ts` (6): `computeHold` empty/BLOCKS_HOLD/LOCAL_ONLY-does-not-hold/determinism; F17 exercised end-to-end — an impossible `lineExtentTicks: 0` setting forces a real `composePages` hold, converted via `holdToLayoutError` into a `BLOCKS_HOLD` error, confirmed to actually flip `computeHold` to `true` (not merely asserted as a standalone unit); a working-settings case confirms `hold === false` with zero errors. `core/layout/assemble.test.ts` (4): every `VersionMetadata` field non-empty, determinism, `settingsVersionFor` is key-order-insensitive but content-sensitive, `measurementIdentityFor` matches provider+version exactly. All 143 pre-existing tests re-ran unmodified and green.
+
+**RESULT: PASS.** `npx vitest run`: 153/153 pass (143 prior + 10 new). `npx tsc --noEmit`: 0 new errors (same pre-existing `src/app/layout.tsx` `LayoutProps` baseline) — the circular-dependency risk was caught at design time, before it could surface as a `tsc` failure. Grep confirmed zero DOM/React/Next/`src/` imports under `core/`; `git status --short` confirmed only `core/diagnostics/` (new), `core/layout/assemble.ts` (new, exactly the file the roadmap names), and `core/layout/schema.ts` (completing the CanonicalDocument shape) changed.
+
+**INVARIANTS:** INV-010 — PASS, verified end-to-end through a real composition hold, not a synthetic error object alone. No other invariant touched.
+
+**OPEN ITEMS AFFECTED:** None resolved, none fabricated. Exact HOLD-triggering thresholds beyond the malformed/impossible-extent case remain an implementation-time detail (Contract §26), not exhaustively designed — matches the roadmap's own "Explicitly NOT included" line.
+
+**DECISION: P3-L12 — PASS / CLOSED.**
+
+**WHY:** F17's test doesn't stop at asserting `computeHold` in isolation — it runs a real `composePages` call through to an actual hold and converts it, proving the bridge function actually connects the two systems rather than merely type-checking; the circular-dependency fix traces directly to `CORE_MODULE_MAP.md` row 23's own stated dependency direction, not a preference.
+
+**COMMIT:** `TSP v2: implement warnings, errors, HOLD, and version metadata`.
+
+**NEXT:** The only Loop remaining before P3-L15 (Canonical Regression Suite / Gate G1, explicitly excluded from this and prior batches) is P3-L15 itself. Per this batch's explicit instruction not to begin P3-L15, and since no other frozen Loop exists to fill this batch's remaining P3-L13/P3-L14 slots, the batch stops here.
+
+---
