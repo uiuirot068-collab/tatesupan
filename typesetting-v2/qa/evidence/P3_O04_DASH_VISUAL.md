@@ -142,3 +142,36 @@ The bar's exact visual proportions (thickness, color) are a Renderer-level defau
 **DECISION: P3-O04 — HOLD, Human strategy recheck required.** The main `qa/visual/p3-o09-preview/index.html` artifact's own dash rule is left UNCHANGED (still 0.06em solid, the last-applied interim value) pending this strategy-level decision — changing it again without Human input would be more guessing, not a resolution.
 
 **Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` and pick among strategies A/B/C (or describe a different direction).
+
+## 17. Human Visual QA — Both Geometric Strategies Rejected; Native Glyph Preferred Direction (2026-09-07)
+
+**Human findings:**
+- **Geometric bar (Strategy C, §16):** **REJECTED BY HUMAN** — too rule-like, does not visually belong to the surrounding typeface.
+- **Opacity-reduced geometric bar (Strategy B, §16):** **REJECTED BY HUMAN** — too pale / visually blurred.
+- **Native glyph (Strategy A, §16):** judged visually closer to real typography, but still needs continuity (seam between the two "―" characters) and centering review before it can be confirmed.
+
+**Preferred strategy direction (Human-set): NATIVE GLYPH INK + PAINT-ONLY POSITION/SEAM CORRECTION.** The geometric-bar direction (both its solid and opacity variants) is abandoned, not merely retuned again — this is a genuine strategy change, not another thickness/opacity iteration on the same painted-rectangle concept.
+
+**Audit of the native rendering path (direct source/artifact reading, no browser):**
+- The "――" DASH run composes as exactly **ONE atom** (`SEMANTIC_RUN` generates zero internal break opportunities, confirmed unchanged since P3-O04's own §3) and paints as **ONE text node** ("――", both characters together) inside **ONE `.unit-ink` box** — there are no separate, independently-positioned per-character DOM elements. Both characters flow within that single box under the already-existing `writing-mode: vertical-rl; line-height: 1; text-align: center;` (inherited from `.unit`).
+- **Question 1 (native stroke):** with the geometric-bar rules stripped (candidate A: `color: transparent` removed, `::after` neutralized to `content: none`), the glyph's own stroke weight is driven entirely by the resolved font — no artificial opacity, no artificial bar width, no pseudo-element replacement remains anywhere in candidate A. **Confirmed YES.**
+- **Question 2 (continuity):** since both dash characters share ONE text node (not two independently-placed Renderer boxes), there is no "gap between two placed atoms" to close at the positioning level — any visible seam is a font-rendering characteristic of how the resolved font draws two consecutive dash characters in vertical flow. The one well-defined, canonical-extent-independent CSS lever for INTER-CHARACTER spacing within a single text run is `letter-spacing` — it operates correctly along the inline axis (vertical, under `writing-mode: vertical-rl`) exactly as it would under horizontal writing, and does not touch canonical run extent, surrounding text, or SourceSpan.
+- **Question 3 (centering):** the original P2-L06 off-center measurement was taken against a **different, now-superseded PoC's own DOM structure** — not directly transferable to this Renderer's own structure, and no live-browser re-measurement tool exists in this environment (the same category of historical uncertainty already found NOT to recur for TCY, P3-O03). No reliable, evidence-backed CSS lever for cross-axis (block-axis) centering under vertical-rl was identified without fabricating an unverified offset. A small nudge is offered only as a clearly-labeled, disclosed EXPERIMENT (candidate C), never as a claimed correction.
+
+**Three native-glyph candidates generated** (`typesetting-v2/qa/visual/p3-o04-dash-weight-comparison/index.html`, regenerated in place, retitled "NATIVE DASH PAINT COMPARISON" — the rejected geometric/opacity strategies are no longer shown):
+
+- **A — native glyph, no correction at all (baseline):** real "――" ink, no letter-spacing, no transform. Tests whether the historical seam/off-center concerns even recur in this Renderer's own structure before any correction is attempted.
+- **B — native glyph + seam-tightening only:** adds `letter-spacing: -0.05em` to close any inter-character gap from the font's own glyph side-bearing; no cross-axis change.
+- **C — native glyph + seam-tightening + speculative centering nudge (EXPERIMENTAL):** same seam correction as B, plus `transform: translateX(-0.03em)` — explicitly disclosed in the artifact itself as unverified, offered only for Human visual judgment, not a proven fix.
+
+**No geometric bar, no opacity trick, and no font-size/font-weight variation appear anywhere in any of the three candidates** — verified directly by a stylesheet regression test asserting none of `content: ""`, `opacity:`, or `background: #111` appear anywhere in the generated comparison artifact.
+
+**Invariants (unchanged, re-verified):** source text "――", `SourceSpan`, `SemanticRun` identity, canonical occupied extent, line/page breaks, adjacent glyph coordinates, Natural Pitch, and `CanonicalDocument` are all unaffected — no Core file was touched (confirmed by `git diff --stat`), and the comparison artifact reuses the exact same composed `PaintDocument` across all three candidates, only substituting CSS text per section. Ellipsis is not referenced anywhere in this change.
+
+**Publication portability:** candidates A and B use only real glyph ink plus a standard, well-supported CSS property (`letter-spacing`) — both are straightforwardly reproducible by a future Publication (PDF/vector) renderer using the same semantic run and a deterministic character-spacing adjustment. Candidate C's `transform: translateX` nudge would need its own reproduction strategy in a vector renderer — disclosed as an open question, not assumed solved, and in any case unverified as a real fix.
+
+**Tests:** 81/81 renderer/preview tests pass (unchanged count — `generateDashWeightComparison.test.ts`'s one test was rewritten in place); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` shows 0 new errors.
+
+**DECISION: P3-O04 — HOLD, Human recheck required on the native-glyph candidates.** The main `qa/visual/p3-o09-preview/index.html` artifact's own dash rule is left UNCHANGED (still the geometric 0.06em rule from the prior HOLD) pending this decision — since NEITHER geometric variant was accepted, applying a native-glyph candidate to the main artifact before Human confirmation would be yet another guess, not a resolution.
+
+**Human recheck status: PENDING** — open `qa/visual/p3-o04-dash-weight-comparison/index.html` and judge candidates A/B/C (native glyph baseline / seam-tightened / seam-tightened + experimental centering).

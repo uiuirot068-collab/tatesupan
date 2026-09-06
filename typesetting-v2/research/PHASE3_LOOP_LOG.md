@@ -1002,3 +1002,23 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to choose among strategies A/B/C or describe a different direction. P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
 
 ---
+
+## P3-O04 Native Dash Glyph Continuity/Centering POC (2026-09-07, third review)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `202cea4` (matches expected checkpoint), worktree clean before start.
+
+**QUESTION:** Human rejected BOTH geometric-bar strategies (solid: too rule-like; opacity-reduced: too pale/blurred) — the native-glyph candidate was judged visually closer to typography but needs continuity and centering review. Can native font glyph ink be retained while correcting only paint position/continuity, without any geometric bar, opacity trick, or font-size/weight change?
+
+**METHOD:** Audited the DASH run's actual rendering path directly: confirmed it composes as exactly one atom and paints as one text node ("――", both characters together) inside one `.unit-ink` box — no separate per-character DOM elements exist to "overlap." Identified `letter-spacing` as the one well-defined, canonical-extent-independent CSS lever for inter-character spacing within that single text node (works correctly along the inline/vertical axis under `writing-mode: vertical-rl`). Found no evidence-backed CSS lever for cross-axis centering without fabricating an unverified offset — the original P2-L06 measurement was taken against a different, superseded PoC structure, not transferable here, and no live-browser re-measurement tool exists in this environment (the same category of uncertainty already resolved-by-non-recurrence for TCY).
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O04_DASH_VISUAL.md` §17 (full audit, three-candidate table). Regenerated `qa/visual/p3-o04-dash-weight-comparison/index.html`, retitled "NATIVE DASH PAINT COMPARISON," with three native-glyph-only candidates: (A) baseline, no correction at all; (B) `letter-spacing: -0.05em` seam-tightening only; (C) same seam-tightening plus a disclosed, explicitly-labeled EXPERIMENTAL `transform: translateX(-0.03em)` centering nudge (never presented as a proven fix). A stylesheet regression test directly asserts none of the rejected geometric/opacity mechanisms (`content: ""`, `opacity:`, `background: #111`) appear anywhere in the new artifact. 81/81 renderer/preview tests pass (unchanged count); 347/347 Core, 21/21 Stage C, 30/30 Stage D tests remain green; `npx tsc --noEmit` 0 new errors. No Core file touched; `PreviewRenderer.tsx`'s own main stylesheet left unchanged (still the geometric rule from the prior HOLD) pending this decision.
+
+**RESULT: native glyph stroke preserved (confirmed — no opacity, no bar, no replacement anywhere in the candidates); geometric bar removed from all three candidates.** Root cause of the seam: the two dash characters share one text node with no independent positioning to correct via overlap, so `letter-spacing` (not a transform-based "overlap") is the correct lever. Centering correction offered only as a disclosed experiment, not a proven fix, given the lack of a transferable measurement.
+
+**DECISION: P3-O04 — HOLD, Human recheck required on the native-glyph candidates (not the abandoned geometric direction).**
+
+**WHY:** Every claim traces to a direct structural fact (one atom, one text node, confirmed via source/artifact reading) or an honestly-disclosed absence of evidence (no transferable centering measurement) — nothing was guessed and presented as settled; the experimental candidate is explicitly labeled as such in the artifact itself, not silently offered as equal-confidence with A/B.
+
+**NEXT:** Human review of `qa/visual/p3-o04-dash-weight-comparison/index.html` to judge candidates A/B/C. P3-O05 remains untouched and OPEN. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---
