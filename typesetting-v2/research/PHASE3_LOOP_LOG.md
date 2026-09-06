@@ -754,3 +754,30 @@ Two small, sequential Human Visual QA readability fixes to the Stage D adapter, 
 **RESULT: both PASS.** 20/20 Stage D tests pass total across both fixes; 330 Core tests and 21 Stage C tests remain green throughout; 0 new tsc errors at either step. Full detail in `qa/evidence/STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §17/§18. `src/`, Production, Core, `package.json`, the lockfile, and the root `vitest.config.ts` were never touched by either fix. Human Visual QA recheck remains PENDING.
 
 ---
+
+## Stage D First-Line Indent Visual HOLD (2026-09-06/07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `79298c6` (one commit ahead of the task's stated `ff6e176` — the extra commit was the already-completed, unrelated 1.5x scale tuning; proceeded, worktree clean), worktree clean before start.
+
+**QUESTION:** Human Visual QA found the approved, machine-test-passing paragraph first-line indent (一字下げ) does not visually appear in the Stage D artifact — which layer (Normalizer/Core/View Model/Painter) is responsible, and what is the minimal correction?
+
+**HYPOTHESIS:** Unknown going in, per this task's own explicit instruction to prove the layer before fixing.
+
+**METHOD:** Traced `ParagraphBreakUnit`/paragraph-start state through `composeLine` → `composeColumn` → `composePage`/`composePages` → `CanonicalLine.indentTick` → Stage D's `viewModel.ts` → `PreviewApp.tsx`'s CSS `top`. Found two independent bugs, one per layer, the second surfaced only while authoring the task's own required regression test 6.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md` §19 (full trace, before/after values, constraint-by-constraint verification).
+
+1. **VIEW MODEL bug (the directly reported symptom).** Core's own documented contract keeps `PlacedUnit.yTick` line-relative from 0 always, exposing the indent only as separate `CanonicalLine.indentTick` metadata for a Renderer to add at paint time. `viewModel.ts`'s `buildViewLine` computed `topPx` straight from `placed.yTick`, never adding `line.indentTick` — Core was correct throughout; the painter simply never performed its own documented half of the contract. Fixed by adding `const indentOffsetTicks = line.indentTick ?? 0;` to the `topPx` computation.
+2. **CORE bug (newly discovered, not the reported symptom).** While writing the required regression test "manual page break does not fabricate a paragraph indent," `core/compose/column.ts`'s `currentIsParagraphStart` carry-forward logic was found to preserve the pre-line paragraph-start value unchanged across a `MANUAL_FORCED` (page-closing) cut, instead of treating it as consumed like every other cut does — a genuine general-case Core correctness gap (legacy's `pendingParagraphStart` is unconditionally consumed by any line's real content regardless of how that line ends; a page break itself never re-arms it). Fixed by simplifying `currentIsParagraphStart = lineResult.endedAtParagraphBreak ? true : lineResult.forcedBreak ? currentIsParagraphStart : false` to `currentIsParagraphStart = lineResult.endedAtParagraphBreak;` — matching the task's own explicit authorization ("if Core merely reduces available line extent but leaves the first glyph at line-start y=0, that is a genuine Core implementation gap... a minimal Core correction IS AUTHORIZED, but ONLY after root cause is proven"), extended to this closely related state-threading defect the same investigation surfaced.
+
+10 required regression tests added/verified (`viewModel.test.ts` tests 1/2/3/5/6/7/8/9 + the U+3000 case; `generateArtifact.test.ts` test 10 asserting the generated HTML itself, not just the view model, paints the shifted position).
+
+**RESULT: PASS.** 30/30 Stage D tests pass (27 from before this task's own additions + 3 new: tests 7, 9, 10); all 330 Core tests and 21 Stage C tests remain green (Stage C exercises `composeColumn` transitively — no regression); `npx tsc --noEmit` shows 0 new errors (only the known pre-existing `src/app/layout.tsx` baseline error). No source fabricated, no fake `SourceSpan`, no pitch stretched (verified directly: every glyph-to-glyph `yTick` delta within an indented line is identical, and the indent equals exactly one such delta), ordinary lines unaffected, U+3000 suppression preserved, blank paragraphs preserved, manual-page-break semantics preserved (the very bug this task fixed), ruby/TCY atomicity untouched, determinism preserved (test 9).
+
+**DECISION: Stage D First-Line Indent Visual HOLD — FIXED (both layers).**
+
+**WHY:** The view-model fix traces directly to Core's own pre-existing, already-documented `indentTick`/`yTick` contract (`schema.ts`, `PARAGRAPH_SEMANTICS_PRE_STAGE_D.md`) — nothing new was designed, only the painter's missing half of an existing contract was implemented. The Core fix traces to the task's own explicit authorization clause and to a concretely reproduced failing test, not a hypothetical — no paragraph semantics were redesigned, only a one-line simplification of already-existing state-threading logic.
+
+**NEXT:** Human recheck of the regenerated artifact (`typesetting-v2/qa/visual/stage-d/index.html`) — paragraph-start lines should now show a visible indent band with the first glyph painted below it. This task did not touch, and does not resolve, any of P3-O03/O04/O05/O06/O08/O09, F06, the ruby-placement wiring gap, or `long-prose`'s residual. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---

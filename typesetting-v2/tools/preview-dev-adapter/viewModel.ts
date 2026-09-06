@@ -184,6 +184,22 @@ function buildViewLine(
   source: string,
   ctx: PreviewRenderContext
 ): ViewLine {
+  // STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD: `PlacedUnit.yTick` is always
+  // line-relative starting at 0, REGARDLESS of `line.indentTick` — this is
+  // Core's own, intentional, already-approved contract
+  // (`PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §3/§5: Core reserves the indent
+  // extent for CAPACITY purposes and exposes it as `CanonicalLine.indentTick`
+  // metadata; a Renderer is the one responsible for reserving that much
+  // leading space before painting the line's placedUnits — Core never
+  // shifts `yTick` itself, so no fabricated SourceSpan or canonical
+  // coordinate is ever introduced by this). This adapter previously
+  // computed `topPx` straight from `placed.yTick`, silently skipping the
+  // half of that contract it was itself responsible for — the indent
+  // marker and the first glyph ended up painted at the same `top:0`
+  // position instead of the glyph being pushed below the marker. Adding
+  // the line's own indent extent here (0 for every ordinary line) is the
+  // one-line paint-time fix; nothing upstream of this changes.
+  const indentOffsetTicks = line.indentTick ?? 0;
   const viewUnits: ViewPlacedUnit[] = line.placedUnits.map((placed, i) => {
     const owner = findOwningUnit(units, placed.sourceSpan);
     const kind = owner ? viewKindFor(owner) : "UNKNOWN";
@@ -206,7 +222,7 @@ function buildViewLine(
       kind,
       text: textFor(kind, placed.sourceSpan, source),
       sourceSpan: placed.sourceSpan,
-      topPx: tickToPx(placed.yTick, ctx.scaleMultiplier),
+      topPx: tickToPx(placed.yTick + indentOffsetTicks, ctx.scaleMultiplier),
       heightPx: Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1),
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),

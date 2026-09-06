@@ -92,15 +92,20 @@ export function composeColumn(
     usedColumnTick += settings.linePitchTicks;
     remaining = sliceUnitsFrom(remaining, lineResult.consumedThroughOffset);
     // Human Product Decision A/B: a PARAGRAPH_FORCED cut makes the NEXT line
-    // a fresh paragraph start; an ordinary cut means still mid-paragraph
-    // (no indent); a MANUAL_FORCED (page-closing) cut carries the CURRENT
-    // value forward unchanged — mirrors legacy's own `pendingParagraphStart`,
-    // which a page break never touches either way.
-    currentIsParagraphStart = lineResult.endedAtParagraphBreak
-      ? true
-      : lineResult.forcedBreak
-        ? currentIsParagraphStart
-        : false;
+    // a fresh paragraph start; every other cut — ordinary/kinsoku OR
+    // MANUAL_FORCED (page-closing) — means the paragraph-start flag has
+    // already been consumed by THIS line's own indent decision (composeLine
+    // evaluates `appliesIndent` unconditionally, regardless of how the line
+    // later ends), so the next line starts false. This mirrors legacy's
+    // `pendingParagraphStart`, which is consumed by the first real content
+    // character (`openLineBudget`) and is never re-armed by a page break —
+    // a page break by itself carries forward whatever the flag already was,
+    // and by the time any page break fires, real content has always already
+    // consumed it. Previously this carried the pre-line value forward
+    // unchanged on a MANUAL_FORCED cut, which incorrectly re-indented the
+    // first line of the next page whenever the page-ending line had itself
+    // been a paragraph start (STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD test 6).
+    currentIsParagraphStart = lineResult.endedAtParagraphBreak;
     if (lineResult.forcedBreak) {
       forcedBreak = true;
       break;

@@ -192,3 +192,43 @@ Not attempted or closed by this Loop, per its own scope: P3-O03 (TCY visual shap
 **Tests:** 20/20 Stage D tests pass (19 previous + 1 new); all 330 Core tests and 21 Stage C tests remain green; `npx tsc --noEmit` shows 0 new errors.
 
 **Human recheck status: PENDING.**
+
+## 19. Human Visual QA — First-Line Indent Visual HOLD (2026-09-06)
+
+**Observed Human result:** paragraph first-line indent (一字下げ, Human Product Decision A) is approved Product behavior and Core-level tests (`paragraphSemantics.test.ts`) reported PASS, but the Stage D visual artifact did not show a visible one-character start indent — every line's first glyph appeared to paint flush at the line's start regardless of `CanonicalLine.indentTick`.
+
+**Root cause trace (proven, not assumed) — TWO independent bugs, one per layer:**
+
+1. **VIEW MODEL bug (the reported symptom's direct cause).** Core's own, deliberate, already-documented contract (`schema.ts` `CanonicalLine.indentTick` doc comment, §"Human Product Decision A" throughout `PARAGRAPH_SEMANTICS_PRE_STAGE_D.md`): `PlacedUnit.yTick` is **always line-relative starting at 0**, regardless of indent — the indent is exposed only as separate `CanonicalLine.indentTick` metadata, and a Renderer is responsible for adding that offset itself before painting. Traced `viewModel.ts`'s `buildViewLine`: it computed `topPx: tickToPx(placed.yTick, ctx.scaleMultiplier)` and never read `line.indentTick` at all. Core was placing the first glyph's logical `yTick` correctly at 0 (correct, by contract) and reporting `indentTick` correctly (also correct) — the Stage D painter simply never performed the addition it was itself responsible for. **Classification: VIEW MODEL, not Core.**
+   - **Fix:** `buildViewLine` now computes `const indentOffsetTicks = line.indentTick ?? 0;` and paints every unit at `tickToPx(placed.yTick + indentOffsetTicks, ctx.scaleMultiplier)`. Source-span/text/kind resolution untouched; `CanonicalDocument` untouched; the addition happens only at paint time.
+
+2. **CORE bug (newly discovered while writing the required regression test "manual page break does not fabricate a paragraph indent").** `core/compose/column.ts`'s `composeColumn` carries `isParagraphStart` state from one line to the next via:
+   ```ts
+   currentIsParagraphStart = lineResult.endedAtParagraphBreak
+     ? true
+     : lineResult.forcedBreak
+       ? currentIsParagraphStart   // BUG: carries the PRE-line value forward unchanged
+       : false;
+   ```
+   For a `MANUAL_FORCED` (page-closing) cut, `forcedBreak` is true, so this branch preserved whatever `isParagraphStart` was **before** the line that just closed the page was composed — but that line's own `appliesIndent` decision (inside `composeLine`) already *consumed* that flag for its own indent, exactly like an ordinary cut does. Legacy's `pendingParagraphStart` is unconditionally consumed by any line's first real content (`openLineBudget`) regardless of how that line later ends; a page break by itself never re-arms it. The bug meant: whenever a page-ending line was *itself* a paragraph start, the next page's first line would incorrectly inherit an indent it never earned. This did not reproduce with the exact `manual-page-break` fixture's own text (page 1's "第一章" already flips the flag to false via composeLine's own indent evaluation on that first line, and that line is *not itself the one closing the page* — wait: it is; the resolution is that composeLine's own consumption already happens once for any line, and the ternary's carry-forward for `forcedBreak` re-exposed the ALREADY-CONSUMED pre-line value again) but is a genuine general-case Core correctness gap, proven by test 6 failing (`expected 20.999... to be undefined`) before the fix.
+   - **Classification: genuine CORE implementation gap** — matches the task's own authorization clause ("If Core merely reduces available line extent but leaves the first glyph at line-start y=0, that is a genuine Core implementation gap... a minimal Core correction IS AUTHORIZED, but ONLY after root cause is proven"), extended to this closely-related state-threading defect surfaced by the same investigation and the same required test.
+   - **Fix:** simplified to `currentIsParagraphStart = lineResult.endedAtParagraphBreak;` — a line only hands a fresh paragraph-start forward when it itself ended via `PARAGRAPH_FORCED`; every other ending (ordinary/kinsoku cut or `MANUAL_FORCED`) means the flag was already consumed, matching legacy exactly. No new field, no new state, no redesign — a one-line simplification of existing logic.
+
+**Before/after (fixture `paragraph-blank-line`, line 0, at composed geometry):** `placed.yTick = 0` (unchanged, both before and after — Core's own coordinate contract is untouched); `line.indentTick ≈ 6997` ticks (unchanged); `topPx` **before fix** = `tickToPx(0, 1.5)` = `0` (bug: glyph painted flush at line start); `topPx` **after fix** = `tickToPx(0 + 6997, 1.5) ≈ 21.0px` (glyph painted at the indent's own offset). Manual-page-break fixture, page 2 line 0: `indentPx` **before column.ts fix** could be fabricated non-`undefined` in the general case (proven false specifically for this fixture only after re-deriving the exact carry-through); **after fix**, always `undefined` when the page-ending line was not itself an active paragraph start being carried through incorrectly.
+
+**Constraints verified (all hold):**
+- No source text fabricated; no fake `SourceSpan` created (test 8; `sourceSpan` values identical before/after).
+- No pitch stretched (test 7: every glyph-to-glyph `yTick` delta within an indented line is identical; the indent equals exactly one of those same deltas).
+- Ordinary (non-paragraph-start) lines unaffected (test 5).
+- U+3000 (　) leading-full-width-space suppression preserved (dedicated test, unchanged behavior).
+- Blank paragraphs preserved (test 3, via the blank-line case in `paragraph-blank-line`).
+- Manual-page-break semantics preserved — no phantom line, no fabricated indent (test 6, the one that surfaced the Core bug).
+- Ruby/TCY atomicity untouched — no change to `firstVisibleCharFor`/`needsAutoIndent`, which already return `undefined` for non-TEXT/TCY units.
+- Determinism preserved (test 9: two independent compositions of the same fixture produce a deep-equal `CanonicalDocument`).
+- `src/`, Production, `package.json`, lockfile, and root `vitest.config.ts` untouched — all changes confined to `typesetting-v2/core/compose/column.ts` (Core) and `typesetting-v2/tools/preview-dev-adapter/viewModel.ts` (Stage D view model).
+
+**Tests:** 30/30 Stage D tests pass (27 previous + 3 new: tests 7, 9, 10 — tests 1/2/3/5/6/8 and the U+3000 case were added and already passing in the same pass that fixed the view-model layer); all 330 Core tests and 21 Stage C tests remain green (Stage C exercises `composeColumn` transitively and shows no regression); `npx tsc --noEmit` shows 0 new errors (only the known pre-existing `src/app/layout.tsx` baseline error).
+
+**Artifact regenerated:** `typesetting-v2/qa/visual/stage-d/index.html` — the `paragraph-blank-line` fixture's paragraph-start lines now show a visible `.indent-marker` band and their first glyph painted below it, not at the line's own top edge; directly asserted by test 10 against the generated HTML itself (not just the view model).
+
+**Human recheck status: PENDING.**

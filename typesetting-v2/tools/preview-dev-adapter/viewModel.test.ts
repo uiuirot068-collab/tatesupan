@@ -103,6 +103,128 @@ describe("viewModel.ts — CanonicalDocument -> paint-only ViewModel", () => {
     expect(firstLine.units.every((u) => u.sourceSpan.start >= 0)).toBe(true);
   });
 
+  // STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD: the test above only ever checked
+  // that `indentPx` metadata EXISTS — never that the actual glyph is
+  // PAINTED below it. That gap is exactly what let the visual bug ship
+  // (Core's own `PlacedUnit.yTick` is always line-relative starting at 0,
+  // by design — `line.indentTick` is separate metadata a Renderer must
+  // itself add before painting). These tests assert the real, rendered
+  // `topPx`, not just the presence of the metadata.
+  describe("STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD — first glyph is actually painted below the indent, not merely capacity-reduced", () => {
+    // paragraph-blank-line fixture (fixtures.ts): line0=paragraph1 (indented),
+    // line1=paragraph2 after a bare PARAGRAPH_BREAK (indented), line2=the
+    // blank line itself (no indent — matches legacy), line3=paragraph3
+    // after the blank line (indented).
+    const { document, ctx, bodyUnits, source } = composeFixture("paragraph-blank-line");
+    const vm = buildPreviewViewModel("id", "label", document, bodyUnits, source, ctx);
+    const lines = vm.pages[0].columns[0].lines;
+
+    it("1. first paragraph: first glyph topPx equals the line's own indentPx, not 0", () => {
+      expect(lines[0].indentPx).toBeGreaterThan(0);
+      expect(lines[0].units[0].topPx).toBeCloseTo(lines[0].indentPx!, 6);
+      expect(lines[0].units[0].topPx).not.toBe(0);
+    });
+
+    it("2. paragraph immediately after a bare newline: same", () => {
+      expect(lines[1].indentPx).toBeGreaterThan(0);
+      expect(lines[1].units[0].topPx).toBeCloseTo(lines[1].indentPx!, 6);
+    });
+
+    it("3. paragraph after a blank line: same", () => {
+      expect(lines[3].indentPx).toBeGreaterThan(0);
+      expect(lines[3].units[0].topPx).toBeCloseTo(lines[3].indentPx!, 6);
+    });
+
+    it("5. an ordinary (non-paragraph-start) line has no indent and its first glyph paints at top:0", () => {
+      // Within one paragraph that wraps across multiple lines, only the
+      // FIRST line of that paragraph is a paragraph start. This fixture's
+      // own capacity is generous enough that every paragraph fits on one
+      // line, so the blank line (line2) itself is the available example of
+      // "not a fresh visible paragraph" — it has no indent and, since its
+      // only unit is the zero-cost break marker itself (kind UNKNOWN, no
+      // text), its own topPx is unaffected by any indent offset.
+      expect(lines[2].indentPx).toBeUndefined();
+      expect(lines[2].units[0].topPx).toBe(0);
+    });
+
+    it("6. manual page break does not fabricate a paragraph indent", () => {
+      const mp = composeFixture("manual-page-break");
+      const mpVm = buildPreviewViewModel("id", "label", mp.document, mp.bodyUnits, mp.source, mp.ctx);
+      // Page 2's content ("第二章の本文です") follows a MANUAL_FORCED cut,
+      // not a PARAGRAPH_FORCED one. Human Product Decision A's
+      // pendingParagraphStart-equivalent state is CONSUMED by any line's
+      // own real content, regardless of how that line later ends — a
+      // MANUAL_FORCED cut does not re-arm it any more than an ordinary cut
+      // does (only a PARAGRAPH_FORCED cut starts a fresh paragraph). The
+      // very first thing in the whole document ("第一章") consumes the
+      // initial paragraph-start on page 1, so page 2's line must show no
+      // indent at all.
+      //
+      // core/compose/column.ts previously carried the PRE-line
+      // isParagraphStart value forward unchanged across a MANUAL_FORCED
+      // cut instead of treating it as consumed — harmless for this
+      // specific fixture (page 1's line already flips it to false via the
+      // ordinary "else false" branch before any break fires), but a
+      // genuine Core bug in general: whenever the page-ending line was
+      // ITSELF a paragraph start, page 2 would incorrectly inherit that
+      // same indent (proven false; fixed by simplifying the assignment to
+      // `currentIsParagraphStart = lineResult.endedAtParagraphBreak`).
+      const page2Line0 = mpVm.pages[1].columns[0].lines[0];
+      expect(page2Line0.indentPx).toBeUndefined();
+      expect(page2Line0.units[0].topPx).toBe(0);
+    });
+
+    it("7. Natural Pitch: the indent reserves exactly one ordinary character cell and does not stretch/shrink any glyph's own pitch", () => {
+      const indentedLine = document.pages[0].columns[0].lines[0];
+      expect(indentedLine.placedUnits.length).toBeGreaterThan(1);
+      const deltas: number[] = [];
+      for (let i = 1; i < indentedLine.placedUnits.length; i++) {
+        deltas.push(indentedLine.placedUnits[i].yTick - indentedLine.placedUnits[i - 1].yTick);
+      }
+      // Every ordinary glyph-to-glyph advance within the line is
+      // identical — the reserved indent extent is never achieved by
+      // squeezing or stretching any glyph's own pitch (INV-004 Natural
+      // Pitch: no stretch).
+      expect(new Set(deltas).size).toBe(1);
+      // The reserved indent itself is exactly one of those same ordinary
+      // cells — a whole extra character-width reservation, not a
+      // fabricated or independently-scaled value.
+      expect(document.pages[0].columns[0].lines[0].indentTick).toBe(deltas[0]);
+    });
+
+    it("8. source mapping is unaffected by the paint-time indent offset", () => {
+      const expectedSpans = document.pages[0].columns[0].lines[0].placedUnits.map((p) => p.sourceSpan);
+      expect(lines[0].units.map((u) => u.sourceSpan)).toEqual(expectedSpans);
+    });
+
+    it("9. CanonicalDocument composition — including indentTick and every placed unit's yTick — is deterministic", () => {
+      const a = composeFixture("paragraph-blank-line").document;
+      const b = composeFixture("paragraph-blank-line").document;
+      expect(b).toEqual(a);
+    });
+
+    it("explicit leading U+3000 suppresses the generated indent (legacy parity)", () => {
+      const { units, source: fixtureSource } = buildFixtureUnits("body", [{ kind: "TEXT", text: "　あいうえお" }]);
+      const settings = settingsFor({ charsPerLine: 10, linesPerColumn: 3, columnCount: 1 });
+      const measurement = createFakeMeasurementProvider();
+      const doc = composeCanonicalDocument({ bodyUnits: units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+      const testCtx: PreviewRenderContext = {
+        scaleMultiplier: DEFAULT_SCALE_MULTIPLIER,
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        nominalCellTicks: settings.linePitchTicks,
+        measurementIdentity: doc.version.measurementIdentity,
+        paintFontIdentity: doc.version.measurementIdentity,
+      };
+      const vmU3000 = buildPreviewViewModel("id", "label", doc, units, fixtureSource, testCtx);
+      const firstLine = vmU3000.pages[0].columns[0].lines[0];
+      expect(firstLine.indentPx).toBeUndefined();
+      expect(firstLine.units[0].topPx).toBe(0);
+    });
+  });
+
   it("marks the manual-page-break page distinctly, with no phantom extra line (Root Cause C not ported)", () => {
     const { document, ctx, bodyUnits, source } = composeFixture("manual-page-break");
     const vm = buildPreviewViewModel("id", "label", document, bodyUnits, source, ctx);

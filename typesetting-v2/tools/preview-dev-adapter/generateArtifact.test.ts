@@ -145,4 +145,31 @@ describe("Stage D — renderable artifact generation", () => {
       expect(width).toBeGreaterThan(0);
     }
   });
+
+  // Regression guard for STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD: the earlier
+  // bug left `indentTick` metadata present but never actually shifted any
+  // painted glyph — the artifact's own indent-marker band and its first
+  // glyph's `top:` must both reflect the same canonical, non-zero offset,
+  // not merely reduced line capacity.
+  it("10. the generated artifact HTML visibly paints the paragraph indent — the indent-marker height and the first glyph's own top match the canonical shifted position, not zero", () => {
+    const viewModels = buildAllViewModels();
+    const html = "<!doctype html>" + ReactDOMServer.renderToStaticMarkup(PreviewApp({ viewModels }));
+
+    const paragraphModel = viewModels.find((vm) => vm.id === "paragraph-blank-line");
+    expect(paragraphModel).toBeDefined();
+    const firstLine = paragraphModel!.pages[0].columns[0].lines[0];
+    expect(firstLine.indentPx).toBeGreaterThan(0);
+    const expectedIndentPx = firstLine.indentPx!;
+    const expectedFirstUnitTopPx = firstLine.units[0].topPx;
+    expect(expectedFirstUnitTopPx).toBeCloseTo(expectedIndentPx, 6);
+    expect(expectedFirstUnitTopPx).not.toBe(0);
+
+    const markerHeights = [...html.matchAll(/class="indent-marker" style="height:([^;"]*)px"/g)].map((m) => Number(m[1]));
+    expect(markerHeights.length).toBeGreaterThan(0);
+    expect(markerHeights.some((h) => Math.abs(h - expectedIndentPx) < 1e-6)).toBe(true);
+
+    const textUnitTops = [...html.matchAll(/class="unit kind-TEXT" style="top:([^;"]*)px/g)].map((m) => Number(m[1]));
+    expect(textUnitTops.length).toBeGreaterThan(0);
+    expect(textUnitTops.some((t) => Math.abs(t - expectedFirstUnitTopPx) < 1e-6)).toBe(true);
+  });
 });
