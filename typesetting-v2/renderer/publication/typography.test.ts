@@ -14,6 +14,7 @@ import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_S
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
 import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
+import { VerticalGposContext } from "./verticalGposPaint";
 
 // Real horizontal bounds for any PaintCommand -- including "glyphOutline"
 // (round 7), whose own path commands carry the only x-coordinates
@@ -460,9 +461,12 @@ describe("P3-O08 — Publication Typography", () => {
       // Round 7 (OpenType vertical GSUB outline paint): thread a real
       // VerticalOutlineContext so this combined QA artifact reflects the
       // font-derived outline paint for kana/Dash, not just the pre-round-7
-      // manual-mapping-only "text" path.
+      // manual-mapping-only "text" path. Round 10 (GPOS ink placement):
+      // thread a real VerticalGposContext too, so yakumono ink positioning
+      // reflects the font's own real vpal data.
       const outlineContext = new VerticalOutlineContext(readFileSync(FONT_PATH));
-      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY, undefined, outlineContext);
+      const gposContext = new VerticalGposContext(readFileSync(FONT_PATH));
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY, undefined, outlineContext, gposContext);
       const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
       expect(pageCount).toBe(document.pages.length);
       expect(pageCount).toBeGreaterThanOrEqual(6); // one page per manual-break section

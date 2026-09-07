@@ -1432,3 +1432,23 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of the regenerated `yakumono-spacing-qa.pdf`/combined PDF — glyphs should now read at normal body size with the `。→」` spacing still visibly tighter than an ordinary pair. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — OpenType Vertical GPOS Audit (2026-09-07)
+
+**HUMAN QA (round 10):** round 9's glyph-size fix confirmed correct, but `」` now visibly intrudes into the preceding sentence-end area — round 8's advance-only compression was incomplete. Explicit instruction: audit the real Shippori Mincho GPOS table for `vhal`/`vchw` vertical positioning data before any further tuning; do not add another arbitrary renderer-local offset.
+
+**GPOS AUDIT (real, `gposReader.ts` — new, mirrors `gsubReader.ts`'s architecture, not a rewrite of it):** `vhal`/`vchw`/`valt` are confirmed ABSENT in this font. The only real vertical positioning feature present is `vpal` (Proportional Alternate Vertical Metrics, 446 real per-glyph Single Adjustment values). Resolved against the correct POST-GSUB `vert`-substituted glyph IDs (cross-checked against the already-frozen round-6 GSUB audit): `。`/`」` (the reported pair) have near-zero YPlacement — their own ink was already correctly positioned, the round-8 advance compression alone was nearly right for them. **`「`/`（` (opening marks) have a LARGE real YPlacement (+527/+623 font units, over half an em)** — this, never applied anywhere before this round, is the real root cause of the reported intrusion: `「` is the very first character of the fixture, and its own un-repositioned ink collided with the now-correctly-compressed following content.
+
+**ROOT CAUSE CLASSIFICATION: C — Both**, precisely: round 8's WHEN (jlreq pair-adjacency rule) remains correct and font-agnostic; what was missing was the HOW (real font-derived ink placement), never sourced from actual font data. Round 8's flat 0.5em advance is KEPT, not replaced with per-font real values — using real per-glyph `vpal` YAdvance for CANONICAL advance would mean re-deriving Core's own measurement from font metrics, directly conflicting with the FROZEN Natural Pitch invariant (Core Contract §18, re-confirmed, not reopened).
+
+**FIX (Publication-only, real font data, zero Core changes):** new `verticalGposPaint.ts`'s `VerticalGposContext` resolves each grapheme's real `vpal` YPlacement (via the existing GSUB substitution map, reused not re-derived) and applies it as a small paint-time Y nudge — scaled by the atom's own real `bodyEmMm`-derived font size (round 9's fix, never the atom's own possibly-compressed `heightMm`), applied uniformly to both "text" and "glyphOutline" paint mechanisms, for every grapheme unconditionally (harmless where the real value is near-zero). No YAdvance used — only YPlacement, keeping this strictly a paint-time ink correction, never a canonical-layout change.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_GPOS.md` (11-section record). 11 new tests (6 GPOS audit + 5 pipeline integration). `yakumono-spacing-qa.pdf` and the combined `publication-typography-qa.pdf` both regenerated with the real GPOS-derived ink placement. Full regression: Core 380/380 (unchanged, zero Core files touched), Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 163/163 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: root cause identified and fixed with real font data, not tuning. YAKUMONO — READY FOR HUMAN RECHECK.** Ruby/small kana/Dash: unaffected, still recorded PASS. P3-O08: IN PROGRESS. Not ready for JPG/grayscale.
+
+**WHY:** Every claim traces to a directly-run test against the font's own raw GPOS bytes, cross-checked against the already-frozen GSUB substitution map from round 6 — no YPlacement value was invented or tuned; the architecture split (Core owns WHEN via jlreq, Publication owns HOW via real vpal data) directly follows this round's own explicit instruction not to collapse a font-agnostic policy rule and a font-specific metric into one constant.
+
+**NEXT:** Human Visual QA of the regenerated PDFs — does `「今日は、雨だった。」` now read as ordinary Japanese vertical typesetting, with no `」` intrusion? Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

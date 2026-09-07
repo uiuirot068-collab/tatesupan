@@ -13,6 +13,7 @@ import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_S
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
 import { buildPaintPlan, renderPaintPlanToPdf, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
+import { VerticalGposContext } from "./verticalGposPaint";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
 
@@ -40,7 +41,7 @@ describe("Yakumono spacing -- Publication automatically reflects Core's correcte
     expect(periodToBracketPitch).toBe(Math.round(commaToRainPitch * 0.5));
   });
 
-  it("generates yakumono-spacing-qa.pdf using the real font/geometry/vertical-outline pipeline", () => {
+  it("generates yakumono-spacing-qa.pdf using the real font/geometry/vertical-outline/GPOS ink-placement pipeline", () => {
     const geometry: PublicationPageGeometry = { paperWidthMm: 105, paperHeightMm: 148, marginTopMm: 12, marginBottomMm: 12, marginRightMm: 15, marginLeftMm: 10 };
     const { units, source } = buildFixtureUnits("body", [{ kind: "TEXT", text: "「今日は、雨だった。」" }]);
     const settings = settingsFor({ charsPerLine: 14, linesPerColumn: 1, columnCount: 1 });
@@ -58,7 +59,8 @@ describe("Yakumono spacing -- Publication automatically reflects Core's correcte
     const model = buildPublicationDocument("yakumono-spacing-qa", "Yakumono Spacing QA", document, units, source, ctx);
     const font = fontResource();
     const outlineContext = new VerticalOutlineContext(readFileSync(FONT_PATH));
-    const plan = buildPaintPlan(model, true, geometry, undefined, outlineContext);
+    const gposContext = new VerticalGposContext(readFileSync(FONT_PATH));
+    const plan = buildPaintPlan(model, true, geometry, undefined, outlineContext, gposContext);
     const { bytes } = renderPaintPlanToPdf(plan, font);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
 
