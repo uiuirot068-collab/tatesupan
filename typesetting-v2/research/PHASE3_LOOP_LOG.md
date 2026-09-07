@@ -1522,3 +1522,27 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of `yakumono-legacy-parity-qa.pdf` (all 8 fixtures) and the regenerated combined PDF — does `「今日は、雨だった。」` now read as ordinary Japanese vertical typesetting? Master is not modified. Phase 3 is not closed. `src/` (read-only audited, never modified), Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Small-Kana In-Cell Parity + Conditional 。/、→」 Spacing (2026-09-08)
+
+**HUMAN FINDING (round 14):** round 13's real, font-grounded paint-edge-alignment port was still visually insufficient. Two distinct symptoms in "だった": (1) っ shows too much apparent space; (2) 。」/、」 are still too loose.
+
+**PART 1 — small kana, AUDIT FIRST per explicit instruction.** Direct Grep of `src/components/PageCard.tsx` for every plausible small-kana term (`小さ|捨て仮名|拗音|促音|small.?kana|smallKana|ぁぃぅぇぉ|っゃゅょ`) found only two unrelated matches — legacy has **no small-kana-specific mechanism anywhere**, and small kana is confirmed absent from all three yakumono regexes already ported in round 13. Rules out classification C (nothing to port). Two new tests (`renderer/publication/smallKanaCellDebug.test.ts`) prove DIRECTLY — not by inference from `classifyYakumonoAlignment("っ") === "NORMAL"` — that っ's own painted `yMm` and its own real outline path commands are byte-identical whether or not round 13's `yakumonoContext` is supplied: commit `639c63f` provably changed nothing about っ. Rules out classification A (regression). A third test measures っ's real glyph ink-height fraction (`glyphInkBBox`/`unitsPerEm`) against だ/た's and finds it measurably smaller, at the identical uniform baseline anchor — the reported "extra space" is real, measured, and inherent to the glyph's own smaller drawn size within an unchanged, correctly-sized cell.
+
+**DECISION: classification B — NO REGRESSION, pre-existing optical characteristic. No paint correction made.** QA-only `qa/publication/p3-o08/small-kana-cell-debug.pdf` generated (cell-boundary + real ink-bbox overlay for "だった"), never wired into normal Publication output.
+
+**PART 2 — conditional cl-06/cl-07 → cl-02 pair suppression, IMPLEMENTED.** `core/compose/line.ts`'s `computeAtoms` gained one new, narrow, evidence-scoped function (`conditionalYakumonoPairAdvanceTick`): a cl-06/cl-07 atom immediately followed by a cl-02 atom (via `RuleSetVersion.characterClassFor`, the same generic data-driven lookup every other class-aware Core computation uses — no hardcoded character) loses its own trailing half-cell canonical advance. Explicitly distinguished from round 8/11's retired GLOBAL models by scope (one pair only) and by being tested, for the first time, IN COMBINATION with round 13's already-ported real paint-edge-alignment layer — the user's own stated rationale for why this attempt might succeed where the earlier standalone attempts did not.
+
+**Controls verified:** `た。次`/`た、次` (ordinary text following 。/、) completely unaffected; `」次` (cl-02 followed by ordinary text) unaffected — rule only fires on the punctuation SIDE; `先「次` (cl-01) never a trigger; `。。` (two cl-06 in a row) never fires (next class must be cl-02); glyph `fontSizePt` unaffected for every character in the compressed pairs; っ completely unaffected (not cl-06/07/02); no source/SourceSpan mutation; deterministic.
+
+**Round 13 tests updated, not deleted:** two assertions in `yakumonoLegacyParityQa.test.ts` and one in `glyphSizeIndependence.test.ts` had asserted uniform advance for the exact `。→」` pair this round intentionally changes — rewritten to assert the new, correct relationship (`cell - Math.round(cell * 0.5)` for that one pair, `cell` unchanged everywhere else in the same fixtures), preserving the underlying "ordinary adjacency stays uniform" audit intent.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_SMALL_KANA_AND_CONDITIONAL_PUNCTUATION_ROUND14.md`. New tests: `core/compose/conditionalYakumonoPair.test.ts` (12), `renderer/publication/smallKanaCellDebug.test.ts` (6), `renderer/publication/targetedYakumonoQa.test.ts` (5). Full regression: Core 376/376 (364 + 12), Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 193/193 (188 + 5) — all PASS; `npx tsc --noEmit` 0 new errors (only the known pre-existing `src/app/layout.tsx` baseline error).
+
+**DECISION: SMALL KANA — READY FOR HUMAN RECHECK (no code change, diagnostic only). `。」`/`、」` — READY FOR HUMAN RECHECK (real, narrow canonical-advance change).** Ruby/Dash/TCY/Ellipsis: unaffected, still PASS. P3-O08: IN PROGRESS. Not ready for JPG.
+
+**WHY:** Every claim traces to a direct Grep/read of the legacy source, a test that compares actual paint-plan output byte-for-byte (not code-path inference), or a real `FontMetricsReader.glyphInkBBox` measurement against the committed font — never a guessed offset or an unverified assumption.
+
+**NEXT:** Human Visual QA of `qa/publication/p3-o08/small-kana-cell-debug.pdf` (does the debug overlay confirm っ's cell is correctly sized, with the gap being empty ink area, not extra advance?) and `qa/publication/p3-o08/targeted-yakumono-qa.pdf`/`targeted-yakumono-cell-debug.pdf` (fixtures A-E — do `。」`/`、」` now read tight, with `。次`/`、次` unmoved?). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

@@ -49,6 +49,18 @@ export interface RuleSetVersion {
   // all unchanged"), only PAINT-TIME ink position. The correction now
   // lives entirely in `renderer/publication/verticalYakumonoAlign.ts` —
   // Core's own canonical model requires no punctuation-specific concept.
+  //
+  // Human Visual QA HOLD round 14: `core/compose/line.ts`'s own
+  // `computeAtoms` gained ONE narrow, explicitly-scoped exception to the
+  // above — a cl-06/cl-07 (full stop/comma) atom immediately followed by
+  // a cl-02 (closing bracket) atom has its own trailing half-cell
+  // advance suppressed (via `ruleSet.characterClassFor`, the SAME lookup
+  // this field's own generic data model already provides — no new field
+  // was added here). This is a pair rule, not a global scope table like
+  // the two retired experiments above; every other adjacency (in
+  // particular cl-06/cl-07 followed by ordinary text) keeps its full,
+  // uniform 1-cell advance exactly as this round 13 note still
+  // describes.
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see

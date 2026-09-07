@@ -54,23 +54,32 @@ function composeFor(text: string) {
 }
 
 describe("Yakumono legacy-parity edge alignment -- canonical layer proofs", () => {
-  it("た。」 -- canonical advance is now UNIFORM (no compression) -- every pitch is exactly one cell", () => {
+  it("た。」 -- canonical advance is uniform for ordinary adjacency; 。->」 carries round 14's own narrow, scoped half-cell suppression", () => {
     const { document } = composeFor("た。」");
     const measurement = createFakeMeasurementProvider();
     const settings = settingsFor({ charsPerLine: 20, linesPerColumn: 1, columnCount: 1 });
     const cell = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
     const line = document.pages[0].columns[0].lines[0];
-    expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(cell); // た->。
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell); // 。->」
+    expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(cell); // た->。 (ordinary, unaffected)
+    // Human Visual QA HOLD round 14, Part 2: 。 immediately before a
+    // closing bracket (cl-02) has its own trailing half-cell advance
+    // suppressed -- see core/compose/conditionalYakumonoPair.test.ts for
+    // the full proof of this narrow pair rule. Round 13's own claim here
+    // (uniform, no compression) predates that decision.
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell - Math.round(cell * 0.5)); // 。->」
   });
 
-  it("「今日は、雨だった。」 -- every character-to-character pitch is the SAME uniform cell, matching legacy's own invariant exactly", () => {
+  it("「今日は、雨だった。」 -- every character-to-character pitch is the SAME uniform cell, EXCEPT the final 。->」 pair (round 14's own scoped suppression)", () => {
     const { document } = composeFor("「今日は、雨だった。」");
+    const measurement = createFakeMeasurementProvider();
+    const settings = settingsFor({ charsPerLine: 20, linesPerColumn: 1, columnCount: 1 });
+    const cell = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
     const line = document.pages[0].columns[0].lines[0];
     const pitches: number[] = [];
     for (let i = 1; i < line.placedUnits.length; i++) pitches.push(line.placedUnits[i].yTick - line.placedUnits[i - 1].yTick);
-    const first = pitches[0];
-    for (const p of pitches) expect(p).toBe(first);
+    const lastIndex = pitches.length - 1; // 。->」, the only cl-06/cl-07 -> cl-02 adjacency in this fixture
+    for (let i = 0; i < lastIndex; i++) expect(pitches[i]).toBe(cell);
+    expect(pitches[lastIndex]).toBe(cell - Math.round(cell * 0.5));
   });
 
   it("source is never mutated", () => {
