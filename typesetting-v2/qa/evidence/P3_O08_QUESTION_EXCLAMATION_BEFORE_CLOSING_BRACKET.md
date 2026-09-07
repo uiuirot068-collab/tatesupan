@@ -1,5 +1,26 @@
 # P3-O08 — 感嘆符/疑問符 (！/？) Before a Closing Bracket (Human Visual QA HOLD round 18)
 
+## FINAL HUMAN DECISION (round 19, 2026-09-08)
+
+Human reviewed `question-exclamation-closing-bracket-comparison.pdf`
+(A_CURRENT vs B_EVIDENCE_DERIVED, 8 fixtures) and **could not perceive a
+meaningful visible difference** between the two variants. This resolves
+the ambiguity this round's own audit predicted (real ink-bbox data
+already suggested `！`/`？`'s own naturally tall glyph ink, ~0.83 of the
+em-square, likely already makes A_CURRENT look acceptable without any
+special rule).
+
+**Product decision: NO special spacing rule for `！`/`？`/combined
+`！？`/`？！` before a closing bracket. Status: CLOSED.** This is not an
+erasure of the round 18 audit below — the audit and its HOLD-with-
+comparison-evidence approach is exactly what let Human resolve the
+question quickly and correctly, without a speculative implementation
+that might have needed yet another retirement round (as period/comma's
+own round 14→17 history required). The evidence and reasoning below
+remain the record of how this conclusion was reached.
+
+---
+
 Audit + evidence only. **No product rule implemented.** Continues
 directly from round 17 (`qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md`,
 commit `c814568`), which closed the period/comma question with "normal
@@ -157,12 +178,12 @@ this round is audit/QA-only, per its own explicit instruction. `。」`/
 (re-verified directly, not assumed). No new dependency. No push, no
 deploy, no reset.
 
-## Human recheck required
+## Human recheck — RESOLVED (round 19)
 
-Does `question-exclamation-closing-bracket-comparison.pdf` show
-A_CURRENT already looking acceptable (matching this evidence's own
-prediction), or does B_EVIDENCE_DERIVED look meaningfully better? If
-Human judges A_CURRENT already sufficient, this item can close with
-"no rule needed" (same outcome as round 14's small-kana question). If
-Human judges B meaningfully better, that would be new, real product
-evidence — not yet available at the time of this round.
+Human reviewed `question-exclamation-closing-bracket-comparison.pdf`
+and found no meaningful visible difference between A_CURRENT and
+B_EVIDENCE_DERIVED — confirming this evidence's own prediction (real
+ink-bbox data showing `！`/`？` already occupy ~83% of the em-square,
+naturally minimizing any visible gap under the current, unconditional
+centered treatment). **Final decision: CLOSED, no special rule.** See
+the "FINAL HUMAN DECISION" section at the top of this document.
