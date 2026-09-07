@@ -243,7 +243,17 @@ function verticalGraphemeCommands(
   baselineRatio: number = FALLBACK_BASELINE_RATIO,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
-  yakumonoContext?: VerticalYakumonoAlignContext
+  yakumonoContext?: VerticalYakumonoAlignContext,
+  // Human Visual QA HOLD round 16 (final product selection): the
+  // document's own fixed body-em height in mm, and the grapheme
+  // immediately following THIS unit (the next atom's own first
+  // character, when this is the last grapheme of a single-grapheme
+  // TEXT atom — the normal case for punctuation). Both optional and
+  // additive; omitting either preserves the exact prior (pre-round-16)
+  // per-character-slot-height anchor for every caller that does not
+  // supply them.
+  bodyEmMm?: number,
+  nextUnitFirstGrapheme?: string
 ): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
@@ -253,7 +263,17 @@ function verticalGraphemeCommands(
     const yakumonoBaselineRatio = yakumonoContext?.baselineRatioFor(ch);
     const effectiveBaselineRatio = yakumonoBaselineRatio ?? baselineRatio;
     const gposOffsetMm = yakumonoBaselineRatio !== undefined ? 0 : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
-    const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
+    const nextGrapheme = i + 1 < graphemes.length ? graphemes[i + 1] : nextUnitFirstGrapheme;
+    // Human Visual QA HOLD round 16 (final product selection, Human A/B
+    // approved — see `VerticalYakumonoAlignContext.usesFullEmAnchor`'s
+    // own doc): a cl-06/cl-07 atom immediately before a cl-02 atom
+    // anchors its own ink-flush against the FULL body-em height, not
+    // this atom's own (Core-compressed) per-character slot height.
+    // Every other character, including the closing bracket itself,
+    // keeps the exact prior per-slot anchor.
+    const useFullEmAnchor = bodyEmMm !== undefined && (yakumonoContext?.usesFullEmAnchor(ch, nextGrapheme) ?? false);
+    const anchorHeightMm = useFullEmAnchor ? bodyEmMm! : perCharHeightMm;
+    const yMm = topMm + i * perCharHeightMm + anchorHeightMm * effectiveBaselineRatio + gposOffsetMm;
     const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {
       return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
@@ -303,7 +323,11 @@ function unitCommands(
   bodyEmMm: number,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
-  yakumonoContext?: VerticalYakumonoAlignContext
+  yakumonoContext?: VerticalYakumonoAlignContext,
+  // Human Visual QA HOLD round 16: the next atom's own first grapheme on
+  // this same line, when known — threaded only to the TEXT branch below
+  // (the only kind the round-16 pair rule can ever apply to).
+  nextUnitFirstGrapheme?: string
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -329,7 +353,7 @@ function unitCommands(
     // because the round-6 GSUB audit proved the unreachable-vertical-
     // alternate problem is NOT small-kana-specific — ordinary kana
     // (つ/た, etc.) in normal body text have the identical issue.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext, bodyEmMm, nextUnitFirstGrapheme);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -453,7 +477,8 @@ export function buildPaintPlan(
     const yOffsetMm = pageGeometry ? pageGeometry.marginTopMm : 0;
     for (const column of page.columns) {
       for (const line of column.lines) {
-        for (const unit of line.units) {
+        for (let unitIndex = 0; unitIndex < line.units.length; unitIndex++) {
+          const unit = line.units[unitIndex];
           if (unit.kind === "UNKNOWN") continue;
           // vertical-rl physical placement: a "line" is one vertical strip,
           // offset from the CONTENT area's own right edge by
@@ -463,7 +488,12 @@ export function buildPaintPlan(
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext));
+            // Human Visual QA HOLD round 16: the next unit's own first
+            // grapheme on this line, when one exists — the ONLY new input
+            // `VerticalYakumonoAlignContext.usesFullEmAnchor` needs.
+            const nextUnit = line.units[unitIndex + 1];
+            const nextUnitFirstGrapheme = nextUnit ? Array.from(nextUnit.text)[0] : undefined;
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, nextUnitFirstGrapheme));
           }
         }
       }
