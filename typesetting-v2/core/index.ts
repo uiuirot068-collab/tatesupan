@@ -49,6 +49,13 @@ export type { ShipporiMinchoAssetInfo } from "./measurement/shipporiMinchoProvid
 
 export type { PageCompositionSettings } from "./compose/page";
 
+// TateSpun v2's single authoritative ruby-scale value (Human/Product
+// decision, 2026-09-07) — Core measurement, Preview paint, and
+// Publication paint must all derive their own ruby-annotation sizing
+// from THIS constant, never an independently-hardcoded one.
+export type { LayoutSettings } from "./settings";
+export { DEFAULT_RUBY_SCALE } from "./settings";
+
 // P3-O12-C: capacity-formula policy (typesetting-v2/qa/research/P3_O12_CAPACITY_GEOMETRY_AUDIT.md).
 // IMPLEMENTED / READY FOR VALIDATION — not yet wired to any Editor/src/ caller.
 export type { CapacityFormulaVersion, CapacitySettingsEvent } from "./settings/capacityFormulaVersion";

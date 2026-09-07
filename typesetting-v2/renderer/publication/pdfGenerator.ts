@@ -50,7 +50,8 @@
 
 import { jsPDF } from "jspdf";
 import type { PaintPlacedUnit, PublicationDocument } from "./paintModel";
-import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
+import { verticalPaintGraphemeFor, cellLocalOffsetFor, type CellLocalOffsetCandidateId } from "./verticalGlyphMap";
+import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -109,16 +110,14 @@ export type PaintPlan = PaintPagePlan[];
 // approximation, never affects a cell's own position/extent.
 const BASELINE_RATIO = 0.88;
 
-// Preview's own already-Human-approved ruby annotation font-size ratio
-// (`renderer/preview/PreviewRenderer.tsx`'s `.ruby-annotation { font-size:
-// 0.55em; }`) — a Renderer-only PAINT-TIME sizing choice, independent of
-// the canonical `rubyReadingExtentTick`'s own body-font-size-based
-// magnitude (see qa/evidence/P3_O08_PUBLICATION_TYPOGRAPHY.md §7's Ruby
-// Scale Observation: this is classified a paint-only choice, not a
-// canonical measurement gap — the canonical extent defines RESERVED SPACE,
-// which the Renderer is free to fill with smaller text, exactly as Preview
-// already does). Re-derived independently for vector paint, same ratio.
-const RUBY_ANNOTATION_FONT_RATIO = 0.55;
+// Human/Product decision (2026-09-07): TateSpun v2's single authoritative
+// ruby-scale value — Core's own `rubyReadingExtentTick` measurement,
+// Preview's `.ruby-annotation` CSS font-size, and this Publication paint
+// size all derive from the SAME constant now (prior state: Core measured
+// unscaled, Preview used an independently-hardcoded 0.55, Publication
+// used its own separate 0.55 — exactly the inconsistency this decision
+// resolves; see qa/evidence/P3_O08_VERTICAL_CELL_AND_RUBY_SCALE.md).
+const RUBY_ANNOTATION_FONT_RATIO = DEFAULT_RUBY_SCALE;
 
 // ONE deterministic Publication vertical-glyph paint layer
 // (qa/evidence/P3_O08_VERTICAL_GLYPH_PAINT.md): every grapheme painted
@@ -140,18 +139,36 @@ const RUBY_ANNOTATION_FONT_RATIO = 0.55;
 // is a pure paint-time substitution, never re-tokenizing/re-classifying
 // anything (Array.from(text).length, i.e. the grapheme COUNT, is always
 // computed from the ORIGINAL text before substitution).
-function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number): PaintCommand[] {
+// `cellLocalCandidate` (Human Visual QA HOLD round 4): defaults to
+// "A_BASELINE" (a no-op — zero offset for every class, byte-identical to
+// this function's own prior, un-candidated behavior) so the shipped
+// pipeline and every pre-existing test are unaffected unless a comparison
+// caller explicitly requests "B_STANDARD"/"C_STRONG". No candidate is
+// promoted to the default until Human Visual QA selects one — see
+// verticalGlyphMap.ts's own module doc for why a single unverified offset
+// is never shipped as fact.
+function verticalGraphemeCommands(
+  text: string,
+  xCenterMm: number,
+  topMm: number,
+  totalHeightMm: number,
+  fontSizePt: number,
+  cellLocalCandidate: CellLocalOffsetCandidateId = "A_BASELINE"
+): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
-  return graphemes.map((ch, i) => ({
-    op: "text" as const,
-    text: verticalPaintGraphemeFor(ch),
-    xMm: xCenterMm,
-    yMm: topMm + i * perCharHeightMm + perCharHeightMm * BASELINE_RATIO,
-    fontSizePt,
-    align: "center" as const,
-  }));
+  return graphemes.map((ch, i) => {
+    const offset = cellLocalOffsetFor(ch, cellLocalCandidate);
+    return {
+      op: "text" as const,
+      text: verticalPaintGraphemeFor(ch),
+      xMm: xCenterMm,
+      yMm: topMm + i * perCharHeightMm + perCharHeightMm * BASELINE_RATIO + offset.yOffsetEm * perCharHeightMm,
+      fontSizePt,
+      align: "center" as const,
+    };
+  });
 }
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
@@ -179,14 +196,14 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number): PaintCommand[] {
+function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, cellLocalCandidate: CellLocalOffsetCandidateId): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
     // TEXT is already one atom PER CHARACTER (Core's own composition), so
     // `unit.heightMm` already IS one cell's own height.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm));
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), cellLocalCandidate);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -199,7 +216,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // PER-CHARACTER height, not the whole run's own height.
     const baseGraphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / baseGraphemeCount);
-    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
+    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
@@ -252,7 +269,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // unchanged — only the PAINT MECHANISM changed.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
@@ -265,7 +282,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // Dash/Ruby above.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
@@ -283,7 +300,13 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
 // paper edge-to-edge. When omitted, behavior is byte-for-byte the same as
 // before this fix (content-sized page, zero margin) — existing callers
 // unaffected.
-export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry): PaintPlan {
+//
+// `cellLocalCandidate` (optional, defaults to "A_BASELINE" — a no-op):
+// selects which named cell-local-offset candidate (verticalGlyphMap.ts)
+// punctuation/small-kana graphemes use. The shipped default never applies
+// an unverified offset; comparison tooling passes "B_STANDARD"/"C_STRONG"
+// explicitly to generate Human-comparable candidate artifacts.
+export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, cellLocalCandidate: CellLocalOffsetCandidateId = "A_BASELINE"): PaintPlan {
   return doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
     // The content area's own right edge, physically: the paper's right
@@ -303,7 +326,7 @@ export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageG
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, cellLocalCandidate));
           }
         }
       }

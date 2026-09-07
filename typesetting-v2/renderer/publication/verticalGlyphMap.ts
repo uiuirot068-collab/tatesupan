@@ -84,3 +84,104 @@ export function verticalPaintGraphemeFor(grapheme: string): string {
 export function verticalPaintTextFor(text: string): string {
   return Array.from(text).map(verticalPaintGraphemeFor).join("");
 }
+
+// --- Cell-local positioning (Human Visual QA HOLD round 4) -----------------
+//
+// Vertical-form glyph SUBSTITUTION (above) fixes glyph SHAPE/orientation —
+// it does NOT by itself prove correct cell-local INK position, because
+// jsPDF paints every glyph via ordinary horizontal baseline metrics
+// (`BASELINE_RATIO` in pdfGenerator.ts), never the font's own vertical
+// origin/metrics (`vhea`/`vmtx` tables, not parsed by this foundation —
+// only `cmap`, via fontCapability.ts). A vertical-form punctuation glyph's
+// own ink is very likely NOT centered the same way an ordinary kanji's is
+// within its own advance box, and small kana conventionally sit in a
+// specific (not center) part of their cell in real vertical typesetting.
+//
+// HONEST LIMIT: without rendering the actual PDF, the exact correct
+// cell-local offset for any of these classes cannot be machine-verified —
+// this is the SAME epistemic position as any other unverifiable optical
+// value in this project (matching e.g. P3-O06's own "do not fabricate a
+// numeric budget" discipline). Rather than pick one unverified number,
+// this module exposes NAMED, data-driven CANDIDATE STRATEGIES — never a
+// single unverified magic offset presented as fact.
+
+export type PunctuationClass = "OPEN_BRACKET" | "CLOSE_BRACKET" | "COMMA" | "PERIOD";
+
+const PUNCTUATION_CLASS_MAP: ReadonlyMap<number, PunctuationClass> = new Map([
+  [0x300c, "OPEN_BRACKET"], // 「
+  [0xff08, "OPEN_BRACKET"], // （
+  [0x300d, "CLOSE_BRACKET"], // 」
+  [0xff09, "CLOSE_BRACKET"], // ）
+  [0x3001, "COMMA"], // 、
+  [0x3002, "PERIOD"], // 。
+]);
+
+/** Classifies a SOURCE grapheme (before substitution) into a punctuation class, or undefined if it isn't one of these four. */
+export function classifyPunctuation(grapheme: string): PunctuationClass | undefined {
+  if (Array.from(grapheme).length !== 1) return undefined;
+  return PUNCTUATION_CLASS_MAP.get(grapheme.codePointAt(0)!);
+}
+
+// Small kana (捨て仮名/拗音・促音): conventionally positioned toward the
+// upper-right of their own cell in real vertical Japanese typesetting
+// (never centered like an ordinary kana). Hiragana + katakana small forms.
+const SMALL_KANA = new Set(
+  Array.from("ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ")
+);
+
+/** True for any small kana grapheme (捨て仮名), false for ordinary kana/kanji/anything else. */
+export function isSmallKana(grapheme: string): boolean {
+  return Array.from(grapheme).length === 1 && SMALL_KANA.has(grapheme);
+}
+
+export type CellLocalOffsetCandidateId = "A_BASELINE" | "B_STANDARD" | "C_STRONG";
+
+export interface CellLocalOffset {
+  /** Fraction of one cell height, POSITIVE moves the glyph DOWN the cell (toward the run's own end). */
+  yOffsetEm: number;
+}
+
+// Three named, disclosed candidates — never presented as "the correct
+// value," only as reasoned starting points per standard JIS/Adobe vertical
+// typesetting convention (opening marks biased toward the cell's own
+// start/top; closing marks biased toward its own end/bottom; comma/period
+// biased toward the start/top, matching their real upper-left
+// positioning convention; small kana biased toward the start/top and,
+// conceptually, the outside edge — this foundation only expresses the
+// Y-axis component, since X-axis cell-local offset is not yet modeled).
+const CANDIDATES: Record<CellLocalOffsetCandidateId, Record<PunctuationClass | "SMALL_KANA", CellLocalOffset>> = {
+  A_BASELINE: {
+    OPEN_BRACKET: { yOffsetEm: 0 },
+    CLOSE_BRACKET: { yOffsetEm: 0 },
+    COMMA: { yOffsetEm: 0 },
+    PERIOD: { yOffsetEm: 0 },
+    SMALL_KANA: { yOffsetEm: 0 },
+  },
+  B_STANDARD: {
+    OPEN_BRACKET: { yOffsetEm: -0.15 },
+    CLOSE_BRACKET: { yOffsetEm: 0.15 },
+    COMMA: { yOffsetEm: -0.25 },
+    PERIOD: { yOffsetEm: -0.25 },
+    SMALL_KANA: { yOffsetEm: -0.15 },
+  },
+  C_STRONG: {
+    OPEN_BRACKET: { yOffsetEm: -0.3 },
+    CLOSE_BRACKET: { yOffsetEm: 0.3 },
+    COMMA: { yOffsetEm: -0.4 },
+    PERIOD: { yOffsetEm: -0.4 },
+    SMALL_KANA: { yOffsetEm: -0.3 },
+  },
+};
+
+/**
+ * Returns the cell-local Y offset (as a fraction of one cell height) for a
+ * SOURCE grapheme under a named candidate strategy — 0 for any character
+ * that is neither classified punctuation nor small kana (ordinary
+ * kanji/kana, digits, Latin — completely unaffected by this system).
+ */
+export function cellLocalOffsetFor(grapheme: string, candidate: CellLocalOffsetCandidateId): CellLocalOffset {
+  const punctClass = classifyPunctuation(grapheme);
+  if (punctClass) return CANDIDATES[candidate][punctClass];
+  if (isSmallKana(grapheme)) return CANDIDATES[candidate].SMALL_KANA;
+  return { yOffsetEm: 0 };
+}

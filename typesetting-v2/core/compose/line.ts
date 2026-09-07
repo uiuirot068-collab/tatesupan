@@ -25,10 +25,19 @@ import type { CanonicalLine, PlacedUnit } from "../layout/schema";
 import { deriveBreakOpportunities, type BreakOpportunity } from "../breaks/opportunity";
 import { tcyCellCost } from "../tcy";
 import { placeRuby, resolveOverhangAllowance } from "../ruby";
+import { DEFAULT_RUBY_SCALE } from "../settings";
 
 export interface CompositionSettings {
   bodyFontRef: string;
   bodyFontSizePt: number;
+  // Human/Product decision (2026-09-07): TateSpun v2's single authoritative
+  // ruby-scale value (see settings/index.ts's own DEFAULT_RUBY_SCALE doc
+  // comment) — optional here so every pre-existing settings-construction
+  // call site across Core/Stage C/Stage D/Preview/Publication does not need
+  // to be touched individually; omitting it uses the canonical default.
+  // Only ever affects ruby READING-extent measurement (below) — never body
+  // advance, never Natural Pitch, never any non-ruby unit.
+  rubyScale?: number;
 }
 
 export interface LineCompositionHold {
@@ -415,7 +424,18 @@ export function composeLine(
     const owner = findOwningUnit(units, atom.sourceSpan.start, atom.sourceSpan.end);
     if (owner.kind === "RUBY") {
       const readingText = rubyReadingTextForAtom(owner, atom.sourceSpan);
-      const readingExtentTick = measurement.rubyReadingExtentTick(settings.bodyFontRef, settings.bodyFontSizePt, readingText);
+      // Human/Product decision (2026-09-07, P3-O08 Publication ruby-scale
+      // re-audit): the reading run is measured at `bodyFontSizePt * rubyScale`
+      // (canonical default 0.5, DEFAULT_RUBY_SCALE), not the full body size —
+      // proven, not assumed, that the prior unscaled formula reserved 2.5x
+      // the base run's own extent for a 5-character reading over a 2-
+      // character base (qa/evidence/P3_O08_VERTICAL_CELL_AND_RUBY_SCALE.md).
+      // Never affects the BASE run's own advance/coordinates (untouched
+      // above and below this block) — only the reading's own reserved
+      // extent, which in turn only affects `placeRuby`'s own policy/offset
+      // computation, never line/column/page composition.
+      const rubyScale = settings.rubyScale ?? DEFAULT_RUBY_SCALE;
+      const readingExtentTick = measurement.rubyReadingExtentTick(settings.bodyFontRef, settings.bodyFontSizePt * rubyScale, readingText);
       const overhangAllowanceBeforeTick = adjacentOverhangAllowance(units, atoms, i - 1, "before", ruleSet);
       const overhangAllowanceAfterTick =
         i < cutAtAtomIndex ? adjacentOverhangAllowance(units, atoms, i + 1, "after", ruleSet) : 0; // no same-line neighbor after the line's own last placed atom

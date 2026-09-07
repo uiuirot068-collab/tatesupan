@@ -16,6 +16,11 @@ const BLOCK = "body-1";
 const measurement = createFakeMeasurementProvider();
 const settings: CompositionSettings = { bodyFontRef: "body", bodyFontSizePt: 10 };
 const CELL = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, ""); // 3528 ticks
+// Human/Product decision (2026-09-07): ruby reading extent is measured at
+// bodyFontSizePt * DEFAULT_RUBY_SCALE (0.5), not the full body cell — see
+// compose/line.ts's own call site. One reading CHARACTER's own extent is
+// therefore this smaller cell, never CELL itself.
+const READING_CELL = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt * 0.5, ""); // 1764 ticks
 
 function span(start: number, end: number): SourceSpan {
   return { blockId: BLOCK, start, end };
@@ -81,26 +86,32 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(placed.xTick).toBe(0);
     expect(placed.yTick).toBe(0);
     expect(placed.rubyBoundaryPolicy).toBe("CENTER");
-    expect(placed.rubyReadingOffsetTick).toBe(0); // (2cells - 2cells)/2 = 0
-    expect(placed.rubyReadingExtentTick).toBe(CELL * 2);
+    // "とう" (2 reading chars) now measures at READING_CELL each, not CELL —
+    // shorter than the 2-cell base, so CENTER still applies, but the offset
+    // is no longer 0 (base and reading are no longer equal-length once the
+    // reading is measured at half body size).
+    expect(placed.rubyReadingOffsetTick).toBe(Math.floor((CELL * 2 - READING_CELL * 2) / 2));
+    expect(placed.rubyReadingExtentTick).toBe(READING_CELL * 2);
   });
 
   it("2. annotation longer than body: reading extent > base extent -> overflow engages the clamp/overflow model", () => {
-    const r = ruby("都", "とうきょう", 0); // base 1 cell, reading 5 cells -> 4 cells overflow
+    const r = ruby("都", "とうきょう", 0); // base 1 cell, reading 5 chars at READING_CELL each
     const result = composeLine([r], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     const placed = result.line.placedUnits[0];
     // Empty overhang table (P3-O06 residual) -> no allowance anywhere ->
-    // OVERFLOW_OPEN is the only reachable outcome for this much overflow.
+    // 5 x READING_CELL (8820) still exceeds the 1-cell (3528) base, so
+    // OVERFLOW_OPEN remains the only reachable outcome even at the smaller
+    // ruby scale.
     expect(placed.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
-    expect(placed.rubyReadingExtentTick).toBe(CELL * 5);
+    expect(placed.rubyReadingExtentTick).toBe(READING_CELL * 5);
   });
 
   it("3. centered annotation — reading shorter than base", () => {
-    const r = ruby("東京都", "とう", 0); // base 3 cells, reading 2 cells
+    const r = ruby("東京都", "とう", 0); // base 3 cells, reading 2 chars at READING_CELL each
     const result = composeLine([r], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     const placed = result.line.placedUnits[0];
     expect(placed.rubyBoundaryPolicy).toBe("CENTER");
-    expect(placed.rubyReadingOffsetTick).toBe(Math.floor((CELL * 3 - CELL * 2) / 2));
+    expect(placed.rubyReadingOffsetTick).toBe(Math.floor((CELL * 3 - READING_CELL * 2) / 2));
   });
 
   it("4/5. START_CLAMP and END_CLAMP require nonzero overhang allowance — with today's shipped (empty) table, both degrade to OVERFLOW_OPEN, proving the capability is wired without fabricating a nonzero value", () => {
@@ -152,9 +163,9 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(result.line.placedUnits).toHaveLength(2);
     const [seg1, seg2] = result.line.placedUnits;
     expect(seg1.sourceSpan).toEqual(span(0, 2));
-    expect(seg1.rubyReadingExtentTick).toBe(CELL * 5); // "とうきょう" = 5 code points (と,う,き,ょ,う)
+    expect(seg1.rubyReadingExtentTick).toBe(READING_CELL * 5); // "とうきょう" = 5 code points (と,う,き,ょ,う), each at READING_CELL
     expect(seg2.sourceSpan).toEqual(span(2, 3));
-    expect(seg2.rubyReadingExtentTick).toBe(CELL * 1); // "と" = 1 cell
+    expect(seg2.rubyReadingExtentTick).toBe(READING_CELL * 1); // "と" = 1 reading cell
     // Independent geometry: segment 1 overflows (4 cells reading vs 2 cells
     // base), segment 2 does not (1 vs 1) -> different policies.
     expect(seg1.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
@@ -194,7 +205,7 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     const secondLine = doc.pages[0].columns[0].lines[1];
     const rubyPlaced = secondLine.placedUnits.find((p) => p.sourceSpan.start === 2)!;
     expect(rubyPlaced.rubyBoundaryPolicy).toBeDefined();
-    expect(rubyPlaced.rubyReadingExtentTick).toBe(CELL * 5); // "とうきょう" = 5 code points
+    expect(rubyPlaced.rubyReadingExtentTick).toBe(READING_CELL * 5); // "とうきょう" = 5 code points, each at READING_CELL
   });
 
   it("13. ruby immediately after a manual page break composes on the new page with correct annotation geometry, and no phantom line/indent is fabricated", () => {
@@ -212,7 +223,7 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(page2Line0.placedUnits).toHaveLength(1);
     const rubyPlaced = page2Line0.placedUnits[0];
     expect(rubyPlaced.rubyBoundaryPolicy).toBeDefined();
-    expect(rubyPlaced.rubyReadingExtentTick).toBe(CELL * 5); // "とうきょう" = 5 code points
+    expect(rubyPlaced.rubyReadingExtentTick).toBe(READING_CELL * 5); // "とうきょう" = 5 code points, each at READING_CELL
   });
 
   it("14. ruby placed at a column boundary composes correctly on the next column, annotation geometry unaffected by the column cut", () => {
