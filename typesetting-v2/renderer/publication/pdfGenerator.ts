@@ -50,7 +50,9 @@
 
 import { jsPDF } from "jspdf";
 import type { PaintPlacedUnit, PublicationDocument } from "./paintModel";
-import { verticalPaintGraphemeFor, cellLocalOffsetFor, type CellLocalOffsetCandidateId } from "./verticalGlyphMap";
+import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
+import { createGlyphIdLookup } from "./fontCapability";
+import { FontMetricsReader } from "./fontMetrics";
 import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export interface PublicationFontResource {
@@ -103,12 +105,52 @@ export interface PaintPagePlan {
 
 export type PaintPlan = PaintPagePlan[];
 
-// Approximates a CJK font's baseline as a fixed fraction of its own em-box
-// height, since no real per-glyph baseline metric is consumed anywhere in
-// this Core (Natural Pitch is declared-size-based by frozen contract — see
-// qa/evidence/P3_O08_REAL_MEASUREMENT_FACTS.md §2/§6). Disclosed
-// approximation, never affects a cell's own position/extent.
-const BASELINE_RATIO = 0.88;
+// Fallback baseline ratio used only when no font resource is available to
+// derive one from (the rectangle-only, no-font paint path never calls
+// `verticalGraphemeCommands` at all, so this value only matters for a
+// hypothetical caller that supplies `hasFont: true` without ever calling
+// `deriveBaselineRatioFromFont`). Equal to the REAL, MEASURED value for the
+// committed Shippori Mincho asset (see below) — not an independent guess.
+const FALLBACK_BASELINE_RATIO = 0.88;
+
+// Human Visual QA HOLD round 5 (qa/evidence/P3_O08_FONT_DERIVED_VERTICAL_GLYPH_METRICS.md):
+// jsPDF paints every glyph via ordinary HORIZONTAL alphabetic-baseline
+// metrics — there is no vertical-writing-mode API anywhere in its type
+// surface (confirmed exhaustively in the prior task). This function derives
+// where that horizontal baseline should sit within one vertical cell FROM
+// THE FONT'S OWN REAL vhea/vmtx data, replacing what was previously a
+// hand-picked constant (0.88) with a measured one.
+//
+// MEASURED, not assumed (fontMetrics.test.ts, run against the exact
+// committed Shippori Mincho Regular asset): this font's own `vmtx` table
+// gives EVERY tested glyph — ordinary kanji (た), ordinary/small kana
+// (つ/っ/ッ), every punctuation source AND vertical-presentation-form glyph
+// (、。「」（）and their U+FE1x/FE3x/FE4x substitutes) — the IDENTICAL
+// vertical origin: 880 font units above the horizontal baseline, out of
+// 1000 units-per-em (0.88 exactly). The font provides no per-glyph or
+// per-class differentiation signal at all — a single, uniform ratio is the
+// font's own real, intentional design (a standard convention: this font's
+// vertical origin Y was set equal to its own horizontal ascent value, so a
+// vertical glyph painted via horizontal-baseline fallback still lands where
+// a normal horizontal line's baseline would). This is why the pre-existing
+// 0.88 constant, though originally hand-picked, turns out to already match
+// the font's own real data exactly — and why it ALSO explains why Round 4's
+// B_STANDARD/C_STRONG per-class offsets made results look WORSE, not
+// better: they deviated away from a position the font itself defines as
+// correct, uniformly, for every character class.
+export function deriveBaselineRatioFromFont(fontResource: PublicationFontResource): number {
+  const buf = Buffer.from(fontResource.base64, "base64");
+  const reader = new FontMetricsReader(buf);
+  if (!reader.hasTable("vhea") || !reader.hasTable("vmtx")) return FALLBACK_BASELINE_RATIO;
+  // Any covered glyph gives the identical answer (measured uniform above);
+  // U+3042 (あ) is an ordinary, virtually-always-covered hiragana used only
+  // as a representative probe, not because this character is special.
+  const glyphId = createGlyphIdLookup(buf)(0x3042);
+  if (glyphId === undefined) return FALLBACK_BASELINE_RATIO;
+  const vmtx = reader.verticalMetrics(glyphId);
+  if (!vmtx || vmtx.originY === undefined) return FALLBACK_BASELINE_RATIO;
+  return vmtx.originY / reader.unitsPerEm;
+}
 
 // Human/Product decision (2026-09-07): TateSpun v2's single authoritative
 // ruby-scale value — Core's own `rubyReadingExtentTick` measurement,
@@ -139,36 +181,25 @@ const RUBY_ANNOTATION_FONT_RATIO = DEFAULT_RUBY_SCALE;
 // is a pure paint-time substitution, never re-tokenizing/re-classifying
 // anything (Array.from(text).length, i.e. the grapheme COUNT, is always
 // computed from the ORIGINAL text before substitution).
-// `cellLocalCandidate` (Human Visual QA HOLD round 4): defaults to
-// "A_BASELINE" (a no-op — zero offset for every class, byte-identical to
-// this function's own prior, un-candidated behavior) so the shipped
-// pipeline and every pre-existing test are unaffected unless a comparison
-// caller explicitly requests "B_STANDARD"/"C_STRONG". No candidate is
-// promoted to the default until Human Visual QA selects one — see
-// verticalGlyphMap.ts's own module doc for why a single unverified offset
-// is never shipped as fact.
-function verticalGraphemeCommands(
-  text: string,
-  xCenterMm: number,
-  topMm: number,
-  totalHeightMm: number,
-  fontSizePt: number,
-  cellLocalCandidate: CellLocalOffsetCandidateId = "A_BASELINE"
-): PaintCommand[] {
+// `baselineRatio` (Human Visual QA HOLD round 5): the font-derived fraction
+// of one cell's own height at which jsPDF's horizontal alphabetic baseline
+// is placed — see `deriveBaselineRatioFromFont`'s own doc above. Defaults
+// to `FALLBACK_BASELINE_RATIO` (equal to the real measured value) so every
+// pre-existing call site/test is unaffected unless a caller explicitly
+// supplies a font-derived value (as `buildPaintPlan` now does whenever a
+// font resource is available).
+function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number, baselineRatio: number = FALLBACK_BASELINE_RATIO): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
-  return graphemes.map((ch, i) => {
-    const offset = cellLocalOffsetFor(ch, cellLocalCandidate);
-    return {
-      op: "text" as const,
-      text: verticalPaintGraphemeFor(ch),
-      xMm: xCenterMm,
-      yMm: topMm + i * perCharHeightMm + perCharHeightMm * BASELINE_RATIO + offset.yOffsetEm * perCharHeightMm,
-      fontSizePt,
-      align: "center" as const,
-    };
-  });
+  return graphemes.map((ch, i) => ({
+    op: "text" as const,
+    text: verticalPaintGraphemeFor(ch),
+    xMm: xCenterMm,
+    yMm: topMm + i * perCharHeightMm + perCharHeightMm * baselineRatio,
+    fontSizePt,
+    align: "center" as const,
+  }));
 }
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
@@ -196,14 +227,14 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, cellLocalCandidate: CellLocalOffsetCandidateId): PaintCommand[] {
+function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
     // TEXT is already one atom PER CHARACTER (Core's own composition), so
     // `unit.heightMm` already IS one cell's own height.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), cellLocalCandidate);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), baselineRatio);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -216,7 +247,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // PER-CHARACTER height, not the whole run's own height.
     const baseGraphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / baseGraphemeCount);
-    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
+    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
@@ -235,7 +266,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
       const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
       const annotationGapMm = annotationEmWidthMm * 0.25;
       const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
-      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt));
+      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio));
     }
     return commands;
   }
@@ -269,7 +300,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // unchanged — only the PAINT MECHANISM changed.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
@@ -282,7 +313,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // Dash/Ruby above.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, cellLocalCandidate);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
@@ -301,12 +332,14 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
 // before this fix (content-sized page, zero margin) — existing callers
 // unaffected.
 //
-// `cellLocalCandidate` (optional, defaults to "A_BASELINE" — a no-op):
-// selects which named cell-local-offset candidate (verticalGlyphMap.ts)
-// punctuation/small-kana graphemes use. The shipped default never applies
-// an unverified offset; comparison tooling passes "B_STANDARD"/"C_STRONG"
-// explicitly to generate Human-comparable candidate artifacts.
-export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, cellLocalCandidate: CellLocalOffsetCandidateId = "A_BASELINE"): PaintPlan {
+// `baselineRatio` (optional, defaults to `FALLBACK_BASELINE_RATIO` — the
+// real measured value for the committed font): the font-derived fraction
+// of one cell's own height at which jsPDF's horizontal baseline is placed
+// — see `deriveBaselineRatioFromFont`. `generatePublicationPdf` computes
+// this from the real font resource automatically; callers that only pass
+// `hasFont: true` without a real font resource (most of this module's own
+// structural tests) get the same real, measured default.
+export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, baselineRatio: number = FALLBACK_BASELINE_RATIO): PaintPlan {
   return doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
     // The content area's own right edge, physically: the paper's right
@@ -326,7 +359,7 @@ export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageG
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, cellLocalCandidate));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio));
           }
         }
       }
@@ -398,6 +431,7 @@ export function generatePublicationPdf(doc: PublicationDocument, fontResource?: 
   if (doc.hold) {
     throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF for a HOLD document (${doc.holdReasons.join("; ")})`);
   }
-  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry);
+  const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
+  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio);
   return renderPaintPlanToPdf(plan, fontResource);
 }

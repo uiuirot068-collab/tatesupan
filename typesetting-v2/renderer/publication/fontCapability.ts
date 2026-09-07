@@ -66,8 +66,9 @@ function findBestSubtable(buf: Buffer, cmapOffset: number): CmapSubtableRef {
 }
 
 type CoverageCheck = (codePoint: number) => boolean;
+type GlyphIdLookup = (codePoint: number) => number | undefined;
 
-function parseFormat4(buf: Buffer, tableOffset: number): CoverageCheck {
+function parseFormat4Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
   requireBytes(buf, tableOffset, 14, "cmap format 4 header");
   const segCountX2 = buf.readUInt16BE(tableOffset + 6);
   const segCount = segCountX2 / 2;
@@ -77,48 +78,65 @@ function parseFormat4(buf: Buffer, tableOffset: number): CoverageCheck {
   const idRangeOffsetOffset = idDeltaOffset + segCountX2;
   requireBytes(buf, idRangeOffsetOffset, segCountX2, "cmap format 4 idRangeOffset array");
 
-  return (codePoint: number): boolean => {
-    if (codePoint > 0xffff) return false; // format 4 only covers the BMP
+  return (codePoint: number): number | undefined => {
+    if (codePoint > 0xffff) return undefined; // format 4 only covers the BMP
     for (let i = 0; i < segCount; i++) {
       const endCode = buf.readUInt16BE(endCodeOffset + i * 2);
       if (codePoint > endCode) continue;
       const startCode = buf.readUInt16BE(startCodeOffset + i * 2);
-      if (codePoint < startCode) return false;
+      if (codePoint < startCode) return undefined;
       const idRangeOffset = buf.readUInt16BE(idRangeOffsetOffset + i * 2);
+      const idDelta = buf.readInt16BE(idDeltaOffset + i * 2);
       if (idRangeOffset === 0) {
-        const idDelta = buf.readInt16BE(idDeltaOffset + i * 2);
-        return ((codePoint + idDelta) & 0xffff) !== 0;
+        const glyphId = (codePoint + idDelta) & 0xffff;
+        return glyphId !== 0 ? glyphId : undefined;
       }
       const glyphIndexAddress = idRangeOffsetOffset + i * 2 + idRangeOffset + 2 * (codePoint - startCode);
       requireBytes(buf, glyphIndexAddress, 2, "cmap format 4 glyphIdArray entry");
-      const glyphId = buf.readUInt16BE(glyphIndexAddress);
-      if (glyphId === 0) return false;
-      const idDelta = buf.readInt16BE(idDeltaOffset + i * 2);
-      return ((glyphId + idDelta) & 0xffff) !== 0;
+      const rawGlyphId = buf.readUInt16BE(glyphIndexAddress);
+      if (rawGlyphId === 0) return undefined;
+      const glyphId = (rawGlyphId + idDelta) & 0xffff;
+      return glyphId !== 0 ? glyphId : undefined;
     }
-    return false;
+    return undefined;
   };
 }
 
-function parseFormat12(buf: Buffer, tableOffset: number): CoverageCheck {
+function parseFormat12Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
   requireBytes(buf, tableOffset, 16, "cmap format 12 header");
   const numGroups = buf.readUInt32BE(tableOffset + 12);
   const groupsOffset = tableOffset + 16;
   requireBytes(buf, groupsOffset, numGroups * 12, "cmap format 12 groups");
 
-  return (codePoint: number): boolean => {
-    // Groups are sorted ascending by startCharCode (OpenType spec
-    // guarantee) — linear scan is simple and plenty fast for a one-off
-    // capability check over a small, fixed punctuation set.
+  return (codePoint: number): number | undefined => {
     for (let i = 0; i < numGroups; i++) {
       const g = groupsOffset + i * 12;
       const startCharCode = buf.readUInt32BE(g);
       const endCharCode = buf.readUInt32BE(g + 4);
-      if (codePoint >= startCharCode && codePoint <= endCharCode) return true;
+      if (codePoint >= startCharCode && codePoint <= endCharCode) {
+        const startGlyphID = buf.readUInt32BE(g + 8);
+        return startGlyphID + (codePoint - startCharCode);
+      }
       if (startCharCode > codePoint) break;
     }
-    return false;
+    return undefined;
   };
+}
+
+/**
+ * Builds a deterministic glyph-ID lookup for the given raw font bytes —
+ * the same cmap subtable parse as `createGlyphCoverageChecker`, but
+ * returning the real numeric glyph ID (needed by fontMetrics.ts's own
+ * `glyf`/`hmtx` lookups) instead of a boolean.
+ */
+export function createGlyphIdLookup(buf: Buffer): GlyphIdLookup {
+  const cmapOffset = findCmapTableOffset(buf);
+  const subtable = findBestSubtable(buf, cmapOffset);
+  requireBytes(buf, subtable.offset, 2, "cmap subtable format");
+  const format = buf.readUInt16BE(subtable.offset);
+  if (format === 4) return parseFormat4Lookup(buf, subtable.offset);
+  if (format === 12) return parseFormat12Lookup(buf, subtable.offset);
+  throw new Error(`fontCapability: unsupported cmap subtable format ${format} (only 4 and 12 are supported)`);
 }
 
 /**
@@ -127,11 +145,6 @@ function parseFormat12(buf: Buffer, tableOffset: number): CoverageCheck {
  * than silently returning false for everything.
  */
 export function createGlyphCoverageChecker(buf: Buffer): CoverageCheck {
-  const cmapOffset = findCmapTableOffset(buf);
-  const subtable = findBestSubtable(buf, cmapOffset);
-  requireBytes(buf, subtable.offset, 2, "cmap subtable format");
-  const format = buf.readUInt16BE(subtable.offset);
-  if (format === 4) return parseFormat4(buf, subtable.offset);
-  if (format === 12) return parseFormat12(buf, subtable.offset);
-  throw new Error(`fontCapability: unsupported cmap subtable format ${format} (only 4 and 12 are supported)`);
+  const lookup = createGlyphIdLookup(buf);
+  return (codePoint: number) => lookup(codePoint) !== undefined;
 }
