@@ -17,7 +17,8 @@
 
 import type { GeometryTick } from "../geometry/tick";
 import type { SourceSpan } from "../source/span";
-import type { RuleSetVersion } from "../rules/characterClass";
+import type { CharacterClass, CharacterClassId, RuleSetVersion } from "../rules/characterClass";
+import { DEFAULT_CLASS } from "../rules/characterClass";
 import type { MeasurementFacts } from "../measurement/facts";
 import type { LogicalUnit } from "../units";
 import type { TraceRecorder } from "../trace";
@@ -238,63 +239,88 @@ interface AtomComputationResult {
   unresolvedImageSpan?: SourceSpan;
 }
 
-// Human Visual QA HOLD round 8 (yakumono/punctuation-pair spacing —
-// qa/evidence/P3_O08_YAKUMONO_SPACING.md): jlreq's own 括弧類等 glyphs
-// (opening/closing brackets, full stops, commas — RuleSetVersion's
-// `yakumonoSpacingScope`) each carry a built-in ~half-cell blank margin
-// baked into their own glyph design, so a LONE one sitting next to an
-// ordinary kanji/kana already reads with a correctly-sized gap. When TWO
-// such characters sit adjacent, their two built-in half-cell blanks
-// STACK, doubling the intended gap — this is a well-documented case in
-// the primary source this frozen scope cites (see characterClass.ts), not
-// a rendering-mechanism defect (proven separately, across three prior
-// rounds: vertical-form glyph selection, vhea/vmtx origin, and GSUB
-// glyph identity were all already confirmed correct — this is the first
-// round to touch canonical ADVANCE itself).
+// Human Visual QA HOLD round 11 (yakumono half-body canonical model —
+// qa/evidence/P3_O08_YAKUMONO_HALF_BODY_MODEL.md): SUPERSEDES round 8's
+// "full-em body + negative pair-adjustment" model, which Human Visual QA
+// proved wrong across rounds 9 (glyph-size regression) and 10 (bracket
+// intrusion, real GPOS data showing no font-level fix could resolve a
+// canonical-model defect). jlreq's own 括弧類等 classes — opening
+// brackets (cl-01), closing brackets (cl-02), full stops (cl-06), commas
+// (cl-07) — do not have a full 1em canonical body that occasionally gets
+// a negative pair adjustment; they have an INTRINSIC half-em body
+// (`RuleSetVersion.yakumonoHalfBodyScope`), with an ADDITIONAL, EXPLICIT
+// half-em side space added only in specific adjacency contexts. This is
+// a genuinely different model, not a magnitude tweak of the old one.
 //
-// Fix: when the CURRENT atom's own single leading character AND the
-// immediately-preceding PLACED atom's own single trailing character are
-// BOTH in `yakumonoSpacingScope`, the CURRENT atom's canonical advance is
-// compressed to HALF a cell instead of a full cell — removing exactly one
-// of the two stacked blanks, matching jlreq's own "remove the front OR
-// back bracket-type character's blank" resolution for same-size adjacent
-// pairs (cases a/b/c in the cited source). Only ever applied to TEXT
-// atoms (one grapheme per atom, per Contract) — TCY/SEMANTIC_RUN/RUBY/
-// IMAGE atoms are structurally different (multi-glyph groups with their
-// own already-decided extent) and are never touched by this rule.
+// Body: `bodyAdvanceTickFor` — any TEXT atom whose single character's
+// class is in `yakumonoHalfBodyScope` gets HALF `perCellAdvance` as its
+// own intrinsic body; every other atom (any other TEXT character, or any
+// TCY/SEMANTIC_RUN/RUBY/IMAGE atom) is completely unchanged.
 //
-// Disclosed simplification: the cited source's rare case "d" (opening
-// immediately followed by closing, e.g. 「」) calls for a FULL removal of
-// both sides' blanks (ベタ/zero gap); this uniform rule instead halves
-// only the second atom, giving that rare case a half-cell gap rather than
-// zero. The common cases (a/b/c — including this round's own reported
-// 。→」 symptom, case c) are handled exactly as the source specifies.
-// IMPORTANT: `CompositionAtom.advanceTick` is the space AFTER this atom
-// (consumed by `yTick += atom.advanceTick` once the NEXT atom is placed —
-// see composeLine's own placement loop) — it is NOT the space before it.
-// So compressing "the current atom, because it and its predecessor are
-// both yakumono" would shrink the WRONG gap (the one after the current
-// atom, not the one between it and its predecessor). This function
-// mutates the ALREADY-PUSHED PREVIOUS atom's own `advanceTick` in place —
-// the one that actually determines the gap between the two — rather than
-// scaling the atom about to be pushed.
-function applyYakumonoCompression(units: LogicalUnit[], atoms: CompositionAtom[], currentOwner: LogicalUnit, currentSpan: SourceSpan, ruleSet: RuleSetVersion): void {
-  if (currentOwner.kind !== "TEXT") return;
-  const currentText = literalTextForAtom(currentOwner, currentSpan);
-  if (!currentText) return;
-  const currentChar = firstCodePointOf(currentText);
-  if (!ruleSet.yakumonoSpacingScope.includes(ruleSet.characterClassFor(currentChar).id)) return;
+// Side space: `yakumonoSpaceAfterEm` — reuses the EXISTING
+// `mayStartLine`/`mayEndLine` class data (no new hardcoded literal
+// characters, no new class concept) to decide, for the boundary between
+// atom i and atom i+1, whether a half-em space belongs there. Verified
+// against every worked numeric example this round's own task text gives
+// explicitly (た。次 → 。gets body+trailing-space=1.0em total; た。」 →
+// 。gets body ONLY, no trailing space, "because next is cl-02", so
+// 。+」 together total exactly 1.0em, not 1.5em):
+//   - if the NEXT class cannot end a line (`mayEndLine === false` — an
+//     "opening"-type class, e.g. cl-01) AND is in scope: it always gets
+//     a half-em LEADING space, from ANY preceding class — matches "cl-01
+//     normally has 0.5em before it," applied unconditionally (this
+//     round's own task text states it as a plain default; it does not
+//     give a worked numeric example for an opening-bracket-adjacent-to-
+//     opening-bracket case, so this is the documented, deterministic,
+//     data-driven choice made here — not a jlreq ambiguity silently
+//     resolved by guessing, see qa/evidence's own §"open policy" note).
+//   - else if the CURRENT class cannot start a line (`mayStartLine ===
+//     false` — a "closing"-type class, e.g. cl-02/06/07) AND is in
+//     scope, AND the NEXT class is NOT ALSO in scope: it contributes its
+//     own half-em TRAILING space — reproduces た。次 (period before
+//     ordinary text reaches the normal 1em rhythm).
+//   - else: no space — reproduces た。」 (period before a closing
+//     bracket: the period's own trailing space is suppressed because the
+//     next character is itself in scope, exactly as this round's own
+//     task text specifies) and jlreq's case d (opening→closing, e.g.
+//     「」 — ベタ/zero gap).
+// cl-05 (middle dots) and cl-04/09-13 are deliberately NOT added to
+// `yakumonoHalfBodyScope` this round — jlreq gives cl-05 a different
+// (quarter-space) convention this round does not model; left open,
+// unchanged, not silently folded into this scope.
+//
+// `CompositionAtom.advanceTick` remains "the space AFTER this atom"
+// (`yTick += atom.advanceTick` in composeLine's own placement loop) — so
+// `yakumonoSpaceAfterEm(atoms[i], atoms[i+1])` is added directly to
+// atoms[i]'s own advanceTick, in a second pass after every atom's own
+// body has already been computed (needs one-atom lookahead, so cannot be
+// computed inline in the same forward loop that builds each atom).
+function characterClassForAtom(owner: LogicalUnit, span: SourceSpan, ruleSet: RuleSetVersion): CharacterClass {
+  if (owner.kind !== "TEXT") return DEFAULT_CLASS;
+  const text = literalTextForAtom(owner, span);
+  if (!text) return DEFAULT_CLASS;
+  return ruleSet.characterClassFor(firstCodePointOf(text));
+}
 
-  const previous = atoms[atoms.length - 1];
-  if (!previous) return;
-  const previousOwner = findOwningUnit(units, previous.sourceSpan.start, previous.sourceSpan.end);
-  if (previousOwner.kind !== "TEXT") return;
-  const previousText = literalTextForAtom(previousOwner, previous.sourceSpan);
-  if (!previousText) return;
-  const previousChar = lastCodePointOf(previousText);
-  if (!ruleSet.yakumonoSpacingScope.includes(ruleSet.characterClassFor(previousChar).id)) return;
+function bodyAdvanceTickFor(
+  unit: LogicalUnit,
+  spanWidth: number,
+  perCellAdvance: GeometryTick,
+  measurement: MeasurementFacts,
+  classId: CharacterClassId,
+  ruleSet: RuleSetVersion
+): GeometryTick {
+  if (unit.kind === "TEXT" && ruleSet.yakumonoHalfBodyScope.includes(classId)) {
+    return Math.round(perCellAdvance * 0.5);
+  }
+  return advanceTickFor(unit, spanWidth, perCellAdvance, measurement);
+}
 
-  previous.advanceTick = Math.round(previous.advanceTick * 0.5);
+function yakumonoSpaceAfterEm(currentClass: CharacterClass, nextClass: CharacterClass, ruleSet: RuleSetVersion): number {
+  const nextInScope = ruleSet.yakumonoHalfBodyScope.includes(nextClass.id);
+  if (nextInScope && nextClass.mayEndLine === false) return 0.5;
+  if (ruleSet.yakumonoHalfBodyScope.includes(currentClass.id) && currentClass.mayStartLine === false && !nextInScope) return 0.5;
+  return 0;
 }
 
 function computeAtoms(
@@ -318,6 +344,7 @@ function computeAtoms(
 
   const perCellAdvance = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
   const atoms: CompositionAtom[] = [];
+  const classIds: CharacterClass[] = [];
   for (let i = 0; i < boundaries.length - 1; i++) {
     const start = boundaries[i];
     const end = boundaries[i + 1];
@@ -330,10 +357,19 @@ function computeAtoms(
         return { atoms, unresolvedImageSpan: sourceSpan };
       }
       atoms.push({ sourceSpan, advanceTick });
+      classIds.push(DEFAULT_CLASS);
       continue;
     }
-    applyYakumonoCompression(units, atoms, owner, sourceSpan, ruleSet);
-    atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
+    const cls = characterClassForAtom(owner, sourceSpan, ruleSet);
+    atoms.push({ sourceSpan, advanceTick: bodyAdvanceTickFor(owner, end - start, perCellAdvance, measurement, cls.id, ruleSet) });
+    classIds.push(cls);
+  }
+  // Second pass: add the explicit side space for adjacent yakumono pairs,
+  // now that every atom's own class is known (needs one-atom lookahead).
+  for (let i = 0; i < atoms.length; i++) {
+    const nextClass = classIds[i + 1] ?? DEFAULT_CLASS;
+    const spaceEm = yakumonoSpaceAfterEm(classIds[i], nextClass, ruleSet);
+    if (spaceEm > 0) atoms[i].advanceTick += Math.round(perCellAdvance * spaceEm);
   }
   return { atoms };
 }

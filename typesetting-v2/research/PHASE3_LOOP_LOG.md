@@ -1452,3 +1452,29 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of the regenerated PDFs — does `「今日は、雨だった。」` now read as ordinary Japanese vertical typesetting, with no `」` intrusion? Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Yakumono Half-Body Canonical Model (2026-09-07)
+
+**HUMAN QA (round 11):** round 10's real GPOS `vpal` ink-placement fix made no visual difference — `。`/`」` still collide. This proved the defect was not a rendering/paint-mechanism gap at all (four independent rounds — glyph identity, vhea/vmtx origin, GSUB substitution, real GPOS ink placement — had all already been proven correct or ineffective in turn) — it was the CANONICAL MODEL itself. Explicit instruction: retire round 8's "full-em body + negative pair adjustment" model entirely, not tune it further.
+
+**RETIRED, PROVEN WRONG BY RE-READING BEFORE DELETION:** `applyYakumonoCompression` (round 8) gave every TEXT atom a full 1em body unconditionally, then subtracted 0.5em from a PAIR after the fact. The old `core/compose/yakumonoSpacing.test.ts` (16 tests asserting this model's own numeric values) was deleted, not preserved for compatibility — re-running it against the new code first, to prove its assertions really were wrong under the new model (not merely different), produced exactly the expected `3528 vs 1764`-style failures.
+
+**NEW MODEL:** jlreq's 括弧類等 classes (cl-01/02/06/07) have an INTRINSIC half-em canonical body (`RuleSetVersion.yakumonoHalfBodyScope`, renamed from `yakumonoSpacingScope` — a semantic change, not a rename for its own sake), unconditionally — never a full em that gets negatively adjusted. An ADDITIONAL, EXPLICIT half-em side space (`yakumonoSpaceAfterEm`) is added only in specific adjacency contexts, computed via a single, data-driven function that REUSES the existing `mayStartLine`/`mayEndLine` kinsoku class flags — no new class concept, no hardcoded literal characters. Verified against every worked numeric example this round's own task text gave explicitly (`た。次` → period gets body+trailing-space=1.0em total; `た。」` → period's trailing space is suppressed because next is also in scope, so `。`+`」` together total exactly 1.0em, not 1.5em) — both matched exactly once the space-suppression condition was corrected (a real bug in the first draft, caught by re-checking against the task's own worked examples before shipping, not merely by tests passing).
+
+**REPORTED SYMPTOM RESOLVED AT THE MODEL LEVEL:** `。`'s own advanceTick under the new model = body(0.5) + 0 (suppressed, next=`」` in scope) = exactly half a cell — no inserted inter-space, no negative-overlap arithmetic anywhere.
+
+**FONT INDEPENDENCE PRESERVED:** the 0.5em canonical values are NOT derived from Shippori Mincho's own real `vpal` metrics (period ≈0.40em, closing bracket ≈0.48em, measured in round 10) — Core's own composition stays font-agnostic, per jlreq's own allowance for different fonts implementing punctuation at different inherent widths. Round 10's real `vpal` YPlacement ink nudge remains valid, unchanged Publication paint data, orthogonal to which canonical model produced the cell it nudges within.
+
+**GLYPH SIZE UNREGRESSED:** round 9's `bodyEmMm` fix needed no changes — Core has no font-size concept at all; the full 14-test `glyphSizeIndependence.test.ts` suite passes unmodified against the new Core model.
+
+**ONE PRE-EXISTING TEST LEGITIMATELY UPDATED, NOT SILENTLY PATCHED:** `core/compose/page.test.ts`'s own Natural Pitch test (predates ALL yakumono work) incidentally used `「` as ordinary fixture text and baked in the old "opening bracket = full 1em" assumption — updated with a full explanation of why the new model correctly changes this specific pitch.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_HALF_BODY_MODEL.md` (16-section record, including two explicitly disclosed open policy questions: `cl-02+cl-01`/`cl-01+cl-01` adjacency, resolved by the documented class rule but with no worked numeric example given this round to confirm against; and cl-05/line-edge policy, left open). 27 new Core tests (`yakumonoHalfBody.test.ts`) + 2 new Publication tests (focused diagnostic QA + a direct canonical-pitch proof). Full regression: Core 391/391, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 165/165 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: canonical model corrected with real, disclosed, class-rule-driven logic — not tuned, not guessed. YAKUMONO HALF-BODY MODEL — READY FOR HUMAN RECHECK.** Ruby/small kana/Dash: unaffected, still recorded PASS. P3-O08: IN PROGRESS. Not ready for JPG/grayscale.
+
+**WHY:** Every numeric claim traces to either a directly-run test against real `composeLine` output or a direct re-reading of this round's own task text's worked examples (both of which caught and corrected a real bug in the first draft of the space-suppression rule before it shipped) — no constant was invented or tuned by eye; the two genuinely open pair cases (cl-02+cl-01, cl-01+cl-01) are disclosed as open, not silently resolved and hidden.
+
+**NEXT:** Human Visual QA of `yakumono-half-body-qa.pdf` (fixtures A-G + the original sentence) and the regenerated combined PDF. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

@@ -36,22 +36,27 @@ export interface RuleSetVersion {
   cl08PairRule: (a: SemanticRunKind, b: SemanticRunKind) => "INSEPARABLE" | "SEPARABLE";
   hangingPunctuationScope: CharacterClassId[]; // frozen: ["cl-06", "cl-07"]
   rubyOverhangAllowance: Map<CharacterClassId, GeometryTick>; // §9.1 — values OPEN (HG-4 row 22b), ships empty/zero
-  // Human Visual QA HOLD round 8 (yakumono/punctuation-pair spacing):
-  // classes whose glyphs carry their own built-in ~half-cell blank margin
-  // (句読点・括弧類等 — periods/commas/brackets), cited from this
+  // Human Visual QA HOLD round 11 (yakumono half-body canonical model —
+  // qa/evidence/P3_O08_YAKUMONO_HALF_BODY_MODEL.md; SUPERSEDES round 8's
+  // "full-em body + negative pair adjustment" model, which rounds 9/10
+  // proved architecturally wrong, not merely mistuned). Classes in this
+  // scope (句読点・括弧類等 — periods/commas/brackets, cited from this
   // project's own cached primary-source research
   // (research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md,
-  // 小林敏 2021 — a JIS X 4051/JLReq-sourced discussion, not invented).
-  // When TWO atoms whose leading/trailing character both belong to this
-  // scope are placed adjacently, the SECOND atom's own canonical advance
-  // is compressed to half a cell — see `core/compose/line.ts`'s own
-  // `yakumonoCompressionFactor` — because otherwise each glyph's own
-  // built-in half-cell blank stacks with its neighbor's, doubling the
-  // visually intended gap. Frozen v2 default: ["cl-01","cl-02","cl-06","cl-07"]
-  // (opening brackets, closing brackets, full stops, commas) — the same
-  // four classes jlreq's own "括弧類等" grouping names for this exact
-  // adjacency problem.
-  yakumonoSpacingScope: CharacterClassId[];
+  // 小林敏 2021 — JIS X 4051/JLReq-sourced, not invented)) have an
+  // INTRINSIC canonical body advance of HALF a cell — never a full cell
+  // that occasionally gets negatively adjusted. An ADDITIONAL, EXPLICIT
+  // half-cell side space is added only in specific adjacency contexts
+  // (see `core/compose/line.ts`'s own `yakumonoSpaceAfterEm`, which
+  // reuses this SAME class's `mayStartLine`/`mayEndLine` flags — no new
+  // hardcoded literal characters). Frozen v2 default:
+  // ["cl-01","cl-02","cl-06","cl-07"] (opening brackets, closing
+  // brackets, full stops, commas) — the same four classes jlreq's own
+  // "括弧類等" grouping names. cl-05 (middle dots) is deliberately NOT
+  // included — jlreq gives it a different (quarter-space) convention,
+  // left open/unmodeled this round, never silently folded into this
+  // scope.
+  yakumonoHalfBodyScope: CharacterClassId[];
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see

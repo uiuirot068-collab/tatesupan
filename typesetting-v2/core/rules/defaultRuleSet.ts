@@ -105,12 +105,14 @@ export const DEFAULT_RULE_SET_V2: RuleSetVersion = {
   cl08PairRule,
   hangingPunctuationScope: ["cl-06", "cl-07"], // jlreq hanging-punctuation section — cl-06/cl-07 only
   rubyOverhangAllowance: new Map(), // HG-4: principle approved, exact values OPEN (row 22b) — ships empty, not fabricated
-  // Human Visual QA HOLD round 8: opening brackets (cl-01), closing
-  // brackets (cl-02), full stops (cl-06), and commas (cl-07) — jlreq's own
-  // "括弧類等" grouping (research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md
+  // Human Visual QA HOLD round 11 (half-body model, supersedes round 8's
+  // now-retired full-em+negative-adjustment model): opening brackets
+  // (cl-01), closing brackets (cl-02), full stops (cl-06), and commas
+  // (cl-07) — jlreq's own "括弧類等" grouping
+  // (research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md
   // explicitly states "なお，句読点は"終わり"に含める" — periods/commas
   // are grouped WITH closing brackets for this exact adjacency-spacing
   // purpose). See characterClass.ts's own field doc for the full citation.
-  yakumonoSpacingScope: ["cl-01", "cl-02", "cl-06", "cl-07"],
+  yakumonoHalfBodyScope: ["cl-01", "cl-02", "cl-06", "cl-07"],
   characterClassFor: classify,
 };
