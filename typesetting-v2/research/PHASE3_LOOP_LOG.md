@@ -1386,3 +1386,29 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of the four regenerated PDFs (small kana, punctuation, dash, combined). Master is not modified. Phase 3 is not closed. `src/`, Production, and the root `vitest.config.ts` remain fully untouched. `package.json`/lockfile changed ONLY as explicitly approved (`opentype.js` + its types). No push, no deploy.
 
 ---
+
+## P3-O08 — Yakumono (Punctuation-Pair) Spacing (2026-09-07)
+
+**HUMAN VISUAL QA (round 8):** Ruby PASS (frozen). Small kana PASS (round 7's real GSUB outline paint closed it). Dash PASS (same). Punctuation (`。→」`) remains HOLD — explicit instruction to STOP local Renderer offset tuning and audit Japanese yakumono advance/spacing at the CANONICAL layer instead, since glyph identity/GSUB/vhea-vmtx origin/outline paint were all already proven correct across four prior rounds.
+
+**CANONICAL AUDIT (real, not guessed):** direct code read of `core/compose/line.ts`'s `advanceTickFor` confirmed the root cause: every TEXT character — punctuation included — receives the exact same full 1-em canonical advance, with ZERO adjacency-based adjustment. `。→」`'s start-to-start distance was exactly one full cell, identical to any ordinary character pair. Root cause: CANONICAL SPACING, proven from code, not inferred.
+
+**RULE EVIDENCE:** no FROZEN Phase-3 rule-freeze document (Kinsoku, Dash/Ellipsis, Freeze Matrix) addresses punctuation-pair spacing/advance — confirmed by direct audit. But this project's own cached primary-source research, `research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md` (小林敏, 2021, JIS X 4051/JLReq-sourced), read directly this round, DOES define the exact rule needed: adjacent 括弧類等 (opening/closing brackets, periods, commas — jlreq explicitly groups punctuation WITH closing brackets for this purpose) in cases a/b/c (same font size — covering `。」` exactly, jlreq's own case "c") should have their combined gap reduced to a single half-em by removing one side's own built-in half-em blank, rather than stacking two half-em blanks into a full em. Unlike ruby overhang (genuinely multiple competing conventions), this is a single, well-established value for the same-size case — evidence supports adjustment, not ambiguous.
+
+**CORE CHANGE (authorized by this round's own Core Change Gate, since canonical spacing was proven wrong):** `RuleSetVersion` gained a new frozen, DATA-DRIVEN field `yakumonoSpacingScope` (`characterClass.ts`), populated as `["cl-01","cl-02","cl-06","cl-07"]` in `defaultRuleSet.ts` — reusing the EXISTING character-class infrastructure (no new classification concept, no `if (char === "。")` special case). `core/compose/line.ts` gained `applyYakumonoCompression`, halving the PREVIOUS atom's own `advanceTick` when both it and the atom about to be placed have a leading/trailing character in scope. **A real bug was caught and fixed during implementation** (not shipped): `advanceTick` is the space AFTER an atom, not before it — a first draft compressed the wrong (current, not previous) atom and produced zero measurable effect, caught immediately by a failing test. Source/SourceSpan: unchanged (proven). Natural Pitch stretch: not introduced (this only ever shrinks specific pair advances, INV-004 intact).
+
+**BREAK CONSEQUENCES:** full regression shows zero existing test broke — no pre-existing fixture in this project happened to place a yakumono pair at a break-critical position. Kinsoku legality itself untouched (only the advance FED INTO the unmodified break algorithm changed); a dedicated test confirms `、`/`。`/`」` still never start a line under a tight forced-break extent.
+
+**PARITY:** Preview and Publication both consume Core's own `PlacedUnit.yTick`/`xTick` with zero renderer-side spacing logic of their own — both automatically reflect the corrected canonical positions with no additional code (confirmed directly for Publication via a new test measuring the real compressed pitch in a real `PublicationDocument`).
+
+**QA:** `yakumono-spacing-qa.pdf` (new, focused, real font/geometry/GSUB-outline pipeline) + `publication-typography-qa.pdf` (regenerated, automatically reflects the fix).
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_SPACING.md` (10-section record). 18 new tests (16 Core + 2 Publication). Full regression: Core 380/380 (364+16), Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 138/138 (136+2) — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: YAKUMONO SPACING — READY FOR HUMAN RECHECK.** Ruby/small kana/Dash: recorded PASS, not reopened. P3-O08: IN PROGRESS. Not ready for JPG/grayscale.
+
+**WHY:** Every claim traces to a direct code read (the root-cause proof), a directly-read primary source (the rule evidence, not memory/assumption), or a passing test against real composed output (the fix itself, including catching and correcting a real implementation bug via a failing test before it shipped) — no numeric value was invented; the half-em compression factor comes from the cited jlreq/JIS X 4051 source, not a guess.
+
+**NEXT:** Human Visual QA of `yakumono-spacing-qa.pdf` and the regenerated combined PDF — does `。→」` now read as normal Japanese vertical typesetting? Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

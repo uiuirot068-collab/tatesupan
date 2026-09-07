@@ -238,11 +238,71 @@ interface AtomComputationResult {
   unresolvedImageSpan?: SourceSpan;
 }
 
+// Human Visual QA HOLD round 8 (yakumono/punctuation-pair spacing —
+// qa/evidence/P3_O08_YAKUMONO_SPACING.md): jlreq's own 括弧類等 glyphs
+// (opening/closing brackets, full stops, commas — RuleSetVersion's
+// `yakumonoSpacingScope`) each carry a built-in ~half-cell blank margin
+// baked into their own glyph design, so a LONE one sitting next to an
+// ordinary kanji/kana already reads with a correctly-sized gap. When TWO
+// such characters sit adjacent, their two built-in half-cell blanks
+// STACK, doubling the intended gap — this is a well-documented case in
+// the primary source this frozen scope cites (see characterClass.ts), not
+// a rendering-mechanism defect (proven separately, across three prior
+// rounds: vertical-form glyph selection, vhea/vmtx origin, and GSUB
+// glyph identity were all already confirmed correct — this is the first
+// round to touch canonical ADVANCE itself).
+//
+// Fix: when the CURRENT atom's own single leading character AND the
+// immediately-preceding PLACED atom's own single trailing character are
+// BOTH in `yakumonoSpacingScope`, the CURRENT atom's canonical advance is
+// compressed to HALF a cell instead of a full cell — removing exactly one
+// of the two stacked blanks, matching jlreq's own "remove the front OR
+// back bracket-type character's blank" resolution for same-size adjacent
+// pairs (cases a/b/c in the cited source). Only ever applied to TEXT
+// atoms (one grapheme per atom, per Contract) — TCY/SEMANTIC_RUN/RUBY/
+// IMAGE atoms are structurally different (multi-glyph groups with their
+// own already-decided extent) and are never touched by this rule.
+//
+// Disclosed simplification: the cited source's rare case "d" (opening
+// immediately followed by closing, e.g. 「」) calls for a FULL removal of
+// both sides' blanks (ベタ/zero gap); this uniform rule instead halves
+// only the second atom, giving that rare case a half-cell gap rather than
+// zero. The common cases (a/b/c — including this round's own reported
+// 。→」 symptom, case c) are handled exactly as the source specifies.
+// IMPORTANT: `CompositionAtom.advanceTick` is the space AFTER this atom
+// (consumed by `yTick += atom.advanceTick` once the NEXT atom is placed —
+// see composeLine's own placement loop) — it is NOT the space before it.
+// So compressing "the current atom, because it and its predecessor are
+// both yakumono" would shrink the WRONG gap (the one after the current
+// atom, not the one between it and its predecessor). This function
+// mutates the ALREADY-PUSHED PREVIOUS atom's own `advanceTick` in place —
+// the one that actually determines the gap between the two — rather than
+// scaling the atom about to be pushed.
+function applyYakumonoCompression(units: LogicalUnit[], atoms: CompositionAtom[], currentOwner: LogicalUnit, currentSpan: SourceSpan, ruleSet: RuleSetVersion): void {
+  if (currentOwner.kind !== "TEXT") return;
+  const currentText = literalTextForAtom(currentOwner, currentSpan);
+  if (!currentText) return;
+  const currentChar = firstCodePointOf(currentText);
+  if (!ruleSet.yakumonoSpacingScope.includes(ruleSet.characterClassFor(currentChar).id)) return;
+
+  const previous = atoms[atoms.length - 1];
+  if (!previous) return;
+  const previousOwner = findOwningUnit(units, previous.sourceSpan.start, previous.sourceSpan.end);
+  if (previousOwner.kind !== "TEXT") return;
+  const previousText = literalTextForAtom(previousOwner, previous.sourceSpan);
+  if (!previousText) return;
+  const previousChar = lastCodePointOf(previousText);
+  if (!ruleSet.yakumonoSpacingScope.includes(ruleSet.characterClassFor(previousChar).id)) return;
+
+  previous.advanceTick = Math.round(previous.advanceTick * 0.5);
+}
+
 function computeAtoms(
   units: LogicalUnit[],
   opportunities: BreakOpportunity[],
   measurement: MeasurementFacts,
-  settings: CompositionSettings
+  settings: CompositionSettings,
+  ruleSet: RuleSetVersion
 ): AtomComputationResult {
   if (units.length === 0) return { atoms: [] };
   const blockId = units[0].span.blockId;
@@ -272,6 +332,7 @@ function computeAtoms(
       atoms.push({ sourceSpan, advanceTick });
       continue;
     }
+    applyYakumonoCompression(units, atoms, owner, sourceSpan, ruleSet);
     atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
   }
   return { atoms };
@@ -334,7 +395,7 @@ export function composeLine(
   const effectiveLineExtentTicks = lineExtentTicks - indentTick;
 
   const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
-  const atomResult = computeAtoms(units, opportunities, measurement, settings);
+  const atomResult = computeAtoms(units, opportunities, measurement, settings, ruleSet);
   if (atomResult.unresolvedImageSpan) {
     return {
       hold: {

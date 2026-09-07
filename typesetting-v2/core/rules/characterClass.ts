@@ -36,6 +36,22 @@ export interface RuleSetVersion {
   cl08PairRule: (a: SemanticRunKind, b: SemanticRunKind) => "INSEPARABLE" | "SEPARABLE";
   hangingPunctuationScope: CharacterClassId[]; // frozen: ["cl-06", "cl-07"]
   rubyOverhangAllowance: Map<CharacterClassId, GeometryTick>; // §9.1 — values OPEN (HG-4 row 22b), ships empty/zero
+  // Human Visual QA HOLD round 8 (yakumono/punctuation-pair spacing):
+  // classes whose glyphs carry their own built-in ~half-cell blank margin
+  // (句読点・括弧類等 — periods/commas/brackets), cited from this
+  // project's own cached primary-source research
+  // (research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md,
+  // 小林敏 2021 — a JIS X 4051/JLReq-sourced discussion, not invented).
+  // When TWO atoms whose leading/trailing character both belong to this
+  // scope are placed adjacently, the SECOND atom's own canonical advance
+  // is compressed to half a cell — see `core/compose/line.ts`'s own
+  // `yakumonoCompressionFactor` — because otherwise each glyph's own
+  // built-in half-cell blank stacks with its neighbor's, doubling the
+  // visually intended gap. Frozen v2 default: ["cl-01","cl-02","cl-06","cl-07"]
+  // (opening brackets, closing brackets, full stops, commas) — the same
+  // four classes jlreq's own "括弧類等" grouping names for this exact
+  // adjacency problem.
+  yakumonoSpacingScope: CharacterClassId[];
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see
