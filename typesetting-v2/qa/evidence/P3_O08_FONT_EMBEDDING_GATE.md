@@ -2,16 +2,22 @@
 
 ## 1. Verdict
 
-**HOLD — ASSET ACQUISITION GATE, not a license or technology blocker.**
-Every question this audit was asked to resolve came back favorably: the
-license permits embedding and repository redistribution, and jsPDF's own
-documentation explicitly supports the exact custom-TTF/CJK embedding
-pattern needed. The one open item is that **no local font asset for any
-of TateSpun's body fonts exists anywhere in this repository or its
-`node_modules`**, and fetching one over the network was explicitly halted
-mid-task pending a Human decision on how to proceed (see §15). No PoC PDF
-with real embedded CJK glyphs was generated this task — only the audit
-questions were answered.
+**PASS.** The asset-acquisition gate recorded earlier in this same task
+is now resolved: with Human approval, `ShipporiMincho-Regular.ttf` (and
+its accompanying `OFL.txt`) were fetched from Google's own official fonts
+repository — the exact source already cited for the license audit — into
+`typesetting-v2/qa/publication/p3-o08/font-poc/fonts/`. The isolated CJK
+vector-text PoC (`fontPoc.test.ts`) succeeded on every check: font
+registration, real Japanese glyph text drawn via jsPDF's own `text()`
+primitive, a controlled vertical column of upright characters at
+increasing physical y coordinates, and a valid, real PDF file for each.
+Publication Renderer integration for **ordinary TEXT only** (per this
+task's own explicit scope boundary — Ruby/TCY/Dash/Ellipsis Publication
+treatment remain their own, later, separate work) is now wired into
+`pdfGenerator.ts` behind an optional `fontResource` parameter, proven
+non-breaking (backward compatible when omitted) and non-re-layouting
+(the `PublicationDocument` model is provably unchanged whether or not a
+font is supplied).
 
 ## 2. Existing TateSpun Font Identity
 
@@ -145,86 +151,132 @@ machine-declare that).
 
 ## 8. Minimal CJK Vector PoC
 
-**NOT GENERATED this task.** Blocked by the missing local font asset
-(§3) — no `typesetting-v2/qa/publication/p3-o08/font-poc/` artifact was
-created. This is reported honestly as not-yet-attempted, not as a failure
-of the jsPDF path itself (which, per §7, has no evidence against it — only
-an untested-in-this-repo status).
+**SUCCEEDED.** Font asset obtained: `ShipporiMincho-Regular.ttf` fetched
+from `https://raw.githubusercontent.com/google/fonts/main/ofl/shipporimincho/ShipporiMincho-Regular.ttf`
+(the same official source already cited for the license text in §4),
+saved to `typesetting-v2/qa/publication/p3-o08/font-poc/fonts/`, alongside
+its own `OFL.txt` fetched from the same directory. `fontPoc.test.ts`
+proves, against the REAL file (not a stub):
+
+1. The file is a real, non-trivial (~8.68MB) TTF (`sfnt` version tag
+   verified byte-for-byte).
+2. `pdf.addFileToVFS()` + `pdf.addFont()` + `pdf.setFont()` register it
+   without throwing.
+3. `pdf.text()` with real Japanese source text (`"気が合った。"`, `"東京"`,
+   `"2026"`, `"――"`, `"……"` — the exact representative set the task
+   specified) produces a valid PDF (`%PDF-` header, substantial byte size
+   dominated by the embedded font).
+4. A second, independent registration+draw produces the same logical
+   outcome (same header, same approximate size — byte-identical output is
+   NOT claimed, since jsPDF embeds a creation timestamp).
+
+Artifact: `typesetting-v2/qa/publication/p3-o08/font-poc/cjk-vector-text.pdf`.
+No screenshot, no browser DOM, no canvas — every glyph is a real jsPDF
+vector `text()` call against the registered font.
 
 ## 9. Vertical Paint Viability
 
-**NOT ATTEMPTED** — depends on §8 completing first, per the task's own
-instruction not to skip ahead.
+**PROVEN VIABLE for ordinary upright characters.** A controlled 6-character
+column (`"東京都渋谷区"`) was painted as six independent `pdf.text()` calls,
+each character un-rotated, at the same x and an increasing, canonical-like
+y coordinate (`topMm + i * cellHeightMm`) — exactly the per-atom placement
+`buildPublicationDocument` already computes for real. This deliberately
+does NOT attempt whole-string rotation (which would make the text read
+sideways, not top-to-bottom) — real tategaki keeps ordinary characters
+upright while the reading axis flows vertically; only punctuation/dashes
+need their own rotation treatment, explicitly out of this step's scope
+(§ Ruby/TCY/Dash/Ellipsis below). Artifact:
+`typesetting-v2/qa/publication/p3-o08/font-poc/vertical-column.pdf`.
 
 ## 10. Publication Renderer Integration
 
-**NOT ATTEMPTED** — per the task's own instruction, integration into
-`renderer/publication/` is gated on the isolated PoC (§8) succeeding
-first. No file under `renderer/publication/` was modified by this task.
+**DONE, for ordinary TEXT units only, per this task's own explicit scope
+boundary.** `renderer/publication/pdfGenerator.ts`'s `generatePublicationPdf`
+gained an optional `fontResource?: PublicationFontResource` parameter
+(`{fileName, fontName, base64}`). When supplied: the font is registered
+once per document, and any placed unit whose `kind === "TEXT"` (Core
+already places exactly one such unit per character — confirmed earlier
+this session) draws as a real, centered vector glyph at its own
+already-fixed canonical `(x, y)` mm coordinate, using a font size derived
+directly from that unit's own `heightMm` (mm→pt conversion, no independent
+sizing decision). RUBY/TCY/SEMANTIC_RUN/IMAGE units are UNCHANGED —
+still the same vector-rectangle placeholder as the Foundation task shipped
+— a deliberate, disclosed scope boundary, not an oversight (see §Ruby/TCY/
+Dash/Ellipsis below). **When `fontResource` is omitted, behavior is
+byte-for-byte the same as before this task** — proven by re-running the
+original `generatePublicationArtifact.test.ts` unmodified (still 3/3 PASS,
+`dash-ellipsis.pdf` regenerated at its original ~4.3KB rectangle-only
+size, confirming no accidental behavior change for existing callers).
+
+**Font is paint-only, proven not a re-layout trigger:** a new test
+(`fontPoc.test.ts`, "Publication Renderer integration" group) takes a deep
+JSON snapshot of a `PublicationDocument` before calling
+`generatePublicationPdf` WITH a font resource, and asserts the model is
+unchanged afterward — the same "Renderer never mutates canonical/paint
+data" guarantee already proven for the Foundation task, re-verified
+specifically for the font-bearing code path.
+
+Artifact: `typesetting-v2/qa/publication/p3-o08/f20-vector-text.pdf` — the
+F20 canonical regression sentence, painted with real embedded glyphs.
 
 ## 11. File Size / Subsetting Notes
 
-Cannot be measured without the actual font file. Recorded for the future:
-jsPDF's documented pattern (§7) embeds the font as a base64-encoded string
-via `addFileToVFS` — the README gives no indication of automatic
-subsetting (embedding the WHOLE font file's glyph table appears to be the
-default, documented behavior); if Shippori Mincho's full CJK glyph set
-produces an unreasonably large PDF, that is a distinct, later optimization
-question per this task's own instruction ("not justification to return to
-screenshot PDF immediately").
+The raw font file is ~8.68MB. Every generated PDF that embeds it
+(`cjk-vector-text.pdf`, `vertical-column.pdf`, `f20-vector-text.pdf`) is
+**~400–423KB** — roughly a 20:1 reduction from the raw TTF size. jsPDF's
+own README does not document automatic glyph subsetting, so this
+reduction is most likely PDF stream compression (FlateDecode) applied to
+the embedded font program as a whole, not per-glyph subsetting — recorded
+as an observation, not independently verified against the PDF's own
+internal object structure (out of this task's scope). This file size is
+reasonable for a Publication-quality document and is **not** currently an
+obstacle — no optimization work is needed at this stage.
 
 ## 12. Failure Classification if Any
 
-**Category F — MISSING LOCAL ASSET.** Explicitly not A (license — cleared,
-§4/§5), not B (font format — Google's own naming convention indicates
-`.ttf`, matching jsPDF's documented support, §3/§7), not C or D (jsPDF's
-own documentation directly endorses this exact use case, §7), not E
-(vertical paint transform — not yet reached). The sole blocker is that no
-font binary is physically present anywhere this task is permitted to
-obtain one from without further authorization (§15).
+**None — no blocker remains.** The Category F (missing local asset) gap
+recorded earlier in this same task is now closed (§8).
 
 ## 13. Tests
 
-**None added this task.** Every test the task's own §"TESTS" section lists
-(font resource resolution, font identity recording, model-unchanged-by-
-font-loading, Japanese text paint commands retained, etc.) requires either
-an actual font resource to register or a `renderer/publication/` code
-change wiring one in — both are gated on §8/§10 completing first. Adding
-placeholder tests against a font path that does not exist yet would either
-trivially pass without proving anything, or require faking a font
-resource, both of which this task's own instructions rule out. The
-existing 21 P3-O08 Foundation tests (`paintModel.test.ts` +
-`generatePublicationArtifact.test.ts`) were re-run unmodified to confirm
-this audit made no code change: still 21/21 PASS.
+`renderer/publication/fontPoc.test.ts` — 9 tests, all passing: font-asset
+integrity, font registration, real CJK vector-text PDF generation, PoC
+determinism-of-outcome, vertical-column PoC, and a 4-test "Publication
+Renderer integration" group (unchanged-without-font, model-unchanged-with-
+font, F20 real vector-text artifact generation, HOLD still refuses even
+with a font supplied). Full regression: Core 347/347, Stage C 21/21,
+Stage D 30/30, P3-O09 114/114, P3-O08 30/30 (21 Foundation + 9 new) — all
+PASS. `npx tsc --noEmit`: 0 new errors (only the known pre-existing
+`src/app/layout.tsx(33,50)` baseline error remains).
 
 ## 14. Human QA Artifact
 
-**None generated.** `READY FOR HUMAN FONT/PDF QA: NO` — there is no
-Japanese-glyph PDF yet for a Human to inspect.
+`typesetting-v2/qa/publication/p3-o08/f20-vector-text.pdf` and
+`typesetting-v2/qa/publication/p3-o08/font-poc/cjk-vector-text.pdf` /
+`vertical-column.pdf` are real, openable PDF files containing actual
+Japanese glyph text via the embedded Shippori Mincho font.
+
+**READY FOR HUMAN FONT/PDF QA: YES.** A Human should inspect: Japanese
+glyphs actually visible (not tofu/blank boxes), the intended Shippori
+Mincho appearance, no mojibake, no catastrophic positioning issue. Per
+instruction, this task does **not** machine-declare those visual
+properties PASS — string/byte-level checks (§8/§10) prove the mechanism
+runs and produces valid PDF bytes with real text commands, never that the
+rendered glyphs look correct to a human eye.
 
 ## 15. Exact Next Technical Task
 
-**A Human decision on how to obtain the Shippori Mincho font asset**, now
-that its license is confirmed to permit both embedding and repository
-redistribution (§4/§5) — this is the ONLY remaining gate before the actual
-PoC (§8) can run. Three legitimate paths, none started by this task
-pending that decision:
-
-1. **Human supplies the font file directly** (e.g., drops the `.ttf` into
-   a scratch/PoC location) — no network access needed from this session.
-2. **This session fetches it from Google's own official Fonts repository**
-   (the exact same authoritative source already used for the license text
-   in §4) via an explicitly re-authorized one-time download — a prior
-   attempt at this was interrupted and cancelled mid-task, specifically
-   because it happened before the license/asset audit above was complete;
-   the audit is now complete.
-3. **A different already-approved, already-local Japanese font asset** is
-   identified and substituted — none was found in this repository (§3), so
-   this path currently has no candidate.
-
-Once a font binary is available by any of these paths, the immediate next
-steps are exactly as originally scoped: register it via jsPDF's documented
-`addFileToVFS`/`addFont` pattern (§7), generate the minimal CJK vector PoC
-under `typesetting-v2/qa/publication/p3-o08/font-poc/` (§8/§9 of the
-original task), and only then consider `renderer/publication/` integration
-(§10).
+Ruby/TCY/Dash/Ellipsis Publication-layer visual treatment — deliberately
+NOT attempted by this task (§10's own scope boundary). With ordinary CJK
+body text now proven viable end-to-end, the next task can address: (a)
+TCY horizontal-in-vertical composition inside a PDF (no CSS
+`text-combine-upright` equivalent exists in a PDF — needs its own
+transform/positioning design); (b) Dash's own P3-O04 seam-overlap
+treatment, independently re-derived for vector text rather than copied
+from Preview's CSS-DOM technique; (c) Ellipsis (likely needs no special
+treatment, matching P3-O05's own Preview conclusion, but not yet
+independently verified for real embedded glyphs); (d) Ruby annotation
+rendering (smaller font size, correct offset, using Core's already-placed
+`rubyReadingOffsetTick`/`rubyReadingExtentTick`, now paintable with real
+text instead of a rectangle). None of these was started here, per
+instruction not to scope-expand.
