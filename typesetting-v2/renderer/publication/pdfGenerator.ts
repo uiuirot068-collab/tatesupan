@@ -53,6 +53,7 @@ import type { PaintPlacedUnit, PublicationDocument } from "./paintModel";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
+import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export interface PublicationFontResource {
@@ -95,7 +96,16 @@ export interface PublicationPageGeometry {
 
 export type PaintCommand =
   | { op: "text"; text: string; xMm: number; yMm: number; fontSizePt: number; align: "left" | "center"; angle?: number; baseline?: "alphabetic" | "middle"; maxWidthMm?: number }
-  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number };
+  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
+  // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
+  // dependency-gate approval — opentype.js): a real vector glyph outline,
+  // already fully translated/scaled into mm page-coordinate space
+  // (`VerticalOutlineContext.glyphOutlineCommandsMm`). Emitted ONLY for
+  // the specific graphemes proven (P3_O08_OPENTYPE_VERTICAL_GSUB_AUDIT.md)
+  // to have a real GSUB `vert`/`vrt2` alternate that is NOT reachable via
+  // jsPDF's Unicode-string `text()` API — every other character keeps
+  // using the existing "text" command, unchanged.
+  | { op: "glyphOutline"; commands: OutlinePathCommand[] };
 
 export interface PaintPagePlan {
   widthMm: number;
@@ -188,18 +198,43 @@ const RUBY_ANNOTATION_FONT_RATIO = DEFAULT_RUBY_SCALE;
 // pre-existing call site/test is unaffected unless a caller explicitly
 // supplies a font-derived value (as `buildPaintPlan` now does whenever a
 // font resource is available).
-function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number, baselineRatio: number = FALLBACK_BASELINE_RATIO): PaintCommand[] {
+//
+// `outlineContext` (Human Visual QA HOLD round 7): when supplied, each
+// grapheme is checked against `VerticalOutlineContext.resolveOutlineGlyphId`
+// FIRST — only a grapheme proven to need outline paint (its real GSUB
+// vertical alternate is unreachable via jsPDF's Unicode `text()` API)
+// emits a "glyphOutline" command instead of "text"; everything else
+// (ordinary kanji, punctuation, ellipsis, Latin/digits) is completely
+// unaffected and keeps painting via the exact same "text" path as before.
+// The SAME `topMm`/`perCharHeightMm`/`baselineRatio` position math is
+// reused for both paint mechanisms — no separate/new position model.
+function verticalGraphemeCommands(
+  text: string,
+  xCenterMm: number,
+  topMm: number,
+  totalHeightMm: number,
+  fontSizePt: number,
+  baselineRatio: number = FALLBACK_BASELINE_RATIO,
+  outlineContext?: VerticalOutlineContext
+): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
-  return graphemes.map((ch, i) => ({
-    op: "text" as const,
-    text: verticalPaintGraphemeFor(ch),
-    xMm: xCenterMm,
-    yMm: topMm + i * perCharHeightMm + perCharHeightMm * baselineRatio,
-    fontSizePt,
-    align: "center" as const,
-  }));
+  return graphemes.map((ch, i) => {
+    const yMm = topMm + i * perCharHeightMm + perCharHeightMm * baselineRatio;
+    const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
+    if (outlineGlyphId !== undefined && outlineContext) {
+      return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
+    }
+    return {
+      op: "text" as const,
+      text: verticalPaintGraphemeFor(ch),
+      xMm: xCenterMm,
+      yMm,
+      fontSizePt,
+      align: "center" as const,
+    };
+  });
 }
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
@@ -227,14 +262,18 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number): PaintCommand[] {
+function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number, outlineContext?: VerticalOutlineContext): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
     // TEXT is already one atom PER CHARACTER (Core's own composition), so
-    // `unit.heightMm` already IS one cell's own height.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), baselineRatio);
+    // `unit.heightMm` already IS one cell's own height. `outlineContext` is
+    // threaded here too (not just Ruby/Dash below) because the round-6
+    // GSUB audit proved the unreachable-vertical-alternate problem is NOT
+    // small-kana-specific — ordinary kana (つ/た, etc.) in normal body
+    // text have the identical issue.
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), baselineRatio, outlineContext);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -247,7 +286,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // PER-CHARACTER height, not the whole run's own height.
     const baseGraphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / baseGraphemeCount);
-    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
+    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
@@ -266,7 +305,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
       const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
       const annotationGapMm = annotationEmWidthMm * 0.25;
       const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
-      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio));
+      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext));
     }
     return commands;
   }
@@ -290,30 +329,35 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // BUG FIXED (Human Visual QA HOLD round 2, dash stroke intruding into
     // the following character's cell): no longer a special-cased rotation
     // + overlap paint — each "―" grapheme now runs through the SAME
-    // `verticalGraphemeCommands` path as any other character, which
-    // substitutes the real U+FE31 vertical em dash glyph (confirmed
-    // present in the committed font) and paints it upright in its own
-    // ordinary cell, exactly like any kanji character — no custom overlap
-    // math needed, since the font's own glyph is designed to read as a
-    // continuous line when its cells are simply adjacent. Canonical run
+    // `verticalGraphemeCommands` path as any other character. Round 6's
+    // GSUB audit found the manually-mapped U+FE31 glyph is NOT the font's
+    // own true `vert` alternate (which is unreachable via any Unicode code
+    // point) — `outlineContext` (round 7) now paints the font's REAL
+    // vertical dash glyph via outline when supplied, superseding the
+    // U+FE31 substitute; falls back to U+FE31 unchanged when no
+    // `outlineContext` is supplied (backward-compatible). Canonical run
     // extent (2 glyphs guaranteed, P3-O04's own Product scope) is
     // unchanged — only the PAINT MECHANISM changed.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
     // Native vertical-form glyph (U+FE19, confirmed present in the
-    // committed font), painted upright via the same generic path as any
-    // other character — matches P3-O05's own Preview conclusion (no
-    // seam-continuity problem exists for a discrete dot-cluster glyph, so
-    // no Dash-style special treatment is needed beyond correct glyph
-    // selection). Same whole-run-vs-per-character font-size fix as
-    // Dash/Ruby above.
+    // committed font AND confirmed by the round-6 GSUB audit to be the
+    // SAME glyph the font's own `vert` feature selects), painted upright
+    // via the same generic path as any other character — matches P3-O05's
+    // own Preview conclusion (no seam-continuity problem exists for a
+    // discrete dot-cluster glyph, so no Dash-style special treatment is
+    // needed beyond correct glyph selection). `outlineContext` is threaded
+    // for uniformity but `resolveOutlineGlyphId` correctly returns
+    // `undefined` here (already Unicode-reachable) — Ellipsis keeps
+    // painting via "text", unchanged. Same whole-run-vs-per-character
+    // font-size fix as Dash/Ruby above.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
@@ -339,7 +383,12 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
 // this from the real font resource automatically; callers that only pass
 // `hasFont: true` without a real font resource (most of this module's own
 // structural tests) get the same real, measured default.
-export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, baselineRatio: number = FALLBACK_BASELINE_RATIO): PaintPlan {
+// `outlineContext` (optional, Human Visual QA HOLD round 7): when
+// supplied, characters proven to need it (§ see `verticalOutlinePaint.ts`)
+// paint via a real vector glyph outline instead of jsPDF's Unicode
+// `text()` path. Omitting it preserves the exact prior (pre-round-7)
+// "text"-only behavior — every existing call site/test is unaffected.
+export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, baselineRatio: number = FALLBACK_BASELINE_RATIO, outlineContext?: VerticalOutlineContext): PaintPlan {
   return doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
     // The content area's own right edge, physically: the paper's right
@@ -359,7 +408,7 @@ export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageG
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, outlineContext));
           }
         }
       }
@@ -392,9 +441,31 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
     if (fontResource) pdf.setFont(fontResource.fontName);
     pdf.setDrawColor(0, 0, 0);
     pdf.setLineWidth(0.05);
+    pdf.setFillColor(0, 0, 0);
     for (const cmd of page.commands) {
       if (cmd.op === "rect") {
         pdf.rect(cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
+        continue;
+      }
+      if (cmd.op === "glyphOutline") {
+        // Round 7: a real vector glyph outline (already fully
+        // translated/scaled into mm page-coordinate space by
+        // `buildPaintPlan`/`VerticalOutlineContext` — this executor makes
+        // no typography decisions, it only walks the already-decided
+        // command stream). One glyph's outline may have MULTIPLE contours
+        // (e.g. ゅ has 4) — each starts with its own "M" and ends with its
+        // own "Z" (mapped to jsPDF's own `close()`, the PDF "h" operator);
+        // ALL contours are accumulated into ONE current path before a
+        // SINGLE `fill()` call, so the PDF's native nonzero-winding-rule
+        // fill correctly renders inner "holes" (e.g. an enclosed
+        // counter-shape) exactly as PDF's own multi-subpath model intends.
+        for (const outlineCmd of cmd.commands) {
+          if (outlineCmd.type === "M") pdf.moveTo(outlineCmd.x, outlineCmd.y);
+          else if (outlineCmd.type === "L") pdf.lineTo(outlineCmd.x, outlineCmd.y);
+          else if (outlineCmd.type === "C") pdf.curveTo(outlineCmd.x1, outlineCmd.y1, outlineCmd.x2, outlineCmd.y2, outlineCmd.x, outlineCmd.y);
+          else pdf.close();
+        }
+        pdf.fill();
         continue;
       }
       pdf.setFontSize(cmd.fontSizePt);
@@ -432,6 +503,7 @@ export function generatePublicationPdf(doc: PublicationDocument, fontResource?: 
     throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF for a HOLD document (${doc.holdReasons.join("; ")})`);
   }
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
-  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio);
+  const outlineContext = fontResource ? new VerticalOutlineContext(Buffer.from(fontResource.base64, "base64")) : undefined;
+  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext);
   return renderPaintPlanToPdf(plan, fontResource);
 }

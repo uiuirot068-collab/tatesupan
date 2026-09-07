@@ -12,7 +12,23 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { VerticalOutlineContext } from "./verticalOutlinePaint";
+
+// Real horizontal bounds for any PaintCommand -- including "glyphOutline"
+// (round 7), whose own path commands carry the only x-coordinates
+// available for it (no xMm/widthMm field, unlike "text"/"rect").
+function horizontalBoundsMm(cmd: PaintCommand): { xMin: number; xMax: number } {
+  if (cmd.op === "text") {
+    const halfWidthMm = (cmd.fontSizePt * (25.4 / 72)) / 2;
+    return { xMin: cmd.xMm - halfWidthMm, xMax: cmd.xMm + halfWidthMm };
+  }
+  if (cmd.op === "rect") {
+    return { xMin: cmd.xMm, xMax: cmd.xMm + cmd.widthMm };
+  }
+  const xs = cmd.commands.flatMap((c) => (c.type === "Z" ? [] : c.type === "C" ? [c.x1, c.x2, c.x] : [c.x]));
+  return { xMin: Math.min(...xs), xMax: Math.max(...xs) };
+}
 
 // A real, named paper preset (文庫, matching the exact mm value already
 // authoritative in the legacy Production export pipeline's own
@@ -210,7 +226,7 @@ describe("P3-O08 — Publication Typography", () => {
       const { model } = composePublication("dash-ellipsis");
       const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
       const plan = buildPaintPlan(model, true);
-      const dashCalls = plan.flatMap((p) => p.commands).filter((c) => c.op === "text" && c.text === VERTICAL_EM_DASH);
+      const dashCalls = plan.flatMap((p) => p.commands).filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && c.text === VERTICAL_EM_DASH);
       expect(dashCalls[0].yMm).toBeGreaterThanOrEqual(dash.topMm);
       expect(dashCalls[dashCalls.length - 1].yMm).toBeLessThanOrEqual(dash.topMm + dash.heightMm + 1);
     });
@@ -441,7 +457,12 @@ describe("P3-O08 — Publication Typography", () => {
       const model = buildPublicationDocument("publication-typography-qa", "Publication Typography QA — punctuation/text/Ruby/TCY/Dash/Ellipsis", document, combinedFixture.units, combinedFixture.source, ctx);
       expect(model.fontIdentityMismatch).toBe(false);
 
-      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY);
+      // Round 7 (OpenType vertical GSUB outline paint): thread a real
+      // VerticalOutlineContext so this combined QA artifact reflects the
+      // font-derived outline paint for kana/Dash, not just the pre-round-7
+      // manual-mapping-only "text" path.
+      const outlineContext = new VerticalOutlineContext(readFileSync(FONT_PATH));
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY, undefined, outlineContext);
       const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
       expect(pageCount).toBe(document.pages.length);
       expect(pageCount).toBeGreaterThanOrEqual(6); // one page per manual-break section
@@ -457,9 +478,7 @@ describe("P3-O08 — Publication Typography", () => {
       // class of bug Ruby's own invisibility was traced to).
       for (const page of plan) {
         for (const cmd of page.commands) {
-          const halfWidthMm = cmd.op === "text" ? (cmd.fontSizePt * (25.4 / 72)) / 2 : 0;
-          const xMin = cmd.op === "text" ? cmd.xMm - halfWidthMm : cmd.xMm;
-          const xMax = cmd.op === "text" ? cmd.xMm + halfWidthMm : cmd.xMm + cmd.widthMm;
+          const { xMin, xMax } = horizontalBoundsMm(cmd);
           expect(xMin).toBeGreaterThanOrEqual(-0.01);
           expect(xMax).toBeLessThanOrEqual(page.widthMm + 0.01);
         }
