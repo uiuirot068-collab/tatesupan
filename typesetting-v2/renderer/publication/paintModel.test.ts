@@ -188,6 +188,7 @@ describe("P3-O08 — Publication Renderer Foundation", () => {
       fontIdentityMismatch: false,
       totalPageCount: 0,
       renderedPageCount: 0,
+      bodyEmMm: 3.704,
       pages: [],
     };
     expect(() => generatePublicationPdf(holdDocument)).toThrow(/HOLD/);

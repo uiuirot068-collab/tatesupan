@@ -375,7 +375,7 @@ describe("P3-O08 — Publication Typography", () => {
     });
 
     it("HOLD still refuses to emit Publication bytes", () => {
-      const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, pages: [] };
+      const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, bodyEmMm: 3.704, pages: [] };
       expect(() => generatePublicationPdf(holdDocument, fontResource())).toThrow(/HOLD/);
     });
 

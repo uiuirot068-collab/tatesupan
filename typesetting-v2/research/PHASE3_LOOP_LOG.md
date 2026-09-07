@@ -1412,3 +1412,23 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of `yakumono-spacing-qa.pdf` and the regenerated combined PDF — does `。→」` now read as normal Japanese vertical typesetting? Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Glyph-Size Regression Fix (2026-09-07)
+
+**HUMAN QA (round 9):** the round-8 yakumono spacing fix produced a real Publication bug — `。`/`」` painted at ~50% of normal body font size (~5.25pt vs ~10.5pt), not merely closer together. Explicit instruction: do not revert round 8's canonical spacing; find and fix the actual glyph-size defect.
+
+**ROOT CAUSE (confirmed by direct code read, not guessed):** `renderer/publication/paintModel.ts`'s `buildPaintLine` derives each `PaintPlacedUnit.heightMm` as `next.yTick - placed.yTick` — this atom's own canonical ADVANCE, a positioning quantity. `pdfGenerator.ts` then reused this SAME value, unconditionally, as the basis for the painted glyph's own FONT SIZE for TEXT/RUBY-base/DASH/ELLIPSIS. Before round 8 this was harmless (every atom's advance was uniformly 1em, so advance and font size were numerically identical by coincidence); round 8's legitimate compression of specific adjacent-pair advances broke that coincidence, shrinking the compressed atom's own glyph too.
+
+**FIX:** `PublicationDocument` gained `bodyEmMm` — a fixed, document-wide body-em-in-mm value derived from `ctx.linePitchTicks` (a declared `LayoutSettings` constant, never a per-atom composed/compressed advance), computed once in `buildPublicationDocument`. `pdfGenerator.ts`'s `unitCommands` now derives every glyph's own font size from `doc.bodyEmMm` exclusively, for every kind (TEXT, RUBY base+annotation, DASH, ELLIPSIS) uniformly — no per-character special case. `unit.heightMm` remains used ONLY for positioning (atom location, per-grapheme Y-stepping within a multi-character atom) — advance and paint-em are now fully decoupled, matching the round's own explicit architectural instruction.
+
+**VERIFIED:** `renderer/publication/glyphSizeIndependence.test.ts` (14 new tests) proves every character in the round-8 fixture — including the compressed `。`/`」` pair — shares the identical `fontSizePt`, equal to the document's own declared body em; that round 8's spacing compression remains fully active (not reverted); that source/SourceSpan/canonical coordinates are unaffected; and that Ruby/Dash/Ellipsis/TCY each independently paint at the correct fixed size. Two small existing test-fixture object literals (`PublicationDocument` HOLD stubs in `fontPoc.test.ts`/`paintModel.test.ts`/`typography.test.ts`) needed a `bodyEmMm` field added — mechanical, no behavior change.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_SPACING.md` §11 (appended, not a new file — same investigation thread). Full regression: Core 380/380 (unchanged — Publication-only fix, zero Core files touched), Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 152/152 (138+14) — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: GLYPH SHRINK BUG — FIXED.** Yakumono spacing (round 8's own canonical compression) — STILL ACTIVE, READY FOR HUMAN RECHECK now that the glyph-size defect is resolved. Ruby/small kana/Dash: unaffected, still recorded PASS. P3-O08: IN PROGRESS. Not ready for JPG/grayscale.
+
+**WHY:** The root cause traces to a direct read of `paintModel.ts`'s own `heightMm` derivation, not a guess; the fix traces to a principled separation (advance vs. paint-em) the round's own instructions explicitly called for, verified by 14 new tests before being called done — including a determinism check that round 8's own spacing compression is still in effect, so this round did not silently regress the previous one while fixing this one.
+
+**NEXT:** Human Visual QA of the regenerated `yakumono-spacing-qa.pdf`/combined PDF — glyphs should now read at normal body size with the `。→」` spacing still visibly tighter than an ordinary pair. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

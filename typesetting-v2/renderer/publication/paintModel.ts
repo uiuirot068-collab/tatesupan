@@ -111,6 +111,18 @@ export interface PublicationDocument {
   fontIdentityMismatch: boolean;
   totalPageCount: number;
   renderedPageCount: number;
+  // Human Visual QA HOLD round 9 (glyph-size regression): the fixed,
+  // document-wide body em size in mm, derived from `ctx.linePitchTicks`
+  // (a declared LayoutSettings constant — `settings.linePitchTicks`,
+  // never a per-atom composed advance). Deliberately NEVER derived from
+  // any specific `PaintPlacedUnit.heightMm` — that field is a
+  // POSITIONING quantity (how far this atom's own cell extends, which
+  // round 8's yakumono compression can legitimately shrink for specific
+  // adjacent punctuation pairs) and must never double as a FONT-SIZE
+  // quantity. Every glyph in this document paints at this same size
+  // (divided by grapheme count for multi-character atoms), regardless of
+  // how compressed or approximate its own positioning `heightMm` is.
+  bodyEmMm: number;
   pages: PaintPage[];
 }
 
@@ -302,6 +314,7 @@ export function buildPublicationDocument(
     fontIdentityMismatch: ctx.measurementIdentity !== ctx.paintFontIdentity,
     totalPageCount: document.pages.length,
     renderedPageCount: pages.length,
+    bodyEmMm: tickToMm(ctx.linePitchTicks),
     pages,
   };
 }

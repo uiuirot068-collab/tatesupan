@@ -216,7 +216,7 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
     });
 
     it("HOLD still refuses to emit a Publication PDF even when a fontResource is supplied", () => {
-      const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, pages: [] };
+      const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, bodyEmMm: 3.704, pages: [] };
       expect(() => generatePublicationPdf(holdDocument, fontResource())).toThrow(/HOLD/);
     });
   });

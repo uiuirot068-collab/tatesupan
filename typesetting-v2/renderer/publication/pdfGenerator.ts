@@ -262,18 +262,32 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number, outlineContext?: VerticalOutlineContext): PaintCommand[] {
+function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number, bodyEmMm: number, outlineContext?: VerticalOutlineContext): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
+  // Human Visual QA HOLD round 9 (glyph-size regression): every glyph's
+  // own FONT SIZE comes from `bodyEmMm` — the fixed, document-wide,
+  // never-compressed body em (`PublicationDocument.bodyEmMm`, derived
+  // from `LayoutSettings.linePitchTicks`, a declared constant, never a
+  // per-atom composed advance). `unit.heightMm` remains the POSITIONING
+  // quantity only (where this atom sits, how far apart consecutive
+  // graphemes within it are stacked) — round 8's yakumono compression
+  // legitimately shrinks specific atoms' own `heightMm` for spacing
+  // purposes; that must never also shrink the glyph painted into it.
+  // Before this fix, `heightMm` doubled as both quantities, which was
+  // numerically harmless when every atom's advance was uniformly 1em
+  // (pre-round-8) but produced a real, Human-caught bug once round 8
+  // legitimately compressed specific atoms' advance: punctuation glyphs
+  // painted at ~50% size instead of merely sitting closer together.
+  const perCharFontSizePt = mmToPt(bodyEmMm);
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
-    // TEXT is already one atom PER CHARACTER (Core's own composition), so
-    // `unit.heightMm` already IS one cell's own height. `outlineContext` is
-    // threaded here too (not just Ruby/Dash below) because the round-6
-    // GSUB audit proved the unreachable-vertical-alternate problem is NOT
-    // small-kana-specific — ordinary kana (つ/た, etc.) in normal body
-    // text have the identical issue.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm), baselineRatio, outlineContext);
+    // TEXT is already one atom PER CHARACTER (Core's own composition).
+    // `outlineContext` is threaded here too (not just Ruby/Dash below)
+    // because the round-6 GSUB audit proved the unreachable-vertical-
+    // alternate problem is NOT small-kana-specific — ordinary kana
+    // (つ/た, etc.) in normal body text have the identical issue.
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -282,10 +296,9 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // so `unit.heightMm` spans BOTH characters together — using it
     // directly as one glyph's own font size (as an earlier draft did)
     // painted every base character roughly 2x (or Nx, for an N-character
-    // base) too large. The per-glyph font size must come from the
-    // PER-CHARACTER height, not the whole run's own height.
-    const baseGraphemeCount = Array.from(unit.text).length;
-    const perCharFontSizePt = mmToPt(unit.heightMm / baseGraphemeCount);
+    // base) too large. The per-glyph font size now comes from the fixed
+    // `bodyEmMm` (see this function's own doc above), not from dividing
+    // this atom's own (possibly non-uniform) `heightMm`.
     const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
@@ -320,12 +333,6 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "DASH" && unit.text.length > 0) {
-    // BUG FIXED (Human Visual QA HOLD round 1, "Dash appears suspicious"):
-    // same whole-run-vs-per-character height bug as Ruby's base run above
-    // — a 2-glyph "――" run's own `unit.heightMm` spans BOTH glyphs, so it
-    // must be divided by the grapheme count before becoming a per-glyph
-    // font size.
-    //
     // BUG FIXED (Human Visual QA HOLD round 2, dash stroke intruding into
     // the following character's cell): no longer a special-cased rotation
     // + overlap paint — each "―" grapheme now runs through the SAME
@@ -337,9 +344,9 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // U+FE31 substitute; falls back to U+FE31 unchanged when no
     // `outlineContext` is supplied (backward-compatible). Canonical run
     // extent (2 glyphs guaranteed, P3-O04's own Product scope) is
-    // unchanged — only the PAINT MECHANISM changed.
-    const graphemeCount = Array.from(unit.text).length;
-    const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
+    // unchanged — only the PAINT MECHANISM changed. Font size: the fixed
+    // `bodyEmMm` (see this function's own doc above), not derived from
+    // this run's own `heightMm`.
     return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
   }
 
@@ -353,10 +360,8 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // needed beyond correct glyph selection). `outlineContext` is threaded
     // for uniformity but `resolveOutlineGlyphId` correctly returns
     // `undefined` here (already Unicode-reachable) — Ellipsis keeps
-    // painting via "text", unchanged. Same whole-run-vs-per-character
-    // font-size fix as Dash/Ruby above.
-    const graphemeCount = Array.from(unit.text).length;
-    const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
+    // painting via "text", unchanged. Font size: the fixed `bodyEmMm`
+    // (see this function's own doc above), same as every other kind.
     return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext);
   }
 
@@ -408,7 +413,7 @@ export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageG
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, outlineContext));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext));
           }
         }
       }

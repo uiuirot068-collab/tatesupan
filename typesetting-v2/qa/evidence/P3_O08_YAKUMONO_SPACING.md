@@ -192,3 +192,55 @@ Core changed: YES, explicitly authorized by this round's own "Core
 Change Gate" (canonical spacing proven wrong/incomplete, §3) and grounded
 in real, cited primary-source evidence (§4), not invented. `src/`/
 Production: untouched. No new dependency. No push, no deploy.
+
+## 11. Round 9 — Glyph-Size Regression (Found by Human Visual QA, Fixed)
+
+**Human report:** the yakumono spacing fix compressed `。`/`」`'s own
+PAINTED GLYPH SIZE to ~50% of body size (~5.25pt vs. ~10.5pt), not merely
+the spacing between them.
+
+**Root cause, confirmed by direct code read:** `renderer/publication/
+paintModel.ts`'s `buildPaintLine` derives each `PaintPlacedUnit.heightMm`
+as `next.yTick - placed.yTick` — the gap to the NEXT unit, i.e. this
+atom's own canonical ADVANCE. `pdfGenerator.ts`'s `unitCommands` then
+used this SAME `heightMm` value, unconditionally, as the basis for the
+painted GLYPH FONT SIZE (`mmToPt(unit.heightMm)`) for TEXT/RUBY-base/
+DASH/ELLIPSIS. Before round 8, every atom's advance was uniformly 1em, so
+`heightMm` numerically equalled the body em regardless — this conflation
+was harmless. Round 8's real, legitimate advance compression for
+adjacent yakumono pairs broke that coincidence: a compressed atom's own
+`heightMm` (now 0.5 cell) got reused directly as its own font size (now
+0.5 × body em) — exactly the reported symptom.
+
+**Fix:** `PublicationDocument` gained a new field, `bodyEmMm` — the
+fixed, document-wide body em in mm, derived from `ctx.linePitchTicks`
+(a declared `LayoutSettings` constant, `settings.linePitchTicks`, never
+a per-atom composed/compressed advance) — computed once in
+`buildPublicationDocument`. `pdfGenerator.ts`'s `unitCommands` now
+derives every glyph's own FONT SIZE from `doc.bodyEmMm` exclusively;
+`unit.heightMm` remains used ONLY for POSITIONING (where an atom sits,
+how far apart consecutive graphemes within a multi-character atom like a
+Ruby base or Dash run are stacked) — the two quantities are now fully
+decoupled, per the round's own explicit "advance ≠ paint em" instruction.
+No special case was added for `。`/`」`/any specific character — every
+kind (TEXT, RUBY base+annotation, DASH, ELLIPSIS) now derives font size
+from the same single, constant source.
+
+**Verified, not merely asserted:** `renderer/publication/
+glyphSizeIndependence.test.ts` (14 tests) proves every painted character
+in the round-8 fixture shares the exact same `fontSizePt` (including the
+compressed `。`/`」` pair), that this size equals the document's own
+declared body em (10.5pt), that the round-8 spacing compression is
+STILL ACTIVE (not reverted), that source/SourceSpan/canonical coordinates
+are all unaffected, and that Ruby/Dash/Ellipsis/TCY all independently
+paint at the correct fixed size.
+
+**Full regression after the fix:** Core 380/380 (unchanged — this is a
+Publication-only fix, no Core file touched), Stage C 21/21, Stage D
+30/30, P3-O09 (Preview) 114/114, P3-O08 (Publication) 152/152 (138+14) —
+all PASS. `npx tsc --noEmit`: 0 new errors.
+
+`yakumono-spacing-qa.pdf` and `publication-typography-qa.pdf`
+regenerated with the fix applied — Human recheck of the corrected PDF is
+PENDING.
+
