@@ -79,11 +79,8 @@ describe("Glyph size independence -- round 9 regression fix", () => {
     expect(bracketCmd!.fontSizePt).toBe(ordinaryCmd!.fontSizePt);
   });
 
-  it("Human Visual QA HOLD round 13/14: canonical yakumono advance is uniform for ordinary adjacency; 。->」 carries round 14's own narrow, scoped pair suppression", () => {
+  it("Human Visual QA HOLD round 13 (legacy parity audit): canonical yakumono advance is UNIFORM again -- round 8's compression is retired, not merely font-size-independent", () => {
     const { document } = composeFor("「今日は、雨だった。」");
-    const measurement = createFakeMeasurementProvider();
-    const settings = settingsFor({ charsPerLine: 20, linesPerColumn: 1, columnCount: 1 });
-    const cell = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
     const line = document.pages[0].columns[0].lines[0];
     const period = line.placedUnits[9]; // 。
     const bracket = line.placedUnits[10]; // 」
@@ -91,17 +88,16 @@ describe("Glyph size independence -- round 9 regression fix", () => {
     const rain = line.placedUnits[5]; // 雨
     const periodToBracketPitch = bracket.yTick - period.yTick;
     const commaToRainPitch = rain.yTick - comma.yTick;
-    // Round 13 (confirmed by direct read of the already-working legacy
-    // renderer, src/components/PageCard.tsx): canonical advance is never
-    // adjusted for ORDINARY punctuation adjacency -- 、->雨 stays exactly
-    // one uniform cell, always. The paint-only fix for that case lives
-    // entirely in Publication paint (verticalYakumonoAlign.ts).
-    expect(commaToRainPitch).toBe(cell);
-    // Round 14 (Human Visual QA HOLD, Part 2 -- see
-    // core/compose/conditionalYakumonoPair.test.ts): a cl-06/cl-07 atom
-    // immediately followed by a cl-02 atom is the ONE narrow, scoped
-    // exception -- 。->」 loses its own trailing half-cell.
-    expect(periodToBracketPitch).toBe(cell - Math.round(cell * 0.5));
+    // Confirmed by direct read of the already-working legacy renderer
+    // (src/components/PageCard.tsx): canonical advance is never adjusted
+    // for punctuation at all -- every character-to-character pitch is
+    // the SAME uniform cell, always. The visual fix now lives entirely
+    // in Publication paint (verticalYakumonoAlign.ts). Round 14/16's own
+    // cl-06/cl-07 -> cl-02 experiment (briefly compressing this exact
+    // pitch) is RETIRED — round 17's authoritative InDesign comparison
+    // found normal spacing here is the desired product behavior; see
+    // qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md.
+    expect(periodToBracketPitch).toBe(commaToRainPitch);
   });
 
   it("source is never mutated", () => {

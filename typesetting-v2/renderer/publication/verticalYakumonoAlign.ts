@@ -59,19 +59,16 @@ export function classifyYakumonoAlignment(grapheme: string): YakumonoAlignment {
   return "NORMAL";
 }
 
-// Human Visual QA HOLD round 16 (final product selection, Human A/B
-// comparison approved: `yakumono-half-paint-slot-human-comparison.pdf`
-// pages 5-10). Mirrors the SAME narrow cl-06/cl-07 -> cl-02 pair Core's
-// own `conditionalYakumonoPairAdvanceTick` (core/compose/line.ts)
-// already applies to canonical advance — verbatim character sets from
-// `core/rules/defaultRuleSet.ts`'s own cl-06 ("。．") / cl-07 ("、，") /
-// cl-02 ("’”）〕］｝〉》」』】〙〗") member lists, not re-derived and not
-// a broader classification than Core's own rule. This is PAINT-LAYER
-// ONLY — it never re-decides Core's own classification, never touches
-// canonical advance, and is scoped to exactly the pair the Human
-// comparison isolated (the closing bracket's own anchor is unaffected).
-const CL06_CL07_TEST = /[。．、，]/u;
-const CL02_TEST = /[’”）〕］｝〉》」』】〙〗]/u;
+// Human Visual QA HOLD round 16 briefly added a `usesFullEmAnchor`
+// cl-06/cl-07 -> cl-02 paint-anchor override here — RETIRED in round 17:
+// a later, authoritative direct comparison against real Adobe InDesign
+// vertical output found visible normal spacing before a closing bracket
+// is the DESIRED product behavior, not a defect. See
+// `qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md` for the
+// full record (not erased — superseded). This module is back to its
+// exact round-13 form: every yakumono-classified character uses the
+// same per-character-slot-height anchor, with no pair-specific
+// exception.
 
 /**
  * Built once per document render (font bytes parsed exactly once,
@@ -144,20 +141,5 @@ export class VerticalYakumonoAlignContext {
   /** The ordinary, centered default ratio this context was built with — for callers that need it without a specific grapheme's own classification. */
   get defaultBaselineRatio(): number {
     return this.fallbackBaselineRatio;
-  }
-
-  /**
-   * Human Visual QA HOLD round 16 (final product selection): `true` only
-   * when `current` is the punctuation side of a cl-06/cl-07 -> cl-02
-   * pair (the SAME narrow pair Core's own canonical advance rule
-   * already compresses). Callers use this to decide whether this
-   * character's own ink-flush anchor should be computed against the
-   * FULL, uncompressed body-em height instead of this atom's own
-   * (Core-compressed) per-character paint slot — Human A/B approved
-   * exactly this variable, and only this pair; the closing bracket's own
-   * anchor is unaffected.
-   */
-  usesFullEmAnchor(current: string, next: string | undefined): boolean {
-    return CL06_CL07_TEST.test(current) && next !== undefined && CL02_TEST.test(next);
   }
 }

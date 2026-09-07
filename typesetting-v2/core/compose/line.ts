@@ -17,7 +17,7 @@
 
 import type { GeometryTick } from "../geometry/tick";
 import type { SourceSpan } from "../source/span";
-import type { CharacterClass, RuleSetVersion } from "../rules/characterClass";
+import type { RuleSetVersion } from "../rules/characterClass";
 import type { MeasurementFacts } from "../measurement/facts";
 import type { LogicalUnit } from "../units";
 import type { TraceRecorder } from "../trace";
@@ -251,47 +251,23 @@ interface AtomComputationResult {
 // placement correction (per-typographic-class flex anchor within an
 // unchanged cell), never a canonical-layer change. `computeAtoms` is
 // therefore back to plain, uniform Natural Pitch for every TEXT atom —
-// no character-class branching of any kind, EXCEPT the one narrow,
-// evidence-scoped exception directly below (round 14).
+// no character-class branching of any kind.
 //
-// Human Visual QA HOLD round 14 (targeted correction): round 13's
-// paint-only edge alignment, on its own, was still visually judged too
-// loose for 。」/、」 specifically. This is NOT a re-introduction of
-// round 8's "full-em body + negative pair adjustment" or round 11's
-// "half-em intrinsic body" — both were GLOBAL yakumono-pair models,
-// applied to every adjacency the (now-deleted) `yakumonoSpacingScope`/
-// `yakumonoHalfBodyScope` table declared, and both were rejected for
-// visual reasons BEFORE round 13's real paint-edge-alignment port
-// existed. This is a single, explicitly-scoped PAIR RULE, applied only
-// when the CURRENT atom classifies cl-06 (full stop) or cl-07 (comma)
-// AND the immediately-following atom classifies cl-02 (closing
-// bracket/quote) — Human/Product decision, not a jlreq table lookup:
-// suppress that punctuation atom's own trailing half-cell contribution
-// so 。/、 sits tight against a following closing bracket, while 。/、
-// followed by ordinary text (the overwhelmingly common case) keeps its
-// full, uniform 1-cell advance exactly as round 13 left it. Combined
-// with round 13's own real paint-time edge anchor (which decides WHERE
-// each glyph's ink sits inside its own cell), this is the first attempt
-// at this pairing to ever run with both layers in place at once.
-function conditionalYakumonoPairAdvanceTick(
-  currentClass: CharacterClass,
-  nextClass: CharacterClass | undefined,
-  perCellAdvance: GeometryTick
-): GeometryTick {
-  const currentIsClosingPunctuation = currentClass.id === "cl-06" || currentClass.id === "cl-07";
-  const nextIsClosingBracket = nextClass?.id === "cl-02";
-  if (currentIsClosingPunctuation && nextIsClosingBracket) {
-    return perCellAdvance - Math.round(perCellAdvance * 0.5);
-  }
-  return perCellAdvance;
-}
-
+// Human Visual QA HOLD round 14 (targeted correction) briefly added a
+// narrow cl-06/cl-07 -> cl-02 canonical advance suppression here, and
+// round 16 added a matching Publication-paint anchor override — both
+// RETIRED in round 17 (Human Visual QA HOLD): a later, authoritative
+// direct comparison against real Adobe InDesign vertical output found
+// visible normal spacing before a closing bracket is the DESIRED
+// behavior, not a defect — round 14/16's own experiment is superseded,
+// not merely undone. See qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md
+// for the full record (round 14/16 are not erased from history there).
+// `computeAtoms` is back to its exact round-13 form.
 function computeAtoms(
   units: LogicalUnit[],
   opportunities: BreakOpportunity[],
   measurement: MeasurementFacts,
-  settings: CompositionSettings,
-  ruleSet: RuleSetVersion
+  settings: CompositionSettings
 ): AtomComputationResult {
   if (units.length === 0) return { atoms: [] };
   const blockId = units[0].span.blockId;
@@ -304,18 +280,6 @@ function computeAtoms(
     boundarySet.add(opportunity.position.start);
   }
   const boundaries = Array.from(boundarySet).sort((a, b) => a - b);
-
-  // Forward-scans past any zero-width boundary pair (e.g. a MANUAL_BREAK
-  // marker) to find the NEXT atom's own real span, for the round-14
-  // cl-06/cl-07 -> cl-02 lookahead below. Returns undefined at end of stream.
-  function nextAtomSpan(fromIndex: number): { start: number; end: number } | undefined {
-    for (let j = fromIndex; j < boundaries.length - 1; j++) {
-      const s = boundaries[j];
-      const e = boundaries[j + 1];
-      if (e > s) return { start: s, end: e };
-    }
-    return undefined;
-  }
 
   const perCellAdvance = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
   const atoms: CompositionAtom[] = [];
@@ -333,29 +297,7 @@ function computeAtoms(
       atoms.push({ sourceSpan, advanceTick });
       continue;
     }
-    let advanceTick = advanceTickFor(owner, end - start, perCellAdvance, measurement);
-    // Round 14 conditional pair rule: only ever evaluated for a TEXT atom
-    // whose own literal content is classifiable (never RUBY/SEMANTIC_RUN/
-    // TCY/IMAGE — none of those are cl-06/cl-07 members) and whose
-    // immediately-following atom is ALSO an ordinary classifiable TEXT
-    // atom (a ruby/TCY/image neighbor never triggers this rule).
-    if (owner.kind === "TEXT") {
-      const currentText = literalTextForAtom(owner, sourceSpan);
-      if (currentText) {
-        const currentClass = ruleSet.characterClassFor(lastCodePointOf(currentText));
-        const nextSpan = nextAtomSpan(i + 1);
-        let nextClass: CharacterClass | undefined;
-        if (nextSpan) {
-          const nextOwner = findOwningUnit(units, nextSpan.start, nextSpan.end);
-          if (nextOwner.kind === "TEXT") {
-            const nextText = literalTextForAtom(nextOwner, { blockId, start: nextSpan.start, end: nextSpan.end });
-            if (nextText) nextClass = ruleSet.characterClassFor(firstCodePointOf(nextText));
-          }
-        }
-        advanceTick = conditionalYakumonoPairAdvanceTick(currentClass, nextClass, advanceTick);
-      }
-    }
-    atoms.push({ sourceSpan, advanceTick });
+    atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
   }
   return { atoms };
 }
@@ -417,7 +359,7 @@ export function composeLine(
   const effectiveLineExtentTicks = lineExtentTicks - indentTick;
 
   const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
-  const atomResult = computeAtoms(units, opportunities, measurement, settings, ruleSet);
+  const atomResult = computeAtoms(units, opportunities, measurement, settings);
   if (atomResult.unresolvedImageSpan) {
     return {
       hold: {

@@ -50,17 +50,17 @@ export interface RuleSetVersion {
   // lives entirely in `renderer/publication/verticalYakumonoAlign.ts` —
   // Core's own canonical model requires no punctuation-specific concept.
   //
-  // Human Visual QA HOLD round 14: `core/compose/line.ts`'s own
-  // `computeAtoms` gained ONE narrow, explicitly-scoped exception to the
-  // above — a cl-06/cl-07 (full stop/comma) atom immediately followed by
-  // a cl-02 (closing bracket) atom has its own trailing half-cell
-  // advance suppressed (via `ruleSet.characterClassFor`, the SAME lookup
-  // this field's own generic data model already provides — no new field
-  // was added here). This is a pair rule, not a global scope table like
-  // the two retired experiments above; every other adjacency (in
-  // particular cl-06/cl-07 followed by ordinary text) keeps its full,
-  // uniform 1-cell advance exactly as this round 13 note still
-  // describes.
+  // Human Visual QA HOLD round 14 added, then round 17 RETIRED, a third
+  // attempt: a narrow cl-06/cl-07 -> cl-02 canonical advance suppression
+  // in `core/compose/line.ts`'s `computeAtoms` (paired with a matching
+  // Publication-paint anchor override in round 16). Round 17's own
+  // authoritative direct comparison against real Adobe InDesign vertical
+  // output found visible normal spacing before a closing bracket is the
+  // DESIRED product behavior, not a defect — superseding, not merely
+  // reverting, round 14/16's own experiment. See
+  // `qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md` for the
+  // full record. `computeAtoms` is back to its exact round-13 form: no
+  // character-class branching of any kind for punctuation advance.
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see
