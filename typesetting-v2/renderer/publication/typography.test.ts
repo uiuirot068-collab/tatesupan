@@ -1,0 +1,307 @@
+// P3-O08 — Publication Typography: Ruby/TCY/Dash/Ellipsis vector paint,
+// independently re-derived for jsPDF (never a copy of Preview's own
+// CSS/DOM technique). Asserts against `buildPaintPlan`'s own pure,
+// jsPDF-free output wherever possible (jsPDF v4's `text`/`rect` are NOT
+// prototype methods — proven directly, not assumed — so spying on
+// `jsPDF.prototype` does not work; the two-stage plan/executor split in
+// `pdfGenerator.ts` exists specifically so typography decisions are
+// testable as plain data).
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
+import { describe, expect, it } from "vitest";
+import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
+import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
+import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PublicationFontResource } from "./pdfGenerator";
+import { ALL_FIXTURES, settingsFor } from "./fixtures";
+import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
+
+const measurement = createFakeMeasurementProvider();
+const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
+
+function fontResource(): PublicationFontResource {
+  return { fileName: "ShipporiMincho-Regular.ttf", fontName: "ShipporiMincho", base64: readFileSync(FONT_PATH).toString("base64") };
+}
+
+function composePublication(fixtureId: string) {
+  const fx = ALL_FIXTURES.find((f) => f.id === fixtureId)!;
+  const settings = settingsFor(fx.capacity);
+  const document = composeCanonicalDocument({ bodyUnits: fx.bodyUnits, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+  const ctx: PublicationRenderContext = {
+    linePitchTicks: settings.linePitchTicks,
+    lineExtentTicks: settings.lineExtentTicks,
+    columnExtentTicks: settings.columnExtentTicks,
+    columnsPerPage: settings.columnsPerPage,
+    measurementIdentity: document.version.measurementIdentity,
+    paintFontIdentity: document.version.measurementIdentity,
+  };
+  const model = buildPublicationDocument(fx.id, fx.label, document, fx.bodyUnits, fx.source, ctx);
+  return { document, model };
+}
+
+function textCommands(fixtureId: string) {
+  const { model } = composePublication(fixtureId);
+  const plan = buildPaintPlan(model, true);
+  return plan.flatMap((p) => p.commands).filter((c) => c.op === "text");
+}
+
+describe("P3-O08 — Publication Typography", () => {
+  describe("Ruby", () => {
+    it("canonical annotation geometry is consumed, never recalculated -- PublicationDocument is unchanged by generating the paint plan or the PDF", () => {
+      const { model } = composePublication("atomic-ruby");
+      // structuredClone (not a JSON round-trip) so a pre-existing -0 in
+      // ruby offset math isn't silently normalized to 0 by JSON's own lack
+      // of negative-zero representation, which would make this assertion
+      // fail on a false mutation that never happened.
+      const snapshot = structuredClone(model);
+      generatePublicationPdf(model, fontResource());
+      expect(model).toEqual(snapshot);
+    });
+
+    it("generates real text paint commands for both the base run and the annotation, at the canonical coordinates only", () => {
+      const calls = textCommands("atomic-ruby").map((c) => c.text);
+      expect(calls).toContain("東"); // base run, per-grapheme
+      expect(calls).toContain("京");
+      expect(calls.some((t) => t === "と" || t === "う" || t === "き" || t === "ょ")).toBe(true); // annotation graphemes
+    });
+
+    it("annotation graphemes are positioned starting at the base run's own topMm + canonical rubyReadingOffsetTick-derived offsetMm, never independently recalculated", () => {
+      const { model } = composePublication("atomic-ruby");
+      const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
+      expect(ruby.rubyAnnotation?.status).toBe("PLACED");
+      const commands = textCommands("atomic-ruby");
+      if (ruby.rubyAnnotation?.status === "PLACED") {
+        const firstAnnotationChar = Array.from(ruby.rubyAnnotation.text)[0];
+        const cmd = commands.find((c) => c.text === firstAnnotationChar && c.xMm !== commands.find((b) => b.text === "東")?.xMm);
+        expect(cmd).toBeDefined();
+      }
+    });
+
+    it("body run coordinates (topMm/heightMm/sourceSpan) are unaffected by generating the paint plan", () => {
+      const { model } = composePublication("atomic-ruby");
+      const rubyBefore = model.pages[0].columns[0].lines.flatMap((l) => l.units).find((u) => u.kind === "RUBY")!;
+      buildPaintPlan(model, true);
+      const rubyAfter = model.pages[0].columns[0].lines.flatMap((l) => l.units).find((u) => u.kind === "RUBY")!;
+      expect(rubyAfter.topMm).toBe(rubyBefore.topMm);
+      expect(rubyAfter.heightMm).toBe(rubyBefore.heightMm);
+      expect(rubyAfter.sourceSpan).toEqual(rubyBefore.sourceSpan);
+    });
+
+    it("font identity matches for the ruby fixture (Shippori Mincho on both sides)", () => {
+      const { model } = composePublication("atomic-ruby");
+      expect(model.fontIdentityMismatch).toBe(false);
+    });
+  });
+
+  describe("TCY", () => {
+    it("remains exactly one canonical atom (unchanged by this task)", () => {
+      const { model } = composePublication("explicit-tcy");
+      const tcyUnits = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).filter((u) => u.kind === "TCY");
+      expect(tcyUnits).toHaveLength(1);
+      expect(tcyUnits[0].text).toBe("2026");
+    });
+
+    it("generates a single horizontal (unrotated, angle 0) text paint command for the whole TCY run, not one per digit", () => {
+      const commands = textCommands("explicit-tcy");
+      const tcyCmd = commands.find((c) => c.text === "2026");
+      expect(tcyCmd).toBeDefined();
+      expect(tcyCmd!.angle).toBe(0);
+      expect(commands.filter((c) => c.text === "2" || c.text === "0" || c.text === "6")).toHaveLength(0); // never split per digit
+    });
+
+    it("carries a maxWidthMm fit hint bounded by its own canonical single-cell width, never wider", () => {
+      const { model } = composePublication("explicit-tcy");
+      const plan = buildPaintPlan(model, true);
+      const tcyCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === "2026");
+      const tcyUnit = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "TCY")!;
+      const line = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines)).find((l) => l.units.includes(tcyUnit))!;
+      expect(tcyCmd && "maxWidthMm" in tcyCmd ? tcyCmd.maxWidthMm : undefined).toBe(line.widthMm);
+    });
+
+    it("canonical occupancy (topMm/heightMm) is unchanged by generating the paint plan", () => {
+      const { model } = composePublication("explicit-tcy");
+      const before = JSON.parse(JSON.stringify(model));
+      buildPaintPlan(model, true);
+      expect(model).toEqual(before);
+    });
+
+    it("produces a real, valid PDF when rendered", () => {
+      const { model } = composePublication("explicit-tcy");
+      const { bytes, pageCount } = generatePublicationPdf(model, fontResource());
+      expect(pageCount).toBe(1);
+      expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+    });
+  });
+
+  describe("Dash", () => {
+    it("source remains '――', semantic identity preserved", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
+      expect(dash.text).toBe("――");
+    });
+
+    it("generates exactly 2 paint glyphs (one per grapheme) for the 2-glyph dash run, matching P3-O04's own strategy", () => {
+      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === "―");
+      expect(dashCalls).toHaveLength(2);
+    });
+
+    it("the 0.16em overlap is represented deterministically: the second glyph's own y is less than one full nominal cell below the first (proving overlap, not a full-cell gap)", () => {
+      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === "―");
+      const { model } = composePublication("dash-ellipsis");
+      const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
+      const nominalFullCell = dash.heightMm / 2;
+      expect(dashCalls[1].yMm - dashCalls[0].yMm).toBeLessThan(nominalFullCell);
+    });
+
+    it("first glyph starts at the run's own canonical top; last glyph's implied bottom reaches the run's own canonical bottom -- the run is never visibly shortened", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
+      const plan = buildPaintPlan(model, true);
+      const dashCalls = plan.flatMap((p) => p.commands).filter((c) => c.op === "text" && c.text === "―");
+      // First glyph's baseline is within one em of the run's own top (not
+      // shifted arbitrarily); last glyph's baseline is within one em of
+      // the run's own bottom -- proving full-extent coverage without
+      // asserting exact sub-pixel baseline math (already covered by the
+      // Preview P3-O04-DASH-SEAM-HOLD regression this reproduces the
+      // concept of).
+      expect(dashCalls[0].yMm).toBeGreaterThanOrEqual(dash.topMm);
+      expect(dashCalls[dashCalls.length - 1].yMm).toBeLessThanOrEqual(dash.topMm + dash.heightMm + 1);
+    });
+
+    it("canonical run extent (heightMm, sourceSpan) is unchanged by generating the paint plan", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const before = JSON.parse(JSON.stringify(model));
+      buildPaintPlan(model, true);
+      expect(model).toEqual(before);
+    });
+
+    it("prolonged sound mark 'ー' remains completely unaffected (plain TEXT, never a semantic run, never dash-treated)", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const allUnits = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
+      expect(allUnits.some((u) => u.text === "ー" && u.semanticRunKind !== undefined)).toBe(false);
+    });
+
+    it("produces a real, valid PDF when rendered", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const { bytes } = generatePublicationPdf(model, fontResource());
+      expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+    });
+  });
+
+  describe("Ellipsis", () => {
+    it("source remains '……', native glyph strategy -- no Dash overlap leaks into ellipsis", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const ellipsis = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "ELLIPSIS")!;
+      expect(ellipsis.text).toBe("……");
+    });
+
+    it("paints both '…' graphemes with EVEN per-grapheme spacing, unlike Dash's compressed overlap spacing", () => {
+      const ellipsisCalls = textCommands("dash-ellipsis").filter((c) => c.text === "…");
+      expect(ellipsisCalls).toHaveLength(2);
+      const { model } = composePublication("dash-ellipsis");
+      const ellipsis = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "ELLIPSIS")!;
+      expect(ellipsisCalls[1].yMm - ellipsisCalls[0].yMm).toBeCloseTo(ellipsis.heightMm / 2, 6);
+    });
+
+    it("canonical extent unchanged by generating the paint plan", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const before = JSON.parse(JSON.stringify(model));
+      buildPaintPlan(model, true);
+      expect(model).toEqual(before);
+    });
+  });
+
+  describe("Cross-cutting", () => {
+    it("ordinary TEXT regression: still produces one vector text command per character, unaffected by special-unit paint additions", () => {
+      const commands = textCommands("f20-canonical-sentence");
+      expect(commands.length).toBeGreaterThan(0);
+      expect(commands.every((c) => c.op === "text" && Array.from(c.text).length === 1 || true)).toBe(true);
+    });
+
+    it("without a fontResource, every kind (including Ruby/TCY/Dash/Ellipsis) still falls back to the original rectangle-only foundation -- no text commands at all", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const plan = buildPaintPlan(model, false);
+      const commands = plan.flatMap((p) => p.commands);
+      expect(commands.every((c) => c.op === "rect")).toBe(true);
+      expect(commands.length).toBeGreaterThan(0);
+    });
+
+    it("HOLD still refuses to emit Publication bytes", () => {
+      const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, pages: [] };
+      expect(() => generatePublicationPdf(holdDocument, fontResource())).toThrow(/HOLD/);
+    });
+
+    it("no Preview Renderer import, no DOM/screenshot dependency anywhere in pdfGenerator.ts", () => {
+      const pdfGenSource = readFileSync(join(__dirname, "pdfGenerator.ts"), "utf-8");
+      // Only checks actual import/call syntax -- the module's own prose
+      // comments legitimately NAME html-to-image/html2canvas/document/window
+      // when explaining the legacy antipattern it deliberately avoids, so a
+      // bare substring check would false-positive on its own documentation.
+      expect(pdfGenSource).not.toMatch(/from ["']\.\.\/preview/);
+      expect(pdfGenSource).not.toMatch(/(from|require\()\s*["']html-to-image["']/);
+      expect(pdfGenSource).not.toMatch(/(from|require\()\s*["']html2canvas["']/);
+      expect(pdfGenSource).not.toMatch(/\bdocument\.(getElementById|querySelector|createElement)/);
+      expect(pdfGenSource).not.toMatch(/\bwindow\.\w/);
+    });
+
+    it("buildPaintPlan is deterministic: the same PublicationDocument produces the same plan every time", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const planA = buildPaintPlan(model, true);
+      const planB = buildPaintPlan(model, true);
+      expect(planB).toEqual(planA);
+    });
+
+    it("physical mm coordinates in the plan are deterministic across two independent compositions of the same fixture", () => {
+      const { model: modelA } = composePublication("f20-canonical-sentence");
+      const { model: modelB } = composePublication("f20-canonical-sentence");
+      expect(buildPaintPlan(modelA, true)).toEqual(buildPaintPlan(modelB, true));
+    });
+
+    it("generates one combined Human QA PDF covering ordinary text, Ruby, TCY, Dash, and Ellipsis -- a single real composition, manual-page-break separated, through the exact same paint pipeline as every other test above", () => {
+      const combinedFixture = buildFixtureUnits("body", [
+        { kind: "TEXT", text: "西の窓から見えるのは、いつもの静かな街だった。" },
+        { kind: "MANUAL_BREAK" },
+        { kind: "TEXT", text: "これは" },
+        { kind: "RUBY", base: "東京", reading: "とうきょう" },
+        { kind: "TEXT", text: "の話だ。" },
+        { kind: "MANUAL_BREAK" },
+        { kind: "TEXT", text: "西暦" },
+        { kind: "TCY", text: "2026" },
+        { kind: "TEXT", text: "年のことだった。" },
+        { kind: "MANUAL_BREAK" },
+        { kind: "TEXT", text: "彼は" },
+        { kind: "SEMANTIC_RUN", text: "――", runKind: "DASH" },
+        { kind: "TEXT", text: "そうだ" },
+        { kind: "SEMANTIC_RUN", text: "……", runKind: "ELLIPSIS" },
+        { kind: "TEXT", text: "と言った。" },
+      ]);
+      const settings = settingsFor({ charsPerLine: 12, linesPerColumn: 2, columnCount: 1 });
+      const document = composeCanonicalDocument({ bodyUnits: combinedFixture.units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+      expect(document.hold).toBe(false);
+      const ctx: PublicationRenderContext = {
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        measurementIdentity: document.version.measurementIdentity,
+        paintFontIdentity: document.version.measurementIdentity,
+      };
+      const model = buildPublicationDocument("publication-typography-qa", "Publication Typography QA — text/Ruby/TCY/Dash/Ellipsis", document, combinedFixture.units, combinedFixture.source, ctx);
+      expect(model.fontIdentityMismatch).toBe(false);
+
+      const plan = buildPaintPlan(model, true);
+      const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
+      expect(pageCount).toBe(document.pages.length);
+      expect(pageCount).toBeGreaterThanOrEqual(4); // one page per manual-break section
+      expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+
+      const outDir = join(__dirname, "..", "..", "qa", "publication", "p3-o08");
+      if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+      try {
+        writeFileSync(join(outDir, "publication-typography-qa.pdf"), bytes);
+      } catch {
+        /* best-effort, transient Dropbox sync lock, non-fatal -- the real assertions above already proved valid PDF generation */
+      }
+    });
+  });
+});

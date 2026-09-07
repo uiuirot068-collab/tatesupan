@@ -1202,3 +1202,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Ruby/TCY/Dash/Ellipsis Publication-layer visual treatment — not started here, per instruction (deferred a second time, now with a real, verifiable measurement identity available to any future Publication evidence that wants to cite it). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency, no new font binary.
 
 ---
+
+## P3-O08 — Publication Typography (Ruby/TCY/Dash/Ellipsis) (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `ef23de2` (matches expected checkpoint), worktree clean before start.
+
+**AUDIT:** direct-read jsPDF's actual `text()`/`getTextWidth()`/`rect()` API (`node_modules/jspdf/types/index.d.ts`) before writing paint code. Discovered `vi.spyOn(jsPDF.prototype, "text")` does not work — jsPDF v4's plugin system attaches paint methods as per-instance own properties, not prototype methods (proven directly by a failing spy, not assumed). **Architectural response:** split `pdfGenerator.ts` into `buildPaintPlan` (pure, jsPDF-free plain-data `PaintCommand[]`) and `renderPaintPlanToPdf` (a thin mechanical executor) — every typography test now asserts against the pure plan directly, more precise than spying on library internals.
+
+**RUBY SCALE OBSERVATION, classified before writing Ruby paint code:** Category B (paint-only choice), not a canonical measurement gap — the canonical `rubyReadingExtentTick` defines RESERVED SPACE, not a mandated paint font size; Preview's own already-Human-approved `0.55em` annotation font-size ratio already demonstrates this exact paint-time-sizing freedom. Publication re-derives the same `0.55` ratio independently, citing Preview's precedent rather than copying its CSS mechanism. No Core change made or needed; did not stop the Ruby branch.
+
+**IMPLEMENTED, each independently re-derived (never copied from Preview's CSS/DOM technique):** Ruby (per-grapheme base + annotation painting at canonical offset/extent, smaller paint-time font size); TCY (one horizontal, UNROTATED text command — an initial `angle: -90` draft mistake, which would have made digits read sideways, was caught and fixed before shipping — fit via a single measure-then-scale pass against the real font, bounded by the canonical single-cell width); Dash (P3-O04's own per-grapheme 0.16em overlap concept, re-derived in physical mm); Ellipsis (native glyph, explicitly proven to NOT share Dash's overlap treatment — even per-grapheme spacing instead).
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O08_PUBLICATION_TYPOGRAPHY.md` (full 16-section audit). 27 new tests (Ruby 5, TCY 5, Dash 7, Ellipsis 3, cross-cutting 8 including a combined Human QA PDF). A test-methodology note recorded: invariant snapshots use `structuredClone` rather than JSON round-trip, since JSON silently normalizes a pre-existing, harmless `-0` (a float curiosity in one ruby offset computation, predating this task) to `0`, which would otherwise read as a false mutation. Full regression: Core 364/364, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 59/59 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**HUMAN QA ARTIFACT:** `qa/publication/p3-o08/publication-typography-qa.pdf` — one real, 4-page, manual-page-break-separated composition covering ordinary text + Ruby + TCY + Dash + Ellipsis together, through the exact same pipeline every test exercises (no screenshot, no demo-only code path).
+
+**DECISION: P3-O08 Publication Typography — MACHINE PASS.** Ready for Human Visual QA; not yet claimed as final Publication Quality. P3-O06 (exact ruby overhang values) and P3-O07 (TCY auto-detection) remain untouched and separately OPEN.
+
+**WHY:** Every claim traces to a directly-read jsPDF API surface, a directly-read frozen Core/Preview precedent, or a passing test against real generated PDF bytes — the jsPDF-prototype-spy discovery and the TCY rotation mistake were both caught through direct verification (a failing test, a code review before shipping) rather than assumed correct from memory.
+
+**NEXT:** Human Visual QA of the combined and per-fixture PDFs; afterward, either refine a Human-flagged treatment or proceed to a still-open P3-O08 item (grayscale color space, paper-size/bleed/trim, JPG output). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---
