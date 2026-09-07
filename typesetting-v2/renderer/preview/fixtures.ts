@@ -137,7 +137,7 @@ export const ALL_FIXTURES: FoundationFixture[] = [
 
   fixture(
     "dash-ellipsis",
-    "Dash / Ellipsis Runs (dash: painted-bar treatment active, P3-O04; ellipsis: optical alignment still provisional, P3-O05 OPEN)",
+    "Dash / Ellipsis Runs (dash: per-grapheme native-glyph seam treatment, P3-O04 CLOSED; ellipsis: native-glyph, audited and left unmodified, P3-O05 CLOSED)",
     [
       { kind: "TEXT", text: "彼は" },
       { kind: "SEMANTIC_RUN", text: "――", runKind: "DASH" },

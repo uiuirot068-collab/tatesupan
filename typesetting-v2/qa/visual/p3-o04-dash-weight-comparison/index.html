@@ -77,8 +77,15 @@
      amount (paintModel.ts's own dashOverlapEm) to visually close the
      seam, while the FIRST glyph's own top and the LAST glyph's own
      bottom still span the full canonical run extent exactly -- the
-     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
-     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+     painted run is never shortened.
+
+     P3-O05-ELLIPSIS-AUDIT: ELLIPSIS was independently audited (not assumed
+     to need the same fix) and left on the plain native-glyph path -- its
+     visual unit is two complete, self-contained "..." dot-cluster glyphs,
+     not a continuous stroke, so Dash's own seam-continuity problem has no
+     analogue here. TWO_DOT_LEADER remains untouched/unused for the same
+     reason (not yet exercised by any fixture). See
+     qa/evidence/P3_O05_ELLIPSIS_VISUAL.md for the full audit record. */
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
   .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
@@ -193,8 +200,15 @@
      amount (paintModel.ts's own dashOverlapEm) to visually close the
      seam, while the FIRST glyph's own top and the LAST glyph's own
      bottom still span the full canonical run extent exactly -- the
-     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
-     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+     painted run is never shortened.
+
+     P3-O05-ELLIPSIS-AUDIT: ELLIPSIS was independently audited (not assumed
+     to need the same fix) and left on the plain native-glyph path -- its
+     visual unit is two complete, self-contained "..." dot-cluster glyphs,
+     not a continuous stroke, so Dash's own seam-continuity problem has no
+     analogue here. TWO_DOT_LEADER remains untouched/unused for the same
+     reason (not yet exercised by any fixture). See
+     qa/evidence/P3_O05_ELLIPSIS_VISUAL.md for the full audit record. */
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
   .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }

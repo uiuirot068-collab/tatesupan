@@ -96,8 +96,15 @@ const STYLE = `
      amount (paintModel.ts's own dashOverlapEm) to visually close the
      seam, while the FIRST glyph's own top and the LAST glyph's own
      bottom still span the full canonical run extent exactly -- the
-     painted run is never shortened. ELLIPSIS/TWO_DOT_LEADER are
-     explicitly untouched (P3-O05 remains its own, separate, OPEN item). */
+     painted run is never shortened.
+
+     P3-O05-ELLIPSIS-AUDIT: ELLIPSIS was independently audited (not assumed
+     to need the same fix) and left on the plain native-glyph path -- its
+     visual unit is two complete, self-contained "..." dot-cluster glyphs,
+     not a continuous stroke, so Dash's own seam-continuity problem has no
+     analogue here. TWO_DOT_LEADER remains untouched/unused for the same
+     reason (not yet exercised by any fixture). See
+     qa/evidence/P3_O05_ELLIPSIS_VISUAL.md for the full audit record. */
   .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
   .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
@@ -156,8 +163,10 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
         `annotation="${unit.rubyAnnotation.text}" policy=${unit.rubyAnnotation.policy} annotationStart=${(unit.topPx + unit.rubyAnnotation.offsetPx).toFixed(1)}px ` +
         `annotationExtent=${unit.rubyAnnotation.extentPx.toFixed(1)}px offsetFromBody=${unit.rubyAnnotation.offsetPx.toFixed(1)}px`
       : undefined;
-  // P3-O04-DASH-VISUAL: only DASH gets the painted-bar treatment;
-  // ELLIPSIS/TWO_DOT_LEADER (P3-O05, still OPEN) are explicitly untouched.
+  // P3-O04-DASH-VISUAL: only DASH gets the per-grapheme paint-node
+  // treatment; ELLIPSIS/TWO_DOT_LEADER were independently audited under
+  // P3-O05 and intentionally left on the native-glyph path (no seam-
+  // continuity defect applies to a discrete dot-cluster glyph).
   const unitClassName = `unit kind-${unit.kind}${unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "DASH" ? " semantic-dash" : ""}`;
   return (
     <div className={unitClassName} style={{ top: unit.topPx, height: unit.heightPx, fontSize: fontSizePx }} title={mode === "debug" ? debugText : undefined}>
