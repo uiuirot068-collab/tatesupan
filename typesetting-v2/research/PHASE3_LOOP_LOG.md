@@ -1154,3 +1154,23 @@ Also recorded, documentation only, not implemented: the Human-approved future Ed
 **NEXT:** Font embedding decision (Product/dependency-gate) is the named next technical task before further Publication visual work (TCY shaping, Dash/Ellipsis/Ruby treatment) can proceed meaningfully. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Font Embedding Gate Audit (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `dfe20d5` (matches expected checkpoint), worktree clean before start. (A GAME-LOOP-018 prompt for an unrelated project was pasted into this session mid-turn by mistake — confirmed via `git status`/`git rev-parse HEAD` that it caused zero file changes before being disregarded entirely, per explicit user instruction; not otherwise recorded here.)
+
+**QUESTION:** can TateSpun's actual body font be legally embedded in a Publication PDF, and does jsPDF (already installed) technically support it — audited before attempting any PoC, per instruction not to guess.
+
+**METHOD:** direct-read `src/lib/pageLayout.ts`/`src/app/layout.tsx` for the real font identity (Shippori Mincho, loaded from Google Fonts CDN, no local copy); `core/measurement/facts.ts`/`fakeProvider.ts` for MeasurementFacts identity (confirmed: no real provider exists anywhere in v2 Core yet — fully synthetic, a pre-existing system-wide gap, not new); a repository-wide file search for any existing Shippori Mincho/Noto/Zen Old Mincho font binary (none found — only an unrelated HarfBuzz prototype's Latin/Devanagari/Arabic test fonts exist, no CJK coverage); `node_modules/jspdf/types/index.d.ts` and `node_modules/jspdf/README.md` (version 4.2.1, matching the repository's own declared dependency) for jsPDF's own documented custom-font/CJK capability; WebFetch against Google's own official `google/fonts` GitHub repository's `OFL.txt` for Shippori Mincho — the authoritative upstream license source, not an inference from "free font" status.
+
+A first attempt to fetch the actual font binary via `curl` into `/tmp` was correctly interrupted and cancelled by the user mid-task, since it preceded completing the license/asset audit — the audit was then finished using only Read/Grep/Glob/WebFetch against already-permitted sources, with no further download attempted.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O08_FONT_EMBEDDING_GATE.md` (full 15-section audit). License: SIL Open Font License 1.1, confirmed via Google's own official repository — explicitly grants "embed" and "redistribute" by name (not inferred). jsPDF: `addFont`'s own `Identity-H` encoding option and the README's own worked example ("if you want to have for example Chinese text in your pdf...") directly confirm the library is designed for exactly this use case. **No blocker found in license or technology — the sole gap is that no font binary exists anywhere in this repository to actually embed.**
+
+**DECISION: HOLD — asset acquisition gate.** Classified as Category F (missing local asset), explicitly not a license, format, or jsPDF-capability blocker (all of those cleared favorably). No PoC PDF was generated; no `renderer/publication/` code was changed; the existing 21 P3-O08 Foundation tests were re-run unmodified to confirm (still 21/21 PASS). `PHASE3_OPEN_ITEMS.md`'s P3-O08 row is unchanged (already correctly IN PROGRESS).
+
+**WHY:** Every claim traces to a directly-read local file, a directly-read jsPDF source/doc file, or an authoritative upstream license source fetched via WebFetch — no font-embedding capability claim was inferred from "it's a free font" or from generic Unicode-support marketing text, per the task's own explicit caution.
+
+**NEXT:** A Human decision on how to obtain the Shippori Mincho binary (Human supplies the file directly; this session re-attempts a now-audit-cleared one-time fetch from Google's own official repository; or an already-local substitute font is identified, though none currently exists). Once obtained, the immediate next steps are exactly as originally scoped: register via jsPDF's documented `addFileToVFS`/`addFont` pattern, generate the minimal CJK vector PoC, then consider Publication Renderer integration. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency, no font binary committed.
+
+---
