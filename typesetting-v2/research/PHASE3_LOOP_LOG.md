@@ -1478,3 +1478,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of `yakumono-half-body-qa.pdf` (fixtures A-G + the original sentence) and the regenerated combined PDF. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Yakumono Legacy Parity Audit (2026-09-07, AUDIT ONLY)
+
+**HUMAN DECISION (round 12):** STOP speculative v2-side theory iteration (rounds 8-11 each tried a different theoretical model — full-em+negative-adjustment, real GPOS ink placement, jlreq half-body — none matched). The legacy browser renderer already produces accepted Japanese vertical punctuation; empirically audit its own real, working mechanism instead of inventing another v2 model. Audit-only round, no implementation.
+
+**DECISIVE FINDING, direct primary source (`src/components/PageCard.tsx` lines 29-49, dated TSP-LOOP-003 — an EARLIER, foundational fix than even the TSP-LOOP-029 hanging-punctuation work):** the legacy renderer's own header comment diagnoses the EXACT symptom this whole v2 chain has chased ("、。「」… ended up floating in the middle of their cell, ~0.5em away from the glyph they should hug") and documents its own real, MEASURED fix against real browser-native vertical text: **the canonical cell/slot/advance for punctuation is NEVER touched — only PAINT-TIME ink position, within an unchanged full-size cell, changes**, via a per-typographic-class CSS flex anchor (`justify-content: flex-start` for closing-type 、。「」』）etc., `flex-end` for opening-type「『（etc., `center` otherwise) plus a selective `"vpal" 1` re-enable (font's own real glyph shape) for just those characters — both applied within an absolutely-positioned, fixed-px-size container whose size is computed identically for every character, so structurally cannot be affected by either technique.
+
+**PARITY MISMATCH CONFIRMED, not defended:** round 11's own half-body model (and round 8's before it) modifies Core's own CANONICAL advance for punctuation — legacy never does this at all. Marked explicitly: PRODUCT PARITY MISMATCH, regardless of round 11's own jlreq citations.
+
+**COMMIT REGRESSION TRACE (from `git show --stat`, not assumed):** `4d4f6a2` is the sole origin of every canonical-layer punctuation change; `ad30d0a` is the only other commit touching it. `8ba41b5`/`8a9cf90`/`1469a83` are all confirmed Publication-paint-only, zero `core/` touched.
+
+**SAFE ROLLBACK CANDIDATE (not performed):** revert Core's yakumono-specific pieces (`characterClassForAtom`/`bodyAdvanceTickFor`/`yakumonoSpaceAfterEm`/`yakumonoHalfBodyScope`) to pre-`4d4f6a2` uniform Natural Pitch, while preserving every later infrastructure commit (Ruby/small-kana/Dash/outline-paint/GPOS-ink-placement all independently confirmed unaffected by the revert, via the same commit trace).
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_LEGACY_PARITY_AUDIT.md` (12-section record). No tests added (audit-only, no implementation). No source file changed — confirmed via `git status --porcelain` showing only the new evidence file.
+
+**DECISION: Yakumono — HOLD. Root cause and exact next task now known with high confidence (Publication-paint-only edge-alignment, ported directly from the working legacy mechanism, not re-derived from theory).** Ruby/small kana/Dash/TCY/Ellipsis/outline-paint: unaffected, still PASS. P3-O08: IN PROGRESS. Not ready for JPG.
+
+**WHY:** Every claim traces to a direct read of the legacy source's own code and its own dated header comment recording a REAL, MEASURED browser observation — not re-derived jlreq theory. The commit regression trace is read from `git show --stat` output, not assumed from commit messages.
+
+**NEXT:** Implement the Publication-paint-only edge-alignment fix (§11 of the evidence doc): revert Core's canonical yakumono advance model to uniform Natural Pitch; add a paint-time-only cell-edge alignment (closing-type toward cell start, opening-type toward cell end) within the unchanged full cell, composing with round 10's existing GPOS ink-placement infrastructure. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---
