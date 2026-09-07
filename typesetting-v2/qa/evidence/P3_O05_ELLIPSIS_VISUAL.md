@@ -2,18 +2,23 @@
 
 ## 1. Verdict
 
-**MACHINE PASS.** Ellipsis (`……`, SEMANTIC_RUN runKind `ELLIPSIS`) was audited
-independently of Dash (per the task's explicit instruction not to assume
-Dash's paint strategy transfers) and found to have **no analogous defect**.
-No Renderer paint code change was made for ellipsis. The existing native
-rendering (identical to how any ordinary unit paints — no special CSS class,
-no per-grapheme split) is the deliberate, evidence-based outcome of this
-task, not an oversight. 26 new regression tests
-(`renderer/preview/ellipsisVisual.test.ts`) prove this is intentional and
-protect Dash's own P3-O04 treatment from any incidental regression.
+**HUMAN VISUAL QA PASS. CLOSED (2026-09-07).** Ellipsis (`……`, SEMANTIC_RUN
+runKind `ELLIPSIS`) was audited independently of Dash (per the task's
+explicit instruction not to assume Dash's paint strategy transfers) and
+found to have **no analogous defect**. No Renderer paint code change was
+made for ellipsis. The existing native rendering (identical to how any
+ordinary unit paints — no special CSS class, no per-grapheme split) is the
+deliberate, evidence-based outcome of this task, not an oversight. 26
+regression tests (`renderer/preview/ellipsisVisual.test.ts`) prove this is
+intentional and protect Dash's own P3-O04 treatment from any incidental
+regression.
 
-Ready for Human Visual QA (ellipsis appearance only). Not yet Human PASS —
-that decision belongs to the Human, per this project's standing process.
+**Human Visual QA (2026-09-07):** reviewed the `……` run in the `dash-ellipsis`
+fixture, NORMAL Preview (`qa/visual/p3-o09-preview/index.html`). Observed:
+reads naturally as a vertical Japanese ellipsis; visually centered
+acceptably; spacing acceptable; surrounding text unaffected; no line/page
+escape; no debug decoration visible. **PASS.** No further ellipsis paint
+change was made or requested.
 
 ## 2. Frozen Contract
 
@@ -232,15 +237,9 @@ Human reviewing the main artifact sees accurate status text.
 
 ## 15. Remaining Work
 
-Human Visual QA on the `dash-ellipsis` fixture's `……` run in
-`p3-o09-preview/index.html`: confirm the native rendering reads naturally
-as a vertical Japanese ellipsis (not rotated incorrectly, not pushed
-off-center in a way that looks wrong, not read as some other punctuation
-mark). If Human QA finds a genuine visual defect that this audit's
-reasoning did not anticipate, that would be new evidence not covered by
-this document, and would need its own follow-up loop (this task's own
-audit found no defect to correct, but is not a substitute for the Human's
-own visual judgment).
+None for P3-O05 itself. Human Visual QA (§1) confirmed the native
+rendering reads naturally, with no further correction requested. Ellipsis
+paint was not modified further, per instruction.
 
 ## 16. Next Technical Task
 

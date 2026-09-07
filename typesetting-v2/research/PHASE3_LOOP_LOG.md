@@ -1098,3 +1098,37 @@ Recorded as a descriptive future item, **not implemented, no numeric P3-O identi
 **DOCUMENTATION ONLY — no Core/Renderer/src/Production change.** Recorded a Human-approved future typography feature: 縦罫線 (Vertical Rule), a proper explicit vertical-rule typesetting element for a long continuous line, distinct from and never automatically converted from repeated dash punctuation ("―――" etc. — source meaning stays under user control, no silent reinterpretation). Initial Human-approved spec: length by character count (never arbitrary px); one standard stroke width only (no user-selectable thickness initially); black only (no color/gray); must not push surrounding text or cause reflow; modeled as ONE formal semantic/canonical unit (not N repeated dash glyphs, exact type name not frozen). Future ownership split (Editor/notation creates it, Normalizer recognizes explicit notation, Core owns position/length/occupancy/identity/association, both Preview and Publication Renderers reproduce the same semantic rule from canonical data — never a browser-only CSS trick, never DOM-measurement-derived length). Cross-referenced with the previously-recorded 文章チェックβ v2 dash notice (a future NOTICE_ONLY suggestion could point authors at this feature) and grouped alongside Dakuten Attachment as a future special-typography item, while kept independently specified. Recorded in `docs/architecture/PHASE3_OPEN_ITEMS.md`'s "Non-P3-O Future Items" section. No numeric P3-O identifier assigned, per instruction. Did not interrupt or modify the concurrently active P3-O05 task.
 
 ---
+
+## P3-O05 — Human Visual QA Final PASS / CLOSED (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `9e08bff` (matches expected checkpoint), worktree clean before start.
+
+**HUMAN OBSERVATION:** the `……` run in NORMAL Preview (`qa/visual/p3-o09-preview/index.html`, `dash-ellipsis` fixture) reads naturally as a vertical ellipsis, is visually centered acceptably, spacing is acceptable, surrounding text is unaffected, no line/page escape, no debug decoration visible.
+
+**DECISION: P3-O05 (Ellipsis Visual) — Human Visual QA PASS. CLOSED.** No further ellipsis paint change made. `qa/evidence/P3_O05_ELLIPSIS_VISUAL.md` §1/§15 and `PHASE3_OPEN_ITEMS.md` row P3-O05 updated from "MACHINE PASS, pending Human Visual QA" to full "CLOSED / PASS," matching the P3-O03/P3-O04 pattern exactly.
+
+**WHY:** The Human's own observation directly confirms the prior machine audit's conclusion (native, unmodified rendering is correct) — no new evidence contradicted it, so no further investigation or paint change was warranted.
+
+**NEXT:** Audit the actual remaining Phase 3 / P3-O09 open-item list rather than assuming P3-O06 follows by default (see the Closure Readiness Audit entry immediately below, completed as part of the same task). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched.
+
+---
+
+## P3-O09 — Closure Readiness Audit (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `9e08bff` (matches expected checkpoint), worktree clean before start. Documentation/audit only — no Core/Renderer/`src/`/Production code read for modification, only for evidence gathering.
+
+**QUESTION:** with P3-O03/O04/O05 all now Human-PASS CLOSED and Ruby's own anchor-correctness Human-PASS CLOSED, what exactly remains before "P3-O09 Preview Renderer implementation" can be called complete — audited directly from frozen docs, not assumed, and without automatically executing P3-O06/O07/O08/F06 merely because they remain OPEN elsewhere.
+
+**METHOD:** direct-read `PHASE3_OPEN_ITEMS.md`, `P3_O09_PREVIEW_RENDERER_FOUNDATION.md` (including its two Human Visual QA HOLD addenda), `RUBY_PLACEMENT_PREVIEW_MICRO_LOOP.md` (including its three Human Visual QA HOLD addenda, ending in Final Result PASS), `P3_O03_TCY_VISUAL.md`, `P3_O04_DASH_VISUAL.md`, `P3_O05_ELLIPSIS_VISUAL.md`, `STAGE_D_PREVIEW_ADAPTER_IMPLEMENTATION.md`, `CURRENT_EDITOR_FEATURE_INVENTORY.md` (for F06's true classification), and direct code reads (`paintModel.ts`, `PreviewRenderer.tsx`, `fixtures.ts`) to verify font-identity-warning and colophon-fixture claims rather than trusting prior evidence-doc prose alone.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O09_CLOSURE_READINESS_AUDIT.md` (full 18-section audit + acceptance matrix + blocker classification). Every audited remaining item (P3-O06 residual, P3-O07, P3-O08, F06, image resolver, colophon artifact fixture, folio/header, virtualization) classified as either a separately-tracked item, an intentional disclosed architecture boundary, or a narrow non-blocking follow-up — none is a Preview Renderer architecture defect. Font-identity-mismatch warning directly confirmed present and wired (`paintModel.ts:473`, `PreviewRenderer.tsx:278`). Colophon paint mechanism confirmed proven at the unit-test level but absent from the main Human-visible artifact's fixture list (narrow, non-blocking gap).
+
+**DECISION: P3-O09 — HAS NARROW REMAINING TECHNICAL BLOCKERS (none of which are Preview Renderer architecture gaps).** Recommends (does not unilaterally decide) that `PHASE3_OPEN_ITEMS.md` row P3-O09 could be marked CLOSED now, with P3-O06/O07/O08/F06 correctly remaining separately OPEN under their own IDs — final call left to Human/Product, per the audit's own §17. `PHASE3_OPEN_ITEMS.md` row P3-O09 was **not** changed by this task (its status remains IN PROGRESS pending that Human decision, to avoid unilaterally closing a roadmap item this audit itself flags as needing sign-off).
+
+Also recorded, documentation only, not implemented: the Human-approved future Editor feature **文章チェックβ v2 — 縦書き・入稿向け原稿チェック** (local-only, no manuscript transmission to AI/external APIs; five future check categories; SAFE_AUTO_FIX/REVIEW_BEFORE_FIX/NOTICE_ONLY fix-class model; cross-referenced with the existing 縦罫線/Vertical Rule and Dakuten Attachment future items) — added to `PHASE3_OPEN_ITEMS.md`'s "Non-P3-O Future Items" section, no numeric P3-O identifier assigned.
+
+**WHY:** Every classification traces to a directly-read frozen document or a directly-read code fact (not memory) — the "non-blocker" calls for P3-O06/O07/O08/F06/image/virtualization all rest on those items' own frozen documents already describing them as separate, intentionally-deferred, or out-of-Renderer-scope, not on this audit's own convenience.
+
+**NEXT:** Pending the Human decision on P3-O09's own closure (§17 of the audit), the next independently-startable items are P3-O06's exact ruby overhang values, P3-O07's TCY auto-detection threshold, or P3-O08 Publication Renderer work — none started here. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No code was changed by this task.
+
+---
