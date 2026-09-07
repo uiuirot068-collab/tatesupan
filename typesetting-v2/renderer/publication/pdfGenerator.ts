@@ -468,6 +468,25 @@ export function buildPaintPlan(
         }
       }
     }
+    // Human Visual QA HOLD round 20 (P3-O08 final-page completion, Step
+    // 1 -- folio/header): painted ONLY when Core actually supplies a
+    // folio for this page (never invented, never a page-numbering
+    // policy decided here). `page.folio.xMm`/`topMm` are the SAME
+    // content-relative-from-right-edge / content-relative-from-top-edge
+    // convention body units already use -- offset by the SAME
+    // `contentRightEdgeMm`/`yOffsetMm` page-geometry terms, one
+    // consistent coordinate system, no separate "decoration layer"
+    // positioning invented. Font: the body font, at the fixed
+    // `bodyEmMm` size (HD-005's own default -- 柱/奥付/folio inherit the
+    // body font unless overridden; no override mechanism exists in
+    // Publication paint yet, so only the default is implemented here).
+    if (page.folio && page.folio.text.length > 0 && hasFont) {
+      const x = contentRightEdgeMm - page.folio.xMm;
+      const xCenter = x + doc.bodyEmMm / 2;
+      const topMm = yOffsetMm + page.folio.topMm;
+      const totalHeightMm = doc.bodyEmMm * Array.from(page.folio.text).length;
+      commands.push(...verticalGraphemeCommands(page.folio.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
+    }
     return {
       widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
       heightMm: pageGeometry?.paperHeightMm ?? page.heightMm,

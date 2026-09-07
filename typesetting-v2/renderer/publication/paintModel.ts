@@ -84,6 +84,36 @@ export interface PaintColumn {
   lines: PaintLine[];
 }
 
+// Human Visual QA HOLD round 20 (P3-O08 final-page completion, Step 1):
+// `CanonicalPage.folio?: PlacedUnit` (Contract §15, page-decoration
+// layer) is a real schema field, but Core never populates it today —
+// confirmed by direct search, `folio` appears nowhere in `core/compose/`
+// or `core/layout/assemble.ts`, only in its own type declaration.
+// Preview's own `paintModel.ts` already documented this exact finding
+// and passes `page.folio` through UNRESOLVED (a raw `PlacedUnit`,
+// painted by nothing downstream). Publication instead resolves it here,
+// consistent with every OTHER unit in this file's own convention
+// (paintModel.ts always resolves text/mm up front; `pdfGenerator.ts`
+// never re-touches raw `LogicalUnit`/source) — this is a deliberate,
+// documented divergence from Preview's raw pass-through, not an
+// oversight; both are equally valid "wiring," this one just matches
+// Publication's own established two-stage design.
+//
+// Working position contract (Core does not populate this today, so
+// nothing yet exercises it in production): `folio.xTick`/`folio.yTick`
+// are treated exactly like a body `PlacedUnit`'s own coordinates — an
+// absolute offset from the page's own top-right origin, converted via
+// the SAME `tickToMm` every other coordinate in this file uses. This
+// keeps pagination/positioning entirely Core's decision (Contract-
+// consistent: Renderer never invents a page-numbering policy) — once a
+// future Core populates real folio ticks, this paint code needs no
+// change.
+export interface PaintFolio {
+  text: string;
+  xMm: number;
+  topMm: number;
+}
+
 export interface PaintPage {
   id: string;
   order: number;
@@ -91,6 +121,7 @@ export interface PaintPage {
   heightMm: number;
   manualBreakBefore: boolean;
   columns: PaintColumn[];
+  folio?: PaintFolio;
 }
 
 export interface PublicationRenderContext {
@@ -258,6 +289,14 @@ function buildPaintColumn(
   };
 }
 
+function buildPaintFolio(folio: PlacedUnit, source: string): PaintFolio {
+  return {
+    text: sliceCodePoints(source, folio.sourceSpan.start, folio.sourceSpan.end).replace(/\n/g, ""),
+    xMm: tickToMm(folio.xTick),
+    topMm: tickToMm(folio.yTick),
+  };
+}
+
 function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: LogicalUnit[], source: string, ctx: PublicationRenderContext): PaintPage {
   return {
     id: page.id,
@@ -266,6 +305,7 @@ function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: 
     heightMm: tickToMm(ctx.lineExtentTicks),
     manualBreakBefore,
     columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, units, source, ctx)),
+    ...(page.folio ? { folio: buildPaintFolio(page.folio, source) } : {}),
   };
 }
 
