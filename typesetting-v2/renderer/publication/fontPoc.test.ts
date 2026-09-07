@@ -33,6 +33,27 @@ const FONT_DIR = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "fon
 const FONT_PATH = join(FONT_DIR, "ShipporiMincho-Regular.ttf");
 const OUT_DIR = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc");
 
+// Dropbox (this worktree lives inside a synced Dropbox folder) can briefly
+// hold an OS-level lock on a just-written file while it syncs — a known,
+// pre-existing environment gotcha (unrelated to this task's own logic; the
+// PDF bytes themselves are already asserted valid before this ever runs).
+// Best-effort artifact write with a few retries; never fails the test on
+// its own, since the QA artifact file is a convenience, not the assertion.
+function writeArtifactBestEffort(path: string, bytes: Uint8Array): void {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      writeFileSync(path, bytes);
+      return;
+    } catch (err) {
+      if (attempt === 4) {
+        // eslint-disable-next-line no-console
+        console.warn(`writeArtifactBestEffort: could not write ${path} after 5 attempts (likely a transient Dropbox sync lock) — ${(err as Error).message}`);
+        return;
+      }
+    }
+  }
+}
+
 describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
   it("the fetched font asset exists and is a real, non-trivial TTF file", () => {
     expect(existsSync(FONT_PATH)).toBe(true);
@@ -76,7 +97,7 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
     expect(bytes.byteLength).toBeGreaterThan(100_000); // the embedded font dominates file size
 
     if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
-    writeFileSync(join(OUT_DIR, "cjk-vector-text.pdf"), bytes);
+    writeArtifactBestEffort(join(OUT_DIR, "cjk-vector-text.pdf"), bytes);
   });
 
   it("a second, independent registration + draw produces the same logical text-command sequence (deterministic invocation order, not raw byte determinism)", () => {
@@ -126,7 +147,7 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
     const bytes = new Uint8Array(pdf.output("arraybuffer") as ArrayBuffer);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
     if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
-    writeFileSync(join(OUT_DIR, "vertical-column.pdf"), bytes);
+    writeArtifactBestEffort(join(OUT_DIR, "vertical-column.pdf"), bytes);
   });
 
   describe("Publication Renderer integration (ordinary TEXT only, per this task's own scope boundary)", () => {
@@ -191,12 +212,54 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
       const { bytes, pageCount } = generatePublicationPdf(model, fontResource());
       expect(pageCount).toBe(document.pages.length);
       expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
-      writeFileSync(join(__dirname, "..", "..", "qa", "publication", "p3-o08", "f20-vector-text.pdf"), bytes);
+      writeArtifactBestEffort(join(__dirname, "..", "..", "qa", "publication", "p3-o08", "f20-vector-text.pdf"), bytes);
     });
 
     it("HOLD still refuses to emit a Publication PDF even when a fontResource is supplied", () => {
       const holdDocument = { id: "hold", label: "hold", hold: true, holdReasons: ["synthetic"], fontIdentityMismatch: false, totalPageCount: 0, renderedPageCount: 0, pages: [] };
       expect(() => generatePublicationPdf(holdDocument, fontResource())).toThrow(/HOLD/);
+    });
+  });
+
+  describe("Real MeasurementFacts identity <-> Publication paint identity", () => {
+    it("Core's real Shippori Mincho MeasurementFacts identity matches Publication's own paintFontIdentity when both reference the same committed asset", async () => {
+      const { createShipporiMinchoMeasurementProvider } = await import("../../core");
+      const realProvider = createShipporiMinchoMeasurementProvider(FONT_PATH);
+      const measurementIdentity = `${realProvider.providerId}@${realProvider.providerVersion}`;
+
+      const fx = ALL_FIXTURES.find((f) => f.id === "f20-canonical-sentence")!;
+      const settings = settingsFor(fx.capacity);
+      const document = composeCanonicalDocument({ bodyUnits: fx.bodyUnits, ruleSet: DEFAULT_RULE_SET_V2, measurement: realProvider, settings });
+      expect(document.version.measurementIdentity).toBe(measurementIdentity);
+
+      const ctx: PublicationRenderContext = {
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        measurementIdentity: document.version.measurementIdentity,
+        paintFontIdentity: measurementIdentity, // same real asset identity, Publication side
+      };
+      const model = buildPublicationDocument(fx.id, fx.label, document, fx.bodyUnits, fx.source, ctx);
+      expect(model.fontIdentityMismatch).toBe(false);
+    });
+
+    it("a genuinely different font identity on the Publication side is detected as a mismatch, never silently accepted", async () => {
+      const { createShipporiMinchoMeasurementProvider } = await import("../../core");
+      const realProvider = createShipporiMinchoMeasurementProvider(FONT_PATH);
+      const fx = ALL_FIXTURES.find((f) => f.id === "f20-canonical-sentence")!;
+      const settings = settingsFor(fx.capacity);
+      const document = composeCanonicalDocument({ bodyUnits: fx.bodyUnits, ruleSet: DEFAULT_RULE_SET_V2, measurement: realProvider, settings });
+      const ctx: PublicationRenderContext = {
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        measurementIdentity: document.version.measurementIdentity,
+        paintFontIdentity: "a-completely-different-font-identity",
+      };
+      const model = buildPublicationDocument(fx.id, fx.label, document, fx.bodyUnits, fx.source, ctx);
+      expect(model.fontIdentityMismatch).toBe(true);
     });
   });
 });

@@ -1180,3 +1180,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Ruby/TCY/Dash/Ellipsis Publication-layer visual treatment (independently re-derived for vector PDF text, not copied from Preview's own CSS-DOM techniques). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Real Shippori Mincho MeasurementFacts (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `7c77439` (matches expected checkpoint), worktree clean before start. Human PDF QA recorded PASS for the prior task's CJK/vertical PoCs (Japanese visible, no tofu/mojibake, Shippori Mincho appearance confirmed) — recorded in `qa/evidence/P3_O08_FONT_EMBEDDING_GATE.md` §14.
+
+**QUESTION:** with real CJK font embedding proven, does v2 Core's own `MeasurementFacts` need to switch from its synthetic fake provider to real, font-derived glyph metrics before Ruby/TCY/Dash/Ellipsis Publication work can proceed?
+
+**METHOD:** direct-read Core Contract §17/§18, Master HD-015/HD-018 (§25.1/§25.4), and this session's own prior falsification-test memory (InDesign's real PDF output independently confirmed uniform 1em advance per character, not per-glyph proportional width) — before writing any code. Audited every real `MeasurementFacts` consumer (`compose/line.ts`'s `advanceTickFor`/ruby-atom placement) to confirm exactly which facts are geometry-producing vs. identity-only.
+
+**CENTRAL FINDING:** Natural Pitch is a FROZEN Human Product Decision — "natural 1em declared-pitch composition": character advance equals the declared point size itself, never a per-glyph font metric. A real provider that read Shippori Mincho's own glyph-width tables and used them would be a CONTRACT VIOLATION, not an improvement. The actual gap was never the arithmetic — it was that `measurementIdentity` had no real, verifiable connection to an actual font asset.
+
+**IMPLEMENTED:** `core/measurement/sfntReader.ts` (a deliberately minimal SFNT table-directory reader — no glyph outlines, no cmap mappings, no hmtx/vmtx per-glyph widths parsed, none needed) and `core/measurement/shipporiMinchoProvider.ts` (`createShipporiMinchoMeasurementProvider`, built against the exact already-committed, Human-QA'd font asset from the Font Embedding Gate — no new binary added). Its `naturalAdvanceTick`/`rubyReadingExtentTick` are proven byte-identical to the fake provider's own formulas, both at the single-function level and via full `CanonicalDocument` composition parity (F20, ruby, TCY, dash/ellipsis fixtures). What is genuinely new: a `crypto.createHash("sha256")`-derived (Node built-in, no new dependency) content-tied `providerVersion`, making `measurementIdentity` vs. Publication's own `paintFontIdentity` a meaningful, provably-detectable match/mismatch for the first time (`fontPoc.test.ts`'s new identity test group). `fakeProvider.ts` is untouched and remains the correct choice for ordinary test/fixture code.
+
+**PRIMARY EVIDENCE:** `typesetting-v2/qa/evidence/P3_O08_REAL_MEASUREMENT_FACTS.md` (full 16-section audit). 22 new Core tests + 2 new Publication identity tests. Full regression: Core 364/364 (347 + 17 net new), Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 32/32 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: P3-O08 Real Measurement Facts — PASS.** No Natural Pitch behavior changed (proven, not merely claimed). `rubyScale` was found to be unapplied anywhere in the ruby-reading-extent call path — recorded honestly as a pre-existing, out-of-scope Core-composition observation, not fixed here.
+
+**WHY:** Every claim traces to a directly-read frozen contract clause, a directly-read Human-approved decision, an already-passing pre-existing regression, or a new passing test comparing real-vs-fake output byte-for-byte — the "no formula change needed" conclusion is the evidence-driven, contract-derived answer, not an assumption of convenience (the task's own instructions explicitly warned against exactly the mistake this audit avoided: replacing a correct 1em advance with fabricated per-glyph proportional widths).
+
+**NEXT:** Ruby/TCY/Dash/Ellipsis Publication-layer visual treatment — not started here, per instruction (deferred a second time, now with a real, verifiable measurement identity available to any future Publication evidence that wants to cite it). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency, no new font binary.
+
+---

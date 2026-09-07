@@ -39,6 +39,13 @@ export { DEFAULT_RULE_SET_V2 } from "./rules/defaultRuleSet";
 
 export type { MeasurementFacts } from "./measurement/facts";
 export { createFakeMeasurementProvider } from "./measurement/fakeProvider";
+// Real, asset-backed provider (P3-O08 Font Embedding Gate follow-up) — does
+// local, synchronous file I/O inside its factory function only (never
+// inside composeCanonicalDocument's own deterministic loop). Test/fixture
+// code should keep using createFakeMeasurementProvider unless it
+// specifically needs a real, asset-tied measurementIdentity.
+export { createShipporiMinchoMeasurementProvider } from "./measurement/shipporiMinchoProvider";
+export type { ShipporiMinchoAssetInfo } from "./measurement/shipporiMinchoProvider";
 
 export type { PageCompositionSettings } from "./compose/page";
 
