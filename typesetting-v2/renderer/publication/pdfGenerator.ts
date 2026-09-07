@@ -55,6 +55,7 @@ import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
 import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
+import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export interface PublicationFontResource {
@@ -221,6 +222,18 @@ const RUBY_ANNOTATION_FONT_RATIO = DEFAULT_RUBY_SCALE;
 // canonical advance for it" principle). Canonical yTick/topMm are never
 // touched — this is a pure paint-time ink nudge, same architectural
 // class as round 5's baseline ratio and round 7's outline paint.
+//
+// `yakumonoContext` (Human Visual QA HOLD round 13 — legacy parity):
+// when a grapheme is classified HANG_START/HANG_END
+// (`classifyYakumonoAlignment`, ported verbatim from the already-working
+// legacy renderer's own regex), its baseline is placed using a REAL,
+// font-derived ratio that flushes that exact glyph's own ink against the
+// correct cell edge, OVERRIDING the ordinary centered `baselineRatio`
+// for that grapheme only. Deliberately gates OUT the `gposContext` nudge
+// for any grapheme this override applies to — both are ink-position
+// corrections, and legacy's own comment describes `vpal` as secondary to
+// the edge-anchor fix, not a second correction to stack on top of it
+// (avoids double-applying placement).
 function verticalGraphemeCommands(
   text: string,
   xCenterMm: number,
@@ -229,15 +242,18 @@ function verticalGraphemeCommands(
   fontSizePt: number,
   baselineRatio: number = FALLBACK_BASELINE_RATIO,
   outlineContext?: VerticalOutlineContext,
-  gposContext?: VerticalGposContext
+  gposContext?: VerticalGposContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
 ): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
   const emSizeMm = fontSizePt * (25.4 / 72);
   return graphemes.map((ch, i) => {
-    const gposOffsetMm = (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
-    const yMm = topMm + i * perCharHeightMm + perCharHeightMm * baselineRatio + gposOffsetMm;
+    const yakumonoBaselineRatio = yakumonoContext?.baselineRatioFor(ch);
+    const effectiveBaselineRatio = yakumonoBaselineRatio ?? baselineRatio;
+    const gposOffsetMm = yakumonoBaselineRatio !== undefined ? 0 : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
+    const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
     const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {
       return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
@@ -278,7 +294,17 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, baselineRatio: number, bodyEmMm: number, outlineContext?: VerticalOutlineContext, gposContext?: VerticalGposContext): PaintCommand[] {
+function unitCommands(
+  unit: PaintPlacedUnit,
+  x: number,
+  lineWidthMm: number,
+  yOffsetMm: number,
+  baselineRatio: number,
+  bodyEmMm: number,
+  outlineContext?: VerticalOutlineContext,
+  gposContext?: VerticalGposContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
+): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
   // Human Visual QA HOLD round 9 (glyph-size regression): every glyph's
@@ -303,7 +329,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // because the round-6 GSUB audit proved the unreachable-vertical-
     // alternate problem is NOT small-kana-specific — ordinary kana
     // (つ/た, etc.) in normal body text have the identical issue.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
@@ -315,7 +341,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // base) too large. The per-glyph font size now comes from the fixed
     // `bodyEmMm` (see this function's own doc above), not from dividing
     // this atom's own (possibly non-uniform) `heightMm`.
-    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext);
+    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
@@ -334,7 +360,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
       const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
       const annotationGapMm = annotationEmWidthMm * 0.25;
       const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
-      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext));
+      commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return commands;
   }
@@ -363,7 +389,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // unchanged — only the PAINT MECHANISM changed. Font size: the fixed
     // `bodyEmMm` (see this function's own doc above), not derived from
     // this run's own `heightMm`.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
@@ -378,7 +404,7 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
     // `undefined` here (already Unicode-reachable) — Ellipsis keeps
     // painting via "text", unchanged. Font size: the fixed `bodyEmMm`
     // (see this function's own doc above), same as every other kind.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
@@ -409,7 +435,15 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
 // paint via a real vector glyph outline instead of jsPDF's Unicode
 // `text()` path. Omitting it preserves the exact prior (pre-round-7)
 // "text"-only behavior — every existing call site/test is unaffected.
-export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry, baselineRatio: number = FALLBACK_BASELINE_RATIO, outlineContext?: VerticalOutlineContext, gposContext?: VerticalGposContext): PaintPlan {
+export function buildPaintPlan(
+  doc: PublicationDocument,
+  hasFont: boolean,
+  pageGeometry?: PublicationPageGeometry,
+  baselineRatio: number = FALLBACK_BASELINE_RATIO,
+  outlineContext?: VerticalOutlineContext,
+  gposContext?: VerticalGposContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
+): PaintPlan {
   return doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
     // The content area's own right edge, physically: the paper's right
@@ -429,7 +463,7 @@ export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageG
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext));
           }
         }
       }
@@ -526,6 +560,7 @@ export function generatePublicationPdf(doc: PublicationDocument, fontResource?: 
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
   const outlineContext = fontResource ? new VerticalOutlineContext(Buffer.from(fontResource.base64, "base64")) : undefined;
   const gposContext = fontResource ? new VerticalGposContext(Buffer.from(fontResource.base64, "base64")) : undefined;
-  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext);
+  const yakumonoContext = fontResource ? new VerticalYakumonoAlignContext(Buffer.from(fontResource.base64, "base64"), baselineRatio) : undefined;
+  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
   return renderPaintPlanToPdf(plan, fontResource);
 }

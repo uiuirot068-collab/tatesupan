@@ -79,7 +79,7 @@ describe("Glyph size independence -- round 9 regression fix", () => {
     expect(bracketCmd!.fontSizePt).toBe(ordinaryCmd!.fontSizePt);
   });
 
-  it("yakumono canonical advance/spacing remains compressed -- the round-8 fix is NOT reverted", () => {
+  it("Human Visual QA HOLD round 13 (legacy parity audit): canonical yakumono advance is UNIFORM again -- round 8's compression is retired, not merely font-size-independent", () => {
     const { document } = composeFor("「今日は、雨だった。」");
     const line = document.pages[0].columns[0].lines[0];
     const period = line.placedUnits[9]; // 。
@@ -88,7 +88,12 @@ describe("Glyph size independence -- round 9 regression fix", () => {
     const rain = line.placedUnits[5]; // 雨
     const periodToBracketPitch = bracket.yTick - period.yTick;
     const commaToRainPitch = rain.yTick - comma.yTick;
-    expect(periodToBracketPitch).toBe(Math.round(commaToRainPitch * 0.5)); // still compressed
+    // Confirmed by direct read of the already-working legacy renderer
+    // (src/components/PageCard.tsx): canonical advance is never adjusted
+    // for punctuation at all -- every character-to-character pitch is
+    // the SAME uniform cell, always. The visual fix now lives entirely
+    // in Publication paint (verticalYakumonoAlign.ts).
+    expect(periodToBracketPitch).toBe(commaToRainPitch);
   });
 
   it("source is never mutated", () => {

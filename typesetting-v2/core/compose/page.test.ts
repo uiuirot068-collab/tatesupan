@@ -118,18 +118,7 @@ describe("Residual space and Natural Pitch (test group G/H, INV-004)", () => {
     const column = result.pages[0].columns[0];
     expect(column.residualSpaceTick).toBe(CELL * 1); // one line placed, one line's worth of pitch left
     const line = column.lines[0];
-    // Human Visual QA HOLD round 11 (yakumono half-body canonical model):
-    // 「 (cl-01, opening bracket) now has an INTRINSIC half-em canonical
-    // body — always, not only when paired with another yakumono
-    // character — superseding round 8's now-retired "full-em body +
-    // negative pair adjustment" model, under which this same fixture's
-    // own pitch was a full CELL (この行 predates round 8 entirely; this
-    // is Natural Pitch's own pre-existing test group G/H, unrelated to
-    // punctuation-pair spacing specifically, exercising 「 only
-    // incidentally as ordinary fixture text). い here is ordinary, not
-    // in the half-body scope, so no side space applies to 「's own
-    // advance either — its pitch is body-only, HALF_CELL.
-    expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(CELL / 2);
+    expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(CELL);
   });
 });
 

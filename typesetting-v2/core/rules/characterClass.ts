@@ -36,27 +36,19 @@ export interface RuleSetVersion {
   cl08PairRule: (a: SemanticRunKind, b: SemanticRunKind) => "INSEPARABLE" | "SEPARABLE";
   hangingPunctuationScope: CharacterClassId[]; // frozen: ["cl-06", "cl-07"]
   rubyOverhangAllowance: Map<CharacterClassId, GeometryTick>; // §9.1 — values OPEN (HG-4 row 22b), ships empty/zero
-  // Human Visual QA HOLD round 11 (yakumono half-body canonical model —
-  // qa/evidence/P3_O08_YAKUMONO_HALF_BODY_MODEL.md; SUPERSEDES round 8's
-  // "full-em body + negative pair adjustment" model, which rounds 9/10
-  // proved architecturally wrong, not merely mistuned). Classes in this
-  // scope (句読点・括弧類等 — periods/commas/brackets, cited from this
-  // project's own cached primary-source research
-  // (research/phase3/source-cache/jlreq/punctuations_in_different_sizes.md,
-  // 小林敏 2021 — JIS X 4051/JLReq-sourced, not invented)) have an
-  // INTRINSIC canonical body advance of HALF a cell — never a full cell
-  // that occasionally gets negatively adjusted. An ADDITIONAL, EXPLICIT
-  // half-cell side space is added only in specific adjacency contexts
-  // (see `core/compose/line.ts`'s own `yakumonoSpaceAfterEm`, which
-  // reuses this SAME class's `mayStartLine`/`mayEndLine` flags — no new
-  // hardcoded literal characters). Frozen v2 default:
-  // ["cl-01","cl-02","cl-06","cl-07"] (opening brackets, closing
-  // brackets, full stops, commas) — the same four classes jlreq's own
-  // "括弧類等" grouping names. cl-05 (middle dots) is deliberately NOT
-  // included — jlreq gives it a different (quarter-space) convention,
-  // left open/unmodeled this round, never silently folded into this
-  // scope.
-  yakumonoHalfBodyScope: CharacterClassId[];
+  // NOTE (Human Visual QA HOLD round 13 — legacy parity audit,
+  // qa/evidence/P3_O08_YAKUMONO_LEGACY_PARITY_AUDIT.md): a
+  // `yakumonoHalfBodyScope` field (round 11) and, before it, a
+  // `yakumonoSpacingScope` field (round 8) both lived here at one point,
+  // each attempting a CANONICAL (Core-layer) model for punctuation
+  // advance. Both were retired — confirmed, by direct read of the
+  // already-working legacy renderer's own source
+  // (`src/components/PageCard.tsx`), to be a genuine product parity
+  // mismatch: the legacy fix for the identical symptom never touches
+  // canonical advance at all ("slot coordinates, height and advance are
+  // all unchanged"), only PAINT-TIME ink position. The correction now
+  // lives entirely in `renderer/publication/verticalYakumonoAlign.ts` —
+  // Core's own canonical model requires no punctuation-specific concept.
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see

@@ -12,9 +12,10 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
+import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 
 // Real horizontal bounds for any PaintCommand -- including "glyphOutline"
 // (round 7), whose own path commands carry the only x-coordinates
@@ -462,11 +463,15 @@ describe("P3-O08 — Publication Typography", () => {
       // VerticalOutlineContext so this combined QA artifact reflects the
       // font-derived outline paint for kana/Dash, not just the pre-round-7
       // manual-mapping-only "text" path. Round 10 (GPOS ink placement):
-      // thread a real VerticalGposContext too, so yakumono ink positioning
-      // reflects the font's own real vpal data.
+      // thread a real VerticalGposContext too. Round 13 (legacy parity
+      // edge alignment): thread a real VerticalYakumonoAlignContext,
+      // ported directly from the already-working legacy renderer's own
+      // punctuation edge-anchoring mechanism (Core's own canonical
+      // advance is no longer touched for punctuation at all).
       const outlineContext = new VerticalOutlineContext(readFileSync(FONT_PATH));
       const gposContext = new VerticalGposContext(readFileSync(FONT_PATH));
-      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY, undefined, outlineContext, gposContext);
+      const yakumonoContext = new VerticalYakumonoAlignContext(readFileSync(FONT_PATH), deriveBaselineRatioFromFont(fontResource()));
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
       const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
       expect(pageCount).toBe(document.pages.length);
       expect(pageCount).toBeGreaterThanOrEqual(6); // one page per manual-break section

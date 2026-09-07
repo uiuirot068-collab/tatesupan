@@ -1500,3 +1500,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Implement the Publication-paint-only edge-alignment fix (§11 of the evidence doc): revert Core's canonical yakumono advance model to uniform Natural Pitch; add a paint-time-only cell-edge alignment (closing-type toward cell start, opening-type toward cell end) within the unchanged full cell, composing with round 10's existing GPOS ink-placement infrastructure. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Yakumono Legacy-Parity Paint Port (2026-09-08)
+
+**IMPLEMENTATION of round 12's own audit recommendation.** Core's yakumono-specific pieces are RETIRED, not tuned further: `core/compose/line.ts`'s `computeAtoms` is back to the exact pre-round-8 form (`advanceTickFor` returns `perCellAdvance` unconditionally for every TEXT atom, zero character-class branching); `RuleSetVersion` no longer carries any yakumono-scope field. Core's own regression suite returns to **364/364 — the EXACT count before round 8 ever touched this file**, confirming a clean retirement back to an earlier, already-validated state.
+
+**PORT, not re-derivation:** `renderer/publication/verticalYakumonoAlign.ts` (new) ports the already-working legacy renderer's own real mechanism VERBATIM — `HANG_START_TEST`/`HANG_END_TEST`, copied character-for-character from `src/components/PageCard.tsx:47,49`, classify each grapheme exactly as legacy does. The CSS `flex-start`/`flex-end` edge-anchor is translated into jsPDF's baseline-anchored paint model using REAL, already-measured per-glyph ink bounding boxes (`fontMetrics.ts`'s `glyphInkBBox`, round 5/7 infrastructure) — `baselineRatio = yMax/unitsPerEm` (HANG_START, flush ink-top to cell-top) or `1 + yMin/unitsPerEm` (HANG_END, flush ink-bottom to cell-bottom), both verified directly against independently-computed values from the real font, resolved against the ACTUAL painted glyph (post-presentation-form substitution) not the source character's own glyph.
+
+**No double application:** round 10's real GPOS `vpal` YPlacement nudge is explicitly gated OFF for any grapheme this edge-alignment override applies to — legacy's own comment describes `vpal` as secondary to the edge-anchor fix, not a second correction to stack on top of it. Verified directly: a classified character's own `yMm` is byte-identical whether or not a `gposContext` is also supplied.
+
+**No glyph scaling, no canonical mutation:** font size stays the fixed `bodyEmMm` (round 9) for every character; `PublicationDocument` is byte-identical with or without a `yakumonoContext` supplied — both verified directly.
+
+**CLEANUP:** round 11's own test file (`core/compose/yakumonoHalfBody.test.ts`) deleted (round 8's own file was already deleted in round 11). One pre-existing `page.test.ts` assertion restored to its original pre-round-8 value. Round 8's and round 11's own Publication QA-generation test files (`yakumonoSpacingQa.test.ts`, `yakumonoHalfBodyQa.test.ts`) deleted — their own numeric assertions encoded the now-retired models — replaced by a single new `yakumonoLegacyParityQa.test.ts` generating `yakumono-legacy-parity-qa.pdf` (fixtures A-G + the original sentence, per this round's own required set).
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_YAKUMONO_LEGACY_PAINT_PORT.md` (12-section record). 21 new/rewritten tests (11 in `verticalYakumonoAlign.test.ts` + 10 in `yakumonoLegacyParityQa.test.ts`), 1 test in `glyphSizeIndependence.test.ts` rewritten to assert the new (uniform) invariant instead of the retired (compressed) one. Full regression: Core 364/364, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 182/182 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: YAKUMONO LEGACY PARITY — implementation complete, READY FOR HUMAN RECHECK.** Ruby/small kana/Dash/TCY/Ellipsis/outline-paint/GPOS infrastructure: all preserved, unaffected. P3-O08: IN PROGRESS. Not ready for JPG.
+
+**WHY:** Every claim traces to a direct re-read of the legacy source's own regex/mechanism (not memory), a real font ink-bbox computation independently verified against the context's own output, or a passing regression test. The Core retirement's own correctness is proven by an exact test-count match to the pre-round-8 baseline, not merely "tests still pass."
+
+**NEXT:** Human Visual QA of `yakumono-legacy-parity-qa.pdf` (all 8 fixtures) and the regenerated combined PDF — does `「今日は、雨だった。」` now read as ordinary Japanese vertical typesetting? Master is not modified. Phase 3 is not closed. `src/` (read-only audited, never modified), Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---
