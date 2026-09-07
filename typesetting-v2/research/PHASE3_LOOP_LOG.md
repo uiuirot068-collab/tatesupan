@@ -1272,3 +1272,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Fresh Human Visual QA on the regenerated PDF, specifically the margin, Ruby visibility/position, and Dash/Ellipsis rotation direction. Separately, a Product/technical decision on whether to invest in the General Vertical Glyph Orientation Blocker now or defer it. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Vertical Glyph Paint Foundation (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `8d898ac` (matches expected checkpoint), worktree clean before start.
+
+**HUMAN HOLD (round 3):** ordinary kanji/kana broadly readable; Ruby now visible (final QA pending); TCY broadly plausible; Dash's vertical stroke intruded into the following character's cell; general vertical punctuation still unresolved. Instruction: stop ad-hoc rotation patching, build ONE deterministic vertical-glyph paint layer.
+
+**AUDIT FIRST, per instruction:** wrote a minimal, self-contained OpenType `cmap` reader (`renderer/publication/fontCapability.ts`, formats 4 and 12 — never touching Core's own `sfntReader.ts`, staying Publication-paint-only) and ran it against the exact committed Shippori Mincho asset. Sourced the exact Unicode vertical presentation-form code points from Unicode's own official Names List (fetched, not recalled from memory) before writing the map. Real, measured result: 、。「」（）―… ALL have real vertical-form glyphs in this font (U+FE11/FE12/FE41/FE42/FE35/FE36/FE31/FE19); ！？：； do not (but are conventionally left upright anyway, per standard Japanese vertical-typesetting practice, so this blocks nothing).
+
+**ROOT CAUSE OF THE DASH INTRUSION BUG, found not assumed:** the prior 90° rotation approach rotated a horizontal glyph's own bounding box, which does not reliably match the assumed per-character cell height — the exact mechanism of the reported intrusion. **Fix:** built ONE deterministic paint layer (`verticalGlyphMap.ts`, a plain `Map<number,number>` + `verticalPaintGraphemeFor`) consulted by TEXT, RUBY base/annotation, DASH, and ELLIPSIS alike — Dash and Ellipsis now paint their real vertical-form glyph UPRIGHT via the exact same per-character-height-slot algorithm already proven correct for ordinary text, eliminating the custom rotation/overlap machinery entirely (removed as dead code, not merely disabled). P3-O04's own Product scope (2-glyph guarantee, source/extent unchanged) is preserved exactly — only the paint mechanism changed, as explicitly permitted.
+
+**Ordinary punctuation — fixed this time, not merely classified.** The same real cmap audit found brackets/comma/full-stop/parentheses already covered by the font, so `「今日は、雨だった。」` and `（仮）` are now painted correctly via the identical generic mechanism, not a one-off patch — a stronger outcome than the prior task's own honest "classified but not fixed" position.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_VERTICAL_GLYPH_PAINT.md` (new, full 12-section record, including the real coverage table). 11 new/rewritten tests (4 cmap audit + Dash/Ellipsis rewrites + 4 new punctuation tests). Ruby/TCY untouched, re-verified via their own unchanged regression suites. Full regression: Core 364/364, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 77/77 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: MACHINE PASS for the paint-layer architecture and code-point selection; Human Visual QA still required for actual rendered appearance** — this task does not and cannot machine-declare visual typography correctness (a font's own glyph design quality is not something a coverage/coordinate test can judge).
+
+**WHY:** Every claim traces to a directly-implemented and directly-run cmap parser against the real committed font file, or an authoritative Unicode Names List fetch — never assumed rotation would work, never guessed code point values from memory without verification.
+
+**NEXT:** Human Visual QA of the regenerated PDF. If glyphs look correct, proceed to JPG/grayscale/paper-size-bleed-trim (still deferred). If still wrong despite correct code-point selection, the next investigation is the font's own glyph design/metrics — a different class of problem than code-point selection, which this task has proven correct. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

@@ -33,6 +33,12 @@ import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
 const measurement = createFakeMeasurementProvider();
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 
+// Vertical presentation-form code points, built via fromCodePoint (never a
+// literal character in source) to eliminate any editor/encoding ambiguity
+// about exactly which code point is under test.
+const VERTICAL_EM_DASH = String.fromCodePoint(0xfe31); // U+FE31, substitute for U+2015 ―
+const VERTICAL_ELLIPSIS = String.fromCodePoint(0xfe19); // U+FE19, substitute for U+2026 …
+
 function fontResource(): PublicationFontResource {
   return { fileName: "ShipporiMincho-Regular.ttf", fontName: "ShipporiMincho", base64: readFileSync(FONT_PATH).toString("base64") };
 }
@@ -180,30 +186,31 @@ describe("P3-O08 — Publication Typography", () => {
       expect(dash.text).toBe("――");
     });
 
-    it("generates exactly 2 paint glyphs (one per grapheme) for the 2-glyph dash run, matching P3-O04's own strategy", () => {
-      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === "―");
+    it("REGRESSION (Human Visual QA HOLD round 2, dash intruding into the following cell): each '―' grapheme now paints as the real Unicode vertical em dash glyph (U+FE31, confirmed present in the committed font), not a rotated horizontal glyph", () => {
+      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === VERTICAL_EM_DASH);
       expect(dashCalls).toHaveLength(2);
+      // Never the OLD, buggy rotated-horizontal-glyph approach -- the raw
+      // source character must not appear as a paint command's own text.
+      expect(textCommands("dash-ellipsis").some((c) => c.text === "―")).toBe(false);
     });
 
-    it("the 0.16em overlap is represented deterministically: the second glyph's own y is less than one full nominal cell below the first (proving overlap, not a full-cell gap)", () => {
-      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === "―");
+    it("no rotation is applied -- the vertical-form glyph paints upright, exactly like ordinary TEXT (angle is undefined, not -90)", () => {
+      const dashCmd = textCommands("dash-ellipsis").find((c) => c.text === VERTICAL_EM_DASH)!;
+      expect(dashCmd.angle).toBeUndefined();
+    });
+
+    it("spacing is EVEN per-grapheme (exactly heightMm/2 apart, one ordinary cell each) -- no overlap math is needed once the real font glyph is used", () => {
+      const dashCalls = textCommands("dash-ellipsis").filter((c) => c.text === VERTICAL_EM_DASH);
       const { model } = composePublication("dash-ellipsis");
       const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
-      const nominalFullCell = dash.heightMm / 2;
-      expect(dashCalls[1].yMm - dashCalls[0].yMm).toBeLessThan(nominalFullCell);
+      expect(dashCalls[1].yMm - dashCalls[0].yMm).toBeCloseTo(dash.heightMm / 2, 6);
     });
 
     it("first glyph starts at the run's own canonical top; last glyph's implied bottom reaches the run's own canonical bottom -- the run is never visibly shortened", () => {
       const { model } = composePublication("dash-ellipsis");
       const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
       const plan = buildPaintPlan(model, true);
-      const dashCalls = plan.flatMap((p) => p.commands).filter((c) => c.op === "text" && c.text === "―");
-      // First glyph's baseline is within one em of the run's own top (not
-      // shifted arbitrarily); last glyph's baseline is within one em of
-      // the run's own bottom -- proving full-extent coverage without
-      // asserting exact sub-pixel baseline math (already covered by the
-      // Preview P3-O04-DASH-SEAM-HOLD regression this reproduces the
-      // concept of).
+      const dashCalls = plan.flatMap((p) => p.commands).filter((c) => c.op === "text" && c.text === VERTICAL_EM_DASH);
       expect(dashCalls[0].yMm).toBeGreaterThanOrEqual(dash.topMm);
       expect(dashCalls[dashCalls.length - 1].yMm).toBeLessThanOrEqual(dash.topMm + dash.heightMm + 1);
     });
@@ -215,10 +222,24 @@ describe("P3-O08 — Publication Typography", () => {
       expect(model).toEqual(before);
     });
 
-    it("prolonged sound mark 'ー' remains completely unaffected (plain TEXT, never a semantic run, never dash-treated)", () => {
-      const { model } = composePublication("dash-ellipsis");
+    it("prolonged sound mark 'ー' remains completely unaffected -- unmapped in verticalGlyphMap, never dash-treated", () => {
+      const { units, source } = buildFixtureUnits("body", [{ kind: "TEXT", text: "コーヒー" }]);
+      const settings = settingsFor({ charsPerLine: 6, linesPerColumn: 1, columnCount: 1 });
+      const document = composeCanonicalDocument({ bodyUnits: units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+      const ctx: PublicationRenderContext = {
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        measurementIdentity: document.version.measurementIdentity,
+        paintFontIdentity: document.version.measurementIdentity,
+      };
+      const model = buildPublicationDocument("id", "label", document, units, source, ctx);
       const allUnits = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units)));
-      expect(allUnits.some((u) => u.text === "ー" && u.semanticRunKind !== undefined)).toBe(false);
+      expect(allUnits.every((u) => u.semanticRunKind === undefined)).toBe(true);
+      const plan = buildPaintPlan(model, true);
+      const prolongedMarkCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === "ー");
+      expect(prolongedMarkCmd).toBeDefined(); // painted unchanged, not substituted
     });
 
     it("produces a real, valid PDF when rendered", () => {
@@ -227,11 +248,11 @@ describe("P3-O08 — Publication Typography", () => {
       expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
     });
 
-    it("REGRESSION (Human Visual QA HOLD, \"Dash appears suspicious\" / oversized glyphs): glyph font size is derived from PER-CHARACTER height, not the whole 2-glyph run's own heightMm", () => {
+    it("REGRESSION (Human Visual QA HOLD round 1, \"Dash appears suspicious\" / oversized glyphs): glyph font size is derived from PER-CHARACTER height, not the whole 2-glyph run's own heightMm", () => {
       const { model } = composePublication("dash-ellipsis");
       const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
       const plan = buildPaintPlan(model, true);
-      const dashCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === "―");
+      const dashCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === VERTICAL_EM_DASH);
       expect(dashCmd && dashCmd.op === "text" ? dashCmd.fontSizePt : undefined).toBeCloseTo((dash.heightMm / 2) * (72 / 25.4), 6);
     });
   });
@@ -243,9 +264,19 @@ describe("P3-O08 — Publication Typography", () => {
       expect(ellipsis.text).toBe("……");
     });
 
-    it("paints both '…' graphemes with EVEN per-grapheme spacing, unlike Dash's compressed overlap spacing", () => {
-      const ellipsisCalls = textCommands("dash-ellipsis").filter((c) => c.text === "…");
+    it("REGRESSION (Human Visual QA HOLD round 2, horizontal ellipsis dot orientation): each '…' grapheme now paints as the real Unicode vertical horizontal-ellipsis glyph (U+FE19, confirmed present in the committed font), not the raw horizontal glyph", () => {
+      const ellipsisCalls = textCommands("dash-ellipsis").filter((c) => c.text === VERTICAL_ELLIPSIS);
       expect(ellipsisCalls).toHaveLength(2);
+      expect(textCommands("dash-ellipsis").some((c) => c.text === "…")).toBe(false);
+    });
+
+    it("no rotation is applied -- upright, exactly like ordinary TEXT (angle is undefined, not -90)", () => {
+      const ellipsisCmd = textCommands("dash-ellipsis").find((c) => c.text === VERTICAL_ELLIPSIS)!;
+      expect(ellipsisCmd.angle).toBeUndefined();
+    });
+
+    it("paints both graphemes with EVEN per-grapheme spacing, unlike Dash's own P3-O04 overlap policy -- Dash's own treatment never leaks into Ellipsis", () => {
+      const ellipsisCalls = textCommands("dash-ellipsis").filter((c) => c.text === VERTICAL_ELLIPSIS);
       const { model } = composePublication("dash-ellipsis");
       const ellipsis = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "ELLIPSIS")!;
       expect(ellipsisCalls[1].yMm - ellipsisCalls[0].yMm).toBeCloseTo(ellipsis.heightMm / 2, 6);
@@ -256,6 +287,59 @@ describe("P3-O08 — Publication Typography", () => {
       const before = JSON.parse(JSON.stringify(model));
       buildPaintPlan(model, true);
       expect(model).toEqual(before);
+    });
+  });
+
+  describe("Ordinary punctuation (、。「」（）) vertical-form substitution", () => {
+    function planFor(text: string) {
+      const { units, source } = buildFixtureUnits("body", [{ kind: "TEXT", text }]);
+      const settings = settingsFor({ charsPerLine: Array.from(text).length + 2, linesPerColumn: 1, columnCount: 1 });
+      const document = composeCanonicalDocument({ bodyUnits: units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+      const ctx: PublicationRenderContext = {
+        linePitchTicks: settings.linePitchTicks,
+        lineExtentTicks: settings.lineExtentTicks,
+        columnExtentTicks: settings.columnExtentTicks,
+        columnsPerPage: settings.columnsPerPage,
+        measurementIdentity: document.version.measurementIdentity,
+        paintFontIdentity: document.version.measurementIdentity,
+      };
+      const model = buildPublicationDocument("id", "label", document, units, source, ctx);
+      return { document, plan: buildPaintPlan(model, true) };
+    }
+
+    it("「今日は、雨だった。」 -- brackets, comma, and full stop all paint as their real vertical presentation-form glyphs, source unchanged", () => {
+      const { document, plan } = planFor("「今日は、雨だった。」");
+      expect(document.hold).toBe(false);
+      const texts = plan.flatMap((p) => p.commands).filter((c) => c.op === "text").map((c) => (c as { text: string }).text);
+      expect(texts).toContain(String.fromCodePoint(0xfe41)); // 「
+      expect(texts).toContain(String.fromCodePoint(0xfe42)); // 」
+      expect(texts).toContain(String.fromCodePoint(0xfe11)); // 、
+      expect(texts).toContain(String.fromCodePoint(0xfe12)); // 。
+      expect(texts).not.toContain("「");
+      expect(texts).not.toContain("」");
+      expect(texts).not.toContain("、");
+      expect(texts).not.toContain("。");
+    });
+
+    it("（仮） -- parentheses paint as their real vertical presentation-form glyphs", () => {
+      const { plan } = planFor("（仮）");
+      const texts = plan.flatMap((p) => p.commands).filter((c) => c.op === "text").map((c) => (c as { text: string }).text);
+      expect(texts).toContain(String.fromCodePoint(0xfe35)); // （
+      expect(texts).toContain(String.fromCodePoint(0xfe36)); // ）
+      expect(texts).toContain("仮"); // ordinary kanji unchanged
+      expect(texts).not.toContain("（");
+      expect(texts).not.toContain("）");
+    });
+
+    it("no punctuation substitution carries a rotation angle -- upright, same as ordinary kanji/kana", () => {
+      const { plan } = planFor("「今日は、雨だった。」");
+      const commands = plan.flatMap((p) => p.commands).filter((c) => c.op === "text");
+      expect(commands.every((c) => c.angle === undefined)).toBe(true);
+    });
+
+    it("source characters (、。「」（）) are never mutated -- only the PAINT command's own text differs from the canonical LogicalUnit's own text", () => {
+      const { units } = buildFixtureUnits("body", [{ kind: "TEXT", text: "「仮」" }]);
+      expect(units.map((u) => (u.kind === "TEXT" ? u.text : "")).join("")).toBe("「仮」");
     });
   });
 
@@ -307,6 +391,10 @@ describe("P3-O08 — Publication Typography", () => {
 
     it("generates one combined Human QA PDF covering ordinary text, Ruby, TCY, Dash, and Ellipsis -- a single real composition, manual-page-break separated, through the exact same paint pipeline as every other test above, at a REALISTIC physical page size (not a tiny content-hugging test-fixture strip)", () => {
       const combinedFixture = buildFixtureUnits("body", [
+        { kind: "TEXT", text: "「今日は、雨だった。」" },
+        { kind: "MANUAL_BREAK" },
+        { kind: "TEXT", text: "（仮）" },
+        { kind: "MANUAL_BREAK" },
         { kind: "TEXT", text: "西の窓から見えるのは、いつもの静かな街だった。" },
         { kind: "MANUAL_BREAK" },
         { kind: "TEXT", text: "これは" },
@@ -350,13 +438,13 @@ describe("P3-O08 — Publication Typography", () => {
         measurementIdentity: document.version.measurementIdentity,
         paintFontIdentity: document.version.measurementIdentity,
       };
-      const model = buildPublicationDocument("publication-typography-qa", "Publication Typography QA — text/Ruby/TCY/Dash/Ellipsis", document, combinedFixture.units, combinedFixture.source, ctx);
+      const model = buildPublicationDocument("publication-typography-qa", "Publication Typography QA — punctuation/text/Ruby/TCY/Dash/Ellipsis", document, combinedFixture.units, combinedFixture.source, ctx);
       expect(model.fontIdentityMismatch).toBe(false);
 
       const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY);
       const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
       expect(pageCount).toBe(document.pages.length);
-      expect(pageCount).toBeGreaterThanOrEqual(4); // one page per manual-break section
+      expect(pageCount).toBeGreaterThanOrEqual(6); // one page per manual-break section
       expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
 
       // Every page uses the real 文庫 paper size, not a content-derived one.
@@ -412,12 +500,12 @@ describe("P3-O08 — Publication Typography", () => {
       }
     });
 
-    it("REGRESSION (Human Visual QA HOLD, horizontal Dash/Ellipsis glyphs): Dash and Ellipsis paint commands carry a 90-degree glyph rotation; TCY explicitly does not; ordinary TEXT/Ruby-base carry no rotation", () => {
+    it("REGRESSION (Human Visual QA HOLD round 3, ONE deterministic vertical-glyph paint layer): Dash and Ellipsis now paint via real vertical-form glyph substitution (no rotation at all -- angle undefined, same as ordinary TEXT); TCY remains the only kind with an explicit angle (0, unrotated horizontal-in-vertical)", () => {
       const dashEllipsisCommands = textCommands("dash-ellipsis");
-      const dashCmd = dashEllipsisCommands.find((c) => c.text === "―")!;
-      const ellipsisCmd = dashEllipsisCommands.find((c) => c.text === "…")!;
-      expect(dashCmd.angle).toBe(-90);
-      expect(ellipsisCmd.angle).toBe(-90);
+      const dashCmd = dashEllipsisCommands.find((c) => c.text === VERTICAL_EM_DASH)!;
+      const ellipsisCmd = dashEllipsisCommands.find((c) => c.text === VERTICAL_ELLIPSIS)!;
+      expect(dashCmd.angle).toBeUndefined();
+      expect(ellipsisCmd.angle).toBeUndefined();
       const tcyCmd = textCommands("explicit-tcy").find((c) => c.text === "2026")!;
       expect(tcyCmd.angle).toBe(0);
       const textCmd = textCommands("f20-canonical-sentence")[0];

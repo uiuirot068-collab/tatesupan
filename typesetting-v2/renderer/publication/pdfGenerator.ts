@@ -50,6 +50,7 @@
 
 import { jsPDF } from "jspdf";
 import type { PaintPlacedUnit, PublicationDocument } from "./paintModel";
+import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -108,12 +109,6 @@ export type PaintPlan = PaintPagePlan[];
 // approximation, never affects a cell's own position/extent.
 const BASELINE_RATIO = 0.88;
 
-// P3-O04's own Human-selected value (qa/evidence/P3_O04_DASH_VISUAL.md §19):
-// re-derived independently here for vector mm coordinates, never imported
-// from `renderer/preview/` (Publication and Preview are sibling consumers,
-// never dependents of each other).
-const DASH_OVERLAP_EM = 0.16;
-
 // Preview's own already-Human-approved ruby annotation font-size ratio
 // (`renderer/preview/PreviewRenderer.tsx`'s `.ruby-annotation { font-size:
 // 0.55em; }`) — a Renderer-only PAINT-TIME sizing choice, independent of
@@ -125,67 +120,38 @@ const DASH_OVERLAP_EM = 0.16;
 // already does). Re-derived independently for vector paint, same ratio.
 const RUBY_ANNOTATION_FONT_RATIO = 0.55;
 
-function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number, angle?: number): PaintCommand[] {
+// ONE deterministic Publication vertical-glyph paint layer
+// (qa/evidence/P3_O08_VERTICAL_GLYPH_PAINT.md): every grapheme painted
+// vertically — ordinary TEXT, RUBY base/annotation, and (as of this fix)
+// DASH/ELLIPSIS — runs through `verticalPaintGraphemeFor` (verticalGlyphMap.ts),
+// which substitutes a real Unicode vertical presentation-form glyph
+// (measured present in the committed Shippori Mincho asset — 、。「」（）
+// ―…) when one exists, and paints the character UNCHANGED, UPRIGHT
+// (never rotated) otherwise. This REPLACES the earlier ad-hoc 90-degree
+// glyph-rotation approach for Dash/Ellipsis, which caused a real,
+// reported bug: a rotated horizontal glyph's own rotated bounding box did
+// not reliably match the assumed per-character cell height, so Dash's
+// vertical stroke visibly intruded into the following character's cell.
+// The real vertical-form glyph is designed by the font itself to sit
+// correctly within one ordinary cell — the SAME per-character-height
+// slot algorithm already proven correct for ordinary TEXT now applies
+// uniformly, with no separate overlap/rotation math needed for Dash or
+// Ellipsis at all. Canonical source/SourceSpan are never touched — this
+// is a pure paint-time substitution, never re-tokenizing/re-classifying
+// anything (Array.from(text).length, i.e. the grapheme COUNT, is always
+// computed from the ORIGINAL text before substitution).
+function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
   return graphemes.map((ch, i) => ({
     op: "text" as const,
-    text: ch,
+    text: verticalPaintGraphemeFor(ch),
     xMm: xCenterMm,
     yMm: topMm + i * perCharHeightMm + perCharHeightMm * BASELINE_RATIO,
     fontSizePt,
     align: "center" as const,
-    ...(angle !== undefined ? { angle } : {}),
   }));
-}
-
-// Human Visual QA HOLD (2026-09-07): "Dash appears as two HORIZONTAL bars"
-// / "Ellipsis uses horizontal ellipsis glyph orientation" — jsPDF's
-// text() paints a glyph in its font's own NATIVE (horizontal) orientation
-// regardless of where the anchor point sits; simply stacking un-rotated
-// horizontal glyphs at different y-coordinates arranges the GLYPHS
-// vertically but leaves each individual glyph's own shape horizontal
-// (a horizontal dash stroke, or three left-to-right dots), which is wrong
-// for vertical Japanese typesetting. jsPDF has no OpenType vertical
-// (`vert`/`vrt2`) substitution — confirmed by direct capability audit (no
-// such option exists anywhere in `node_modules/jspdf/types/index.d.ts`;
-// its own README documents only whole-string `angle` rotation, no
-// per-glyph feature selection) — so the smallest deterministic vector-only
-// fix available is rotating the GLYPH itself 90 degrees: a horizontal
-// dash stroke rotated 90 degrees becomes a vertical stroke; three
-// left-to-right dots rotated 90 degrees become three dots stacked in the
-// same original left-to-right reading order, now read top-to-bottom.
-// Direction (-90) is this task's own best-effort choice (clockwise, so the
-// glyph's own original LEFT end becomes its TOP) — NOT independently
-// visually verified; flagged explicitly for Human Visual QA rather than
-// assumed correct.
-const DASH_ELLIPSIS_ROTATION_DEGREES = -90;
-
-// Dash's own P3-O04 seam-continuity paint: one glyph per grapheme,
-// consecutive glyphs overlapping by DASH_OVERLAP_EM (relative to the body
-// line-pitch font size) so a shared canonical run reads as one unbroken
-// line — same algorithm as Preview's `dashGlyphsFor`
-// (renderer/preview/paintModel.ts), re-derived in physical mm instead of
-// px. First glyph's own top and the last glyph's own bottom still span the
-// full canonical run extent exactly — the run is never shortened.
-function dashGlyphCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number): PaintCommand[] {
-  const graphemes = Array.from(text);
-  const n = graphemes.length;
-  if (n === 0) return [];
-  if (n === 1) {
-    return [{ op: "text", text: graphemes[0], xMm: xCenterMm, yMm: topMm + totalHeightMm * BASELINE_RATIO, fontSizePt, align: "center", angle: DASH_ELLIPSIS_ROTATION_DEGREES }];
-  }
-  const overlapMm = DASH_OVERLAP_EM * (fontSizePt * (25.4 / 72));
-  const nominalGlyphHeightMm = totalHeightMm / n;
-  return graphemes.map((ch, i) => {
-    const isFirst = i === 0;
-    const isLast = i === n - 1;
-    const top = i * nominalGlyphHeightMm - (isFirst ? 0 : overlapMm / 2);
-    const extra = (isFirst ? 0 : overlapMm / 2) + (isLast ? 0 : overlapMm / 2);
-    const glyphHeight = nominalGlyphHeightMm + extra;
-    return { op: "text" as const, text: ch, xMm: xCenterMm, yMm: topMm + top + glyphHeight * BASELINE_RATIO, fontSizePt, align: "center" as const, angle: DASH_ELLIPSIS_ROTATION_DEGREES };
-  });
 }
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
@@ -267,27 +233,39 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOf
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "DASH" && unit.text.length > 0) {
-    // BUG FIXED (Human Visual QA HOLD, "Dash appears suspicious"): same
-    // whole-run-vs-per-character height bug as Ruby's base run above — a
-    // 2-glyph "――" run's own `unit.heightMm` spans BOTH glyphs, so it must
-    // be divided by the grapheme count before becoming a per-glyph font
-    // size.
+    // BUG FIXED (Human Visual QA HOLD round 1, "Dash appears suspicious"):
+    // same whole-run-vs-per-character height bug as Ruby's base run above
+    // — a 2-glyph "――" run's own `unit.heightMm` spans BOTH glyphs, so it
+    // must be divided by the grapheme count before becoming a per-glyph
+    // font size.
+    //
+    // BUG FIXED (Human Visual QA HOLD round 2, dash stroke intruding into
+    // the following character's cell): no longer a special-cased rotation
+    // + overlap paint — each "―" grapheme now runs through the SAME
+    // `verticalGraphemeCommands` path as any other character, which
+    // substitutes the real U+FE31 vertical em dash glyph (confirmed
+    // present in the committed font) and paints it upright in its own
+    // ordinary cell, exactly like any kanji character — no custom overlap
+    // math needed, since the font's own glyph is designed to read as a
+    // continuous line when its cells are simply adjacent. Canonical run
+    // extent (2 glyphs guaranteed, P3-O04's own Product scope) is
+    // unchanged — only the PAINT MECHANISM changed.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return dashGlyphCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
-    // Native glyph, no special correction — matches P3-O05's own Preview
-    // conclusion (no seam-continuity problem exists for a discrete
-    // dot-cluster glyph). NEVER apply Dash's own overlap treatment here.
-    // Same whole-run-vs-per-character fix as Dash/Ruby above. Same
-    // horizontal-glyph-orientation rotation fix as Dash (see
-    // DASH_ELLIPSIS_ROTATION_DEGREES's own comment) — never Dash's OWN
-    // overlap treatment, only its rotation concept, independently applied.
+    // Native vertical-form glyph (U+FE19, confirmed present in the
+    // committed font), painted upright via the same generic path as any
+    // other character — matches P3-O05's own Preview conclusion (no
+    // seam-continuity problem exists for a discrete dot-cluster glyph, so
+    // no Dash-style special treatment is needed beyond correct glyph
+    // selection). Same whole-run-vs-per-character font-size fix as
+    // Dash/Ruby above.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, DASH_ELLIPSIS_ROTATION_DEGREES);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
