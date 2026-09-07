@@ -148,3 +148,59 @@ export function createGlyphCoverageChecker(buf: Buffer): CoverageCheck {
   const lookup = createGlyphIdLookup(buf);
   return (codePoint: number) => lookup(codePoint) !== undefined;
 }
+
+// P3-O08 — OpenType vertical GSUB audit (Human Visual QA HOLD round 6):
+// answers "is this GSUB-substituted glyph ID reachable through ANY
+// Unicode code point this font's own cmap defines?" -- the deciding
+// question for whether jsPDF's Unicode-string-only `text()` API can ever
+// paint a GSUB `vert`/`vrt2` alternate glyph that has no dedicated
+// Unicode Vertical Forms/CJK Compat Forms code point (unlike punctuation,
+// most kana vertical alternates have no such code point). Scans the SAME
+// preferred cmap subtable `createGlyphIdLookup` uses; returns the first
+// matching code point, or `undefined` if genuinely unreachable.
+export function findCodePointForGlyphId(buf: Buffer, targetGlyphId: number): number | undefined {
+  const cmapOffset = findCmapTableOffset(buf);
+  const subtable = findBestSubtable(buf, cmapOffset);
+  requireBytes(buf, subtable.offset, 2, "cmap subtable format");
+  const format = buf.readUInt16BE(subtable.offset);
+
+  if (format === 12) {
+    const tableOffset = subtable.offset;
+    requireBytes(buf, tableOffset, 16, "cmap format 12 header");
+    const numGroups = buf.readUInt32BE(tableOffset + 12);
+    const groupsOffset = tableOffset + 16;
+    requireBytes(buf, groupsOffset, numGroups * 12, "cmap format 12 groups");
+    for (let i = 0; i < numGroups; i++) {
+      const g = groupsOffset + i * 12;
+      const startCharCode = buf.readUInt32BE(g);
+      const endCharCode = buf.readUInt32BE(g + 4);
+      const startGlyphID = buf.readUInt32BE(g + 8);
+      const rangeLength = endCharCode - startCharCode;
+      if (targetGlyphId >= startGlyphID && targetGlyphId <= startGlyphID + rangeLength) {
+        return startCharCode + (targetGlyphId - startGlyphID);
+      }
+    }
+    return undefined;
+  }
+
+  if (format === 4) {
+    const lookup = parseFormat4Lookup(buf, subtable.offset);
+    const tableOffset = subtable.offset;
+    requireBytes(buf, tableOffset, 14, "cmap format 4 header");
+    const segCountX2 = buf.readUInt16BE(tableOffset + 6);
+    const segCount = segCountX2 / 2;
+    const endCodeOffset = tableOffset + 14;
+    const startCodeOffset = endCodeOffset + segCountX2 + 2;
+    for (let i = 0; i < segCount; i++) {
+      const endCode = buf.readUInt16BE(endCodeOffset + i * 2);
+      const startCode = buf.readUInt16BE(startCodeOffset + i * 2);
+      if (startCode === 0xffff) continue; // sentinel end-of-table segment
+      for (let cp = startCode; cp <= endCode; cp++) {
+        if (lookup(cp) === targetGlyphId) return cp;
+      }
+    }
+    return undefined;
+  }
+
+  throw new Error(`fontCapability: unsupported cmap subtable format ${format} (only 4 and 12 are supported)`);
+}
