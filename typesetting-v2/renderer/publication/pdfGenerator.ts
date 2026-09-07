@@ -65,6 +65,30 @@ export interface PublicationPdfResult {
   pageCount: number;
 }
 
+// Human Visual QA HOLD (2026-09-07): the Foundation task's own page model
+// treated CONTENT extent (Core's `columnsPerPage x columnExtentTicks` /
+// `lineExtentTicks`) as if it WERE the physical paper size — correct for
+// Preview's own on-screen convenience, but wrong for Publication, where the
+// paper sheet is the canonical output. `CanonicalDocument` itself carries
+// no physical-paper field to read instead (`core/layout/schema.ts`'s
+// `CanonicalPage = {id, order, columns, folio?}`, confirmed by direct read
+// — no Core defect, just a field that was never wired up), so Publication
+// now supplies its OWN render-only physical context: a real paper sheet
+// size plus margins, with the already-composed content positioned INSET
+// from the paper's own edges rather than assumed to fill it edge-to-edge.
+// Optional and additive — omitting it preserves the exact prior
+// (content-sized page, zero margin) behavior for existing callers/tests.
+export interface PublicationPageGeometry {
+  paperWidthMm: number;
+  paperHeightMm: number;
+  marginTopMm: number;
+  marginBottomMm: number;
+  /** Inside margin — for vertical-rl, content starts near the paper's own right edge. */
+  marginRightMm: number;
+  /** Outside margin. */
+  marginLeftMm: number;
+}
+
 export type PaintCommand =
   | { op: "text"; text: string; xMm: number; yMm: number; fontSizePt: number; align: "left" | "center"; angle?: number; baseline?: "alphabetic" | "middle"; maxWidthMm?: number }
   | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number };
@@ -101,7 +125,7 @@ const DASH_OVERLAP_EM = 0.16;
 // already does). Re-derived independently for vector paint, same ratio.
 const RUBY_ANNOTATION_FONT_RATIO = 0.55;
 
-function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number): PaintCommand[] {
+function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number, totalHeightMm: number, fontSizePt: number, angle?: number): PaintCommand[] {
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
@@ -112,8 +136,31 @@ function verticalGraphemeCommands(text: string, xCenterMm: number, topMm: number
     yMm: topMm + i * perCharHeightMm + perCharHeightMm * BASELINE_RATIO,
     fontSizePt,
     align: "center" as const,
+    ...(angle !== undefined ? { angle } : {}),
   }));
 }
+
+// Human Visual QA HOLD (2026-09-07): "Dash appears as two HORIZONTAL bars"
+// / "Ellipsis uses horizontal ellipsis glyph orientation" — jsPDF's
+// text() paints a glyph in its font's own NATIVE (horizontal) orientation
+// regardless of where the anchor point sits; simply stacking un-rotated
+// horizontal glyphs at different y-coordinates arranges the GLYPHS
+// vertically but leaves each individual glyph's own shape horizontal
+// (a horizontal dash stroke, or three left-to-right dots), which is wrong
+// for vertical Japanese typesetting. jsPDF has no OpenType vertical
+// (`vert`/`vrt2`) substitution — confirmed by direct capability audit (no
+// such option exists anywhere in `node_modules/jspdf/types/index.d.ts`;
+// its own README documents only whole-string `angle` rotation, no
+// per-glyph feature selection) — so the smallest deterministic vector-only
+// fix available is rotating the GLYPH itself 90 degrees: a horizontal
+// dash stroke rotated 90 degrees becomes a vertical stroke; three
+// left-to-right dots rotated 90 degrees become three dots stacked in the
+// same original left-to-right reading order, now read top-to-bottom.
+// Direction (-90) is this task's own best-effort choice (clockwise, so the
+// glyph's own original LEFT end becomes its TOP) — NOT independently
+// visually verified; flagged explicitly for Human Visual QA rather than
+// assumed correct.
+const DASH_ELLIPSIS_ROTATION_DEGREES = -90;
 
 // Dash's own P3-O04 seam-continuity paint: one glyph per grapheme,
 // consecutive glyphs overlapping by DASH_OVERLAP_EM (relative to the body
@@ -127,7 +174,7 @@ function dashGlyphCommands(text: string, xCenterMm: number, topMm: number, total
   const n = graphemes.length;
   if (n === 0) return [];
   if (n === 1) {
-    return [{ op: "text", text: graphemes[0], xMm: xCenterMm, yMm: topMm + totalHeightMm * BASELINE_RATIO, fontSizePt, align: "center" }];
+    return [{ op: "text", text: graphemes[0], xMm: xCenterMm, yMm: topMm + totalHeightMm * BASELINE_RATIO, fontSizePt, align: "center", angle: DASH_ELLIPSIS_ROTATION_DEGREES }];
   }
   const overlapMm = DASH_OVERLAP_EM * (fontSizePt * (25.4 / 72));
   const nominalGlyphHeightMm = totalHeightMm / n;
@@ -137,7 +184,7 @@ function dashGlyphCommands(text: string, xCenterMm: number, topMm: number, total
     const top = i * nominalGlyphHeightMm - (isFirst ? 0 : overlapMm / 2);
     const extra = (isFirst ? 0 : overlapMm / 2) + (isLast ? 0 : overlapMm / 2);
     const glyphHeight = nominalGlyphHeightMm + extra;
-    return { op: "text" as const, text: ch, xMm: xCenterMm, yMm: topMm + top + glyphHeight * BASELINE_RATIO, fontSizePt, align: "center" as const };
+    return { op: "text" as const, text: ch, xMm: xCenterMm, yMm: topMm + top + glyphHeight * BASELINE_RATIO, fontSizePt, align: "center" as const, angle: DASH_ELLIPSIS_ROTATION_DEGREES };
   });
 }
 
@@ -166,8 +213,8 @@ function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
 
-function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number): PaintCommand[] {
-  const y = unit.topMm;
+function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number): PaintCommand[] {
+  const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
@@ -234,10 +281,13 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number): Pa
     // Native glyph, no special correction — matches P3-O05's own Preview
     // conclusion (no seam-continuity problem exists for a discrete
     // dot-cluster glyph). NEVER apply Dash's own overlap treatment here.
-    // Same whole-run-vs-per-character fix as Dash/Ruby above.
+    // Same whole-run-vs-per-character fix as Dash/Ruby above. Same
+    // horizontal-glyph-orientation rotation fix as Dash (see
+    // DASH_ELLIPSIS_ROTATION_DEGREES's own comment) — never Dash's OWN
+    // overlap treatment, only its rotation concept, independently applied.
     const graphemeCount = Array.from(unit.text).length;
     const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, DASH_ELLIPSIS_ROTATION_DEGREES);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
@@ -247,26 +297,44 @@ function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number): Pa
 
 // Pure, jsPDF-free: PublicationDocument -> a plain-data paint plan. This is
 // what every typography regression test asserts against directly.
-export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean): PaintPlan {
+//
+// `pageGeometry` (optional, additive — see its own interface doc): when
+// supplied, the emitted page uses the REAL paper size, and every command's
+// coordinates are offset so the already-composed content sits INSET from
+// the paper edges by the declared margins, rather than assumed to fill the
+// paper edge-to-edge. When omitted, behavior is byte-for-byte the same as
+// before this fix (content-sized page, zero margin) — existing callers
+// unaffected.
+export function buildPaintPlan(doc: PublicationDocument, hasFont: boolean, pageGeometry?: PublicationPageGeometry): PaintPlan {
   return doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
+    // The content area's own right edge, physically: the paper's right
+    // edge minus the inside margin when pageGeometry is supplied, or the
+    // content's own extent (the prior, margin-less behavior) otherwise.
+    const contentRightEdgeMm = pageGeometry ? pageGeometry.paperWidthMm - pageGeometry.marginRightMm : page.widthMm;
+    const yOffsetMm = pageGeometry ? pageGeometry.marginTopMm : 0;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {
           if (unit.kind === "UNKNOWN") continue;
           // vertical-rl physical placement: a "line" is one vertical strip,
-          // offset from the page's right edge by `column.rightMm + line.rightMm`;
-          // a unit's own topMm is its offset down that strip.
-          const x = page.widthMm - column.rightMm - line.rightMm - line.widthMm;
+          // offset from the CONTENT area's own right edge by
+          // `column.rightMm + line.rightMm`; a unit's own topMm is its
+          // offset down that strip, from the content area's own top edge.
+          const x = contentRightEdgeMm - column.rightMm - line.rightMm - line.widthMm;
           if (!hasFont) {
-            commands.push({ op: "rect", xMm: x, yMm: unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
+            commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm));
           }
         }
       }
     }
-    return { widthMm: page.widthMm, heightMm: page.heightMm, commands };
+    return {
+      widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
+      heightMm: pageGeometry?.paperHeightMm ?? page.heightMm,
+      commands,
+    };
   });
 }
 
@@ -325,10 +393,10 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
 // an unresolved document as an approved layout). Throws rather than
 // returning a partially-built result, since there is no "banner-only PDF
 // page" concept defined by any frozen contract yet.
-export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource): PublicationPdfResult {
+export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource, pageGeometry?: PublicationPageGeometry): PublicationPdfResult {
   if (doc.hold) {
     throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF for a HOLD document (${doc.holdReasons.join("; ")})`);
   }
-  const plan = buildPaintPlan(doc, !!fontResource);
+  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry);
   return renderPaintPlanToPdf(plan, fontResource);
 }

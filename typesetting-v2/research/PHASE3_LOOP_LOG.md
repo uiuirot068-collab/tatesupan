@@ -1246,3 +1246,29 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Await fresh Human Visual QA on the regenerated PDF. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Publication Physical Page & Vertical Paint Foundation (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `12ffaf0` (matches expected checkpoint), worktree clean before start.
+
+**HUMAN HOLD (round 2):** the page's outer size looked realistic but the body column painted flush against the paper's own right edge (no margin); Ruby reading text existed in the PDF content stream but was not rendered visibly (Human's own hypothesis: pushed off-page); Dash painted as two horizontal bars, not a vertical line; Ellipsis used horizontal dot orientation.
+
+**A. Page-size ownership investigated first, per required order (again, more deeply this time — the prior task's finding that `CanonicalPage` has no physical field was correct but insufficient: it doesn't by itself justify treating content extent AS paper size).** Confirmed no authoritative resolved physical-paper-geometry source exists anywhere in the currently-implemented Core (`LayoutSettings.pageWidthMm`/`marginsMm` declared but never consumed by `composePage`/`composeColumn`/`composeLine`, confirmed by direct read of all three files). Adopted the task's own explicitly-permitted architecture: a Renderer-only `PublicationPageGeometry` (paper size + margins) in `pdfGenerator.ts`, optional and additive to `buildPaintPlan`, content now painted INSET from real paper edges rather than assumed to fill them. No Core change made.
+
+**B/C.** Regenerated the combined QA PDF using a real 文庫 paper preset (105×148mm, matching the legacy Production export pipeline's own `PAPER_SIZES` table, cited not imported) with realistic margins (12/12/15/10mm) and content-area-derived capacity (33/21), rather than an arbitrary page size with zero margins.
+
+**D. Traced Ruby before patching position, per instruction.** Confirmed the annotation's own offset/extent math (already regression-tested) was correct all along — the root cause was purely the missing margin: the base run's rightmost line sat AT the (fake, content-sized) page boundary, leaving the annotation with zero room. Fixed by the page-geometry change itself; proven by a dedicated regression test (annotation's own painted column stays within paper bounds).
+
+**Vertical glyph orientation — capability audit, then targeted fix.** Confirmed exhaustively (case-insensitive search of jsPDF's entire type surface) that jsPDF has NO OpenType vertical-substitution (`vert`/`vrt2`) capability — only whole-string `angle` rotation exists. Applied a 90° glyph rotation (`angle: -90`, direction is a disclosed best-effort choice, not independently visually verified) to Dash and Ellipsis specifically — the smallest deterministic, vector-only fix available without a new dependency.
+
+**Ordinary punctuation audited honestly, NOT special-case-patched.** Confirmed brackets/commas/periods currently share the same unrotated paint path as any kanji character — real vertical typesetting needs its own (larger, curated) treatment per character class. Classified as a distinct **GENERAL VERTICAL GLYPH ORIENTATION BLOCKER**, explicitly named and scoped OUT of this task rather than silently left unaddressed or naively patched.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_PUBLICATION_PHYSICAL_PAGE_AND_VERTICAL_PAINT.md` (new, full 15-section record). 4 new regression tests (margin inset, Ruby-within-bounds, rotation-per-kind, backward-compatible-without-geometry) plus inline paper-size and no-content-off-page proofs in the combined QA PDF's own test. Full regression: Core 364/364, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 66/66 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: PARTIAL.** Page/content-box model and Ruby: fixed and proven. Dash/Ellipsis: rotated (direction unverified, flagged). General punctuation orientation: classified, not fixed. Human Visual QA required again before any PASS claim.
+
+**WHY:** Every claim traces to a directly-read Core file (proving no physical-geometry source exists), a direct jsPDF API-surface search (proving no vertical-substitution capability exists), or an arithmetic trace of the exact coordinate chain that pushed Ruby off-page — never assumed from the Human's own description alone.
+
+**NEXT:** Fresh Human Visual QA on the regenerated PDF, specifically the margin, Ruby visibility/position, and Dash/Ellipsis rotation direction. Separately, a Product/technical decision on whether to invest in the General Vertical Glyph Orientation Blocker now or defer it. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

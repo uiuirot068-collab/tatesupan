@@ -12,7 +12,21 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PublicationFontResource } from "./pdfGenerator";
+import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+
+// A real, named paper preset (文庫, matching the exact mm value already
+// authoritative in the legacy Production export pipeline's own
+// `PAPER_SIZES` table, `src/utils/exportPdf.ts`, read-only-cited here, not
+// imported), with hand-picked realistic margins (asymmetric: a larger
+// inside margin for binding). Content area = 80x124mm.
+const BUNKO_PAGE_GEOMETRY: PublicationPageGeometry = {
+  paperWidthMm: 105,
+  paperHeightMm: 148,
+  marginTopMm: 12,
+  marginBottomMm: 12,
+  marginRightMm: 15, // inside
+  marginLeftMm: 10, // outside
+};
 import { ALL_FIXTURES, settingsFor } from "./fixtures";
 import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
 
@@ -309,19 +323,23 @@ describe("P3-O08 — Publication Typography", () => {
         { kind: "SEMANTIC_RUN", text: "……", runKind: "ELLIPSIS" },
         { kind: "TEXT", text: "と言った。" },
       ]);
-      // Human Visual QA HOLD (2026-09-07): the original combined QA PDF used
-      // a tiny test-fixture capacity (charsPerLine:12, linesPerColumn:2),
-      // producing a ~7x45mm page -- far too small for meaningful visual
-      // judgment. CanonicalPage (core/layout/schema.ts) carries no
-      // independent physical-paper-size field at all (confirmed by direct
-      // read: `{id, order, columns, folio?}`, nothing else) -- page size is
-      // legitimately DERIVED from capacity (Contract §19: "capacity is
-      // derived from geometry"), the same convention Preview's own
-      // paintModel.ts already uses unchanged. This is not a Core defect to
-      // fix; the defect was this test's own unrealistic capacity choice.
-      // charsPerLine:40/linesPerColumn:28 at 10.5pt yields a ~104x148mm
-      // page -- close to a real bunko/A6 book page.
-      const settings = settingsFor({ charsPerLine: 40, linesPerColumn: 28, columnCount: 1 });
+      // Human Visual QA HOLD round 2 (2026-09-07): the round-1 fix used a
+      // realistic-looking capacity (charsPerLine:40/linesPerColumn:28) but
+      // still assumed content fills the paper edge-to-edge (zero margin) --
+      // the body column painted flush against the paper's own right edge,
+      // and the Ruby annotation (positioned further right, past the
+      // rightmost column) had nowhere to go but off the page. Fixed:
+      // capacity is now derived from BUNKO_PAGE_GEOMETRY's own CONTENT AREA
+      // (paper minus margins: 80x124mm), and buildPaintPlan is given that
+      // same geometry so content paints INSET from the real paper edges.
+      const contentWidthMm = BUNKO_PAGE_GEOMETRY.paperWidthMm - BUNKO_PAGE_GEOMETRY.marginRightMm - BUNKO_PAGE_GEOMETRY.marginLeftMm;
+      const contentHeightMm = BUNKO_PAGE_GEOMETRY.paperHeightMm - BUNKO_PAGE_GEOMETRY.marginTopMm - BUNKO_PAGE_GEOMETRY.marginBottomMm;
+      const perCellMm = 3.704; // 10.5pt body font's own natural advance (matches settingsFor's own formula)
+      const settings = settingsFor({
+        charsPerLine: Math.floor(contentHeightMm / perCellMm),
+        linesPerColumn: Math.floor(contentWidthMm / perCellMm),
+        columnCount: 1,
+      });
       const document = composeCanonicalDocument({ bodyUnits: combinedFixture.units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
       expect(document.hold).toBe(false);
       const ctx: PublicationRenderContext = {
@@ -335,11 +353,29 @@ describe("P3-O08 — Publication Typography", () => {
       const model = buildPublicationDocument("publication-typography-qa", "Publication Typography QA — text/Ruby/TCY/Dash/Ellipsis", document, combinedFixture.units, combinedFixture.source, ctx);
       expect(model.fontIdentityMismatch).toBe(false);
 
-      const plan = buildPaintPlan(model, true);
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY);
       const { bytes, pageCount } = renderPaintPlanToPdf(plan, fontResource());
       expect(pageCount).toBe(document.pages.length);
       expect(pageCount).toBeGreaterThanOrEqual(4); // one page per manual-break section
       expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+
+      // Every page uses the real 文庫 paper size, not a content-derived one.
+      for (const page of plan) {
+        expect(page.widthMm).toBe(BUNKO_PAGE_GEOMETRY.paperWidthMm);
+        expect(page.heightMm).toBe(BUNKO_PAGE_GEOMETRY.paperHeightMm);
+      }
+      // No painted glyph/rect sits outside the physical paper rect (a
+      // direct, geometric proof of "no content off-page" -- the exact
+      // class of bug Ruby's own invisibility was traced to).
+      for (const page of plan) {
+        for (const cmd of page.commands) {
+          const halfWidthMm = cmd.op === "text" ? (cmd.fontSizePt * (25.4 / 72)) / 2 : 0;
+          const xMin = cmd.op === "text" ? cmd.xMm - halfWidthMm : cmd.xMm;
+          const xMax = cmd.op === "text" ? cmd.xMm + halfWidthMm : cmd.xMm + cmd.widthMm;
+          expect(xMin).toBeGreaterThanOrEqual(-0.01);
+          expect(xMax).toBeLessThanOrEqual(page.widthMm + 0.01);
+        }
+      }
 
       const outDir = join(__dirname, "..", "..", "qa", "publication", "p3-o08");
       if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
@@ -348,6 +384,52 @@ describe("P3-O08 — Publication Typography", () => {
       } catch {
         /* best-effort, transient Dropbox sync lock, non-fatal -- the real assertions above already proved valid PDF generation */
       }
+    });
+
+    it("REGRESSION (Human Visual QA HOLD, body flush against paper edge): with pageGeometry supplied, the rightmost body column starts INSET from the paper's right edge by the inside margin, never flush against it", () => {
+      const { model } = composePublication("f20-canonical-sentence");
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY);
+      const firstTextCmd = plan[0].commands.find((c) => c.op === "text")!;
+      expect(firstTextCmd.op).toBe("text");
+      if (firstTextCmd.op === "text") {
+        const expectedContentRightEdge = BUNKO_PAGE_GEOMETRY.paperWidthMm - BUNKO_PAGE_GEOMETRY.marginRightMm;
+        expect(firstTextCmd.xMm).toBeLessThanOrEqual(expectedContentRightEdge);
+        expect(firstTextCmd.xMm).toBeGreaterThan(expectedContentRightEdge - 5); // within one cell of the content edge
+      }
+    });
+
+    it("REGRESSION (Human Visual QA HOLD, invisible Ruby): with pageGeometry supplied, the Ruby annotation's own painted column stays within the physical paper bounds, even on the fixture's rightmost (and only) line", () => {
+      const { model } = composePublication("atomic-ruby");
+      const plan = buildPaintPlan(model, true, BUNKO_PAGE_GEOMETRY);
+      const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
+      const ann = ruby.rubyAnnotation!;
+      expect(ann.status).toBe("PLACED");
+      const annCmd = plan[0].commands.find((c) => c.op === "text" && ann.status === "PLACED" && c.text === Array.from(ann.text)[0]);
+      expect(annCmd).toBeDefined();
+      if (annCmd && annCmd.op === "text") {
+        const halfWidthMm = (annCmd.fontSizePt * (25.4 / 72)) / 2;
+        expect(annCmd.xMm + halfWidthMm).toBeLessThanOrEqual(BUNKO_PAGE_GEOMETRY.paperWidthMm);
+      }
+    });
+
+    it("REGRESSION (Human Visual QA HOLD, horizontal Dash/Ellipsis glyphs): Dash and Ellipsis paint commands carry a 90-degree glyph rotation; TCY explicitly does not; ordinary TEXT/Ruby-base carry no rotation", () => {
+      const dashEllipsisCommands = textCommands("dash-ellipsis");
+      const dashCmd = dashEllipsisCommands.find((c) => c.text === "―")!;
+      const ellipsisCmd = dashEllipsisCommands.find((c) => c.text === "…")!;
+      expect(dashCmd.angle).toBe(-90);
+      expect(ellipsisCmd.angle).toBe(-90);
+      const tcyCmd = textCommands("explicit-tcy").find((c) => c.text === "2026")!;
+      expect(tcyCmd.angle).toBe(0);
+      const textCmd = textCommands("f20-canonical-sentence")[0];
+      expect(textCmd.angle).toBeUndefined();
+    });
+
+    it("without pageGeometry, behavior is unchanged from before this fix (content-sized page, zero margin) -- backward compatible for every existing caller", () => {
+      const { model } = composePublication("f20-canonical-sentence");
+      const planWithoutGeometry = buildPaintPlan(model, true);
+      const page = model.pages[0];
+      expect(planWithoutGeometry[0].widthMm).toBe(page.widthMm);
+      expect(planWithoutGeometry[0].heightMm).toBe(page.heightMm);
     });
   });
 });
