@@ -91,6 +91,32 @@ describe("P3-O08 — Publication Typography", () => {
       const { model } = composePublication("atomic-ruby");
       expect(model.fontIdentityMismatch).toBe(false);
     });
+
+    it("REGRESSION (Human Visual QA HOLD, oversized glyphs): base-run font size is derived from PER-CHARACTER height, not the whole 2-character run's own heightMm", () => {
+      const { model } = composePublication("atomic-ruby");
+      const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
+      const graphemeCount = Array.from(ruby.text).length;
+      const plan = buildPaintPlan(model, true);
+      const baseCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === Array.from(ruby.text)[0]);
+      expect(baseCmd && baseCmd.op === "text" ? baseCmd.fontSizePt : undefined).toBeCloseTo((ruby.heightMm / graphemeCount) * (72 / 25.4), 6);
+    });
+
+    it("REGRESSION (Human Visual QA HOLD, catastrophic overlap): the annotation's own painted column never overlaps the base run's own line box", () => {
+      const { model } = composePublication("atomic-ruby");
+      const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
+      const line = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines)).find((l) => l.units.includes(ruby))!;
+      const page = model.pages[0];
+      const column = page.columns[0];
+      const baseRightEdgeMm = page.widthMm - column.rightMm - line.rightMm; // base line's own right physical edge
+      const plan = buildPaintPlan(model, true);
+      const ann = ruby.rubyAnnotation!;
+      const annCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && ann.status === "PLACED" && c.text === Array.from(ann.text)[0] && c.xMm > baseRightEdgeMm - 1);
+      expect(annCmd).toBeDefined();
+      if (annCmd && annCmd.op === "text") {
+        const halfWidthMm = (annCmd.fontSizePt * (25.4 / 72)) / 2;
+        expect(annCmd.xMm - halfWidthMm).toBeGreaterThanOrEqual(baseRightEdgeMm);
+      }
+    });
   });
 
   describe("TCY", () => {
@@ -186,6 +212,14 @@ describe("P3-O08 — Publication Typography", () => {
       const { bytes } = generatePublicationPdf(model, fontResource());
       expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
     });
+
+    it("REGRESSION (Human Visual QA HOLD, \"Dash appears suspicious\" / oversized glyphs): glyph font size is derived from PER-CHARACTER height, not the whole 2-glyph run's own heightMm", () => {
+      const { model } = composePublication("dash-ellipsis");
+      const dash = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.semanticRunKind === "DASH")!;
+      const plan = buildPaintPlan(model, true);
+      const dashCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && c.text === "―");
+      expect(dashCmd && dashCmd.op === "text" ? dashCmd.fontSizePt : undefined).toBeCloseTo((dash.heightMm / 2) * (72 / 25.4), 6);
+    });
   });
 
   describe("Ellipsis", () => {
@@ -257,7 +291,7 @@ describe("P3-O08 — Publication Typography", () => {
       expect(buildPaintPlan(modelA, true)).toEqual(buildPaintPlan(modelB, true));
     });
 
-    it("generates one combined Human QA PDF covering ordinary text, Ruby, TCY, Dash, and Ellipsis -- a single real composition, manual-page-break separated, through the exact same paint pipeline as every other test above", () => {
+    it("generates one combined Human QA PDF covering ordinary text, Ruby, TCY, Dash, and Ellipsis -- a single real composition, manual-page-break separated, through the exact same paint pipeline as every other test above, at a REALISTIC physical page size (not a tiny content-hugging test-fixture strip)", () => {
       const combinedFixture = buildFixtureUnits("body", [
         { kind: "TEXT", text: "西の窓から見えるのは、いつもの静かな街だった。" },
         { kind: "MANUAL_BREAK" },
@@ -275,7 +309,19 @@ describe("P3-O08 — Publication Typography", () => {
         { kind: "SEMANTIC_RUN", text: "……", runKind: "ELLIPSIS" },
         { kind: "TEXT", text: "と言った。" },
       ]);
-      const settings = settingsFor({ charsPerLine: 12, linesPerColumn: 2, columnCount: 1 });
+      // Human Visual QA HOLD (2026-09-07): the original combined QA PDF used
+      // a tiny test-fixture capacity (charsPerLine:12, linesPerColumn:2),
+      // producing a ~7x45mm page -- far too small for meaningful visual
+      // judgment. CanonicalPage (core/layout/schema.ts) carries no
+      // independent physical-paper-size field at all (confirmed by direct
+      // read: `{id, order, columns, folio?}`, nothing else) -- page size is
+      // legitimately DERIVED from capacity (Contract §19: "capacity is
+      // derived from geometry"), the same convention Preview's own
+      // paintModel.ts already uses unchanged. This is not a Core defect to
+      // fix; the defect was this test's own unrealistic capacity choice.
+      // charsPerLine:40/linesPerColumn:28 at 10.5pt yields a ~104x148mm
+      // page -- close to a real bunko/A6 book page.
+      const settings = settingsFor({ charsPerLine: 40, linesPerColumn: 28, columnCount: 1 });
       const document = composeCanonicalDocument({ bodyUnits: combinedFixture.units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
       expect(document.hold).toBe(false);
       const ctx: PublicationRenderContext = {

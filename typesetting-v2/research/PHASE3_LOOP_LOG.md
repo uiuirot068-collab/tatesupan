@@ -1224,3 +1224,25 @@ A first attempt to fetch the actual font binary via `curl` into `/tmp` was corre
 **NEXT:** Human Visual QA of the combined and per-fixture PDFs; afterward, either refine a Human-flagged treatment or proceed to a still-open P3-O08 item (grayscale color space, paper-size/bleed/trim, JPG output). Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
 
 ---
+
+## P3-O08 — Publication Typography HOLD: Page Geometry + Ruby Overlap + Oversized Glyphs (2026-09-07)
+
+**Preflight:** branch `design/tatespun-typesetting-v2`, HEAD `da2b084` (matches expected checkpoint), worktree clean before start.
+
+**HUMAN VISUAL QA REPORT: HOLD.** The combined QA PDF's page measured ~7.4×44.4mm — a single-column test-fixture strip, not a real page, invalidating typography judgment at that scale. Ruby annotation visibly overlapped the base run. Dash flagged as "suspicious," to be rechecked after page geometry was fixed.
+
+**A. Page-size ownership investigated first, per required order.** Direct-read `core/layout/schema.ts`: `CanonicalPage` carries zero physical geometry fields (`{id, order, columns, folio?}` only) — `LayoutSettings.pageWidthMm`/`pageHeightMm` are declared but never consumed by composition. Page size is legitimately DERIVED from capacity (Contract §19), the same convention Preview's own `paintModel.ts` already uses unchanged. **No canonical geometry defect found — no Core change made.** The real defect: the combined-QA-PDF test used a tiny test-fixture capacity. Fixed to `charsPerLine:40, linesPerColumn:28` (10.5pt) → ~104×148mm, close to a real bunko/A6 page.
+
+**D. Traced the Ruby mismatch and found TWO independent, real bugs (neither a scale illusion) while investigating:**
+1. **Oversized glyphs** (also explains Dash's "suspicious" appearance): `bodyFontSizePt` was derived from a canonical atom's WHOLE `heightMm`, correct only for TEXT (one atom per character already) — wrong for Ruby base, Dash, and Ellipsis (multi-character atoms), painting every glyph ~2x (or Nx) too large. Fixed: derive font size from `heightMm / graphemeCount`.
+2. **Ruby annotation overlap:** clearance was computed as a fraction of the BASE run's own width — an unrelated scale from the annotation's own similarly-sized font, producing too small a gap. Fixed: clearance now derives from the annotation's own em-width.
+
+**PRIMARY EVIDENCE:** `qa/evidence/P3_O08_PUBLICATION_TYPOGRAPHY.md` §17 (new). 3 new regression tests (Ruby base font-size, Ruby annotation non-overlap, Dash font-size) proving the corrected formulas by construction. Combined QA PDF regenerated at realistic page size. Full regression: Core 364/364, Stage C 21/21, Stage D 30/30, P3-O09 114/114, P3-O08 62/62 — all PASS; `npx tsc --noEmit` 0 new errors.
+
+**DECISION: two real bugs fixed; page-size root-caused to a test-fixture choice, not Core.** Human Visual QA remains HOLD until re-reviewed against the regenerated PDF — this task does not self-declare PASS on visual quality.
+
+**WHY:** Every claim traces to a directly-read Core schema (proving no physical-geometry field exists to have been "used wrong"), or arithmetic proof that the pre-fix formula used the wrong divisor/reference scale — not assumed from the Human's own description alone.
+
+**NEXT:** Await fresh Human Visual QA on the regenerated PDF. Master is not modified. Phase 3 is not closed. `src/`, Production, `package.json`, the lockfile, and the root `vitest.config.ts` remain fully untouched. No push, no deploy, no new dependency.
+
+---

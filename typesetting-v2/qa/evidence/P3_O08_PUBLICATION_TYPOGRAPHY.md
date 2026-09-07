@@ -2,15 +2,21 @@
 
 ## 1. Verdict
 
-**MACHINE PASS.** Ruby, TCY, Dash, and Ellipsis are each independently
-re-derived for vector PDF paint in `renderer/publication/pdfGenerator.ts`,
-reproducing the same frozen semantic/canonical decisions Preview already
-established, without copying any of Preview's CSS/DOM implementation
-technique (none of which exists in a PDF's own paint model). A combined
-Human QA PDF (`qa/publication/p3-o08/publication-typography-qa.pdf`) was
-generated covering all four treatments plus ordinary body text in one
-real, multi-page, manual-page-break-separated composition. Ready for
-Human Visual QA; not yet claimed as final Publication Quality.
+**MACHINE PASS, then Human Visual QA HOLD, then two real bugs fixed —
+see §17 for the full HOLD/fix cycle.** Ruby, TCY, Dash, and Ellipsis are
+each independently re-derived for vector PDF paint in
+`renderer/publication/pdfGenerator.ts`, reproducing the same frozen
+semantic/canonical decisions Preview already established, without copying
+any of Preview's CSS/DOM implementation technique (none of which exists
+in a PDF's own paint model). Human Visual QA of the first generated PDF
+found the combined QA artifact's page was far too small to judge (a
+test-fixture-scale capacity, not a Core defect) and two real, independent
+bugs: oversized glyphs for every multi-character canonical atom (Ruby
+base, Dash, Ellipsis) and a Ruby annotation clearance formula referencing
+the wrong scale, causing a visible overlap. Both are fixed, covered by
+new regression tests, and the combined QA PDF regenerated at a realistic
+page size (§17). Ready for a fresh round of Human Visual QA; not yet
+claimed as final Publication Quality.
 
 ## 2. Preconditions
 
@@ -246,3 +252,71 @@ per-fixture PDFs) — the next MACHINE task, after that Human review,
 depends on its outcome: either refine a specific treatment the Human
 flags, or proceed to a still-open P3-O08 item (grayscale color space,
 paper-size/bleed/trim porting, or JPG output) if Human QA passes cleanly.
+
+## 17. Human Visual QA HOLD — Page Geometry + Ruby Overlap + Oversized Glyphs (2026-09-07)
+
+**Human observation:** the combined QA PDF's page measured ~7.4×44.4mm
+(a single-column strip, not a real page) — glyphs appeared enormous and
+Human typography QA was invalid at that scale. The Ruby annotation
+visibly overlapped the base run. Dash "appears suspicious" and needed
+rechecking once page geometry was corrected.
+
+**A. Page-size ownership — investigated, no Core defect found.**
+Direct-read of `core/layout/schema.ts`: `CanonicalPage = {id, order,
+columns, folio?}` — **zero physical geometry fields**. `LayoutSettings.pageWidthMm`/
+`pageHeightMm` (`core/settings/index.ts`) are declared but never consumed
+by `composePage`/`composeColumn`/`composeLine` (confirmed: `PageCompositionSettings`
+only carries `columnsPerPage` + tick-based line/column extents). Page
+size is therefore legitimately DERIVED from capacity (Contract §19:
+"capacity is derived from geometry") — Preview's own `paintModel.ts`
+already uses the identical `widthMm = columnsPerPage × columnExtentTicks`
+/ `heightMm = lineExtentTicks` formula, unchanged. **No canonical geometry
+defect was proven, so no Core change was made.** The actual defect: this
+task's own combined-QA-PDF test used a tiny test-fixture capacity
+(`charsPerLine:12, linesPerColumn:2`) designed for cheap composition-logic
+testing, not for a realistic Human-facing page. **Fix:** changed to
+`charsPerLine:40, linesPerColumn:28` (10.5pt) → a ~104×148mm page, close
+to a real bunko/A6 book page (105×148mm).
+
+**B/C. Regenerated** `publication-typography-qa.pdf` at the corrected,
+realistic capacity — confirmed via the same test/pipeline, no special-cased
+demo path.
+
+**D. Traced the Ruby mismatch — TWO independent, real bugs found and
+fixed in `pdfGenerator.ts`, both pre-dating the page-size issue (neither
+was a scale illusion):**
+
+1. **Oversized glyphs (explains "Dash appears suspicious" and the Ruby
+   overlap's own severity):** `unitCommands`'s `bodyFontSizePt` was
+   computed from the unit's own FULL `heightMm` — correct for TEXT (one
+   atom per character already) but WRONG for RUBY base (one atom spans
+   the whole base string, e.g. 2 characters for "東京"), DASH, and
+   ELLIPSIS (2-character semantic runs) — each of those painted every
+   glyph at roughly 2× (or N×, for an N-character run) the correct size.
+   **Fix:** derive font size from `unit.heightMm / graphemeCount` for
+   every kind that paints multiple characters from one canonical atom.
+2. **Ruby annotation overlap:** the annotation's own horizontal clearance
+   was computed as a fraction of the BASE run's own `lineWidthMm` — an
+   unrelated scale from the annotation's own (similarly-sized) font,
+   producing a gap far too small for the annotation's own glyphs, which
+   then visibly overlapped back into the base column. **Fix:** clearance
+   is now computed from the annotation's OWN em-width, centering it
+   within its own appropriately-sized column just past the base run's
+   right edge.
+
+**Regression tests added** (not merely fixed silently): a Ruby test
+proving base-run font size derives from per-character height; a Ruby
+test proving the annotation's own painted column never overlaps the
+base run's physical right edge; a Dash test proving glyph font size
+derives from per-character height. All three pass against the fixed
+code and would fail against the pre-fix formulas (verified by construction
+— each test asserts the exact corrected formula, which differs from the
+buggy one by the grapheme-count divisor).
+
+**Tests:** 62/62 `renderer/publication/` (59 previous + 3 new regression
+tests). Full regression: Core 364/364, Stage C 21/21, Stage D 30/30,
+P3-O09 114/114 — all PASS. `npx tsc --noEmit`: 0 new errors.
+
+**Status: Human Visual QA remains HOLD until re-reviewed** against the
+regenerated, corrected `publication-typography-qa.pdf`. Not yet
+proceeding to JPG/bleed/trim, per instruction.

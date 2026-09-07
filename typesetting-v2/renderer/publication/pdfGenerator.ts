@@ -160,45 +160,84 @@ function tcyCommand(text: string, xCenterMm: number, yCenterMm: number, fontSize
   return { op: "text", text, xMm: xCenterMm, yMm: yCenterMm, fontSizePt, align: "center", angle: 0, baseline: "middle", maxWidthMm };
 }
 
+// Converts a physical mm length to the equivalent jsPDF font-size point
+// value for ONE character cell of that height.
+function mmToPt(mm: number): number {
+  return mm * (72 / 25.4);
+}
+
 function unitCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number): PaintCommand[] {
   const y = unit.topMm;
   const xCenter = x + lineWidthMm / 2;
-  const bodyFontSizePt = unit.heightMm * (72 / 25.4); // mm -> pt
 
   if (unit.kind === "TEXT" && unit.text.length > 0) {
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, bodyFontSizePt);
+    // TEXT is already one atom PER CHARACTER (Core's own composition), so
+    // `unit.heightMm` already IS one cell's own height.
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, mmToPt(unit.heightMm));
   }
 
   if (unit.kind === "RUBY" && unit.text.length > 0) {
-    // Base run: same per-grapheme vertical stacking as ordinary TEXT — a
-    // RUBY placed atom carries its FULL base string (e.g. "東京", not one
-    // character per atom, unlike TEXT), so splitting happens here.
-    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, bodyFontSizePt);
+    // BUG FIXED (Human Visual QA HOLD, oversized/"suspicious" glyphs): a
+    // RUBY base atom carries its FULL string (e.g. "東京", 2 characters),
+    // so `unit.heightMm` spans BOTH characters together — using it
+    // directly as one glyph's own font size (as an earlier draft did)
+    // painted every base character roughly 2x (or Nx, for an N-character
+    // base) too large. The per-glyph font size must come from the
+    // PER-CHARACTER height, not the whole run's own height.
+    const baseGraphemeCount = Array.from(unit.text).length;
+    const perCharFontSizePt = mmToPt(unit.heightMm / baseGraphemeCount);
+    const commands = verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
-      const annotationFontSizePt = bodyFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
+      const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
       // Positioned to the physical right of the base run's own column —
       // the vector-paint equivalent of Preview's `left: 100%` CSS (see
-      // this module's own RUBY_ANNOTATION_FONT_RATIO comment).
-      const annotationX = x + lineWidthMm + lineWidthMm * RUBY_ANNOTATION_FONT_RATIO * 0.5;
+      // this module's own RUBY_ANNOTATION_FONT_RATIO comment). BUG FIXED
+      // (Human Visual QA HOLD, catastrophic overlap): the clearance MUST be
+      // sized relative to the ANNOTATION's own font/glyph width, never the
+      // base run's own `lineWidthMm` — the two are unrelated scales, and
+      // using the base line's width as the clearance reference produced a
+      // gap far too small for the annotation's own (similarly-sized)
+      // glyphs, so the annotation visibly overlapped back into the base
+      // run's column. The annotation is now centered within its own
+      // em-sized column, placed just past the base run's right edge with a
+      // small proportional gap.
+      const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
+      const annotationGapMm = annotationEmWidthMm * 0.25;
+      const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
       commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt));
     }
     return commands;
   }
 
   if (unit.kind === "TCY" && unit.text.length > 0) {
-    return [tcyCommand(unit.text, xCenter, y + unit.heightMm / 2, bodyFontSizePt, lineWidthMm)];
+    // TCY paints as one horizontal run (never split per-character), so its
+    // own box heightMm is the correct basis for an initial font-size guess
+    // — `renderPaintPlanToPdf`'s own measure-then-scale pass (via
+    // `maxWidthMm`) corrects it against the real font's actual metrics
+    // regardless.
+    return [tcyCommand(unit.text, xCenter, y + unit.heightMm / 2, mmToPt(unit.heightMm), lineWidthMm)];
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "DASH" && unit.text.length > 0) {
-    return dashGlyphCommands(unit.text, xCenter, y, unit.heightMm, bodyFontSizePt);
+    // BUG FIXED (Human Visual QA HOLD, "Dash appears suspicious"): same
+    // whole-run-vs-per-character height bug as Ruby's base run above — a
+    // 2-glyph "――" run's own `unit.heightMm` spans BOTH glyphs, so it must
+    // be divided by the grapheme count before becoming a per-glyph font
+    // size.
+    const graphemeCount = Array.from(unit.text).length;
+    const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
+    return dashGlyphCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
   }
 
   if (unit.kind === "SEMANTIC_RUN" && unit.semanticRunKind === "ELLIPSIS" && unit.text.length > 0) {
     // Native glyph, no special correction — matches P3-O05's own Preview
     // conclusion (no seam-continuity problem exists for a discrete
     // dot-cluster glyph). NEVER apply Dash's own overlap treatment here.
-    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, bodyFontSizePt);
+    // Same whole-run-vs-per-character fix as Dash/Ruby above.
+    const graphemeCount = Array.from(unit.text).length;
+    const perCharFontSizePt = mmToPt(unit.heightMm / graphemeCount);
+    return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt);
   }
 
   // IMAGE, and any other kind without real paint text yet: unchanged
