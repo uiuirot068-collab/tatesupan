@@ -11,9 +11,10 @@ import type { LogicalUnit } from "../units";
 import type { BlockId } from "../source/span";
 import { composePages, type PageCompositionSettings } from "../compose/page";
 import { composeColophon } from "../colophon";
+import { composeFolioForPage, type FolioSettings } from "../folio";
 import { createTraceRecorder } from "../trace";
 import { computeHold, holdToLayoutError } from "../diagnostics";
-import type { CanonicalDocument, LayoutError, LayoutWarning } from "./schema";
+import type { CanonicalDocument, CanonicalPage, LayoutError, LayoutWarning } from "./schema";
 
 // "which MeasurementFacts bundle" (Contract §25) — identified by provider +
 // version, per the Contract's own phrasing ("itself versioned/identified by
@@ -57,6 +58,14 @@ export interface DocumentCompositionInput {
   ruleSet: RuleSetVersion;
   measurement: MeasurementFacts;
   settings: PageCompositionSettings;
+  // Human Visual QA HOLD round 21 (P3-O08 final-page completion, Step
+  // 1B): optional and additive — omitting it preserves the exact prior
+  // behavior for every existing caller (no page ever gets a `folio`,
+  // byte-identical to before this field existed). When supplied, every
+  // body page (colophon pages are a distinct, isolated block per
+  // Contract §15 and never receive folio) gets `composeFolioForPage`
+  // applied per its own 0-based page order.
+  folioSettings?: FolioSettings;
 }
 
 // The full orchestration named by this Loop's goal. Composes body pages,
@@ -72,6 +81,13 @@ export function composeCanonicalDocument(input: DocumentCompositionInput): Canon
   if (bodyResult.hold) {
     errors.push(holdToLayoutError(bodyResult.hold));
   }
+  const folioSettings = input.folioSettings;
+  const pages: CanonicalPage[] = folioSettings
+    ? bodyResult.pages.map((page, i) => {
+        const folio = composeFolioForPage(i, folioSettings);
+        return folio ? { ...page, folio } : page;
+      })
+    : bodyResult.pages;
 
   let colophon: CanonicalDocument["colophon"];
   if (input.colophonUnits && input.colophonUnits.length > 0) {
@@ -84,7 +100,7 @@ export function composeCanonicalDocument(input: DocumentCompositionInput): Canon
   }
 
   return {
-    pages: bodyResult.pages,
+    pages,
     colophon,
     version: buildVersionMetadata(input.ruleSet.id, input.settings, input.measurement),
     warnings,

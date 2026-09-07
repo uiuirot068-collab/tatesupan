@@ -84,34 +84,27 @@ export interface PaintColumn {
   lines: PaintLine[];
 }
 
-// Human Visual QA HOLD round 20 (P3-O08 final-page completion, Step 1):
-// `CanonicalPage.folio?: PlacedUnit` (Contract §15, page-decoration
-// layer) is a real schema field, but Core never populates it today —
-// confirmed by direct search, `folio` appears nowhere in `core/compose/`
-// or `core/layout/assemble.ts`, only in its own type declaration.
-// Preview's own `paintModel.ts` already documented this exact finding
-// and passes `page.folio` through UNRESOLVED (a raw `PlacedUnit`,
-// painted by nothing downstream). Publication instead resolves it here,
-// consistent with every OTHER unit in this file's own convention
-// (paintModel.ts always resolves text/mm up front; `pdfGenerator.ts`
-// never re-touches raw `LogicalUnit`/source) — this is a deliberate,
-// documented divergence from Preview's raw pass-through, not an
-// oversight; both are equally valid "wiring," this one just matches
-// Publication's own established two-stage design.
+// Human Visual QA HOLD round 20/21 (P3-O08 final-page completion, Step
+// 1/1B): `CanonicalPage.folio?: GeneratedPageFurniture` (Contract §15,
+// page-decoration layer) is now real, generated Core data — round 21's
+// own `core/folio/index.ts` populates it (ported verbatim from legacy
+// `src/lib/pageLayout.ts`'s `MasterPageSettings`). Publication resolves
+// it here, consistent with every OTHER unit in this file's own
+// convention (paintModel.ts always resolves paint-ready data up front;
+// `pdfGenerator.ts` never re-touches raw Core types) — a deliberate,
+// documented divergence from Preview's own raw pass-through.
 //
-// Working position contract (Core does not populate this today, so
-// nothing yet exercises it in production): `folio.xTick`/`folio.yTick`
-// are treated exactly like a body `PlacedUnit`'s own coordinates — an
-// absolute offset from the page's own top-right origin, converted via
-// the SAME `tickToMm` every other coordinate in this file uses. This
-// keeps pagination/positioning entirely Core's decision (Contract-
-// consistent: Renderer never invents a page-numbering policy) — once a
-// future Core populates real folio ticks, this paint code needs no
-// change.
+// Position is intentionally NOT resolved to physical mm here: Core's
+// `GeneratedPageFurniture.position` is SEMANTIC only ("center" —
+// "gutter"/"outer" are real legacy values ported into the type but not
+// yet generated, see `core/folio/index.ts`'s own header comment) — Core
+// does not own physical paper geometry (`PublicationPageGeometry`, a
+// Publication-paint-boundary-only concept), so resolving "center" into
+// an actual xMm/topMm happens in `pdfGenerator.ts`, which is the only
+// place that ever sees real page margins.
 export interface PaintFolio {
   text: string;
-  xMm: number;
-  topMm: number;
+  position: "center" | "gutter" | "outer";
 }
 
 export interface PaintPage {
@@ -289,14 +282,6 @@ function buildPaintColumn(
   };
 }
 
-function buildPaintFolio(folio: PlacedUnit, source: string): PaintFolio {
-  return {
-    text: sliceCodePoints(source, folio.sourceSpan.start, folio.sourceSpan.end).replace(/\n/g, ""),
-    xMm: tickToMm(folio.xTick),
-    topMm: tickToMm(folio.yTick),
-  };
-}
-
 function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: LogicalUnit[], source: string, ctx: PublicationRenderContext): PaintPage {
   return {
     id: page.id,
@@ -305,7 +290,7 @@ function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: 
     heightMm: tickToMm(ctx.lineExtentTicks),
     manualBreakBefore,
     columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, units, source, ctx)),
-    ...(page.folio ? { folio: buildPaintFolio(page.folio, source) } : {}),
+    ...(page.folio ? { folio: { text: page.folio.text, position: page.folio.position } } : {}),
   };
 }
 

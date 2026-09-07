@@ -27,6 +27,7 @@ import type {
   CanonicalLine,
   CanonicalPage,
   ColophonBlock,
+  GeneratedPageFurniture,
   LogicalUnit,
   PlacedUnit,
 } from "../../core";
@@ -139,12 +140,18 @@ export interface PaintPage {
   heightPx: number;
   manualBreakBefore: boolean;
   columns: PaintColumn[];
-  // Contract §15 page-decoration layer. Never populated by Core today
-  // (verified by direct grep: `folio` appears only in its own type
-  // declaration) — passed through unchanged if a future Core ever sets it,
-  // painted as nothing when absent. Recorded as PENDING CORE DATA, not
-  // invented here.
-  folio?: PlacedUnit;
+  // Contract §15 page-decoration layer. Human Visual QA HOLD round 21
+  // (P3-O08 final-page completion, Step 1B): Core now populates this
+  // via `core/folio/index.ts` when a caller opts in
+  // (`DocumentCompositionInput.folioSettings`) — passed through
+  // unchanged here (Preview has not yet built any paint logic for it,
+  // matching this file's own original "PENDING" note, now updated to
+  // reflect that the schema type itself changed from `PlacedUnit` to
+  // `GeneratedPageFurniture` — generated page furniture is never
+  // manuscript content and must never carry a `SourceSpan`, see
+  // `core/layout/schema.ts`'s own doc comment). Painted as nothing when
+  // absent, still.
+  folio?: GeneratedPageFurniture;
   // TSP-LOOP-005 precedent: a colophon is its own, structurally identical
   // CanonicalPage set, but conventionally set in horizontal writing mode —
   // this is a fixed Renderer painting convention (Contract-consistent),

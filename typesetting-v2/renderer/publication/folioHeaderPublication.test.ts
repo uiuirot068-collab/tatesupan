@@ -1,18 +1,17 @@
-// P3-O08 -- Final-page completion, Step 1 (Human Visual QA HOLD round 20):
-// folio/header paint. Core never populates `CanonicalPage.folio` today
-// (confirmed directly, same finding Preview's own paintModel.ts already
-// recorded) -- there is no real producer to test end-to-end through
-// `composeCanonicalDocument`. These tests construct a `PublicationDocument`
-// directly (the same technique many Core tests already use to test one
-// half of a pipeline whose other half has no real producer yet) to prove
-// Publication's own paint-side mechanism is correct once given real data,
-// without inventing what that data means.
+// P3-O08 -- Final-page completion, Step 1 + 1B (Human Visual QA HOLD
+// rounds 20-21): folio/header paint AND real Core-side folio generation.
+// `core/folio/index.ts` (round 21) ports legacy `src/lib/pageLayout.ts`'s
+// real `MasterPageSettings` folio fields (`nombreStart`,
+// `hideNombreOnFirstPage`, `nombrePosition`, restricted to "center" this
+// round) into a real `composeCanonicalDocument({ folioSettings })` input
+// -- no synthetic injection is used for the tests or the final QA PDF;
+// every fixture here goes through the real pipeline.
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
-import { buildPublicationDocument, type PublicationDocument, type PublicationRenderContext } from "./paintModel";
+import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_FOLIO_SETTINGS, DEFAULT_RULE_SET_V2, type FolioSettings } from "../../core";
+import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
 import { buildPaintPlan, deriveBaselineRatioFromFont, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
@@ -38,11 +37,12 @@ function realContexts() {
   };
 }
 
-function composeModel(text: string) {
+/** Real pipeline only -- composeCanonicalDocument's own folioSettings input, no synthetic PaintPage/PublicationDocument injection. */
+function composeModel(text: string, folioSettings?: FolioSettings) {
   const { units, source } = buildFixtureUnits("body", [{ kind: "TEXT", text }]);
   const settings = settingsFor({ charsPerLine: Array.from(text).length + 2, linesPerColumn: 1, columnCount: 1 });
   const measurement = createFakeMeasurementProvider();
-  const document = composeCanonicalDocument({ bodyUnits: units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings });
+  const document = composeCanonicalDocument({ bodyUnits: units, ruleSet: DEFAULT_RULE_SET_V2, measurement, settings, folioSettings });
   const ctx: PublicationRenderContext = {
     linePitchTicks: settings.linePitchTicks,
     lineExtentTicks: settings.lineExtentTicks,
@@ -52,133 +52,125 @@ function composeModel(text: string) {
     paintFontIdentity: document.version.measurementIdentity,
   };
   const model = buildPublicationDocument("folio-qa", "Folio QA", document, units, source, ctx);
-  return { document, model, source, settings, ctx };
+  return { document, model, source };
 }
 
-/** Constructs a folio-bearing copy of a real, otherwise-composed PublicationDocument -- the ONLY way to exercise this path today, since Core never populates folio. Never mutates the composed document Core itself produced. */
-function withFolio(model: PublicationDocument, folioText: string, xTick: number, yTick: number): PublicationDocument {
-  return {
-    ...model,
-    pages: model.pages.map((page) => ({
-      ...page,
-      folio: { text: folioText, xMm: xTick, topMm: yTick },
-    })),
-  };
-}
-
-describe("Folio/header -- contract audit proofs", () => {
-  it("Core never populates CanonicalPage.folio for an ordinary composed document (confirms the audit finding directly, not from memory)", () => {
-    const { document } = composeModel("あいうえお");
+describe("Folio Core generation -- real MasterPageSettings-derived contract", () => {
+  it("Core emits NO folio when folioSettings is omitted -- byte-identical to every pre-round-21 caller (regression safety)", () => {
+    const { document } = composeModel("今日は");
     expect(document.pages[0].folio).toBeUndefined();
   });
 
-  it("Publication's own PaintPage.folio is likewise absent when Core supplies none -- pass-through is faithful, nothing is invented", () => {
-    const { model } = composeModel("あいうえお");
-    expect(model.pages[0].folio).toBeUndefined();
+  it("Core emits a real folio when folioSettings is supplied -- nombreStart=1 gives page 1 the text \"1\" (test: folio value deterministic)", () => {
+    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
+    expect(document.pages[0].folio).toEqual({ text: "1", position: "center" });
+  });
+
+  it("nombreStart offsets every page's own displayed number (legacy MasterPageSettings.nombreStart, ported verbatim)", () => {
+    const { document } = composeModel("今日は", { nombreStart: 7, hideNombreOnFirstPage: false, position: "center" });
+    expect(document.pages[0].folio?.text).toBe("7");
+  });
+
+  it("hideNombreOnFirstPage suppresses only the FIRST page's folio (legacy field, ported verbatim) -- suppression is representable as generated-furniture absence, deterministic", () => {
+    const { document } = composeModel("今日は", { nombreStart: 1, hideNombreOnFirstPage: true, position: "center" });
+    expect(document.pages[0].folio).toBeUndefined();
+  });
+
+  it("generated furniture never carries a SourceSpan -- it is not manuscript content (INV-001 safety)", () => {
+    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
+    const folio = document.pages[0].folio as unknown as Record<string, unknown>;
+    expect(folio.sourceSpan).toBeUndefined();
+  });
+
+  it("composing the same source+folioSettings twice yields byte-identical folio output (determinism)", () => {
+    const a = composeModel("今日は", DEFAULT_FOLIO_SETTINGS).document.pages[0].folio;
+    const b = composeModel("今日は", DEFAULT_FOLIO_SETTINGS).document.pages[0].folio;
+    expect(a).toEqual(b);
+  });
+
+  it("body layout (canonical coordinates, page/column/line geometry) is byte-identical with folioSettings enabled vs disabled -- generated furniture never triggers a reflow", () => {
+    const withFolio = composeModel("今日は", DEFAULT_FOLIO_SETTINGS).document;
+    const withoutFolio = composeModel("今日は").document;
+    expect(withFolio.pages[0].columns).toEqual(withoutFolio.pages[0].columns);
   });
 });
 
-describe("Folio/header -- paint mechanism (source deterministic, positioning geometry-only)", () => {
-  it("folio text resolves deterministically from source+sourceSpan, the same mechanism every other unit uses (test 1)", () => {
-    const { model } = composeModel("あいうえお");
-    const withF = withFolio(model, "１２３", 5, 100);
-    expect(withF.pages[0].folio?.text).toBe("１２３");
-    const withF2 = withFolio(model, "１２３", 5, 100);
-    expect(withF2.pages[0].folio).toEqual(withF.pages[0].folio);
+describe("Folio Publication paint -- real Core data, real geometry resolution", () => {
+  it("folio text resolves via Publication's own paint model, unchanged from Core's generated text", () => {
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
+    expect(model.pages[0].folio).toEqual({ text: "1", position: "center" });
   });
 
-  it("odd/even placement is entirely Core's own coordinate decision -- Publication paints wherever xMm/topMm say, never computing parity itself (test 3)", () => {
-    const { model } = composeModel("あいうえお");
-    const oddPage = withFolio(model, "１", 5, 90);
-    const evenPage = withFolio(model, "１", 20, 90); // a DIFFERENT xMm -- simulating a hypothetical left/right-page offset Core might one day compute
+  it("folio 'center' position resolves to a real physical mm coordinate derived from PublicationPageGeometry -- changing the paper width moves it, proving it is computed from geometry, never fabricated (test: coordinates deterministic)", () => {
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
-    const planOdd = buildPaintPlan(oddPage, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const planEven = buildPaintPlan(evenPage, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const lastOdd = planOdd[0].commands[planOdd[0].commands.length - 1];
-    const lastEven = planEven[0].commands[planEven[0].commands.length - 1];
-    const xOf = (c: PaintCommand): number => {
-      if (c.op === "text" || c.op === "rect") return c.xMm;
-      const first = c.commands.find((cmd): cmd is Extract<typeof cmd, { x: number }> => cmd.type !== "Z");
+    const narrowGeometry: PublicationPageGeometry = { ...DIAGNOSTIC_GEOMETRY, paperWidthMm: 60 };
+    const planWide = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const planNarrow = buildPaintPlan(model, true, narrowGeometry, undefined, outlineContext, gposContext, yakumonoContext);
+    const xOf = (plan: ReturnType<typeof buildPaintPlan>): number => {
+      const cmd = plan[0].commands[plan[0].commands.length - 1];
+      if (cmd.op === "text" || cmd.op === "rect") return cmd.xMm;
+      const first = cmd.commands.find((c): c is Extract<(typeof cmd.commands)[number], { x: number }> => c.type !== "Z");
       return first?.x ?? NaN;
     };
-    expect(xOf(lastOdd)).not.toBe(xOf(lastEven)); // Publication faithfully reflects whatever Core's own xMm says
+    expect(xOf(planWide)).not.toBeCloseTo(xOf(planNarrow), 3);
   });
 
-  it("suppression: a page with no folio paints no folio command at all -- the existing optional-field mechanism IS the suppression rule (test 4)", () => {
-    const { model } = composeModel("あいうえお");
+  it("folio paints via the real vector font path -- 'text' or 'glyphOutline' commands only, never a raster/rect placeholder", () => {
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    // Every command belongs to the body text ("あいうえお", 5 characters) -- none is an extra folio run.
-    const textCommands = plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" | "glyphOutline" }> => c.op === "text" || c.op === "glyphOutline");
-    expect(textCommands.length).toBeLessThanOrEqual(5);
+    const last = plan[0].commands[plan[0].commands.length - 1];
+    expect(["text", "glyphOutline"]).toContain(last.op);
   });
 
-  it("body layout (canonical coordinates, page/column/line geometry) is byte-identical with or without a folio present (test 5)", () => {
-    const { model } = composeModel("あいうえお");
-    const withF = withFolio(model, "１２３", 5, 100);
-    // Strip the folio field itself, then compare everything else.
-    const { folio: _f0, ...pageWithoutFolio } = withF.pages[0];
-    const { folio: _f1, ...pageOriginal } = model.pages[0];
-    expect(pageWithoutFolio).toEqual(pageOriginal);
-  });
-
-  it("folio paints via the real vector font path -- 'text' or 'glyphOutline' commands only, never a raster/rect placeholder when a font is supplied (test 6)", () => {
-    const { model } = composeModel("あいうえお");
-    const withF = withFolio(model, "１２３", 5, 100);
+  it("folio font size matches the fixed body-em size (HD-005 default: inherits body font unless overridden)", () => {
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
-    const plan = buildPaintPlan(withF, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const last3 = plan[0].commands.slice(-3);
-    for (const cmd of last3) expect(["text", "glyphOutline"]).toContain(cmd.op);
-  });
-
-  it("folio font size matches the fixed body-em size (HD-005 default: inherits body font unless overridden; no override mechanism exists yet, so only the default is exercised) (test 7)", () => {
-    // "今日は" (kanji-containing) rather than pure hiragana -- round 6's own
-    // GSUB audit found essentially ALL kana need outline paint in this
-    // font (kanji generally excluded), so a pure-hiragana fixture would
-    // produce zero "text" op commands to compare against here.
-    const { model } = composeModel("今日は");
-    const withF = withFolio(model, "１２３", 5, 100);
-    const { outlineContext, gposContext, yakumonoContext } = realContexts();
-    const plan = buildPaintPlan(withF, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const textCommands = plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
-    expect(textCommands.length).toBeGreaterThan(0);
     const first = textCommands[0].fontSizePt;
     for (const c of textCommands) expect(c.fontSizePt).toBe(first);
   });
 
-  it("same PublicationDocument input -> byte-identical PaintPlan output, twice (test 8, determinism)", () => {
-    const { model } = composeModel("あいうえお");
-    const withF = withFolio(model, "１２３", 5, 100);
+  it("suppressed page (hideNombreOnFirstPage) paints no folio command at all -- the existing optional-field mechanism IS the suppression rule", () => {
+    const { model } = composeModel("今日は", { nombreStart: 1, hideNombreOnFirstPage: true, position: "center" });
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
-    const planA = buildPaintPlan(withF, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const planB = buildPaintPlan(withF, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    // Every command belongs to body text ("今日は", 3 characters) -- none is an extra folio run.
+    expect(plan[0].commands.length).toBeLessThanOrEqual(3);
+  });
+
+  it("same input -> byte-identical PaintPlan output, twice (determinism)", () => {
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const planA = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const planB = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     expect(planA).toEqual(planB);
   });
 });
 
-describe("Folio/header -- regression (Ruby/Small Kana/Dash/TCY/Ellipsis unaffected)", () => {
-  it("full combined fixture (Ruby/TCY/Dash/Ellipsis/punctuation) still renders correctly with a folio present on the same page", () => {
+describe("Folio -- regression (Ruby/Small Kana/Dash/TCY/Ellipsis unaffected)", () => {
+  it("full combined fixture (Ruby/TCY/Dash/Ellipsis/punctuation) still renders correctly with real folio generation enabled", () => {
     const text = "「今日は、雨だった。」きっと２０２６年";
-    const { model } = composeModel(text);
-    const withF = withFolio(model, "７", 5, 130);
+    const { model } = composeModel(text, DEFAULT_FOLIO_SETTINGS);
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
-    const plan = buildPaintPlan(withF, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const { bytes } = renderPaintPlanToPdf(plan, font);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
   });
 });
 
-describe("Folio/header -- generates folio-header-qa.pdf", () => {
-  it("demonstrates odd page (folio present), even page (different xMm), suppressed page (no folio), and body-text-unaffected, at realistic 文庫 geometry", () => {
+describe("Folio -- generates folio-header-real-contract-qa.pdf (real Core generation, no synthetic injection)", () => {
+  it("page 1 (folio '1'), page with hideNombreOnFirstPage (suppressed), page with folioSettings omitted (no folio field at all), body text unaffected throughout", () => {
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const bodyText = "「今日は、雨だった。」きっとやってくる。";
 
-    const { model: base } = composeModel(bodyText);
-    const oddPage = withFolio(base, "１", 6, 132); // odd page: folio near the outer (left, in vertical-rl reading) margin
-    const evenPage = withFolio(base, "２", 90, 132); // even page: a different xMm, simulating a hypothetical mirrored placement
-    const suppressedPage = base; // no folio at all -- e.g. a front-matter/blank page
+    const page1 = composeModel(bodyText, { ...DEFAULT_FOLIO_SETTINGS, nombreStart: 1 }).model;
+    const suppressedPage = composeModel(bodyText, { nombreStart: 1, hideNombreOnFirstPage: true, position: "center" }).model;
+    const noFolioSettingsPage = composeModel(bodyText).model; // folioSettings entirely omitted -- pre-round-21 behavior
 
-    const pages = [oddPage, evenPage, suppressedPage].map((doc) => buildPaintPlan(doc, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext)[0]);
+    const pages = [page1, suppressedPage, noFolioSettingsPage].map((doc) => buildPaintPlan(doc, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext)[0]);
     const { bytes, pageCount } = renderPaintPlanToPdf(pages, font);
     expect(pageCount).toBe(3);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
@@ -186,7 +178,7 @@ describe("Folio/header -- generates folio-header-qa.pdf", () => {
     const outDir = join(__dirname, "..", "..", "qa", "publication", "p3-o08");
     if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
     try {
-      writeFileSync(join(outDir, "folio-header-qa.pdf"), bytes);
+      writeFileSync(join(outDir, "folio-header-real-contract-qa.pdf"), bytes);
     } catch {
       /* best-effort, transient Dropbox sync lock, non-fatal */
     }

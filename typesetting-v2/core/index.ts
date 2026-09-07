@@ -15,7 +15,12 @@ export type {
   ColophonBlock,
   LayoutWarning,
   LayoutError,
+  GeneratedPageFurniture,
+  FolioPosition,
 } from "./layout/schema";
+
+export type { FolioSettings } from "./folio";
+export { DEFAULT_FOLIO_SETTINGS, composeFolioForPage } from "./folio";
 
 export type { VersionMetadata } from "./version";
 

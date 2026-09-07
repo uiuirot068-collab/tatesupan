@@ -468,22 +468,34 @@ export function buildPaintPlan(
         }
       }
     }
-    // Human Visual QA HOLD round 20 (P3-O08 final-page completion, Step
-    // 1 -- folio/header): painted ONLY when Core actually supplies a
-    // folio for this page (never invented, never a page-numbering
-    // policy decided here). `page.folio.xMm`/`topMm` are the SAME
-    // content-relative-from-right-edge / content-relative-from-top-edge
-    // convention body units already use -- offset by the SAME
-    // `contentRightEdgeMm`/`yOffsetMm` page-geometry terms, one
-    // consistent coordinate system, no separate "decoration layer"
-    // positioning invented. Font: the body font, at the fixed
-    // `bodyEmMm` size (HD-005's own default -- 柱/奥付/folio inherit the
-    // body font unless overridden; no override mechanism exists in
-    // Publication paint yet, so only the default is implemented here).
-    if (page.folio && page.folio.text.length > 0 && hasFont) {
-      const x = contentRightEdgeMm - page.folio.xMm;
-      const xCenter = x + doc.bodyEmMm / 2;
-      const topMm = yOffsetMm + page.folio.topMm;
+    // Human Visual QA HOLD round 20/21 (P3-O08 final-page completion,
+    // Step 1/1B -- folio/header): painted ONLY when Core actually
+    // supplies a folio for this page (never invented, never a
+    // page-numbering policy decided here). Core's own
+    // `GeneratedPageFurniture.position` is SEMANTIC ("center"/"gutter"/
+    // "outer", ported verbatim from legacy's `NombrePosition`) --
+    // resolving it into physical mm is this function's own job, since
+    // this is the only place real paper size/margins
+    // (`PublicationPageGeometry`) are ever available. Only "center" is
+    // resolved: horizontally centered on the PAPER's own physical
+    // width (matches legacy's typical bottom-center placement,
+    // independent of column position), vertically anchored at the
+    // start of the reserved bottom-margin band. "gutter"/"outer"
+    // require resolving which physical side is "inside" for this
+    // page's own parity and the book's binding direction -- a real,
+    // unresolved Human/Product decision (see
+    // qa/evidence/P3_O08_FOLIO_HEADER_CORE_CONTRACT.md) -- so nothing
+    // is painted for them rather than faking a position. Font: the
+    // body font, at the fixed `bodyEmMm` size (HD-005's own default --
+    // 柱/奥付/folio inherit the body font unless overridden; no override
+    // mechanism exists in Publication paint yet, so only the default
+    // is implemented here).
+    if (page.folio && page.folio.text.length > 0 && hasFont && page.folio.position === "center") {
+      const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
+      const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
+      const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
+      const xCenter = paperWidthMm / 2;
+      const topMm = paperHeightMm - marginBottomMm;
       const totalHeightMm = doc.bodyEmMm * Array.from(page.folio.text).length;
       commands.push(...verticalGraphemeCommands(page.folio.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
