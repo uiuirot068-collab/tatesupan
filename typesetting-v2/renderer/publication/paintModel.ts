@@ -19,7 +19,7 @@
 // `rubyReadingOffsetTick`/`rubyReadingExtentTick` read-only, exactly like
 // Preview does).
 
-import type { CanonicalDocument, CanonicalPage, LogicalUnit, PlacedUnit } from "../../core";
+import type { CanonicalDocument, CanonicalPage, ColophonHorizontalPlacement, ColophonVerticalPlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
 import type { SourceSpan } from "../../core/source/span";
 import { tickToMm } from "./geometry";
 
@@ -175,6 +175,24 @@ export interface PublicationDocument {
   // exact same tick-derived `PaintPage` shape as body pages; only
   // `pdfGenerator.ts` interprets them differently.
   colophonPages?: PaintPage[];
+  // Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step
+  // 2C): Core's own real physical page order (`CanonicalDocument.pageSequence`)
+  // -- Publication reads this to interleave body/colophon pages
+  // correctly, never deciding order itself. Optional/additive: omitted
+  // for a hand-built `PublicationDocument` fixture that predates this
+  // round (`paintModel.test.ts`'s own literal) -- `buildPaintPlan`
+  // falls back to its pre-round-28 "all body, then all colophon"
+  // concatenation when this is absent, byte-identical to before.
+  pageSequence?: PhysicalPageRef[];
+  // Real legacy `ColophonPlacement.horizontal`/`.vertical`
+  // (`src/lib/colophon.ts:67-74`), resolved by Core onto
+  // `CanonicalDocument.colophon.placement` and passed through here
+  // unresolved-to-mm (Publication's own paint boundary does that
+  // conversion, see `pdfGenerator.ts`). `respectGutter`/
+  // `respectVerticalMargins` are deliberately NOT threaded past Core —
+  // Publication does not act on them yet (disclosed gap, see
+  // qa/evidence/P3_O08_STRUCTURAL_COLOPHON_FINAL_PLACEMENT.md).
+  colophonPlacement?: { horizontal: ColophonHorizontalPlacement; vertical: ColophonVerticalPlacement };
 }
 
 function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
@@ -384,5 +402,9 @@ export function buildPublicationDocument(
     bodyEmMm: tickToMm(ctx.linePitchTicks),
     pages,
     ...(colophonPages ? { colophonPages } : {}),
+    ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),
+    ...(document.colophon?.placement
+      ? { colophonPlacement: { horizontal: document.colophon.placement.horizontal, vertical: document.colophon.placement.vertical } }
+      : {}),
   };
 }

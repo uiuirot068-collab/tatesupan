@@ -97,7 +97,24 @@ export interface PublicationPageGeometry {
 }
 
 export type PaintCommand =
-  | { op: "text"; text: string; xMm: number; yMm: number; fontSizePt: number; align: "left" | "center"; angle?: number; baseline?: "alphabetic" | "middle"; maxWidthMm?: number }
+  | {
+      op: "text";
+      text: string;
+      xMm: number;
+      yMm: number;
+      fontSizePt: number;
+      // "right" added round 28 (P3-O08 final-page completion, Step 2C) —
+      // real colophon row value-column anchor (round 27) and the new
+      // `ColophonPlacement.horizontal:"right"` block anchor both need it.
+      // jsPDF's own `text()` already accepts "right" (a real, existing
+      // TextOptionsLight value, unrelated to this widening) — this only
+      // corrects the PaintCommand type to match, removing round 27's own
+      // unsafe `as "left" | "center"` cast.
+      align: "left" | "center" | "right";
+      angle?: number;
+      baseline?: "alphabetic" | "middle";
+      maxWidthMm?: number;
+    }
   | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
   // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
   // dependency-gate approval — opentype.js): a real vector glyph outline,
@@ -461,18 +478,18 @@ function unitCommands(
 // paint via a real vector glyph outline instead of jsPDF's Unicode
 // `text()` path. Omitting it preserves the exact prior (pre-round-7)
 // "text"-only behavior — every existing call site/test is unaffected.
-export function buildPaintPlan(
-  doc: PublicationDocument,
+function buildBodyPaintPage(
+  page: PaintPage,
   hasFont: boolean,
-  pageGeometry?: PublicationPageGeometry,
-  baselineRatio: number = FALLBACK_BASELINE_RATIO,
+  pageGeometry: PublicationPageGeometry | undefined,
+  doc: PublicationDocument,
+  baselineRatio: number,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
   yakumonoContext?: VerticalYakumonoAlignContext
-): PaintPlan {
-  const bodyPlan = doc.pages.map((page) => {
-    const commands: PaintCommand[] = [];
-    // The content area's own right edge, physically: the paper's right
+): PaintPagePlan {
+  const commands: PaintCommand[] = [];
+  // The content area's own right edge, physically: the paper's right
     // edge minus the inside margin when pageGeometry is supplied, or the
     // content's own extent (the prior, margin-less behavior) otherwise.
     const contentRightEdgeMm = pageGeometry ? pageGeometry.paperWidthMm - pageGeometry.marginRightMm : page.widthMm;
@@ -554,25 +571,44 @@ export function buildPaintPlan(
       const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
       commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
-    return {
-      widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
-      heightMm: pageGeometry?.paperHeightMm ?? page.heightMm,
-      commands,
-    };
-  });
+  return {
+    widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
+    heightMm: pageGeometry?.paperHeightMm ?? page.heightMm,
+    commands,
+  };
+}
 
-  // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
-  // 2, structural colophon): appended AFTER every body page -- Core's
-  // own colophon composition (round 26's own `assemble.ts` change)
-  // continues the same physical page sequence body pages use (matches
-  // legacy's own default `pagePosition: {mode:"end"}`, confirmed real
-  // via `src/lib/colophon.ts`'s own `resolveColophonNombre`). Painted
-  // via a dedicated horizontal path -- legacy's own colophon is real,
-  // confirmed HORIZONTAL content (`writing-mode: horizontal-tb`), never
-  // vertical Japanese body typography, so it deliberately does NOT
-  // route through `unitCommands`/`verticalGraphemeCommands` at all.
-  const colophonPlan = (doc.colophonPages ?? []).map((page) => buildColophonPaintPage(page, hasFont, pageGeometry, doc.bodyEmMm));
+// Human Visual QA HOLD round 20 onward: builds the full document paint
+// plan. `outlineContext`/`baselineRatio` (Human Visual QA HOLD round 7):
+// see `buildBodyPaintPage`'s own doc comment above.
+//
+// Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step
+// 2C): walks `doc.pageSequence` (Core's own real physical page order)
+// when present, dispatching each entry to the body or colophon painter
+// -- Publication never decides insertion order itself, only paints what
+// Core already decided (`resolveColophonInsertion`, wired in
+// `core/layout/assemble.ts`). Falls back to the pre-round-28 "all body,
+// then all colophon" concatenation when `pageSequence` is absent (a
+// hand-built `PublicationDocument` fixture predating this round) --
+// byte-identical to before for every such caller.
+export function buildPaintPlan(
+  doc: PublicationDocument,
+  hasFont: boolean,
+  pageGeometry?: PublicationPageGeometry,
+  baselineRatio: number = FALLBACK_BASELINE_RATIO,
+  outlineContext?: VerticalOutlineContext,
+  gposContext?: VerticalGposContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
+): PaintPlan {
+  const colophonPageCount = doc.colophonPages?.length ?? 0;
+  const bodyPageAt = (i: number) => buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, outlineContext, gposContext, yakumonoContext);
+  const colophonPageAt = (i: number) => buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount);
 
+  if (doc.pageSequence) {
+    return doc.pageSequence.map((ref) => (ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index)));
+  }
+  const bodyPlan = doc.pages.map((_, i) => bodyPageAt(i));
+  const colophonPlan = (doc.colophonPages ?? []).map((_, i) => colophonPageAt(i));
   return [...bodyPlan, ...colophonPlan];
 }
 
@@ -588,24 +624,67 @@ export function buildPaintPlan(
 // each page is painted (ordinary colophon content -- short field rows
 // -- fits within one column in every fixture this round proves; a
 // colophon long enough to overflow into a second column would need a
-// real multi-column horizontal layout, not yet built -- see
-// qa/evidence/P3_O08_STRUCTURAL_COLOPHON.md).
-function buildColophonPaintPage(page: PaintPage, hasFont: boolean, pageGeometry: PublicationPageGeometry | undefined, bodyEmMm: number): PaintPagePlan {
+// real multi-column horizontal layout, not yet built).
+//
+// Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step
+// 2C): applies real legacy `ColophonPlacement.horizontal`/`.vertical`
+// (`src/lib/colophon.ts:67-74`, `ColophonPageCard.tsx:100-120`'s own
+// flexbox justify-content/align-items). `horizontal` anchors each
+// non-tab (freeText/plain) line's own text -- a tab-joined row (round
+// 27) already spans the full content width by construction (label
+// flush-left, value flush-right, mirroring legacy's own fixed 2-column
+// `FragmentRow` grid) and is deliberately NOT re-anchored by
+// `horizontal`, a disclosed simplification (see evidence). `vertical`
+// shifts the WHOLE content block's own start position -- but ONLY when
+// this colophon composed onto exactly one page, matching legacy's own
+// real single-page model exactly; a v2-only multi-page overflow
+// (round 27) always top-anchors every page instead of applying
+// `vertical` per page, a deliberate, disclosed "smallest consistent
+// continuation rule" (repeating "center"/"bottom" per page would break
+// visual flow across pages, a real product decision legacy never had
+// to make since it has no multi-page colophon concept at all).
+// `respectGutter`/`respectVerticalMargins` are NOT read here at all --
+// see `ColophonPlacement`'s own doc comment (`core/layout/schema.ts`)
+// for why.
+function buildColophonPaintPage(
+  page: PaintPage,
+  hasFont: boolean,
+  pageGeometry: PublicationPageGeometry | undefined,
+  bodyEmMm: number,
+  placement: { horizontal: "left" | "center" | "right"; vertical: "top" | "center" | "bottom" } | undefined,
+  colophonPageCount: number
+): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
   const marginTopMm = pageGeometry?.marginTopMm ?? 0;
+  const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
   const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
   const marginRightMm = pageGeometry?.marginRightMm ?? 0;
   const commands: PaintCommand[] = [];
   const firstColumn = page.columns[0];
+  const horizontal = placement?.horizontal ?? "center";
+  const vertical = colophonPageCount === 1 ? (placement?.vertical ?? "center") : "top";
   if (hasFont && firstColumn) {
     const lineHeightMm = bodyEmMm * 1.5; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
     const contentLeftMm = marginLeftMm;
     const contentRightMm = paperWidthMm - marginRightMm;
+    const contentAreaTopMm = marginTopMm;
+    const contentAreaBottomMm = paperHeightMm - marginBottomMm;
+    const contentAreaHeightMm = Math.max(contentAreaBottomMm - contentAreaTopMm, 0);
+    // Deterministic block-height: real composed line COUNT times the
+    // same fixed lineHeightMm every line already paints at -- never a
+    // character-count-based estimate.
+    const totalContentHeightMm = firstColumn.lines.length * lineHeightMm;
+    const startYMm =
+      vertical === "bottom"
+        ? Math.max(contentAreaBottomMm - totalContentHeightMm, contentAreaTopMm)
+        : vertical === "center"
+          ? contentAreaTopMm + Math.max(contentAreaHeightMm - totalContentHeightMm, 0) / 2
+          : contentAreaTopMm;
     firstColumn.lines.forEach((line, lineIndex) => {
       const text = line.units.map((u) => u.text).join("");
       if (text.length === 0) return;
-      const yCenter = marginTopMm + lineIndex * lineHeightMm + bodyEmMm / 2;
+      const yCenter = startYMm + lineIndex * lineHeightMm + bodyEmMm / 2;
       // Human Visual QA HOLD round 27: a TAB-joined row (this module's
       // own `compileColophonContent`-derived label/value pair, real
       // legacy `ColophonField` content) paints as TWO separate
@@ -614,12 +693,15 @@ function buildColophonPaintPage(page: PaintPage, hasFont: boolean, pageGeometry:
       // CSS grid (`FragmentRow`, `src/components/ColophonPageCard.tsx`),
       // which has no literal separator character to reproduce (never
       // invented here as e.g. "："). A line with no tab (freeText, or
-      // any plain line) paints as one centered line, unchanged from
-      // round 26.
+      // any plain line) respects `horizontal` (round 28).
       if (text.includes("\t")) {
         const [label, value] = text.split("\t");
         if (label.length > 0) commands.push({ op: "text", text: label, xMm: contentLeftMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
-        if (value.length > 0) commands.push({ op: "text", text: value, xMm: contentRightMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "right" as "left" | "center", angle: 0, baseline: "middle" });
+        if (value.length > 0) commands.push({ op: "text", text: value, xMm: contentRightMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "right", angle: 0, baseline: "middle" });
+      } else if (horizontal === "left") {
+        commands.push({ op: "text", text, xMm: contentLeftMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
+      } else if (horizontal === "right") {
+        commands.push({ op: "text", text, xMm: contentRightMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "right", angle: 0, baseline: "middle" });
       } else {
         const xCenter = contentLeftMm + (contentRightMm - contentLeftMm) / 2;
         commands.push(horizontalFurnitureCommand(text, xCenter, yCenter, mmToPt(bodyEmMm)));
@@ -627,11 +709,25 @@ function buildColophonPaintPage(page: PaintPage, hasFont: boolean, pageGeometry:
     });
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {
-    const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
     const xCenter =
       page.folio.position === "left" ? marginLeftMm + bodyEmMm / 2 : page.folio.position === "right" ? paperWidthMm - marginRightMm - bodyEmMm / 2 : paperWidthMm / 2;
     const yCenter = paperHeightMm - marginBottomMm / 2;
     commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(bodyEmMm)));
+  }
+  // Human Visual QA HOLD round 28: colophon pages have carried a real,
+  // Core-generated `header` since round 26 (`assemble.ts`'s own
+  // physical-sequence continuation), but this function never painted
+  // it -- an undetected round-26 gap, fixed here, mirroring the body
+  // page header paint exactly (`buildBodyPaintPage` above).
+  if (page.header && page.header.text.length > 0 && hasFont) {
+    const xCenter =
+      page.header.position.horizontal === "left"
+        ? marginLeftMm + bodyEmMm / 2
+        : page.header.position.horizontal === "right"
+          ? paperWidthMm - marginRightMm - bodyEmMm / 2
+          : paperWidthMm / 2;
+    const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
+    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(bodyEmMm)));
   }
   return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }

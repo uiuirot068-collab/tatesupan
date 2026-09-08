@@ -182,14 +182,59 @@ export interface CanonicalPage {
   header?: GeneratedHeader; // 柱, page-decoration layer, Contract §15
 }
 
+// Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step 2C):
+// legacy `ColophonPlacement` (`src/lib/colophon.ts:67-74`), ported
+// verbatim as a type. `horizontal`/`vertical` are a real, portable
+// content-block anchor (legacy: flexbox justify-content/align-items on
+// a placement area, `ColophonPageCard.tsx:100-120`) — resolved by Core
+// here (a pure enum, no parity dependency) and interpreted into actual
+// mm only at the Publication paint boundary (`pdfGenerator.ts`), same
+// split as `ResolvedFolioPosition`/`ResolvedHeaderPosition` above.
+// `respectGutter`/`respectVerticalMargins` are real legacy fields
+// (parity-dependent asymmetric margin selection, `ColophonPageCard.tsx:85-98`)
+// carried here for contract fidelity but NOT YET acted on by Publication
+// — `PublicationPageGeometry` has no distinct gutter/outer margin
+// fields nor per-page-parity margin variance (a single fixed margin
+// rectangle for the whole document), so faithfully porting them would
+// require a materially larger geometry-model change. Disclosed, not
+// silently ignored — see qa/evidence/P3_O08_STRUCTURAL_COLOPHON_FINAL_PLACEMENT.md.
+export type ColophonHorizontalPlacement = "left" | "center" | "right";
+export type ColophonVerticalPlacement = "top" | "center" | "bottom";
+
+export interface ColophonPlacement {
+  horizontal: ColophonHorizontalPlacement;
+  vertical: ColophonVerticalPlacement;
+  respectGutter: boolean;
+  respectVerticalMargins: boolean;
+}
+
 export interface ColophonBlock {
   sourceBlockId: BlockId;
   pages: CanonicalPage[]; // its own page(s), not threaded through body columns/lines
+  // Optional (not required) specifically so a hand-built ColophonBlock
+  // fixture predating this round (e.g.
+  // `renderer/preview/generateFoundationArtifact.test.ts`'s own
+  // `{ sourceBlockId, pages }` literal) keeps type-checking unchanged —
+  // `composeColophon()` itself always populates a real value (defaulting
+  // to `DEFAULT_COLOPHON_PLACEMENT` when a caller omits it).
+  placement?: ColophonPlacement;
 }
+
+// Human Visual QA HOLD round 28: the FINAL PHYSICAL page order, Core's
+// own decision (never Publication's — Publication must not insert or
+// reorder pages, only paint what this sequence already decided).
+// References into `CanonicalDocument.pages`/`colophon.pages` rather
+// than duplicating page data. For every existing caller that never
+// supplies a colophon at all, or uses the (still-default)
+// `{mode:"end"}` pagePosition, this is exactly `[...body pages in
+// order, ...colophon pages in order]` — the same physical order those
+// callers already got before this field existed.
+export type PhysicalPageRef = { kind: "body"; index: number } | { kind: "colophon"; index: number };
 
 export interface CanonicalDocument {
   pages: CanonicalPage[];
   colophon?: ColophonBlock;
+  pageSequence: PhysicalPageRef[];
   version: VersionMetadata;
   warnings: LayoutWarning[];
   errors: LayoutError[];

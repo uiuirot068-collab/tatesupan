@@ -13,6 +13,10 @@ export type {
   CanonicalLine,
   PlacedUnit,
   ColophonBlock,
+  ColophonPlacement,
+  ColophonHorizontalPlacement,
+  ColophonVerticalPlacement,
+  PhysicalPageRef,
   LayoutWarning,
   LayoutError,
   GeneratedPageFurniture,
@@ -31,7 +35,7 @@ export type { HeaderSettings, HeaderPageOverride } from "./header";
 export { DEFAULT_HEADER_SETTINGS, composeHeaderForPage, headerSettingsFromLegacy } from "./header";
 
 export type { ColophonFieldInput, ColophonContentSettings, ColophonCompiledRow, ColophonCompiledContent, ColophonPagePosition, ColophonInsertion } from "./colophon";
-export { composeColophon, compileColophonContent, resolveColophonInsertion } from "./colophon";
+export { composeColophon, compileColophonContent, resolveColophonInsertion, DEFAULT_COLOPHON_PLACEMENT } from "./colophon";
 
 export type { VersionMetadata } from "./version";
 

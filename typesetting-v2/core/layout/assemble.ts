@@ -10,12 +10,12 @@ import type { RuleSetVersion } from "../rules/characterClass";
 import type { LogicalUnit } from "../units";
 import type { BlockId } from "../source/span";
 import { composePages, type PageCompositionSettings } from "../compose/page";
-import { composeColophon } from "../colophon";
+import { composeColophon, resolveColophonInsertion, type ColophonPagePosition } from "../colophon";
 import { composeFolioForPage, type FolioSettings } from "../folio";
 import { composeHeaderForPage, type HeaderPageOverride, type HeaderSettings } from "../header";
 import { createTraceRecorder } from "../trace";
 import { computeHold, holdToLayoutError } from "../diagnostics";
-import type { CanonicalDocument, CanonicalPage, LayoutError, LayoutWarning } from "./schema";
+import type { CanonicalDocument, CanonicalPage, ColophonPlacement, LayoutError, LayoutWarning, PhysicalPageRef } from "./schema";
 
 // "which MeasurementFacts bundle" (Contract §25) — identified by provider +
 // version, per the Contract's own phrasing ("itself versioned/identified by
@@ -88,11 +88,20 @@ export interface DocumentCompositionInput {
   // ページ順（物理ページ順）に従う"), its own physical page number being
   // `precedingBodyPageCount + 1`. This round ports that behavior — the
   // colophon's own pages continue the SAME folio/header sequence body
-  // pages use, at whatever physical position they end up (currently
-  // always "after all body pages," matching legacy's own default
-  // `pagePosition: {mode:"end"}`; `after-body-page` mid-insertion is a
-  // real, disclosed, NOT YET ported gap — see
-  // qa/evidence/P3_O08_STRUCTURAL_COLOPHON.md).
+  // pages use, at whatever physical position they end up.
+  //
+  // Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step
+  // 2C): `colophonPagePosition` wires the already-ported
+  // `resolveColophonInsertion` (`core/colophon/index.ts`, verbatim from
+  // `src/lib/colophon.ts:266-277`) into the actual final physical page
+  // sequence. Optional/additive — omitting it defaults to `{mode:"end"}`,
+  // byte-identical to every round-20-through-27 caller's own behavior
+  // (colophon always after all body pages). `colophonPlacement` is the
+  // real legacy `ColophonPlacement` (`src/lib/colophon.ts:67-74`),
+  // attached to the resulting `ColophonBlock` — see `ColophonPlacement`'s
+  // own doc comment in `./schema` for what is/isn't acted on yet.
+  colophonPagePosition?: ColophonPagePosition;
+  colophonPlacement?: ColophonPlacement;
 }
 
 // The full orchestration named by this Loop's goal. Composes body pages,
@@ -110,41 +119,60 @@ export function composeCanonicalDocument(input: DocumentCompositionInput): Canon
   }
   const folioSettings = input.folioSettings;
   const headerSettings = input.headerSettings;
-  const pages: CanonicalPage[] =
-    folioSettings || headerSettings
-      ? bodyResult.pages.map((page, i) => {
-          const folio = folioSettings ? composeFolioForPage(i, folioSettings) : undefined;
-          const header = headerSettings ? composeHeaderForPage(i, headerSettings, input.headerPageOverrides?.[i + 1]) : undefined;
-          return { ...page, ...(folio ? { folio } : {}), ...(header ? { header } : {}) };
-        })
-      : bodyResult.pages;
 
-  let colophon: CanonicalDocument["colophon"];
+  let colophonRawPages: CanonicalPage[] = [];
+  let colophonBlockId: BlockId | undefined;
   if (input.colophonUnits && input.colophonUnits.length > 0) {
     const colophonResult = composePages(input.colophonUnits, input.ruleSet, input.measurement, input.settings, trace);
     if (colophonResult.hold) {
       errors.push(holdToLayoutError(colophonResult.hold));
     }
-    const blockId = input.colophonBlockId ?? input.colophonUnits[0].span.blockId;
-    // Continues the SAME physical page/folio/header sequence body pages
-    // use (see this file's own round-26 doc comment above) -- the
-    // colophon's own first page picks up right where the body's own
-    // pages left off.
-    const colophonPages: CanonicalPage[] =
-      folioSettings || headerSettings
-        ? colophonResult.pages.map((page, i) => {
-            const pageIndex = pages.length + i;
-            const folio = folioSettings ? composeFolioForPage(pageIndex, folioSettings) : undefined;
-            const header = headerSettings ? composeHeaderForPage(pageIndex, headerSettings, input.headerPageOverrides?.[pageIndex + 1]) : undefined;
-            return { ...page, ...(folio ? { folio } : {}), ...(header ? { header } : {}) };
-          })
-        : colophonResult.pages;
-    colophon = composeColophon(blockId, colophonPages);
+    colophonRawPages = colophonResult.pages;
+    colophonBlockId = input.colophonBlockId ?? input.colophonUnits[0].span.blockId;
+  }
+  const hasColophon = colophonRawPages.length > 0;
+
+  // Human Visual QA HOLD round 28 (P3-O08 final-page completion, Step
+  // 2C): the real physical page sequence, Core's own decision (Publication
+  // never inserts/reorders pages -- it only paints what this decided).
+  // `{mode:"end"}` (the default when `colophonPagePosition` is omitted,
+  // matching every round-20-through-27 caller) yields exactly
+  // `[...body pages, ...colophon pages]` -- byte-identical to this
+  // file's own pre-round-28 behavior.
+  const pagePosition = input.colophonPagePosition ?? { mode: "end" as const };
+  const insertion = hasColophon ? resolveColophonInsertion(pagePosition, bodyResult.pages.length) : undefined;
+  const precedingBodyPages = insertion?.precedingBodyPages ?? bodyResult.pages.length;
+
+  const pageSequence: PhysicalPageRef[] = [];
+  for (let i = 0; i < precedingBodyPages; i++) pageSequence.push({ kind: "body", index: i });
+  for (let i = 0; i < colophonRawPages.length; i++) pageSequence.push({ kind: "colophon", index: i });
+  for (let i = precedingBodyPages; i < bodyResult.pages.length; i++) pageSequence.push({ kind: "body", index: i });
+
+  // Folio/header are resolved against each page's own position in the
+  // FINAL physical sequence above -- not its position within the body's
+  // own (unchanged) composition order or the colophon's own (unchanged)
+  // composition order. A body page's own lines/columns/breaks/source
+  // spans are never touched here, only its furniture -- see
+  // qa/evidence/P3_O08_STRUCTURAL_COLOPHON_FINAL_PLACEMENT.md's own
+  // "body composition invariant" proof.
+  const bodyPagesOut: CanonicalPage[] = bodyResult.pages.slice();
+  const colophonPagesOut: CanonicalPage[] = colophonRawPages.slice();
+  if (folioSettings || headerSettings) {
+    pageSequence.forEach((ref, physicalIndex) => {
+      const folio = folioSettings ? composeFolioForPage(physicalIndex, folioSettings) : undefined;
+      const header = headerSettings ? composeHeaderForPage(physicalIndex, headerSettings, input.headerPageOverrides?.[physicalIndex + 1]) : undefined;
+      const patch = { ...(folio ? { folio } : {}), ...(header ? { header } : {}) };
+      if (ref.kind === "body") bodyPagesOut[ref.index] = { ...bodyPagesOut[ref.index], ...patch };
+      else colophonPagesOut[ref.index] = { ...colophonPagesOut[ref.index], ...patch };
+    });
   }
 
+  const colophon = hasColophon && colophonBlockId !== undefined ? composeColophon(colophonBlockId, colophonPagesOut, input.colophonPlacement) : undefined;
+
   return {
-    pages,
+    pages: bodyPagesOut,
     colophon,
+    pageSequence,
     version: buildVersionMetadata(input.ruleSet.id, input.settings, input.measurement),
     warnings,
     errors,

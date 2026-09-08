@@ -8,10 +8,20 @@
 // undoes, the existing TSP-LOOP-005 colophon flow-isolation precedent.
 
 import type { BlockId } from "../source/span";
-import type { CanonicalPage, ColophonBlock } from "../layout/schema";
+import type { CanonicalPage, ColophonBlock, ColophonPlacement } from "../layout/schema";
 
-export function composeColophon(sourceBlockId: BlockId, pages: CanonicalPage[]): ColophonBlock {
-  return { sourceBlockId, pages };
+// Legacy default (`src/lib/colophon.ts:76-81`, `DEFAULT_COLOPHON_PLACEMENT`)
+// ported verbatim, including the two fields Publication does not yet act
+// on (see `ColophonPlacement`'s own doc comment, `core/layout/schema.ts`).
+export const DEFAULT_COLOPHON_PLACEMENT: ColophonPlacement = {
+  horizontal: "center",
+  vertical: "center",
+  respectGutter: true,
+  respectVerticalMargins: true,
+};
+
+export function composeColophon(sourceBlockId: BlockId, pages: CanonicalPage[], placement?: ColophonPlacement): ColophonBlock {
+  return { sourceBlockId, pages, placement: placement ?? DEFAULT_COLOPHON_PLACEMENT };
 }
 
 // Human Visual QA HOLD round 27 (P3-O08 final-page completion, Step 2B):
@@ -79,14 +89,15 @@ export function compileColophonContent(settings: ColophonContentSettings): Colop
 // lose the colophon, silently fall back to "end" when the requested
 // body page does not exist) are provable in isolation.
 //
-// DISCLOSED GAP (round 27): this function's OUTPUT is not yet wired
-// into `core/layout/assemble.ts`'s actual page composition. Executing
-// `{mode:"after-body-page"}` for real would require re-interleaving
-// `CanonicalDocument.pages` itself and re-deriving every subsequent
-// body page's own folio/header pageIndex -- materially larger than
-// this round's scope. Only `{mode:"end"}` (precedingBodyPages === all
-// body pages) is actually wired end-to-end this round; see
-// qa/evidence/P3_O08_STRUCTURAL_COLOPHON_REAL_PRODUCT_PORT.md.
+// Round 27: this function's output was proven correct in isolation but
+// not yet wired into `core/layout/assemble.ts`'s actual page
+// composition. Round 28 (P3-O08 final-page completion, Step 2C) closes
+// that gap -- `assemble.ts` now calls this to decide
+// `precedingBodyPages`, then builds the FINAL PHYSICAL page sequence
+// (`CanonicalDocument.pageSequence`) by interleaving colophon pages at
+// that point and re-deriving folio/header for every page (body and
+// colophon alike) against its own final physical index -- see
+// qa/evidence/P3_O08_STRUCTURAL_COLOPHON_FINAL_PLACEMENT.md.
 export type ColophonPagePosition = { mode: "end" } | { mode: "after-body-page"; afterBodyPage: number };
 
 export interface ColophonInsertion {
