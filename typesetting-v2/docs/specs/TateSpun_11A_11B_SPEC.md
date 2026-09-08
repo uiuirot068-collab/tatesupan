@@ -46,24 +46,36 @@ Deliberately NOT attempted in Phase 2 (real false-positive/product-judgment risk
 - ASCII punctuation with a full-width equivalent (URL/code/deliberate-Latin false-positive risk)
 - half-width katakana's own auto-conversion replacement text
 
-The remaining categories (broader vertical-writing checks beyond R4/R5, dictionary/NG words) remain open, along with the entire Fix/Ignore UI, presets, and bulk-fix workflow (11-A Phase 3, HUMAN_GATE).
+11-A Phase 3 is ENGINEERING COMPLETE / Human QA pending:
+- remaining rule catalog closed: R9 ellipsis form review (…/……/・・・/..., REVIEW_BEFORE_FIX), R10 dash form review (―/――/―――, REVIEW_BEFORE_FIX for a solo dash, NOTICE_ONLY for 3+), R4 half-width katakana now carries a REAL `suggestedReplacement` (a genuine JIS X 0201↔X 0208 conversion table including dakuten/handakuten combining and the real ウ→ヴ exception) and is promoted to `SAFE_AUTO_FIX`
+- category 5 (表記/dictionary/NG-word) implemented: R11 表記ゆれ dictionary and R12 NG words, both parameterized by user-local entries (`WritingCheckConfig.dictionary`/`.ngWords`), both dictionary-safety-aware -- a match overlapping ruby/TCY/image/page-break notation (via the SAME `tokenizeTategakiWithOffsets` the v2Bridge manuscript adapter reuses, never a second parser) is still reported but never offered an automatic replacement
+- 3 Human-approved presets, exact verbatim names: 入稿前おすすめ (engine defaults + R8 blank-run + dictionary/NG), 記号だけ (punctuation/notation structural rules only), しっかりチェック (every rule on)
+- RED (原稿事故・高確度) / YELLOW (確認推奨) severity surfaced in the UI with BOTH colour and a text label (never colour alone) -- independent of `fixClass`, exactly as this spec's own §11-A correction anticipated
+- explicit 直す (single-diagnostic Fix; re-validates the current source substring against the diagnostic's own `originalText` snapshot before ever mutating -- refuses and reruns diagnostics instead if stale), 無視 (occurrence-level, in-memory only, never persisted, naturally forgotten on reload), 安全な項目をまとめて直す (SAFE_AUTO_FIX-only, descending-offset, overlap-safe bulk apply)
+- narrowest-possible one-step 元に戻す (undo) -- holds only the manuscript state immediately before the last automated change, cleared the instant the user makes any further manual edit; no general history engine was built
+- 文章チェック設定 modal: preset selector, categorized per-rule toggles, わたしの辞書 / NGワード CRUD -- all three new persistence hooks are localStorage-only (`useSyncExternalStore`, matching `useWritingCheckEnabled.ts`'s existing convention), never transmitted anywhere
+- output isolation is now a machine-verified proof, not merely an architectural claim: a static scan of every source file under `typesetting-v2/` (Core/Publication/Preview/export) confirms none of them reference the writing-check engine at all
+- privacy static scan extended to cover every new Phase 3 file (the existing recursive scan picks up new engine files automatically; the new hooks/UI files outside the engine directory are covered by an explicit file list)
+
+Deliberately NOT attempted in Phase 3:
+- "excessive indentation" threshold rule (still no reliable existing contract)
+- ASCII punctuation → full-width auto-conversion (still a URL/code/deliberate-Latin false-positive risk)
+- React-hook-level automated tests for the 3 new localStorage hooks -- this repo has no jsdom/testing-library dependency and no existing hook-test precedent (`useWritingCheckEnabled.ts` itself has none); adding one requires Human approval per the standing no-new-dependency rule, so this is covered by Human QA on the real Editor instead
 
 ### Product principles preserved
 
 - textarea remains manuscript source of truth
 - browser-local processing
 - no automatic external AI/API manuscript transmission
-- no silent mutation
-- output PDF/JPG/Preview must not contain diagnostics
+- no silent mutation -- a fix (single or bulk) only ever applies in direct response to an explicit click
+- output PDF/JPG/Preview must not contain diagnostics -- now machine-verified (see output isolation proof above)
 - explicit Human actions are required for manuscript modification
 
-### β boundary still requiring Human decision
+### β boundary -- resolved
 
-Need Human decision on whether category 5 dictionary/NG-word/user-dictionary UI is:
-- required for β, or
-- post-β.
+Human decision (Phase 3 task): category 5 dictionary/NG-word/user-dictionary functionality IS included in β, local/browser-side only, no manuscript transmission, no external AI/API.
 
-Presets, Fix/Ignore UI and safe bulk fix also remain for later 11-A phases.
+Presets, Fix/Ignore UI, and safe bulk fix are implemented (see above); Phase 3 itself awaits Human visual/UX QA on the real Editor before being marked COMPLETE.
 
 ---
 

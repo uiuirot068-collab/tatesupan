@@ -6,7 +6,7 @@ describe("checkHalfwidthKana (R4-halfwidth-kana)", () => {
     const text = "ﾃｽﾄ";
     const issues = checkHalfwidthKana(text);
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatchObject({ ruleId: "R4-halfwidth-kana", category: "character", severity: "HIGH_CONFIDENCE", fixClass: "REVIEW_BEFORE_FIX" });
+    expect(issues[0]).toMatchObject({ ruleId: "R4-halfwidth-kana", category: "character", severity: "HIGH_CONFIDENCE", fixClass: "SAFE_AUTO_FIX" });
     expect(text.slice(issues[0].start, issues[0].end)).toBe("ﾃｽﾄ");
   });
 
@@ -22,8 +22,8 @@ describe("checkHalfwidthKana (R4-halfwidth-kana)", () => {
     expect(checkHalfwidthKana("[tate]A5[/tate]｜東京《とうきょう》")).toEqual([]);
   });
 
-  it("has no suggestedReplacement yet (conversion table deferred, see module doc)", () => {
+  it("provides a real full-width suggestedReplacement (Phase 3 conversion table)", () => {
     const issues = checkHalfwidthKana("ﾃｽﾄ");
-    expect(issues[0].suggestedReplacement).toBeUndefined();
+    expect(issues[0].suggestedReplacement).toEqual({ text: "テスト", mechanicallyCertain: true });
   });
 });

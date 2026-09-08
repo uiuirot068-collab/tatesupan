@@ -37,6 +37,7 @@ export function checkMixedIndent(text: string): WritingDiagnostic[] {
       // the author's own indentation convention for this manuscript --
       // not determinable from this one line alone.
       fixClass: "REVIEW_BEFORE_FIX",
+      originalText: run,
       message: "行頭でタブと全角スペースが混在しています",
     });
   }

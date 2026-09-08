@@ -34,6 +34,7 @@ export function checkBlankRun(text: string): WritingDiagnostic[] {
       category: "whitespace",
       severity: "REVIEW",
       fixClass: "NOTICE_ONLY",
+      originalText: match[0],
       message: "3行以上の空行が連続しています",
     });
   }

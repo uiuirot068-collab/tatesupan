@@ -21,9 +21,13 @@ export type WritingRuleId =
   | "R5-control-char"
   | "R6-trailing-whitespace"
   | "R7-mixed-indent"
-  | "R8-blank-run";
+  | "R8-blank-run"
+  | "R9-ellipsis"
+  | "R10-dash"
+  | "R11-dictionary"
+  | "R12-ngword";
 
-export type WritingRuleCategory = "structure" | "punctuation" | "notation" | "whitespace" | "character";
+export type WritingRuleCategory = "structure" | "punctuation" | "notation" | "whitespace" | "character" | "dictionary";
 
 /**
  * Internal severity class (Phase 4, still in force in Phase 2).
@@ -72,6 +76,16 @@ export interface WritingDiagnostic {
   /** User-facing Japanese explanation, phrased as a 確認候補 -- never a verdict. */
   message: string;
   /**
+   * The exact source substring this diagnostic was computed against
+   * (`text.slice(start, end)` at the moment the diagnostic was created).
+   * Phase 3's own stale-range protection (`applyFix.ts`) re-slices the
+   * CURRENT manuscript at `[start, end)` and compares it against this
+   * value before ever mutating -- if the manuscript changed since this
+   * diagnostic was computed, the fix is refused rather than silently
+   * applied to the wrong text.
+   */
+  originalText: string;
+  /**
    * Present ONLY where a replacement is mechanically certain. Reserved
    * metadata -- Phase 1/2 build no Fix UI and no code path anywhere
    * applies this automatically; it exists purely so a later phase can
@@ -97,7 +111,33 @@ export type WritingIssue = WritingDiagnostic;
  * outright, matching Phase 1's own simpler all-or-nothing semantics for
  * that field).
  */
+/**
+ * 表記ゆれ (Phase 3, 文章チェックβ v2 category 5). A user-maintained local
+ * entry: any occurrence of a `variants` string is flagged and the
+ * `preferred` form is suggested. Deterministic, configured-alternatives
+ * only -- never an inferred/AI synonym relationship (this engine has no
+ * way to know `科学` vs `化学` is a typo, and does not pretend to).
+ */
+export interface WritingCheckDictionaryEntry {
+  /** Stable id, generated once at creation time -- never derived from content (content can be edited). */
+  id: string;
+  preferred: string;
+  variants: string[];
+}
+
+/** NG word (Phase 3, 文章チェックβ v2 category 5). Flags occurrences only -- no automatic replacement by default. */
+export interface WritingCheckNgWordEntry {
+  id: string;
+  term: string;
+  note?: string;
+}
+
+export type WritingCheckPresetId = "submission-recommended" | "symbols-only" | "thorough";
+
 export interface WritingCheckConfig {
   enabledRuleIds?: WritingRuleId[];
   ruleOverrides?: Partial<Record<WritingRuleId, boolean>>;
+  /** Real user dictionary/NG-word entries (Phase 3) -- both browser-local only, never transmitted, never embedded in Preview/PDF/JPG/TXT output. */
+  dictionary?: WritingCheckDictionaryEntry[];
+  ngWords?: WritingCheckNgWordEntry[];
 }

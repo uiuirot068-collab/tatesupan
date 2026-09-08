@@ -4,37 +4,49 @@
  * type now reads `WritingDiagnostic` instead of `WritingIssue`, which
  * remains a type alias of it).
  */
-import type { WritingDiagnostic } from "./types";
+import type { WritingDiagnostic, WritingSeverity } from "./types";
+
+export type WritingDisplayRange = { start: number; end: number; severity: WritingSeverity };
 
 /**
  * Collapses overlapping / touching issue ranges into the minimal set of
  * display ranges for the wavy underline. The reason list keeps the
  * original issues -- this is only for drawing.
+ *
+ * Phase 3 (RED/YELLOW UI): each merged range also carries a `severity`,
+ * used purely for underline COLOR -- never conflated with `fixClass` (see
+ * `types.ts`'s own doc on why those two axes are independent). When a
+ * HIGH_CONFIDENCE (RED) range touches/overlaps a REVIEW (YELLOW) one,
+ * HIGH_CONFIDENCE wins for the merged range -- a manuscript-accident
+ * signal must never be visually downgraded to "just review this" by
+ * merging with an adjacent lower-severity note.
  */
-export function mergeIssueRanges(issues: WritingDiagnostic[]): Array<{ start: number; end: number }> {
+export function mergeIssueRanges(issues: WritingDiagnostic[]): WritingDisplayRange[] {
   const sorted = [...issues].sort((a, b) => a.start - b.start || a.end - b.end);
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const { start, end } of sorted) {
+  const merged: WritingDisplayRange[] = [];
+  for (const { start, end, severity } of sorted) {
     const last = merged[merged.length - 1];
     if (last && start <= last.end) {
       last.end = Math.max(last.end, end);
+      if (severity === "HIGH_CONFIDENCE") last.severity = "HIGH_CONFIDENCE";
     } else {
-      merged.push({ start, end });
+      merged.push({ start, end, severity });
     }
   }
   return merged;
 }
 
-export type WritingSegment = { text: string; flagged: boolean };
+export type WritingSegment = { text: string; flagged: boolean; severity?: WritingSeverity };
 
 /**
  * Splits `text` into consecutive segments, each either plain or
- * `flagged` (inside a merged issue range). `segments.map((s) =>
+ * `flagged` (inside a merged issue range, carrying that range's own
+ * `severity` for RED/YELLOW underline color). `segments.map((s) =>
  * s.text).join("")` always reconstructs `text` exactly, so the overlay
  * mirror can never gain or lose a character relative to the textarea.
  * Ranges are clamped to `[0, text.length]` defensively.
  */
-export function buildWritingSegments(text: string, ranges: Array<{ start: number; end: number }>): WritingSegment[] {
+export function buildWritingSegments(text: string, ranges: WritingDisplayRange[]): WritingSegment[] {
   if (ranges.length === 0) return text ? [{ text, flagged: false }] : [];
 
   const segments: WritingSegment[] = [];
@@ -43,7 +55,7 @@ export function buildWritingSegments(text: string, ranges: Array<{ start: number
     const start = Math.max(cursor, Math.min(range.start, text.length));
     const end = Math.max(start, Math.min(range.end, text.length));
     if (start > cursor) segments.push({ text: text.slice(cursor, start), flagged: false });
-    if (end > start) segments.push({ text: text.slice(start, end), flagged: true });
+    if (end > start) segments.push({ text: text.slice(start, end), flagged: true, severity: range.severity });
     cursor = end;
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor), flagged: false });

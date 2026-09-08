@@ -6,9 +6,24 @@
  * writes back to it. See `qa/evidence/` (or the Phase 1 result report)
  * for the full privacy/offset/IME audit this module was built against.
  */
-export type { WritingRuleId, WritingRuleCategory, WritingSeverity, WritingFixClass, WritingDiagnostic, WritingIssue, WritingCheckConfig } from "./types";
-export { runWritingCheck } from "./engine";
-export { mergeIssueRanges, buildWritingSegments, issueContext, type WritingSegment } from "./display";
+export type {
+  WritingRuleId,
+  WritingRuleCategory,
+  WritingSeverity,
+  WritingFixClass,
+  WritingDiagnostic,
+  WritingIssue,
+  WritingCheckConfig,
+  WritingCheckDictionaryEntry,
+  WritingCheckNgWordEntry,
+  WritingCheckPresetId,
+} from "./types";
+export { runWritingCheck, DEFAULT_ENABLED_RULE_IDS } from "./engine";
+export { mergeIssueRanges, buildWritingSegments, issueContext, type WritingSegment, type WritingDisplayRange } from "./display";
+export { PRESET_LABELS, PRESET_DEFINITIONS, ALL_TOGGLEABLE_RULE_IDS, type PresetDefinition } from "./presets";
+export { applyFix, type ApplyFixResult, type ApplyFixRefusalReason } from "./applyFix";
+export { applyBulkFix, type ApplyBulkFixResult } from "./applyBulkFix";
+export { filterIgnored } from "./ignoredOccurrences";
 
 import { runWritingCheck } from "./engine";
 import type { WritingDiagnostic } from "./types";

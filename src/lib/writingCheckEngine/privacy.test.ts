@@ -40,3 +40,28 @@ describe("Writing Check engine -- privacy (no network/AI code path)", () => {
     }
   });
 });
+
+// Phase 3's own dictionary/NG-word/preset persistence and result-panel/
+// settings UI live OUTSIDE this directory (`src/hooks/`, `src/components/`)
+// -- listed explicitly here (rather than recursively scanned, which would
+// pull in every unrelated hook/component in the app) so the SAME privacy
+// guarantee covers the localStorage-backed pieces of Phase 3, not just the
+// pure rule engine.
+const PHASE3_UI_FILES = [
+  join(ENGINE_DIR, "..", "..", "hooks", "createJsonLocalStorageHook.ts"),
+  join(ENGINE_DIR, "..", "..", "hooks", "useWritingCheckDictionary.ts"),
+  join(ENGINE_DIR, "..", "..", "hooks", "useWritingCheckNgWords.ts"),
+  join(ENGINE_DIR, "..", "..", "hooks", "useWritingCheckRuleConfig.ts"),
+  join(ENGINE_DIR, "..", "..", "components", "WritingCheckBar.tsx"),
+  join(ENGINE_DIR, "..", "..", "components", "WritingCheckOverlay.tsx"),
+  join(ENGINE_DIR, "..", "..", "components", "WritingCheckSettingsPanel.tsx"),
+];
+
+describe("Writing Check Phase 3 UI/persistence -- privacy (no network/AI call, localStorage only)", () => {
+  it.each(PHASE3_UI_FILES)("%s contains no network/AI call primitive", (file) => {
+    const source = readFileSync(file, "utf-8");
+    for (const pattern of FORBIDDEN_PATTERNS) {
+      expect(pattern.test(source)).toBe(false);
+    }
+  });
+});

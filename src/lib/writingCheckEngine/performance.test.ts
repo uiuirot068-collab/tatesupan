@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { runWritingCheck } from "./engine";
+import type { WritingCheckDictionaryEntry, WritingCheckNgWordEntry } from "./types";
 
 function repeatSentence(n: number): string {
   const sentence = "　これは通常の段落である。「会話文」も含む。｜東京《とうきょう》に住んでいる。西暦20年のことだった。\n";
@@ -32,5 +33,17 @@ describe("performance -- long manuscript, no pathological slowdown", () => {
     const text = "「".repeat(20000);
     const issues = runWritingCheck(text);
     expect(issues.length).toBe(20000);
+  });
+
+  it("a realistic-scale local dictionary + NG-word list (Phase 3) scanned against a full-novel-length manuscript completes within the test's own timeout", () => {
+    const dictionary: WritingCheckDictionaryEntry[] = Array.from({ length: 200 }, (_, i) => ({
+      id: `d${i}`,
+      preferred: `見出し語${i}`,
+      variants: [`表記ゆれ${i}`],
+    }));
+    const ngWords: WritingCheckNgWordEntry[] = Array.from({ length: 100 }, (_, i) => ({ id: `n${i}`, term: `禁止語${i}` }));
+    const text = repeatSentence(2000);
+    const issues = runWritingCheck(text, { dictionary, ngWords });
+    expect(Array.isArray(issues)).toBe(true);
   });
 });

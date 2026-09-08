@@ -42,6 +42,7 @@ export function checkBrackets(text: string): WritingDiagnostic[] {
         category: "structure",
         severity: "HIGH_CONFIDENCE",
         fixClass: "NOTICE_ONLY",
+        originalText: ch,
         message: `閉じ括弧「${ch}」に対応する開き括弧「${BRACKET_CLOSE_TO_OPEN[ch]}」が見つかりません`,
       });
       continue;
@@ -62,6 +63,7 @@ export function checkBrackets(text: string): WritingDiagnostic[] {
         category: "structure",
         severity: "HIGH_CONFIDENCE",
         fixClass: "NOTICE_ONLY",
+        originalText: ch,
         message: `括弧の対応が取れていません（「${top.char}」に対応する閉じ括弧は「${top.expect}」です）`,
       });
     }
@@ -76,6 +78,7 @@ export function checkBrackets(text: string): WritingDiagnostic[] {
       category: "structure",
       severity: "HIGH_CONFIDENCE",
       fixClass: "NOTICE_ONLY",
+      originalText: open.char,
       message: `開き括弧「${open.char}」に対応する閉じ括弧「${open.expect}」が見つかりません`,
     });
   }

@@ -102,6 +102,9 @@ export default function PrivacyPolicyPage() {
       <p>
         Writing Check βによる文章チェックのために、作品本文を外部AIや外部文章解析APIへ送信することはありません。
       </p>
+      <p>
+        Writing Check β内の「わたしの辞書」「NGワード」機能で登録した内容は、ご利用の端末のブラウザ内（localStorage）にのみ保存されます。サーバーへの送信、外部AI・外部APIへの送信、他の端末との同期は行いません。
+      </p>
 
       <h2>4. 外部サービスの利用</h2>
       <p>本サービスでは、サービス提供のために次の外部サービスを利用しています。</p>

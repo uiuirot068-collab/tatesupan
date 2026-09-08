@@ -31,6 +31,7 @@ export function checkControlChars(text: string): WritingDiagnostic[] {
       severity: "HIGH_CONFIDENCE",
       fixClass: "SAFE_AUTO_FIX",
       suggestedReplacement: { text: "", mechanicallyCertain: true },
+      originalText: match[0],
       message: "制御文字が含まれています（貼り付け時の混入の可能性があります）",
     });
   }

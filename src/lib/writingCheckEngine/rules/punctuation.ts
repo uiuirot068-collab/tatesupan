@@ -27,6 +27,7 @@ export function checkPunctuation(text: string): WritingDiagnostic[] {
       // correct proposal, but not certain in every context (rare deliberate
       // doubling) -- REVIEW_BEFORE_FIX, not SAFE_AUTO_FIX.
       fixClass: "REVIEW_BEFORE_FIX",
+      originalText: run,
       message: run[0] === "。" ? "句点（。）が連続しています" : "読点（、）が連続しています",
     });
   }

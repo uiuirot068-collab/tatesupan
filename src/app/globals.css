@@ -47,10 +47,24 @@
   scroll-margin: 6rem;
 }
 
+/* 文章チェック β 2.0 -- RED (原稿事故・高確度) wavy underline. Color alone is
+   never the only signal: the result panel pairs this with a text label and
+   an icon (see WritingCheckBar) for accessible/color-blind-safe distinction. */
 .tsp-writing-wavy {
   text-decoration-line: underline;
   text-decoration-style: wavy;
   text-decoration-color: #dc2626;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.15em;
+}
+
+/* 文章チェック β 2.0 -- YELLOW (確認推奨) wavy underline. A DIFFERENT color
+   from fixClass -- severity and fixClass are independent axes, see
+   `writingCheckEngine/types.ts`'s own doc. */
+.tsp-writing-wavy-review {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #b45309;
   text-decoration-skip-ink: none;
   text-underline-offset: 0.15em;
 }

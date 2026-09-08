@@ -22,7 +22,7 @@ describe("buildWritingSegments -- reconstruction guarantee (no manuscript mutati
 
   it("out-of-bounds ranges are clamped defensively, never throwing and never corrupting reconstruction", () => {
     const text = "短い文";
-    const segments = buildWritingSegments(text, [{ start: -5, end: 9999 }]);
+    const segments = buildWritingSegments(text, [{ start: -5, end: 9999, severity: "HIGH_CONFIDENCE" }]);
     expect(segments.map((s) => s.text).join("")).toBe(text);
   });
 });
@@ -30,13 +30,13 @@ describe("buildWritingSegments -- reconstruction guarantee (no manuscript mutati
 describe("mergeIssueRanges", () => {
   it("merges overlapping and touching ranges into the minimal set", () => {
     const merged = mergeIssueRanges([
-      { id: "a", start: 0, end: 3, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", message: "x" },
-      { id: "b", start: 3, end: 6, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", message: "x" },
-      { id: "c", start: 10, end: 12, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", message: "x" },
+      { id: "a", start: 0, end: 3, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", originalText: "x", message: "x" },
+      { id: "b", start: 3, end: 6, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", originalText: "x", message: "x" },
+      { id: "c", start: 10, end: 12, ruleId: "R1-bracket", category: "structure", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", originalText: "x", message: "x" },
     ]);
     expect(merged).toEqual([
-      { start: 0, end: 6 },
-      { start: 10, end: 12 },
+      { start: 0, end: 6, severity: "HIGH_CONFIDENCE" },
+      { start: 10, end: 12, severity: "HIGH_CONFIDENCE" },
     ]);
   });
 });

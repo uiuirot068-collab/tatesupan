@@ -43,6 +43,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Live Editor → v2 Publication state bridge: COMPLETE
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
+- Writing Check β 2.0 Phase 3: ENGINEERING COMPLETE / Human QA pending
 
 Important: P3-O08's historical document status is stale. Many of its subtracks are complete, but overall production migration/acceptance is not yet closed.
 
@@ -90,7 +91,7 @@ Need exact counting policy for:
 IME, paste, cut, undo, redo, replace, select-all delete, import, programmatic normalization, ruby input, page-break token, image token, Writing Check fixes.
 
 ### GATE-G — 11-A β scope boundary
-Status: HUMAN_GATE
+Status: RESOLVED (Human decision, Phase 3 task)
 Historical full 11-A scope includes:
 1. punctuation
 2. paragraph/whitespace
@@ -98,7 +99,7 @@ Historical full 11-A scope includes:
 4. TateSpun notation
 5. dictionary/NG-word features
 
-Need decide whether dictionary/NG-word UI is β-required or post-β.
+Decision: dictionary/NG-word functionality IS β-required, local/browser-side only, no manuscript transmission, no external AI/API.
 
 ### GATE-H — TXT I/O open contract
 Status: HUMAN_GATE
@@ -135,16 +136,25 @@ Deferred, explicitly not attempted this phase (real false-positive risk without 
 - half-width katakana auto-conversion replacement text (needs a real conversion table, deferred to the Fix UI phase)
 
 #### 11-A Phase 3
-HUMAN_GATE → then implementation
-- preset UX
-- explicit Fix / Ignore
-- safe bulk fix
-- dictionary / NG-word / user dictionary scope
-- final Help copy
-- Human QA only for new visible workflow
+ENGINEERING COMPLETE / Human QA pending
+- remaining rule catalog: R9 ellipsis form (…/……/・・・/...), R10 dash form (―/――/―――), R4 half-width katakana now with a REAL suggestedReplacement (JIS X 0201↔X 0208 table, promoted SAFE_AUTO_FIX)
+- 表記ゆれ dictionary (R11) and NG-word (R12) rules, both parameterized by user-local entries, dictionary-safety-aware (never suggests a replacement overlapping ruby/TCY/image/page-break notation)
+- 3 Human-approved presets (verbatim names): 入稿前おすすめ / 記号だけ / しっかりチェック
+- RED (原稿事故・高確度) / YELLOW (確認推奨) severity UI -- independent of `fixClass`, colour paired with a text label (not colour-only)
+- explicit 直す (single-diagnostic Fix, stale-range-protected), 無視 (occurrence-level, in-memory only, not persisted), 安全な項目をまとめて直す (SAFE_AUTO_FIX only, descending-offset, overlap-safe)
+- narrowest-possible one-step 元に戻す (undo), cleared the moment the user makes any further manual edit
+- 文章チェック設定 UI: preset selector, per-rule toggles, わたしの辞書 / NGワード CRUD -- all localStorage-only, never transmitted
+- output isolation proof: automated static scan confirms no file under `typesetting-v2/` (Core/Publication/Preview/export) references the writing-check engine at all
+- privacy static scan extended to the new engine files (automatic, recursive) and to the new hooks/UI files (explicit list)
+- full regression + `next build` PASS
+
+Deferred, explicitly not attempted this phase:
+- "excessive indentation" threshold rule (still no reliable contract)
+- ASCII punctuation → full-width auto-conversion (still a URL/code/deliberate-Latin false-positive risk)
+- React-hook-level automated tests for the 3 new localStorage hooks (no jsdom/testing-library in this repo; no existing precedent either -- covered by Human QA on the real Editor instead)
 
 Completion condition:
-Local browser-only manuscript checking can detect the agreed β rule set and let the user apply only explicit, safe corrections; no manuscript is sent to external AI/API.
+Local browser-only manuscript checking can detect the agreed β rule set and let the user apply only explicit, safe corrections; no manuscript is sent to external AI/API. Met by engineering; awaiting Human visual/UX QA on the real Editor before Phase 3 itself is marked COMPLETE.
 
 ---
 

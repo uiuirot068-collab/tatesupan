@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import type { PageLayout, PageSettings } from "@/lib/pageLayout";
-import { analyzeWriting, type WritingIssue } from "@/lib/writingCheck";
+import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
+import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
+import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
+import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import PageSettingsPanel from "./PageSettingsPanel";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
+import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -107,13 +111,32 @@ export default function EditorPane({
     el.focus({ preventScroll: true });
   };
 
-  // ---- TSP-LOOP-004 「文章チェック β」 (local, deterministic, no network) ----
+  // ---- TSP-LOOP-004 → 文章チェック β 2.0 (local, deterministic, no network) ----
   const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
   const isComposingRef = useRef(false);
   const [recheckNonce, setRecheckNonce] = useState(0);
+  const { presetId, ruleOverrides, selectPreset, setRuleEnabled } = useWritingCheckRuleConfig();
+  const dictionary = useWritingCheckDictionary();
+  const ngWords = useWritingCheckNgWords();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Phase 12: occurrence-level, in-memory-only ignore state -- never
+  // persisted, naturally forgotten on remount/reload (see `ignoredOccurrences.ts`).
+  const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+  // Phase 14: the narrowest possible one-step undo -- only ever holds the
+  // manuscript state immediately before the last Fix/まとめて直す, and is
+  // cleared the moment the user makes ANY further edit (see the textarea
+  // onChange handler below), so 元に戻す never surprises the user by
+  // discarding keystrokes typed after the automated change.
+  const [undoState, setUndoState] = useState<{ before: string; after: string } | null>(null);
+
+  const writingCheckConfig: WritingCheckConfig = useMemo(
+    () => ({ ruleOverrides, dictionary: dictionary.entries, ngWords: ngWords.entries }),
+    [ruleOverrides, dictionary.entries, ngWords.entries]
+  );
+
   // The analysis is always kept paired with the exact text it ran against, so
   // an underline is only ever drawn while `analysis.text === content`.
-  const [analysis, setAnalysis] = useState<{ text: string; issues: WritingIssue[] }>({
+  const [analysis, setAnalysis] = useState<{ text: string; issues: WritingDiagnostic[] }>({
     text: "",
     issues: [],
   });
@@ -121,14 +144,15 @@ export default function EditorPane({
   useEffect(() => {
     if (!writingCheckEnabled || isComposingRef.current) return;
     const timer = setTimeout(() => {
-      setAnalysis({ text: content, issues: analyzeWriting(content) });
+      setAnalysis({ text: content, issues: runWritingCheck(content, writingCheckConfig) });
     }, WRITING_CHECK_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [content, writingCheckEnabled, recheckNonce]);
+  }, [content, writingCheckEnabled, recheckNonce, writingCheckConfig]);
 
-  const writingIssuesForContent = analysis.text === content ? analysis.issues : [];
+  const analysisCurrent = analysis.text === content;
+  const writingIssuesForContent = analysisCurrent ? filterIgnored(analysis.issues, ignoredIds) : [];
 
-  const handleSelectWritingIssue = (issue: WritingIssue) => {
+  const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
     const el = textareaRef.current;
     if (!el) return;
     el.focus();
@@ -136,6 +160,39 @@ export default function EditorPane({
     const end = Math.min(issue.end, el.value.length);
     el.setSelectionRange(start, end);
     reportCursorIndex();
+  };
+
+  /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
+  const applyAutomatedTextChange = (next: string) => {
+    setUndoState({ before: content, after: next });
+    onContentChange(next);
+  };
+
+  const handleFixIssue = (issue: WritingDiagnostic) => {
+    const result = applyFix(content, issue);
+    if (!result.applied) {
+      // Stale range (manuscript changed since this diagnostic was computed) --
+      // never mutate; rerun diagnostics instead, per Phase 11's own contract.
+      setRecheckNonce((v) => v + 1);
+      return;
+    }
+    applyAutomatedTextChange(result.text);
+  };
+
+  const handleIgnoreIssue = (issue: WritingDiagnostic) => {
+    setIgnoredIds((prev) => new Set(prev).add(issue.id));
+  };
+
+  const handleBulkFix = () => {
+    const result = applyBulkFix(content, writingIssuesForContent);
+    if (result.appliedIds.length === 0) return;
+    applyAutomatedTextChange(result.text);
+  };
+
+  const handleUndoFix = () => {
+    if (!undoState) return;
+    onContentChange(undoState.before);
+    setUndoState(null);
   };
 
   const reportCursorIndex = () => {
@@ -275,7 +332,11 @@ export default function EditorPane({
           data-demo-target="editor"
           value={content}
           onChange={(e) => {
-            onContentChange(e.target.value);
+            const next = e.target.value;
+            // Any edit that isn't exactly the automated fix's own output
+            // ends the one-step undo window (see `undoState`'s own doc).
+            if (undoState && next !== undoState.after) setUndoState(null);
+            onContentChange(next);
             requestAnimationFrame(reportCursorIndex);
           }}
           onSelect={reportCursorIndex}
@@ -297,10 +358,32 @@ export default function EditorPane({
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
-        text={analysis.text}
-        issues={analysis.issues}
+        text={content}
+        issues={writingIssuesForContent}
         onSelectIssue={handleSelectWritingIssue}
+        onFixIssue={handleFixIssue}
+        onIgnoreIssue={handleIgnoreIssue}
+        onBulkFix={handleBulkFix}
+        onOpenSettings={() => setSettingsOpen(true)}
+        undoAvailable={undoState !== null}
+        onUndo={handleUndoFix}
       />
+
+      {settingsOpen && (
+        <WritingCheckSettingsPanel
+          onClose={() => setSettingsOpen(false)}
+          presetId={presetId}
+          ruleOverrides={ruleOverrides}
+          onSelectPreset={selectPreset}
+          onSetRuleEnabled={setRuleEnabled}
+          dictionaryEntries={dictionary.entries}
+          onAddDictionaryEntry={dictionary.addEntry}
+          onRemoveDictionaryEntry={dictionary.removeEntry}
+          ngWordEntries={ngWords.entries}
+          onAddNgWordEntry={ngWords.addEntry}
+          onRemoveNgWordEntry={ngWords.removeEntry}
+        />
+      )}
 
       {/* Two fixed zones: the syntax help sacrifices text with an ellipsis
           first (min-w-0 + truncate), the character count is never wrapped

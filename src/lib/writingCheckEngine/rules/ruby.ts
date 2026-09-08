@@ -36,7 +36,7 @@ export function checkRubyNotation(text: string): WritingDiagnostic[] {
     const end = start + full.length;
     // No single unambiguous fix (add a closing 》? remove the marker
     // entirely? insert a placeholder base/reading?) -- NOTICE_ONLY.
-    issues.push({ id: `R3-ruby:${start}:${end}`, start, end, ruleId: "R3-ruby", category: "notation", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", message });
+    issues.push({ id: `R3-ruby:${start}:${end}`, start, end, ruleId: "R3-ruby", category: "notation", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", originalText: full, message });
   }
   return issues;
 }

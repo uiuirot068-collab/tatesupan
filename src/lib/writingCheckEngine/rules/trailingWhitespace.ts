@@ -29,6 +29,7 @@ export function checkTrailingWhitespace(text: string): WritingDiagnostic[] {
       severity: "HIGH_CONFIDENCE",
       fixClass: "SAFE_AUTO_FIX",
       suggestedReplacement: { text: "", mechanicallyCertain: true },
+      originalText: match[0],
       message: "行末に余分な空白があります",
     });
   }

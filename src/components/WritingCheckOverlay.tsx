@@ -99,7 +99,10 @@ export default function WritingCheckOverlay({
       >
         {segments.map((segment, index) =>
           segment.flagged ? (
-            <span key={index} className="tsp-writing-wavy">
+            <span
+              key={index}
+              className={segment.severity === "REVIEW" ? "tsp-writing-wavy-review" : "tsp-writing-wavy"}
+            >
               {segment.text}
             </span>
           ) : (
