@@ -178,18 +178,29 @@ describe("Width separation -- structuredFrameWidth vs freeTextWrapWidth are inde
   });
 });
 
-describe("freeText uses the title row's own natural width (test 2)", () => {
-  it("freeText wraps at the title row's own width, not the wider structured frame (test 2)", () => {
+// SUPERSEDED BY ROUND 29F: freeText's own width rule changed again --
+// round 29E bound it to the title row's own width; round 29F (Human
+// Product Decision) replaces that with a fixed real-metric target: 0.8x
+// font size inside a 15-structured-em frame (safety-clamped to the real
+// page). Updated (not deleted) -- see
+// `structuralColophonFreeTextTypography.test.ts` for round 29F's own
+// full test set.
+describe("freeText uses its own 15-structured-em target width, not the title row (test 2; round 29F correction)", () => {
+  it("freeText wraps at the 15-structured-em target width (safety-clamped), at its own 0.8x font size (test 2)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const idx = colophonIdx(document);
     const cmds = textCmds(plan, idx);
     const bodyEmMm = model.bodyEmMm;
-    const titleRowWidthMm = measureMm(outlineContext, FULL_FIELDS[0].label, bodyEmMm) + bodyEmMm + measureMm(outlineContext, FULL_FIELDS[0].value, bodyEmMm);
+    const freeTextEmMm = bodyEmMm * 0.8;
+    const freeTextTargetWidthMm = 15 * bodyEmMm;
     const freeTextCmds = cmds.filter((c) => c.text.length > 0 && FULL_FREETEXT.includes(c.text));
     expect(freeTextCmds.length).toBeGreaterThan(0);
-    for (const c of freeTextCmds) expect(measureMm(outlineContext, c.text, bodyEmMm)).toBeLessThanOrEqual(titleRowWidthMm + 0.05);
+    for (const c of freeTextCmds) {
+      expect(c.fontSizePt).toBeCloseTo((freeTextEmMm / 25.4) * 72, 3);
+      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(freeTextTargetWidthMm + 0.05);
+    }
   });
 });
 
@@ -260,17 +271,18 @@ describe("Long contact value handling (tests 6-8)", () => {
   });
 });
 
-describe("freeText stays inside the title-row visual width (test 9)", () => {
-  it("no freeText glyph paints beyond the title row's own natural right edge (test 9)", () => {
+describe("freeText stays inside its own 15-structured-em target width (test 9; round 29F correction)", () => {
+  it("no freeText glyph paints beyond the block's own left edge + the 15-structured-em target width", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const bodyEmMm = model.bodyEmMm;
+    const freeTextEmMm = bodyEmMm * 0.8;
     const blockLeftMm = cmds[0].xMm;
-    const titleRowWidthMm = measureMm(outlineContext, FULL_FIELDS[0].label, bodyEmMm) + bodyEmMm + measureMm(outlineContext, FULL_FIELDS[0].value, bodyEmMm);
+    const freeTextTargetWidthMm = 15 * bodyEmMm;
     const freeTextCmds = cmds.filter((c) => c.text.length > 0 && FULL_FREETEXT.includes(c.text));
-    for (const c of freeTextCmds) expect(c.xMm + measureMm(outlineContext, c.text, bodyEmMm)).toBeLessThanOrEqual(blockLeftMm + titleRowWidthMm + 0.05);
+    for (const c of freeTextCmds) expect(c.xMm + measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(blockLeftMm + freeTextTargetWidthMm + 0.05);
   });
 });
 

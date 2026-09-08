@@ -747,20 +747,25 @@ function buildColophonPaintPage(
   const respectGutter = placement?.respectGutter ?? true;
   const respectVerticalMargins = placement?.respectVerticalMargins ?? true;
 
-  const measureMm = (text: string): number => {
-    if (!outlineContext) return Array.from(text).length * bodyEmMm; // no real font available -- Natural Pitch's own uniform-advance default, not a new estimate
+  // Human Visual QA HOLD round 29F: `emSizeMm` now defaults to
+  // `bodyEmMm` (the structured metadata's own size) but callers
+  // measuring/wrapping freeText pass its own real, smaller em
+  // explicitly -- font-size-correct real measurement, never a
+  // character-count estimate at any size.
+  const measureMm = (text: string, emSizeMm: number = bodyEmMm): number => {
+    if (!outlineContext) return Array.from(text).length * emSizeMm; // no real font available -- Natural Pitch's own uniform-advance default, not a new estimate
     let sum = 0;
-    for (const ch of Array.from(text)) sum += outlineContext.advanceWidthMm(ch, bodyEmMm);
+    for (const ch of Array.from(text)) sum += outlineContext.advanceWidthMm(ch, emSizeMm);
     return sum;
   };
-  const wrapToWidthMm = (text: string, widthMm: number): string[] => {
+  const wrapToWidthMm = (text: string, widthMm: number, emSizeMm: number = bodyEmMm): string[] => {
     if (widthMm <= 0 || Array.from(text).length === 0) return [text];
     const lines: string[] = [];
     let current = "";
     let currentWidthMm = 0;
     const epsilonMm = 1e-6; // guards against floating-point round-trip error (e.g. frameWidthMm - labelColumnWidthMm - gapMm reconstructing a value's own real width) spuriously splitting a value that exactly fits
     for (const ch of Array.from(text)) {
-      const chWidthMm = outlineContext ? outlineContext.advanceWidthMm(ch, bodyEmMm) : bodyEmMm;
+      const chWidthMm = outlineContext ? outlineContext.advanceWidthMm(ch, emSizeMm) : emSizeMm;
       if (current.length > 0 && currentWidthMm + chWidthMm > widthMm + epsilonMm) {
         lines.push(current);
         current = ch;
@@ -836,22 +841,20 @@ function buildColophonPaintPage(
     // page region, but ordinary short values are never pre-emptively
     // narrowed to match some OTHER row.
     //
-    // (B) FREETEXT WRAP WIDTH -- kept independent, still the title
-    // row's own real label+gap+value width (round 29D's own fix,
-    // narrower than (A) in the normal case) -- identified by POSITION
-    // (`rows[0]`), matching legacy's own real, stable field-order
-    // convention (`defaultColophonFields()` always places title first,
-    // Core's compiler preserves order verbatim, round 27); `id`
-    // metadata does not survive Core's own text-flow pipeline into a
-    // painted line, so position is used instead of a literal string
-    // comparison. FreeText no longer inherits (A)'s own width.
+    // (B) FREETEXT WRAP WIDTH -- kept independent from (A). Round 29D
+    // bound it to the title row's own width; round 29F (Human Product
+    // Decision, this round) replaces that with a fixed real-metric
+    // target instead: freeText is optional/supporting information, so
+    // it paints at 0.8x the structured metadata's own font size, inside
+    // a target frame of 15 STRUCTURED-font em (never freeText's own
+    // smaller em -- the target is stated in the metadata's own real
+    // size), safety-clamped to `availableSafeWidthMm` exactly like (A).
     //
     // The COMPLETE block's own outer width (for LEFT/CENTER/RIGHT
-    // placement) is `max(structuredFrameWidthMm, freeTextWrapWidthMm)`
-    // -- normally (A), since (A) >= (B) whenever any row's own natural
-    // value is at least as wide as the title's. freeText still paints
-    // flush with the block's own left edge (round 27/28's own
-    // established convention), never independently centered.
+    // placement) is `max(structuredFrameWidthMm, freeTextWrapWidthMm)`.
+    // freeText still paints flush with the block's own left edge
+    // (round 27/28's own established convention), never independently
+    // centered.
     //
     // DISCLOSED GAP (unchanged from round 29D): Publication-time
     // wrapping happens after Core already decided colophon page COUNT
@@ -874,7 +877,6 @@ function buildColophonPaintPage(
       }
     }
     const gapMm = bodyEmMm; // one real em between label/value columns -- deterministic, documented choice, not measured from any legacy source (legacy's own CSS grid gap is a separate, un-ported visual-density detail)
-    const referenceRow = rows[0];
     const availableSafeWidthMm = Math.max(contentRightMm - contentLeftMm, 0);
 
     // (A) Structured row frame -- natural sizing, safety-clamped only.
@@ -885,21 +887,39 @@ function buildColophonPaintPage(
     const valueColumnWidthMm = Math.max(structuredFrameWidthMm - labelColumnWidthMm - gapMm, 0);
     const rowsWithWrappedValues = rows.map((r) => ({ label: r.label, valueLines: r.value.length > 0 ? wrapToWidthMm(r.value, valueColumnWidthMm) : [] }));
 
-    // (B) freeText's own independent, title-row-bounded wrap width.
-    const freeTextWrapWidthMm = referenceRow ? measureMm(referenceRow.label) + gapMm + measureMm(referenceRow.value) : availableSafeWidthMm;
-    const freeTextLines = freeTextRawLines.flatMap((l) => wrapToWidthMm(l, freeTextWrapWidthMm));
+    // (B) freeText's own typography and wrap width -- round 29F (Human
+    // Product Decision): freeText is optional/supporting information,
+    // not primary bibliographic metadata, so it now paints SMALLER
+    // (0.8x the structured metadata's own real em) inside a WIDER
+    // target frame (15 structured-font em, real font-metric based, not
+    // a character count) -- retiring round 29D/29E's own title-row-
+    // width rule for freeText specifically (structured rows are
+    // unaffected, see (A) above). `freeTextEmMm`/`freeTextLineHeightMm`
+    // are freeText's own real, smaller values; `structuredColophonEmMm`
+    // names `bodyEmMm` explicitly at this specific use site for
+    // clarity, since the "15 em" target is measured in the structured
+    // font's own em, not freeText's own smaller one.
+    const freeTextEmMm = bodyEmMm * 0.8;
+    const freeTextLineHeightMm = freeTextEmMm * 1.5;
+    const structuredColophonEmMm = bodyEmMm;
+    const freeTextTargetWidthMm = 15 * structuredColophonEmMm;
+    const freeTextWrapWidthMm = Math.min(freeTextTargetWidthMm, availableSafeWidthMm);
+    const freeTextLines = freeTextRawLines.flatMap((l) => wrapToWidthMm(l, freeTextWrapWidthMm, freeTextEmMm));
 
     const blockWidthMm = Math.max(structuredFrameWidthMm, freeTextWrapWidthMm);
     const blockLeftMm =
       horizontal === "left" ? contentLeftMm : horizontal === "right" ? contentRightMm - blockWidthMm : contentLeftMm + Math.max(contentRightMm - contentLeftMm - blockWidthMm, 0) / 2;
 
-    // Deterministic block-height: real line COUNT (each row now
-    // contributes max(1, its own wrapped value line count) real lines,
-    // plus real wrapped freeText lines) times the same fixed
-    // lineHeightMm every line paints at -- never a character-count-based
-    // estimate.
+    // Deterministic block-height: real line COUNT per section, each at
+    // its OWN real line pitch (structured rows at `lineHeightMm`,
+    // freeText at its own smaller `freeTextLineHeightMm`) -- never a
+    // character-count-based estimate. A running mm cursor (not a single
+    // shared integer line index) correctly accumulates the two
+    // different pitches.
     const rowLineCounts = rowsWithWrappedValues.map((r) => Math.max(1, r.valueLines.length));
-    const totalContentHeightMm = (rowLineCounts.reduce((a, b) => a + b, 0) + freeTextLines.length) * lineHeightMm;
+    const rowsHeightMm = rowLineCounts.reduce((a, b) => a + b, 0) * lineHeightMm;
+    const freeTextHeightMm = freeTextLines.length * freeTextLineHeightMm;
+    const totalContentHeightMm = rowsHeightMm + freeTextHeightMm;
     const startYMm =
       vertical === "bottom"
         ? Math.max(contentAreaBottomMm - totalContentHeightMm, contentAreaTopMm)
@@ -907,29 +927,35 @@ function buildColophonPaintPage(
           ? contentAreaTopMm + Math.max(contentAreaHeightMm - totalContentHeightMm, 0) / 2
           : contentAreaTopMm;
 
-    let lineIndex = 0;
+    let cursorYMm = startYMm;
     for (const row of rowsWithWrappedValues) {
-      const rowStartLineIndex = lineIndex;
+      const rowStartYMm = cursorYMm;
       if (row.label.length > 0) {
-        const labelYMm = startYMm + rowStartLineIndex * lineHeightMm + bodyEmMm / 2;
-        commands.push({ op: "text", text: row.label, xMm: blockLeftMm, yMm: labelYMm, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
+        commands.push({ op: "text", text: row.label, xMm: blockLeftMm, yMm: rowStartYMm + bodyEmMm / 2, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
       }
       for (const valueLine of row.valueLines) {
         if (valueLine.length > 0) {
-          const valueYMm = startYMm + lineIndex * lineHeightMm + bodyEmMm / 2;
-          commands.push({ op: "text", text: valueLine, xMm: blockLeftMm + labelColumnWidthMm + gapMm, yMm: valueYMm, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
+          commands.push({
+            op: "text",
+            text: valueLine,
+            xMm: blockLeftMm + labelColumnWidthMm + gapMm,
+            yMm: cursorYMm + bodyEmMm / 2,
+            fontSizePt: mmToPt(bodyEmMm),
+            align: "left",
+            angle: 0,
+            baseline: "middle",
+          });
         }
-        lineIndex++;
+        cursorYMm += lineHeightMm;
       }
-      if (row.valueLines.length === 0) lineIndex++; // label-only row (blank value) still occupies its own line
+      if (row.valueLines.length === 0) cursorYMm += lineHeightMm; // label-only row (blank value) still occupies its own line
     }
     for (const line of freeTextLines) {
-      const yCenter = startYMm + lineIndex * lineHeightMm + bodyEmMm / 2;
       // freeText always left-aligns WITHIN the block (natural paragraph
       // flow) -- `horizontal` decides where the whole block sits on the
       // page (blockLeftMm above), not freeText's own internal alignment.
-      commands.push({ op: "text", text: line, xMm: blockLeftMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
-      lineIndex++;
+      commands.push({ op: "text", text: line, xMm: blockLeftMm, yMm: cursorYMm + freeTextEmMm / 2, fontSizePt: mmToPt(freeTextEmMm), align: "left", angle: 0, baseline: "middle" });
+      cursorYMm += freeTextLineHeightMm;
     }
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {

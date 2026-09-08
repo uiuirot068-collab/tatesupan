@@ -368,7 +368,17 @@ describe("Overflow -- multi-page colophon after insertion, no silent clipping", 
     const colophonPlans = document.pageSequence.map((ref, i) => ({ ref, i })).filter((x) => x.ref.kind === "colophon").map((x) => plan[x.i]);
     expect(colophonPlans.length).toBeGreaterThan(2);
     const firstYs = colophonPlans.map((p) => p.commands.find((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text")?.yMm);
-    for (const y of firstYs) expect(y).toBeCloseTo(firstYs[0]!, 5);
+    // Round 29F: freeText now paints at a real, smaller em (0.8x) than
+    // structured rows, so a continuation page whose own FIRST line
+    // happens to be freeText paints its first glyph's own half-em
+    // offset slightly differently (by up to 0.1 * bodyEmMm) than a page
+    // starting with a row -- a real, minor, expected consequence, not a
+    // break of the underlying rule this test proves (every continuation
+    // page's own STARTING boundary, `contentAreaTopMm`, is still
+    // identical; only the half-em offset of whichever content happens
+    // to paint first can differ).
+    const toleranceMm = model.bodyEmMm * 0.15;
+    for (const y of firstYs) expect(Math.abs(y! - firstYs[0]!)).toBeLessThanOrEqual(toleranceMm);
   });
 });
 

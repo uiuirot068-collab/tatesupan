@@ -176,7 +176,15 @@ describe("Free text block width (item 1)", () => {
     expect(cmds.length).toBe(3); // label, value, one freeText line
   });
 
-  it("the SAME row block, a freeText line WIDER than it, wraps into multiple commands whose own real widths each stay within the block width -- proving the wrap width equals the row block width, not the full content width (test 2)", () => {
+  // SUPERSEDED BY ROUND 29F: freeText no longer wraps at the row
+  // block's own width at all (that was round 29D/29E's own rule).
+  // Round 29F's own Human Product Decision: freeText paints at 0.8x the
+  // structured font size inside a 15-structured-em target frame
+  // (safety-clamped to the real page). Updated (not deleted) to assert
+  // the current real contract -- see
+  // `structuralColophonFreeTextTypography.test.ts` for round 29F's own
+  // full test set.
+  it("a freeText line wraps at its own 0.8x-em, 15-structured-em target width -- each wrapped fragment's own real (smaller-font) width stays within that target (test 2; round 29F correction)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", MINIMAL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
@@ -184,11 +192,13 @@ describe("Free text block width (item 1)", () => {
     const cmds = textCmds(plan, idx);
     expect(cmds.length).toBeGreaterThan(3); // label, value, + multiple wrapped freeText fragments
     const bodyEmMm = model.bodyEmMm;
-    const labelWidthMm = measureMm(outlineContext, "書名", bodyEmMm);
-    const valueWidthMm = measureMm(outlineContext, "短編", bodyEmMm);
-    const expectedBlockWidthMm = labelWidthMm + bodyEmMm + valueWidthMm;
+    const freeTextEmMm = bodyEmMm * 0.8;
+    const freeTextTargetWidthMm = 15 * bodyEmMm;
     const freeTextCmds = cmds.slice(2);
-    for (const c of freeTextCmds) expect(measureMm(outlineContext, c.text, bodyEmMm)).toBeLessThanOrEqual(expectedBlockWidthMm + 0.01);
+    for (const c of freeTextCmds) {
+      expect(c.fontSizePt).toBeCloseTo((freeTextEmMm / 25.4) * 72, 3); // painted at the smaller freeText font size
+      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(freeTextTargetWidthMm + 0.01);
+    }
   });
 
   it("LEFT placement keeps the whole block within the real page content bounds (test 3)", () => {
@@ -239,7 +249,7 @@ describe("Free text block width (item 1)", () => {
     expect(blockLeftMm).toBeGreaterThanOrEqual(0);
   });
 
-  it("RIGHT placement's own block right edge is flush with the resolved content-right edge (test 6)", () => {
+  it("RIGHT placement's own block right edge is flush with the resolved content-right edge (test 6; round 29F: block width now also accounts for freeText's own 15-structured-em target)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", MINIMAL_FIELDS, "短い文", { colophonPlacement: { horizontal: "right", vertical: "center", respectGutter: false, respectVerticalMargins: true } });
     const plan = buildPaintPlan(model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
@@ -247,7 +257,14 @@ describe("Free text block width (item 1)", () => {
     const bodyEmMm = model.bodyEmMm;
     const labelWidthMm = measureMm(outlineContext, "書名", bodyEmMm);
     const valueWidthMm = measureMm(outlineContext, "短編", bodyEmMm);
-    const blockWidthMm = labelWidthMm + bodyEmMm + valueWidthMm;
+    const structuredWidthMm = labelWidthMm + bodyEmMm + valueWidthMm;
+    // respectGutter:false -> symmetric margin = min(gutter,outer); the real
+    // available content width bounds freeText's own 15-em target (round 29F).
+    const expectedContentRightMmForClamp = ASYMMETRIC_GEOMETRY.paperWidthMm - ASYMMETRIC_GEOMETRY.marginOuterMm!;
+    const expectedContentLeftMmForClamp = ASYMMETRIC_GEOMETRY.marginOuterMm!;
+    const availableSafeWidthMm = expectedContentRightMmForClamp - expectedContentLeftMmForClamp;
+    const freeTextTargetWidthMm = Math.min(15 * bodyEmMm, availableSafeWidthMm);
+    const blockWidthMm = Math.max(structuredWidthMm, freeTextTargetWidthMm);
     const labelXMm = cmds[0].xMm;
     // respectGutter:false -> symmetric margin = min(gutter,outer) = marginOuterMm(11) on both sides.
     const expectedContentRightMm = ASYMMETRIC_GEOMETRY.paperWidthMm - ASYMMETRIC_GEOMETRY.marginOuterMm!;
