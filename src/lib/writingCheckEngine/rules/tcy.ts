@@ -31,6 +31,10 @@ export function checkTcyNotation(text: string): WritingDiagnostic[] {
       ruleId: "R3-tcy",
       category: "notation",
       severity: "HIGH_CONFIDENCE",
+      // No single unambiguous fix: an unmatched marker could mean "add the
+      // missing partner" OR "this was never meant to be TCY at all" --
+      // NOTICE_ONLY, same reasoning as R1-bracket.
+      fixClass: "NOTICE_ONLY",
       message: match[0] === "[tate]" ? "縦中横の記法が崩れています（[tate]◯◯[/tate] の形で、中は1〜8文字にしてください）" : "縦中横の記法が崩れています（対応する [tate] が見つかりません）",
     });
   }

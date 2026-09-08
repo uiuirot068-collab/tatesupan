@@ -6,7 +6,7 @@
  * writes back to it. See `qa/evidence/` (or the Phase 1 result report)
  * for the full privacy/offset/IME audit this module was built against.
  */
-export type { WritingRuleId, WritingRuleCategory, WritingSeverity, WritingDiagnostic, WritingIssue, WritingCheckConfig } from "./types";
+export type { WritingRuleId, WritingRuleCategory, WritingSeverity, WritingFixClass, WritingDiagnostic, WritingIssue, WritingCheckConfig } from "./types";
 export { runWritingCheck } from "./engine";
 export { mergeIssueRanges, buildWritingSegments, issueContext, type WritingSegment } from "./display";
 

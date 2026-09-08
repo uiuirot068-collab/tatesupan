@@ -33,8 +33,20 @@ This is distinct from severity. A diagnostic may be high-confidence yet still be
 - UTF-16 offsets
 - IME/privacy/build regression coverage
 
-The original fix-class model has NOT yet been implemented.
-The remaining categories (paragraph/whitespace, broader vertical-writing checks, dictionary/NG words) remain open.
+11-A Phase 2 is COMPLETE:
+- fix-class model implemented: `SAFE_AUTO_FIX` / `REVIEW_BEFORE_FIX` / `NOTICE_ONLY`, a required field on every diagnostic, independent of `severity` (a diagnostic can be HIGH_CONFIDENCE yet NOTICE_ONLY, exactly as this spec's own §11-A correction anticipated)
+- paragraph/whitespace category: R6 trailing whitespace (SAFE_AUTO_FIX), R7 leading tab+ideographic-space mixing (REVIEW_BEFORE_FIX), R8 3+ consecutive blank lines (NOTICE_ONLY, REVIEW severity, **disabled by default** -- blank-line conventions vary by author/genre, a real style question left for a later Human decision on defaults)
+- vertical-writing character category (partial): R4 half-width katakana detection (REVIEW_BEFORE_FIX, no computed replacement text yet -- a real conversion table is deferred to whenever the Fix UI itself is built), R5 stray control characters (SAFE_AUTO_FIX)
+- per-rule configuration contract: `WritingCheckConfig.ruleOverrides` (additive, flips specific rules relative to the engine's own default set) alongside Phase 1's `enabledRuleIds` (absolute whitelist, unchanged)
+- rule IDs remain stable/deterministic (explicit regression test), replacement ranges verified safe across emoji/ruby/TCY/multiline/CRLF context
+- explicit no-mutation regression tests added
+
+Deliberately NOT attempted in Phase 2 (real false-positive/product-judgment risk without further guidance):
+- "excessive indentation" (no reliable existing contract defines an invalid threshold -- this spec's own caution against assuming "one ideographic space is always mandatory")
+- ASCII punctuation with a full-width equivalent (URL/code/deliberate-Latin false-positive risk)
+- half-width katakana's own auto-conversion replacement text
+
+The remaining categories (broader vertical-writing checks beyond R4/R5, dictionary/NG words) remain open, along with the entire Fix/Ignore UI, presets, and bulk-fix workflow (11-A Phase 3, HUMAN_GATE).
 
 ### Product principles preserved
 

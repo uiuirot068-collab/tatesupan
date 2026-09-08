@@ -23,6 +23,10 @@ export function checkPunctuation(text: string): WritingDiagnostic[] {
       ruleId: "R2-punct",
       category: "punctuation",
       severity: "HIGH_CONFIDENCE",
+      // A collapse-to-single-character replacement is a reasonable, usually-
+      // correct proposal, but not certain in every context (rare deliberate
+      // doubling) -- REVIEW_BEFORE_FIX, not SAFE_AUTO_FIX.
+      fixClass: "REVIEW_BEFORE_FIX",
       message: run[0] === "。" ? "句点（。）が連続しています" : "読点（、）が連続しています",
     });
   }

@@ -34,7 +34,9 @@ export function checkRubyNotation(text: string): WritingDiagnostic[] {
     else message = "ルビの読み（《》の中）が入力されていません";
 
     const end = start + full.length;
-    issues.push({ id: `R3-ruby:${start}:${end}`, start, end, ruleId: "R3-ruby", category: "notation", severity: "HIGH_CONFIDENCE", message });
+    // No single unambiguous fix (add a closing 》? remove the marker
+    // entirely? insert a placeholder base/reading?) -- NOTICE_ONLY.
+    issues.push({ id: `R3-ruby:${start}:${end}`, start, end, ruleId: "R3-ruby", category: "notation", severity: "HIGH_CONFIDENCE", fixClass: "NOTICE_ONLY", message });
   }
   return issues;
 }

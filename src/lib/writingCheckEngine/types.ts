@@ -1,5 +1,6 @@
 /**
- * TateSpun 文章チェック β 2.0 -- Phase 1: structured diagnostic model.
+ * TateSpun 文章チェック β 2.0 -- structured diagnostic model (Phase 1
+ * foundation + Phase 2 fix-class/config extension).
  *
  * NO React/DOM dependency anywhere in this module tree. Offsets are
  * UTF-16 code-unit indices into the raw manuscript string -- the SAME
@@ -11,18 +12,50 @@
  * model, this one feeds a live `<textarea>`).
  */
 
-export type WritingRuleId = "R1-bracket" | "R2-punct" | "R3-tcy" | "R3-ruby";
+export type WritingRuleId =
+  | "R1-bracket"
+  | "R2-punct"
+  | "R3-tcy"
+  | "R3-ruby"
+  | "R4-halfwidth-kana"
+  | "R5-control-char"
+  | "R6-trailing-whitespace"
+  | "R7-mixed-indent"
+  | "R8-blank-run";
 
-export type WritingRuleCategory = "structure" | "punctuation" | "notation";
+export type WritingRuleCategory = "structure" | "punctuation" | "notation" | "whitespace" | "character";
 
 /**
- * Internal severity class (Phase 4). Only HIGH_CONFIDENCE rules are
- * enabled by default in Phase 1 -- there are no REVIEW-severity rules
- * shipped yet (every currently-enabled rule is a structural/mechanical
- * defect, not a stylistic judgment). The type exists now so later
- * phases can add REVIEW-severity rules without another schema rewrite.
+ * Internal severity class (Phase 4, still in force in Phase 2).
+ * HIGH_CONFIDENCE = the manuscript defect itself is mechanically
+ * certain (a real bracket mismatch, a real stray control character,
+ * etc). REVIEW = the underlying observation is real, but the correct
+ * *handling* may depend on context/style TateSpun's engine cannot see.
+ * Independent of `fixClass` below -- a HIGH_CONFIDENCE diagnostic can
+ * still be NOTICE_ONLY (e.g. an unmatched bracket: certain something is
+ * wrong, but not certain what the one correct edit is).
  */
 export type WritingSeverity = "HIGH_CONFIDENCE" | "REVIEW";
+
+/**
+ * Fix-class (Phase 2, historical 文章チェックβ v2 spec, recovered via
+ * `docs/specs/TateSpun_11A_11B_SPEC.md`). Answers a DIFFERENT question
+ * than `severity`: not "how certain is this diagnostic" but "how safely
+ * could TateSpun ever act on it." No Phase 1/2 rule's classification
+ * here implies an actual auto-fix runs -- Phase 2 defines the contract
+ * and metadata only; no manuscript mutation exists anywhere yet.
+ *
+ * - SAFE_AUTO_FIX: exactly one correct replacement exists and applying
+ *   it can never destroy meaningful authorial content (e.g. deleting
+ *   trailing whitespace before a line break).
+ * - REVIEW_BEFORE_FIX: a replacement CAN be mechanically proposed, but
+ *   style/context genuinely matters (e.g. collapsing duplicated
+ *   punctuation -- often right, not certain in every context).
+ * - NOTICE_ONLY: no single unambiguous correction exists (e.g. an
+ *   unmatched bracket -- something is wrong, but which side to edit is
+ *   not determinable from the text alone).
+ */
+export type WritingFixClass = "SAFE_AUTO_FIX" | "REVIEW_BEFORE_FIX" | "NOTICE_ONLY";
 
 export interface WritingDiagnostic {
   /** Stable, deterministic key -- same input always produces the same id (ruleId+range), safe to use as a React list key. */
@@ -30,6 +63,8 @@ export interface WritingDiagnostic {
   ruleId: WritingRuleId;
   category: WritingRuleCategory;
   severity: WritingSeverity;
+  /** Phase 2: every diagnostic now carries a deterministic fix classification -- see `WritingFixClass`'s own doc. Required, not optional: every rule must decide this, never leave it implicit. */
+  fixClass: WritingFixClass;
   /** UTF-16 code-unit index into the source string (inclusive). */
   start: number;
   /** UTF-16 code-unit index into the source string (exclusive). */
@@ -37,11 +72,10 @@ export interface WritingDiagnostic {
   /** User-facing Japanese explanation, phrased as a 確認候補 -- never a verdict. */
   message: string;
   /**
-   * Present ONLY where a replacement is mechanically certain (e.g. a
-   * rule that could deterministically prove there is exactly one
-   * correct fix). No Phase 1 rule sets this -- Phase 1 explicitly does
-   * not implement a fix/auto-correct UI. Reserved so a later phase can
-   * add safe-fix metadata without another diagnostic-schema rewrite.
+   * Present ONLY where a replacement is mechanically certain. Reserved
+   * metadata -- Phase 1/2 build no Fix UI and no code path anywhere
+   * applies this automatically; it exists purely so a later phase can
+   * build that UI without another diagnostic-schema rewrite.
    */
   suggestedReplacement?: { text: string; mechanicallyCertain: true };
 }
@@ -50,14 +84,20 @@ export interface WritingDiagnostic {
 export type WritingIssue = WritingDiagnostic;
 
 /**
- * Phase 1: every currently-enabled rule is always on (all are
- * HIGH_CONFIDENCE, structural/mechanical, no stylistic judgment). This
- * config type exists so a later phase can add opt-in/opt-out style
- * rules without changing the engine's own public call shape --
- * `enabledRuleIds` is additive-only in intent (omitting it runs every
- * currently-shipped rule, byte-identical to calling `analyzeWriting`
- * directly).
+ * `enabledRuleIds` (Phase 1): an ABSOLUTE whitelist -- when present,
+ * ONLY these rules run, overriding every default. Preserved unchanged
+ * for backward compatibility (existing callers/tests keep working
+ * byte-identically).
+ *
+ * `ruleOverrides` (Phase 2, additive): flips SPECIFIC rules on/off
+ * relative to the engine's own default set (`DEFAULT_ENABLED_RULE_IDS`
+ * in `engine.ts`) -- this is the real per-rule configuration contract a
+ * future Settings UI needs, without disturbing every OTHER rule's own
+ * default. Ignored when `enabledRuleIds` is present (the whitelist wins
+ * outright, matching Phase 1's own simpler all-or-nothing semantics for
+ * that field).
  */
 export interface WritingCheckConfig {
   enabledRuleIds?: WritingRuleId[];
+  ruleOverrides?: Partial<Record<WritingRuleId, boolean>>;
 }

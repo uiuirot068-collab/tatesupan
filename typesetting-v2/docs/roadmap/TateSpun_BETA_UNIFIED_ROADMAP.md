@@ -42,6 +42,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Browser-native JPG renderer PoC: COMPLETE / Human PASS
 - Live Editor → v2 Publication state bridge: COMPLETE
 - Writing Check β 2.0 Phase 1: COMPLETE
+- Writing Check β 2.0 Phase 2: COMPLETE
 
 Important: P3-O08's historical document status is stale. Many of its subtracks are complete, but overall production migration/acceptance is not yet closed.
 
@@ -120,16 +121,18 @@ COMPLETE — commit `26eef0f`
 - IME/privacy/build PASS
 
 #### 11-A Phase 2
-NOT_STARTED
-- paragraph/whitespace rules
-- vertical-writing character rules
-- original fix-class model:
-  - SAFE_AUTO_FIX
-  - REVIEW_BEFORE_FIX
-  - NOTICE_ONLY
-- rule config / per-rule enablement
-- diagnostics result model
-- no silent mutation
+COMPLETE
+- paragraph/whitespace rules: R6 trailing whitespace (SAFE_AUTO_FIX), R7 mixed tab/ideographic-space indentation (REVIEW_BEFORE_FIX), R8 3+ consecutive blank lines (NOTICE_ONLY, REVIEW severity, disabled by default -- style-sensitive)
+- vertical-writing character rules: R4 half-width katakana (REVIEW_BEFORE_FIX, no computed replacement yet), R5 stray control characters (SAFE_AUTO_FIX)
+- fix-class model implemented: `SAFE_AUTO_FIX` / `REVIEW_BEFORE_FIX` / `NOTICE_ONLY`, required on every diagnostic, independent of severity
+- rule config / per-rule enablement: `ruleOverrides` (additive, relative to the engine's own default set) alongside Phase 1's `enabledRuleIds` (absolute whitelist, unchanged)
+- diagnostics result model extended (`fixClass` field), no Fix/Ignore UI built yet
+- no silent mutation -- verified by explicit tests
+
+Deferred, explicitly not attempted this phase (real false-positive risk without further product guidance):
+- "excessive indentation" rule (no reliable existing contract defines an invalid threshold)
+- ASCII punctuation with a full-width equivalent (URL/code/deliberate-Latin false-positive risk)
+- half-width katakana auto-conversion replacement text (needs a real conversion table, deferred to the Fix UI phase)
 
 #### 11-A Phase 3
 HUMAN_GATE → then implementation
