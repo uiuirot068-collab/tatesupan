@@ -14,40 +14,15 @@
 // (JPG Export scope audit) specifically so JPG generation can run
 // server-side (Node/Vitest) with the same byte-level, low-Human-QA-burden
 // testing rigor already established for PDF/image-embedding this
-// project cycle -- not for any other purpose.
+// project cycle -- a Node-side QA REFERENCE implementation, not the
+// production path (round 32: production uses `rasterGeneratorBrowser.ts`,
+// native Canvas 2D -- see that module's own doc for why). `devDependency`
+// only; never imported by any browser-facing module.
 import { createCanvas, GlobalFonts, loadImage, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 import type { PaintCommand, PaintPlan, PublicationFontResource } from "./pdfGenerator";
+import { RASTER_DPI, mmToPx, ptToPx } from "./rasterShared";
 
-const MM_PER_INCH = 25.4;
-
-// Reuses the ONE real, cited Publication raster-quality precedent that
-// exists anywhere in this product's history -- legacy's own
-// `PDF_EXPORT_DPI = 600` (`src/lib/pageLayout.ts`, ported by reference
-// only, never imported from `src/`). No NEW product-visible DPI setting
-// is introduced. Disclosed limitation (JPG Export scope audit): legacy's
-// own Web閲覧用 JPG used a separate, smaller, DOM-`pixelRatio`-derived
-// size with no portable DPI equivalent to recover -- reusing 600dpi for
-// BOTH web and print base rendering is a SAFE_TECHNICAL_DEFAULT, not a
-// recovered product number, and produces a larger-than-legacy Web JPG
-// base raster (downstream JPEG compression still keeps file size
-// reasonable). Revisit if a Human product decision sets a distinct Web
-// JPG DPI later.
-export const RASTER_DPI = 600;
-
-// Reused verbatim from legacy `PRINT_JPG_LONG_SIDE_PX` (`src/lib/pageLayout.ts`).
-export const PRINT_JPG_LONG_SIDE_PX = 1600;
-
-// Reused verbatim from legacy (`exportImage.ts`'s three `toDataURL`/`toBlob`
-// call sites, all `'image/jpeg', 0.95`).
-export const JPEG_QUALITY = 0.95;
-
-function mmToPx(mm: number, dpi: number): number {
-  return (mm / MM_PER_INCH) * dpi;
-}
-
-function ptToPx(pt: number, dpi: number): number {
-  return (pt / 72) * dpi;
-}
+export { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY } from "./rasterShared";
 
 // One process-lifetime registration per font name -- `GlobalFonts` is a
 // real global registry (mirrors jsPDF's own per-document

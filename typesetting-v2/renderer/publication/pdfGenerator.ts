@@ -169,7 +169,7 @@ export type PaintPlan = PaintPagePlan[];
 // hypothetical caller that supplies `hasFont: true` without ever calling
 // `deriveBaselineRatioFromFont`). Equal to the REAL, MEASURED value for the
 // committed Shippori Mincho asset (see below) — not an independent guess.
-const FALLBACK_BASELINE_RATIO = 0.88;
+export const FALLBACK_BASELINE_RATIO = 0.88;
 
 // Human Visual QA HOLD round 5 (qa/evidence/P3_O08_FONT_DERIVED_VERTICAL_GLYPH_METRICS.md):
 // jsPDF paints every glyph via ordinary HORIZONTAL alphabetic-baseline

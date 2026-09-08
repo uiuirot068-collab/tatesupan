@@ -223,7 +223,7 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
 
   describe("Real MeasurementFacts identity <-> Publication paint identity", () => {
     it("Core's real Shippori Mincho MeasurementFacts identity matches Publication's own paintFontIdentity when both reference the same committed asset", async () => {
-      const { createShipporiMinchoMeasurementProvider } = await import("../../core");
+      const { createShipporiMinchoMeasurementProvider } = await import("../../core/measurement/shipporiMinchoProvider");
       const realProvider = createShipporiMinchoMeasurementProvider(FONT_PATH);
       const measurementIdentity = `${realProvider.providerId}@${realProvider.providerVersion}`;
 
@@ -245,7 +245,7 @@ describe("P3-O08 — Font Embedding PoC (Shippori Mincho, jsPDF)", () => {
     });
 
     it("a genuinely different font identity on the Publication side is detected as a mismatch, never silently accepted", async () => {
-      const { createShipporiMinchoMeasurementProvider } = await import("../../core");
+      const { createShipporiMinchoMeasurementProvider } = await import("../../core/measurement/shipporiMinchoProvider");
       const realProvider = createShipporiMinchoMeasurementProvider(FONT_PATH);
       const fx = ALL_FIXTURES.find((f) => f.id === "f20-canonical-sentence")!;
       const settings = settingsFor(fx.capacity);

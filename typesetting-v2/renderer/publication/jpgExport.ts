@@ -28,44 +28,18 @@
 // geometry field that does not exist.
 import JSZip from "jszip";
 import { createCanvas, type Canvas } from "@napi-rs/canvas";
-import { renderPaintPlanToRasterPages, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, RASTER_DPI, type RasterPage } from "./rasterGenerator";
+import { renderPaintPlanToRasterPages, type RasterPage } from "./rasterGenerator";
+import { PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, RASTER_DPI, computeLongSideResize } from "./rasterShared";
+import { sanitizeFilename, buildPageJpgFileName, buildZipFileName } from "./jpgFilename";
 import { buildPublicationPaintPlan, type PaintPlan, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import type { PublicationDocument } from "./paintModel";
 
 export type JpgExportMode = "WEB" | "PRINT";
 
-// --- Filename contract (ported verbatim from `src/utils/exportFilename.ts`) ---
-
-const FALLBACK_TITLE = "無題のドキュメント";
-const FORBIDDEN_FILENAME_CHARS = /[\\/:*?"<>|]/g;
-
-export function sanitizeFilename(name: string): string {
-  const cleaned = name
-    .replace(FORBIDDEN_FILENAME_CHARS, "")
-    .trim()
-    .replace(/[.\s]+$/, "");
-  return cleaned.length > 0 ? cleaned : FALLBACK_TITLE;
-}
-
-function padPageNumber(pageNumber: number): string {
-  return String(pageNumber).padStart(3, "0");
-}
-
-export function buildPageJpgFileName(title: string, pageNumber: number): string {
-  return `${sanitizeFilename(title)}_${padPageNumber(pageNumber)}.jpg`;
-}
-
-export function buildZipFileName(title: string): string {
-  return `${sanitizeFilename(title)}_jpg.zip`;
-}
-
-// --- Print/web geometry transform ---
-
-function computeLongSideResize(pixelWidth: number, pixelHeight: number, longSidePx: number): { width: number; height: number } {
-  const longSide = Math.max(pixelWidth, pixelHeight);
-  const scale = longSidePx / longSide;
-  return { width: Math.max(1, Math.round(pixelWidth * scale)), height: Math.max(1, Math.round(pixelHeight * scale)) };
-}
+// Re-exported for backward compatibility -- the filename contract itself
+// now lives in `jpgFilename.ts` (pure, platform-agnostic, shared with the
+// browser executor too).
+export { sanitizeFilename, buildPageJpgFileName, buildZipFileName };
 
 function toPrintCanvas(base: RasterPage): Canvas {
   const { width, height } = computeLongSideResize(base.pixelWidth, base.pixelHeight, PRINT_JPG_LONG_SIDE_PX);

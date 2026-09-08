@@ -64,7 +64,20 @@ export { createFakeMeasurementProvider } from "./measurement/fakeProvider";
 // inside composeCanonicalDocument's own deterministic loop). Test/fixture
 // code should keep using createFakeMeasurementProvider unless it
 // specifically needs a real, asset-tied measurementIdentity.
-export { createShipporiMinchoMeasurementProvider } from "./measurement/shipporiMinchoProvider";
+//
+// Deliberately NOT re-exported from this barrel (Human Visual QA HOLD
+// round 32, JPG Export browser-production-integration audit): its own
+// module imports Node's `fs` at top scope (`readFileSync`). A real
+// `next build` proved that re-exporting it here makes THIS ENTIRE
+// barrel unbundlable for any browser/client consumer of core/index.ts
+// (Turbopack must resolve every re-exported module's own imports, even
+// ones never called) — this file's own doc says it is "the only file
+// anything outside typesetting-v2/core/ may import from," so keeping a
+// Node-only export in it silently poisons that promise for every future
+// browser consumer, not just this one. Node/test callers that
+// specifically need it import directly from
+// `./measurement/shipporiMinchoProvider` (already the convention one of
+// two existing consumers used before this fix).
 export type { ShipporiMinchoAssetInfo } from "./measurement/shipporiMinchoProvider";
 
 export type { PageCompositionSettings } from "./compose/page";
