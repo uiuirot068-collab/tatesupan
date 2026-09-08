@@ -120,17 +120,45 @@ export interface GeneratedPageFurniture {
 // from legacy `MasterPageSettings.hashiraOdd`/`hashiraEven`/
 // `hashiraPosition`. Kept as its own type, not force-fit into
 // `GeneratedPageFurniture`'s own `ResolvedFolioPosition` vocabulary —
-// 柱's own position axis (top/bottom, per legacy's real
-// `HashiraPosition`) is a genuinely different concept from folio's own
-// (center/left/right), and this codebase's own convention throughout
-// (P3-O08's whole yakumono history) is to avoid a shared abstraction
-// two real, differently-shaped concepts would have to be awkwardly
-// squeezed into.
-export type HeaderPosition = "top" | "bottom";
+// 柱's own position axis is a genuinely different concept from folio's
+// own (center/left/right), and this codebase's own convention
+// throughout (P3-O08's whole yakumono history) is to avoid a shared
+// abstraction two real, differently-shaped concepts would have to be
+// awkwardly squeezed into.
+//
+// Human Visual QA HOLD round 24 (P3-O08 final-page completion, Step
+// 1D): a v2-native ENHANCEMENT beyond legacy's own limited top/bottom
+// contract — a full 2-axis semantic grid, TOP/CENTER/BOTTOM crossed
+// with OUTER/GUTTER. `HeaderVerticalPosition` is the vertical axis
+// (legacy only ever had "top"/"bottom" — "center" is new, v2-only).
+// `HeaderSide` reuses the EXACT SAME "outer"/"gutter" vocabulary
+// `FolioPosition` already established (not a coincidence — both are
+// literally the same jlreq-adjacent 小口/ノド concept), so parity
+// resolution reuses `core/folio/index.ts`'s own
+// `resolveFolioPhysicalSide` directly rather than a second
+// implementation of the identical odd/even logic.
+export type HeaderVerticalPosition = "top" | "center" | "bottom";
+export type HeaderSide = "outer" | "gutter";
+
+// Settings-level (user-facing) choice.
+export interface HeaderPositionSetting {
+  vertical: HeaderVerticalPosition;
+  side: HeaderSide;
+}
+
+// Core-resolved (parity already applied) — what `GeneratedHeader`
+// actually carries. `side` becomes a PHYSICAL side once resolved,
+// mirroring `ResolvedFolioPosition`'s own "gutter"/"outer" ->
+// "left"/"right" resolution exactly (same parity logic, reused not
+// duplicated).
+export interface ResolvedHeaderPosition {
+  vertical: HeaderVerticalPosition;
+  side: "left" | "right";
+}
 
 export interface GeneratedHeader {
   text: string;
-  position: HeaderPosition;
+  position: ResolvedHeaderPosition;
 }
 
 export interface CanonicalPage {

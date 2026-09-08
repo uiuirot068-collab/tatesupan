@@ -535,8 +535,23 @@ export function buildPaintPlan(
       commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
-      const xCenter = paperWidthMm / 2;
-      const yCenter = page.header.position === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
+      // Human Visual QA HOLD round 24: v2-native 2-axis placement.
+      // `side` reuses the SAME left/right anchor formula folio's own
+      // "left"/"right" already established (flush with the margin the
+      // body content area itself uses). `vertical: "center"` is a
+      // v2-only capability with no legacy equivalent -- vertically
+      // centered on the FULL PAPER height (page-furniture placement,
+      // never the body content column's own center).
+      const xCenter =
+        page.header.position.side === "left"
+          ? marginLeftMm + doc.bodyEmMm / 2
+          : paperWidthMm - marginRightMm - doc.bodyEmMm / 2;
+      const yCenter =
+        page.header.position.vertical === "top"
+          ? marginTopMm / 2
+          : page.header.position.vertical === "bottom"
+            ? paperHeightMm - marginBottomMm / 2
+            : paperHeightMm / 2;
       commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     return {

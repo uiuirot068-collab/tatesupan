@@ -174,7 +174,7 @@ describe("Part B -- folio horizontal orientation", () => {
 
 describe("Part C -- header (柱) horizontal orientation", () => {
   it("header paints as a single horizontal command (angle 0), never per-character vertical split (test 13, 14)", () => {
-    const { model } = composeModel("今日は", { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: "top" });
+    const { model } = composeModel("今日は", { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: { vertical: "top", side: "outer" } });
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const headerCmd = plan[0].commands[plan[0].commands.length - 1] as Extract<PaintCommand, { op: "text" }>;
@@ -184,14 +184,14 @@ describe("Part C -- header (柱) horizontal orientation", () => {
   });
 
   it("top/bottom position semantics are unchanged -- still real Core-passed values (test 15)", () => {
-    const top = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: "top" }).document;
-    const bottom = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: "bottom" }).document;
-    expect(top.pages[0].header?.position).toBe("top");
-    expect(bottom.pages[0].header?.position).toBe("bottom");
+    const top = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: { vertical: "top", side: "outer" } }).document;
+    const bottom = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: { vertical: "bottom", side: "outer" } }).document;
+    expect(top.pages[0].header?.position.vertical).toBe("top");
+    expect(bottom.pages[0].header?.position.vertical).toBe("bottom");
   });
 
   it("odd/even content selection is unchanged (test 16)", () => {
-    const { document } = composeModel("今日は", { hashiraOdd: "作品名", hashiraEven: "章名", position: "top" });
+    const { document } = composeModel("今日は", { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
     expect(document.pages[0].header?.text).toBe("作品名"); // page 1 is odd
   });
 
@@ -204,7 +204,7 @@ describe("Part C -- header (柱) horizontal orientation", () => {
       ruleSet: DEFAULT_RULE_SET_V2,
       measurement,
       settings,
-      headerSettings: { hashiraOdd: "作品名", hashiraEven: "章名", position: "top" },
+      headerSettings: { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } },
       headerPageOverrides: { 1: { hideHashira: true } },
     });
     void source;
@@ -214,14 +214,14 @@ describe("Part C -- header (柱) horizontal orientation", () => {
 
 describe("Integration + regression", () => {
   it("body geometry unchanged with furniture enabled vs disabled (test 18)", () => {
-    const withFurniture = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: "top" }, DEFAULT_FOLIO_SETTINGS).document;
+    const withFurniture = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: { vertical: "top", side: "outer" } }, DEFAULT_FOLIO_SETTINGS).document;
     const withoutFurniture = composeModel("今日は").document;
     expect(withFurniture.pages[0].columns).toEqual(withoutFurniture.pages[0].columns);
   });
 
   it("full combined fixture (Ruby/Dash/TCY/Ellipsis/punctuation) still renders correctly with furniture + small-kana correction both active (tests 19-23)", () => {
     const text = "「今日は、雨だった。」きっと２０２６年";
-    const { model } = composeModel(text, { hashiraOdd: "A", hashiraEven: "B", position: "top" }, DEFAULT_FOLIO_SETTINGS);
+    const { model } = composeModel(text, { hashiraOdd: "A", hashiraEven: "B", position: { vertical: "top", side: "outer" } }, DEFAULT_FOLIO_SETTINGS);
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const { bytes } = renderPaintPlanToPdf(plan, font);
@@ -229,7 +229,7 @@ describe("Integration + regression", () => {
   });
 
   it("vector-only, deterministic output (tests 24-25)", () => {
-    const { model } = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: "top" }, DEFAULT_FOLIO_SETTINGS);
+    const { model } = composeModel("今日は", { hashiraOdd: "A", hashiraEven: "B", position: { vertical: "top", side: "outer" } }, DEFAULT_FOLIO_SETTINGS);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const planA = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const planB = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
@@ -296,7 +296,7 @@ describe("QA -- small-kana-indesign-parity-qa.pdf", () => {
 describe("QA -- small-kana-and-page-furniture-final-qa.pdf", () => {
   it("sections A-D: small-kana parity, folio, header, folio+header+body together", () => {
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
-    const headerSettings: HeaderSettings = { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: "top" };
+    const headerSettings: HeaderSettings = { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: { vertical: "top", side: "outer" } };
     const pages: ReturnType<typeof buildPaintPlan>[0][] = [];
 
     // SECTION A -- small-kana InDesign-parity fixtures.
@@ -321,8 +321,8 @@ describe("QA -- small-kana-and-page-furniture-final-qa.pdf", () => {
     }
 
     // SECTION C -- header: odd/even, top/bottom, override.
-    const { model: headerOdd } = composeModel("今日は", { ...headerSettings, position: "top" });
-    const { model: headerBottom } = composeModel("今日は", { ...headerSettings, position: "bottom" });
+    const { model: headerOdd } = composeModel("今日は", { ...headerSettings, position: { vertical: "top", side: "outer" } });
+    const { model: headerBottom } = composeModel("今日は", { ...headerSettings, position: { vertical: "bottom", side: "outer" } });
     pages.push(buildPaintPlan(headerOdd, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext)[0]);
     pages.push(buildPaintPlan(headerBottom, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext)[0]);
 

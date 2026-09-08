@@ -103,7 +103,10 @@ export interface PaintColumn {
 // concept), so converting a resolved side into an actual xMm/topMm
 // happens in `pdfGenerator.ts`, which is the only place that ever sees
 // real page margins. 柱 (`GeneratedHeader`/`PaintHeader`) follows the
-// exact same split — `position` ("top"/"bottom") stays semantic here.
+// exact same split — `position` (round 24: a 2-axis
+// vertical/TOP-CENTER-BOTTOM x side/left-right, side already
+// parity-resolved by Core) stays semantic here; only physical mm
+// conversion happens at the Publication paint boundary.
 export interface PaintFolio {
   text: string;
   position: "center" | "left" | "right";
@@ -111,7 +114,7 @@ export interface PaintFolio {
 
 export interface PaintHeader {
   text: string;
-  position: "top" | "bottom";
+  position: { vertical: "top" | "center" | "bottom"; side: "left" | "right" };
 }
 
 export interface PaintPage {
