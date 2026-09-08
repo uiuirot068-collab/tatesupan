@@ -30,6 +30,9 @@ export { DEFAULT_FOLIO_SETTINGS, composeFolioForPage, resolveFolioPhysicalSide }
 export type { HeaderSettings, HeaderPageOverride } from "./header";
 export { DEFAULT_HEADER_SETTINGS, composeHeaderForPage, headerSettingsFromLegacy } from "./header";
 
+export type { ColophonFieldInput, ColophonContentSettings, ColophonCompiledRow, ColophonCompiledContent, ColophonPagePosition, ColophonInsertion } from "./colophon";
+export { composeColophon, compileColophonContent, resolveColophonInsertion } from "./colophon";
+
 export type { VersionMetadata } from "./version";
 
 export type {

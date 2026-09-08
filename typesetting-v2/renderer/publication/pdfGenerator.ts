@@ -600,12 +600,30 @@ function buildColophonPaintPage(page: PaintPage, hasFont: boolean, pageGeometry:
   const firstColumn = page.columns[0];
   if (hasFont && firstColumn) {
     const lineHeightMm = bodyEmMm * 1.5; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
+    const contentLeftMm = marginLeftMm;
+    const contentRightMm = paperWidthMm - marginRightMm;
     firstColumn.lines.forEach((line, lineIndex) => {
       const text = line.units.map((u) => u.text).join("");
       if (text.length === 0) return;
-      const xCenter = marginLeftMm + (paperWidthMm - marginLeftMm - marginRightMm) / 2;
       const yCenter = marginTopMm + lineIndex * lineHeightMm + bodyEmMm / 2;
-      commands.push(horizontalFurnitureCommand(text, xCenter, yCenter, mmToPt(bodyEmMm)));
+      // Human Visual QA HOLD round 27: a TAB-joined row (this module's
+      // own `compileColophonContent`-derived label/value pair, real
+      // legacy `ColophonField` content) paints as TWO separate
+      // commands, label flush-left / value flush-right -- the closest
+      // faithful text-level equivalent of legacy's own real 2-column
+      // CSS grid (`FragmentRow`, `src/components/ColophonPageCard.tsx`),
+      // which has no literal separator character to reproduce (never
+      // invented here as e.g. "："). A line with no tab (freeText, or
+      // any plain line) paints as one centered line, unchanged from
+      // round 26.
+      if (text.includes("\t")) {
+        const [label, value] = text.split("\t");
+        if (label.length > 0) commands.push({ op: "text", text: label, xMm: contentLeftMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "left", angle: 0, baseline: "middle" });
+        if (value.length > 0) commands.push({ op: "text", text: value, xMm: contentRightMm, yMm: yCenter, fontSizePt: mmToPt(bodyEmMm), align: "right" as "left" | "center", angle: 0, baseline: "middle" });
+      } else {
+        const xCenter = contentLeftMm + (contentRightMm - contentLeftMm) / 2;
+        commands.push(horizontalFurnitureCommand(text, xCenter, yCenter, mmToPt(bodyEmMm)));
+      }
     });
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {
