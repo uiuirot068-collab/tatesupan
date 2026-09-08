@@ -342,7 +342,18 @@ character-spacing consistency and line/column spacing.
 ---
 
 ### 17b. Typography Parity — InDesign Character-Pitch Recheck (OPEN follow-up, recorded 2026-09-09)
-Status: NOT_STARTED
+Status: OPEN — audit complete (2026-09-09, HEAD `985c415`), HUMAN GATE for next step
+
+Audit findings: `qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_CHARACTER_PITCH.md`.
+Summary: canonical body pitch is uniform 1em, frozen, previously validated
+against real InDesign PDF output; Preview and Publication derive from the
+identical Core tick values with no added spacing; Shippori Mincho's own
+font metrics are well-formed and uniform (no anomalous glyph found in a
+17-character continuous-prose sample). No single code-level cause was
+found — no correction was implemented. "InDesign-level is the minimum
+acceptance line" remains the frozen standard; this item stays OPEN until a
+size-normalized Human visual comparison (recommended next action, see the
+evidence doc §8) passes.
 
 Not a numbered P3-O / TSP-LOOP item — a descriptive open follow-up recorded from Human observation.
 
