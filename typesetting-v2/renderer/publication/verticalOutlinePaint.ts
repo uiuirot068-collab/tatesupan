@@ -22,6 +22,11 @@ import { Font as OpenTypeFont, parse as parseOpenTypeFont, type Glyph as OpenTyp
 import { auditGsub, type GsubAudit } from "./gsubReader";
 import { createGlyphIdLookup, findCodePointForGlyphId } from "./fontCapability";
 
+// Human Visual QA HOLD round 23 -- ported VERBATIM from
+// `core/rules/defaultRuleSet.ts`'s own cl-11 (small kana) member list,
+// never re-derived or hardcoded independently.
+const SMALL_KANA_TEST = /[ぁぃぅぇぉァィゥェォっゃゅょッャュョ]/u;
+
 export type OutlinePathCommand =
   | { type: "M"; x: number; y: number }
   | { type: "L"; x: number; y: number }
@@ -136,6 +141,28 @@ export class VerticalOutlineContext {
   /** unitsPerEm of the underlying font — exposed for callers that need to reason about font-unit quantities (e.g. real advance width) alongside outline paint. */
   get unitsPerEm(): number {
     return this.font.unitsPerEm;
+  }
+
+  /**
+   * Human Visual QA HOLD round 23: bbox-derived baseline ratio that
+   * centers a SMALL KANA glyph's own real ink bounding box on its own
+   * 1em slot's vertical center, along the vertical-flow axis only —
+   * `undefined` for any other grapheme (ordinary characters keep the
+   * existing uniform, vmtx-origin-derived default; this is a targeted
+   * exception, not a general re-centering rule). `SMALL_KANA_TEST` is
+   * ported verbatim from `core/rules/defaultRuleSet.ts`'s own cl-11
+   * member list (never re-derived, never a hardcoded literal-only
+   * check elsewhere). Resolved against the ACTUAL painted glyph — the
+   * outline glyph when one applies (small kana's real GSUB vertical
+   * alternate, per round 6), the ordinary cmap-resolved glyph
+   * otherwise — never the wrong glyph's own bbox.
+   */
+  inkCenteredBaselineRatioForSmallKana(grapheme: string): number | undefined {
+    if (!SMALL_KANA_TEST.test(grapheme)) return undefined;
+    const glyphId = this.resolveOutlineGlyphId(grapheme) ?? this.glyphIdFor(grapheme.codePointAt(0)!);
+    if (glyphId === undefined) return undefined;
+    const bbox = this.getGlyph(glyphId).getBoundingBox();
+    return 0.5 + (bbox.y1 + bbox.y2) / (2 * this.font.unitsPerEm);
   }
 
   /**

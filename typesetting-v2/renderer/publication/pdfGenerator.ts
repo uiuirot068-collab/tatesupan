@@ -251,8 +251,20 @@ function verticalGraphemeCommands(
   const emSizeMm = fontSizePt * (25.4 / 72);
   return graphemes.map((ch, i) => {
     const yakumonoBaselineRatio = yakumonoContext?.baselineRatioFor(ch);
-    const effectiveBaselineRatio = yakumonoBaselineRatio ?? baselineRatio;
-    const gposOffsetMm = yakumonoBaselineRatio !== undefined ? 0 : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
+    // Human Visual QA HOLD round 23: small kana's own real ink bbox is
+    // measurably smaller than an ordinary glyph's (round 14's own
+    // finding), so the uniform, vmtx-origin-derived default baseline
+    // ratio does not center it well within its own 1em slot along the
+    // vertical-flow axis. `inkCenteredBaselineRatioForSmallKana`
+    // computes a real, per-glyph, bbox-derived correction — never a
+    // guessed/hardcoded offset — scoped to cl-11 members only (ordinary
+    // characters, including punctuation the yakumono context already
+    // handles, are unaffected). Yakumono edge-alignment takes priority
+    // if both were ever somehow applicable (never in practice — small
+    // kana is never yakumono-classified).
+    const smallKanaBaselineRatio = outlineContext?.inkCenteredBaselineRatioForSmallKana(ch);
+    const effectiveBaselineRatio = yakumonoBaselineRatio ?? smallKanaBaselineRatio ?? baselineRatio;
+    const gposOffsetMm = yakumonoBaselineRatio !== undefined || smallKanaBaselineRatio !== undefined ? 0 : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
     const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
     const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {
@@ -286,6 +298,20 @@ function verticalGraphemeCommands(
 // logicalCells/occupancy are never touched.
 function tcyCommand(text: string, xCenterMm: number, yCenterMm: number, fontSizePt: number, maxWidthMm: number): PaintCommand {
   return { op: "text", text, xMm: xCenterMm, yMm: yCenterMm, fontSizePt, align: "center", angle: 0, baseline: "middle", maxWidthMm };
+}
+
+// Human Visual QA HOLD round 23: page furniture (folio/柱, Contract §15)
+// is generated content, not manuscript typography -- it must never be
+// painted sideways/rotated or split one-character-per-vertical-line the
+// way body text is. This is the SAME "horizontal even inside a
+// vertical-rl document" architectural pattern `tcyCommand` above
+// already established -- a single, unrotated, unsplit text run.
+// Deliberately bypasses `verticalGraphemeCommands` entirely: no GSUB
+// vert/vrt2 substitution, no small-kana bbox correction, no yakumono
+// edge-alignment, no per-character split -- none of those are
+// vertical-writing-mode concerns that apply to a horizontal string.
+function horizontalFurnitureCommand(text: string, xCenterMm: number, yCenterMm: number, fontSizePt: number): PaintCommand {
+  return { op: "text", text, xMm: xCenterMm, yMm: yCenterMm, fontSizePt, align: "center", angle: 0, baseline: "middle" };
 }
 
 // Converts a physical mm length to the equivalent jsPDF font-size point
@@ -468,23 +494,27 @@ export function buildPaintPlan(
         }
       }
     }
-    // Human Visual QA HOLD round 20/21/22 (P3-O08 final-page completion,
-    // Steps 1/1B/1C -- folio/header): painted ONLY when Core actually
-    // supplies one for this page (never invented, never a
-    // page-numbering/pagination policy decided here). Core's own
-    // `ResolvedFolioPosition` ("center"/"left"/"right", already
-    // parity-resolved by Core -- see `core/folio/index.ts`) is still
-    // SEMANTIC, not a physical coordinate -- converting it to mm is
-    // this function's own job, since this is the only place real paper
-    // size/margins (`PublicationPageGeometry`) are ever available.
-    // "left"/"right" anchor flush with the SAME margin the body content
-    // area itself uses (`marginLeftMm`/`marginRightMm`), mirroring
-    // legacy's own "frame edge, not paper edge" convention
-    // (`PageCard.tsx`'s `NombreOverlay`). Font: the body font, at the
-    // fixed `bodyEmMm` size (HD-005's own default -- 柱/奥付/folio
-    // inherit the body font unless overridden; no override mechanism
-    // exists in Publication paint yet, so only the default is
-    // implemented here).
+    // Human Visual QA HOLD round 20/21/22/23 (P3-O08 final-page
+    // completion, Steps 1/1B/1C, Human orientation correction):
+    // painted ONLY when Core actually supplies one for this page
+    // (never invented, never a page-numbering/pagination policy
+    // decided here). Core's own `ResolvedFolioPosition`
+    // ("center"/"left"/"right", already parity-resolved by Core -- see
+    // `core/folio/index.ts`) is still SEMANTIC, not a physical
+    // coordinate -- converting it to mm is this function's own job,
+    // since this is the only place real paper size/margins
+    // (`PublicationPageGeometry`) are ever available.
+    //
+    // Round 23 (Human Visual QA HOLD): page furniture is NOT manuscript
+    // typography -- rounds 20-22 mistakenly routed it through the SAME
+    // vertical per-character painter body text uses (GSUB vert/vrt2
+    // substitution, small-kana handling, yakumono edge-alignment, TCY
+    // rotation), which paints Arabic digits/柱 text sideways/stacked.
+    // `horizontalFurnitureCommand` below is a dedicated, SIMPLE
+    // horizontal text path (angle 0, no vertical-writing concerns of
+    // any kind) -- the same architectural pattern TCY already
+    // established for "content that must read horizontally even inside
+    // a vertical-rl document."
     const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
     const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
     const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
@@ -492,21 +522,22 @@ export function buildPaintPlan(
     const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
     const marginRightMm = pageGeometry?.marginRightMm ?? 0;
     if (page.folio && page.folio.text.length > 0 && hasFont) {
+      // "left"/"right" anchor flush with the SAME margin the body
+      // content area itself uses, mirroring legacy's own "frame edge,
+      // not paper edge" convention (`PageCard.tsx`'s `NombreOverlay`).
       const xCenter =
         page.folio.position === "left"
           ? marginLeftMm + doc.bodyEmMm / 2
           : page.folio.position === "right"
             ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
             : paperWidthMm / 2;
-      const topMm = paperHeightMm - marginBottomMm;
-      const totalHeightMm = doc.bodyEmMm * Array.from(page.folio.text).length;
-      commands.push(...verticalGraphemeCommands(page.folio.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
+      const yCenter = paperHeightMm - marginBottomMm / 2;
+      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
       const xCenter = paperWidthMm / 2;
-      const totalHeightMm = doc.bodyEmMm * Array.from(page.header.text).length;
-      const topMm = page.header.position === "top" ? marginTopMm - totalHeightMm : paperHeightMm - marginBottomMm;
-      commands.push(...verticalGraphemeCommands(page.header.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
+      const yCenter = page.header.position === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
+      commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     return {
       widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
