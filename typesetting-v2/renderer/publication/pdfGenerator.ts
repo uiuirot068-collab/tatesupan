@@ -1187,18 +1187,32 @@ function findUnresolvedImageIssues(doc: PublicationDocument): string[] {
 // returning a partially-built result, since there is no "banner-only PDF
 // page" concept defined by any frozen contract yet. Round 30: the SAME
 // refusal now also applies to a real, unresolved required image.
-export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource, pageGeometry?: PublicationPageGeometry): PublicationPdfResult {
+// Round 31 (JPG Export): extracted so the JPG raster path
+// (`rasterGenerator.ts`/`jpgExport.ts`) can reuse the IDENTICAL
+// pre-flight HOLD/unresolved-image refusal and paint-context
+// construction PDF already uses -- never a second, independently
+// drifting copy of this logic (per this round's own "do not duplicate
+// composition logic" rule). `generatePublicationPdf` below is now a
+// thin wrapper: build the plan via this function, then hand it to
+// `renderPaintPlanToPdf`. `refusalPrefix` lets each real caller keep its
+// own exact, already-tested error-message wording (existing PDF tests
+// assert against `generatePublicationPdf`'s own exact prefix).
+export function buildPublicationPaintPlan(doc: PublicationDocument, fontResource: PublicationFontResource | undefined, pageGeometry: PublicationPageGeometry | undefined, refusalPrefix: string): PaintPlan {
   if (doc.hold) {
-    throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF for a HOLD document (${doc.holdReasons.join("; ")})`);
+    throw new Error(`${refusalPrefix} for a HOLD document (${doc.holdReasons.join("; ")})`);
   }
   const imageIssues = findUnresolvedImageIssues(doc);
   if (imageIssues.length > 0) {
-    throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF with unresolved required image(s): ${imageIssues.join("; ")}`);
+    throw new Error(`${refusalPrefix} with unresolved required image(s): ${imageIssues.join("; ")}`);
   }
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
   const outlineContext = fontResource ? new VerticalOutlineContext(Buffer.from(fontResource.base64, "base64")) : undefined;
   const gposContext = fontResource ? new VerticalGposContext(Buffer.from(fontResource.base64, "base64")) : undefined;
   const yakumonoContext = fontResource ? new VerticalYakumonoAlignContext(Buffer.from(fontResource.base64, "base64"), baselineRatio) : undefined;
-  const plan = buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
+  return buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
+}
+
+export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource, pageGeometry?: PublicationPageGeometry): PublicationPdfResult {
+  const plan = buildPublicationPaintPlan(doc, fontResource, pageGeometry, "generatePublicationPdf: refusing to emit a Publication PDF");
   return renderPaintPlanToPdf(plan, fontResource);
 }
