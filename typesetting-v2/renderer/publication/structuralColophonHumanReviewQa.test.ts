@@ -224,7 +224,9 @@ describe("Root cause -- confirms CASE A (QA-fixture-only), not a product bug", (
 });
 
 describe("QA -- structural-colophon-human-review-qa.pdf (compact, judgeable)", () => {
-  it("14 focused scenarios + 1 compact page-order sample, every normal scenario a single complete colophon page", () => {
+  it(
+    "14 focused scenarios + 1 compact page-order sample, every normal scenario a single complete colophon page",
+    () => {
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const bodyText = "「今日は、雨だった。」きっとやってくる。";
     const place = (horizontal: ColophonPlacement["horizontal"], vertical: ColophonPlacement["vertical"], respectGutter = true, respectVerticalMargins = true): ColophonPlacement => ({
@@ -281,15 +283,21 @@ describe("QA -- structural-colophon-human-review-qa.pdf (compact, judgeable)", (
         capacity: OVERFLOW_CAPACITY_HUMAN,
       });
       expect(document.colophon!.pages.length).toBeGreaterThan(1);
-      // Round 29B's own regression guard: no row/date/email token may be
-      // split across two "text" commands on any one overflow page --
-      // each compiled row still paints as exactly one label command +
-      // one value command (round 27's own label/value split), never
-      // fragmented further by mid-token line-wrapping.
+      // Round 29B's own regression guard (mid-token splitting caused by
+      // an unrealistically NARROW capacity) is frozen and stays fixed --
+      // proven separately in "Root cause" above. Round 29D adds a real,
+      // narrower value-column frame (title-row-derived), under which a
+      // value WIDER than that frame (e.g. a long email) may legitimately
+      // wrap -- so "must paint as one whole command" is no longer the
+      // right check. What must still hold: every character of the real
+      // value survives, in order, reconstructable by concatenating its
+      // own consecutive painted fragments (no loss, no reordering,
+      // even when wrapped).
       const compiled = compileColophonContent({ fields: FULL_FIELDS, freeText: FULL_FREETEXT });
       const paintedTexts = colophonOnly.flatMap((page) => page.commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text").map((c) => c.text));
+      const allPaintedText = paintedTexts.join("");
       for (const row of compiled.rows) {
-        expect(paintedTexts).toContain(row.value); // e.g. "2026年9月8日", "example@example.com" -- whole, never split
+        expect(allPaintedText).toContain(row.value); // whole (if it fit) or reconstructable across consecutive wrapped fragments
       }
       scenarios.push(colophonOnly);
     }
@@ -320,7 +328,9 @@ describe("QA -- structural-colophon-human-review-qa.pdf (compact, judgeable)", (
     } catch {
       /* best-effort, transient Dropbox sync lock, non-fatal */
     }
-  });
+    },
+    30000 // Human Visual QA HOLD round 29D: real per-character font-metric measurement across 15 scenarios is heavier than the default 5000ms budget under full-suite CPU contention (parallel test files) -- passes comfortably in ~2.5s standalone; this raises the test's own timeout, it does not mask a hang (confirmed: standalone run completes in ~2.7s total).
+  );
 });
 
 describe("Regression", () => {

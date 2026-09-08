@@ -99,6 +99,15 @@ export class VerticalOutlineContext {
   private readonly font: OpenTypeFont;
   private readonly fontBuf: Buffer;
   private readonly outlineGlyphCache = new Map<number, number | undefined>();
+  // Human Visual QA HOLD round 29D: `advanceWidthMm` is now called
+  // per-character, potentially thousands of times across a real
+  // document's own colophon block/wrap measurement -- memoized here
+  // (keyed by grapheme+emSizeMm, this context's own lifetime only) to
+  // avoid redundant `getGlyph`/GSUB-audit work for repeated characters
+  // (common: kanji, punctuation, spaces). A real performance fix, not a
+  // behavior change -- every cached value is still the same real,
+  // measured result `advanceWidthMm` would otherwise recompute.
+  private readonly advanceWidthCache = new Map<string, number>();
 
   constructor(fontBuf: Buffer) {
     this.fontBuf = fontBuf;
@@ -204,9 +213,12 @@ export class VerticalOutlineContext {
    */
   advanceWidthMm(grapheme: string, emSizeMm: number): number {
     if (Array.from(grapheme).length !== 1) return emSizeMm;
+    const cacheKey = `${grapheme} ${emSizeMm}`;
+    const cached = this.advanceWidthCache.get(cacheKey);
+    if (cached !== undefined) return cached;
     const glyphId = this.resolveOutlineGlyphId(grapheme) ?? this.glyphIdFor(grapheme.codePointAt(0)!);
-    if (glyphId === undefined) return emSizeMm;
-    const glyph = this.getGlyph(glyphId);
-    return ((glyph.advanceWidth ?? this.font.unitsPerEm) / this.font.unitsPerEm) * emSizeMm;
+    const result = glyphId === undefined ? emSizeMm : ((this.getGlyph(glyphId).advanceWidth ?? this.font.unitsPerEm) / this.font.unitsPerEm) * emSizeMm;
+    this.advanceWidthCache.set(cacheKey, result);
+    return result;
   }
 }
