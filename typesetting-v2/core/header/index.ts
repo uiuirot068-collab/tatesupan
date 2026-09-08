@@ -1,6 +1,6 @@
 // 柱 (running header) generation — Contract §15 page-decoration layer.
-// Human Visual QA HOLD round 22/24 (P3-O08 final-page completion, Steps
-// 1C/1D).
+// Human Visual QA HOLD round 22/24/25 (P3-O08 final-page completion,
+// Steps 1C/1D and its own correction).
 //
 // Ported field names/defaults/semantics VERBATIM from the already-shipped
 // legacy `src/lib/pageLayout.ts`'s `MasterPageSettings`
@@ -21,18 +21,24 @@
 // exactly `resolveFolioPhysicalSide("outer", isOddPage)`, never
 // configurable, never "gutter"). `headerSettingsFromLegacy` below
 // recovers this exact legacy default for old documents/settings.
-// v2 adds a real 2-axis choice (`HeaderPositionSetting`, TOP/CENTER/
-// BOTTOM x OUTER/GUTTER) — CENTER is new (legacy had none), GUTTER is
-// new (legacy always used outer). Side resolution reuses
-// `core/folio/index.ts`'s own `resolveFolioPhysicalSide` directly — the
-// SAME odd/even parity logic, not a second implementation.
+//
+// Round 25 (correction, Human QA-caught product-model error): round
+// 24's own "vertical CENTER" reading was wrong — "CENTER" was never
+// meant as vertical page-center. The corrected model: `HeaderBand`
+// ("top"|"bottom", the ONLY vertical axis, matching legacy's own real
+// `HashiraPosition` exactly) crossed with `FolioPosition` itself,
+// reused DIRECTLY as the horizontal axis (小口/ノド/center is literally
+// the same concept folio already models — not a lookalike copy).
+// Side/horizontal resolution reuses `core/folio/index.ts`'s own
+// `resolveFolioPhysicalSide` UNCHANGED — the SAME odd/even parity
+// logic, not a second implementation.
 //
 // This module owns WHAT text each page gets (odd/even selection,
-// per-page override, suppression) and resolves `position` (vertical
-// pass-through, side parity-resolved). Physical mm/pt placement remains
-// a Renderer concern.
+// per-page override, suppression) and resolves `position` (band
+// pass-through, horizontal parity-resolved). Physical mm/pt placement
+// remains a Renderer concern.
 
-import type { GeneratedHeader, HeaderPositionSetting, HeaderVerticalPosition, ResolvedHeaderPosition } from "../layout/schema";
+import type { FolioPosition, GeneratedHeader, HeaderBand, HeaderPositionSetting, ResolvedHeaderPosition } from "../layout/schema";
 import { resolveFolioPhysicalSide } from "../folio";
 
 export interface HeaderSettings {
@@ -40,7 +46,7 @@ export interface HeaderSettings {
   hashiraOdd: string;
   // Matches legacy `MasterPageSettings.hashiraEven` exactly.
   hashiraEven: string;
-  // v2-native 2-axis position (round 24) — see this file's own header
+  // v2-native 2-axis position (round 25) — see this file's own header
   // comment. Use `headerSettingsFromLegacy` to construct this from an
   // old document's own bare `hashiraPosition: "top"|"bottom"` value.
   position: HeaderPositionSetting;
@@ -48,24 +54,24 @@ export interface HeaderSettings {
 
 // Matches legacy `DEFAULT_MASTER_PAGE_SETTINGS`'s own 柱-relevant fields
 // exactly (`hashiraOdd: ""`, `hashiraEven: ""`, `hashiraPosition: "top"`),
-// with `side` recovered from legacy's own real, always-outer behavior
-// (see this file's own header comment).
+// with `horizontal` recovered from legacy's own real, always-outer
+// behavior (see this file's own header comment).
 export const DEFAULT_HEADER_SETTINGS: HeaderSettings = {
   hashiraOdd: "",
   hashiraEven: "",
-  position: { vertical: "top", side: "outer" },
+  position: { band: "top", horizontal: "outer" },
 };
 
 /**
  * Legacy compatibility: recovers a v2 `HeaderSettings.position` from an
  * old document's own bare `hashiraPosition: "top" | "bottom"` value —
- * `side` is always `"outer"`, matching legacy's own real, unconfigurable
- * behavior exactly (never `"gutter"`, never `"center"` — those are
- * genuinely new v2-only capabilities with no legacy equivalent to
- * recover).
+ * `horizontal` is always `"outer"`, matching legacy's own real,
+ * unconfigurable behavior exactly (never `"gutter"`, never `"center"` —
+ * those are genuinely new v2-only capabilities with no legacy
+ * equivalent to recover).
  */
-export function headerSettingsFromLegacy(hashiraOdd: string, hashiraEven: string, hashiraPosition: "top" | "bottom"): HeaderSettings {
-  return { hashiraOdd, hashiraEven, position: { vertical: hashiraPosition, side: "outer" } };
+export function headerSettingsFromLegacy(hashiraOdd: string, hashiraEven: string, hashiraPosition: HeaderBand): HeaderSettings {
+  return { hashiraOdd, hashiraEven, position: { band: hashiraPosition, horizontal: "outer" } };
 }
 
 // Matches legacy `PageOverride` exactly (`hideHashira`/`hashiraOverride`
@@ -79,13 +85,7 @@ export interface HeaderPageOverride {
 }
 
 function resolveHeaderPosition(setting: HeaderPositionSetting, isOddPage: boolean): ResolvedHeaderPosition {
-  const resolvedSide = resolveFolioPhysicalSide(setting.side, isOddPage);
-  // `resolveFolioPhysicalSide` returns "center" only for a "center"
-  // input, which `HeaderSide` never is ("outer"|"gutter" only) — this
-  // branch is unreachable but keeps the return type honest without an
-  // unsafe cast.
-  const side: "left" | "right" = resolvedSide === "center" ? "left" : resolvedSide;
-  return { vertical: setting.vertical, side };
+  return { band: setting.band, horizontal: resolveFolioPhysicalSide(setting.horizontal, isOddPage) };
 }
 
 /**
@@ -106,4 +106,4 @@ export function composeHeaderForPage(pageIndex: number, settings: HeaderSettings
   return { text, position: resolveHeaderPosition(settings.position, isOddPage) };
 }
 
-export type { HeaderVerticalPosition };
+export type { HeaderBand, FolioPosition as HeaderHorizontalPosition };

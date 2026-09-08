@@ -19,8 +19,7 @@ export type {
   FolioPosition,
   ResolvedFolioPosition,
   GeneratedHeader,
-  HeaderVerticalPosition,
-  HeaderSide,
+  HeaderBand,
   HeaderPositionSetting,
   ResolvedHeaderPosition,
 } from "./layout/schema";

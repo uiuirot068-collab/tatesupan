@@ -535,23 +535,23 @@ export function buildPaintPlan(
       commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
-      // Human Visual QA HOLD round 24: v2-native 2-axis placement.
-      // `side` reuses the SAME left/right anchor formula folio's own
-      // "left"/"right" already established (flush with the margin the
-      // body content area itself uses). `vertical: "center"` is a
-      // v2-only capability with no legacy equivalent -- vertically
-      // centered on the FULL PAPER height (page-furniture placement,
-      // never the body content column's own center).
+      // Human Visual QA HOLD round 25 (correction to round 24's own
+      // vertical-center misreading): `band` is the ONLY vertical axis
+      // (top/bottom, matching legacy exactly) -- there is no vertical
+      // center. `horizontal` reuses the SAME center/left/right
+      // resolution folio's own position already uses: "left"/"right"
+      // anchor flush with the margin the body content area itself
+      // uses; "center" horizontally centers on the PAPER's own
+      // physical width (jsPDF's own `align:"center"` in
+      // `horizontalFurnitureCommand` already accounts for the real
+      // text width -- no separate measurement needed here).
       const xCenter =
-        page.header.position.side === "left"
+        page.header.position.horizontal === "left"
           ? marginLeftMm + doc.bodyEmMm / 2
-          : paperWidthMm - marginRightMm - doc.bodyEmMm / 2;
-      const yCenter =
-        page.header.position.vertical === "top"
-          ? marginTopMm / 2
-          : page.header.position.vertical === "bottom"
-            ? paperHeightMm - marginBottomMm / 2
-            : paperHeightMm / 2;
+          : page.header.position.horizontal === "right"
+            ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
+            : paperWidthMm / 2;
+      const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
       commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
     }
     return {

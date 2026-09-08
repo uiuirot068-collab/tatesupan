@@ -1,16 +1,56 @@
-# P3-O08 — Header (柱) Six-Position Placement (Human Visual QA HOLD round 24)
+# P3-O08 — Header (柱) Six-Position Placement (Human Visual QA HOLD round 24, corrected round 25)
+
+## CORRECTION (round 25, 2026-09-08)
+
+**Previous interpretation (round 24, this document's own original
+text below): TOP/CENTER/BOTTOM × OUTER/GUTTER — WRONG.** Human QA
+caught the error directly against the round-24 QA PDF: pages 3/4
+showed 柱 text sitting at the vertical middle of the physical page.
+"CENTER" was never meant as vertical page-center — it means HORIZONTAL
+centering within the top/bottom band, the same 小口/中央/ノド axis
+folio's own `FolioPosition` already models.
+
+**Correct model: `HeaderBand` ("top"|"bottom", the ONLY vertical axis)
+× `FolioPosition` reused directly ("outer"|"center"|"gutter",
+horizontal axis).** Six real combinations: TOP×OUTER, TOP×CENTER,
+TOP×GUTTER, BOTTOM×OUTER, BOTTOM×CENTER, BOTTOM×GUTTER — no vertical
+center anywhere. `core/layout/schema.ts`'s `HeaderVerticalPosition`/
+`HeaderSide` types (round 24) are RETIRED, not kept as hidden aliases —
+replaced by `HeaderBand` and a direct reuse of `FolioPosition`/
+`ResolvedFolioPosition`. `resolveFolioPhysicalSide` is now called with
+its own FULL input range (including `"center"`, previously only ever
+called with `"outer"`/`"gutter"` for header) — the SAME function,
+genuinely exercising the branch this round's own horizontal-center
+case needs, still zero duplicate parity logic.
+
+Legacy mapping is unaffected by the correction: `headerSettingsFromLegacy`
+still maps `"top"|"bottom"` → `{band, horizontal: "outer"}` — the field
+names changed (`vertical`→`band`, `side`→`horizontal`) but the
+recovered legacy behavior itself (always outer, band = the literal
+legacy value) is identical to round 24's own correct part.
+
+Round 24's own record below is preserved as history, not erased — it
+documents what was actually built and why the correction was needed,
+consistent with this project's own established practice of recording
+corrections rather than deleting the record of what preceded them.
+
+---
+
+## Round 24's own original record (superseded interpretation, kept for history)
 
 Continues from commit `a7a740b` (Human PASS: small kana, folio, header
 orientation/content/parity). New Human Product Decision: expand 柱
 placement from legacy's own limited top/bottom-only, always-outer
 contract to a v2-native 2-axis semantic grid.
 
-## Human Product Decision
+### Human Product Decision (round 24, later corrected)
 
 Six supported positions: TOP×OUTER, TOP×GUTTER, CENTER×OUTER,
 CENTER×GUTTER, BOTTOM×OUTER, BOTTOM×GUTTER. An intentional TateSpun v2
 enhancement — CENTER (vertical) and GUTTER (side) are both new
 capabilities with no legacy equivalent.
+**[Round 25 correction: "CENTER" here was wrongly read as a vertical
+position — see the correction section at the top of this document.]**
 
 ## Six-position semantic model
 

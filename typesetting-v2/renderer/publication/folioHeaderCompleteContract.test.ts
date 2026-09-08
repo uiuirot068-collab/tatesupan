@@ -107,22 +107,22 @@ describe("Folio gutter/outer parity -- ported verbatim from PageCard.tsx", () =>
 
 describe("Header (柱) -- ported verbatim from legacy MasterPageSettings/PageOverride", () => {
   it("odd page gets hashiraOdd content (test: odd content deterministic)", () => {
-    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     expect(document.pages[0].header?.text).toBe("作品名");
   });
 
   it("hashiraPosition is passed through unchanged (test: hashiraPosition deterministic)", () => {
-    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "bottom", side: "outer" } });
-    expect(document.pages[0].header?.position.vertical).toBe("bottom");
+    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "bottom", horizontal: "outer" } });
+    expect(document.pages[0].header?.position.band).toBe("bottom");
   });
 
   it("hideHashira suppresses the header on that page only (test: hideHashira suppression)", () => {
-    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } }, { 1: { hideHashira: true } });
+    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } }, { 1: { hideHashira: true } });
     expect(document.pages[0].header).toBeUndefined();
   });
 
   it("hashiraOverride replaces the normal odd/even content for one page (test: hashiraOverride)", () => {
-    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } }, { 1: { hashiraOverride: "特別編" } });
+    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } }, { 1: { hashiraOverride: "特別編" } });
     expect(document.pages[0].header?.text).toBe("特別編");
   });
 
@@ -132,13 +132,13 @@ describe("Header (柱) -- ported verbatim from legacy MasterPageSettings/PageOve
   });
 
   it("header content never carries a SourceSpan (generated furniture, not manuscript content)", () => {
-    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { document } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     const header = document.pages[0].header as unknown as Record<string, unknown>;
     expect(header.sourceSpan).toBeUndefined();
   });
 
   it("headerFontSize is HD-005's own default (body font inheritance) -- no separate font mechanism invented (test: body-font inheritance, headerFontSize)", () => {
-    const { model } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { model } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const textCommands = plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
@@ -151,19 +151,19 @@ describe("Header (柱) -- ported verbatim from legacy MasterPageSettings/PageOve
 
 describe("Folio + Header integration", () => {
   it("both coexist on the same page without collision (test: Folio + Header coexist)", () => {
-    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     expect(document.pages[0].folio).toBeDefined();
     expect(document.pages[0].header).toBeDefined();
   });
 
   it("body layout is byte-identical with folio+header enabled vs both omitted (test: body layout byte/structural equality)", () => {
-    const withFurniture = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } }).document;
+    const withFurniture = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } }).document;
     const withoutFurniture = composeModel("今日は").document;
     expect(withFurniture.pages[0].columns).toEqual(withoutFurniture.pages[0].columns);
   });
 
   it("Publication uses the real canonical folio+header, painting via the real vector font path (test: Publication uses canonical furniture, vector-only text)", () => {
-    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const last2 = plan[0].commands.slice(-2);
@@ -171,7 +171,7 @@ describe("Folio + Header integration", () => {
   });
 
   it("Preview receives the same canonical furniture, unchanged pass-through (test: Preview uses canonical furniture if implemented)", () => {
-    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { document } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     // Preview's own paintModel.ts pass-through is exercised indirectly here via the SAME CanonicalDocument both renderers consume.
     expect(document.pages[0].folio?.text).toBe("1");
     expect(document.pages[0].header?.text).toBe("作品名");
@@ -181,7 +181,7 @@ describe("Folio + Header integration", () => {
 describe("Regression (Ruby/Small Kana/Dash/TCY/Ellipsis unaffected)", () => {
   it("full combined fixture still renders correctly with folio+header both enabled", () => {
     const text = "「今日は、雨だった。」きっと２０２６年";
-    const { model } = composeModel(text, DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { vertical: "top", side: "outer" } });
+    const { model } = composeModel(text, DEFAULT_FOLIO_SETTINGS, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const { bytes } = renderPaintPlanToPdf(plan, font);
@@ -193,7 +193,7 @@ describe("Generates folio-header-complete-contract-qa.pdf (real Core pipeline, n
   it("11 fixtures covering odd/even, outer, gutter, first-page suppression, odd/even header, hideHashira, hashiraOverride, folio+header together, body-unaffected", () => {
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const bodyText = "「今日は、雨だった。」きっとやってくる。";
-    const headerSettings: HeaderSettings = { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: { vertical: "top", side: "outer" } };
+    const headerSettings: HeaderSettings = { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: { band: "top", horizontal: "outer" } };
 
     const fixtures = [
       composeModel(bodyText, { nombreStart: 1, hideNombreOnFirstPage: false, position: "center" }).model, // 1. odd + center

@@ -137,23 +137,36 @@ export interface GeneratedPageFurniture {
 // resolution reuses `core/folio/index.ts`'s own
 // `resolveFolioPhysicalSide` directly rather than a second
 // implementation of the identical odd/even logic.
-export type HeaderVerticalPosition = "top" | "center" | "bottom";
-export type HeaderSide = "outer" | "gutter";
+//
+// Human Visual QA HOLD round 25 (P3-O08 final-page completion,
+// correction to round 24): round 24's own "vertical CENTER" reading was
+// a genuine Human QA-caught product-model error — "CENTER" was never
+// meant as vertical page-center; it means HORIZONTAL centering within
+// the top/bottom band, the exact same axis/vocabulary folio's own
+// `FolioPosition` ("center"|"gutter"|"outer") already uses. There is no
+// vertical-center position. The corrected model: `HeaderBand`
+// ("top"|"bottom" — the ONLY vertical axis, matching legacy's own real
+// `HashiraPosition` exactly) crossed with `FolioPosition` itself,
+// reused directly as the horizontal axis (not a lookalike copy — the
+// SAME type, since 小口/ノド/center is literally the identical concept
+// folio already models) — six real combinations (2 band x 3 horizontal),
+// not the round-24 six that wrongly included a vertical center.
+export type HeaderBand = "top" | "bottom";
 
-// Settings-level (user-facing) choice.
+// Settings-level (user-facing) choice. `horizontal` reuses
+// `FolioPosition` directly — real code/type reuse, not a lookalike.
 export interface HeaderPositionSetting {
-  vertical: HeaderVerticalPosition;
-  side: HeaderSide;
+  band: HeaderBand;
+  horizontal: FolioPosition;
 }
 
 // Core-resolved (parity already applied) — what `GeneratedHeader`
-// actually carries. `side` becomes a PHYSICAL side once resolved,
-// mirroring `ResolvedFolioPosition`'s own "gutter"/"outer" ->
-// "left"/"right" resolution exactly (same parity logic, reused not
-// duplicated).
+// actually carries. `horizontal` reuses `ResolvedFolioPosition`
+// directly (parity resolution for header's own horizontal axis IS
+// folio's own `resolveFolioPhysicalSide`, called unchanged).
 export interface ResolvedHeaderPosition {
-  vertical: HeaderVerticalPosition;
-  side: "left" | "right";
+  band: HeaderBand;
+  horizontal: ResolvedFolioPosition;
 }
 
 export interface GeneratedHeader {
