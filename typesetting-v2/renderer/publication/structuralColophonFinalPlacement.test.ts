@@ -273,10 +273,20 @@ describe("ColophonPlacement -- real legacy block-anchor semantics ported", () =>
     const leftB = buildPlan({ horizontal: "left", vertical: "center", respectGutter: true, respectVerticalMargins: true });
     expect(leftA[1].commands).toEqual(leftB[1].commands);
     const right = buildPlan({ horizontal: "right", vertical: "center", respectGutter: true, respectVerticalMargins: true });
-    const freeTextCmdLeft = leftA[1].commands.find((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && c.text === "自由記述欄です");
-    const freeTextCmdRight = right[1].commands.find((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && c.text === "自由記述欄です");
+    // Round 29C: freeText now wraps within the row block's own real
+    // (narrow) measured width, so "自由記述欄です" no longer necessarily
+    // survives as one single command's own text -- the row's own 2
+    // commands (label, value) come first, so index 2 is freeText's own
+    // first painted fragment either way.
+    const rowCommandCount = 2;
+    const freeTextCmdLeft = leftA[1].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text")[rowCommandCount];
+    const freeTextCmdRight = right[1].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text")[rowCommandCount];
+    // freeText always left-aligns WITHIN its own block (natural paragraph
+    // flow) regardless of `horizontal` -- `horizontal` moves the WHOLE
+    // block's own xMm instead (proven directly below), not each line's
+    // own internal align.
     expect(freeTextCmdLeft?.align).toBe("left");
-    expect(freeTextCmdRight?.align).toBe("right");
+    expect(freeTextCmdRight?.align).toBe("left");
     expect(freeTextCmdLeft?.xMm).not.toBe(freeTextCmdRight?.xMm);
   });
 

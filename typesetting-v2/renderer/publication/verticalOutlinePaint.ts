@@ -186,4 +186,27 @@ export class VerticalOutlineContext {
     const path = glyph.getPath(anchorXMm, yBaselineMm, emSizeMm);
     return convertOpenTypePathCommands(path.commands);
   }
+
+  /**
+   * Human Visual QA HOLD round 29C (P3-O08 final-page completion,
+   * colophon horizontal block-width measurement): a single grapheme's
+   * REAL horizontal advance width in mm, at `emSizeMm` per cell — reuses
+   * the EXACT SAME glyph resolution (`resolveOutlineGlyphId`/
+   * `glyphIdFor`) and `glyph.advanceWidth` field `glyphOutlineCommandsMm`
+   * already trusts above, just exposed as a horizontal SUM primitive
+   * rather than an outline-paint primitive. Never a character-count
+   * estimate — a real ASCII glyph (e.g. an email address's own Latin
+   * characters) and a real CJK glyph in the same font genuinely have
+   * different advance widths, and this reads each one's own real value.
+   * Falls back to `emSizeMm` (Natural Pitch's own uniform default) only
+   * when the grapheme cannot be resolved to any glyph at all (never a
+   * silent 0).
+   */
+  advanceWidthMm(grapheme: string, emSizeMm: number): number {
+    if (Array.from(grapheme).length !== 1) return emSizeMm;
+    const glyphId = this.resolveOutlineGlyphId(grapheme) ?? this.glyphIdFor(grapheme.codePointAt(0)!);
+    if (glyphId === undefined) return emSizeMm;
+    const glyph = this.getGlyph(glyphId);
+    return ((glyph.advanceWidth ?? this.font.unitsPerEm) / this.font.unitsPerEm) * emSizeMm;
+  }
 }

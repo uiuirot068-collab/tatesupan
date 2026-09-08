@@ -315,7 +315,7 @@ describe("Publication rendering -- vector, horizontal, real compiled rows painte
     expect(textCmd?.angle).toBe(0);
   });
 
-  it("a real compiled row (label\\tvalue) paints as TWO separate commands, label left-anchored / value right-anchored, and the raw tab never reaches a painted command's own text (test 23)", () => {
+  it("a real compiled row (label\\tvalue) paints as TWO separate commands, a naturally-sized label column followed by a value column, and the raw tab never reaches a painted command's own text (test 23; round 29C: value column left-aligns after the label column, replacing round 27's own full-width right-anchor)", () => {
     const fields: ColophonFieldInput[] = [{ label: "書名", value: "吾輩は猫である", visible: true }];
     const { model } = composeFromSettings("あいうえお", fields);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
@@ -324,7 +324,8 @@ describe("Publication rendering -- vector, horizontal, real compiled rows painte
     expect(textCommands.length).toBe(2);
     for (const c of textCommands) expect(c.text.includes("\t")).toBe(false);
     const aligns = textCommands.map((c) => c.align).sort();
-    expect(aligns).toEqual(["left", "right"]);
+    expect(aligns).toEqual(["left", "left"]);
+    expect(textCommands[0].xMm).toBeLessThan(textCommands[1].xMm); // label column, then value column
   });
 
   it("body font inheritance preserved -- colophon glyph size matches the fixed body-em size (test 24)", () => {
