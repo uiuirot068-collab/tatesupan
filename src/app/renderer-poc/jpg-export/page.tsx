@@ -4,24 +4,32 @@
  * TateSpun v2 Publication JPG Export -- Browser Production PoC
  *
  * Isolated PoC, same convention as `../page.tsx`'s own top-of-file
- * disclosure: NOT connected to the real Editor/manuscript/export flow.
- * Its job is narrower and different from that page's: prove that the
- * real v2 Publication pipeline (Core composition -> Publication Paint
- * Model -> the SAME PaintPlan the PDF/Node-QA paths already use) can be
- * rendered to a real JPG entirely in the browser, using native Canvas 2D
+ * disclosure: NOT connected to the real Editor/manuscript state. Its job
+ * is narrower and different from that page's: prove that the real v2
+ * Publication pipeline (Core composition -> Publication Paint Model ->
+ * the SAME PaintPlan the PDF/Node-QA paths already use) can be rendered
+ * to a real JPG entirely in the browser, using native Canvas 2D
  * (`typesetting-v2/renderer/publication/rasterGeneratorBrowser.ts`), and
  * that a real user can trigger and download that JPG from the real
- * deployed app -- closing the "engine exists but nothing can execute it"
- * gap identified by the JPG Export product-runtime-integration audit.
+ * deployed app.
  *
- * Wiring this into the real manuscript Editor/PreviewPane export buttons
- * is explicitly OUT of scope here: that requires a real "Editor content
- * string + PageSettings -> v2 Core LogicalUnit[]/composeCanonicalDocument"
- * bridge, which does not exist anywhere yet for PDF either (a separate,
- * much larger, not-yet-authorized task -- see the compatibility matrix's
- * own "Export migration" roadmap item). This page proves the BROWSER
- * EXECUTION PATH itself is real and working in the real app/bundle,
- * using a small fixed demo manuscript instead of live Editor content.
+ * Round 2 (Live Editor -> v2 Bridge): this page now composes through the
+ * real `composeV2Document` bridge (`src/lib/v2Bridge/`) using the
+ * Editor's own real `DEFAULT_PAGE_SETTINGS` (real 文庫 paper size, real
+ * margins, real charsPerLine=39/linesPerColumn=15 -- the actual current
+ * app default, not an arbitrary demo number) instead of this page's own
+ * prior hand-rolled composition. This both closes an earlier Human
+ * observation (the previous hardcoded 20-char demo capacity looked
+ * visually tight -- not a renderer defect, simply not a real setting)
+ * and gives a real, empirical (not just unit-tested) build-time proof
+ * that the bridge is genuinely client-bundle-safe.
+ *
+ * Still NOT wired to live Editor manuscript content/title/images -- this
+ * page's own manuscript text remains a small fixed demo string, passed
+ * through the SAME real `buildV2UnitsFromManuscript` tokenizer the
+ * bridge uses for any real manuscript. Wiring real Editor content itself
+ * (title/content/images state) into a page is the next, separate,
+ * trivial-by-comparison step once this bridge is Human-approved.
  *
  * Composition here uses `createFakeMeasurementProvider` (deterministic,
  * synthetic per-character advance) -- the same convention this whole v2
@@ -34,93 +42,27 @@
 import { useMemo, useState } from "react";
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
-// Deliberately DEEP imports, never the `typesetting-v2/core` barrel
-// (`core/index.ts`) -- the barrel re-exports EVERYTHING, including
-// `createShipporiMinchoMeasurementProvider` (`core/measurement/shipporiMinchoProvider.ts`),
-// which imports Node's `fs` at module scope. A real `next build` proved
-// this fails the client bundle even when the Node-only export is never
-// called -- Turbopack must still resolve every module the barrel
-// re-exports. Importing only the specific submodules actually used
-// avoids pulling that (or any other Node-only) file into this route at
-// all.
-import { composeCanonicalDocument } from "../../../../typesetting-v2/core/layout/assemble";
 import { createFakeMeasurementProvider } from "../../../../typesetting-v2/core/measurement/fakeProvider";
-import { DEFAULT_FOLIO_SETTINGS } from "../../../../typesetting-v2/core/folio";
-import { DEFAULT_RULE_SET_V2 } from "../../../../typesetting-v2/core/rules/defaultRuleSet";
-import { mmToTicks } from "../../../../typesetting-v2/core/geometry/tick";
-import type { HeaderSettings } from "../../../../typesetting-v2/core/header";
-import type { LogicalUnit } from "../../../../typesetting-v2/core/units";
-import { buildPublicationDocument, type PublicationRenderContext } from "../../../../typesetting-v2/renderer/publication/paintModel";
-import { buildPaintPlan, FALLBACK_BASELINE_RATIO, type PublicationPageGeometry } from "../../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { composeV2Document } from "../../../lib/v2Bridge/composeV2Document";
+import { DEFAULT_PAGE_SETTINGS } from "../../../lib/pageLayout";
 import { exportPaintPlanToBrowserJpgPages, type JpgExportMode } from "../../../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { buildPageJpgFileName, buildZipFileName } from "../../../../typesetting-v2/renderer/publication/jpgFilename";
 
 const FONT_FAMILY = "Shippori Mincho"; // already loaded via Google Fonts in src/app/layout.tsx
 
-const GEOMETRY: PublicationPageGeometry = { paperWidthMm: 105, paperHeightMm: 148, marginTopMm: 15, marginBottomMm: 12, marginRightMm: 15, marginLeftMm: 15 };
-
 const DEMO_TITLE = "JPG書き出しPoC";
 
-const DEMO_PARAGRAPHS = ["これはTateSpun v2 Publicationのブラウザ内JPG書き出しを確認するための実験ページである。", "本文はダミーの原稿であり、実際のエディタ内容とは接続されていない。"];
+const DEMO_CONTENT = "これはTateSpun v2 Publicationのブラウザ内JPG書き出しを確認するための実験ページである。\n本文はダミーの原稿であり、実際のエディタ内容とは接続されていない。";
 
-// Sequential TEXT LogicalUnits with real, correctly-offset SourceSpans --
-// the same simple construction `tools/compare/fixtureBuilder.ts`'s own
-// TEXT-piece handling does, inlined here to keep this page self-contained
-// rather than importing a test-only fixture helper into `src/`.
-function buildDemoUnits(blockId: string, paragraphs: string[]): { units: LogicalUnit[]; source: string } {
-  let cursor = 0;
-  let source = "";
-  const units: LogicalUnit[] = [];
-  paragraphs.forEach((text, i) => {
-    const start = cursor;
-    source += text;
-    cursor += Array.from(text).length;
-    units.push({ kind: "TEXT", span: { blockId, start, end: cursor }, text });
-    if (i < paragraphs.length - 1) {
-      const breakStart = cursor;
-      source += "\n";
-      cursor += 1;
-      // The break unit's own span must own its real "\n" character range
-      // (not a zero-width span) -- Core's boundary derivation requires
-      // every source position to be owned by exactly one unit.
-      units.push({ kind: "PARAGRAPH_BREAK", span: { blockId, start: breakStart, end: cursor } });
-    }
-  });
-  return { units, source };
-}
+const DEMO_SETTINGS = {
+  ...DEFAULT_PAGE_SETTINGS,
+  masterPage: { ...DEFAULT_PAGE_SETTINGS.masterPage, hashiraOdd: DEMO_TITLE, hashiraEven: DEMO_TITLE },
+};
 
 function buildDemoPlan() {
-  const { units, source } = buildDemoUnits("body", DEMO_PARAGRAPHS);
-  const bodyFontSizePt = 10.5;
-  const perCellAdvanceTick = mmToTicks((bodyFontSizePt * 25.4) / 72);
-  const settings = {
-    bodyFontRef: "jpg-export-poc",
-    bodyFontSizePt,
-    lineExtentTicks: 20 * perCellAdvanceTick,
-    linePitchTicks: perCellAdvanceTick,
-    columnExtentTicks: 30 * perCellAdvanceTick,
-    columnsPerPage: 1,
-  };
   const measurement = createFakeMeasurementProvider();
-  const headerSettings: HeaderSettings = { hashiraOdd: DEMO_TITLE, hashiraEven: DEMO_TITLE, position: { band: "top", horizontal: "outer" } };
-  const document = composeCanonicalDocument({
-    bodyUnits: units,
-    ruleSet: DEFAULT_RULE_SET_V2,
-    measurement,
-    settings,
-    folioSettings: DEFAULT_FOLIO_SETTINGS,
-    headerSettings,
-  });
-  const ctx: PublicationRenderContext = {
-    linePitchTicks: settings.linePitchTicks,
-    lineExtentTicks: settings.lineExtentTicks,
-    columnExtentTicks: settings.columnExtentTicks,
-    columnsPerPage: settings.columnsPerPage,
-    measurementIdentity: document.version.measurementIdentity,
-    paintFontIdentity: document.version.measurementIdentity,
-  };
-  const model = buildPublicationDocument("jpg-export-poc", DEMO_TITLE, document, units, source, ctx);
-  return buildPaintPlan(model, true, GEOMETRY, FALLBACK_BASELINE_RATIO);
+  const { plan } = composeV2Document({ title: DEMO_TITLE, content: DEMO_CONTENT, settings: DEMO_SETTINGS, measurement });
+  return plan;
 }
 
 type Status = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "done"; label: string } | { kind: "error"; message: string };
@@ -151,8 +93,9 @@ export default function JpgExportPocPage() {
     <main style={{ padding: "2rem", fontFamily: "sans-serif", maxWidth: 640 }}>
       <h1>TateSpun v2 Publication -- JPG書き出し ブラウザPoC</h1>
       <p style={{ color: "#555" }}>
-        実際のEditor/原稿とは接続されていない、独立した検証ページである。v2 Publication Paint
-        Model（PDF出力と同じPaintPlan）をブラウザ標準Canvas 2Dで実際にJPGへ変換し、ダウンロードできることを確認する。
+        実際のEditor原稿本文とは接続されていないが、実際のEditor既定設定（文庫・39字×15行）を
+        src/lib/v2Bridge 経由で使用している。v2 Publication Paint Model（PDF出力と同じPaintPlan）を
+        ブラウザ標準Canvas 2Dで実際にJPGへ変換し、ダウンロードできることを確認する。
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1.5rem" }}>
         <button onClick={() => runExport("WEB", "single")}>Web閲覧用JPGをダウンロード</button>
