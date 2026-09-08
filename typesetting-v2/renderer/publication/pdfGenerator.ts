@@ -816,50 +816,51 @@ function buildColophonPaintPage(
     contentAreaBottomMm = Math.max(contentAreaBottomMm, contentAreaTopMm); // never invert if furniture leaves no room at all
     const contentAreaHeightMm = Math.max(contentAreaBottomMm - contentAreaTopMm, 0);
 
-    // Block model (round 29C item 1, corrected round 29D). Human found
-    // round 29C's own "value column = widest real value across every
-    // row" defect: one long value (e.g. an email address) enlarged the
-    // ENTIRE block, which freeText then inherited. Human Product
-    // Decision (round 29D, this comment records it -- not merely an
-    // implementation note): the bounded content frame is defined by ONE
-    // reference row -- the field legacy's own `defaultColophonFields()`
-    // (`src/lib/colophon.ts:101-111`) always places FIRST (書名/title).
-    // `id` metadata does not survive Core's own text-flow pipeline
-    // (a composed colophon LINE is plain flowed text by the time it
-    // reaches this paint function, per Contract's own Renderer-reads-
-    // Canonical-only boundary) -- so this uses POSITION (`rows[0]`),
-    // matching that real, stable field-order convention exactly
-    // (round 27 proved Core's own compiler preserves field order
-    // verbatim), never a literal Japanese string comparison.
+    // Block model (round 29C item 1; corrected round 29D; corrected
+    // again round 29E). Round 29D over-corrected: binding freeText's
+    // own width to the title row's own frame ALSO shrunk the
+    // STRUCTURED rows' own value column to that same narrow width,
+    // wrapping short/normal values (e.g. the date) that previously fit
+    // naturally. Round 29E's own Human Product Decision separates two
+    // independent widths:
     //
-    // `valueColumnWidthMm` = the reference row's own value width,
-    // DIRECTLY (never re-derived by subtracting a label-column width
-    // from a frame computed against the reference row's own label --
-    // that would let some OTHER row's wider label silently shrink the
-    // title row's own value column below its own natural width,
-    // wrapping the title value even when the Human's own visual target
-    // keeps it on one line). `labelColumnWidthMm` may still be the
-    // widest LABEL across all rows (Human's own explicit allowance --
-    // labels are short, uniform-ish product vocabulary, not the
-    // defect); the frame simply grows to include that real width.
-    // `frameWidthMm = labelColumnWidthMm + gap + valueColumnWidthMm` --
-    // by construction the reference row's own value NEVER wraps. Every
-    // OTHER row's own value shares the SAME `valueColumnWidthMm` and
-    // WRAPS (the same real per-character greedy wrap freeText already
-    // uses) if its own real content is wider -- it never enlarges the
-    // frame. freeText wraps inside the SAME frame width.
+    // (A) STRUCTURED ROW FRAME -- reverted to round 29C's own natural
+    // "widest real value across every row" sizing (so title/author/
+    // circle/date/printer/contact all size to whatever the real
+    // content naturally needs, none artificially narrowed by another
+    // row), with ONE new safety clamp: never wider than
+    // `availableSafeWidthMm` (the real resolved content area width --
+    // `contentRightMm - contentLeftMm`, already margin/gutter-resolved
+    // above). A value wider than the resulting (clamped) value column
+    // wraps within it -- the frame itself still never exceeds the safe
+    // page region, but ordinary short values are never pre-emptively
+    // narrowed to match some OTHER row.
     //
-    // DISCLOSED GAP: this wrap happens at Publication paint time, after
-    // Core already decided how many PAGES the colophon needs (from its
-    // own, unrelated, character-count Natural Pitch line count). If a
-    // frame narrow enough to force heavy re-wrapping ever produces MORE
-    // real visual lines than Core's own page capacity assumed, content
-    // could in principle extend past a physical page's own bottom edge
-    // -- not observed in any fixture this round proves (this round's
-    // own page capacity comfortably exceeds the real re-wrapped line
-    // count), but not proven safe in general; a full fix would require
-    // Publication to renegotiate Core's own page breaks, a materially
-    // larger change than this round's own scope.
+    // (B) FREETEXT WRAP WIDTH -- kept independent, still the title
+    // row's own real label+gap+value width (round 29D's own fix,
+    // narrower than (A) in the normal case) -- identified by POSITION
+    // (`rows[0]`), matching legacy's own real, stable field-order
+    // convention (`defaultColophonFields()` always places title first,
+    // Core's compiler preserves order verbatim, round 27); `id`
+    // metadata does not survive Core's own text-flow pipeline into a
+    // painted line, so position is used instead of a literal string
+    // comparison. FreeText no longer inherits (A)'s own width.
+    //
+    // The COMPLETE block's own outer width (for LEFT/CENTER/RIGHT
+    // placement) is `max(structuredFrameWidthMm, freeTextWrapWidthMm)`
+    // -- normally (A), since (A) >= (B) whenever any row's own natural
+    // value is at least as wide as the title's. freeText still paints
+    // flush with the block's own left edge (round 27/28's own
+    // established convention), never independently centered.
+    //
+    // DISCLOSED GAP (unchanged from round 29D): Publication-time
+    // wrapping happens after Core already decided colophon page COUNT
+    // from its own, unrelated character-count Natural Pitch line
+    // count; a frame narrow enough to force much heavier re-wrapping
+    // than Core assumed could in principle overflow a physical page's
+    // own bottom edge. Not observed in any fixture this round proves;
+    // a full fix would require Publication to renegotiate Core's own
+    // page breaks, materially larger than this round's own scope.
     const rows: { label: string; value: string }[] = [];
     const freeTextRawLines: string[] = [];
     for (const line of firstColumn.lines) {
@@ -874,26 +875,21 @@ function buildColophonPaintPage(
     }
     const gapMm = bodyEmMm; // one real em between label/value columns -- deterministic, documented choice, not measured from any legacy source (legacy's own CSS grid gap is a separate, un-ported visual-density detail)
     const referenceRow = rows[0];
-    // Human Product Decision (round 29D): `valueColumnWidthMm` is the
-    // reference row's own value width DIRECTLY -- not re-derived by
-    // subtracting `labelColumnWidthMm` from a frame computed against
-    // the reference row's OWN (possibly narrower) label. Deriving it
-    // via subtraction would let some OTHER row's wider label (e.g.
-    // サークル vs 書名) silently shrink the title row's own value column
-    // below its own natural width, wrapping the title value even
-    // though the Human's own visual target keeps it on one line.
-    // `labelColumnWidthMm` may still be the widest label across ALL
-    // rows (Human's own explicit allowance); the frame simply grows to
-    // accommodate that real width, on top of the reference row's own
-    // full value width -- so the reference row's own value NEVER wraps
-    // by construction, while any other row's wider value still does.
+    const availableSafeWidthMm = Math.max(contentRightMm - contentLeftMm, 0);
+
+    // (A) Structured row frame -- natural sizing, safety-clamped only.
     const labelColumnWidthMm = rows.length > 0 ? Math.max(...rows.map((r) => measureMm(r.label))) : 0;
-    const valueColumnWidthMm = referenceRow ? measureMm(referenceRow.value) : 0;
-    const frameWidthMm = rows.length > 0 ? labelColumnWidthMm + gapMm + valueColumnWidthMm : 0;
+    const naturalValueColumnWidthMm = rows.length > 0 ? Math.max(...rows.map((r) => measureMm(r.value))) : 0;
+    const naturalStructuredWidthMm = rows.length > 0 ? labelColumnWidthMm + gapMm + naturalValueColumnWidthMm : 0;
+    const structuredFrameWidthMm = Math.min(naturalStructuredWidthMm, availableSafeWidthMm);
+    const valueColumnWidthMm = Math.max(structuredFrameWidthMm - labelColumnWidthMm - gapMm, 0);
     const rowsWithWrappedValues = rows.map((r) => ({ label: r.label, valueLines: r.value.length > 0 ? wrapToWidthMm(r.value, valueColumnWidthMm) : [] }));
-    const wrapWidthMm = rows.length > 0 ? frameWidthMm : Math.max(contentRightMm - contentLeftMm, 0);
-    const freeTextLines = freeTextRawLines.flatMap((l) => wrapToWidthMm(l, wrapWidthMm));
-    const blockWidthMm = rows.length > 0 ? frameWidthMm : Math.max(0, ...freeTextLines.map((l) => measureMm(l)));
+
+    // (B) freeText's own independent, title-row-bounded wrap width.
+    const freeTextWrapWidthMm = referenceRow ? measureMm(referenceRow.label) + gapMm + measureMm(referenceRow.value) : availableSafeWidthMm;
+    const freeTextLines = freeTextRawLines.flatMap((l) => wrapToWidthMm(l, freeTextWrapWidthMm));
+
+    const blockWidthMm = Math.max(structuredFrameWidthMm, freeTextWrapWidthMm);
     const blockLeftMm =
       horizontal === "left" ? contentLeftMm : horizontal === "right" ? contentRightMm - blockWidthMm : contentLeftMm + Math.max(contentRightMm - contentLeftMm - blockWidthMm, 0) / 2;
 
