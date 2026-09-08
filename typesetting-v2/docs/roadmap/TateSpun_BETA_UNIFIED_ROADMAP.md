@@ -43,7 +43,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Live Editor → v2 Publication state bridge: COMPLETE
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
-- Writing Check β 2.0 Phase 3: ENGINEERING COMPLETE / Human QA pending
+- Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
 
 Important: P3-O08's historical document status is stale. Many of its subtracks are complete, but overall production migration/acceptance is not yet closed.
 
@@ -111,7 +111,7 @@ encoding, BOM, line endings, ruby/page-break/image round-trip representation, ma
 ## 4. Integrated β roadmap from current position
 
 ### 11-A. Writing Check β 2.0 completion
-Status: IN_PROGRESS
+Status: COMPLETE — Human QA PASS (checkpoint 2026-09-09, HEAD `97b3df7`)
 
 #### 11-A Phase 1
 COMPLETE — commit `26eef0f`
@@ -136,7 +136,7 @@ Deferred, explicitly not attempted this phase (real false-positive risk without 
 - half-width katakana auto-conversion replacement text (needs a real conversion table, deferred to the Fix UI phase)
 
 #### 11-A Phase 3
-ENGINEERING COMPLETE / Human QA pending
+COMPLETE / Human QA PASS
 - remaining rule catalog: R9 ellipsis form (…/……/・・・/...), R10 dash form (―/――/―――), R4 half-width katakana now with a REAL suggestedReplacement (JIS X 0201↔X 0208 table, promoted SAFE_AUTO_FIX)
 - 表記ゆれ dictionary (R11) and NG-word (R12) rules, both parameterized by user-local entries, dictionary-safety-aware (never suggests a replacement overlapping ruby/TCY/image/page-break notation)
 - 3 Human-approved presets (verbatim names): 入稿前おすすめ / 記号だけ / しっかりチェック
@@ -153,8 +153,54 @@ Deferred, explicitly not attempted this phase:
 - ASCII punctuation → full-width auto-conversion (still a URL/code/deliberate-Latin false-positive risk)
 - React-hook-level automated tests for the 3 new localStorage hooks (no jsdom/testing-library in this repo; no existing precedent either -- covered by Human QA on the real Editor instead)
 
+Human QA confirmed (2026-09-09, on the real Editor at HEAD `97b3df7`):
+- preset switching: 入稿前おすすめ / 記号だけ / しっかりチェック
+- no useSyncExternalStore crash after the persistence-hook fix (see the bugfix commit `97b3df7`)
+- RED/YELLOW diagnostic display
+- individual 直す
+- 元に戻す
+- 無視
+- SAFE_AUTO_FIX bulk correction only (ellipsis/dash are NOT silently auto-fixed)
+- わたしの辞書 add/detect/fix
+- NGワード add/detect
+- Preview isolation
+- PDF isolation
+- JPG isolation
+
+Writing Check diagnostics remain Editor-only and do not enter Preview / PDF / JPG output.
+
 Completion condition:
-Local browser-only manuscript checking can detect the agreed β rule set and let the user apply only explicit, safe corrections; no manuscript is sent to external AI/API. Met by engineering; awaiting Human visual/UX QA on the real Editor before Phase 3 itself is marked COMPLETE.
+Local browser-only manuscript checking can detect the agreed β rule set and let the user apply only explicit, safe corrections; no manuscript is sent to external AI/API. MET — Phase 3 is COMPLETE.
+
+#### 11-A Human QA polish backlog (non-blocking, deferred)
+Recorded 2026-09-09. None of these block 11-A Phase 3 closure; scheduled as later follow-up polish.
+
+**A. Writing Check visual polish**
+- NGワード should use a PURPLE wavy underline (keep the internal RED/YELLOW severity contract unchanged — this is an additional visual category, not a severity change)
+- NG status must also be identified by text, not color alone
+- current YELLOW/amber underline should be made somewhat lighter
+- result-list diagnostic body/snippet text should use approximately the same readable font size as the Editor body text (badges/buttons may remain smaller)
+
+**B. Help navigation**
+- add a table of contents at the top of Help
+- clicking a TOC item jumps to the relevant Help section
+
+**C. TOC (目次) creation dialog polish**
+- move 再検出 to a new line
+- align it to the left
+- align the empty/result explanatory gray text to the left
+- remove the current awkward centered result presentation
+
+**D. 完成前マイチェックリスト**
+- still NOT IMPLEMENTED
+- preserve as roadmap feature
+- directly accessible around Memo / Editor workflow
+- presets / editable personal checklist, as already decided
+
+**E. UI-C integration**
+- UI-C settings drawer was Human-selected as the PC settings model
+- current Editor has NOT yet completed full settings-drawer integration
+- preserve as a future UI integration task (see also §16 Settings / UI-C / Export Profiles below)
 
 ---
 
@@ -263,6 +309,8 @@ Includes:
 
 Need scope audit before implementation.
 
+Confirmed (2026-09-09, 11-A Phase 3 Human QA checkpoint): UI-C settings drawer is the Human-selected PC settings model. The current Editor (including the new 文章チェック設定 modal) has NOT yet completed full settings-drawer integration — see 11-A's own Human QA polish backlog item E above.
+
 ---
 
 ### 17. Typography final contract closure
@@ -290,6 +338,49 @@ Then run mandatory matrix:
 
 Special regression:
 character-spacing consistency and line/column spacing.
+
+---
+
+### 17b. Typography Parity — InDesign Character-Pitch Recheck (OPEN follow-up, recorded 2026-09-09)
+Status: NOT_STARTED
+
+Not a numbered P3-O / TSP-LOOP item — a descriptive open follow-up recorded from Human observation.
+
+Human supplied a new comparison (TateSpun Preview vs. InDesign as reference) and observes that TateSpun's vertical character spacing / pitch may still look different from InDesign in continuous prose.
+
+This does NOT reopen Writing Check β 2.0 (11-A) and does NOT invalidate already-passed functional work. No Core/Preview/Publication changes were made at this checkpoint.
+
+Schedule before final v2 Production integration.
+
+Future comparison must use:
+- same font
+- same font size
+- same manuscript text
+- same page/preset geometry
+
+Compare:
+1. InDesign grid/reference
+2. TateSpun Preview
+3. TateSpun Publication PDF
+
+Separate findings into:
+A. basic body character advance / pitch
+B. glyph ink positioning inside the cell
+C. punctuation
+D. small kana
+E. dash / ellipsis
+F. ruby if present
+
+Guardrails:
+- preserve Natural Pitch
+- no page-fill stretching
+- no arbitrary screenshot-pixel magic offsets
+- do not reopen already-frozen punctuation decisions unless a real regression is demonstrated
+- Publication remains canonical
+- Preview may visually differ slightly but must not look like different typesetting
+
+Acceptance:
+Human visual parity review required before final Production integration.
 
 ---
 

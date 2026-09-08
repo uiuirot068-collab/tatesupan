@@ -46,7 +46,7 @@ Deliberately NOT attempted in Phase 2 (real false-positive/product-judgment risk
 - ASCII punctuation with a full-width equivalent (URL/code/deliberate-Latin false-positive risk)
 - half-width katakana's own auto-conversion replacement text
 
-11-A Phase 3 is ENGINEERING COMPLETE / Human QA pending:
+11-A Phase 3 is COMPLETE / Human QA PASS (checkpoint 2026-09-09, HEAD `97b3df7`):
 - remaining rule catalog closed: R9 ellipsis form review (…/……/・・・/..., REVIEW_BEFORE_FIX), R10 dash form review (―/――/―――, REVIEW_BEFORE_FIX for a solo dash, NOTICE_ONLY for 3+), R4 half-width katakana now carries a REAL `suggestedReplacement` (a genuine JIS X 0201↔X 0208 conversion table including dakuten/handakuten combining and the real ウ→ヴ exception) and is promoted to `SAFE_AUTO_FIX`
 - category 5 (表記/dictionary/NG-word) implemented: R11 表記ゆれ dictionary and R12 NG words, both parameterized by user-local entries (`WritingCheckConfig.dictionary`/`.ngWords`), both dictionary-safety-aware -- a match overlapping ruby/TCY/image/page-break notation (via the SAME `tokenizeTategakiWithOffsets` the v2Bridge manuscript adapter reuses, never a second parser) is still reported but never offered an automatic replacement
 - 3 Human-approved presets, exact verbatim names: 入稿前おすすめ (engine defaults + R8 blank-run + dictionary/NG), 記号だけ (punctuation/notation structural rules only), しっかりチェック (every rule on)
@@ -75,7 +75,13 @@ Deliberately NOT attempted in Phase 3:
 
 Human decision (Phase 3 task): category 5 dictionary/NG-word/user-dictionary functionality IS included in β, local/browser-side only, no manuscript transmission, no external AI/API.
 
-Presets, Fix/Ignore UI, and safe bulk fix are implemented (see above); Phase 3 itself awaits Human visual/UX QA on the real Editor before being marked COMPLETE.
+Presets, Fix/Ignore UI, and safe bulk fix are implemented (see above).
+
+### Human QA (2026-09-09) -- PASS
+
+Confirmed on the real Editor: preset switching (入稿前おすすめ/記号だけ/しっかりチェック), RED/YELLOW diagnostic display, individual 直す, 元に戻す, 無視, SAFE_AUTO_FIX-only bulk correction (ellipsis/dash are not silently auto-fixed), わたしの辞書 add/detect/fix, NGワード add/detect, and Preview/PDF/JPG isolation. A real blocking bug was found and fixed during this QA pass (`useSyncExternalStore` snapshot-identity loop in the 3 localStorage persistence hooks, triggered by selecting 記号だけ -- see `docs/roadmap/TateSpun_BETA_UNIFIED_ROADMAP.md`'s own 11-A Phase 3 entry and commit `97b3df7`).
+
+A non-blocking Human polish backlog (visual/UI refinements, Help TOC, TOC-dialog alignment, 完成前マイチェックリスト, UI-C settings-drawer integration) and a separate open Typography Parity follow-up (InDesign character-pitch comparison) were recorded in the roadmap; neither blocks this Phase 3 closure.
 
 ---
 
