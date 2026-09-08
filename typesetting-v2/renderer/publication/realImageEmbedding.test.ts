@@ -123,10 +123,27 @@ const TRANSPARENT_SQUARE = buildPngFixture("qa-transparent-square", 200, 200, (x
 // pixel dimensions.
 const MISMATCHED_ASPECT = buildPngFixture("qa-mismatched-aspect", 400, 100, (x) => (x % 20 < 10 ? [250, 200, 40, 255] : [90, 60, 10, 255]));
 
+// Round 30 follow-up (Human Visual QA HOLD, Page 6 size fix): a declared
+// canonical box intentionally larger than its own natural pixel-derived
+// size -- exercises a FULL image sized up to (near) the full page
+// content-area width. Registered in FIXTURES so Core's own real
+// composition/placement (which authoritatively reads
+// `MeasurementFacts.imageIntrinsicTick`, not the LogicalUnit's own
+// declared fields directly -- see `realMeasurementProvider`'s own doc
+// above) agrees with the 75x60mm box the QA generator below declares on
+// the ImageUnit itself. Before this fix "qa-near-max" was absent from
+// FIXTURES, so composition silently used the provider's own generic
+// 40x30mm default instead of the intended near-full-width box.
+const NEAR_MAX = (() => {
+  const fx = buildPngFixture("qa-near-max", 300, 200, () => [80, 200, 220, 255]);
+  return { ...fx, intrinsicWidthTick: mmToTicks(GEOMETRY.paperWidthMm - GEOMETRY.marginLeftMm - GEOMETRY.marginRightMm), intrinsicHeightTick: mmToTicks(60) };
+})();
+
 const FIXTURES: Record<string, Fixture> = {
   [OPAQUE_LANDSCAPE.refId]: OPAQUE_LANDSCAPE,
   [TRANSPARENT_SQUARE.refId]: TRANSPARENT_SQUARE,
   [MISMATCHED_ASPECT.refId]: MISMATCHED_ASPECT,
+  [NEAR_MAX.refId]: NEAR_MAX,
 };
 
 function realImageResolver(): ImageResolver {
@@ -338,6 +355,101 @@ describe("Placement / bounds (tests 9, 11, 13)", () => {
     if (!cmd) return;
     expect(cmd.widthMm).toBeLessThanOrEqual(GEOMETRY.paperWidthMm);
     expect(cmd.widthMm / cmd.heightMm).toBeCloseTo(2, 1); // aspect ratio preserved, not distorted
+    // Round 30 follow-up (Human Visual QA HOLD): the clamp must land on
+    // the real page content-area width, not an arbitrarily smaller bound
+    // (the pre-fix bug clamped to ~3.7mm, a single character-line's own
+    // pitch width, which also happened to satisfy the two assertions
+    // above without ever being caught).
+    const contentAreaWidthMm = GEOMETRY.paperWidthMm - GEOMETRY.marginLeftMm - GEOMETRY.marginRightMm;
+    expect(cmd.widthMm).toBeCloseTo(contentAreaWidthMm, 0);
+  });
+});
+
+describe("Real content-area sizing (round 30 follow-up: images no longer clamped to a single character-line's width)", () => {
+  it("Page 1 (opaque landscape, alone) paints at its real intended intrinsic size, not a one-character-cell shrink", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: OPAQUE_LANDSCAPE.refId, intrinsicWidthTicks: OPAQUE_LANDSCAPE.intrinsicWidthTick, intrinsicHeightTicks: OPAQUE_LANDSCAPE.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.widthMm).toBeCloseTo(pxToMm(OPAQUE_LANDSCAPE.pixelWidth), 1);
+    expect(cmd.heightMm).toBeCloseTo(pxToMm(OPAQUE_LANDSCAPE.pixelHeight), 1);
+  });
+
+  it("Page 2 (transparent square, alone) paints at its real intended intrinsic size", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: TRANSPARENT_SQUARE.refId, intrinsicWidthTicks: TRANSPARENT_SQUARE.intrinsicWidthTick, intrinsicHeightTicks: TRANSPARENT_SQUARE.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.widthMm).toBeCloseTo(pxToMm(TRANSPARENT_SQUARE.pixelWidth), 1);
+    expect(cmd.heightMm).toBeCloseTo(pxToMm(TRANSPARENT_SQUARE.pixelHeight), 1);
+  });
+
+  it("Page 4 (opaque landscape, between two body-text pages) paints at the same real intended intrinsic size as when alone", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([
+      { kind: "TEXT", text: "本文の途中に画像が入る例である。" },
+      { kind: "IMAGE", refId: OPAQUE_LANDSCAPE.refId, intrinsicWidthTicks: OPAQUE_LANDSCAPE.intrinsicWidthTick, intrinsicHeightTicks: OPAQUE_LANDSCAPE.intrinsicHeightTick, placement: "FULL" },
+      { kind: "TEXT", text: "画像の後にも本文が続く。" },
+    ]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const imagePage = plan.find((p) => p.commands.some((c) => c.op === "image"));
+    expect(imagePage).toBeDefined();
+    const cmd = imagePage?.commands.find((c): c is Extract<PaintCommand, { op: "image" }> => c.op === "image");
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.widthMm).toBeCloseTo(pxToMm(OPAQUE_LANDSCAPE.pixelWidth), 1);
+    expect(cmd.heightMm).toBeCloseTo(pxToMm(OPAQUE_LANDSCAPE.pixelHeight), 1);
+  });
+
+  it("Page 6 (near-max declared box) paints at (near-)full content-area width, not a one-character-cell shrink", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: NEAR_MAX.refId, intrinsicWidthTicks: NEAR_MAX.intrinsicWidthTick, intrinsicHeightTicks: NEAR_MAX.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    const contentAreaWidthMm = GEOMETRY.paperWidthMm - GEOMETRY.marginLeftMm - GEOMETRY.marginRightMm;
+    expect(cmd.widthMm).toBeCloseTo(contentAreaWidthMm, 1);
+    expect(cmd.heightMm).toBeCloseTo(60, 1);
+  });
+
+  it("the pre-fix one-character-cell shrink is eliminated: no isolated FULL image paints anywhere near a single line-pitch width", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const cases = [
+      { refId: OPAQUE_LANDSCAPE.refId, wTick: OPAQUE_LANDSCAPE.intrinsicWidthTick, hTick: OPAQUE_LANDSCAPE.intrinsicHeightTick },
+      { refId: TRANSPARENT_SQUARE.refId, wTick: TRANSPARENT_SQUARE.intrinsicWidthTick, hTick: TRANSPARENT_SQUARE.intrinsicHeightTick },
+      { refId: NEAR_MAX.refId, wTick: NEAR_MAX.intrinsicWidthTick, hTick: NEAR_MAX.intrinsicHeightTick },
+    ];
+    for (const c of cases) {
+      const { model } = composeWithImage([{ kind: "IMAGE", refId: c.refId, intrinsicWidthTicks: c.wTick, intrinsicHeightTicks: c.hTick, placement: "FULL" }]);
+      const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+      const cmd = imageCmd(plan);
+      expect(cmd).toBeDefined();
+      if (!cmd) continue;
+      // A single character-line's own pitch width at this QA's body font
+      // size (10.5pt) is ~3.7mm -- the pre-fix bug clamped every image
+      // down to roughly this width regardless of its real intended size.
+      expect(cmd.widthMm).toBeGreaterThan(10);
+    }
+  });
+
+  it("a small image (smaller than the content area) is never enlarged beyond its own real intrinsic size", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const smallWidthTick = mmToTicks(10);
+    const smallHeightTick = mmToTicks(8);
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: "qa-small", intrinsicWidthTicks: smallWidthTick, intrinsicHeightTicks: smallHeightTick, placement: "FULL" }], {
+      resolver: (refId) => (refId === "qa-small" ? { kind: "RESOLVED", url: "x", bytes: OPAQUE_LANDSCAPE.bytes, format: "PNG", pixelWidth: 300, pixelHeight: 200 } : { kind: "MISSING" }),
+    });
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.widthMm).toBeCloseTo(10, 1);
+    expect(cmd.heightMm).toBeCloseTo(8, 1);
   });
 });
 
@@ -453,13 +565,7 @@ describe("QA -- real-image-embedding-qa.pdf", () => {
         [{ kind: "TEXT", text: "本文の途中に画像が入る例である。" }, { kind: "IMAGE", refId: OPAQUE_LANDSCAPE.refId, intrinsicWidthTicks: OPAQUE_LANDSCAPE.intrinsicWidthTick, intrinsicHeightTicks: OPAQUE_LANDSCAPE.intrinsicHeightTick, placement: "FULL" }, { kind: "TEXT", text: "画像の後にも本文が続く。" }],
         pageOpts
       ),
-      (() => {
-        const nearMax = buildPngFixture("qa-near-max", 300, 200, () => [80, 200, 220, 255]);
-        return composeWithImage([{ kind: "IMAGE", refId: "qa-near-max", intrinsicWidthTicks: mmToTicks(GEOMETRY.paperWidthMm - GEOMETRY.marginLeftMm - GEOMETRY.marginRightMm), intrinsicHeightTicks: mmToTicks(60), placement: "FULL" }], {
-          ...pageOpts,
-          resolver: (refId) => (refId === "qa-near-max" ? { kind: "RESOLVED", url: "x", bytes: nearMax.bytes, format: "PNG", pixelWidth: 300, pixelHeight: 200 } : { kind: "MISSING" }),
-        });
-      })(),
+      composeWithImage([{ kind: "IMAGE", refId: NEAR_MAX.refId, intrinsicWidthTicks: NEAR_MAX.intrinsicWidthTick, intrinsicHeightTicks: NEAR_MAX.intrinsicHeightTick, placement: "FULL" }], pageOpts),
     ];
 
     const pages = docs.flatMap(({ model }) => buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext));

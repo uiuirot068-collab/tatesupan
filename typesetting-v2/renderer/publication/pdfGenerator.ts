@@ -375,7 +375,19 @@ function unitCommands(
   bodyEmMm: number,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
-  yakumonoContext?: VerticalYakumonoAlignContext
+  yakumonoContext?: VerticalYakumonoAlignContext,
+  // Human Visual QA HOLD round 30 follow-up (Step 3 size/placement fix):
+  // the real physical content-area box an isolated IMAGE unit should be
+  // sized/centered against — the page's own writing area between margins,
+  // NOT `lineWidthMm` (a single character-line's own pitch width, ~one em;
+  // correct for TEXT/RUBY/TCY's own column-strip positioning above, but
+  // never the available width for a FULL-placement image, which visually
+  // spans past its own originating line). Optional: undefined when no real
+  // page geometry is available (pre-round-30-follow-up callers, and any
+  // caller that never supplied `pageGeometry` to `buildPaintPlan`), in
+  // which case the IMAGE branch falls back to the prior `lineWidthMm`-based
+  // sizing unchanged.
+  imageBoxMm?: { widthMm: number; centerXMm: number }
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -486,19 +498,34 @@ function unitCommands(
     // (`unit.imageIntrinsicWidthMm`/`unit.heightMm`, round 30's own
     // `paintModel.ts` fix), never re-derived from the resolved bytes'
     // own real pixel dimensions. Safety-only clamp: if the intrinsic
-    // width would paint outside this unit's own column strip, scale
+    // width would paint outside the page's own real content area, scale
     // BOTH dimensions down proportionally (never distorts, never grows)
-    // so the image never paints past its real canonical page/column
-    // bounds — this is a safety floor, not a redesign of the "intrinsic
-    // size, no stretch" default policy (see evidence for the audited
-    // rationale). Horizontally centered within the column strip,
-    // top-aligned at this unit's own real composed position.
-    const naturalWidthMm = unit.imageIntrinsicWidthMm ?? lineWidthMm;
+    // so the image never paints past its real canonical page bounds —
+    // this is a safety floor, not a redesign of the "intrinsic size, no
+    // stretch" default policy (see evidence for the audited rationale).
+    //
+    // BUG FIXED (round 30 follow-up, Human Visual QA HOLD: images
+    // rendered drastically too small / "upper-right postage stamp").
+    // This clamp previously compared against `lineWidthMm` — the width
+    // of the single character-line this unit happens to be attached to
+    // (~one em, a few mm), correct for TEXT/RUBY/TCY's own column-strip
+    // math above but NOT the available box for an isolated FULL-placement
+    // image, which visually spans past its own originating line. Every
+    // real image was therefore clamped down to roughly one character's
+    // width regardless of its real intended size. Now uses `imageBoxMm`
+    // (the real page content-area width/center between margins, threaded
+    // from `buildBodyPaintPage`) when available, falling back to the
+    // prior `lineWidthMm`/`xCenter` behavior only when no real page
+    // geometry was supplied at all (preserves every pre-existing
+    // geometry-less caller byte-for-byte).
+    const boxWidthMm = imageBoxMm?.widthMm ?? lineWidthMm;
+    const boxCenterXMm = imageBoxMm?.centerXMm ?? xCenter;
+    const naturalWidthMm = unit.imageIntrinsicWidthMm ?? boxWidthMm;
     const naturalHeightMm = unit.heightMm;
-    const scale = naturalWidthMm > lineWidthMm ? lineWidthMm / naturalWidthMm : 1;
+    const scale = naturalWidthMm > boxWidthMm ? boxWidthMm / naturalWidthMm : 1;
     const widthMm = naturalWidthMm * scale;
     const heightMm = naturalHeightMm * scale;
-    const imageX = xCenter - widthMm / 2;
+    const imageX = boxCenterXMm - widthMm / 2;
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
       return [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
@@ -556,6 +583,14 @@ function buildBodyPaintPage(
     // content's own extent (the prior, margin-less behavior) otherwise.
     const contentRightEdgeMm = pageGeometry ? pageGeometry.paperWidthMm - pageGeometry.marginRightMm : page.widthMm;
     const yOffsetMm = pageGeometry ? pageGeometry.marginTopMm : 0;
+    // Round 30 follow-up (Human Visual QA HOLD, image size/placement
+    // fix): the real content-area box, used ONLY as an IMAGE unit's own
+    // sizing/centering reference (see `unitCommands`'s own `imageBoxMm`
+    // doc) — undefined when no real page geometry was supplied, so
+    // geometry-less callers keep their prior `lineWidthMm`-based behavior.
+    const contentAreaWidthMm = pageGeometry ? contentRightEdgeMm - pageGeometry.marginLeftMm : undefined;
+    const contentAreaCenterXMm = pageGeometry && contentAreaWidthMm !== undefined ? pageGeometry.marginLeftMm + contentAreaWidthMm / 2 : undefined;
+    const imageBoxMm = contentAreaWidthMm !== undefined && contentAreaCenterXMm !== undefined ? { widthMm: contentAreaWidthMm, centerXMm: contentAreaCenterXMm } : undefined;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {
@@ -568,7 +603,7 @@ function buildBodyPaintPage(
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm));
           }
         }
       }
