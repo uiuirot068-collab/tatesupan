@@ -140,7 +140,20 @@ export type PaintCommand =
   // to have a real GSUB `vert`/`vrt2` alternate that is NOT reachable via
   // jsPDF's Unicode-string `text()` API — every other character keeps
   // using the existing "text" command, unchanged.
-  | { op: "glyphOutline"; commands: OutlinePathCommand[] };
+  | { op: "glyphOutline"; commands: OutlinePathCommand[] }
+  // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
+  // 3, real image embedding): real, already-resolved image bytes,
+  // painted at Core's own canonical box (`xMm`/`yMm`/`widthMm`/`heightMm`
+  // — never re-derived from `bytes`' own real pixel dimensions, per this
+  // round's own frozen "Publication does not re-layout from raster
+  // dimensions" architecture). `format` tells the executor which of
+  // jsPDF's own real embedders to call — "JPEG" bytes pass through
+  // unmodified (jsPDF embeds the DCT-encoded stream directly, no
+  // recompression); "PNG" bytes go through jsPDF's own internal PNG
+  // decoder (unavoidable — the PDF image-XObject model has no native
+  // PNG encoding), which does preserve a real alpha channel via jsPDF's
+  // own SMask support.
+  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG" };
 
 export interface PaintPagePlan {
   widthMm: number;
@@ -466,8 +479,41 @@ function unitCommands(
     return verticalGraphemeCommands(unit.text, xCenter, y, unit.heightMm, perCharFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext);
   }
 
-  // IMAGE, and any other kind without real paint text yet: unchanged
-  // vector-rectangle placeholder.
+  if (unit.kind === "IMAGE") {
+    // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
+    // 3, real image embedding). Canonical box authority: width/height
+    // come from Core's own `intrinsicWidth`/`intrinsicHeight`
+    // (`unit.imageIntrinsicWidthMm`/`unit.heightMm`, round 30's own
+    // `paintModel.ts` fix), never re-derived from the resolved bytes'
+    // own real pixel dimensions. Safety-only clamp: if the intrinsic
+    // width would paint outside this unit's own column strip, scale
+    // BOTH dimensions down proportionally (never distorts, never grows)
+    // so the image never paints past its real canonical page/column
+    // bounds — this is a safety floor, not a redesign of the "intrinsic
+    // size, no stretch" default policy (see evidence for the audited
+    // rationale). Horizontally centered within the column strip,
+    // top-aligned at this unit's own real composed position.
+    const naturalWidthMm = unit.imageIntrinsicWidthMm ?? lineWidthMm;
+    const naturalHeightMm = unit.heightMm;
+    const scale = naturalWidthMm > lineWidthMm ? lineWidthMm / naturalWidthMm : 1;
+    const widthMm = naturalWidthMm * scale;
+    const heightMm = naturalHeightMm * scale;
+    const imageX = xCenter - widthMm / 2;
+    const resolution = unit.imageResolution;
+    if (resolution && resolution.kind === "RESOLVED") {
+      return [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
+    }
+    // PLACEHOLDER (no resolver wired) or an unresolved failure kind that
+    // reached paint time without going through `generatePublicationPdf`'s
+    // own pre-flight check (e.g. a caller using `buildPaintPlan` directly,
+    // as every typography test in this file does) — the same vector-rect
+    // placeholder as before, now sized to the real aspect-correct box
+    // instead of the full column width.
+    return [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
+  }
+
+  // Any other kind without real paint text yet: unchanged vector-rectangle
+  // placeholder.
   return [{ op: "rect", xMm: x, yMm: y, widthMm: lineWidthMm, heightMm: unit.heightMm }];
 }
 
@@ -1008,6 +1054,21 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
         pdf.rect(cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
         continue;
       }
+      if (cmd.op === "image") {
+        // Human Visual QA HOLD round 30: jsPDF's own real `addImage` —
+        // for "JPEG" this embeds the already-DCT-encoded bytes directly
+        // (no recompression); for "PNG" jsPDF's own internal decoder
+        // extracts pixel data and, when the source has one, a real
+        // alpha channel (embedded as a PDF SMask) — neither path is
+        // reimplemented here, this executor only calls jsPDF's own API
+        // with the already-decided real bytes/box, exactly like every
+        // other command in this switch makes no typography/decode
+        // decision of its own. `Buffer.from` (not the raw `Uint8Array`)
+        // is what jsPDF's own Node code path expects for real binary
+        // image data.
+        pdf.addImage(Buffer.from(cmd.bytes), cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
+        continue;
+      }
       if (cmd.op === "glyphOutline") {
         // Round 7: a real vector glyph outline (already fully
         // translated/scaled into mm page-coordinate space by
@@ -1054,14 +1115,50 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
   return { bytes: new Uint8Array(arrayBuffer), pageCount: plan.length };
 }
 
+// Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step 3):
+// collects every IMAGE unit whose own resolver outcome is a real,
+// structured failure (MISSING/UNSUPPORTED_FORMAT/CORRUPT) — never
+// silently painted as a normal-looking placeholder rectangle and
+// reported as a successful export (INV-010's own "no silently
+// discarded problem" principle, extended here to image resolution,
+// which is genuinely a Publication-only concern Core cannot see).
+// PLACEHOLDER is NOT a failure here — it means no resolver was wired at
+// all (every existing typography test's own real, intentional mode).
+function findUnresolvedImageIssues(doc: PublicationDocument): string[] {
+  const issues: string[] = [];
+  const scanPages = (pages: PublicationDocument["pages"]) => {
+    for (const page of pages) {
+      for (const column of page.columns) {
+        for (const line of column.lines) {
+          for (const unit of line.units) {
+            if (unit.kind !== "IMAGE" || !unit.imageResolution) continue;
+            const r = unit.imageResolution;
+            if (r.kind === "MISSING") issues.push(`image at ${JSON.stringify(unit.sourceSpan)}: source not found`);
+            else if (r.kind === "UNSUPPORTED_FORMAT") issues.push(`image at ${JSON.stringify(unit.sourceSpan)}: unsupported format${r.detectedFormat ? ` (${r.detectedFormat})` : ""}`);
+            else if (r.kind === "CORRUPT") issues.push(`image at ${JSON.stringify(unit.sourceSpan)}: corrupt/undecodable bytes`);
+          }
+        }
+      }
+    }
+  };
+  scanPages(doc.pages);
+  if (doc.colophonPages) scanPages(doc.colophonPages);
+  return issues;
+}
+
 // Refuses to emit a normal-looking publication PDF for a HOLD document —
 // mirrors Preview's own HOLD structural exclusion (never silently painting
 // an unresolved document as an approved layout). Throws rather than
 // returning a partially-built result, since there is no "banner-only PDF
-// page" concept defined by any frozen contract yet.
+// page" concept defined by any frozen contract yet. Round 30: the SAME
+// refusal now also applies to a real, unresolved required image.
 export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource, pageGeometry?: PublicationPageGeometry): PublicationPdfResult {
   if (doc.hold) {
     throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF for a HOLD document (${doc.holdReasons.join("; ")})`);
+  }
+  const imageIssues = findUnresolvedImageIssues(doc);
+  if (imageIssues.length > 0) {
+    throw new Error(`generatePublicationPdf: refusing to emit a Publication PDF with unresolved required image(s): ${imageIssues.join("; ")}`);
   }
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
   const outlineContext = fontResource ? new VerticalOutlineContext(Buffer.from(fontResource.base64, "base64")) : undefined;

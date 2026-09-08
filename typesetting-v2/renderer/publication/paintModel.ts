@@ -37,7 +37,34 @@ export type RubyAnnotationPaint =
   | { status: "PENDING" }
   | { status: "PLACED"; policy: "CENTER" | "START_CLAMP" | "END_CLAMP" | "OVERFLOW_OPEN"; offsetMm: number; extentMm: number; text: string };
 
-export type ImageResolution = { kind: "PLACEHOLDER" } | { kind: "RESOLVED"; url: string };
+// Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step 3,
+// real image embedding). Publication's own paint boundary is where
+// "resolving actual local image bytes" happens (Core never touches raw
+// binary, Contract §14/§28) -- so `ImageResolution` grows real,
+// structured outcomes here, in this Publication-only file (Preview's
+// own sibling `renderer/preview/paintModel.ts` keeps its own, still
+// url-only, `ImageResolution` -- unaffected, no shared type, matching
+// this whole module's own established "sibling consumer, never a
+// dependent" convention). PLACEHOLDER is unchanged (the pre-existing
+// default -- no resolver wired, or a caller deliberately wants the
+// vector-rectangle placeholder, e.g. Preview-style dev iteration).
+// RESOLVED now carries REAL bytes + real decoded pixel dimensions (for
+// diagnostic use only -- painted SIZE always comes from Core's own
+// `intrinsicWidth`/`intrinsicHeight`, never re-derived from these
+// pixel counts, per this round's own frozen architecture: "Publication
+// must NOT... recalculate layout from raster dimensions unless the
+// Core contract explicitly delegates an intrinsic measurement fact" —
+// it already does, via `MeasurementFacts.imageIntrinsicTick`). The
+// three failure kinds are real, structured, and required (never
+// silently treated as blank success, see `generatePublicationPdf`'s
+// own new pre-flight check in `pdfGenerator.ts`).
+export type PublicationImageFormat = "JPEG" | "PNG";
+export type ImageResolution =
+  | { kind: "PLACEHOLDER" }
+  | { kind: "RESOLVED"; url: string; bytes: Uint8Array; format: PublicationImageFormat; pixelWidth: number; pixelHeight: number }
+  | { kind: "MISSING" }
+  | { kind: "UNSUPPORTED_FORMAT"; detectedFormat?: string }
+  | { kind: "CORRUPT" };
 export type ImageResolver = (refId: string) => ImageResolution;
 export const defaultPlaceholderImageResolver: ImageResolver = () => ({ kind: "PLACEHOLDER" });
 
@@ -61,6 +88,13 @@ export interface PaintPlacedUnit {
   provisional: boolean;
   rubyAnnotation?: RubyAnnotationPaint;
   imageResolution?: ImageResolution;
+  // Human Visual QA HOLD round 30: an IMAGE unit's own real, Core-known
+  // intrinsic WIDTH (mm) -- `heightMm` above already carries the real
+  // intrinsic height (Core's own advance for this atom); width is not
+  // otherwise tracked per-unit anywhere in this file (every other kind
+  // paints at a shared, context-level width), so IMAGE carries its own
+  // explicitly. Populated only for IMAGE units.
+  imageIntrinsicWidthMm?: number;
   semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER";
   debug: PaintDebugInfo;
 }
@@ -272,7 +306,22 @@ function buildPaintLine(
       heightIsApproximate = true;
     }
     const text = textFor(kind, placed.sourceSpan, source);
-    const heightMm = Math.max(tickToMm(extentTicks), 0.001);
+    // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
+    // 3, real image embedding): an IMAGE unit's own REAL height is
+    // already known exactly -- Core used it as this atom's own advance
+    // during composition (`core/compose/line.ts`'s own `advanceTickFor`
+    // IMAGE case reads `measurement.imageIntrinsicTick(refId).height`
+    // directly) -- so it is read here from `owner.intrinsicHeight`
+    // rather than re-derived from the generic next/prev-atom delta or
+    // guess above. This matters concretely: an isolated FULL-placement
+    // image (Contract §14's own `breakBefore`/`breakAfter` isolation)
+    // is very often the ONLY atom on its own line, making the generic
+    // "no next atom" DEV-ONLY guess path trigger for the exact common
+    // case where a real, authoritative value already exists -- using
+    // the guess there would have been a real regression, not a neutral
+    // approximation.
+    const isImage = kind === "IMAGE" && owner && owner.kind === "IMAGE";
+    const heightMm = isImage ? Math.max(tickToMm(owner.intrinsicHeight), 0.001) : Math.max(tickToMm(extentTicks), 0.001);
     const semanticRunKind = kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? owner.runKind : undefined;
     return {
       id: placed.id,
@@ -281,10 +330,10 @@ function buildPaintLine(
       sourceSpan: placed.sourceSpan,
       topMm: tickToMm(placed.yTick + indentOffsetTicks),
       heightMm,
-      heightIsApproximate,
+      heightIsApproximate: isImage ? false : heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed) } : {}),
-      ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
+      ...(isImage ? { imageResolution: resolveImage(owner.refId), imageIntrinsicWidthMm: tickToMm(owner.intrinsicWidth) } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),
       debug: {
         pageOrder,

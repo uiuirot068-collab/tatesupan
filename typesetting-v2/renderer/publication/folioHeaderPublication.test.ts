@@ -109,7 +109,7 @@ describe("Folio Publication paint -- real Core data, real geometry resolution", 
     const planNarrow = buildPaintPlan(model, true, narrowGeometry, undefined, outlineContext, gposContext, yakumonoContext);
     const xOf = (plan: ReturnType<typeof buildPaintPlan>): number => {
       const cmd = plan[0].commands[plan[0].commands.length - 1];
-      if (cmd.op === "text" || cmd.op === "rect") return cmd.xMm;
+      if (cmd.op === "text" || cmd.op === "rect" || cmd.op === "image") return cmd.xMm;
       const first = cmd.commands.find((c): c is Extract<(typeof cmd.commands)[number], { x: number }> => c.type !== "Z");
       return first?.x ?? NaN;
     };

@@ -25,7 +25,7 @@ function horizontalBoundsMm(cmd: PaintCommand): { xMin: number; xMax: number } {
     const halfWidthMm = (cmd.fontSizePt * (25.4 / 72)) / 2;
     return { xMin: cmd.xMm - halfWidthMm, xMax: cmd.xMm + halfWidthMm };
   }
-  if (cmd.op === "rect") {
+  if (cmd.op === "rect" || cmd.op === "image") {
     return { xMin: cmd.xMm, xMax: cmd.xMm + cmd.widthMm };
   }
   const xs = cmd.commands.flatMap((c) => (c.type === "Z" ? [] : c.type === "C" ? [c.x1, c.x2, c.x] : [c.x]));
