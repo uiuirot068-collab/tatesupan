@@ -160,6 +160,21 @@ export interface PublicationDocument {
   // how compressed or approximate its own positioning `heightMm` is.
   bodyEmMm: number;
   pages: PaintPage[];
+  // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
+  // 2, structural colophon): Core's own `CanonicalDocument.colophon`
+  // (Contract §15, a distinct, isolated `ColophonBlock`, never threaded
+  // through body columns/lines) resolved into paint-ready pages via the
+  // SAME `buildPaintPage` this file already uses for body pages —
+  // reused, not reimplemented. `undefined` when no colophon was
+  // composed (every existing caller, byte-identical to before this
+  // field existed). Orientation (colophon is real, legacy-confirmed
+  // HORIZONTAL content, `src/lib/colophon.ts`'s own `writing-mode:
+  // horizontal-tb`) is a Publication PAINT-TIME decision, per this
+  // file's own established boundary (paintModel.ts resolves structure;
+  // `pdfGenerator.ts` decides how to walk it) — these pages carry the
+  // exact same tick-derived `PaintPage` shape as body pages; only
+  // `pdfGenerator.ts` interprets them differently.
+  colophonPages?: PaintPage[];
 }
 
 function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
@@ -339,10 +354,24 @@ export function buildPublicationDocument(
   document: CanonicalDocument,
   units: LogicalUnit[],
   source: string,
-  ctx: PublicationRenderContext
+  ctx: PublicationRenderContext,
+  // Human Visual QA HOLD round 26: the colophon's own separate
+  // LogicalUnit[]/source pair (it is composed from an entirely
+  // different SourceBlock than the body, per Contract §15 -- its own
+  // `sourceSpan`s are meaningless against the body's own `source`
+  // string). Optional and additive; omitting it (every existing
+  // caller) leaves `colophonPages` undefined, byte-identical to before
+  // this parameter existed.
+  colophonUnits?: LogicalUnit[],
+  colophonSource?: string
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
   const pages = document.pages.map((page, i) => buildPaintPage(page, manualBreaks[i] ?? false, units, source, ctx));
+
+  const colophonPages =
+    document.colophon && colophonUnits && colophonSource !== undefined
+      ? document.colophon.pages.map((page) => buildPaintPage(page, false, colophonUnits, colophonSource, ctx))
+      : undefined;
 
   return {
     id,
@@ -354,5 +383,6 @@ export function buildPublicationDocument(
     renderedPageCount: pages.length,
     bodyEmMm: tickToMm(ctx.linePitchTicks),
     pages,
+    ...(colophonPages ? { colophonPages } : {}),
   };
 }

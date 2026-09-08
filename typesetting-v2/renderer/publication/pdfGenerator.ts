@@ -49,7 +49,7 @@
 // recalculates placement, breaks, or canonical occupancy.
 
 import { jsPDF } from "jspdf";
-import type { PaintPlacedUnit, PublicationDocument } from "./paintModel";
+import type { PaintPage, PaintPlacedUnit, PublicationDocument } from "./paintModel";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
@@ -470,7 +470,7 @@ export function buildPaintPlan(
   gposContext?: VerticalGposContext,
   yakumonoContext?: VerticalYakumonoAlignContext
 ): PaintPlan {
-  return doc.pages.map((page) => {
+  const bodyPlan = doc.pages.map((page) => {
     const commands: PaintCommand[] = [];
     // The content area's own right edge, physically: the paper's right
     // edge minus the inside margin when pageGeometry is supplied, or the
@@ -560,6 +560,62 @@ export function buildPaintPlan(
       commands,
     };
   });
+
+  // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
+  // 2, structural colophon): appended AFTER every body page -- Core's
+  // own colophon composition (round 26's own `assemble.ts` change)
+  // continues the same physical page sequence body pages use (matches
+  // legacy's own default `pagePosition: {mode:"end"}`, confirmed real
+  // via `src/lib/colophon.ts`'s own `resolveColophonNombre`). Painted
+  // via a dedicated horizontal path -- legacy's own colophon is real,
+  // confirmed HORIZONTAL content (`writing-mode: horizontal-tb`), never
+  // vertical Japanese body typography, so it deliberately does NOT
+  // route through `unitCommands`/`verticalGraphemeCommands` at all.
+  const colophonPlan = (doc.colophonPages ?? []).map((page) => buildColophonPaintPage(page, hasFont, pageGeometry, doc.bodyEmMm));
+
+  return [...bodyPlan, ...colophonPlan];
+}
+
+// Human Visual QA HOLD round 26: colophon pages are composed through
+// the SAME vertical Natural-Pitch line-breaking `composePages` uses for
+// body content (Core's own existing, real mechanism -- reused, not
+// duplicated) -- but legacy's own real product is HORIZONTAL. This
+// function reinterprets that already-decided LINE STRUCTURE (which
+// characters share a line -- a real, reusable decision) as horizontal
+// rows, painted top-to-bottom, left-to-right, via the SAME
+// `horizontalFurnitureCommand` single-line text path folio/header
+// already use. KNOWN, DISCLOSED SCOPE LIMIT: only the first column of
+// each page is painted (ordinary colophon content -- short field rows
+// -- fits within one column in every fixture this round proves; a
+// colophon long enough to overflow into a second column would need a
+// real multi-column horizontal layout, not yet built -- see
+// qa/evidence/P3_O08_STRUCTURAL_COLOPHON.md).
+function buildColophonPaintPage(page: PaintPage, hasFont: boolean, pageGeometry: PublicationPageGeometry | undefined, bodyEmMm: number): PaintPagePlan {
+  const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
+  const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
+  const marginTopMm = pageGeometry?.marginTopMm ?? 0;
+  const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
+  const marginRightMm = pageGeometry?.marginRightMm ?? 0;
+  const commands: PaintCommand[] = [];
+  const firstColumn = page.columns[0];
+  if (hasFont && firstColumn) {
+    const lineHeightMm = bodyEmMm * 1.5; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
+    firstColumn.lines.forEach((line, lineIndex) => {
+      const text = line.units.map((u) => u.text).join("");
+      if (text.length === 0) return;
+      const xCenter = marginLeftMm + (paperWidthMm - marginLeftMm - marginRightMm) / 2;
+      const yCenter = marginTopMm + lineIndex * lineHeightMm + bodyEmMm / 2;
+      commands.push(horizontalFurnitureCommand(text, xCenter, yCenter, mmToPt(bodyEmMm)));
+    });
+  }
+  if (page.folio && page.folio.text.length > 0 && hasFont) {
+    const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
+    const xCenter =
+      page.folio.position === "left" ? marginLeftMm + bodyEmMm / 2 : page.folio.position === "right" ? paperWidthMm - marginRightMm - bodyEmMm / 2 : paperWidthMm / 2;
+    const yCenter = paperHeightMm - marginBottomMm / 2;
+    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(bodyEmMm)));
+  }
+  return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }
 
 // Thin, mechanical executor: walks a PaintPlan and calls jsPDF's own

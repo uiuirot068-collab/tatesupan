@@ -78,6 +78,21 @@ export interface DocumentCompositionInput {
   // qa/evidence/P3_O08_FOLIO_HEADER_COMPLETE_CONTRACT.md).
   headerSettings?: HeaderSettings;
   headerPageOverrides?: Record<number, HeaderPageOverride>;
+  // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
+  // 2, structural colophon): CORRECTS round 21's own prior comment ("no
+  // page ever gets a folio... colophon pages... never receive folio") —
+  // that was an untested assumption, not audited evidence. Direct read
+  // of legacy `src/lib/colophon.ts`'s own real `resolveColophonNombre`
+  // proves the opposite: the colophon page DOES participate in the SAME
+  // physical page/nombre sequence as body pages ("ノンブルは実際の作品
+  // ページ順（物理ページ順）に従う"), its own physical page number being
+  // `precedingBodyPageCount + 1`. This round ports that behavior — the
+  // colophon's own pages continue the SAME folio/header sequence body
+  // pages use, at whatever physical position they end up (currently
+  // always "after all body pages," matching legacy's own default
+  // `pagePosition: {mode:"end"}`; `after-body-page` mid-insertion is a
+  // real, disclosed, NOT YET ported gap — see
+  // qa/evidence/P3_O08_STRUCTURAL_COLOPHON.md).
 }
 
 // The full orchestration named by this Loop's goal. Composes body pages,
@@ -111,7 +126,20 @@ export function composeCanonicalDocument(input: DocumentCompositionInput): Canon
       errors.push(holdToLayoutError(colophonResult.hold));
     }
     const blockId = input.colophonBlockId ?? input.colophonUnits[0].span.blockId;
-    colophon = composeColophon(blockId, colophonResult.pages);
+    // Continues the SAME physical page/folio/header sequence body pages
+    // use (see this file's own round-26 doc comment above) -- the
+    // colophon's own first page picks up right where the body's own
+    // pages left off.
+    const colophonPages: CanonicalPage[] =
+      folioSettings || headerSettings
+        ? colophonResult.pages.map((page, i) => {
+            const pageIndex = pages.length + i;
+            const folio = folioSettings ? composeFolioForPage(pageIndex, folioSettings) : undefined;
+            const header = headerSettings ? composeHeaderForPage(pageIndex, headerSettings, input.headerPageOverrides?.[pageIndex + 1]) : undefined;
+            return { ...page, ...(folio ? { folio } : {}), ...(header ? { header } : {}) };
+          })
+        : colophonResult.pages;
+    colophon = composeColophon(blockId, colophonPages);
   }
 
   return {
