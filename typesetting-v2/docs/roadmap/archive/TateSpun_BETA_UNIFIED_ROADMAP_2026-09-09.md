@@ -1,0 +1,409 @@
+# TateSpun β Unified Roadmap
+Updated: 2026-09-09
+Status: ChatGPT / Claude reconciliation baseline
+
+## 1. Authority rule
+
+This roadmap reconciles:
+- historical v2 roadmap/docs
+- current repository/commit state
+- recent Human decisions
+- newly added β requirements
+
+Status labels:
+- COMPLETE
+- IN_PROGRESS
+- NOT_STARTED
+- HUMAN_GATE
+- DEFERRED_POST_BETA
+
+Historical docs remain evidence, but stale statuses are superseded by later verified commits/Human QA.
+
+---
+
+## 2. Current verified completion
+
+### Typesetting / Publication foundation
+
+- P3-O01 Kinsoku class table: COMPLETE
+- P3-O02 Dash/Ellipsis primary source: COMPLETE
+- P3-O03 TCY visual renderer: COMPLETE / Human PASS
+- P3-O04 Dash visual alignment: COMPLETE / Human PASS
+- P3-O05 Ellipsis visual alignment: COMPLETE / Human PASS
+- P3-O09 Preview renderer foundation: COMPLETE / Human PASS
+- P3-O12 Capacity/margin formula: COMPLETE
+- Folio / Header: COMPLETE / Human PASS
+- Structural Colophon: COMPLETE / Human PASS
+- Real Image Embedding PNG: COMPLETE
+- Transparent PNG: COMPLETE
+- JPEG real-image embedding: COMPLETE
+- Image sizing/aspect/placement fix: COMPLETE / Human PASS
+- JPG Node reference engine: COMPLETE
+- Browser-native JPG renderer PoC: COMPLETE / Human PASS
+- Live Editor → v2 Publication state bridge: COMPLETE
+- Writing Check β 2.0 Phase 1: COMPLETE
+
+Important: P3-O08's historical document status is stale. Many of its subtracks are complete, but overall production migration/acceptance is not yet closed.
+
+---
+
+## 3. Known open product/architecture gates
+
+### GATE-A — TCY auto-detect threshold (P3-O07)
+Status: HUMAN_GATE
+Decision: 2-digit vs 4-digit auto-detect threshold.
+Reason: blocks final TCY rule freeze.
+
+### GATE-B — Ruby contracts
+Status: HUMAN_GATE / partially open
+Includes:
+- P3-O06 numeric ruby overhang budget
+- P3-O14 jukugo-ruby segmentation mechanism
+- P3-O15 group-ruby break/distribution if required for β acceptance
+
+### GATE-C — Bleed / trim β policy
+Status: HUMAN_GATE
+Historical roadmap expected bleed/trim porting.
+Current v2 canonical page has no separate bleed geometry; current print JPG crop is therefore a disclosed no-op.
+Need explicit β product decision:
+- β intentionally supports trim-page-only output, or
+- add a true bleed/trim model before β.
+
+### GATE-D — PDF production integration path
+Status: HUMAN_GATE / architecture
+Current app is static/browser-based.
+JPG has a browser production executor.
+PDF Publication engine exists, but live browser integration is not yet proven.
+Preferred audit target: browser-side jsPDF path if client-safe; do not introduce a server runtime unless necessary.
+
+### GATE-E — Export rollout
+Status: HUMAN_GATE
+Choose:
+- additive/feature-flag migration alongside legacy DOM export first, or
+- direct replacement.
+Historical sequencing recommends non-destructive/flag-gated rollout.
+
+### GATE-F — 11-B event semantics
+Status: HUMAN_GATE
+Need exact counting policy for:
+IME, paste, cut, undo, redo, replace, select-all delete, import, programmatic normalization, ruby input, page-break token, image token, Writing Check fixes.
+
+### GATE-G — 11-A β scope boundary
+Status: HUMAN_GATE
+Historical full 11-A scope includes:
+1. punctuation
+2. paragraph/whitespace
+3. vertical-writing character issues
+4. TateSpun notation
+5. dictionary/NG-word features
+
+Need decide whether dictionary/NG-word UI is β-required or post-β.
+
+### GATE-H — TXT I/O open contract
+Status: HUMAN_GATE
+Open items include:
+encoding, BOM, line endings, ruby/page-break/image round-trip representation, malformed-input handling.
+
+---
+
+## 4. Integrated β roadmap from current position
+
+### 11-A. Writing Check β 2.0 completion
+Status: IN_PROGRESS
+
+#### 11-A Phase 1
+COMPLETE — commit `26eef0f`
+- reusable local rule engine
+- current rule regression
+- bracket/punctuation/TCY/ruby high-confidence diagnostics
+- UTF-16 offset safety
+- IME/privacy/build PASS
+
+#### 11-A Phase 2
+NOT_STARTED
+- paragraph/whitespace rules
+- vertical-writing character rules
+- original fix-class model:
+  - SAFE_AUTO_FIX
+  - REVIEW_BEFORE_FIX
+  - NOTICE_ONLY
+- rule config / per-rule enablement
+- diagnostics result model
+- no silent mutation
+
+#### 11-A Phase 3
+HUMAN_GATE → then implementation
+- preset UX
+- explicit Fix / Ignore
+- safe bulk fix
+- dictionary / NG-word / user dictionary scope
+- final Help copy
+- Human QA only for new visible workflow
+
+Completion condition:
+Local browser-only manuscript checking can detect the agreed β rule set and let the user apply only explicit, safe corrections; no manuscript is sent to external AI/API.
+
+---
+
+### 11-B. Writing-session total activity counter
+Status: NOT_STARTED
+
+Confirmed contract:
+START → edit → END
+- insertedCharacters
+- deletedCharacters
+- totalActivity = inserted + deleted
+- result display
+- SNS share
+- separate `Editor Session Metrics` responsibility
+- not the same as current manuscript length
+
+Before implementation:
+resolve GATE-F.
+
+Suggested β boundary:
+- one active session
+- input/deletion/total counts
+- END result
+- explicit SNS share
+- local-only processing
+- long-term analytics/history can be post-β unless Human chooses otherwise
+
+---
+
+### 12. Real Editor → Production Publication connection
+Status: PARTIAL
+
+Bridge state mapping is COMPLETE, but the real Editor UI still uses legacy export.
+
+Tasks:
+1. Bind real Editor `title/content/images/settings` into the v2 bridge in the real product flow.
+2. Prove real manuscript → Canonical Document → PaintPlan using live state.
+3. Preserve line count / chars-per-line propagation.
+4. Preserve folio/header/colophon/images.
+
+Human QA:
+Conditional; first real-manuscript output should receive Human visual QA.
+
+---
+
+### 13. Browser PDF Publication path
+Status: NOT_STARTED
+
+Tasks:
+- audit current jsPDF Publication renderer for browser/client safety
+- build/verify a real browser PDF download path
+- no Node-only leakage
+- same PaintPlan as JPG
+- static Next build PASS
+- first real PDF Human QA
+
+Completion:
+real browser user can download v2 Publication PDF from a real v2-composed manuscript.
+
+---
+
+### 14. Export migration
+Status: NOT_STARTED
+
+Tasks:
+- wire live Editor export buttons to v2 PDF/JPG
+- preserve/implement:
+  - single page where applicable
+  - all pages
+  - selected pages if current UX supports them
+  - JPG ZIP
+  - print JPG
+  - web-reading JPG
+  - filename rules
+  - error handling
+- feature-flag/additive rollout preferred until rollback is proven
+- legacy DOM capture remains available during migration unless Human chooses direct replacement
+
+Completion:
+real Editor users can use v2 Publication output end-to-end.
+
+---
+
+### 15. TXT I/O Contract
+Status: HUMAN_GATE → NOT_STARTED
+
+Resolve GATE-H, then implement/test:
+- encoding
+- BOM
+- line endings
+- TateSpun notation round-trip
+- malformed input behavior
+- import/export compatibility
+
+Required by Master §17 acceptance.
+
+---
+
+### 16. Settings / UI-C / Export Profiles
+Status: NOT_STARTED / PARTIAL HISTORICAL SPEC
+
+Includes:
+- UI-C Settings drawer (HD-010)
+- P3-O11 Editor Export Profiles A/B/C
+- settings mapping/UI exposure needed by β
+
+Need scope audit before implementation.
+
+---
+
+### 17. Typography final contract closure
+Status: PARTIAL
+
+Resolve:
+- P3-O07 TCY threshold
+- P3-O06 ruby overhang numeric budget
+- P3-O14 jukugo-ruby segmentation
+- P3-O15 if β-relevant
+- any remaining vertical-writing typography contracts
+
+Then run mandatory matrix:
+- A5
+- A5 two-column
+- web-reading
+- other supported paper presets
+- chars/line and lines/column variations
+- ruby
+- TCY
+- punctuation
+- images
+- folio/header
+- colophon
+
+Special regression:
+character-spacing consistency and line/column spacing.
+
+---
+
+### 18. Real-manuscript End-to-End QA
+Status: NOT_STARTED
+
+Use a realistic Human-authored manuscript rather than only fixtures.
+
+Flow:
+Editor input
+→ settings
+→ Writing Check
+→ optional session count
+→ Preview
+→ PDF
+→ JPG
+→ images
+→ folio/header
+→ colophon
+→ reload/persistence
+→ TXT round-trip where applicable
+
+Human QA: YES.
+
+---
+
+### 19. Master §17 full acceptance run
+Status: NOT_STARTED
+
+Must explicitly PASS or be formally scoped:
+- PDF quality
+- JPG quality
+- Preview quality
+- logical-layout consistency
+- mandatory preset matrix
+- regression corpus
+- kinsoku/hanging/ruby/TCY/dash/ellipsis
+- pagination
+- image placement
+- existing-project compatibility
+- TXT I/O
+- performance
+- privacy
+- Human visual QA
+- rollback
+
+No production migration while any required item remains undetermined.
+
+---
+
+### 20. Final site / β release update
+Status: NOT_STARTED
+
+Tasks:
+- TateSpun top page final copy
+- β wording / onboarding / Help
+- privacy / terms / explanatory copy
+- “原稿を勝手にAIへ送らない” assurance copy
+- release links / official URL checks
+- final accessibility/responsive sanity check
+
+#### NEW requirement: support / affiliate footer
+Placement:
+TateSpun TOP PAGE lower/footer area only.
+
+Do NOT place ads/support links inside the Editor work area.
+
+Planned block:
+- “TateSpunを応援する” style heading/copy
+- Amazon affiliate shopping link
+- Rakuten affiliate shopping link
+- clear affiliate disclosure
+
+Before implementation:
+check the current Amazon/Rakuten affiliate program rules and disclosure requirements.
+
+---
+
+### 21. Production build / deploy / Production QA
+Status: NOT_STARTED
+
+- full regression
+- `next build`
+- deploy
+- Production URL checks
+- Editor smoke
+- PDF/JPG download smoke
+- privacy/help/site copy
+- rollback verification
+
+Human QA: YES for final production smoke.
+
+---
+
+### 22. TateSpun β COMPLETE
+Status: NOT_STARTED
+
+Definition:
+All β-required Master §17 acceptance conditions and newly-approved β product requirements are PASS, or explicitly deferred by Human as post-β without contradicting the acceptance contract.
+
+---
+
+## 5. Post-β candidates unless Human promotes them
+
+- P3-O10 full vertical Editor-mode feasibility
+- P3-O13 HarfBuzz/dedicated shaping
+- dakuten typography
+- advanced group-ruby behavior if explicitly scoped out of β
+- long-term Writing Session history/analytics
+- advanced dictionary/user-rule system if excluded from β
+- richer monetization/recommendation pages
+
+---
+
+## 6. Current progress interpretation
+
+Core/typesetting engine completion: approximately 85–90%.
+
+β product completion: approximately 65–70%.
+
+Reason:
+the layout/rendering engine is advanced, but real Editor export migration, TXT I/O, remaining typography contracts, full acceptance/rollback, and final production integration are still open.
+
+---
+
+## 7. Prompt ownership
+
+Implementation prompts are authored and reviewed by ChatGPT.
+
+Claude Code / Cursor acts as implementation/audit agent and must not be delegated responsibility for creating the next engineering prompt unless Human explicitly asks otherwise.
