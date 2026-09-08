@@ -19,7 +19,7 @@
 // `rubyReadingOffsetTick`/`rubyReadingExtentTick` read-only, exactly like
 // Preview does).
 
-import type { CanonicalDocument, CanonicalPage, ColophonHorizontalPlacement, ColophonVerticalPlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
+import type { CanonicalDocument, CanonicalPage, ColophonPlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
 import type { SourceSpan } from "../../core/source/span";
 import { tickToMm } from "./geometry";
 
@@ -184,15 +184,14 @@ export interface PublicationDocument {
   // falls back to its pre-round-28 "all body, then all colophon"
   // concatenation when this is absent, byte-identical to before.
   pageSequence?: PhysicalPageRef[];
-  // Real legacy `ColophonPlacement.horizontal`/`.vertical`
-  // (`src/lib/colophon.ts:67-74`), resolved by Core onto
-  // `CanonicalDocument.colophon.placement` and passed through here
-  // unresolved-to-mm (Publication's own paint boundary does that
-  // conversion, see `pdfGenerator.ts`). `respectGutter`/
-  // `respectVerticalMargins` are deliberately NOT threaded past Core —
-  // Publication does not act on them yet (disclosed gap, see
-  // qa/evidence/P3_O08_STRUCTURAL_COLOPHON_FINAL_PLACEMENT.md).
-  colophonPlacement?: { horizontal: ColophonHorizontalPlacement; vertical: ColophonVerticalPlacement };
+  // Real legacy `ColophonPlacement` (`src/lib/colophon.ts:67-74`),
+  // resolved by Core onto `CanonicalDocument.colophon.placement` and
+  // passed through here unresolved-to-mm (Publication's own paint
+  // boundary does that conversion, see `pdfGenerator.ts`). Round 28
+  // threaded only `horizontal`/`vertical`; round 29 (P3-O08 final-page
+  // completion, Step 2D) threads the full object so
+  // `respectGutter`/`respectVerticalMargins` reach Publication too.
+  colophonPlacement?: ColophonPlacement;
 }
 
 function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
@@ -403,8 +402,6 @@ export function buildPublicationDocument(
     pages,
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),
-    ...(document.colophon?.placement
-      ? { colophonPlacement: { horizontal: document.colophon.placement.horizontal, vertical: document.colophon.placement.vertical } }
-      : {}),
+    ...(document.colophon?.placement ? { colophonPlacement: document.colophon.placement } : {}),
   };
 }

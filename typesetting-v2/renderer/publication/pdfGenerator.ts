@@ -56,7 +56,7 @@ import { FontMetricsReader } from "./fontMetrics";
 import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
-import { DEFAULT_RUBY_SCALE } from "../../core";
+import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -94,6 +94,22 @@ export interface PublicationPageGeometry {
   marginRightMm: number;
   /** Outside margin. */
   marginLeftMm: number;
+  // Human Visual QA HOLD round 29 (P3-O08 final-page completion, Step
+  // 2D): real legacy MasterPageSettings-level `marginGutter`/`marginOuter`
+  // (ノド/小口, `src/lib/colophon.ts` consumer `ColophonPageCard.tsx:85-98`)
+  // -- DISTINCT quantities from `marginLeftMm`/`marginRightMm` above,
+  // which every OTHER paint path (body content, folio, header) still
+  // uses as one fixed, parity-INDEPENDENT physical rectangle for the
+  // whole document (a real, pre-existing v2 simplification, not
+  // resolved by this round). These two fields are read ONLY by
+  // `buildColophonPaintPage`'s own `ColophonPlacement.respectGutter`
+  // resolution (round 29) -- body/folio/header remain byte-identical.
+  // Optional/additive: omitted (every existing caller), `respectGutter`
+  // has no distinguishable effect (falls back to
+  // `marginLeftMm`/`marginRightMm` symmetrically either way) -- a real,
+  // honest inertness, not a silent no-op dressed up as support.
+  marginGutterMm?: number;
+  marginOuterMm?: number;
 }
 
 export type PaintCommand =
@@ -602,13 +618,21 @@ export function buildPaintPlan(
 ): PaintPlan {
   const colophonPageCount = doc.colophonPages?.length ?? 0;
   const bodyPageAt = (i: number) => buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, outlineContext, gposContext, yakumonoContext);
-  const colophonPageAt = (i: number) => buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount);
+  // `physicalIndex` (Human Visual QA HOLD round 29): the SAME 0-based
+  // final-physical-sequence position `core/layout/assemble.ts` already
+  // used to resolve this page's own folio/header -- re-derived here
+  // (never re-decided) purely to compute `isOddPage` for
+  // `ColophonPlacement.respectGutter`'s own parity-dependent margin
+  // resolution, via the SAME `resolveFolioPhysicalSide` Core's own
+  // folio/header logic already uses (round 22).
+  const colophonPageAt = (i: number, physicalIndex: number) =>
+    buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount, (physicalIndex + 1) % 2 === 1);
 
   if (doc.pageSequence) {
-    return doc.pageSequence.map((ref) => (ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index)));
+    return doc.pageSequence.map((ref, physicalIndex) => (ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index, physicalIndex)));
   }
   const bodyPlan = doc.pages.map((_, i) => bodyPageAt(i));
-  const colophonPlan = (doc.colophonPages ?? []).map((_, i) => colophonPageAt(i));
+  const colophonPlan = (doc.colophonPages ?? []).map((_, i) => colophonPageAt(i, doc.pages.length + i));
   return [...bodyPlan, ...colophonPlan];
 }
 
@@ -643,16 +667,38 @@ export function buildPaintPlan(
 // continuation rule" (repeating "center"/"bottom" per page would break
 // visual flow across pages, a real product decision legacy never had
 // to make since it has no multi-page colophon concept at all).
-// `respectGutter`/`respectVerticalMargins` are NOT read here at all --
-// see `ColophonPlacement`'s own doc comment (`core/layout/schema.ts`)
-// for why.
+// Human Visual QA HOLD round 29 (P3-O08 final-page completion, Step
+// 2D): applies real legacy `respectGutter`/`respectVerticalMargins`
+// (`src/lib/colophon.ts:67-74`, direct-read formula at
+// `ColophonPageCard.tsx:85-98`) -- these are REAL, NOT a legacy no-op:
+// `respectGutter` ON assigns the placement area's own left/right
+// margins asymmetrically by page parity (`marginOuter`/`marginGutter`,
+// via the SAME `resolveFolioPhysicalSide("outer"|"gutter", isOddPage)`
+// Core's own folio/header logic already uses, round 22) — OFF makes
+// both sides `Math.min(marginGutterMm, marginOuterMm)` (symmetric).
+// `respectVerticalMargins` ON uses `marginTopMm`/`marginBottomMm`
+// as-is (the pre-round-29 default) — OFF makes both
+// `Math.min(marginTopMm, marginBottomMm)` (symmetric). `left`/`center`/
+// `right` and `top`/`center`/`bottom` all resolve WITHIN whatever this
+// placement area turns out to be — so "center" is not exempt from
+// these flags either, matching legacy's own real flexbox
+// justify-content/align-items-on-a-resized-area behavior exactly
+// (proven with deliberately asymmetric geometry, not a symmetric
+// fixture that would pass by accident). `marginGutterMm`/`marginOuterMm`
+// are optional, additive `PublicationPageGeometry` fields (this round);
+// omitted, `respectGutter` has no distinguishable effect (both
+// true/false fall back to `marginLeftMm`/`marginRightMm` symmetrically)
+// -- see that field's own doc comment for why this is the smallest
+// sufficient derivation rather than a full parity-aware geometry
+// rewrite touching body/folio/header.
 function buildColophonPaintPage(
   page: PaintPage,
   hasFont: boolean,
   pageGeometry: PublicationPageGeometry | undefined,
   bodyEmMm: number,
-  placement: { horizontal: "left" | "center" | "right"; vertical: "top" | "center" | "bottom" } | undefined,
-  colophonPageCount: number
+  placement: ColophonPlacement | undefined,
+  colophonPageCount: number,
+  isOddPage: boolean
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -664,12 +710,31 @@ function buildColophonPaintPage(
   const firstColumn = page.columns[0];
   const horizontal = placement?.horizontal ?? "center";
   const vertical = colophonPageCount === 1 ? (placement?.vertical ?? "center") : "top";
+  const respectGutter = placement?.respectGutter ?? true;
+  const respectVerticalMargins = placement?.respectVerticalMargins ?? true;
   if (hasFont && firstColumn) {
     const lineHeightMm = bodyEmMm * 1.5; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
-    const contentLeftMm = marginLeftMm;
-    const contentRightMm = paperWidthMm - marginRightMm;
-    const contentAreaTopMm = marginTopMm;
-    const contentAreaBottomMm = paperHeightMm - marginBottomMm;
+    const gutterMm = pageGeometry?.marginGutterMm;
+    const outerMm = pageGeometry?.marginOuterMm;
+    let placementLeftMm = marginLeftMm;
+    let placementRightMm = marginRightMm;
+    if (gutterMm !== undefined && outerMm !== undefined) {
+      if (respectGutter) {
+        const outerSide = resolveFolioPhysicalSide("outer", isOddPage);
+        placementLeftMm = outerSide === "left" ? outerMm : gutterMm;
+        placementRightMm = outerSide === "left" ? gutterMm : outerMm;
+      } else {
+        const symmetricMm = Math.min(gutterMm, outerMm);
+        placementLeftMm = symmetricMm;
+        placementRightMm = symmetricMm;
+      }
+    }
+    const placementTopMm = respectVerticalMargins ? marginTopMm : Math.min(marginTopMm, marginBottomMm);
+    const placementBottomMm = respectVerticalMargins ? marginBottomMm : Math.min(marginTopMm, marginBottomMm);
+    const contentLeftMm = placementLeftMm;
+    const contentRightMm = paperWidthMm - placementRightMm;
+    const contentAreaTopMm = placementTopMm;
+    const contentAreaBottomMm = paperHeightMm - placementBottomMm;
     const contentAreaHeightMm = Math.max(contentAreaBottomMm - contentAreaTopMm, 0);
     // Deterministic block-height: real composed line COUNT times the
     // same fixed lineHeightMm every line already paints at -- never a
