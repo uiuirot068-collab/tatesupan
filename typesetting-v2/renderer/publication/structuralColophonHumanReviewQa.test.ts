@@ -38,7 +38,7 @@ import {
   type ColophonPlacement,
 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, deriveBaselineRatioFromFont, renderPaintPlanToPdf, type PaintPlan, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, deriveBaselineRatioFromFont, renderPaintPlanToPdf, type PaintCommand, type PaintPlan, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
@@ -53,9 +53,26 @@ const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "fo
 // page, the same way a real 文庫/A5 page comfortably holds a normal
 // colophon in the shipped product.
 const NORMAL_CAPACITY = { charsPerLine: 30, linesPerColumn: 12, columnCount: 1 as const };
-// Reserved ONLY for the one explicitly-labeled overflow diagnostic
-// (scenario 14) -- never reused for a "show one normal colophon" page.
+// Reserved for the "Root cause" describe block's own automated proof
+// that this narrow capacity was the round-28/29 bug's real cause --
+// never used for a Human-visible QA page (round 29B: Human QA FAIL on
+// the original scenario 14, which DID use this for a visible page --
+// see OVERFLOW_CAPACITY_HUMAN below).
 const OVERFLOW_CAPACITY = { charsPerLine: 10, linesPerColumn: 2, columnCount: 1 as const };
+// Human Visual QA HOLD round 29B: Human found the round-29A scenario 14
+// unusable -- `OVERFLOW_CAPACITY`'s narrow `charsPerLine:10` is
+// narrower than a single real field VALUE (`2026年9月8日` is 8 chars,
+// `example@example.com` is 20), so Natural Pitch line-wrapping split
+// those tokens mid-word across lines/pages -- not a realistic
+// representation of overflow (a real product page is never narrower
+// than one email address). This capacity keeps the SAME realistic
+// width as `NORMAL_CAPACITY` (`charsPerLine:30`, so every real row
+// stays atomic/whole on its own line, exactly like a normal page) and
+// forces multi-page overflow ONLY by shrinking vertical capacity
+// (`linesPerColumn:3`, too few lines for a normal ~8-line colophon) --
+// overflow via genuine "too much content," never via "too narrow a
+// column."
+const OVERFLOW_CAPACITY_HUMAN = { charsPerLine: 30, linesPerColumn: 3, columnCount: 1 as const };
 
 const QA_GEOMETRY: PublicationPageGeometry = {
   paperWidthMm: 105,
@@ -255,16 +272,25 @@ describe("QA -- structural-colophon-human-review-qa.pdf (compact, judgeable)", (
     pushScenario("12 respectVerticalMargins TRUE", { colophonPlacement: place("center", "top", true, true) });
     pushScenario("13 respectVerticalMargins FALSE", { colophonPlacement: place("center", "top", true, false) });
 
-    // 14: ONE explicitly labeled overflow diagnostic -- the diagnostic
-    // capacity used ONLY here, never for a normal comparison page.
-    // Kept deliberately short (FULL_FIELDS' own 6 rows, no freeText) so
-    // the diagnostic itself stays compact (3 pages) while still clearly
-    // multi-page.
+    // 14: ONE explicitly labeled overflow diagnostic -- round 29B:
+    // realistic horizontal width (every row/date/email stays atomic,
+    // never split mid-token), overflow forced only by real content
+    // quantity exceeding a short page's real vertical capacity.
     {
-      const { colophonOnly, document } = scenario("14 OVERFLOW DIAGNOSTIC (tiny capacity, intentional)", "あいうえお", FULL_FIELDS, "", {
-        capacity: OVERFLOW_CAPACITY,
+      const { colophonOnly, document } = scenario("14 OVERFLOW DIAGNOSTIC (realistic width, short page -- vertical overflow only)", "あいうえお", FULL_FIELDS, FULL_FREETEXT, {
+        capacity: OVERFLOW_CAPACITY_HUMAN,
       });
       expect(document.colophon!.pages.length).toBeGreaterThan(1);
+      // Round 29B's own regression guard: no row/date/email token may be
+      // split across two "text" commands on any one overflow page --
+      // each compiled row still paints as exactly one label command +
+      // one value command (round 27's own label/value split), never
+      // fragmented further by mid-token line-wrapping.
+      const compiled = compileColophonContent({ fields: FULL_FIELDS, freeText: FULL_FREETEXT });
+      const paintedTexts = colophonOnly.flatMap((page) => page.commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text").map((c) => c.text));
+      for (const row of compiled.rows) {
+        expect(paintedTexts).toContain(row.value); // e.g. "2026年9月8日", "example@example.com" -- whole, never split
+      }
       scenarios.push(colophonOnly);
     }
 
