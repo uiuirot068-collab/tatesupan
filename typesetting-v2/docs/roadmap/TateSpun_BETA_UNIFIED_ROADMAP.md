@@ -357,6 +357,32 @@ evidence doc §8) passes.
 
 Not a numbered P3-O / TSP-LOOP item — a descriptive open follow-up recorded from Human observation.
 
+**Round 2 update (2026-09-09, HEAD `31a78b8`)**: Human produced a direct
+black/red PDF overlay (TateSpun vs. InDesign) showing visible drift and
+froze the product quality bar: "InDesign-level is the minimum acceptance
+line," systematic cumulative drift is NOT acceptable, Publication is
+canonical and must reach InDesign-class geometry, Preview should follow
+wherever technically possible without violating Canonical authority. This
+item explicitly does NOT close while drift remains unexplained.
+
+Round 2's own critical finding: **the real product's ONLY user-reachable
+PDF export (`src/utils/exportPdf.ts`) is a legacy DOM/CSS screenshot
+raster (`html-to-image` → canvas → `jsPDF` image embed) — categorically
+different from v2 Core/Publication's vector tick-based renderer**, which
+is reachable only via the internal `/renderer-poc` developer route. If
+the Human's overlay compared the real product's export button output,
+that overlay is not yet evidence against v2 Publication's own typography.
+A controlled, real-pipeline v2 Publication reference PDF was generated
+this round (`qa/publication/p3-o08/typography-parity-v2-publication-reference.pdf`,
+same canonical continuous-prose sample, real Shippori Mincho, real
+`generatePublicationPdf`) for the next comparison. No repo-local InDesign
+reference PDF exists yet (expected path:
+`typesetting-v2/qa/reference/indesign/molsui-indesign-reference.pdf`) —
+full drift quantification (origin offset vs. per-character/per-column
+pitch slope) is blocked on it. See
+`qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md` for the full
+record. No Core/Preview/Publication code was changed this round.
+
 Human supplied a new comparison (TateSpun Preview vs. InDesign as reference) and observes that TateSpun's vertical character spacing / pitch may still look different from InDesign in continuous prose.
 
 This does NOT reopen Writing Check β 2.0 (11-A) and does NOT invalidate already-passed functional work. No Core/Preview/Publication changes were made at this checkpoint.
