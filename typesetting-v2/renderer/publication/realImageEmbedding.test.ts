@@ -72,7 +72,7 @@ function pxToMm(px: number): number {
 interface Fixture {
   refId: string;
   bytes: Uint8Array;
-  format: "PNG";
+  format: "PNG" | "JPEG";
   pixelWidth: number;
   pixelHeight: number;
   intrinsicWidthTick: number;
@@ -139,11 +139,31 @@ const NEAR_MAX = (() => {
   return { ...fx, intrinsicWidthTick: mmToTicks(GEOMETRY.paperWidthMm - GEOMETRY.marginLeftMm - GEOMETRY.marginRightMm), intrinsicHeightTick: mmToTicks(60) };
 })();
 
+// JPEG Dependency Gate closure (Human-supplied fixture, Option A):
+// a real, deterministic, non-sensitive JPEG file (simple geometric test
+// shapes, 96x64px), committed as a tracked repo asset -- NOT synthesized
+// (no JPEG encoder exists among approved dependencies, and hand-rolling
+// one was explicitly rejected as out of scope, see evidence). Exercises
+// the SAME production path as every PNG fixture above (`ImageResolver`
+// -> Publication paint model -> `pdfGenerator` -> jsPDF's own real
+// `addImage`), proving true end-to-end JPEG decodability, not just the
+// paint-model code-path parity the initial round-30 JPEG test proved.
+const REAL_JPEG: Fixture = {
+  refId: "qa-real-jpeg",
+  bytes: readFileSync(join(__dirname, "fixtures", "qa-real.jpg")),
+  format: "JPEG",
+  pixelWidth: 96,
+  pixelHeight: 64,
+  intrinsicWidthTick: mmToTicks(pxToMm(96)),
+  intrinsicHeightTick: mmToTicks(pxToMm(64)),
+};
+
 const FIXTURES: Record<string, Fixture> = {
   [OPAQUE_LANDSCAPE.refId]: OPAQUE_LANDSCAPE,
   [TRANSPARENT_SQUARE.refId]: TRANSPARENT_SQUARE,
   [MISMATCHED_ASPECT.refId]: MISMATCHED_ASPECT,
   [NEAR_MAX.refId]: NEAR_MAX,
+  [REAL_JPEG.refId]: REAL_JPEG,
 };
 
 function realImageResolver(): ImageResolver {
@@ -267,7 +287,7 @@ describe("Canonical image box authority (tests 3, 6, 7, 10, 12)", () => {
   });
 });
 
-describe("JPEG (dependency-gated: real code path proven, no real fixture this round)", () => {
+describe("JPEG (paint-model code-path parity, synthetic bytes)", () => {
   it("the format:'JPEG' code path paints via the SAME {op:'image'} command shape as PNG -- format-agnostic, real bytes pass straight to the executor (test 1 partial)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     // A real, valid minimal JPEG byte sequence's own SOI/EOI framing is
@@ -285,6 +305,72 @@ describe("JPEG (dependency-gated: real code path proven, no real fixture this ro
     const cmd = imageCmd(plan);
     expect(cmd).toBeDefined();
     expect(cmd?.format).toBe("JPEG");
+  });
+});
+
+describe("Real JPEG embedding (JPEG Dependency Gate closure, Human-supplied fixture)", () => {
+  it("real JPEG bytes are accepted and resolve as format 'JPEG' through the SAME production ImageResolver as PNG", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.format).toBe("JPEG");
+    expect(cmd.bytes.length).toBe(REAL_JPEG.bytes.length);
+  });
+
+  it("generatePublicationPdf (the real production entrypoint, including its own pre-flight unresolved-image check) succeeds with a real JPEG, produces a real PDF, and embeds a real DCTDecode image XObject", () => {
+    const { font } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" }]);
+    const { bytes } = generatePublicationPdf(model, font, GEOMETRY);
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+    const raw = Buffer.from(bytes).toString("latin1");
+    expect(raw).toMatch(/\/Subtype\s*\/Image/);
+    // jsPDF embeds real JPEG bytes as a DCTDecode-filtered XObject (no
+    // recompression, no PNG-style internal decode) -- a real, reliably
+    // inspectable structural marker distinct from PNG's own embedding.
+    expect(raw).toMatch(/\/Filter\s*\/DCTDecode/);
+  });
+
+  it("the real JPEG paints at its own real intrinsic size (96x64px, no clamp needed at this QA's geometry) -- not a one-character-cell shrink", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.widthMm).toBeCloseTo(pxToMm(REAL_JPEG.pixelWidth), 1);
+    expect(cmd.heightMm).toBeCloseTo(pxToMm(REAL_JPEG.pixelHeight), 1);
+    expect(cmd.widthMm / cmd.heightMm).toBeCloseTo(96 / 64, 1); // 3:2, preserved
+    expect(cmd.widthMm).toBeGreaterThan(10); // pre-fix one-cell-shrink would have been ~3.7mm
+  });
+
+  it("the real JPEG stays within the page's own real physical bounds, same as PNG (test 13 parity)", () => {
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([{ kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const cmd = imageCmd(plan);
+    expect(cmd).toBeDefined();
+    if (!cmd) return;
+    expect(cmd.xMm).toBeGreaterThanOrEqual(0);
+    expect(cmd.xMm + cmd.widthMm).toBeLessThanOrEqual(GEOMETRY.paperWidthMm);
+  });
+
+  it("a real JPEG and a real (opaque + transparent) PNG coexist correctly in the same document -- no format cross-contamination, PNG/transparent-PNG behavior unaffected by JPEG support existing", () => {
+    const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
+    const { model } = composeWithImage([
+      { kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" },
+      { kind: "TEXT", text: "混在" },
+      { kind: "IMAGE", refId: TRANSPARENT_SQUARE.refId, intrinsicWidthTicks: TRANSPARENT_SQUARE.intrinsicWidthTick, intrinsicHeightTicks: TRANSPARENT_SQUARE.intrinsicHeightTick, placement: "FULL" },
+    ]);
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const imageCmds = plan.flatMap((p) => p.commands.filter((c): c is Extract<PaintCommand, { op: "image" }> => c.op === "image"));
+    expect(imageCmds.length).toBe(2);
+    expect(imageCmds.find((c) => c.format === "JPEG")).toBeDefined();
+    expect(imageCmds.find((c) => c.format === "PNG")).toBeDefined();
+    const { bytes } = renderPaintPlanToPdf(plan, font);
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
   });
 });
 
@@ -577,6 +663,42 @@ describe("QA -- real-image-embedding-qa.pdf", () => {
     if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
     try {
       writeFileSync(join(outDir, "real-image-embedding-qa.pdf"), bytes);
+    } catch {
+      /* best-effort, transient Dropbox sync lock, non-fatal */
+    }
+  });
+});
+
+describe("QA -- real-jpeg-embedding-qa.pdf (JPEG Dependency Gate closure)", () => {
+  it("generates a dedicated, real-pipeline JPEG QA artifact: the Human-supplied real JPEG alone, and mixed with a real PNG in one document -- machine-verified below, not requiring a fresh Human visual pass (no new visual behavior beyond already-approved Step 3 image behavior)", () => {
+    const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
+    const HEADER_SETTINGS: HeaderSettings = { hashiraOdd: "小説のタイトル", hashiraEven: "第一章", position: { band: "top", horizontal: "outer" } };
+    const pageOpts = { folioSettings: DEFAULT_FOLIO_SETTINGS, headerSettings: HEADER_SETTINGS };
+
+    const docs = [
+      composeWithImage([{ kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" }], pageOpts),
+      composeWithImage(
+        [
+          { kind: "IMAGE", refId: REAL_JPEG.refId, intrinsicWidthTicks: REAL_JPEG.intrinsicWidthTick, intrinsicHeightTicks: REAL_JPEG.intrinsicHeightTick, placement: "FULL" },
+          { kind: "TEXT", text: "混在" },
+          { kind: "IMAGE", refId: TRANSPARENT_SQUARE.refId, intrinsicWidthTicks: TRANSPARENT_SQUARE.intrinsicWidthTick, intrinsicHeightTicks: TRANSPARENT_SQUARE.intrinsicHeightTick, placement: "FULL" },
+        ],
+        pageOpts
+      ),
+    ];
+
+    const pages = docs.flatMap(({ model }) => buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext));
+    const { bytes, pageCount } = renderPaintPlanToPdf(pages, font);
+    expect(pageCount).toBe(pages.length);
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+    const raw = Buffer.from(bytes).toString("latin1");
+    expect(raw).toMatch(/\/Subtype\s*\/Image/);
+    expect(raw).toMatch(/\/Filter\s*\/DCTDecode/);
+
+    const outDir = join(__dirname, "..", "..", "qa", "publication", "p3-o08");
+    if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+    try {
+      writeFileSync(join(outDir, "real-jpeg-embedding-qa.pdf"), bytes);
     } catch {
       /* best-effort, transient Dropbox sync lock, non-fatal */
     }
