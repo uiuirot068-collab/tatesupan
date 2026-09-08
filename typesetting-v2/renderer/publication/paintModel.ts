@@ -84,27 +84,34 @@ export interface PaintColumn {
   lines: PaintLine[];
 }
 
-// Human Visual QA HOLD round 20/21 (P3-O08 final-page completion, Step
-// 1/1B): `CanonicalPage.folio?: GeneratedPageFurniture` (Contract §15,
-// page-decoration layer) is now real, generated Core data — round 21's
-// own `core/folio/index.ts` populates it (ported verbatim from legacy
-// `src/lib/pageLayout.ts`'s `MasterPageSettings`). Publication resolves
-// it here, consistent with every OTHER unit in this file's own
-// convention (paintModel.ts always resolves paint-ready data up front;
-// `pdfGenerator.ts` never re-touches raw Core types) — a deliberate,
-// documented divergence from Preview's own raw pass-through.
+// Human Visual QA HOLD round 20/21/22 (P3-O08 final-page completion,
+// Steps 1/1B/1C): `CanonicalPage.folio?: GeneratedPageFurniture`
+// (Contract §15, page-decoration layer) is now real, generated Core
+// data — `core/folio/index.ts` populates it (ported verbatim from
+// legacy `src/lib/pageLayout.ts`'s `MasterPageSettings`), including
+// round 22's own parity-aware gutter/outer -> left/right resolution
+// (ported from `PageCard.tsx`'s own `isOddPage`/`anchoredSide` logic).
+// Publication resolves both here, consistent with every OTHER unit in
+// this file's own convention (paintModel.ts always resolves paint-ready
+// data up front; `pdfGenerator.ts` never re-touches raw Core types) — a
+// deliberate, documented divergence from Preview's own raw pass-through.
 //
-// Position is intentionally NOT resolved to physical mm here: Core's
-// `GeneratedPageFurniture.position` is SEMANTIC only ("center" —
-// "gutter"/"outer" are real legacy values ported into the type but not
-// yet generated, see `core/folio/index.ts`'s own header comment) — Core
-// does not own physical paper geometry (`PublicationPageGeometry`, a
-// Publication-paint-boundary-only concept), so resolving "center" into
-// an actual xMm/topMm happens in `pdfGenerator.ts`, which is the only
-// place that ever sees real page margins.
+// Physical mm is intentionally NOT resolved here: Core's own
+// `ResolvedFolioPosition` ("center"/"left"/"right") is still SEMANTIC —
+// Core does not own physical paper geometry
+// (`PublicationPageGeometry`, a Publication-paint-boundary-only
+// concept), so converting a resolved side into an actual xMm/topMm
+// happens in `pdfGenerator.ts`, which is the only place that ever sees
+// real page margins. 柱 (`GeneratedHeader`/`PaintHeader`) follows the
+// exact same split — `position` ("top"/"bottom") stays semantic here.
 export interface PaintFolio {
   text: string;
-  position: "center" | "gutter" | "outer";
+  position: "center" | "left" | "right";
+}
+
+export interface PaintHeader {
+  text: string;
+  position: "top" | "bottom";
 }
 
 export interface PaintPage {
@@ -115,6 +122,7 @@ export interface PaintPage {
   manualBreakBefore: boolean;
   columns: PaintColumn[];
   folio?: PaintFolio;
+  header?: PaintHeader;
 }
 
 export interface PublicationRenderContext {
@@ -291,6 +299,7 @@ function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: 
     manualBreakBefore,
     columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, units, source, ctx)),
     ...(page.folio ? { folio: { text: page.folio.text, position: page.folio.position } } : {}),
+    ...(page.header ? { header: { text: page.header.text, position: page.header.position } } : {}),
   };
 }
 

@@ -27,6 +27,7 @@ import type {
   CanonicalLine,
   CanonicalPage,
   ColophonBlock,
+  GeneratedHeader,
   GeneratedPageFurniture,
   LogicalUnit,
   PlacedUnit,
@@ -152,6 +153,11 @@ export interface PaintPage {
   // `core/layout/schema.ts`'s own doc comment). Painted as nothing when
   // absent, still.
   folio?: GeneratedPageFurniture;
+  // Human Visual QA HOLD round 22: 柱 (running header), Core's OTHER
+  // Contract §15 page-decoration-layer element (`core/header/index.ts`)
+  // — same pass-through-only treatment as `folio` above; Preview has
+  // built no paint logic for either yet.
+  header?: GeneratedHeader;
   // TSP-LOOP-005 precedent: a colophon is its own, structurally identical
   // CanonicalPage set, but conventionally set in horizontal writing mode —
   // this is a fixed Renderer painting convention (Contract-consistent),
@@ -448,6 +454,7 @@ function buildPaintPage(
     manualBreakBefore,
     columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, manualBreakBefore, units, source, ctx)),
     folio: page.folio,
+    header: page.header,
     orientation,
   };
 }

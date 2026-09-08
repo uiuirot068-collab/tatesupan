@@ -17,10 +17,16 @@ export type {
   LayoutError,
   GeneratedPageFurniture,
   FolioPosition,
+  ResolvedFolioPosition,
+  GeneratedHeader,
+  HeaderPosition,
 } from "./layout/schema";
 
 export type { FolioSettings } from "./folio";
-export { DEFAULT_FOLIO_SETTINGS, composeFolioForPage } from "./folio";
+export { DEFAULT_FOLIO_SETTINGS, composeFolioForPage, resolveFolioPhysicalSide } from "./folio";
+
+export type { HeaderSettings, HeaderPageOverride } from "./header";
+export { DEFAULT_HEADER_SETTINGS, composeHeaderForPage } from "./header";
 
 export type { VersionMetadata } from "./version";
 

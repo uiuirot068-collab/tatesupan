@@ -12,6 +12,7 @@ import type { BlockId } from "../source/span";
 import { composePages, type PageCompositionSettings } from "../compose/page";
 import { composeColophon } from "../colophon";
 import { composeFolioForPage, type FolioSettings } from "../folio";
+import { composeHeaderForPage, type HeaderPageOverride, type HeaderSettings } from "../header";
 import { createTraceRecorder } from "../trace";
 import { computeHold, holdToLayoutError } from "../diagnostics";
 import type { CanonicalDocument, CanonicalPage, LayoutError, LayoutWarning } from "./schema";
@@ -66,6 +67,17 @@ export interface DocumentCompositionInput {
   // Contract §15 and never receive folio) gets `composeFolioForPage`
   // applied per its own 0-based page order.
   folioSettings?: FolioSettings;
+  // Human Visual QA HOLD round 22 (P3-O08 final-page completion, Step
+  // 1C): same optional/additive contract as `folioSettings` — omitting
+  // it preserves the exact prior behavior. `headerPageOverrides` mirrors
+  // legacy `PageSettings.pageOverrides`'s own per-page-number-keyed
+  // shape (1-based page number, matching legacy exactly), but only for
+  // the 柱-relevant subset (`hideHashira`/`hashiraOverride`) — folio's
+  // own per-page `hideNombre` override is real legacy behavior but
+  // remains out of this round's own scope (see
+  // qa/evidence/P3_O08_FOLIO_HEADER_COMPLETE_CONTRACT.md).
+  headerSettings?: HeaderSettings;
+  headerPageOverrides?: Record<number, HeaderPageOverride>;
 }
 
 // The full orchestration named by this Loop's goal. Composes body pages,
@@ -82,12 +94,15 @@ export function composeCanonicalDocument(input: DocumentCompositionInput): Canon
     errors.push(holdToLayoutError(bodyResult.hold));
   }
   const folioSettings = input.folioSettings;
-  const pages: CanonicalPage[] = folioSettings
-    ? bodyResult.pages.map((page, i) => {
-        const folio = composeFolioForPage(i, folioSettings);
-        return folio ? { ...page, folio } : page;
-      })
-    : bodyResult.pages;
+  const headerSettings = input.headerSettings;
+  const pages: CanonicalPage[] =
+    folioSettings || headerSettings
+      ? bodyResult.pages.map((page, i) => {
+          const folio = folioSettings ? composeFolioForPage(i, folioSettings) : undefined;
+          const header = headerSettings ? composeHeaderForPage(i, headerSettings, input.headerPageOverrides?.[i + 1]) : undefined;
+          return { ...page, ...(folio ? { folio } : {}), ...(header ? { header } : {}) };
+        })
+      : bodyResult.pages;
 
   let colophon: CanonicalDocument["colophon"];
   if (input.colophonUnits && input.colophonUnits.length > 0) {

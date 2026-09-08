@@ -468,36 +468,45 @@ export function buildPaintPlan(
         }
       }
     }
-    // Human Visual QA HOLD round 20/21 (P3-O08 final-page completion,
-    // Step 1/1B -- folio/header): painted ONLY when Core actually
-    // supplies a folio for this page (never invented, never a
-    // page-numbering policy decided here). Core's own
-    // `GeneratedPageFurniture.position` is SEMANTIC ("center"/"gutter"/
-    // "outer", ported verbatim from legacy's `NombrePosition`) --
-    // resolving it into physical mm is this function's own job, since
-    // this is the only place real paper size/margins
-    // (`PublicationPageGeometry`) are ever available. Only "center" is
-    // resolved: horizontally centered on the PAPER's own physical
-    // width (matches legacy's typical bottom-center placement,
-    // independent of column position), vertically anchored at the
-    // start of the reserved bottom-margin band. "gutter"/"outer"
-    // require resolving which physical side is "inside" for this
-    // page's own parity and the book's binding direction -- a real,
-    // unresolved Human/Product decision (see
-    // qa/evidence/P3_O08_FOLIO_HEADER_CORE_CONTRACT.md) -- so nothing
-    // is painted for them rather than faking a position. Font: the
-    // body font, at the fixed `bodyEmMm` size (HD-005's own default --
-    // 柱/奥付/folio inherit the body font unless overridden; no override
-    // mechanism exists in Publication paint yet, so only the default
-    // is implemented here).
-    if (page.folio && page.folio.text.length > 0 && hasFont && page.folio.position === "center") {
-      const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
-      const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
-      const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
-      const xCenter = paperWidthMm / 2;
+    // Human Visual QA HOLD round 20/21/22 (P3-O08 final-page completion,
+    // Steps 1/1B/1C -- folio/header): painted ONLY when Core actually
+    // supplies one for this page (never invented, never a
+    // page-numbering/pagination policy decided here). Core's own
+    // `ResolvedFolioPosition` ("center"/"left"/"right", already
+    // parity-resolved by Core -- see `core/folio/index.ts`) is still
+    // SEMANTIC, not a physical coordinate -- converting it to mm is
+    // this function's own job, since this is the only place real paper
+    // size/margins (`PublicationPageGeometry`) are ever available.
+    // "left"/"right" anchor flush with the SAME margin the body content
+    // area itself uses (`marginLeftMm`/`marginRightMm`), mirroring
+    // legacy's own "frame edge, not paper edge" convention
+    // (`PageCard.tsx`'s `NombreOverlay`). Font: the body font, at the
+    // fixed `bodyEmMm` size (HD-005's own default -- 柱/奥付/folio
+    // inherit the body font unless overridden; no override mechanism
+    // exists in Publication paint yet, so only the default is
+    // implemented here).
+    const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
+    const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
+    const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
+    const marginTopMm = pageGeometry?.marginTopMm ?? 0;
+    const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
+    const marginRightMm = pageGeometry?.marginRightMm ?? 0;
+    if (page.folio && page.folio.text.length > 0 && hasFont) {
+      const xCenter =
+        page.folio.position === "left"
+          ? marginLeftMm + doc.bodyEmMm / 2
+          : page.folio.position === "right"
+            ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
+            : paperWidthMm / 2;
       const topMm = paperHeightMm - marginBottomMm;
       const totalHeightMm = doc.bodyEmMm * Array.from(page.folio.text).length;
       commands.push(...verticalGraphemeCommands(page.folio.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
+    }
+    if (page.header && page.header.text.length > 0 && hasFont) {
+      const xCenter = paperWidthMm / 2;
+      const totalHeightMm = doc.bodyEmMm * Array.from(page.header.text).length;
+      const topMm = page.header.position === "top" ? marginTopMm - totalHeightMm : paperHeightMm - marginBottomMm;
+      commands.push(...verticalGraphemeCommands(page.header.text, xCenter, topMm, totalHeightMm, mmToPt(doc.bodyEmMm), baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return {
       widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
