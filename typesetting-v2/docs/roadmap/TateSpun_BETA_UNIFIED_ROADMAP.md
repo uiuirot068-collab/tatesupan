@@ -45,6 +45,12 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Writing Check β 2.0 Phase 2: COMPLETE
 - Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
 
+- Ordinary Glyph Parity: COMPLETE / Human E2E PASS
+- Yakumono Parity: COMPLETE / Human E2E PASS
+- Preview Typography Parity: COMPLETE / Human E2E PASS
+- Publication Typography Parity: COMPLETE / Human E2E PASS
+- InDesign-level Typography Quality Gate: COMPLETE / FORMAL HUMAN E2E PASS
+
 Important: P3-O08's historical document status is stale. Many of its subtracks are complete, but overall production migration/acceptance is not yet closed.
 
 ---
@@ -341,8 +347,8 @@ character-spacing consistency and line/column spacing.
 
 ---
 
-### 17b. Typography Parity — InDesign Character-Pitch Recheck (OPEN follow-up, recorded 2026-09-09)
-Status: ROOT CAUSE FOUND AND FIXED (Round 3, 2026-09-09, HEAD `4b8e8a4`) — Human visual recheck still required before closing
+### 17b. Typography Parity — InDesign Character-Pitch Recheck (CLOSED, final Human E2E PASS recorded 2026-09-09)
+Status: COMPLETE / FORMAL HUMAN E2E PASS (development Editor, HEAD `62edc32`)
 
 Audit findings: `qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_CHARACTER_PITCH.md`.
 Summary: canonical body pitch is uniform 1em, frozen, previously validated
@@ -633,6 +639,20 @@ exceptional contexts through the real unmodified pipeline for the
 record. No production code changed, no Implementation Gate met, no
 frozen Human decision reopened. See
 `qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md` §11.
+
+---
+
+**Final Human E2E closeout (2026-09-09, HEAD `62edc32`)**: Human verified
+the completed typography work through the development Editor using actual
+manuscript editing, v2 Preview, and real v2 Publication PDF export. The
+ordinary vertical rhythm, punctuation placement, and final output quality
+all pass the InDesign-level acceptance line. Final status: **Ordinary Glyph
+Parity PASS; Yakumono Parity PASS; Preview Human E2E PASS; Publication Human
+E2E PASS; InDesign-level Typography Quality Gate PASS.** This formally closes
+the Typography Parity follow-up. All earlier audit, superseded,
+unresolved-at-the-time, and HOLD records above remain historical evidence and
+are not rewritten. Closeout evidence:
+`qa/evidence/TYPOGRAPHY_PARITY_FINAL_HUMAN_E2E_CLOSEOUT.md`.
 
 ---
 
