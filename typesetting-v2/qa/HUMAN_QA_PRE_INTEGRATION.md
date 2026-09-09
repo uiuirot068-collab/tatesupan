@@ -24,7 +24,7 @@ From the repository root, run:
 npm.cmd run dev
 ```
 
-Open `http://127.0.0.1:3000/editor?demo=1`. In the left manuscript Editor pane, look at the bottom footer. The `このセッションの編集量 0文字` badge is immediately before the current-manuscript character count. Select the badge to see inserted/deleted detail and the result-share action.
+Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. In the left manuscript Editor pane, look at the bottom footer. The `このセッションの編集量 0文字` badge is immediately before the current-manuscript character count. Select the badge to see inserted/deleted detail and the result-share action.
 
 Steps:
 
@@ -35,7 +35,7 @@ Steps:
 
 PASS: final IME commits count once; inserted/deleted totals reflect real mutations; reload/document switch retains the tab total; a new tab session starts at zero; current manuscript length remains visibly distinct.
 
-Known limitation: this packet records the pending Human UI check only. The frozen 27-test semantics are already complete.
+Round 2 found that this documented `127.0.0.1` route received only the server-rendered shell because Next 16 blocked its client assets; the textarea looked editable, but React and 11-B were not hydrated. `allowedDevOrigins` now explicitly permits this local QA host. The frozen 27 semantic tests and the real-route browser regression pass; the final Human recheck is listed below.
 
 ## 2. 完成前マイチェックリスト
 
@@ -126,14 +126,26 @@ Record PASS/FAIL plus browser, viewport, and the first failing item. Keep failur
 
 ## Human QA Round 2 — targeted recheck only
 
-1. Personal checklist delete warning: cancel leaves the personal list untouched; confirm deletes it normally.
-2. Preset/edit/check state survives browser reload.
-3. Manual page break creates exactly the expected next page in Preview.
-4. Manual page break creates exactly the expected next page in PDF.
-5. Manual page break creates exactly the expected next page in Web JPG.
-6. Manual page break creates exactly the expected next page in print JPG.
-7. U+30FC `ー` is vertical in Web JPG.
-8. U+30FC `ー` is vertical in print JPG.
-9. Odd-page JPG running head is fully visible at the left outer edge.
-10. Even-page JPG running head is fully visible at the right outer edge.
-11. 11-B: run `npm.cmd run dev`, open `http://127.0.0.1:3000/editor?demo=1`, and find `このセッションの編集量 0文字` in the bottom footer of the left manuscript Editor pane, immediately before the current-manuscript character count. Production integration is not required.
+1. **PASS — Human Round 2.** Personal checklist delete warning: cancel leaves the personal list untouched; confirm deletes it normally.
+2. **PASS — Human Round 2.** Preset/edit/check state survives browser reload.
+3. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in Preview.
+4. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in PDF.
+5. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in Web JPG.
+6. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in print JPG; PDF/JPG page-boundary parity is confirmed.
+7. **PASS — Human Round 2.** U+30FC `ー` is vertical in Web JPG.
+8. **PASS — Human Round 2.** U+30FC `ー` is vertical in print JPG.
+9. **PASS — Human Round 2.** Odd-page JPG running head is fully visible at the left outer edge.
+10. **PASS — Human Round 2.** Even-page JPG running head is fully visible at the right outer edge.
+11. **FAIL — fixed; final recheck required.** 11-B was visible but remained at zero because the documented `127.0.0.1` dev origin did not hydrate. The local origin is now allowed and the actual-route browser E2E passes.
+
+## Final Human recheck — 11-B only
+
+1. Open the actual Editor: run `npm.cmd run dev`, use Next's printed port, and open `http://127.0.0.1:<port>/editor?demo=1`.
+2. Confirm session editing activity begins at `0文字`.
+3. Type Japanese with IME; intermediate composition must remain uncounted and the final commit must increase activity exactly once.
+4. Delete manuscript text; deleted activity must increase.
+5. Paste over a selection; deleted and inserted activity must both increase by their actual code-point counts.
+6. Press Ctrl+Z; activity must increase by the actual resulting mutation.
+7. Press Ctrl+Y (or the browser/platform redo shortcut); activity must increase by the actual resulting mutation.
+8. Reload the same tab; the session activity total must remain.
+9. Open the Editor in a new browser tab/session; activity must begin at `0文字`, and the separate current-manuscript count must remain visible.

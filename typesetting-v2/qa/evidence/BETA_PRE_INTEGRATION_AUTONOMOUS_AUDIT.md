@@ -90,3 +90,23 @@ Updated verification:
 Non-blocking narrow-width note: the development Editor currently recomposes `composeV2Document` synchronously whenever manuscript content changes so JPG actions always have a current PaintPlan. That MASTER RUN wiring is an obvious source of edit-time work on narrow devices. It remains documented backlog; this scoped fix loop does not introduce a debounce, worker, or broader rendering rewrite.
 
 The Round 2 Human packet is intentionally limited to the 11 targeted items in `typesetting-v2/qa/HUMAN_QA_PRE_INTEGRATION.md`; previously passed QA is not reopened.
+
+## Final pre-integration 11-B wiring fix and Ruby regression audit
+
+Date: 2026-09-09
+
+### 11-B real Editor root cause and fix
+
+The Human-observed failure was reproduced in a real headless Chromium session on the documented `http://127.0.0.1:<port>/editor?demo=1` route. Native `beforeinput` and `input` events fired and changed the textarea DOM, but neither the current manuscript count nor 11-B changed. Next.js 16's dev log showed the cause: `next dev` advertised `localhost` and rejected every client/HMR asset requested from the additional `127.0.0.1` origin. The page was an unhydrated SSR shell, so no React Editor mutation handler or 11-B accounting code could run.
+
+`next.config.ts` now declares development-only `allowedDevOrigins: ["127.0.0.1"]`. No 11-B policy/model/component semantics changed. A dependency-free CDP browser regression at `tests/e2e/editorSessionActivity.e2e.mjs` opens the actual demo Editor route, waits for React hydration, sends a real browser key event to the manuscript textarea, verifies visible activity `0文字 → 1文字`, verifies the separate manuscript count changes, inspects the persisted inserted/deleted totals, and reloads the same tab to prove retention.
+
+### Ruby audit — no regression found
+
+- Previous Human-passed reference found: **YES**. Preview body-run anchor closure is commit `788fc31`; the later formal Typography closeout is `70287aa`.
+- Ruby geometry changed since PASS: **NO**. `core/compose/rubyPlacement.ts`, Preview's canonical-to-paint Ruby mapping, and Publication's canonical-to-paint Ruby mapping are byte-identical between `70287aa` and the pre-fix HEAD. The only later `pdfGenerator.ts` changes are the isolated U+30FC fallback and running-head anchors; the Ruby annotation x/offset/extent formula remains attributed to the frozen Publication Ruby fixes.
+- PDF/JPG Canonical parity: **PASS**. Publication builds Ruby commands from `rubyAnnotation.offsetMm`/`extentMm`, and both Web/print JPG rasterize the same PaintPlan rather than recomposing Ruby.
+- Code change required: **NO**. The perceived distance matches the already Human-passed output; no new aesthetic value was invented and Ruby remains CLOSED.
+- Human Ruby recheck required: **NO**.
+
+Focused verification: 11-B semantics 27/27 PASS; real Editor browser E2E PASS on `127.0.0.1`; Core Ruby 17/17 PASS; Preview Ruby 42/42 PASS; Publication Typography + JPG 72/72 PASS; ESLint, TypeScript, and optimized Next.js 16.3.0 build PASS.
