@@ -47,6 +47,31 @@ describe("Residual space is reported, never absorbed (test group B/C, INV-004)",
   });
 });
 
+describe("Human-approved literal yakumono pair mojikumi", () => {
+  it("compresses only 。→」 and 、→」 to a half-em origin advance", () => {
+    for (const source of ["あ。」", "あ、」"]) {
+      const result = composeLine([text(source, 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
+      expect(result.line.placedUnits[1].yTick - result.line.placedUnits[0].yTick).toBe(CELL);
+      expect(result.line.placedUnits[2].yTick - result.line.placedUnits[1].yTick).toBe(CELL / 2);
+    }
+  });
+
+  it("keeps ！/？ pairs and ordinary prose at uniform Natural Pitch", () => {
+    for (const source of ["あ！」", "あ？」", "あ！？", "あ？！", "あ！？」", "あ？！」", "人は驚きすぎると本当に足が止まるらしい"]) {
+      const result = composeLine([text(source, 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 100, false);
+      const pitches = result.line.placedUnits.slice(1).map((placed, i) => placed.yTick - result.line.placedUnits[i].yTick);
+      expect(pitches.every((pitch) => pitch === CELL)).toBe(true);
+    }
+  });
+
+  it("does not broaden to other members of cl-06/cl-07 or cl-02", () => {
+    for (const source of ["あ．」", "あ，」", "あ。』", "あ、）"]) {
+      const result = composeLine([text(source, 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
+      expect(result.line.placedUnits[2].yTick - result.line.placedUnits[1].yTick).toBe(CELL);
+    }
+  });
+});
+
 describe("Prohibited boundary is skipped in favor of an earlier legal one (test group D/E)", () => {
   it("extends onto the current line through a line-start-prohibited character when it still fits", () => {
     // "あいう、え" with a 4-cell extent: breaking BEFORE '、' (offset 3) is

@@ -105,5 +105,9 @@ export const DEFAULT_RULE_SET_V2: RuleSetVersion = {
   cl08PairRule,
   hangingPunctuationScope: ["cl-06", "cl-07"], // jlreq hanging-punctuation section — cl-06/cl-07 only
   rubyOverhangAllowance: new Map(), // HG-4: principle approved, exact values OPEN (row 22b) — ships empty, not fabricated
+  pairAdvanceRatio: new Map([
+    ["。」", 0.5],
+    ["、」", 0.5],
+  ]),
   characterClassFor: classify,
 };

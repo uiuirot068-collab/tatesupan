@@ -36,6 +36,12 @@ export interface RuleSetVersion {
   cl08PairRule: (a: SemanticRunKind, b: SemanticRunKind) => "INSEPARABLE" | "SEPARABLE";
   hangingPunctuationScope: CharacterClassId[]; // frozen: ["cl-06", "cl-07"]
   rubyOverhangAllowance: Map<CharacterClassId, GeometryTick>; // §9.1 — values OPEN (HG-4 row 22b), ships empty/zero
+  // Deterministic, literal-character pair mojikumi. The key is the two
+  // adjacent Unicode characters concatenated in source order; the value
+  // scales the LEFT atom's ordinary natural advance. Literal keys keep a
+  // verified pair from silently broadening to every member of either
+  // character class.
+  pairAdvanceRatio: ReadonlyMap<string, number>;
   // NOTE (Human Visual QA HOLD round 13 — legacy parity audit,
   // qa/evidence/P3_O08_YAKUMONO_LEGACY_PARITY_AUDIT.md): a
   // `yakumonoHalfBodyScope` field (round 11) and, before it, a
@@ -59,8 +65,10 @@ export interface RuleSetVersion {
   // DESIRED product behavior, not a defect — superseding, not merely
   // reverting, round 14/16's own experiment. See
   // `qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md` for the
-  // full record. `computeAtoms` is back to its exact round-13 form: no
-  // character-class branching of any kind for punctuation advance.
+  // full record. A later dedicated missing-case InDesign reference and
+  // explicit Human approval reopened ONLY the literal `。」` / `、」`
+  // decision. That narrower evidence is represented by `pairAdvanceRatio`
+  // above, without restoring the former class-wide branch.
   // Generic per-character lookup (falls back to DEFAULT_CLASS). This is
   // plumbing the frozen data-model candidate's prose implies ("the class
   // table") but does not name as a field — see

@@ -54,23 +54,24 @@ function composeFor(text: string) {
 }
 
 describe("Yakumono legacy-parity edge alignment -- canonical layer proofs", () => {
-  it("た。」 -- canonical advance is now UNIFORM (no compression) -- every pitch is exactly one cell", () => {
+  it("た。」 -- later dedicated-reference decision compresses only 。→」", () => {
     const { document } = composeFor("た。」");
     const measurement = createFakeMeasurementProvider();
     const settings = settingsFor({ charsPerLine: 20, linesPerColumn: 1, columnCount: 1 });
     const cell = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
     const line = document.pages[0].columns[0].lines[0];
     expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(cell); // た->。
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell); // 。->」
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell / 2); // 。->」
   });
 
-  it("「今日は、雨だった。」 -- every character-to-character pitch is the SAME uniform cell, matching legacy's own invariant exactly", () => {
+  it("「今日は、雨だった。」 -- only the verified 。→」 pair is half-em", () => {
     const { document } = composeFor("「今日は、雨だった。」");
     const line = document.pages[0].columns[0].lines[0];
     const pitches: number[] = [];
     for (let i = 1; i < line.placedUnits.length; i++) pitches.push(line.placedUnits[i].yTick - line.placedUnits[i - 1].yTick);
-    const first = pitches[0];
-    for (const p of pitches) expect(p).toBe(first);
+    const chars = Array.from("「今日は、雨だった。」");
+    const cell = pitches[0];
+    pitches.forEach((pitch, i) => expect(pitch).toBe(chars[i] === "。" && chars[i + 1] === "」" ? cell / 2 : cell));
   });
 
   it("source is never mutated", () => {

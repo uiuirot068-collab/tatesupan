@@ -262,12 +262,16 @@ interface AtomComputationResult {
 // behavior, not a defect — round 14/16's own experiment is superseded,
 // not merely undone. See qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md
 // for the full record (round 14/16 are not erased from history there).
-// `computeAtoms` is back to its exact round-13 form.
+// A later dedicated InDesign missing-case reference plus explicit Human
+// approval reopened ONLY literal `。」` and `、」`. The implementation below
+// reads those exact pairs from RuleSetVersion data; it does not restore the
+// retired cl-06/cl-07 -> cl-02 class-wide rule.
 function computeAtoms(
   units: LogicalUnit[],
   opportunities: BreakOpportunity[],
   measurement: MeasurementFacts,
-  settings: CompositionSettings
+  settings: CompositionSettings,
+  ruleSet: RuleSetVersion
 ): AtomComputationResult {
   if (units.length === 0) return { atoms: [] };
   const blockId = units[0].span.blockId;
@@ -298,6 +302,16 @@ function computeAtoms(
       continue;
     }
     atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
+  }
+  for (let i = 0; i < atoms.length - 1; i++) {
+    const leftOwner = findOwningUnit(units, atoms[i].sourceSpan.start, atoms[i].sourceSpan.end);
+    const rightOwner = findOwningUnit(units, atoms[i + 1].sourceSpan.start, atoms[i + 1].sourceSpan.end);
+    const leftText = literalTextForAtom(leftOwner, atoms[i].sourceSpan);
+    const rightText = literalTextForAtom(rightOwner, atoms[i + 1].sourceSpan);
+    if (leftText === undefined || rightText === undefined) continue;
+    const pair = `${lastCodePointOf(leftText)}${firstCodePointOf(rightText)}`;
+    const ratio = ruleSet.pairAdvanceRatio.get(pair);
+    if (ratio !== undefined) atoms[i].advanceTick = Math.round(atoms[i].advanceTick * ratio);
   }
   return { atoms };
 }
@@ -359,7 +373,7 @@ export function composeLine(
   const effectiveLineExtentTicks = lineExtentTicks - indentTick;
 
   const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
-  const atomResult = computeAtoms(units, opportunities, measurement, settings);
+  const atomResult = computeAtoms(units, opportunities, measurement, settings, ruleSet);
   if (atomResult.unresolvedImageSpan) {
     return {
       hold: {

@@ -86,31 +86,32 @@ describe("Round 17 -- special cl-06/cl-07 -> cl-02 branch is gone", () => {
   });
 });
 
-describe("Round 17 -- canonical advance is uniform again (no compression)", () => {
-  it("た。」 -- every pitch is exactly one cell", () => {
+describe("Round 17 decision reopened narrowly by the dedicated missing-case reference", () => {
+  it("た。」 -- only 。→」 is half a cell", () => {
     const { document } = composeFor("た。」");
     const measurement = createFakeMeasurementProvider();
     const settings = settingsFor({ charsPerLine: 20, linesPerColumn: 1, columnCount: 1 });
     const cell = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
     const line = document.pages[0].columns[0].lines[0];
     expect(line.placedUnits[1].yTick - line.placedUnits[0].yTick).toBe(cell);
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell);
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(cell / 2);
   });
 
-  it("た、」 -- every pitch is exactly one cell", () => {
+  it("た、」 -- only 、→」 is half a cell", () => {
     const { document } = composeFor("た、」");
     const line = document.pages[0].columns[0].lines[0];
     const first = line.placedUnits[1].yTick - line.placedUnits[0].yTick;
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(first);
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(first / 2);
   });
 
-  it("「今日は、雨だった。」 -- EVERY pitch is the same uniform cell, no exception anywhere (unlike round 14/16)", () => {
+  it("「今日は、雨だった。」 -- only the verified 。→」 pair is half-em", () => {
     const { document } = composeFor("「今日は、雨だった。」");
     const line = document.pages[0].columns[0].lines[0];
     const pitches: number[] = [];
     for (let i = 1; i < line.placedUnits.length; i++) pitches.push(line.placedUnits[i].yTick - line.placedUnits[i - 1].yTick);
-    const first = pitches[0];
-    for (const p of pitches) expect(p).toBe(first);
+    const chars = Array.from("「今日は、雨だった。」");
+    const cell = pitches[0];
+    pitches.forEach((pitch, i) => expect(pitch).toBe(chars[i] === "。" && chars[i + 1] === "」" ? cell / 2 : cell));
   });
 
   it("た。次 / た、次 -- unaffected, exactly as before (controls)", () => {

@@ -97,7 +97,7 @@ describe("Glyph size independence -- round 9 regression fix", () => {
     // pitch) is RETIRED — round 17's authoritative InDesign comparison
     // found normal spacing here is the desired product behavior; see
     // qa/evidence/P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md.
-    expect(periodToBracketPitch).toBe(commaToRainPitch);
+    expect(periodToBracketPitch).toBe(commaToRainPitch / 2);
   });
 
   it("source is never mutated", () => {

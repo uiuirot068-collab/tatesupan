@@ -176,16 +176,16 @@ describe("Round 18 audit -- real ink-bbox evidence (parallels round 14's small-k
 });
 
 describe("Round 18 audit -- regression controls (period/comma untouched, safety)", () => {
-  it("。」 remains NORMAL/unchanged (round 17's own closed decision)", () => {
+  it("。」 follows the later Human-approved dedicated-reference half-em decision", () => {
     const { document } = composeFor("た。」");
     const line = document.pages[0].columns[0].lines[0];
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(line.placedUnits[1].yTick - line.placedUnits[0].yTick);
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe((line.placedUnits[1].yTick - line.placedUnits[0].yTick) / 2);
   });
 
-  it("、」 remains NORMAL/unchanged", () => {
+  it("、」 follows the later Human-approved dedicated-reference half-em decision", () => {
     const { document } = composeFor("た、」");
     const line = document.pages[0].columns[0].lines[0];
-    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe(line.placedUnits[1].yTick - line.placedUnits[0].yTick);
+    expect(line.placedUnits[2].yTick - line.placedUnits[1].yTick).toBe((line.placedUnits[1].yTick - line.placedUnits[0].yTick) / 2);
   });
 
   it("glyph size stays the fixed 1em bodyEmMm-derived fontSizePt (test 8)", () => {
