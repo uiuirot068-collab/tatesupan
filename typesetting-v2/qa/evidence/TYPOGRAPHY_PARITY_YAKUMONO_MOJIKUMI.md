@@ -178,14 +178,72 @@ before a closing bracket) is a **data-coverage gap** (Y3), not a defect —
 no real InDesign reference containing that sequence exists in this
 repo.
 
+## §9a — Round 7A addendum: reference integrity recheck (2026-09-09)
+
+A follow-up round investigated a suspected contamination of
+`qa/reference/indesign/molsui-indesign-reference.pdf`, since §2's own
+reconstructed text did not contain the Human's independently-verified
+authoritative sentences ("人は驚きすぎると…", "スイはそれを初めて知った",
+"数歩先へ行ったモルが振り返る").
+
+**Finding: the reference file was never replaced or contaminated.**
+SHA-256 `0029bf7008093105069717c1f72e9e3bf333054a2089003f81487dea4c1c7a12`
+(49522 bytes), now locked by
+`renderer/publication/typographyParityIndesignReferenceIntegrity.test.ts`,
+which fails loudly on any future drift. A broader Tj/TJ-array scan of the
+SAME single content stream (object 35) that §2's own extraction already
+read finds all three target snippets present, in full context, alongside
+everything §2 originally found.
+
+**Real root cause: §2's own extraction regex was incomplete, not the
+reference.** It matched a Tj call only when immediately adjacent to a
+fresh `9 0 0 9 X Y Tm` operator. Real InDesign paragraph-initial runs
+emit the leading full-width indent glyph as its own short Tj, then
+reposition via a relative `Td` before emitting the rest of the paragraph
+as one long Tj — a pattern the regex silently skipped, dropping whole
+paragraphs (including the one containing "人は驚きすぎると") from §2's
+own reconstruction, while paragraphs whose entire content sits in a
+single Tm-adjacent Tj (most of what §2 did capture) came through intact.
+
+**Effect on §2's specific claims:**
+- The two real `？」` measurements (`しない？」`, `よくない？」`) were
+  both taken from Tm-adjacent runs the old regex captured correctly —
+  independently re-confirmed present, in the same position, in the
+  broader Round 7A extraction. **These two measurements remain valid.**
+- The claim that uniform 1em advance was checked "across the entire
+  reconstructed body text... zero exceptions" **overstated its own
+  coverage** — a substantial fraction of the real manuscript (every
+  Td-continued paragraph) was never examined by §2's test at all. This
+  is a coverage gap in the audit, not a falsified result: no
+  counterexample to uniform advance has been found in the newly-visible
+  text either, but it has not yet been formally re-measured there.
+- The §4/§8 conclusion (uniform advance for `？」`, confirming round 17)
+  therefore stands on its own narrower evidence (2 real instances,
+  correctly measured), downgraded from "exhaustive" to "spot-verified."
+  A future round re-running §2's Y-delta assertion against the FULL,
+  correctly-extracted manuscript (all paragraphs, both Tm-adjacent and
+  Td-continued) would upgrade this back to exhaustive; not done here
+  (out of scope for a reference-integrity-only round).
+
+**Classification revision: still Y6, no defect found; audit coverage
+was partial, not the conclusion itself.** No production code change
+implied by this addendum.
+
 ## §9 — Decision
 
-**IDENTIFIED, no Implementation Gate triggered.** No production code
-change is warranted this round: TateSpun's current, unmodified yakumono
-path already matches the real InDesign advance behavior newly confirmed
-here, including for the previously-open `？」` case. This round is
-audit-only. The `！」`/`！？」`/`？！」` sub-cases remain explicitly OPEN
-pending a real InDesign reference containing `！` before a closing
-bracket — a data-coverage gap, not a code defect, and not something to
-guess/hardcode without real evidence per this round's own explicit
-constraint.
+**IDENTIFIED, no Implementation Gate triggered** (revised by §9a: spot-
+verified, not exhaustively verified). No production code change is
+warranted this round: TateSpun's current, unmodified yakumono path
+already matches the real InDesign advance behavior confirmed for the
+`？」` case, on the two real instances that were correctly measured (see
+§9a for the coverage caveat on the "checked across the entire document"
+framing). This round is audit-only. The `！」`/`！？」`/`？！」` sub-cases
+remain explicitly OPEN pending a real InDesign reference containing `！`
+before a closing bracket — a data-coverage gap, not a code defect, and
+not something to guess/hardcode without real evidence per this round's
+own explicit constraint. The reference file itself is verified authentic
+and now identity-locked (§9a) — future rounds should trust it without
+re-litigating contamination, but a full-coverage re-extraction (all
+paragraphs, not just Tm-adjacent ones) is a reasonable Round 8 candidate
+before treating any advance/gap finding from this reference as
+exhaustive.

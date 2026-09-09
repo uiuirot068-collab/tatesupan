@@ -552,6 +552,28 @@ deleted after inspection). Publication and the new/updated typography-
 parity tests pass; tsc clean. See
 `qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md`.
 
+**Round 7A update (2026-09-09, HEAD `d7dddb3`)**: reference-integrity-only
+recheck, no production code touched. Round 7's own extraction reported a
+manuscript missing the Human's independently-verified sentences ("人は
+驚きすぎると…" etc.), raising a contamination concern about
+`qa/reference/indesign/molsui-indesign-reference.pdf`. Verified: the file
+was **never replaced** (SHA-256 `0029bf70...c1c7a12`, 49522 bytes, now
+locked by `renderer/publication/typographyParityIndesignReferenceIntegrity.test.ts`,
+which fails loudly on any future drift). Root cause was Round 7's own
+extraction regex, which only matched a Tj call immediately adjacent to a
+fresh Tm operator — real InDesign paragraph-initial runs continue via a
+relative `Td` after the leading indent glyph instead, a pattern the
+regex silently skipped, dropping whole paragraphs (including the target
+sentence) from Round 7's reconstruction while capturing others intact.
+Round 7's two actual `？」` measurements came from correctly-captured
+runs and remain valid; its "checked across the entire body text, zero
+exceptions" framing is downgraded to spot-verified (2 real instances),
+since a real fraction of the manuscript was never examined. tsc was
+**not** independently validated this round either (ambiguous worktree-
+level invocation against the known standing baseline error). See
+`qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md` §9a. A full-
+coverage re-extraction is a reasonable Round 8 candidate, not done here.
+
 ---
 
 ### 18. Real-manuscript End-to-End QA
