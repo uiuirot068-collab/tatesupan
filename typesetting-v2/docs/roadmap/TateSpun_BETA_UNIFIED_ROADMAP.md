@@ -44,7 +44,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
 - Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
-- 11-B Writing-session total activity counter: COMPLETE / GATE-F Human decision implemented
+- 11-B explicit work-session activity tracker: IMPLEMENTED / focused Human QA pending
 
 - Ordinary Glyph Parity: COMPLETE / Human E2E PASS
 - Yakumono Parity: COMPLETE / Human E2E PASS
@@ -92,10 +92,10 @@ Choose:
 - direct replacement.
 Historical sequencing recommends non-destructive/flag-gated rollout.
 
-### GATE-F — 11-B event semantics
-Status: RESOLVED (Human decision, 2026-09-09) / IMPLEMENTED
+### GATE-F — 11-B work-session semantics
+Status: RESOLVED BY CORRECTED PRODUCT SPEC (2026-09-09) / IMPLEMENTED / HUMAN QA PENDING
 
-Frozen policy: Unicode code-point inserted+deleted activity; IME final commit once; actual undo/redo and replacement mutations; manual text/ruby/token typing counts; structural Ruby/page-break/image UI work does not; explicit Writing Check fixes count; analysis/settings/load/import/normalization/migration/autosave/recomposition/output do not. One tab-scoped session persists only in `sessionStorage`, across reload and document switching, and ends with the tab session.
+Human QA superseded the earlier automatic browser-tab/session measurement unit. Its mutation accounting was correct, but the product contract was not the intended one. The frozen unit is now an explicit Human-started `作業タイム`: idle edits add zero; Start begins at zero; active edits use the existing Unicode code-point inserted+deleted semantics; End freezes a metadata-only result; active state and the latest 100 completed records persist locally. No manuscript text, cloud, database, or event log is stored.
 
 ### GATE-G — 11-A β scope boundary
 Status: RESOLVED (Human decision, Phase 3 task)
@@ -235,11 +235,13 @@ Production `src/`, frozen Typography states, push, and deploy remain outside thi
 
 ---
 
-### 11-B. Writing-session total activity counter
-Status: COMPLETE (2026-09-09)
+### 11-B. Explicit work-session activity tracker
+Status: IMPLEMENTED / FOCUSED HUMAN QA PENDING (2026-09-09)
 
-- automatic Editor-session lifecycle; reload and document switch in one tab preserve the counter
-- `sessionStorage` only; no cloud/database/`localStorage`; a future tab session starts from 0
+- previous automatic browser-session product definition: **SUPERSEDED after Human QA**; underlying deterministic mutation accounting remains correct and is reused
+- explicit `作業スタート` / `作業終了`; idle edits add zero and each new work session starts at zero
+- active-session aggregate, id, and start timestamp survive reload through `localStorage`; elapsed time derives from timestamps
+- metadata-only completed history (`id`, start/end, duration, editing activity), latest 100, oldest evicted first; no manuscript/event log/cloud/database
 - Unicode code-point `insertedCodePoints`, `deletedCodePoints`, and their positive sum `totalActivity`
 - selection-aware input accounting for typing/Delete/Cut/Paste/replacement, including paste-over-selection
 - IME intermediate=0, final commit exactly once, cancellation=0
@@ -247,9 +249,10 @@ Status: COMPLETE (2026-09-09)
 - explicit single/SAFE bulk Writing Check fixes and search/replace count full deleted+inserted operands
 - direct manual ruby/token/caption text counts; automatically generated Ruby/page-break/image structure does not
 - load/import/normalization/migration/autosave/Preview/typesetting/Publication generation excluded
-- compact `このセッションの編集量` Editor display, visibly distinct from current manuscript length, with inserted/deleted detail and explicit result sharing
+- compact active display (`作業中`, `今回の編集量`, `経過時間`) remains visibly distinct from current manuscript length
+- End result contains activity/duration/start/end, exact X/copy share text, and a local `作業記録` view with X share per record
 - Editor-only implementation; static test proves no Core/Canonical/Preview/Publication dependency
-- deterministic test suite: 27/27 PASS; no new dependency
+- deterministic test suite: 33/33 PASS across all 18 required cases; actual Editor browser E2E PASS; no new dependency
 
 ---
 
@@ -781,7 +784,8 @@ All β-required Master §17 acceptance conditions and newly-approved β product 
 ### 2026-09-09 final pre-integration audit
 
 - **CLOSED:** Typography parity (ordinary glyph, yakumono, Preview, Publication, InDesign-level quality).
-- **COMPLETE:** 11-A functional scope/Human QA; Real Image Embedding; 11-B implementation; Canonical Core/Preview/Publication foundations; JPG reference engine and browser executor.
+- **COMPLETE:** 11-A functional scope/Human QA; Real Image Embedding; Canonical Core/Preview/Publication foundations; JPG reference engine and browser executor.
+- **IMPLEMENTED / HUMAN QA PENDING:** corrected 11-B explicit work-session tracker.
 - **IMPLEMENTED / HUMAN QA PENDING:** development-only 完成前マイチェックリスト; development UI-C/Memo/actions; current-development-manuscript browser JPG wiring.
 - **HOLD:** one artifact-writing Publication regression test is blocked by a repeatable Dropbox `EBUSY` lock on `typography-parity-yakumono-missing-cases-diagnostic.pdf`; its other eight assertions and 578/579 full-suite tests pass.
 - **HUMAN GATE:** TCY threshold; remaining ruby policy; bleed/trim β policy; browser PDF architecture; rollout strategy; TXT contract; P3-O11 profile transformations.

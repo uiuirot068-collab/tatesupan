@@ -52,7 +52,7 @@ All five are intentionally left unchanged under the absolute no-Production-`src/
 - Preview renderer: 114/114 PASS.
 - v2Bridge: 27/27 PASS.
 - Writing Check engine: 331/331 PASS.
-- 11-B session activity: 27/27 PASS.
+- Historical 11-B automatic session-counter semantics: 27/27 PASS at that checkpoint; this product definition was later superseded after Human QA.
 - localStorage hook regression: 11/11 PASS.
 - JPG focused regression: 26/26 PASS.
 - Publication: 578/579 PASS; the only failure is a repeatable Dropbox `EBUSY` while overwriting the pre-existing `typography-parity-yakumono-missing-cases-diagnostic.pdf` QA artifact. The same test's other 8 assertions pass; after two identical attempts this artifact-writing branch is HOLD.
@@ -84,7 +84,7 @@ Updated verification:
 - Development Editor/checklist/manual-break integration: 13/13 PASS.
 - Focused JPG regression: 31/31 PASS; U+30FC browser Canvas plus Web/print raster orientation and odd/even Web/print edge strips are covered.
 - Publication: 583/584 PASS. The sole failure is the same Dropbox `EBUSY` while overwriting `typography-parity-yakumono-missing-cases-diagnostic.pdf`; all deterministic code assertions and the focused Typography/JPG cases pass.
-- 11-B frozen semantics: 27/27 PASS.
+- Historical 11-B automatic session-counter semantics: 27/27 PASS at that checkpoint; see the corrected work-session evidence below.
 - TypeScript, standalone development Editor Vite build, and optimized Next.js 16.3.0 build: PASS.
 
 Non-blocking narrow-width note: the development Editor currently recomposes `composeV2Document` synchronously whenever manuscript content changes so JPG actions always have a current PaintPlan. That MASTER RUN wiring is an obvious source of edit-time work on narrow devices. It remains documented backlog; this scoped fix loop does not introduce a debounce, worker, or broader rendering rewrite.
@@ -109,4 +109,23 @@ The Human-observed failure was reproduced in a real headless Chromium session on
 - Code change required: **NO**. The perceived distance matches the already Human-passed output; no new aesthetic value was invented and Ruby remains CLOSED.
 - Human Ruby recheck required: **NO**.
 
-Focused verification: 11-B semantics 27/27 PASS; real Editor browser E2E PASS on `127.0.0.1`; Core Ruby 17/17 PASS; Preview Ruby 42/42 PASS; Publication Typography + JPG 72/72 PASS; ESLint, TypeScript, and optimized Next.js 16.3.0 build PASS.
+Focused verification at that checkpoint: historical 11-B semantics 27/27 PASS; real Editor browser hydration E2E PASS on `127.0.0.1`; Core Ruby 17/17 PASS; Preview Ruby 42/42 PASS; Publication Typography + JPG 72/72 PASS; ESLint, TypeScript, and optimized Next.js 16.3.0 build PASS.
+
+## 11-B product-spec correction — explicit work-session tracker
+
+Date: 2026-09-09
+
+Human QA established a product-spec mismatch: automatically counting the lifetime of a browser tab was not the intended product. The prior accounting implementation was correct against its old specification; it is not recorded as an accounting bug. The browser-session definition is now superseded by explicit `作業スタート` / `作業終了` work sessions.
+
+Implementation evidence:
+
+- Existing Unicode code-point mutation policy is reused for typing, delete, replacement, IME final commit once, Undo/Redo, Writing Check fixes, and other already-frozen inclusions/exclusions.
+- The store ignores mutations while idle, starts every new work session at 0, freezes immediately on End, and preserves an active session across reload using timestamps plus aggregate activity only.
+- `localStorage` contains only session metadata. Completed history is bounded to the latest 100 entries and removes the oldest first. No manuscript text, per-keystroke event log, cloud synchronization, analytics, or database was added.
+- Result and history UI expose X sharing; result exposes text copy. Canonical text is exactly `今日は{editingActivity}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`.
+- The current manuscript character count remains separately visible.
+- Deterministic 11-B suite: **33/33 PASS**, covering all 18 requested lifecycle, mutation, persistence, cap/eviction, exact-share, manuscript-isolation, and current-count cases.
+- Real Editor browser E2E on `/editor?demo=1`: **PASS** for idle → Start at 0 → type → visible increase → End → result → reload → history retained.
+- TypeScript: **PASS**. Optimized Next.js 16.3.0 build: **PASS**.
+
+Ruby remains CLOSED / Human PASS. This correction changes only Editor/work-session state and does not reopen or modify Ruby, Canonical geometry, Preview, Publication PDF, JPG geometry, TCY, Typography, or Writing Check semantics.
