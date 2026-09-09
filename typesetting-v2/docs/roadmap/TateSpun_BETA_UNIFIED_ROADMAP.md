@@ -420,6 +420,46 @@ absolute page-origin precision (T2) and glyph-ink-position comparison
 (now that `lineHeightRatio` actually reaches v2 Publication output) is
 the recommended next step before this item closes.
 
+**Round 4 update (2026-09-09, HEAD `50133a3`)**: the Round 3 human-recheck
+PDF failed Human QA — giant, overlapping glyphs, only a fragment of the
+manuscript legible. Root cause: `PublicationDocument.bodyEmMm` (and
+Preview's own `fontSizePx`) derived GLYPH PAINT SCALE from
+`ctx.linePitchTicks` — a field/value every existing fixture in this
+codebase had always set equal to the character em (ratio 1.0) and which
+was explicitly documented elsewhere as interchangeable with "the body
+font's own em size." Round 3's own column-pitch fix correctly broke that
+coincidence for the first time, silently painting every glyph at the
+column-pitch size (~1.77x too large). Fixed with a new, additive,
+optional `bodyFontSizeTick` field on both render contexts (falls back to
+the old behavior when omitted — exact backward compatibility, 542/542
+existing Publication tests unaffected). Regenerated and visually
+verified (rasterized via the existing `@napi-rs/canvas` executor, no PDF
+rasterizer installed in this environment): clean, uniform 9pt
+typesetting, full manuscript, no overlaps.
+
+**Round 5 update (2026-09-09, HEAD `50133a3`)**: with the artifact now
+valid, Human raised a narrower, in-scope-only concern — intra-column
+visual rhythm for ORDINARY Kanji/Hiragana (punctuation explicitly
+excluded). Audited G1–G6 (canonical advance, font scale, vertical
+origin, vmtx application, GSUB vert/vrt2 substitution, GPOS
+valt/vkna) against real, measured font data — all six are either exactly
+correct or not applicable to this font/character set (including a real,
+initially-unexpected finding: 12 of 18 ordinary hiragana in the test set
+DO have a GSUB vrt2 alternate, but its ink bbox is byte-identical to the
+horizontal-form source glyph in every case, and the metrics-relevant
+part — vpal Y-placement, already measured non-zero and glyph-specific —
+is already correctly applied via `VerticalGposContext`, wired into
+`generatePublicationPdf` since an earlier P3-O08 round). Repeated-glyph
+and alternating-pair controls confirm TateSpun's own renderer is
+internally deterministic with zero pair-to-pair advance variance. No
+production code changed. Remaining candidate (G7, real font ink-shape
+variance, same in InDesign since same font) cannot be independently
+confirmed against InDesign's own embedded CFF glyph outlines — this
+repo's font tooling is TrueType/glyf-only; a CFF/Type2-charstring
+interpreter is new, nontrivial tooling, explicitly out of scope. See
+`qa/evidence/TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md`.
+Genuine HUMAN GATE / tooling-limited STOP, not a deferred implementation.
+
 Human supplied a new comparison (TateSpun Preview vs. InDesign as reference) and observes that TateSpun's vertical character spacing / pitch may still look different from InDesign in continuous prose.
 
 This does NOT reopen Writing Check β 2.0 (11-A) and does NOT invalidate already-passed functional work. No Core/Preview/Publication changes were made at this checkpoint.
