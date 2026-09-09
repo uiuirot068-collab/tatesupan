@@ -81,13 +81,13 @@ Presets, Fix/Ignore UI, and safe bulk fix are implemented (see above).
 
 Confirmed on the real Editor: preset switching (入稿前おすすめ/記号だけ/しっかりチェック), RED/YELLOW diagnostic display, individual 直す, 元に戻す, 無視, SAFE_AUTO_FIX-only bulk correction (ellipsis/dash are not silently auto-fixed), わたしの辞書 add/detect/fix, NGワード add/detect, and Preview/PDF/JPG isolation. A real blocking bug was found and fixed during this QA pass (`useSyncExternalStore` snapshot-identity loop in the 3 localStorage persistence hooks, triggered by selecting 記号だけ -- see `docs/roadmap/TateSpun_BETA_UNIFIED_ROADMAP.md`'s own 11-A Phase 3 entry and commit `97b3df7`).
 
-A non-blocking Human polish backlog (visual/UI refinements, Help TOC, TOC-dialog alignment, 完成前マイチェックリスト, UI-C settings-drawer integration) and a separate open Typography Parity follow-up (InDesign character-pitch comparison) were recorded in the roadmap; neither blocks this Phase 3 closure.
+A non-blocking Human polish backlog (visual/UI refinements, Help TOC, and TOC-dialog alignment) was recorded without reopening this Phase 3 closure. The later development-only checklist/UI-C work and the Typography Parity follow-up have since passed their applicable Human gates; their current β disposition is authoritative in `docs/roadmap/TateSpun_BETA_UNIFIED_ROADMAP.md`.
 
 ### Development-only follow-up checkpoint (2026-09-09)
 
-The safely frozen local portion of 完成前マイチェックリスト is implemented in `typesetting-v2/tools/human-e2e-editor/`, directly beside Memo in the development Editor toolbar. Its versioned model provides three editable presets, reusable personal lists, editable check state/text/name, reset, and defensive localStorage restoration. It has no manuscript dependency, cloud/database client, or external transmission. Status: **IMPLEMENTED / HUMAN QA PENDING**; placement in the real Editor is a **PRODUCTION INTEGRATION GATE**.
+The safely frozen local portion of 完成前マイチェックリスト is implemented in `typesetting-v2/tools/human-e2e-editor/`, directly beside Memo in the development Editor toolbar. Its versioned model provides three editable presets, reusable personal lists, editable check state/text/name, reset, and defensive localStorage restoration. It has no manuscript dependency, cloud/database client, or external transmission. Status: **IMPLEMENTED / HUMAN PASS IN DEVELOPMENT**; placement in the real Editor remains a **PRODUCTION INTEGRATION GATE**.
 
-The same development Editor implements the approved UI-C drawer interaction and browser JPG actions from the current Canonical PaintPlan. Writing Check visual polish, Help TOC, and TOC-dialog alignment remain a **PRODUCTION INTEGRATION GATE** because their owning components are under Production `src/`, which this run was explicitly forbidden to modify. This does not reopen 11-A detection/fix semantics or its Human PASS.
+The same development Editor implements the approved UI-C drawer interaction, Memo/actions, manual page break, and browser JPG actions from the current Canonical PaintPlan; these applicable development surfaces are **HUMAN PASS**. Writing Check visual polish, Help TOC, and TOC-dialog alignment remain **BETA REQUIRED / PRODUCTION INTEGRATION GATE** because their owning components are under Production `src/`, which this documentation run does not modify. This does not reopen 11-A detection/fix semantics or its Human PASS.
 
 ---
 
