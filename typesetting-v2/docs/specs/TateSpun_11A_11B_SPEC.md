@@ -1,6 +1,6 @@
-# TateSpun 11-A / 11-B Specification v1.1
+# TateSpun 11-A / 11-B Specification v1.2
 Updated: 2026-09-09
-Revision reason: roadmap reconciliation recovered older authoritative scope details that were missing from v1.
+Revision reason: GATE-F Human decision frozen and 11-B implemented.
 
 ## 11-A correction / recovered historical authority
 
@@ -85,38 +85,50 @@ A non-blocking Human polish backlog (visual/UI refinements, Help TOC, TOC-dialog
 
 ---
 
-## 11-B recovered historical authority
+## 11-B frozen specification and implementation
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Confirmed:
-- START
-- END
-- inserted characters
-- deleted characters
-- `totalActivity = inserted + deleted`
-- example: +100, -50, +30 = total activity 180
-- final manuscript net length is not the metric
-- results may be explicitly shared to SNS
-- belongs to Editor Session Metrics, not Typesetting Engine Core
+Status: **COMPLETE — GATE-F RESOLVED by Human decision (2026-09-09).**
 
-Still unresolved historically:
-- IME composition
-- paste
-- cut
-- undo
-- redo
-- replace
-- select-all delete
-- import
-- programmatic normalization
-- ruby input
-- page-break token
-- image token
-- Writing Check-driven fixes
-- persistence/history semantics
+### Purpose and unit
 
-No implementation has started yet.
+- Measures session editing **activity**, not final manuscript length.
+- Every quantity is a Unicode code-point count.
+- Insertions and deletions each add positively; replacement is the full deleted operand plus the full inserted operand.
+- `totalActivity = insertedCodePoints + deletedCodePoints`.
+- The compact Editor UI labels this value `このセッションの編集量`, shows inserted/deleted detail, explicitly distinguishes it from the existing current-manuscript character count, and provides an explicit result-share action.
+
+### Counted operations
+
+- Ordinary typing, Delete, Cut, Select-All Delete, and Paste count their actual inserted/deleted code points. Paste over a selection counts both sides.
+- IME composition updates/intermediate conversion count 0. Composition end counts its final committed text delta exactly once. Cancellation counts 0.
+- Undo/redo count the actual resulting manuscript mutation in the direction it occurs.
+- Directly typed ruby source and directly typed structural-token text count normally.
+- A future Ruby UI counts user-entered base/readings (including their explicit replacements) but excludes generated markup/structural transformation.
+- Explicit Writing Check `直す` and SAFE bulk fix count every applied deleted+inserted operand. Undoing such a fix counts the inverse resulting mutation.
+- Search/replace counts each actual replacement's full deleted+inserted operands.
+- User-edited textual image captions or related manuscript text count normally.
+
+### Exclusions
+
+- Dedicated UI insertion/removal or rewriting of page-break structure counts 0.
+- Image insertion/removal and generated/rewritten image structural tokens count 0.
+- Writing Check analysis, `無視`, dictionary settings, and NG-word settings count 0.
+- Loading/opening existing manuscripts, import, normalization, internal migrations, autosave, Preview/typesetting recomposition, and Publication/PDF/JPG generation count 0.
+
+### Session and persistence
+
+- The session begins automatically when the Editor session opens; the earlier historical START/END-button wording is superseded by this exact lifecycle decision.
+- Reload and manuscript/document switching in the same browser tab preserve one shared counter. It is session-scoped, never manuscript-scoped.
+- Persistence is `sessionStorage` only: no cloud, database, or `localStorage` lifetime persistence.
+- Closing/ending that browser-tab session ends the editing session; a future session begins at 0.
+
+### Implementation boundary and verification
+
+- Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
+- The counter remains outside Core typesetting, Canonical Layout, Preview layout, and Publication output. A static isolation test enforces this boundary.
+- 27 deterministic 11-B tests cover the complete policy above, persistence, UI distinction, result-share text, and architectural isolation. No new dependency was introduced.
 
 ---
 

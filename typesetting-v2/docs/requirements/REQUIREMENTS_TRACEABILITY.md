@@ -73,8 +73,8 @@ Columns: **ID | Requirement | Source | Phase Responsible | QA Method | Human QA 
 
 | ID | Requirement | Source | Phase | QA Method | Human QA? | Status |
 |----|---|---|---|---|---|---|
-| V2-SESSION-001 | START/END session with cumulative (typed+deleted) activity counter, separate from Typesetting Engine core | Master §9.2, §20.4; Freeze §11 | 6 | Manual functional test | No | Approved (frozen); paste/delete counting and import/normalization exclusion RESOLVED by HD-004 — remaining edge cases (IME, undo/redo, replace, select-all, ruby/break/image tokens) are engineering investigation, not open product decisions |
-| V2-SESSION-002 | SNS share of session activity result | Master §9.2; Freeze §11 | 6 | Manual functional test | No | Approved (frozen) |
+| V2-SESSION-001 | Automatic tab-scoped Editor session with cumulative Unicode code-point inserted+deleted activity counter, separate from Typesetting Engine core | Master §9.2, §20.4; 11-A/11-B Spec §11-B | 6 | Deterministic model/store/isolation tests + manual UI check | No | COMPLETE (2026-09-09); GATE-F resolved, `sessionStorage`-only persistence, all event and exclusion semantics implemented |
+| V2-SESSION-002 | Explicit SNS share of session activity result | Master §9.2; 11-A/11-B Spec §11-B | 6 | Deterministic share-text test + manual browser share check | No | COMPLETE (2026-09-09) |
 
 ## Privacy (V2-PRIV-*)
 

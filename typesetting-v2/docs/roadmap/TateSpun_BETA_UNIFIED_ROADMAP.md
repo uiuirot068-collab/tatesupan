@@ -44,6 +44,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
 - Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
+- 11-B Writing-session total activity counter: COMPLETE / GATE-F Human decision implemented
 
 - Ordinary Glyph Parity: COMPLETE / Human E2E PASS
 - Yakumono Parity: COMPLETE / Human E2E PASS
@@ -92,9 +93,9 @@ Choose:
 Historical sequencing recommends non-destructive/flag-gated rollout.
 
 ### GATE-F — 11-B event semantics
-Status: HUMAN_GATE
-Need exact counting policy for:
-IME, paste, cut, undo, redo, replace, select-all delete, import, programmatic normalization, ruby input, page-break token, image token, Writing Check fixes.
+Status: RESOLVED (Human decision, 2026-09-09) / IMPLEMENTED
+
+Frozen policy: Unicode code-point inserted+deleted activity; IME final commit once; actual undo/redo and replacement mutations; manual text/ruby/token typing counts; structural Ruby/page-break/image UI work does not; explicit Writing Check fixes count; analysis/settings/load/import/normalization/migration/autosave/recomposition/output do not. One tab-scoped session persists only in `sessionStorage`, across reload and document switching, and ends with the tab session.
 
 ### GATE-G — 11-A β scope boundary
 Status: RESOLVED (Human decision, Phase 3 task)
@@ -211,28 +212,20 @@ Recorded 2026-09-09. None of these block 11-A Phase 3 closure; scheduled as late
 ---
 
 ### 11-B. Writing-session total activity counter
-Status: NOT_STARTED
+Status: COMPLETE (2026-09-09)
 
-Confirmed contract:
-START → edit → END
-- insertedCharacters
-- deletedCharacters
-- totalActivity = inserted + deleted
-- result display
-- SNS share
-- separate `Editor Session Metrics` responsibility
-- not the same as current manuscript length
-
-Before implementation:
-resolve GATE-F.
-
-Suggested β boundary:
-- one active session
-- input/deletion/total counts
-- END result
-- explicit SNS share
-- local-only processing
-- long-term analytics/history can be post-β unless Human chooses otherwise
+- automatic Editor-session lifecycle; reload and document switch in one tab preserve the counter
+- `sessionStorage` only; no cloud/database/`localStorage`; a future tab session starts from 0
+- Unicode code-point `insertedCodePoints`, `deletedCodePoints`, and their positive sum `totalActivity`
+- selection-aware input accounting for typing/Delete/Cut/Paste/replacement, including paste-over-selection
+- IME intermediate=0, final commit exactly once, cancellation=0
+- browser and Writing Check undo/redo count their actual resulting mutation
+- explicit single/SAFE bulk Writing Check fixes and search/replace count full deleted+inserted operands
+- direct manual ruby/token/caption text counts; automatically generated Ruby/page-break/image structure does not
+- load/import/normalization/migration/autosave/Preview/typesetting/Publication generation excluded
+- compact `このセッションの編集量` Editor display, visibly distinct from current manuscript length, with inserted/deleted detail and explicit result sharing
+- Editor-only implementation; static test proves no Core/Canonical/Preview/Publication dependency
+- deterministic test suite: 27/27 PASS; no new dependency
 
 ---
 

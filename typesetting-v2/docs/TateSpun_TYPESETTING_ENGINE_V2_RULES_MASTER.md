@@ -382,7 +382,9 @@ Phase 0で決める事項:
 
 ## 9.2 Writing-session total activity counter
 
-STARTボタンからENDボタンまでの間に行った「総編集文字数」をカウントする機能を追加要件とする。
+**GATE-F Human Decision（2026-09-09）:** セッションはEditorを開いた時点で自動開始し、同一タブ内のreload・作品切替をまたいで継続し、タブセッション終了時に終了する。従来のSTART/ENDボタン表現は、この厳密なセッションライフサイクル決定で置き換える。
+
+そのEditorセッション中に行った「総編集文字数」をカウントする機能を追加要件とする。
 
 概念:
 - 入力した文字数
@@ -396,7 +398,7 @@ STARTボタンからENDボタンまでの間に行った「総編集文字数」
 30文字入力
 → 総作業文字数 180
 
-Phase 0以降で確定する事項:
+Phase 0時点で未確定だった事項（GATE-Fで全項目解決済み）:
 - IME compositionの扱い
 - paste
 - cut
@@ -410,14 +412,18 @@ Phase 0以降で確定する事項:
 - 改ページtoken
 - 画像token
 
+**GATE-F確定（2026-09-09）:** 単位はUnicode code point。挿入・削除はいずれも正に加算し、置換は削除全文字＋挿入全文字。IME中間更新は0、compositionendの最終commitを一度だけ数え、cancelは0。undo/redoは実際に生じた原稿変化を数える。直接手入力したruby/構造token/画像関連本文は通常計数し、Ruby UIの自動markup変換、専用改ページUI、画像UIの構造token操作は0。明示的な文章チェック修正は数え、解析・無視・辞書/NG設定は0。load/import/normalization/migration/autosave/Preview・組版再構成/Publication生成は0。
+
+永続化は`sessionStorage`のみ。cloud/database/`localStorage`永続化は行わない。UIは既存の原稿文字数と明確に区別し、`このセッションの編集量`と表示する。
+
 **HD-004 (v1.2) 確定事項:**
 - paste: 貼り付けた文字数をactivity（typed側）として扱う方向で確定。
 - delete / cut: 削除文字数をactivityとして扱う方向で確定。
 - `.txt` importおよびprogrammatic normalizationは、通常の執筆activityとは分離する。
 
-上記以外（IME composition, undo, redo, replace, select-all delete, ruby入力, 改ページtoken, 画像token）は引き続きengineering investigation後に確定する（§20.4）。
+上記以外もGATE-F Human Decisionで確定済み（§20.4）。
 
-START / END後に結果をSNSシェアできるようにする。
+セッションの編集量結果を明示操作でSNSシェアできるようにする。
 
 この機能はTypesetting Engineのcore責務ではなくEditor Session Metricsとして分離する。
 
@@ -974,14 +980,14 @@ TXT import / edit / TXT exportにおいて、
 - delete / cut: 削除文字数をactivityとして扱う方向。
 - TXT importおよびprogrammatic normalizationは、通常の執筆activityとは分離する。
 
-以下は引き続きengineering investigation後に確定する（未決定のまま）:
-- IME compositionの扱い
-- undo / redo
-- replace
-- select-all delete
-- ruby入力のカウント方法
-- 改ページtokenのカウント方法
-- 画像tokenのカウント方法
+以下はGATE-F Human Decision（2026-09-09）で確定済み:
+- Unicode code-point単位、挿入＋削除の正のactivity
+- IMEは中間0、最終commit一度、cancel 0
+- undo / redo / replace / select-all deleteは実際の削除＋挿入
+- rubyの直接入力とuser-entered readingは計数、自動markup変換は0
+- 改ページ・画像の専用UI構造token操作は0、文字としての直接入力は計数
+- 明示的Writing Check修正は計数、解析・無視・辞書/NG設定は0
+- 同一タブのEditor sessionとして`sessionStorage`のみで保持
 
 SNS share機能は維持する。
 

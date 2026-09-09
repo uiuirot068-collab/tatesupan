@@ -48,6 +48,9 @@ import {
 } from "@/constants/demoData";
 import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
+import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
+import { measureEditorActivityOperation } from "@/lib/editorSessionActivity";
+import { PAGE_BREAK_MARKER } from "@/lib/tategaki";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -65,6 +68,7 @@ export default function TategakiEditor({
 }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { activity: sessionActivity, recordActivity } = useEditorSessionActivity();
   const [docId, setDocId] = useState<number | null>(
     demoMode
       ? DEMO_PROJECT.id
@@ -526,6 +530,17 @@ export default function TategakiEditor({
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
 
+    // Generated book-part prose is a real manuscript insertion. Only a
+    // dedicated UI's generated structural page-break token is excluded.
+    recordActivity(
+      measureEditorActivityOperation({
+        kind: "explicit-replacements",
+        replacements: [
+          { deletedText: "", insertedText: textToInsert.replaceAll(PAGE_BREAK_MARKER, "") },
+        ],
+      })
+    );
+
     // 扉・目次・奥付は本文と異なりノンブルも柱も表示しないのが慣例なので、
     // 挿入した瞬間にそのパーツが占めるページへ自動でノンブル非表示・柱非表示
     // を設定する（両者は独立したフラグ——正式仕様上「柱は消さない」のは
@@ -662,6 +677,8 @@ export default function TategakiEditor({
             onTitleChange={setTitle}
             content={content}
             onContentChange={setContent}
+            sessionActivity={sessionActivity}
+            onRecordActivity={recordActivity}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenBookParts={() => setIsBookPartsModalOpen(true)}
             onOpenBetaFeedback={() => setIsBetaFeedbackOpen(true)}
@@ -764,7 +781,12 @@ export default function TategakiEditor({
       {isSearchOpen && (
         <SearchReplaceModal
           content={content}
-          onReplace={(next) => {
+          onReplace={(next, replacements) => {
+            if (next !== content) {
+              recordActivity(
+                measureEditorActivityOperation({ kind: "explicit-replacements", replacements })
+              );
+            }
             setContent(next);
             setIsSearchOpen(false);
           }}

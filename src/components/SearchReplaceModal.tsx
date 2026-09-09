@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 
 interface SearchReplaceModalProps {
   content: string;
-  onReplace: (nextContent: string) => void;
+  onReplace: (
+    nextContent: string,
+    replacements: readonly { deletedText: string; insertedText: string }[]
+  ) => void;
   onClose: () => void;
 }
 
@@ -26,7 +29,14 @@ export default function SearchReplaceModal({
   const handleReplaceAll = () => {
     if (searchText === "") return;
     const pattern = new RegExp(escapeRegExp(searchText), "g");
-    onReplace(content.replace(pattern, replaceText));
+    const next = content.replace(pattern, replaceText);
+    onReplace(
+      next,
+      Array.from({ length: matchCount }, () => ({
+        deletedText: searchText,
+        insertedText: replaceText,
+      }))
+    );
   };
 
   return (

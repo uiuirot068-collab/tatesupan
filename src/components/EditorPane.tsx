@@ -7,7 +7,20 @@ import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
 import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
+import {
+  applyTextInputChange,
+  captureBeforeInput,
+  createTextInputActivityState,
+  finishComposition,
+  measureEditorActivityOperation,
+  reverseActivityDelta,
+  startComposition,
+  syncTextInputActivityState,
+  type ActivityDelta,
+  type SessionActivity,
+} from "@/lib/editorSessionActivity";
 import PageSettingsPanel from "./PageSettingsPanel";
+import SessionActivityCounter from "./SessionActivityCounter";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
@@ -57,6 +70,8 @@ interface EditorPaneProps {
   onTitleChange: (title: string) => void;
   content: string;
   onContentChange: (content: string) => void;
+  sessionActivity: SessionActivity;
+  onRecordActivity: (delta: ActivityDelta) => void;
   onOpenSearchReplace: () => void;
   onOpenBookParts: () => void;
   /** β限定「報告」ボタン。BETA_FEEDBACK_ENABLED のときだけ表示。 */
@@ -85,6 +100,8 @@ export default function EditorPane({
   onTitleChange,
   content,
   onContentChange,
+  sessionActivity,
+  onRecordActivity,
   onOpenSearchReplace,
   onOpenBookParts,
   onOpenBetaFeedback,
@@ -99,6 +116,16 @@ export default function EditorPane({
   focusMode = false,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputActivityStateRef = useRef(createTextInputActivityState(content));
+
+  // Parent-driven changes (load/switch, structural UI, Preview operations)
+  // become the next input baseline without themselves becoming activity.
+  useEffect(() => {
+    inputActivityStateRef.current = syncTextInputActivityState(
+      inputActivityStateRef.current,
+      content
+    );
+  }, [content]);
 
   // TSP-LOOP-020: explicit "本文を書く" action (phone only). scrollIntoView is
   // always done; focus() is only ever called from this direct user tap —
@@ -127,7 +154,11 @@ export default function EditorPane({
   // cleared the moment the user makes ANY further edit (see the textarea
   // onChange handler below), so 元に戻す never surprises the user by
   // discarding keystrokes typed after the automated change.
-  const [undoState, setUndoState] = useState<{ before: string; after: string } | null>(null);
+  const [undoState, setUndoState] = useState<{
+    before: string;
+    after: string;
+    forwardActivity: ActivityDelta;
+  } | null>(null);
 
   const writingCheckConfig: WritingCheckConfig = useMemo(
     () => ({ ruleOverrides, dictionary: dictionary.entries, ngWords: ngWords.entries }),
@@ -163,8 +194,11 @@ export default function EditorPane({
   };
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
-  const applyAutomatedTextChange = (next: string) => {
-    setUndoState({ before: content, after: next });
+  const applyAutomatedTextChange = (next: string, forwardActivity: ActivityDelta) => {
+    if (next === content) return;
+    setUndoState({ before: content, after: next, forwardActivity });
+    onRecordActivity(forwardActivity);
+    inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
     onContentChange(next);
   };
 
@@ -176,7 +210,18 @@ export default function EditorPane({
       setRecheckNonce((v) => v + 1);
       return;
     }
-    applyAutomatedTextChange(result.text);
+    applyAutomatedTextChange(
+      result.text,
+      measureEditorActivityOperation({
+        kind: "explicit-replacements",
+        replacements: [
+          {
+            deletedText: issue.originalText,
+            insertedText: issue.suggestedReplacement?.text ?? "",
+          },
+        ],
+      })
+    );
   };
 
   const handleIgnoreIssue = (issue: WritingDiagnostic) => {
@@ -186,11 +231,28 @@ export default function EditorPane({
   const handleBulkFix = () => {
     const result = applyBulkFix(content, writingIssuesForContent);
     if (result.appliedIds.length === 0) return;
-    applyAutomatedTextChange(result.text);
+    const appliedIds = new Set(result.appliedIds);
+    applyAutomatedTextChange(
+      result.text,
+      measureEditorActivityOperation({
+        kind: "explicit-replacements",
+        replacements: writingIssuesForContent
+          .filter((issue) => appliedIds.has(issue.id) && issue.suggestedReplacement !== undefined)
+          .map((issue) => ({
+            deletedText: issue.originalText,
+            insertedText: issue.suggestedReplacement?.text ?? "",
+          })),
+      })
+    );
   };
 
   const handleUndoFix = () => {
     if (!undoState) return;
+    onRecordActivity(reverseActivityDelta(undoState.forwardActivity));
+    inputActivityStateRef.current = syncTextInputActivityState(
+      inputActivityStateRef.current,
+      undoState.before
+    );
     onContentChange(undoState.before);
     setUndoState(null);
   };
@@ -199,6 +261,15 @@ export default function EditorPane({
     const el = textareaRef.current;
     if (!el || !onCursorIndexChange) return;
     onCursorIndexChange(el.selectionStart);
+  };
+
+  const captureTextareaInput = (el: HTMLTextAreaElement, inputType: string) => {
+    inputActivityStateRef.current = captureBeforeInput(inputActivityStateRef.current, {
+      beforeText: el.value,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      inputType,
+    });
   };
 
   const insertPageBreak = () => {
@@ -212,7 +283,10 @@ export default function EditorPane({
     // marker would render as literal text instead of a real page break —
     // see `insertPageBreakMarker`'s doc.
     const marker = insertPageBreakMarker(before, after);
-    onContentChange(before + marker + after);
+    const next = before + marker + after;
+    // Dedicated structural page-break UI is explicitly outside 11-B.
+    inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
+    onContentChange(next);
     const caret = start + marker.indexOf(PAGE_BREAK_MARKER) + PAGE_BREAK_MARKER.length;
     requestAnimationFrame(() => {
       el?.focus();
@@ -331,22 +405,46 @@ export default function EditorPane({
           ref={textareaRef}
           data-demo-target="editor"
           value={content}
+          onBeforeInput={(event) => {
+            const nativeEvent = event.nativeEvent as InputEvent;
+            captureTextareaInput(event.currentTarget, nativeEvent.inputType ?? "");
+          }}
+          // Explicit fallbacks preserve selection-aware Cut/Paste accounting
+          // in browsers that do not expose InputEvent.inputType reliably.
+          onPaste={(event) => captureTextareaInput(event.currentTarget, "insertFromPaste")}
+          onCut={(event) => captureTextareaInput(event.currentTarget, "deleteByCut")}
           onChange={(e) => {
             const next = e.target.value;
             // Any edit that isn't exactly the automated fix's own output
             // ends the one-step undo window (see `undoState`'s own doc).
             if (undoState && next !== undoState.after) setUndoState(null);
+            const transition = applyTextInputChange(inputActivityStateRef.current, next);
+            inputActivityStateRef.current = transition.state;
+            onRecordActivity(transition.delta);
             onContentChange(next);
             requestAnimationFrame(reportCursorIndex);
           }}
           onSelect={reportCursorIndex}
           onClick={reportCursorIndex}
           onKeyUp={reportCursorIndex}
-          onCompositionStart={() => {
+          onCompositionStart={(event) => {
             isComposingRef.current = true;
+            const el = event.currentTarget;
+            inputActivityStateRef.current = startComposition(
+              inputActivityStateRef.current,
+              el.value,
+              el.selectionStart,
+              el.selectionEnd
+            );
           }}
-          onCompositionEnd={() => {
+          onCompositionEnd={(event) => {
             isComposingRef.current = false;
+            const transition = finishComposition(
+              inputActivityStateRef.current,
+              event.currentTarget.value
+            );
+            inputActivityStateRef.current = transition.state;
+            onRecordActivity(transition.delta);
             setRecheckNonce((value) => value + 1);
           }}
           placeholder={DEFAULT_INITIAL_TEXT}
@@ -396,7 +494,11 @@ export default function EditorPane({
           ルビ: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁を自動検知・
           <code>[tate]A5[/tate]</code>／改ページ: <code>{PAGE_BREAK_MARKER}</code>
         </span>
-        <span className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink">
+        <SessionActivityCounter activity={sessionActivity} />
+        <span
+          title="現在の原稿文字数"
+          className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
+        >
           {countVisualLength(content)} 文字
         </span>
       </div>
