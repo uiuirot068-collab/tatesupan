@@ -3,7 +3,11 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { capturePageToCanvas, EXPORT_TIMING_ENABLED, type RelativeRect } from './exportCapture';
-import { throwIfExportCancelled, waitForExportDelay } from '@/lib/exportCancellation';
+import {
+  throwIfExportCancelled,
+  waitForExportDelay,
+  waitForExportPermission,
+} from '@/lib/exportCancellation';
 
 /** 書き出し対象の1ページ分: キャプチャ元DOM要素と、出力ファイル名。 */
 export interface ExportPageItem {
@@ -135,16 +139,16 @@ export async function exportPageToJpg(
   let capturedCanvas: HTMLCanvasElement | null = null;
   let finalCanvas: HTMLCanvasElement | null = null;
   try {
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     finalCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
     const tEncodeStart = performance.now();
     const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
     if (EXPORT_TIMING_ENABLED) {
       console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
     }
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     saveAs(dataUrl, fileName);
   } finally {
     releaseCanvas(finalCanvas);
@@ -168,11 +172,11 @@ export async function exportPagesToZip(
 ): Promise<void> {
   if (typeof window === 'undefined' || items.length === 0) return;
 
-  throwIfExportCancelled(signal);
+  await waitForExportPermission(signal);
   const zip = new JSZip();
 
   for (let i = 0; i < items.length; i++) {
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     const { element, fileName } = items[i];
     onProgress?.(i + 1, items.length);
 
@@ -181,7 +185,7 @@ export async function exportPagesToZip(
     let finalCanvas: HTMLCanvasElement | null = null;
     try {
       capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       const processedCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
       finalCanvas = processedCanvas;
 
@@ -193,7 +197,7 @@ export async function exportPagesToZip(
         console.log(`canvas → JPEG blob: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
 
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       const tZipStart = performance.now();
       if (blob) {
         zip.file(fileName, blob);
@@ -209,12 +213,12 @@ export async function exportPagesToZip(
     }
   }
 
-  throwIfExportCancelled(signal);
+  await waitForExportPermission(signal);
   const content = await zip.generateAsync(
     { type: 'blob' },
     () => throwIfExportCancelled(signal)
   );
-  throwIfExportCancelled(signal);
+  await waitForExportPermission(signal);
   saveAs(content, zipFileName);
 }
 
@@ -239,7 +243,7 @@ export async function exportPagesAsIndividualJpgs(
   if (typeof window === 'undefined' || items.length === 0) return;
 
   for (let i = 0; i < items.length; i++) {
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     const { element, fileName } = items[i];
     onProgress?.(i + 1, items.length);
 
@@ -248,14 +252,14 @@ export async function exportPagesAsIndividualJpgs(
     let finalCanvas: HTMLCanvasElement | null = null;
     try {
       capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       finalCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
       const tEncodeStart = performance.now();
       const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       saveAs(dataUrl, fileName);
 
     } finally {

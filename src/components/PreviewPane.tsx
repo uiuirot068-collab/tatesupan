@@ -2109,7 +2109,7 @@ export default function PreviewPane({
           )}
         >
           <p className="text-sm leading-relaxed text-ink/70">
-            現在処理しているページの完了後、残りの書き出しを安全に停止します。
+            確認中は、新しいページの処理を始めません。現在処理しているページは完了することがあります。
           </p>
         </ViewportModal>
       )}

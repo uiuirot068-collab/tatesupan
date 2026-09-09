@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import { encode } from 'fast-png';
 import { capturePageToCanvas, EXPORT_TIMING_ENABLED } from './exportCapture';
 import { BLEED_MM } from '@/lib/pageLayout';
-import { throwIfExportCancelled } from '@/lib/exportCancellation';
+import { waitForExportPermission } from '@/lib/exportCancellation';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -129,7 +129,7 @@ export async function exportCustomPdf(
     signal
   } = options;
 
-  throwIfExportCancelled(signal);
+  await waitForExportPermission(signal);
 
   // 用紙サイズの確定（仕上がり/trim寸法。例: A5 = 148×210mm）
   let pageWidth = customWidth;
@@ -167,7 +167,7 @@ export async function exportCustomPdf(
   });
 
   for (let i = 0; i < elements.length; i++) {
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
     if (i > 0) pdf.addPage();
     if (onProgress) onProgress(i + 1, elements.length);
 
@@ -182,7 +182,7 @@ export async function exportCustomPdf(
     if (signal?.aborted) {
       canvas.width = 0;
       canvas.height = 0;
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
     }
 
     if (mode === 'trim') {
@@ -195,7 +195,7 @@ export async function exportCustomPdf(
       }
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(cropped);
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
@@ -210,7 +210,7 @@ export async function exportCustomPdf(
       // 断ち落としPDF: 塗り足し込みページを原寸のまま出力。
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(canvas);
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
@@ -224,7 +224,7 @@ export async function exportCustomPdf(
       // （正式仕様E。以前はここでtrim寸法へ縮小してしまっていた）。
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(canvas);
-      throwIfExportCancelled(signal);
+      await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
@@ -283,9 +283,9 @@ export async function exportCustomPdf(
 
     // マクロタスク挿入（UI開放・フリーズ防止）
     await new Promise((resolve) => setTimeout(resolve, 0));
-    throwIfExportCancelled(signal);
+    await waitForExportPermission(signal);
   }
 
-  throwIfExportCancelled(signal);
+  await waitForExportPermission(signal);
   pdf.save(fileName);
 }
