@@ -526,6 +526,32 @@ Guardrails:
 Acceptance:
 Human visual parity review required before final Production integration.
 
+**Round 7 update (2026-09-09, HEAD `7dc654e`)**: audit only, punctuation/
+brackets/mojikumi scope (C above), Rounds 1–6 findings (A/B) explicitly
+untouched and re-confirmed unchanged. Discovered the real InDesign
+reference PDF's actual body text is not the "人は驚きすぎると…" sentence
+assumed in Rounds 2–6 (a manuscript-content discrepancy that does not
+invalidate those rounds' own geometry findings), and built new ToUnicode-
+CMap extraction tooling (no new dependency) to recover the real text and
+each glyph's real Y position. Result, now backed by an asserted
+regression test: InDesign's own real rendering advances **every**
+consecutive glyph pair — including every punctuation transition present
+in the real document — by exactly 1em, with zero pair-compression for
+any character class. This directly closes a portion of a previously-OPEN
+item from the historical P3-O08 chain (`P3_O08_YAKUMONO_NORMAL_SPACING_FINAL_ROUND17.md`,
+which left 感嘆符/疑問符-before-closing-bracket unverified): the real
+document contains two genuine `？」` instances, both measured at exactly
+1em advance, confirming (not contradicting) round 17's already-frozen
+uncompressed-advance decision. `！」`/`！？」`/`？！」` remain OPEN — no
+`！` character appears anywhere in the real reference document, so no
+real data exists for those sub-cases; not guessed or hardcoded. No
+production code changed — TateSpun's current, unmodified yakumono path
+already matches this newly-confirmed InDesign behavior (qualitatively
+re-verified via a temporary raster check of the real `？」` sequence,
+deleted after inspection). Publication and the new/updated typography-
+parity tests pass; tsc clean. See
+`qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md`.
+
 ---
 
 ### 18. Real-manuscript End-to-End QA
