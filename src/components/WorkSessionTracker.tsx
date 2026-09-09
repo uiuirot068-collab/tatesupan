@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   formatWorkSessionShareText,
   type CompletedWorkSession,
@@ -51,6 +52,120 @@ function openXShare(record: CompletedWorkSession): void {
   );
 }
 
+function WorkSessionResultModal({
+  result,
+  copied,
+  onClose,
+  onCopy,
+  onShare,
+}: {
+  result: CompletedWorkSession;
+  copied: boolean;
+  onClose: () => void;
+  onCopy: () => void;
+  onShare: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    closeButtonRef.current?.focus();
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape, true);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      data-work-session-result-modal
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="work-session-result-title"
+        data-work-session-result
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-lg border border-ink/15 bg-base text-left shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-ink/10 px-4 py-3">
+          <p id="work-session-result-title" className="text-sm font-bold text-ink">
+            作業おつかれさまでした
+          </p>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            aria-label="作業結果を閉じる"
+            data-work-session-result-action="close-icon"
+            onClick={onClose}
+            className="rounded p-1 text-ink/55 hover:bg-ink/5 hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <dt className="text-ink/55">今回書いた文字数</dt>
+            <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
+              {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
+            </dd>
+            <dt className="text-ink/55">作業時間</dt>
+            <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
+            <dt className="text-ink/55">開始時刻</dt>
+            <dd className="text-right tabular-nums text-ink">{formatClock(result.startedAt)}</dd>
+            <dt className="text-ink/55">終了時刻</dt>
+            <dd className="text-right tabular-nums text-ink">{formatClock(result.endedAt)}</dd>
+          </dl>
+          <p className="mt-2 text-[10px] text-ink/45">現在の原稿文字数とは別の値です。</p>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-ink/10 px-4 py-3">
+          <button
+            type="button"
+            data-work-session-result-action="close"
+            onClick={onClose}
+            className="rounded px-2 py-1 text-[11px] text-ink/55 hover:bg-ink/5"
+          >
+            閉じる
+          </button>
+          <button
+            type="button"
+            data-work-session-result-action="copy"
+            onClick={onCopy}
+            className="rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5"
+          >
+            {copied ? "コピーしました" : "テキストをコピー"}
+          </button>
+          <button
+            type="button"
+            data-work-session-result-action="share-x"
+            onClick={onShare}
+            className="rounded bg-ink px-2 py-1 text-[11px] font-semibold text-base hover:opacity-90"
+          >
+            Xでシェア
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function WorkSessionTracker({
   state,
   onStart,
@@ -65,6 +180,8 @@ export default function WorkSessionTracker({
   const [result, setResult] = useState<CompletedWorkSession | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const activeId = state.active?.id;
+
+  const closePanel = useCallback(() => setPanel(null), []);
 
   useEffect(() => {
     if (!activeId) return;
@@ -143,38 +260,13 @@ export default function WorkSessionTracker({
       </button>
 
       {panel === "result" && result && (
-        <div
-          role="dialog"
-          aria-label="作業結果"
-          data-work-session-result
-          className="absolute bottom-full right-0 z-30 mb-2 w-72 rounded-lg border border-ink/15 bg-base p-4 text-left shadow-xl"
-        >
-          <p className="text-sm font-bold text-ink">作業おつかれさまでした</p>
-          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-            <dt className="text-ink/55">今回書いた文字数</dt>
-            <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
-              {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
-            </dd>
-            <dt className="text-ink/55">作業時間</dt>
-            <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
-            <dt className="text-ink/55">開始時刻</dt>
-            <dd className="text-right tabular-nums text-ink">{formatClock(result.startedAt)}</dd>
-            <dt className="text-ink/55">終了時刻</dt>
-            <dd className="text-right tabular-nums text-ink">{formatClock(result.endedAt)}</dd>
-          </dl>
-          <p className="mt-2 text-[10px] text-ink/45">現在の原稿文字数とは別の値です。</p>
-          <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => setPanel(null)} className="rounded px-2 py-1 text-[11px] text-ink/55 hover:bg-ink/5">
-              閉じる
-            </button>
-            <button type="button" onClick={() => copyShareText(result)} className="rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5">
-              {copiedId === result.id ? "コピーしました" : "テキストをコピー"}
-            </button>
-            <button type="button" onClick={() => openXShare(result)} className="rounded bg-ink px-2 py-1 text-[11px] font-semibold text-base hover:opacity-90">
-              Xでシェア
-            </button>
-          </div>
-        </div>
+        <WorkSessionResultModal
+          result={result}
+          copied={copiedId === result.id}
+          onClose={closePanel}
+          onCopy={() => copyShareText(result)}
+          onShare={() => openXShare(result)}
+        />
       )}
 
       {panel === "history" && (

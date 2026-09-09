@@ -141,17 +141,46 @@ function snapshotExpression() {
     const editor = document.querySelector('[data-demo-target="editor"]');
     const activity = document.querySelector('[data-work-session-written-count]');
     const result = document.querySelector('[data-work-session-result]');
+    const resultModal = document.querySelector('[data-work-session-result-modal]');
     const history = document.querySelector('[data-work-session-history]');
     const footerHelp = document.querySelector('[data-editor-footer-help]');
     const footerControls = document.querySelector('[data-editor-footer-controls]');
     const helpRect = footerHelp?.getBoundingClientRect();
     const controlsRect = footerControls?.getBoundingClientRect();
+    const resultRect = result?.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const resultActions = result
+      ? [...result.querySelectorAll('[data-work-session-result-action]')]
+          .map((action) => action.getAttribute('data-work-session-result-action'))
+      : [];
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
       editorValue: editor?.value,
       activityText: activity?.textContent.trim(),
       activityValue: activity?.getAttribute('data-work-session-written-count'),
       resultText: result?.textContent.replace(/\\s+/g, ' ').trim(),
+      resultActions,
+      resultRole: result?.getAttribute('role'),
+      resultAriaModal: result?.getAttribute('aria-modal'),
+      resultModalPosition: resultModal ? getComputedStyle(resultModal).position : undefined,
+      resultPortalledToBody: resultModal?.parentElement === document.body,
+      resultInViewport: Boolean(
+        resultRect &&
+        resultRect.left >= 0 &&
+        resultRect.top >= 0 &&
+        resultRect.right <= innerWidth &&
+        resultRect.bottom <= innerHeight
+      ),
+      resultCenterDelta: resultRect
+        ? {
+            x: Math.abs((resultRect.left + resultRect.right) / 2 - viewportWidth / 2),
+            y: Math.abs((resultRect.top + resultRect.bottom) / 2 - viewportHeight / 2),
+          }
+        : undefined,
+      resultMargins: resultRect
+        ? { left: resultRect.left, right: innerWidth - resultRect.right }
+        : undefined,
       historyText: history?.textContent.replace(/\\s+/g, ' ').trim(),
       hasStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
       hasEnd: Boolean(document.querySelector('[data-work-session-action="end"]')),
@@ -353,9 +382,67 @@ try {
   assert.equal(ended.hasStart, true);
   assert.match(ended.resultText, /今回書いた文字数\s*5文字/);
   assert.match(ended.resultText, /作業時間/);
+  assert.equal(ended.resultRole, "dialog");
+  assert.equal(ended.resultAriaModal, "true");
+  assert.equal(ended.resultModalPosition, "fixed");
+  assert.equal(ended.resultPortalledToBody, true);
+  assert.equal(ended.resultInViewport, true);
+  assert.ok(
+    ended.resultCenterDelta.x <= 1,
+    "result modal is not horizontally centered: " + JSON.stringify(ended.resultCenterDelta)
+  );
+  assert.ok(
+    ended.resultCenterDelta.y <= 1,
+    "result modal is not vertically centered on desktop: " + JSON.stringify(ended.resultCenterDelta)
+  );
+  assert.deepEqual(
+    ended.resultActions,
+    ["close-icon", "close", "copy", "share-x"]
+  );
   assert.equal(completedState.active, null);
   assert.equal(completedState.history.length, 1);
   assert.equal(completedState.history[0].writtenCharacterCount, 5);
+
+  const copiedShareText = await cdp.evaluate("(async () => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__workSessionCopiedText = text; } } }); document.querySelector('[data-work-session-result-action=copy]').click(); await Promise.resolve(); return window.__workSessionCopiedText; })()");
+  assert.equal(
+    copiedShareText,
+    "今日は5文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/"
+  );
+
+  const xShareUrl = await cdp.evaluate("(() => { window.open = (url) => { window.__workSessionShareUrl = String(url); return null; }; document.querySelector('[data-work-session-result-action=share-x]').click(); return window.__workSessionShareUrl; })()");
+  assert.equal(
+    new URL(xShareUrl).searchParams.get("text"),
+    "今日は5文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/"
+  );
+
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await cdp.evaluate("new Promise((resolve) => requestAnimationFrame(() => resolve(true)))");
+  const narrowResult = await cdp.evaluate(snapshotExpression());
+  assert.equal(narrowResult.resultInViewport, true);
+  assert.ok(
+    narrowResult.resultMargins.left >= 15,
+    "missing narrow left margin: " + JSON.stringify(narrowResult.resultMargins)
+  );
+  assert.ok(
+    narrowResult.resultMargins.right >= 15,
+    "missing narrow right margin: " + JSON.stringify(narrowResult.resultMargins)
+  );
+
+  await cdp.evaluate("document.querySelector('[data-work-session-result-action=close]').click(); true");
+  await cdp.waitFor("!document.querySelector('[data-work-session-result]')");
+  const afterResultClose = await cdp.evaluate(snapshotExpression());
+  assert.equal(JSON.parse(afterResultClose.storage).history.length, 1);
+
+  await cdp.evaluate("document.querySelector('[data-work-session-action=history]').click(); true");
+  await cdp.waitFor("Boolean(document.querySelector('[data-work-session-history-record]'))");
+  const historyAfterClose = await cdp.evaluate(snapshotExpression());
+  assert.match(historyAfterClose.historyText, /5文字/);
+  assert.equal(JSON.parse(historyAfterClose.storage).history[0].writtenCharacterCount, 5);
 
   await cdp.evaluate("location.reload(); true");
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
@@ -368,7 +455,31 @@ try {
   assert.match(reloaded.historyText, /5文字/);
   assert.equal(JSON.parse(reloaded.storage).history[0].writtenCharacterCount, 5);
 
-  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (visible Undo/Redo reuse native history at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
+  await cdp.evaluate("document.querySelector('[data-work-session-action=history]').click(); true");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=start]').click(); true");
+  await cdp.waitFor("document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '0'");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=end]').click(); true");
+  await cdp.waitFor("Boolean(document.querySelector('[data-work-session-result]'))");
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.waitFor("!document.querySelector('[data-work-session-result]')");
+  const afterEscapeClose = await cdp.evaluate(snapshotExpression());
+  assert.equal(JSON.parse(afterEscapeClose.storage).history.length, 2);
+  assert.equal(JSON.parse(afterEscapeClose.storage).history[1].writtenCharacterCount, 0);
+
+  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (viewport result modal desktop/narrow + copy/X + explicit/Escape close + retained history; visible Undo/Redo at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;

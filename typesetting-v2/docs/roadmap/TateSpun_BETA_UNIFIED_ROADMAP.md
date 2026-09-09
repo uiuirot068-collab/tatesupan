@@ -60,9 +60,7 @@ The following state is closed or Human-passed and must be preserved through inte
 - UI-C drawer integration, Memo, Editor actions, and narrow-width behavior: **HUMAN PASS in the development Editor**.
 - Manual page break across Preview/PDF/Web JPG/print JPG: **HUMAN PASS**.
 - Writing Check 11-A functional scope: **COMPLETE / HUMAN PASS**.
-- 11-B work-session tracker: **FUNCTIONAL HUMAN PASS**. It remains **READY FOR FINAL VISUAL CONFIRMATION**, not CLOSED, until both explicit Human confirmations pass:
-  1. Ruby/TCY/page-break help row is visually separate and readable.
-  2. Visible Undo/Redo is discoverable and performs the expected native-history action.
+- 11-B work-session tracker: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Ruby/TCY/page-break help-row readability and visible Undo/Redo discoverability/function are **HUMAN PASS**. The only remaining Human item is confirming that the completed-session result modal is fully visible and operable without clipping.
 
 Passed typesetting quality is a regression guard for integration, not a new design loop.
 
@@ -72,7 +70,7 @@ Primary disposition A:
 
 | Item | Current state | Exit condition |
 | --- | --- | --- |
-| 11-B final visual confirmation | READY FOR FINAL VISUAL CONFIRMATION | Both named Human checks in §3 pass. |
+| 11-B result-modal visual confirmation | READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION | Human confirms the centered completed-session modal is fully visible and operable without clipping. |
 | Production integration | NOT_STARTED | The ordered integration in §11 is complete without reopening passed typesetting. |
 | Browser/Production PDF execution | NOT_STARTED; architecture decision required | Real Production browser flow downloads the same Publication PaintPlan with no Node-only leakage. |
 | Real-manuscript Production E2E | NOT_STARTED | A Human-authored manuscript passes the flow in §12, including reload, images, PDF/JPG, TXT, and preflight. |
@@ -198,7 +196,7 @@ Historical audit/HOLD text remains evidence. This table, the closed-state list, 
 
 Production integration remains **NOT_STARTED**. It may begin only after:
 
-1. both 11-B final visual confirmations pass;
+1. the single 11-B final result-modal visual confirmation passes;
 2. the four F decisions in §8 are recorded;
 3. the task explicitly authorizes Production `src/` changes;
 4. the current Production diff/noise is inventoried and exact task-owned paths are established;
@@ -234,7 +232,7 @@ Do not batch all slices into one opaque migration. Do not retire the legacy path
 
 Critical path:
 
-> 11-B final visual confirmation → product/architecture decisions → Production integration → browser PDF → TXT and export-cancel UX → top page/demo → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
+> 11-B final result-modal visual confirmation → product/architecture decisions → Production integration → browser PDF → TXT and export-cancel UX → top page/demo → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
 
 ### Real-manuscript Production E2E
 

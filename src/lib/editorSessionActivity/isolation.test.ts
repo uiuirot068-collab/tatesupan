@@ -56,4 +56,18 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain("↷</span> やり直す");
     expect(editor).toContain("document.execCommand(command)");
   });
+
+  it("renders the completed result as a viewport modal without changing its actions", () => {
+    const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
+    expect(counter).toContain('createPortal(');
+    expect(counter).toContain('document.body');
+    expect(counter).toContain('data-work-session-result-modal');
+    expect(counter).toContain('className="fixed inset-0');
+    expect(counter).toContain('aria-modal="true"');
+    expect(counter).toContain('event.key !== "Escape"');
+    expect(counter).toContain('data-work-session-result-action="close"');
+    expect(counter).toContain('data-work-session-result-action="copy"');
+    expect(counter).toContain('data-work-session-result-action="share-x"');
+    expect(counter).not.toContain('data-work-session-result\n          className="absolute bottom-full');
+  });
 });

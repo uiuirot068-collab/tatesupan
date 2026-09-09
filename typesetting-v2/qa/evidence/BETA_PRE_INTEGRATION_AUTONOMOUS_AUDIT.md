@@ -159,4 +159,19 @@ Date: 2026-09-10
 - Deterministic Editor/11-B tests: **43/43 PASS**.
 - Real Editor browser E2E: **PASS** for separate readable footer rows, visible Undo/Redo manuscript changes, unchanged written count during both, and the existing type/delete/replacement/End/history flow.
 
-Only two Human visual confirmations remain: footer separation/readability and visible Undo/Redo discoverability/function. Ruby remains CLOSED / Human PASS.
+At that checkpoint, two Human visual confirmations remained: footer separation/readability and visible Undo/Redo discoverability/function. Both subsequently received Human PASS. Ruby remains CLOSED / Human PASS.
+
+## 11-B final result-modal clipping fix
+
+Date: 2026-09-10
+
+The last Human-visible 11-B defect was presentation-only: the completed-session result used an anchored absolute panel inside the Editor footer and could be clipped by the surrounding frame. The result now renders through a `document.body` portal as a viewport-fixed, centered modal using the existing TateSpun dialog language.
+
+- Desktop centering and a safe 390px-width layout are covered in the real browser.
+- The dialog exposes explicit close, Escape close, and backdrop close; its body may scroll internally while the action row remains visible.
+- The existing count, duration, start/end times, exact canonical copy text, and X share intent are unchanged.
+- Closing the modal only dismisses presentation state. The completed local history record remains and reopens through `作業記録`.
+- Deterministic Editor/11-B tests: **44/44 PASS**.
+- Real Editor browser E2E: **PASS** for body portal/fixed positioning, desktop/narrow geometry, copy/X actions, explicit/Escape close, retained history, and the existing Undo/Redo +0 and written-only flow.
+
+11-B status: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Exactly one Human check remains: the centered result modal is fully visible, unclipped, and operable. Formal Human CLOSED is not claimed yet.

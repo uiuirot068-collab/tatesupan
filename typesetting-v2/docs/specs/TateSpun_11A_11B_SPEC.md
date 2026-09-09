@@ -1,6 +1,6 @@
-# TateSpun 11-A / 11-B Specification v1.4
-Updated: 2026-09-09
-Revision reason: final Human QA semantics correction: explicit work sessions count newly written/inserted text only.
+# TateSpun 11-A / 11-B Specification v1.5
+Updated: 2026-09-10
+Revision reason: preserve the final written-only semantics while moving the completed-session result into a viewport-centered modal.
 
 ## 11-A correction / recovered historical authority
 
@@ -95,7 +95,7 @@ The same development Editor implements the approved UI-C drawer interaction, Mem
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Status: **FUNCTIONAL HUMAN PASS / FINAL UI POLISH IMPLEMENTED / VISUAL CONFIRMATION PENDING (2026-09-10).**
+Status: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION (2026-09-10).** Footer readability and visible Undo/Redo are Human PASS; only result-modal visibility remains.
 
 Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
@@ -134,7 +134,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Only newly inserted user-authored text occurring while ACTIVE adds to `writtenCharacterCount`. Elapsed time is derived from `startedAt`; there is no per-second persistent write or event log.
 - A normal reload restores the same active id, start time, active state, and aggregate activity from `localStorage`.
 - Selecting `作業終了` stops accumulation immediately and appends one completed metadata-only record containing `id`, `startedAt`, `endedAt`, `durationMs`, and `writtenCharacterCount`.
-- The result shows activity, duration, start time, and end time. Later idle edits cannot change it. A later Start creates a new session at 0 while preserving completed history.
+- The result opens in a viewport-centered modal independent of Editor/footer overflow. It shows activity, duration, start time, and end time; supports explicit/Escape/backdrop close; and retains copy/X actions. Closing the modal does not delete history. Later idle edits cannot change the result. A later Start creates a new session at 0 while preserving completed history.
 - Completed history is local-only, capped at the latest 100 records, and evicts the oldest first. No cloud synchronization, analytics, database, manuscript text, or mutation event log is used.
 - No pause state is introduced in this beta iteration.
 
@@ -148,7 +148,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
-- 43 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, separate wrapping footer rows, and visible native-history controls. The actual `/editor?demo=1` browser E2E additionally proves visible Undo/Redo both mutate the manuscript through native history while the written count stays unchanged. No new dependency was introduced.
+- 44 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, separate wrapping footer rows, visible native-history controls, and the viewport-modal contract. The actual `/editor?demo=1` browser E2E additionally proves desktop/narrow modal geometry, canonical copy/X actions, explicit/Escape close, retained history, and visible Undo/Redo at +0. No new dependency was introduced.
 
 ---
 
