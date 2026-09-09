@@ -9,7 +9,7 @@ import { mmToTicks } from "../../core/geometry/tick";
 import { buildPaintDocument } from "../../renderer/preview/paintModel";
 import { generatePublicationPdf, type PublicationFontResource } from "../../renderer/publication/pdfGenerator";
 
-export interface QaInput { content: string; fontSizePt: number; lineHeightRatio: number; charsPerLine: number; linesPerColumn: number }
+export interface QaInput { title?: string; content: string; fontSizePt: number; lineHeightRatio: number; charsPerLine: number; linesPerColumn: number }
 const FONT_PATH = fileURLToPath(new URL("../../qa/publication/p3-o08/font-poc/fonts/ShipporiMincho-Regular.ttf", import.meta.url));
 
 function settingsFor(input: QaInput): PageSettings {
@@ -19,7 +19,7 @@ function settingsFor(input: QaInput): PageSettings {
 function compose(input: QaInput) {
   const settings = settingsFor(input);
   const measurement = createShipporiMinchoMeasurementProvider(FONT_PATH);
-  const bridge = composeV2Document({ title: "TateSpun v2 Human E2E QA", content: input.content, settings, measurement });
+  const bridge = composeV2Document({ title: input.title?.trim() || "TateSpun v2 Human E2E QA", content: input.content, settings, measurement });
   return { settings, bridge };
 }
 
