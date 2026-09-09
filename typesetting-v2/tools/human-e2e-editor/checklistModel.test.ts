@@ -6,6 +6,7 @@ import {
   createDefaultChecklistState,
   parseChecklistState,
   removePersonalChecklist,
+  removePersonalChecklistWithConfirmation,
   resetChecklistSet,
   updateChecklistSet,
 } from "./checklistModel";
@@ -48,6 +49,29 @@ describe("preflight checklist model", () => {
     expect(added.activeSetId).toBe("personal-1");
     expect(removePersonalChecklist(added, "personal-1").sets).toHaveLength(initial.sets.length);
     expect(removePersonalChecklist(initial, initial.sets[0].id)).toEqual(initial);
+  });
+
+  it("requires one confirmation before deleting a personal list and preserves it on cancel", () => {
+    const state = addPersonalChecklist(createDefaultChecklistState(), "personal-1", "入稿前の自分用");
+    const cancelled = removePersonalChecklistWithConfirmation(state, "personal-1", (name) => {
+      expect(name).toBe("入稿前の自分用");
+      return false;
+    });
+    expect(cancelled).toBe(state);
+
+    const confirmed = removePersonalChecklistWithConfirmation(state, "personal-1", () => true);
+    expect(confirmed.sets.some((set) => set.id === "personal-1")).toBe(false);
+  });
+
+  it("restores edited preset text and checked state after a serialized browser reload", () => {
+    const initial = createDefaultChecklistState();
+    const preset = initial.sets[0];
+    const edited = updateChecklistSet(initial, preset.id, (set) => ({
+      ...set,
+      items: set.items.map((item, index) => index === 0 ? { ...item, text: "再読して確認", checked: true } : item),
+    }));
+    const reloaded = parseChecklistState(JSON.stringify(edited));
+    expect(reloaded.sets[0].items[0]).toMatchObject({ text: "再読して確認", checked: true });
   });
 
   it("recovers safely from invalid JSON and sanitizes malformed entries", () => {

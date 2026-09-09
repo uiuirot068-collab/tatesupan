@@ -59,8 +59,34 @@ All five are intentionally left unchanged under the absolute no-Production-`src/
 - `npm.cmd exec -- next build`: PASS on Next.js 16.3.0 after reading the repository-shipped CLI guide. `npm.cmd run build` cannot run its project-specific prebuild without a configured `NEXT_PUBLIC_SUPABASE_URL`; the direct optimized Next build itself passes.
 - `scripts/verify-writing-check.mjs`: tooling invocation fails under Node 24 on a pre-existing unsupported ESM directory import; the newer dedicated Writing Check Vitest suite passes 331/331 and is the recorded regression result.
 
-## Checkpoint limitation
+## Earlier checkpoint limitation — resolved
 
-`git add` could not create the worktree metadata `index.lock` because the actual Git worktree directory is outside the writable workspace and read-only to this sandbox. The run contract explicitly prohibited permission escalation. No alternate index, external write, commit, push, or deploy was attempted. Task-owned source/docs remain an isolated unstaged diff; all pre-existing QA noise was left un-staged.
+During the original MASTER RUN, `git add` could not create the linked-worktree `index.lock` and the contract prohibited escalation. The post-Round 1 recovery resumed with explicit Human authorization for local staging and checkpoint commits. The task-owned changes are now checkpointed through exact-path staging; unrelated QA noise remains unstaged. No alternate index, push, or deploy was used.
 
 Human visual/interaction QA remains required; see `typesetting-v2/qa/HUMAN_QA_PRE_INTEGRATION.md`.
+
+## Post-pre-integration Human QA Round 1 fix loop
+
+Date: 2026-09-09
+
+The four scoped Round 1 findings were addressed without changing Production `src/` or reopening passed Typography:
+
+- Browser/JPG PaintPlan fallback rotates only U+30FC `ー` around its already-composed cell center. U+2015 `―`, character advance, and Canonical geometry are unchanged.
+- Odd/even running heads now use edge-safe left/right paint anchors and matching text alignment. Body Canonical geometry and manuscript flow are unchanged.
+- A manual break wins when its boundary shares an offset with a paragraph break, and only the marker's immediately-following separator newline is consumed. Preview, PDF, Web JPG, and print JPG receive the same two-page Canonical result; ordinary newline behavior is unchanged.
+- Personal checklist deletion asks for one clear confirmation. Cancel preserves the personal list; confirm uses the existing deletion path. Presets cannot enter the confirmation/deletion path.
+
+Updated verification:
+
+- Core: 368/368 PASS.
+- Preview: 114/114 PASS.
+- v2Bridge including the frozen Typography Human recheck: 27/27 PASS.
+- Development Editor/checklist/manual-break integration: 13/13 PASS.
+- Focused JPG regression: 31/31 PASS; U+30FC browser Canvas plus Web/print raster orientation and odd/even Web/print edge strips are covered.
+- Publication: 583/584 PASS. The sole failure is the same Dropbox `EBUSY` while overwriting `typography-parity-yakumono-missing-cases-diagnostic.pdf`; all deterministic code assertions and the focused Typography/JPG cases pass.
+- 11-B frozen semantics: 27/27 PASS.
+- TypeScript, standalone development Editor Vite build, and optimized Next.js 16.3.0 build: PASS.
+
+Non-blocking narrow-width note: the development Editor currently recomposes `composeV2Document` synchronously whenever manuscript content changes so JPG actions always have a current PaintPlan. That MASTER RUN wiring is an obvious source of edit-time work on narrow devices. It remains documented backlog; this scoped fix loop does not introduce a debounce, worker, or broader rendering rewrite.
+
+The Round 2 Human packet is intentionally limited to the 11 targeted items in `typesetting-v2/qa/HUMAN_QA_PRE_INTEGRATION.md`; previously passed QA is not reopened.

@@ -5,7 +5,7 @@ import {
   completionFor,
   createDefaultChecklistState,
   parseChecklistState,
-  removePersonalChecklist,
+  removePersonalChecklistWithConfirmation,
   resetChecklistSet,
   updateChecklistSet,
   type ChecklistState,
@@ -64,7 +64,15 @@ export function ChecklistPanel({ onClose }: ChecklistPanelProps) {
           <button type="button" onClick={() => setState((current) => addPersonalChecklist(current, nextId("personal")))}>自分用リストを作る</button>
           <button type="button" onClick={() => setState((current) => resetChecklistSet(current, active.id))}>リセット</button>
           {active.presetId === null && (
-            <button className="danger-text" type="button" onClick={() => setState((current) => removePersonalChecklist(current, active.id))}>このリストを削除</button>
+            <button
+              className="danger-text"
+              type="button"
+              onClick={() => setState((current) => removePersonalChecklistWithConfirmation(
+                current,
+                active.id,
+                (listName) => window.confirm(`「${listName}」を削除します。元に戻せません。削除してよろしいですか？`),
+              ))}
+            >このリストを削除</button>
           )}
         </div>
 

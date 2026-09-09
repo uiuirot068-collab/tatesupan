@@ -16,7 +16,15 @@ Open `http://127.0.0.1:5173/`.
 
 ## 1. 11-B session editing activity counter
 
-Location: real Production-style Editor where 11-B was implemented; not duplicated in the isolated development Editor.
+This check uses the existing real Editor implementation. It is not duplicated in the isolated v2 development Editor and does not require Production deployment or integration.
+
+From the repository root, run:
+
+```powershell
+npm.cmd run dev
+```
+
+Open `http://127.0.0.1:3000/editor?demo=1`. In the left manuscript Editor pane, look at the bottom footer. The `このセッションの編集量 0文字` badge is immediately before the current-manuscript character count. Select the badge to see inserted/deleted detail and the result-share action.
 
 Steps:
 
@@ -38,10 +46,10 @@ Steps:
 1. Open each of the three presets and confirm the items are useful and editable.
 2. Edit an item, check several items, close/reopen the drawer, then reload the page.
 3. Select `リセット`; confirm a preset restores its original items and clears checks.
-4. Create a personal list, rename it, add/edit/delete items, reload, then delete the personal list.
+4. Create a personal list, rename it, add/edit/delete items, reload, then delete the personal list. Cancel the first deletion warning and confirm the second.
 5. Confirm the Editor and Preview do not change when checklist state changes.
 
-PASS: state persists locally across reload; presets and personal lists remain reusable; completion count is correct; no checklist text enters manuscript, Preview, PDF, or JPG.
+PASS: state persists locally across reload; presets and personal lists remain reusable; cancelling the one-time personal-list deletion warning leaves the list untouched and confirming it deletes normally; completion count is correct; no checklist text enters manuscript, Preview, PDF, or JPG.
 
 Known limitation: cloud/work-specific checklist semantics are deliberately not implemented. Production Editor placement is an integration gate.
 
@@ -115,3 +123,17 @@ PASS after implementation: `再検出` starts on a new left-aligned line; empty/
 ## Report
 
 Record PASS/FAIL plus browser, viewport, and the first failing item. Keep failures separate by numbered section so an isolated fix can be made without reopening already-passed typography.
+
+## Human QA Round 2 — targeted recheck only
+
+1. Personal checklist delete warning: cancel leaves the personal list untouched; confirm deletes it normally.
+2. Preset/edit/check state survives browser reload.
+3. Manual page break creates exactly the expected next page in Preview.
+4. Manual page break creates exactly the expected next page in PDF.
+5. Manual page break creates exactly the expected next page in Web JPG.
+6. Manual page break creates exactly the expected next page in print JPG.
+7. U+30FC `ー` is vertical in Web JPG.
+8. U+30FC `ー` is vertical in print JPG.
+9. Odd-page JPG running head is fully visible at the left outer edge.
+10. Even-page JPG running head is fully visible at the right outer edge.
+11. 11-B: run `npm.cmd run dev`, open `http://127.0.0.1:3000/editor?demo=1`, and find `このセッションの編集量 0文字` in the bottom footer of the left manuscript Editor pane, immediately before the current-manuscript character count. Production integration is not required.

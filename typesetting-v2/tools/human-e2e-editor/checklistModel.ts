@@ -153,6 +153,16 @@ export function removePersonalChecklist(state: ChecklistState, setId: string): C
   return { ...state, sets, activeSetId: state.activeSetId === setId ? sets[0].id : state.activeSetId };
 }
 
+export function removePersonalChecklistWithConfirmation(
+  state: ChecklistState,
+  setId: string,
+  confirmDeletion: (listName: string) => boolean
+): ChecklistState {
+  const target = state.sets.find((set) => set.id === setId);
+  if (!target || target.presetId !== null) return state;
+  return confirmDeletion(target.name) ? removePersonalChecklist(state, setId) : state;
+}
+
 export function completionFor(set: ChecklistSet): { checked: number; total: number; complete: boolean } {
   const checked = set.items.filter((item) => item.checked).length;
   return { checked, total: set.items.length, complete: set.items.length > 0 && checked === set.items.length };

@@ -220,6 +220,19 @@ The Human-decision-free, development-only portion of items D/E and final JPG wir
 
 Automated evidence: 10/10 focused tests (checklist state + UI/export static contracts), TypeScript PASS, standalone Vite production build PASS. Human QA packet: `qa/HUMAN_QA_PRE_INTEGRATION.md`.
 
+#### Post-pre-integration Human QA Round 1 fix loop (2026-09-09)
+
+Status: **FIXED / HUMAN QA ROUND 2 READY** for the scoped development-only surfaces.
+
+- U+30FC `ー` now has browser/JPG paint parity without changing U+2015 `―`, Canonical geometry, advances, or real Publication PDF shaping.
+- Odd/even JPG running heads use edge-safe paint anchors; body composition is unchanged.
+- Development Editor manual page breaks now propagate as one shared Canonical boundary through Preview, PDF, Web JPG, and print JPG, with no literal marker or extra page.
+- Personal checklist list-deletion now has one cancel-safe confirmation.
+- Exact 11-B local launch/route/footer instructions and the 11-item-only Round 2 packet are recorded in `qa/HUMAN_QA_PRE_INTEGRATION.md`.
+- Narrow-width edit sluggishness is non-blocking backlog: the development harness synchronously recomposes its v2 bridge on content changes to keep JPG output current. No broad performance rewrite is included here.
+
+Production `src/`, frozen Typography states, push, and deploy remain outside this fix loop.
+
 ---
 
 ### 11-B. Writing-session total activity counter
@@ -776,7 +789,7 @@ All β-required Master §17 acceptance conditions and newly-approved β product 
 - **Human QA:** consolidated development review, real-manuscript E2E, mandatory acceptance matrix, and final Production smoke.
 - **NOT_STARTED but not autonomously implementable under this run:** only the gated/Production/Human-QA items above. No additional Human-decision-free roadmap item was found.
 
-Checkpoint limitation: the task-owned changes could not be staged or committed because the worktree Git metadata directory is read-only to this sandbox (`index.lock: Permission denied`). No alternate index, permission escalation, push, or deploy was attempted.
+Checkpoint recovery: the earlier linked-worktree `index.lock` limitation was resolved during the post-Round 1 fix loop using the Human-authorized local staging/commit path. Exact task-owned files were checkpointed; unrelated QA noise remains unstaged. No alternate index, push, or deploy was used.
 
 ---
 
