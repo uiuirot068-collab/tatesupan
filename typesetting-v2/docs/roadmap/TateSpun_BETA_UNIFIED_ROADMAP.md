@@ -460,6 +460,36 @@ interpreter is new, nontrivial tooling, explicitly out of scope. See
 `qa/evidence/TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md`.
 Genuine HUMAN GATE / tooling-limited STOP, not a deferred implementation.
 
+**Round 6 update (2026-09-09, HEAD `d17bcd0`)**: superseded, not merely
+revised — Human independently rendered both the real TateSpun v2
+Publication PDF and the real InDesign reference at the same physical
+scale and measured per-glyph vertical CENTER offsets directly from the
+raster images. Cross-checked against this codebase's own real, measured,
+currently-applied `vpal` GPOS Y-placement values (`VerticalGposContext`):
+**every ordinary hiragana's measured offset matched TateSpun's own
+applied vpal value in sign, and closely in magnitude, for every glyph
+checked** (largest: い, measured −1.68pt vs. applied −1.692pt). Root
+cause: an earlier round (round 10, `P3_O08_YAKUMONO_GPOS.md`) built
+`vpal`-based ink repositioning specifically to fix real yakumono (「」（）
+bracket) intrusion, then extended it to apply unconditionally to every
+OTHER character too, on the assumption "harmless — verified for ordinary
+kanji (real vpal = 0)." That assumption was never verified for ordinary
+HIRAGANA, which this font gives real, substantial vpal values — and the
+extension was, per this round's own measurement, actively wrong for
+them. Yakumono ink placement was already owned entirely by a separate
+mechanism (`yakumonoContext`), so real bracket positioning is completely
+unaffected by removing this. Fixed: `pdfGenerator.ts`'s
+`verticalGraphemeCommands` no longer consumes `vpal` for ordinary
+(non-yakumono, non-small-kana) characters. No Core/Preview file touched;
+Natural Pitch, `lineHeightRatio`, `linePitchTicks`, column pitch, and
+font size all completely unchanged. One existing test asserting the old
+(now-understood-to-be-wrong) behavior was corrected, with full history
+preserved in its own comment. Full regression (Core/Stage C/Stage
+D/Preview/Publication/v2Bridge) and tsc pass. See
+`qa/evidence/TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md` §11–19.
+Human visual recheck of the regenerated artifacts is the natural next
+step.
+
 Human supplied a new comparison (TateSpun Preview vs. InDesign as reference) and observes that TateSpun's vertical character spacing / pitch may still look different from InDesign in continuous prose.
 
 This does NOT reopen Writing Check β 2.0 (11-A) and does NOT invalidate already-passed functional work. No Core/Preview/Publication changes were made at this checkpoint.

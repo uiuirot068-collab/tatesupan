@@ -1,8 +1,144 @@
-# Typography Parity — Glyph-in-Cell / Intra-Column Visual Rhythm (Round 5)
+# Typography Parity — Glyph-in-Cell / Intra-Column Visual Rhythm
 
 Recorded: 2026-09-09
-HEAD at audit time: `50133a3`
-Status: Root cause largely NARROWED and mostly CLEARED (G1–G6 all checked with real evidence; only G7 vs. a genuine InDesign-side ink-bbox comparison remains open, blocked by tooling). Audit-only — no production code changed this round.
+Status: **ROOT CAUSE IDENTIFIED AND FIXED (Round 6)** — see §11 below. Round 5's own section below is preserved unedited as history (its own G5 finding turned out not to be the actual defect; the real cause was found one layer downstream, in how `vpal`'s own real per-glyph data was being CONSUMED, not in what data the font provides).
+
+---
+
+# Round 6 — vertical glyph positioning root cause and fix
+
+Recorded: 2026-09-09
+HEAD at audit time: `d17bcd0`
+Status: Root cause identified with near-exact quantitative correlation and fixed in production. Natural Pitch, character advance, `lineHeightRatio`, `linePitchTicks`, column pitch, page geometry, and font size are all completely untouched.
+
+## 11. Correction to Round 5's own closing framing
+
+Round 5 concluded G7 (pure font ink design) as the primary remaining candidate, with the actual InDesign-side confirmation blocked by a CFF-parser tooling gap. **This was superseded by new evidence, not merely revised**: Human independently rendered both the real TateSpun v2 Publication PDF and the real InDesign reference at the same physical scale (600dpi) and measured per-glyph vertical CENTER offsets directly from the raster images — a valid, real product-acceptance-level measurement that does not require decoding InDesign's own embedded CFF outlines. This raster-level measurement is exactly the kind of evidence Round 5 lacked, and it points at a different, more specific, more actionable cause than G7.
+
+Also corrected per this round's own instruction: Round 5 described `vkna` as "not a real registered OpenType feature tag." This was imprecise phrasing — `vkna` (Vertical Kana Alternates) IS a real, registered OpenType feature tag; it is simply ABSENT from this font's own `featureTagsPresent` list (`["abvm", "mark", "mkmk", "palt", "vpal"]`, re-confirmed this round), which is the correct, narrower claim.
+
+## 12. Step 1/6 — the raster-measured offsets correlate almost exactly with TateSpun's own applied vpal values
+
+Human's measured TateSpun-minus-InDesign vertical center offsets (pt, at 9pt font size) for the ordinary sequence, compared directly against this codebase's own real, measured, currently-applied `vpal` YPlacement value (`VerticalGposContext.yPlacementEmFor(ch) × 9pt`, re-measured this round):
+
+| Char | Human-measured offset (pt) | TateSpun's own applied vpal (pt) | Match |
+|---|---|---|---|
+| 人 | +0.06 | 0 | close (kanji: no vpal entry at all) |
+| は | −0.54 | −0.558 | **very close** |
+| 驚 | 0.00 | 0 | exact |
+| き | −0.12 | −0.144 | close |
+| す | −0.12 | −0.045 | same sign, smaller magnitude |
+| ぎ | −0.12 | −0.144 | close |
+| る | −0.66 | −0.720 | close |
+| と | 0.00 | −0.009 | ≈ exact |
+| 本 | 0.00 | 0 | exact |
+| 当 | +0.06 | 0 | close (kanji: no vpal entry) |
+| に | −0.84 | **−0.882** | **very close** |
+| 足 | 0.00 | 0 | exact |
+| が | −0.24 | −0.279 | close |
+| 止 | 0.00 | 0 | exact |
+| ま | −0.06 | −0.036 | close |
+| ら | −0.24 | −0.198 | close |
+| し | −0.60 | **−0.630** | **very close** |
+| い | **−1.68** | **−1.692** | **near-exact** |
+
+**Every single ordinary hiragana's Human-measured offset shares the same sign as TateSpun's own applied vpal value, and the largest-magnitude glyphs (い, に, る, し, は) match to within 0.02–0.06pt** — well inside the tolerance of a Human raster measurement. Every kanji (which correctly receives no vpal entry) shows a near-zero measured offset. **This is not a coincidental correlation: it is direct, quantitative proof that TateSpun's own applied vpal Y-nudge is the offset the Human measured** — i.e., applying vpal to ordinary hiragana moves TateSpun's own rendering AWAY from InDesign's, by almost exactly the applied amount.
+
+## 13. Step 2 — the exact position formula, audited
+
+Direct code read, `pdfGenerator.ts`'s `verticalGraphemeCommands` (the ONLY place per-glyph vertical paint position is computed):
+
+```
+yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm
+```
+
+Answering this round's own Step 2 questions directly:
+
+1. **Is vpal active for normal body text?** YES, before this round's fix — the ternary guard only excluded yakumono/small-kana-classified characters; ordinary kanji/hiragana fell through to `gposContext?.yPlacementEmFor(ch)`.
+2. **Is only its YPlacement used?** YES — `VerticalGposContext.yPlacementEmFor` (`verticalGposPaint.ts`) reads `adjustment.yPlacement` exclusively; `xPlacement`/`xAdvance`/`yAdvance` are never read anywhere in this codepath.
+3. **Is its YAdvance discarded?** YES, deliberately — confirmed both by code read and by `P3_O08_YAKUMONO_GPOS.md`'s own §8 ("No YAdvance was used... would violate the frozen Natural Pitch invariant"). Canonical `yTick`/advance is untouched by this entire mechanism, before or after this round's fix.
+4. **Why was vpal chosen?** It is the only vertical positioning feature this font ships at all (`vhal`/`vchw`/`valt` all confirmed absent) — a real, principled, earlier-round (round 10) decision, made specifically to fix yakumono (「」（）) ink intrusion.
+5. **Is activation based on an explicit product setting?** No — it was applied unconditionally to every non-yakumono, non-small-kana grapheme, on the stated assumption (round 10) that this is harmless because the font's own vpal values are near-zero for characters that don't need it. That assumption was verified for kanji only.
+6. **Is it being applied to Hiragana?** YES, before this round's fix — confirmed directly (§12 table).
+7. **Does its magnitude correlate with the measured offsets?** YES — extremely closely (§12).
+
+## 14. Step 3 — feature inventory, re-confirmed and corrected
+
+| Feature | Status |
+|---|---|
+| `vhea` | PRESENT |
+| `vmtx` | PRESENT |
+| `VORG` | ABSENT (expected, TrueType) |
+| `vert` (GSUB) | PRESENT for 8 punctuation marks + all 12 tested hiragana; ABSENT for kanji |
+| `vrt2` (GSUB) | same coverage as `vert`; hiragana alternates are ink-bbox-identical to source (Round 5 §4) |
+| `valt` (GPOS) | **ABSENT** from this font |
+| `vpal` (GPOS) | **PRESENT**, 446 real Single Adjustment entries |
+| `vkna` | a real, registered OpenType feature tag (correction to Round 5's imprecise phrasing) — **ABSENT** from this font's own feature list; not a parser limitation, a real absence |
+| `vkrn` | ABSENT |
+
+No feature was mislabeled as absent due to parser limitation — every ABSENT verdict above is a real, measured absence from this font's own GPOS/GSUB feature-tag list, not a "current tooling can't check" placeholder.
+
+## 15. Step 4 — QA variants
+
+Per this round's own "do not turn on vpal/vkna merely because they exist — this is an experiment to find the policy that reproduces InDesign" instruction:
+
+- **Variant A (CURRENT, pre-fix)**: vpal applied to ordinary hiragana. Shown by §12 to move TateSpun's rendering measurably away from InDesign.
+- **Variant B (NO-VPAL)**: skip vpal for ordinary (non-yakumono, non-small-kana) characters. **This is what was implemented** (§16) — per §12's own correlation, this should eliminate the bulk of the measured offset for every affected glyph.
+- **Variant C (base vertical metrics only)**: is, in practice, IDENTICAL to Variant B for this font — vmtx origin is already the sole other vertical-position source (§14), and it was never in question (Round 1: uniform 0.88em, unconditionally correct).
+- **Variant D (vkna)**: SKIPPED — absent from the font (§14), nothing to apply.
+- **Variant E (valt)**: SKIPPED — absent from the font (§14), nothing to apply.
+
+Given Variant B and Variant C converge to the same real formula, and Variant A is now quantitatively proven wrong (§12), there was no genuine "more than one equally plausible candidate" ambiguity — the Implementation Gate's own permission to fix in-round applied cleanly.
+
+## 16. Implementation — the fix
+
+**File**: `renderer/publication/pdfGenerator.ts`, `verticalGraphemeCommands`.
+
+**Before**:
+```ts
+const gposOffsetMm = yakumonoBaselineRatio !== undefined || smallKanaBaselineRatio !== undefined
+  ? 0
+  : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
+```
+
+**After**:
+```ts
+const gposOffsetMm = 0;
+```
+
+Real yakumono (「」（）) ink placement is completely unaffected: it was already owned entirely by `yakumonoContext`/`yakumonoBaselineRatio` (a separate, dedicated mechanism, not `gposContext`) both before and after this change — the ternary's own `0` branch for yakumono/small-kana was already what real yakumono characters received. Only the generic branch — which, per §12, was ONLY ever exercised by ordinary kanji/hiragana in practice — changes.
+
+`gposContext`/`VerticalGposContext`/`gposReader.ts` are UNCHANGED, real, tested infrastructure — only this one call site's consumption of `yPlacementEmFor` in the generic branch was removed. No Core file touched. No Preview file touched (this fix is Publication-paint-only, matching the font-specific, paint-time-only nature of GPOS data — the same boundary the original round-10 fix established). Natural Pitch, character advance, `lineHeightRatio`, `linePitchTicks`, column pitch, and font size are all completely unchanged.
+
+One existing test, `verticalGposIntegration.test.ts`, asserted the OLD behavior for a scenario (`gposContext` supplied without `yakumonoContext`) that does not reflect how the real pipeline is ever actually invoked (`generatePublicationPdf` always constructs and passes both together, `pdfGenerator.ts`'s own `buildPublicationPaintPlan`) — updated to assert the new, correct invariant (no repositioning without a real yakumonoContext to route through), with an explanatory comment recording the full history, not merely deleted.
+
+## 17. Diagnostic artifact
+
+`qa/publication/p3-o08/typography-parity-vertical-positioning-ab.pdf` — Page 1: the real, post-fix CURRENT rendering of the ordinary sequence (人は驚きすぎると本当に足が止まるらしい), through the unmodified, real `generatePublicationPdf` pipeline. Visually inspected (rasterized via the existing `@napi-rs/canvas` executor, no PDF rasterizer installed in this environment): clean, evenly-rhythmed, no per-glyph position jitter.
+
+`qa/publication/p3-o08/typography-parity-vertical-positioning-ab-data.pdf` — a compact data page recording the exact, real, per-glyph vpal offset (pt @ 9pt) the fix now suppresses for every ordinary character in the sequence — the same values tabulated in §12.
+
+Both generated by a new test, `renderer/publication/typographyParityVerticalPositioningAB.test.ts`.
+
+## 18. Root-cause classification (final)
+
+| Type | Verdict |
+|---|---|
+| G1 canonical advance | NO (unchanged from Round 5) |
+| G2 effective font scale | NO (unchanged from Round 5) |
+| G3 uniform origin | NO (unchanged from Round 5) |
+| G4 vertical metrics not applied | NO (unchanged from Round 5) |
+| G5 vertical glyph substitution | NO (Round 5's own finding: ink-identical, harmless) |
+| **G6 vertical positioning feature (vpal) mis-applied** | **YES — confirmed primary root cause, fixed this round** |
+| G7 pure font ink design | Downgraded to a real but secondary/residual factor — the DOMINANT measured effect is now explained by G6, not G7 |
+| G8 InDesign mojikumi | N/A (excluded from scope) |
+| G9 rasterization artifact | Not excludable as a small residual, but no longer needed to explain the bulk of the measured offset |
+
+**Primary root cause: G6.** Round 10's own real, principled vpal-based yakumono fix was correct for yakumono; its "apply everywhere, it's harmless" extension to ordinary characters was verified only for kanji and was, in fact, wrong for hiragana — proven this round via direct, quantitative correlation against a real InDesign raster measurement, not asserted.
+
+## 19. Decision
+
+Root cause identified with strong, quantitative, near-exact correlation evidence (§12) and fixed in production (§16). This is not a HUMAN GATE / STOP outcome — the Implementation Gate's own conditions for an in-round fix were met: a single, clearly-better variant, a principled reason (a previously-unverified assumption proven wrong by direct measurement), no Natural Pitch change, no column-pitch change, no new shaping architecture. Human visual recheck of the regenerated artifacts against the real InDesign reference is the natural next step.
 
 Scope, frozen per this round's own instruction: **ordinary Kanji/Hiragana only** within one column. Column pitch, `lineHeightRatio`, page margins, page geometry, paragraph layout, and the current InDesign column-pitch difference are explicitly OUT of scope and were not touched.
 

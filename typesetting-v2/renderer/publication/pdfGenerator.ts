@@ -310,7 +310,32 @@ function verticalGraphemeCommands(
     // kana is never yakumono-classified).
     const smallKanaBaselineRatio = outlineContext?.inkCenteredBaselineRatioForSmallKana(ch);
     const effectiveBaselineRatio = yakumonoBaselineRatio ?? smallKanaBaselineRatio ?? baselineRatio;
-    const gposOffsetMm = yakumonoBaselineRatio !== undefined || smallKanaBaselineRatio !== undefined ? 0 : (gposContext?.yPlacementEmFor(ch) ?? 0) * emSizeMm;
+    // Typography Parity Round 6 (2026-09-09, qa/evidence/
+    // TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md): `vpal`'s own
+    // real, non-trivial YPlacement values were verified (round 10,
+    // P3_O08_YAKUMONO_GPOS.md) for yakumono characters (「「(+0.527em,
+    // 「（+0.623em) -- but yakumono ALREADY bypasses this branch entirely
+    // (routed to `yakumonoContext` above, whose own `yakumonoBaselineRatio`
+    // is what actually positions 「」（） ink -- this generic gposOffsetMm
+    // path is a no-op for them either way). Round 10's own "applying it
+    // everywhere is harmless" justification checked only ordinary KANJI
+    // (real vpal = 0, confirmed harmless) -- it never checked ordinary
+    // HIRAGANA, which this font gives real, substantial vpal values (up
+    // to -0.188em for い). A direct Human-supplied raster comparison
+    // against the real InDesign reference PDF (same font, same 9pt, same
+    // sequence) found TateSpun's per-glyph vertical-center offset from
+    // InDesign correlates almost exactly (same sign, closely matching
+    // magnitude) with this exact applied vpal value for every hiragana
+    // measured (e.g. い: applied -0.188em vs. measured InDesign-relative
+    // offset -1.68pt at 9pt = -0.187em) -- i.e. applying vpal to ordinary
+    // hiragana moves TateSpun's ink AWAY from InDesign's own rendering,
+    // not toward it. Retired for this branch, not merely re-tuned:
+    // ordinary (non-yakumono, non-small-kana) characters no longer
+    // receive any gpos Y-nudge. `gposContext`/`VerticalGposContext`/
+    // `gposReader.ts` themselves are UNCHANGED and still real, tested
+    // infrastructure -- only this one call site's own consumption of
+    // `yPlacementEmFor` for the generic/ordinary branch is removed.
+    const gposOffsetMm = 0;
     const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
     const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {

@@ -1,10 +1,35 @@
 // P3-O08 — OpenType vertical GPOS ink placement (Human Visual QA HOLD
-// round 10): full-pipeline integration. Proves the real vpal-derived Y
-// nudge is actually wired into the paint pipeline, and only affects
-// paint position (never canonical coordinates/source). The regenerated
-// yakumono-spacing-qa.pdf artifact is written by `yakumonoSpacingQa.test.ts`
-// (updated this round to thread a real gposContext too) — kept as the
-// single writer for that file, not duplicated here.
+// round 10, REVISED Typography Parity Round 6, 2026-09-09).
+//
+// Round 10 built `VerticalGposContext` to fix real yakumono (「」（）)
+// ink intrusion, using the font's own real `vpal` YPlacement. Round 10's
+// own "apply it everywhere, it's harmless" extension to ordinary
+// (non-yakumono, non-small-kana) characters was verified only for
+// ordinary KANJI (real vpal = 0 for every kanji tested, genuinely
+// harmless) — it was never verified for ordinary HIRAGANA, which this
+// font gives real, substantial vpal values. Round 6
+// (qa/evidence/TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md)
+// found, via a direct Human-supplied raster comparison against the real
+// InDesign reference PDF, that applying vpal to ordinary hiragana moves
+// TateSpun's own ink AWAY from InDesign's rendering, not toward it — the
+// applied offset closely matches the measured discrepancy in both sign
+// and magnitude for every hiragana checked. `pdfGenerator.ts`'s
+// `verticalGraphemeCommands` was therefore changed to never consume
+// `gposContext.yPlacementEmFor` for the generic (non-yakumono,
+// non-small-kana) branch — yakumono positioning was ALREADY fully owned
+// by `yakumonoContext` (a separate mechanism) even before this change,
+// so real yakumono ink placement is unaffected; only ordinary
+// kanji/hiragana lose the (now-proven-harmful) vpal nudge.
+//
+// `VerticalGposContext`/`gposReader.ts` themselves are UNCHANGED and
+// still real, correctly-computing, tested infrastructure — this file's
+// own tests below still verify `yPlacementEmFor`'s own raw computation
+// is correct; they no longer assert that a generic (yakumonoContext-less)
+// `buildPaintPlan` call visibly repositions 「, since that combination no
+// longer reflects how the real pipeline (`generatePublicationPdf`) is
+// ever actually invoked (it always constructs and passes a real
+// `yakumonoContext` alongside `gposContext` — see
+// `buildPublicationPaintPlan`).
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -50,7 +75,7 @@ describe("Vertical GPOS ink placement -- pipeline integration", () => {
     expect(Math.abs(ctx.yPlacementEmFor("「"))).toBeGreaterThan(0.3); // real, large font-derived shift
   });
 
-  it("「今日は、雨だった。」 -- painting with a real gposContext shifts 「's own yMm relative to painting without one; 。/」 barely move", () => {
+  it("「今日は、雨だった。」 -- a gposContext WITHOUT a yakumonoContext no longer repositions anything (Round 6: the generic vpal branch is retired) -- real yakumono ink placement is owned entirely by yakumonoContext, exercised in verticalYakumonoAlign's own integration tests, not here", () => {
     const { model } = composeFor("「今日は、雨だった。」");
     const planWithout = buildPaintPlan(model, true);
     const gposContext = new VerticalGposContext(readFileSync(FONT_PATH));
@@ -59,8 +84,11 @@ describe("Vertical GPOS ink placement -- pipeline integration", () => {
     const without = textOf(planWithout);
     const withGpos = textOf(planWith);
     expect(without.length).toBe(withGpos.length);
-    // Index 0 is 「 (opening bracket) -- its yMm must move measurably.
-    expect(Math.abs(withGpos[0].yMm - without[0].yMm)).toBeGreaterThan(0.3);
+    // Every character's yMm is now identical with or without gposContext
+    // -- the generic (non-yakumono) branch never consumes it any more.
+    for (let i = 0; i < without.length; i++) {
+      expect(withGpos[i].yMm).toBe(without[i].yMm);
+    }
   });
 
   it("canonical PublicationDocument coordinates are byte-identical with or without a gposContext -- only paint yMm changes", () => {
