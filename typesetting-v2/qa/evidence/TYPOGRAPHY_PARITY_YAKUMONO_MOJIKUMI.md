@@ -247,3 +247,164 @@ re-litigating contamination, but a full-coverage re-extraction (all
 paragraphs, not just Tm-adjacent ones) is a reasonable Round 8 candidate
 before treating any advance/gap finding from this reference as
 exhaustive.
+
+## §10 — Round 8: exhaustive operator-level extraction (2026-09-09)
+
+Round 7's regex-adjacency extractor is replaced by a real, deterministic
+PDF text-state token machine
+(`renderer/publication/typographyParityYakumonoExhaustiveExtraction.test.ts`):
+a proper tokenizer (hex strings, literal strings, arrays, dicts, names,
+numbers, operator keywords) walks `BT/ET/Tf/Tm/Td/TD/T*/Tj/TJ` in actual
+document order, maintaining the real PDF text matrix per §9.4 of the PDF
+spec, and **fails loudly** on any text-state operator it does not model
+exactly (`Tc`/`Tz`/`Tr`/`Ts` at a non-default value, quote-operators,
+malformed operand counts, anything outside a small explicit whitelist of
+non-text graphics/marked-content operators known to be position-inert).
+
+**Coverage achieved**: `unsupportedOps = []` — zero unsupported text
+operators across the entire content stream (object 35). Operators
+actually encountered: `BT`/`ET` ×21, `Tf`/`Tm` ×21, `Tj` ×31, `Td` ×12,
+`TJ` ×2, plus 3 non-text operators (`k`, `ri`, `gs`, all position-inert).
+614 glyphs recovered (vs. Round 7's ~150), the full manuscript, both
+previously-missed paragraphs ("スイはモルが好きだった…", "グリダニアで…")
+now present, and all three integrity snippets confirmed recoverable
+(re-asserted, still passing).
+
+**New discovery — real TJ-array numeric adjustments exist in this
+document.** Round 7 implicitly assumed none (never checked using a TJ-
+aware parser). Two categories found, both confirmed via exact glyph-pair
+context, not inferred:
+
+1. **49 occurrences of `+10`** (0.01em = 0.09pt), scattered through one
+   long ordinary-text TJ run — between kanji-kanji, kana-kana, and
+   `、`-kanji pairs alike, with no punctuation-class correlation
+   whatsoever. Magnitude is below any plausible visual threshold (0.09pt
+   at 9pt size). Read as InDesign PDF-export rounding/optical-kerning
+   noise uniformly applied across a paragraph, not a punctuation rule.
+2. **2 occurrences of `-250`** (−0.25em = −2.25pt, a real, visually
+   significant quarter-em EXTRA gap), both immediately after `、`
+   and before an ordinary kana (`、と` in "気が合った、と言って…", `、ど`
+   in "けれど気づけば、どこへ…"). This is the first real evidence this
+   session of a non-uniform advance anywhere in the InDesign reference.
+
+**Investigated, not resolved: why the `-250` gaps occur.** Tested the
+"line-end justification" hypothesis (Japanese vertical justification
+conventionally distributes leftover line-fill space preferentially at
+punctuation) by checking each occurrence's position within its own
+same-X Tm-run: both sit mid-run (positions 5/54 and 27/54 from the
+start, 48/54 and 26/54 from the end) — not at either edge, which argues
+against a simple line-end-fill explanation. However, that same
+same-X-run heuristic groups 54 consecutive glyphs under one physical
+column, and the reconstructed Y coordinate for later glyphs in that run
+reaches implausible values (as low as −1651pt — no real page is that
+tall), indicating the extractor's own same-X run-grouping likely merges
+multiple *separate* physical columns that happen to reuse the same
+horizontal anchor (a real, expected pattern across a multi-page/multi-
+column document), rather than genuinely reflecting one continuous
+column. **This means the mid-run positioning result itself cannot be
+trusted as conclusive** — it could reflect either genuine mid-column
+placement or an artifact of an incorrectly-merged column boundary. No
+tooling exists yet in this repo to reconstruct real per-page/per-column
+boundaries from this content stream alone (would need the page tree's
+own `/Contents` per-page split, not attempted this round).
+
+**Per this round's own explicit STOP condition** ("more than one
+plausible interpretation remains"): stopping here rather than guessing.
+The `-250` finding is real and verified at the byte level; its
+typographic *meaning* (deliberate post-comma mojikumi gap vs. line-
+justification artifact vs. an unrelated InDesign export quirk) is
+**unresolved** and requires either (a) per-page content-stream splitting
+tooling, or (b) direct Human inspection of the actual InDesign document
+at those two exact sentences, neither done this round.
+
+### Punctuation inventory (real, from the full 614-glyph extraction)
+
+| class | count | class | count |
+|---|---|---|---|
+| 、 | 22 | 」 | 4 |
+| 。 | 26 | 『 | 0 (ABSENT) |
+| 「 | 4 | 』 | 0 (ABSENT) |
+| （ | 0 (ABSENT) | ！ | 0 (ABSENT) |
+| ） | 0 (ABSENT) | ？ | 2 |
+| ・ | 0 (ABSENT) | ―― | 1 |
+| …… | 1 | ！？ | 0 (ABSENT) |
+| ？！ | 0 (ABSENT) | 。」 | 0 (ABSENT) |
+| 、」 | 0 (ABSENT) | ！」 | 0 (ABSENT) |
+| ？」 | 2 | ！？」 | 0 (ABSENT) |
+| ？！」 | 0 (ABSENT) | | |
+
+No ABSENT case is treated as closed. `！` and every `！`-containing
+combination remain OPEN, unchanged from Round 7/7A, for lack of real
+data — consistent with, and now on a fully exhaustive rather than
+partial basis.
+
+### Advance audit (Step 4)
+
+Every ordinary→ordinary, ordinary→punctuation, and punctuation→ordinary
+transition **not** inside the 2 TJ runs is uniform 1em (9.0pt), matching
+Round 7's finding, now on exhaustive rather than partial coverage. The
+sole exceptions are the 51 TJ-adjusted pairs above (49 negligible, 2
+real and unresolved).
+
+### TateSpun comparison (Step 8)
+
+TateSpun's `computeAtoms` (Core) applies strict, unconditional uniform
+1em advance with no character-class branching (re-confirmed unchanged
+this round — no production code touched). For 、, 。, 「, 」, ？, ―, …:
+**MATCH** against the exhaustive InDesign advance data, with one
+flagged exception: the 2 real `、`-then-ordinary `-250` gaps have no
+TateSpun analogue and are **UNVERIFIED** (not MATCH, not DIFFERENT) —
+their own real-world cause is unresolved per above, so no conformance
+claim can be made either way yet.
+
+### Previous Human decisions (Step 10)
+
+- `。」`, `、」`, `！」`, `！？`, `？！`: **UNVERIFIED** — absent from this
+  real reference; no real data exists to compare against. Not silently
+  reopened.
+- `？」`: **PRESERVED** — 2 real instances, both exactly 1em, matching
+  Round 7's own finding, now re-confirmed via the exhaustive extractor
+  independently of Round 7's own (buggy) regex.
+- Post-`、` gap: **NEEDS HUMAN REOPEN** is not asserted (the evidence is
+  not clean enough to justify reopening a frozen decision), but this is
+  flagged as a genuine open question for a future round or direct Human
+  review of the source InDesign document, distinct from anything
+  previously decided (round 17 concerned closing-bracket compression,
+  not post-comma expansion — no existing frozen decision actually
+  covers this specific question).
+
+### Ordinary control (Step 9)
+
+No production code touched this round. Round 6/7's ordinary control
+(`人は驚きすぎると本当に足が止まるらしい`) is unchanged; its own
+diagnostic artifact (`typography-parity-yakumono-mojikumi-page1-ordinary-control.pdf`,
+Round 7) was not regenerated since nothing affecting it changed.
+
+### Artifact (Step 12) — reduced scope, explicitly disclosed
+
+The full 6-page diagnostic (including an enlarged InDesign-vs-TateSpun
+visual overlay for the `-250` cases) was **not** built this round: doing
+so would require correctly-resolved per-column InDesign glyph positions,
+which §10's own column-merge caveat above shows this round's tooling
+cannot yet produce reliably. Building a visual "comparison" on
+unresolved geometry would misrepresent confidence that doesn't exist.
+Instead: `qa/publication/p3-o08/typography-parity-yakumono-round8-diagnostic.pdf`
+contains only the two things this round can state with confidence — the
+punctuation inventory table and the advance-audit summary — both as
+plain text/data pages, no InDesign-side visual overlay.
+
+### Decision (Round 8)
+
+**HOLD — real, unresolved finding, not an Implementation Gate.** No
+production code change is warranted or attempted: TateSpun's uniform-
+advance architecture matches the exhaustive InDesign evidence for every
+punctuation class this round could fully verify. The one real exception
+(2 `-250` gaps) is flagged, not acted on — its cause is genuinely
+ambiguous per this round's own STOP condition, and guessing at a fix
+would risk reopening the already-frozen Round 17 architecture on
+insufficient evidence. Recommended next step for whoever picks this up:
+build content-stream-per-page splitting (using the PDF's own page tree
+`/Contents` references) before trusting any further Y-position
+reconstruction from this reference beyond simple ordered-glyph advance
+checks, which remain valid regardless of the column-merge caveat (they
+only depend on within-Tm-run adjacency, not absolute column boundaries).

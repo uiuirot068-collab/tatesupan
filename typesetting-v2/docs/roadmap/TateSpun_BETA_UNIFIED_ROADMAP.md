@@ -574,6 +574,37 @@ level invocation against the known standing baseline error). See
 `qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md` §9a. A full-
 coverage re-extraction is a reasonable Round 8 candidate, not done here.
 
+**Round 8 update (2026-09-09, HEAD `581bc14`)**: exhaustive extraction,
+audit only, no production code touched. Replaced Round 7's regex-
+adjacency extractor with a real deterministic PDF text-state token
+machine (walks BT/ET/Tf/Tm/Td/TD/T*/Tj/TJ in actual order, fails loudly
+on any unmodeled text operator). Achieved full coverage: zero unsupported
+operators, 614 glyphs recovered (vs. Round 7's ~150), both previously-
+missed paragraphs now present, all three integrity snippets re-confirmed.
+Full punctuation inventory taken (、22, 。26, 「」4 each, ？2, ―1, …1,
+？」2; 『』（）！・！？？！。」、」！」！？」？！」 all ABSENT — none
+closed). Advance is uniform 1em everywhere except 51 real TJ-array
+adjustments found in this document (49 negligible +0.09pt noise with no
+punctuation correlation, and 2 real -2.25pt gaps, both immediately after
+、 before an ordinary kana). Investigated whether the 2 real gaps are
+line-end justification, a deliberate post-comma rule, or an extraction
+artifact — inconclusive: the same-X run-grouping heuristic used to check
+this appears to merge separate physical columns (reconstructed Y reaches
+implausible values), so the result cannot be trusted either way. Stopped
+per this round's own explicit condition ("more than one plausible
+interpretation remains") rather than guess. Classification: HOLD, not an
+Implementation Gate — TateSpun's uniform-advance architecture matches
+the exhaustive evidence everywhere this round could fully verify; the 2
+flagged gaps are unresolved, not acted on. Diagnostic artifact built in
+reduced scope (data tables only, no InDesign-side visual overlay, since
+that would require geometry this round's tooling cannot yet reconstruct
+reliably) at `qa/publication/p3-o08/typography-parity-yakumono-round8-diagnostic.pdf`.
+tsc not independently validated (same ambiguity as Round 7A). See
+`qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md` §10. Recommended
+next step for a future round: build per-page content-stream splitting
+(via the PDF's own page tree) before trusting further Y-position
+reconstruction from this reference.
+
 ---
 
 ### 18. Real-manuscript End-to-End QA
