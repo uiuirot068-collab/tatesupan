@@ -174,7 +174,7 @@ The last Human-visible 11-B defect was presentation-only: the completed-session 
 - Deterministic Editor/11-B tests: **44/44 PASS**.
 - Real Editor browser E2E: **PASS** for body portal/fixed positioning, desktop/narrow geometry, copy/X actions, explicit/Escape close, retained history, and the existing Undo/Redo +0 and written-only flow.
 
-At that checkpoint, 11-B status was **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Exactly one Human check then remained: the centered result modal was fully visible, unclipped, and operable. The following focused UX pass supersedes that presentation-only recheck status without reopening 11-B semantics.
+At that checkpoint, 11-B still had one result-modal visual confirmation pending. That check subsequently passed. The following focused UX pass superseded that presentation-only status without reopening 11-B semantics.
 
 ## Pre-integration responsive UX polish and export cancellation
 
@@ -191,4 +191,30 @@ Verification: pre-integration UX/export unit and pipeline tests **9/9 PASS**; 11
 
 Exact best-effort boundary: an already-running synchronous canvas encode/grayscale conversion, browser capture call, or JSZip chunk cannot be interrupted inside that third-party/synchronous call. Cancellation is observed at the earliest following safe checkpoint; the current page may finish, but remaining pages and the final unsaved PDF/JPG/ZIP handoff do not proceed. A download already handed to the browser cannot be recalled. Production integration and Production-flow cancellation QA therefore remain **BETA REQUIRED**.
 
-Current status: **READY FOR TARGETED HUMAN QA** using only the ten-item recheck in `HUMAN_QA_PRE_INTEGRATION.md`. 11-B functionality, Ruby, TCY, Typography, Preview, and Publication remain Human-passed/closed and are not reopened.
+That ten-item recheck subsequently received Human PASS. 11-B is **CLOSED / FORMAL HUMAN PASS**; Ruby, TCY, Typography, Preview, and Publication remain Human-passed/closed and are not reopened.
+
+## Final pre-integration content and UX polish
+
+Date: 2026-09-10
+
+The final bounded polish run records the completed Human gates and adds only the new content/discoverability/pause behavior:
+
+- 11-B Start/End, written-only counting, reload/history/share, result/history presentation, narrow-width usability, compact Ruby/TCY help, and visible Undo/Redo have final Human confirmation. Status: **CLOSED / FORMAL HUMAN PASS**. Ruby remains **CLOSED / HUMAN PASS**.
+- Export cancellation now has a cooperative `confirming-pause` state. Opening the Esc warning does not abort; all PDF/JPG/ZIP paths await the same signal-associated pause gate before beginning the next safe capture/encode/page/generation/save unit. Continue and Escape-dismiss release the gate; confirmed cancellation rejects pending work, suppresses remaining work/final handoff, and the existing `finally` path restores busy UI.
+- A currently running synchronous canvas conversion, capture call, or JSZip generation chunk may finish. It cannot be paused inside third-party/synchronous code; the earliest following cooperative boundary is used. Downloads already handed to the browser cannot be recalled.
+- The ten-step primary Demo replaces a secondary preview-collapse explanation with a concise work-session step. It introduces `作業スタート`, newly written character recording, and `作業記録` without changing 11-B behavior. The existing target-aware responsive placement remains unchanged and Human-passed.
+- The secondary `もっと詳しく` feature guide adds 完成前マイチェックリスト, describing reusable presets, a personal list, browser-local persistence, and submission-mistake prevention without claiming cloud behavior.
+- Real Help derives a compact top TOC from the existing stable section markers. Native buttons provide pointer/Enter/Space activation, and activation scrolls and focuses the matching existing heading. Section order and Help body copy are unchanged.
+- The 目次作成 dialog changes alignment only: `再検出` starts on its own left-aligned line and explanatory gray text is left-aligned. TOC detection, page calculation, generated text, and insertion paths are unchanged.
+
+Focused automated verification:
+
+- Final pre-integration Demo/export/Help/TOC suite: **19/19 PASS**.
+- Frozen 11-B deterministic regression: **44/44 PASS**.
+- Real Editor desktop/narrow browser E2E: **PASS** using the already-running local Next server; work-session/modal/Undo/Redo behavior remains unchanged.
+- TSP-024 Demo, TSP-027 Help navigation, TSP-028 export UX, TSP-029 export/typesetting integrity, and colophon/TOC structural verifiers: **PASS**.
+- TypeScript: **PASS**.
+- Targeted ESLint for every changed source/test file except `PreviewPane.tsx`: **PASS**. Including the whole pre-existing `PreviewPane.tsx` reports seven existing `react-hooks/refs` findings at lines 114–142 in its unchanged callback helpers; the export-pause edit is outside those lines.
+- Direct optimized Next.js 16.3.0 build: **PASS**. The project `prebuild` environment gate remains separate and was not bypassed with invented Supabase values.
+
+The current Human packet contains only the 13 new remaining checks. Top/Hero implementation, Browser/Production PDF architecture, bleed/trim decision, TXT I/O, broad Production integration, Production real-manuscript E2E, RC, release approval, push, and deploy remain open/not authorized.

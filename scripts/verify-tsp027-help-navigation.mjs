@@ -21,6 +21,7 @@ const check = (name, cond) => {
 };
 
 const helpSections = read("src/lib/helpSections.ts");
+const helpToc = read("src/lib/helpTableOfContents.ts");
 const helpModal = read("src/components/HelpModal.tsx");
 const guide = read("src/app/guide/page.tsx");
 const helpMd = read("public/docs/help.md");
@@ -60,13 +61,13 @@ check(
 /* ---------------- 3. feature guide has a Help CTA ---------------- */
 
 check(
-  "3. /guide renders a ［使い方を見る →］ CTA per card",
+  "3. /guide renders a ［使い方を見る →］ CTA for Help-mapped cards",
   !!guide && /使い方を見る\s*→/.test(guide) && /data-feature-help-cta=\{/.test(guide),
 );
 check(
   "3b. the CTA is a real <button>, not a hover-only affordance",
   !!guide &&
-    /<button[\s\S]*?data-feature-help-cta=\{card\.helpSection\}[\s\S]*?onClick=\{\(\) => setHelpSection\(card\.helpSection\)\}/.test(
+    /<button[\s\S]*?data-feature-help-cta=\{card\.helpSection\}[\s\S]*?onClick=\{\(\) => setHelpSection\(card\.helpSection \?\? null\)\}/.test(
       guide,
     ),
 );
@@ -112,10 +113,11 @@ check(
 );
 check(
   "5c. scroll-to-section is a computed destination (offsetTop of the matched id), not brittle nav",
-  !!helpModal &&
-    /querySelector<HTMLElement>\(\s*`\[id="\$\{helpSectionDomId\(initialSectionId\)\}"\]`/.test(helpModal) &&
-    /\.scrollTop\s*=\s*Math\.max\(0, el\.offsetTop/.test(helpModal) &&
-    !/nth-child|:nth-|childNodes\[\d|children\[\d|textContent ===|innerText/.test(helpModal),
+  !!helpModal && !!helpToc &&
+    /scrollToHelpSection\(container, initialSectionId\)/.test(helpModal) &&
+    /querySelector<HTMLElement>\([\s\S]{0,120}helpSectionDomId\(sectionId\)/.test(helpToc) &&
+    /\.scrollTop\s*=\s*Math\.max\(0, heading\.offsetTop/.test(helpToc) &&
+    !/nth-child|:nth-|childNodes\[\d|children\[\d|textContent ===|innerText/.test(helpToc),
 );
 
 /* ---------------- 6. one canonical Help — no duplication ---------------- */
@@ -196,7 +198,7 @@ check(
 
 check(
   "10. TSP-027 surface touches no backend (helpSections / HelpModal / guide import no supabase / edge / db)",
-  [helpSections, helpModal, guide].every(
+  [helpSections, helpToc, helpModal, guide].every(
     (src) =>
       !!src &&
       !/supabase|functions\.invoke|edge function|edge runtime|\.sql\b|db\.(get|put|add|table)|createClient/i.test(src),
@@ -207,7 +209,7 @@ check(
 
 check(
   "11. no text-search / nth-child / pixel-scroll navigation in HelpModal or guide",
-  [helpModal, guide].every(
+  [helpToc, helpModal, guide].every(
     (src) =>
       !!src &&
       !/nth-child|:nth-of-type|:nth-|scrollTo\(\s*0\s*,\s*\d{3,}|scrollTop\s*=\s*\d{3,}\b/.test(src),
@@ -236,7 +238,9 @@ check(
 );
 check(
   "12d. HelpModal strips the markers so they never render as visible text",
-  !!helpModal && /MARKER_STRIP_RE|replace\(MARKER_STRIP_RE/.test(helpModal),
+  !!helpModal && !!helpToc &&
+    /parseHelpMarkdown\(raw\)/.test(helpModal) &&
+    /MARKER_STRIP_RE/.test(helpToc) && /replace\(MARKER_STRIP_RE/.test(helpToc),
 );
 
 /* ---------------- done ---------------- */

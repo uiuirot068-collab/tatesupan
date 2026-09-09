@@ -44,7 +44,7 @@ Top-page implementation is not part of this documentation checkpoint.
 
 ### β demo requirement
 
-The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement is implemented in the current Editor and awaits targeted Human QA; the larger Hero/Demo product rebase remains roadmap-only until Production integration is authorized.
+The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, introduce explicit work-session tracking, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement is **HUMAN PASS**. The primary tour now includes the concise work-session step, and the secondary feature guide includes 完成前マイチェックリスト; both content changes are **IMPLEMENTED / HUMAN QA PENDING**. The larger Hero implementation remains roadmap-only until Production integration is authorized.
 
 ## 3. Closed state — do not reopen
 
@@ -60,7 +60,7 @@ The following state is closed or Human-passed and must be preserved through inte
 - UI-C drawer integration, Memo, Editor actions, and narrow-width behavior: **HUMAN PASS in the development Editor**.
 - Manual page break across Preview/PDF/Web JPG/print JPG: **HUMAN PASS**.
 - Writing Check 11-A functional scope: **COMPLETE / HUMAN PASS**.
-- 11-B work-session tracker: **FUNCTIONAL HUMAN PASS**. Counting, Start/End, persistence, share/history data, result content, and visible Undo/Redo are Human PASS and frozen. Result/history now share a centered viewport-modal shell; presentation-only Human confirmation remains for those two dialogs. Ruby and TCY remain **CLOSED / HUMAN PASS**; their compact help disclosure changes presentation only.
+- 11-B work-session tracker: **CLOSED / FORMAL HUMAN PASS**. Counting, Start/End, persistence, share/history data, result/history modal presentation, narrow-width usability, X/copy share, and visible Undo/Redo are Human PASS and frozen. Ruby and TCY remain **CLOSED / HUMAN PASS**.
 
 Passed typesetting quality is a regression guard for integration, not a new design loop.
 
@@ -70,7 +70,7 @@ Primary disposition A:
 
 | Item | Current state | Exit condition |
 | --- | --- | --- |
-| Pre-integration responsive UX recheck | READY FOR TARGETED HUMAN QA | Human confirms compact Ruby/TCY help, centered result/history dialogs, responsive Demo placement, and Esc export cancellation using the focused ten-item packet. |
+| Final pre-integration content/UX recheck | READY FOR TARGETED HUMAN QA | Human checks only the new Demo content, Help TOC, TOC-dialog alignment, and confirmation-time export pause using the focused 13-item packet. Passed Ruby/TCY, 11-B, modal, Undo/Redo, and responsive Demo placement QA is not repeated. |
 | Production integration | NOT_STARTED | The ordered integration in §11 is complete without reopening passed typesetting. |
 | Browser/Production PDF execution | NOT_STARTED; architecture decision required | Real Production browser flow downloads the same Publication PaintPlan with no Node-only leakage. |
 | Real-manuscript Production E2E | NOT_STARTED | A Human-authored manuscript passes the flow in §12, including reload, images, PDF/JPG, TXT, and preflight. |
@@ -114,13 +114,13 @@ Primary disposition B:
 - Escape must request cancellation during Production PDF, Web JPG, print JPG, and all-page ZIP work.
 - Cancellation is cooperative/best-effort: stop future page work at safe boundaries, do not announce incomplete output as success, restore normal UI state, and leave manuscript/settings/images unmodified and uncorrupted.
 - If a browser download has already been irreversibly handed off, do not claim it was recalled; report the last reliable application state.
-- The current Editor implementation now shares one `AbortSignal` across PDF, Web/print JPG, and ZIP paths and awaits targeted Human QA. This does **not** remove cancellation from the β critical path: Production integration and Production-flow verification remain required.
+- The current Editor implementation shares one `AbortSignal` and one cooperative pause gate across PDF, Web/print JPG, and ZIP paths. Opening the Esc confirmation pauses scheduling at the next safe boundary; Continue or Escape resumes, while confirmed cancellation suppresses remaining work and incomplete success. Status: **IMPLEMENTED / HUMAN QA PENDING**. This does **not** remove cancellation from the β critical path: Production integration and Production-flow verification remain required.
 
 ### Preflight and help polish
 
 - Writing Check: NG word gets a purple wavy underline plus textual NG identity; internal RED/YELLOW semantics stay unchanged; amber becomes lighter; result body/snippet is readable at approximately Editor-body size.
-- Help: compact top TOC with mouse/keyboard-usable anchors to existing sections; preserve content and order.
-- TOC creation dialog: `再検出` begins on its own left-aligned line; explanatory gray empty/result text is left-aligned; detection/insertion behavior is unchanged.
+- Help: compact top TOC with mouse/keyboard-usable anchors to existing sections; content and order are preserved. **IMPLEMENTED / HUMAN QA PENDING**.
+- TOC creation dialog: `再検出` begins on its own left-aligned line; explanatory gray empty/result text is left-aligned; detection/insertion behavior is unchanged. **IMPLEMENTED / HUMAN QA PENDING**.
 
 ### Release validation
 
@@ -169,16 +169,16 @@ No Human decision remains for the old TCY threshold or old Ruby-contract gates f
 | Recovered item | Previous state | New disposition | Reason |
 | --- | --- | --- | --- |
 | Top-page positioning/Hero | Generic “final site copy” / not frozen | **B — BETA REQUIRED** | The product promise and first-viewport journey now have exact approved copy. |
-| Existing interactive demo | Historical Production feature, absent from the v2 critical path | **B — BETA REQUIRED** | It is the shortest proof of manuscript → book → export/preflight and already has a real-Editor foundation. |
+| Existing interactive demo | Responsive placement HUMAN PASS; work-session/checklist content implemented, Human QA pending | **B — BETA REQUIRED** | It is the shortest proof of manuscript → book → work session → export/preflight and already has a real-Editor foundation. |
 | TXT export | Combined TXT I/O HUMAN_GATE / NOT_STARTED | **B — BETA REQUIRED** | User-owned portability is core to the positioning; structural representation remains an F decision. |
 | TXT import | Combined TXT I/O HUMAN_GATE / NOT_STARTED | **B — BETA REQUIRED** | External-manuscript intake is fundamental to “どこで綴っても” and “原稿を持ち込む”. |
-| Esc/best-effort export cancel | Historical blocking progress UX had no in-progress cancellation | **B — BETA REQUIRED** | Multi-page PDF/JPG/ZIP can be long-running; safe cooperative cancellation is required β export UX. |
+| Esc/best-effort export cancel | Confirmation-time cooperative pause implemented; Human QA pending | **B — BETA REQUIRED** | Multi-page PDF/JPG/ZIP can be long-running; safe cooperative pause/cancellation is required β export UX. |
 | Browser/Production PDF | HUMAN_GATE / NOT_STARTED | **F — NEEDS HUMAN PRODUCT DECISION** | Execution architecture is unresolved; the typesetting/PaintPlan quality is already passed and stays closed. |
 | Bleed/trim | HUMAN_GATE | **F — NEEDS HUMAN PRODUCT DECISION** | Existing v2 output cannot honestly claim separate bleed geometry. |
 | Export rollout strategy | HUMAN_GATE | **F — NEEDS HUMAN PRODUCT DECISION** | Migration/rollback shape changes Production risk. |
 | Writing Check visual polish | Non-blocking deferred / Production gate | **B — BETA REQUIRED** | Required clarity/accessibility polish; detection semantics remain closed. |
-| Help top TOC | Non-blocking deferred / Production gate | **B — BETA REQUIRED** | Required discoverability for the β feature set. |
-| TOC-dialog alignment | Non-blocking deferred / Production gate | **B — BETA REQUIRED** | Small, bounded usability correction already specified by Human QA. |
+| Help top TOC | Implemented / Human QA pending | **B — BETA REQUIRED** | Required discoverability for the β feature set. |
+| TOC-dialog alignment | Implemented / Human QA pending | **B — BETA REQUIRED** | Small, bounded usability correction already specified by Human QA. |
 | UI-C/checklist/Memo/actions | Development-only, formerly Human QA pending | **B — BETA REQUIRED** | Development Human PASS is preserved; only Production integration remains. |
 | TCY 2-vs-4-digit auto-detect gate | HUMAN_GATE | **E — NO LONGER A BETA GATE** | Explicit/current TCY behavior passed Human QA; do not reopen it for an unneeded auto-detect expansion. |
 | Ruby numeric/jukugo/group contracts | Partially open HUMAN_GATE | **D — POST-BETA** | Current Ruby passed Human QA. Advanced semantics are separable and must not reopen passed β output. |
@@ -197,7 +197,7 @@ Historical audit/HOLD text remains evidence. This table, the closed-state list, 
 
 Production integration remains **NOT_STARTED**. It may begin only after:
 
-1. the focused pre-integration responsive UX/export-cancel Human recheck passes;
+1. the focused final pre-integration content/UX Human recheck passes;
 2. the four F decisions in §8 are recorded;
 3. the task explicitly authorizes Production `src/` changes;
 4. the current Production diff/noise is inventoried and exact task-owned paths are established;
@@ -220,12 +220,12 @@ Use the following dependency-safe order; verify each slice before continuing:
 9. Browser JPG actions: Web first page, Web all-page ZIP, print all-page ZIP, plus preserved existing scope where supported.
 10. Real image state/embedding and unresolved-image export HOLD behavior.
 11. Writing Check visual polish only; preserve its passed engine/fix semantics.
-12. Help top TOC/anchors.
-13. TOC creation-dialog alignment.
+12. Preserve and verify the implemented Help top TOC/anchors.
+13. Preserve and verify the implemented TOC creation-dialog alignment.
 14. TXT export under the frozen contract.
 15. TXT import under the same frozen contract.
-16. Esc/best-effort cancellation across PDF/JPG/ZIP work.
-17. Top-page frozen copy/journey and β demo rebase.
+16. Integrate and verify Esc cooperative pause/cancellation across the final PDF/JPG/ZIP execution paths.
+17. Implement the frozen top-page copy/journey while preserving the completed β Demo content rebase.
 
 Do not batch all slices into one opaque migration. Do not retire the legacy path before the approved rollout/rollback gate says it is safe.
 
@@ -233,7 +233,7 @@ Do not batch all slices into one opaque migration. Do not retire the legacy path
 
 Critical path:
 
-> targeted pre-integration UX/export-cancel Human QA → product/architecture decisions → Production integration → browser PDF/TXT/export-cancel integration → top page/demo product rebase → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
+> targeted final pre-integration content/UX Human QA → product/architecture decisions → Production integration → browser PDF/TXT/export-cancel integration → top page product implementation → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
 
 ### Real-manuscript Production E2E
 

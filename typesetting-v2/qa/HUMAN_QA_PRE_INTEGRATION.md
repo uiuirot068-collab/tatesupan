@@ -1,143 +1,45 @@
-# TateSpun v2 consolidated Human QA — pre-integration
+# TateSpun final pre-integration content + UX — targeted Human QA
 
-Prepared: 2026-09-09
+Prepared: 2026-09-10
 
-This is the single Human QA packet for development-only v2 work. It does not authorize Production `src/` integration, push, or deploy.
+This packet contains **only the new remaining checks** from the final content/UX polish run. It does not authorize broad Production integration, push, or deploy.
 
-## Start the development Editor
+## Do not repeat closed QA
+
+Typography, Ruby, TCY, 11-B counting/lifecycle/history/share, result/history modal usability, Undo/Redo, checklist functionality, and Demo responsive placement are already Human PASS. A failure in one of the new checks should be reported against that check only; it does not reopen those closed areas.
+
+## Start the real Editor
 
 From the repository root:
-
-```powershell
-npm.cmd exec -- vite --config typesetting-v2/tools/human-e2e-editor/vite.config.ts
-```
-
-Open `http://127.0.0.1:5173/`.
-
-## 1. 11-B work-session written-character tracker
-
-This check uses the existing real Editor implementation. It is not duplicated in the isolated v2 development Editor and does not require Production deployment or integration.
-
-From the repository root, run:
 
 ```powershell
 npm.cmd run dev
 ```
 
-Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. 11-B work-session behavior and final written-character semantics are **FUNCTIONAL HUMAN PASS**. Visible Undo/Redo and result data/content are Human PASS. Do not repeat counting QA; use only the focused presentation/export recheck at the end of this packet.
+Use the exact port printed by Next, then open `http://127.0.0.1:<port>/editor?demo=1`.
 
-Round 2 found that this documented `127.0.0.1` route received only the server-rendered shell because Next 16 blocked its client assets; that hydration issue was fixed. Subsequent Human QA then established that the automatic browser-session concept itself was the wrong product definition. That earlier definition is superseded—not treated as a mutation-accounting bug—and the focused Human QA for the corrected product is listed below.
+For export pause checks, use a manuscript and export selection long enough to contain multiple pages.
 
-## 2. 完成前マイチェックリスト
+## Remaining checks
 
-Location: development Editor toolbar → `完成前チェック`.
+1. Primary Demo includes a concise `作業タイム` step that points out `作業スタート` and `作業記録`.
+2. Demo `もっと詳しく` includes 完成前マイチェックリスト and explains reusable presets, a personal list, browser-local persistence, and prevention of submission mistakes.
+3. Demo cards still avoid covering mobile bottom targets; `次へ` and `デモを終了` remain reachable.
+4. Help has a compact table of contents near the top.
+5. Help TOC click/tap moves to the matching existing section.
+6. Help TOC remains readable and usable at narrow/mobile width; keyboard Enter/Space activation moves focus to the section.
+7. 奥付・目次 → 目次作成 shows `再検出` on its own left-aligned line.
+8. The TOC dialog's explanatory gray text, including the empty-result message, is left-aligned.
+9. During an active export, Escape opens `書き出しを中断しますか？` without immediately cancelling.
+10. While the confirmation remains open, the currently running page/chunk may finish, but progress does not begin an additional page/safe work unit.
+11. `書き出しを続ける` closes the confirmation and resumes from the next safe step.
+12. Escape while the confirmation is open closes only that warning and resumes; it does not close an underlying dialog or silently cancel.
+13. `中断する` stops remaining work, does not report incomplete output as success, and restores the normal non-busy UI.
 
-Steps:
+## Cooperative boundary disclosure
 
-1. Open each of the three presets and confirm the items are useful and editable.
-2. Edit an item, check several items, close/reopen the drawer, then reload the page.
-3. Select `リセット`; confirm a preset restores its original items and clears checks.
-4. Create a personal list, rename it, add/edit/delete items, reload, then delete the personal list. Cancel the first deletion warning and confirm the second.
-5. Confirm the Editor and Preview do not change when checklist state changes.
-
-PASS: state persists locally across reload; presets and personal lists remain reusable; cancelling the one-time personal-list deletion warning leaves the list untouched and confirming it deletes normally; completion count is correct; no checklist text enters manuscript, Preview, PDF, or JPG.
-
-Known limitation: cloud/work-specific checklist semantics are deliberately not implemented. Production Editor placement is an integration gate.
-
-## 3. UI-C + Memo + Editor actions
-
-Location: development Editor toolbar.
-
-Steps:
-
-1. Put the caret in the manuscript and scroll to a recognizable position.
-2. Open `⚙️ 設定`; change body size/line spacing/characters/lines; close with ×, backdrop, and Escape in separate passes.
-3. Confirm the manuscript remains visible and its text/scroll context is preserved.
-4. Open `メモ` directly from the toolbar, edit it, close/reopen, then reload.
-5. Type text, use `↶ 元に戻す` and `↷ やり直す`, then insert `⏎ 改ページ` at the caret.
-6. Repeat at a narrow/mobile browser width.
-
-PASS: right drawer overlays the still-mounted Editor; Memo needs no Settings detour and persists locally; default input stays horizontal; actions work; PC/mobile layouts remain usable; no rejected prototype emoji appear.
-
-Known limitation: image insertion is visibly disabled because real Production image-state wiring is an integration gate. Optional vertical Editor remains out of current scope.
-
-## 4. Canonical Preview and PDF development gate
-
-Location: below the manuscript → `Preview更新` and `PDF`.
-
-Steps:
-
-1. Enter Japanese containing punctuation, ruby notation, dash, ellipsis, and a manual page break.
-2. Change settings and choose `Preview更新`.
-3. Choose `PDF`, open the downloaded file, and compare page count/content/geometry with Preview.
-
-PASS: Preview updates from current manuscript/settings; PDF is readable and follows the same canonical composition without page-fill stretch or typography regression.
-
-Known limitation: PDF currently uses the local development Vite API. Browser-native/Production PDF is a Human architecture and Production integration gate because the renderer contains Node `Buffer` dependencies.
-
-## 5. JPG final development wiring
-
-Location: below the manuscript → `Web JPG・1ページ`, `Web JPG・全ページZIP`, `印刷JPG・全ページZIP`.
-
-Steps:
-
-1. Use a manuscript long enough for at least two pages and update Preview.
-2. Download Web first-page JPG; confirm the title-derived `_001.jpg` filename and readable content.
-3. Download Web all-page ZIP; confirm one sequentially numbered JPG per canonical page.
-4. Download print all-page ZIP; confirm the same logical pages/geometry and 1600px long side.
-5. Compare punctuation, ruby, dash, ellipsis, folio/header (where enabled), and last-page content with Preview/PDF.
-
-PASS: no missing/extra/reordered pages; filenames are correct; Web and print transforms do not reflow text; typography matches the already-passed canonical output quality.
-
-Known limitation: v2 currently has no separate bleed geometry, so print crop is a disclosed no-op before the 1600px resize. Production Editor buttons are not wired.
-
-## 6. Writing Check visual polish — after Production integration permission
-
-Location: real Editor → Writing Check results.
-
-The requested source changes are not part of this development-only checkpoint because they live under Production `src/components/`.
-
-PASS after implementation: NG word has a purple wavy underline and textual NG identity; internal RED/YELLOW severity remains unchanged; amber underline is lighter; diagnostic body/snippet is approximately Editor-body readable size; detection/fix semantics and Preview/PDF/JPG isolation are unchanged.
-
-## 7. Help top TOC — after Production integration permission
-
-Location: real Editor → Help.
-
-PASS after implementation: compact TOC appears at the top; mouse and keyboard activation scroll to the matching existing section; Help content/section order is preserved.
-
-## 8. TOC creation dialog polish — after Production integration permission
-
-Location: real Editor → 奥付・目次 → 目次作成.
-
-PASS after implementation: `再検出` starts on a new left-aligned line; empty/result explanatory gray text is left-aligned; TOC detection and insertion results are unchanged.
+An already-running synchronous canvas encode/grayscale conversion, browser capture call, or JSZip generation chunk cannot be interrupted inside that operation. Confirmation pauses at the earliest cooperative boundary. A browser download already handed off cannot be recalled.
 
 ## Report
 
-Record PASS/FAIL plus browser, viewport, and the first failing item. Keep failures separate by numbered section so an isolated fix can be made without reopening already-passed typography.
-
-## Human QA Round 2 — targeted recheck only
-
-1. **PASS — Human Round 2.** Personal checklist delete warning: cancel leaves the personal list untouched; confirm deletes it normally.
-2. **PASS — Human Round 2.** Preset/edit/check state survives browser reload.
-3. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in Preview.
-4. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in PDF.
-5. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in Web JPG.
-6. **PASS — Human Round 2.** Manual page break creates exactly the expected next page in print JPG; PDF/JPG page-boundary parity is confirmed.
-7. **PASS — Human Round 2.** U+30FC `ー` is vertical in Web JPG.
-8. **PASS — Human Round 2.** U+30FC `ー` is vertical in print JPG.
-9. **PASS — Human Round 2.** Odd-page JPG running head is fully visible at the left outer edge.
-10. **PASS — Human Round 2.** Even-page JPG running head is fully visible at the right outer edge.
-11. **FUNCTIONAL HUMAN PASS.** After the route hydration fix and two Human-directed product-semantics corrections, Start/End, written-only counting, timer, reload, result/share/history data, next-session reset, and visible Undo/Redo pass. Only the focused presentation/export recheck below remains.
-
-## Pre-integration UX + export cancel — targeted Human recheck only
-
-1. Ruby/TCY help stays one line with `…`.
-2. Desktop hover shows the full Ruby/TCY help.
-3. Mobile/touch can reveal the full Ruby/TCY help.
-4. Work-session result modal remains centered on a narrow viewport.
-5. Work-session history opens centered and is fully usable.
-6. Demo bottom-target step moves out of the way on mobile.
-7. Escape during export shows `書き出しを中断しますか？`.
-8. `書き出しを続ける` continues export.
-9. Escape on the confirmation closes the warning and continues export.
-10. `中断する` stops remaining export work and returns the UI to normal.
+Record PASS/FAIL, browser, viewport, export type, approximate page count, and the first failing numbered item. Do not rerun passed Typography/Ruby/11-B suites as Human QA.

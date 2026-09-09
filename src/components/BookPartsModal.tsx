@@ -244,21 +244,21 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
           </div>
         ) : (
           <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between">
+            <div className="text-left">
               <p className="text-gray-500">
                 本文中の「# 見出し」「■ 見出し」を検出し、ページ番号を自動判定します。
               </p>
               <button
                 type="button"
                 onClick={detectToc}
-                className="shrink-0 rounded-md border border-gray-300 dark:border-neutral-700 px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                className="mt-2 block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
               >
                 🔄 再検出
               </button>
             </div>
 
             {tocDetected && tocItems.length === 0 ? (
-              <p className="text-gray-400 py-4 text-center">
+              <p className="py-4 text-left text-gray-400">
                 見出しが見つかりませんでした。本文に「# 見出し」または「■
                 見出し」の形式で見出しを追加してください。
               </p>

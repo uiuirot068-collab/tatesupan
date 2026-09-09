@@ -6,9 +6,12 @@ import ReactMarkdown from "react-markdown";
 import { withBasePath } from "@/lib/basePath";
 import {
   helpSectionDomId,
-  isHelpSectionId,
   type HelpSectionId,
 } from "@/lib/helpSections";
+import {
+  parseHelpMarkdown,
+  scrollToHelpSection,
+} from "@/lib/helpTableOfContents";
 
 interface HelpModalProps {
   onClose: () => void;
@@ -18,31 +21,6 @@ interface HelpModalProps {
    * Help button, which always opens at the top with no target.
    */
   initialSectionId?: HelpSectionId;
-}
-
-/**
- * Heading marker syntax in help.md: `## 見出し <!-- help-id: preview -->`.
- * The comment is parsed here for the anchor id, then stripped so it never
- * renders. Matching a heading to its id is done on the plain heading text
- * (marker removed) — an explicit lookup, not heading order.
- */
-const HEADING_MARKER_RE =
-  /^(#{1,6})[ \t]+(.*?)[ \t]*<!--[ \t]*help-id:[ \t]*([a-z0-9-]+)[ \t]*-->[ \t]*$/;
-const MARKER_STRIP_RE = /[ \t]*<!--[ \t]*help-id:[ \t]*[a-z0-9-]+[ \t]*-->/g;
-
-function parseHelpMarkdown(rawInput: string): {
-  markdown: string;
-  headingIds: Map<string, HelpSectionId>;
-} {
-  const raw = rawInput.replace(/\r\n?/g, "\n");
-  const headingIds = new Map<string, HelpSectionId>();
-  for (const line of raw.split("\n")) {
-    const m = line.match(HEADING_MARKER_RE);
-    if (m && isHelpSectionId(m[3])) {
-      headingIds.set(m[2].trim(), m[3]);
-    }
-  }
-  return { markdown: raw.replace(MARKER_STRIP_RE, ""), headingIds };
 }
 
 function flattenText(node: ReactNode): string {
@@ -64,7 +42,7 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
     openedAtRef.current = Date.now();
   }, []);
 
-  const { markdown, headingIds } = useMemo(() => parseHelpMarkdown(raw), [raw]);
+  const { markdown, headingIds, sections } = useMemo(() => parseHelpMarkdown(raw), [raw]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,15 +87,13 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
     if (!initialSectionId) return;
     const container = scrollRef.current;
     if (!container) return;
-    const el = container.querySelector<HTMLElement>(
-      `[id="${helpSectionDomId(initialSectionId)}"]`,
-    );
-    if (!el) return;
-    // offsetTop is relative to the positioned scroll container — a computed
-    // destination, not a guessed pixel offset. 8px keeps the heading clear
-    // of the container's top edge.
-    container.scrollTop = Math.max(0, el.offsetTop - 8);
+    scrollToHelpSection(container, initialSectionId);
   }, [initialSectionId]);
+
+  const activateTableOfContentsItem = useCallback((sectionId: HelpSectionId) => {
+    const container = scrollRef.current;
+    if (container) scrollToHelpSection(container, sectionId, true);
+  }, []);
 
   // Re-run the scroll for a short window after opening: help.md images have
   // no intrinsic height, so a lazy image loading above the target would
@@ -148,7 +124,11 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
     (Tag: "h2" | "h3") =>
       function Heading({ children }: { children?: ReactNode }) {
         const id = headingIds.get(flattenText(children).trim());
-        return <Tag id={id ? helpSectionDomId(id) : undefined}>{children}</Tag>;
+        return (
+          <Tag id={id ? helpSectionDomId(id) : undefined} tabIndex={id ? -1 : undefined}>
+            {children}
+          </Tag>
+        );
       },
     [headingIds],
   );
@@ -198,6 +178,28 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
                 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs
                 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink/10 [&_pre]:p-2 [&_pre]:text-xs"
             >
+              <nav
+                aria-label="ヘルプ目次"
+                data-help-table-of-contents=""
+                className="rounded-lg border border-ink/10 bg-ink/[0.025] p-3"
+              >
+                <p className="text-xs font-bold text-ink/75">目次</p>
+                <ul className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 min-[420px]:grid-cols-2">
+                  {sections.map((section) => (
+                    <li key={section.id} className="min-w-0">
+                      <button
+                        type="button"
+                        data-help-toc-target={section.id}
+                        onClick={() => activateTableOfContentsItem(section.id)}
+                        className="w-full truncate rounded px-1.5 py-1 text-left text-xs text-accent hover:bg-ink/5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1"
+                        title={section.title}
+                      >
+                        {section.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
               <ReactMarkdown
                 components={{
                   h2: headingComponent("h2"),

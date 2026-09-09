@@ -1,6 +1,6 @@
-# TateSpun 11-A / 11-B Specification v1.6
+# TateSpun 11-A / 11-B Specification v1.7
 Updated: 2026-09-10
-Revision reason: preserve the final written-only semantics while moving the completed-session result into a viewport-centered modal.
+Revision reason: record the completed Human confirmation and formally close 11-B without changing its frozen semantics.
 
 ## 11-A correction / recovered historical authority
 
@@ -87,7 +87,7 @@ A non-blocking Human polish backlog (visual/UI refinements, Help TOC, and TOC-di
 
 The safely frozen local portion of 完成前マイチェックリスト is implemented in `typesetting-v2/tools/human-e2e-editor/`, directly beside Memo in the development Editor toolbar. Its versioned model provides three editable presets, reusable personal lists, editable check state/text/name, reset, and defensive localStorage restoration. It has no manuscript dependency, cloud/database client, or external transmission. Status: **IMPLEMENTED / HUMAN PASS IN DEVELOPMENT**; placement in the real Editor remains a **PRODUCTION INTEGRATION GATE**.
 
-The same development Editor implements the approved UI-C drawer interaction, Memo/actions, manual page break, and browser JPG actions from the current Canonical PaintPlan; these applicable development surfaces are **HUMAN PASS**. Writing Check visual polish, Help TOC, and TOC-dialog alignment remain **BETA REQUIRED / PRODUCTION INTEGRATION GATE** because their owning components are under Production `src/`, which this documentation run does not modify. This does not reopen 11-A detection/fix semantics or its Human PASS.
+The same development Editor implements the approved UI-C drawer interaction, Memo/actions, manual page break, and browser JPG actions from the current Canonical PaintPlan; these applicable development surfaces are **HUMAN PASS**. Help top TOC and TOC-dialog alignment are now implemented in the real Editor and await only their focused Human UX check. Writing Check visual polish remains a separate **BETA REQUIRED / PRODUCTION INTEGRATION GATE**. This does not reopen 11-A detection/fix semantics or its Human PASS.
 
 ---
 
@@ -95,7 +95,7 @@ The same development Editor implements the approved UI-C drawer interaction, Mem
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Status: **FUNCTIONAL HUMAN PASS / PRESENTATION RECHECK PENDING (2026-09-10).** Counting, lifecycle, persistence, share/history data, result content, and visible Undo/Redo are Human PASS and frozen. Only the centered result/history modal presentation is included in the focused pre-integration UX recheck.
+Status: **CLOSED / FORMAL HUMAN PASS (2026-09-10).** Counting, lifecycle, persistence, share/history data, result/history modal presentation, narrow-width usability, compact Ruby/TCY help, and visible Undo/Redo are Human PASS and frozen. No 11-B recheck remains in the final pre-integration Human QA packet.
 
 Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
@@ -149,6 +149,10 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
 - 44 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, compact accessible help, visible native-history controls, and the shared viewport-modal contract. The actual `/editor?demo=1` browser E2E additionally proves desktop/narrow result/history geometry, touch help disclosure, canonical copy/X actions, explicit/Escape close, retained history, and visible Undo/Redo at +0. No new dependency was introduced.
+
+### Formal close record
+
+The Human final pass confirms Start/End, newly-written-only counting (including delete/cut/Undo/Redo = +0 and inserted-side replacement/paste), reload recovery, history, X/copy sharing, result/history dialogs at desktop and narrow widths, compact Ruby/TCY help, and visible functional Undo/Redo. 11-B and Ruby are therefore **CLOSED / HUMAN PASS**. Later onboarding copy may point to these features, but must not change their semantics.
 
 ---
 
