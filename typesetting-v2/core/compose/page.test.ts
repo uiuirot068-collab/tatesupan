@@ -85,6 +85,17 @@ describe("Manual page break (test group E, INV-006)", () => {
     expect(result.pages[0].columns[0].lines[0].placedUnits).toHaveLength(1);
     expect(result.pages[1].columns[0].lines[0].placedUnits[0].sourceSpan.start).toBe(1);
   });
+
+  it("prioritizes a manual page break when an adjacent paragraph boundary shares its offset", () => {
+    const before = text("あ", 0);
+    const paragraphBefore = { kind: "PARAGRAPH_BREAK" as const, span: span(1, 2) };
+    const manualBreak: ManualBreakUnit = { kind: "MANUAL_BREAK", span: span(2, 2) };
+    const after = text("い", 2);
+    const result = composePages([before, paragraphBefore, manualBreak, after], DEFAULT_RULE_SET_V2, measurement, baseSettings);
+    expect(result.hold).toBeUndefined();
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[1].columns[0].lines[0].placedUnits[0].sourceSpan.start).toBe(2);
+  });
 });
 
 describe("Source mapping survives page/column transitions (test group F, INV-001)", () => {

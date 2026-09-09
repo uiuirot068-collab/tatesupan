@@ -323,8 +323,18 @@ function computeAtoms(
 type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED_LINE" | "FORCED_PAGE";
 
 function legalityAfter(offset: number, opportunities: BreakOpportunity[]): BoundaryLegality {
-  const opportunity = opportunities.find((o) => o.position.start === offset);
-  if (!opportunity) return "LEGAL"; // no candidate recorded here (e.g. end of stream) — nothing prohibits it
+  const candidates = opportunities.filter((o) => o.position.start === offset);
+  if (candidates.length === 0) return "LEGAL"; // no candidate recorded here (e.g. end of stream) — nothing prohibits it
+
+  // A normalized manual-page-break marker can share an offset with an
+  // adjacent newline's paragraph boundary. Page forcing is the stronger
+  // structural semantic and must win independently of opportunity traversal
+  // order; otherwise the first PARAGRAPH_FORCED entry downgrades the same
+  // boundary to an ordinary line break and the page break is lost.
+  const opportunity =
+    candidates.find((candidate) => candidate.reason === "MANUAL_FORCED") ??
+    candidates.find((candidate) => candidate.reason === "PARAGRAPH_FORCED") ??
+    candidates[0];
   switch (opportunity.reason) {
     case "ALLOWED":
     case "RUBY_INTERNAL_ALLOWED":

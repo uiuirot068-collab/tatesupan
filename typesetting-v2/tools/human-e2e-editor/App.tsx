@@ -9,6 +9,7 @@ import { buildPageJpgFileName, buildZipFileName } from "../../renderer/publicati
 import { createFakeMeasurementProvider } from "../../core/measurement/fakeProvider";
 import { composeV2Document } from "../../../src/lib/v2Bridge/composeV2Document";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "../../../src/lib/pageLayout";
+import { insertPageBreakMarker } from "../../../src/lib/tategaki";
 import { ChecklistPanel } from "./ChecklistPanel";
 import fontUrl from "../../qa/publication/p3-o08/font-poc/fonts/ShipporiMincho-Regular.ttf?url";
 
@@ -103,7 +104,7 @@ function App() {
     const textarea = textareaRef.current;
     const start = textarea?.selectionStart ?? content.length;
     const end = textarea?.selectionEnd ?? start;
-    const token = "\n【改ページ】\n";
+    const token = insertPageBreakMarker(content.slice(0, start), content.slice(end));
     updateContent(content.slice(0, start) + token + content.slice(end));
     requestAnimationFrame(() => {
       textarea?.focus();

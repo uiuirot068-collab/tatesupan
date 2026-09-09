@@ -44,8 +44,21 @@ export interface ColumnCompositionResult {
 // by this Loop).
 function sliceUnitsFrom(units: LogicalUnit[], offset: number): LogicalUnit[] {
   const result: LogicalUnit[] = [];
+  const manualBreakAtOffset = units.some(
+    (unit) => unit.kind === "MANUAL_BREAK" && unit.span.start === offset
+  );
   for (const unit of units) {
     if (unit.span.end <= offset) continue; // fully consumed
+    // A UI-inserted marker is isolated on its own source line. Once its
+    // MANUAL_BREAK closes the page, the immediately following separator
+    // newline has no independent paragraph meaning; consuming it prevents an
+    // empty first line on the new page. Ordinary newlines at every other
+    // offset remain untouched.
+    if (
+      manualBreakAtOffset &&
+      unit.kind === "PARAGRAPH_BREAK" &&
+      unit.span.start === offset
+    ) continue;
     if (unit.span.start >= offset) {
       result.push(unit);
       continue;
