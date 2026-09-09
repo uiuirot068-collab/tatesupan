@@ -6,7 +6,7 @@ import {
   codePointLength,
   createTextInputActivityState,
   finishComposition,
-  formatSessionActivityShareText,
+  formatWorkSessionShareText,
   measureBeforeInputCommit,
   measureContiguousMutation,
   measureEditorActivityOperation,
@@ -16,8 +16,8 @@ import {
   ZERO_ACTIVITY,
 } from "./model";
 
-describe("11-B counter purpose and Unicode unit", () => {
-  it("counts session editing activity, not final manuscript length", () => {
+describe("11-B work-session activity purpose and Unicode unit", () => {
+  it("counts editing activity, not final manuscript length", () => {
     let total = ZERO_ACTIVITY;
     total = addActivity(total, measureContiguousMutation("", "あ".repeat(100)));
     total = addActivity(total, measureContiguousMutation("あ".repeat(100), "あ".repeat(50)));
@@ -193,7 +193,7 @@ describe("11-B notation, structural UI, and Writing Check semantics", () => {
   });
 });
 
-describe("11-B exclusions and sharing", () => {
+describe("11-B exclusions and work-session sharing", () => {
   it("load/import/normalization/migration/autosave/recomposition/publication all add zero", () => {
     for (const source of [
       "load-existing-manuscript",
@@ -209,9 +209,9 @@ describe("11-B exclusions and sharing", () => {
     }
   });
 
-  it("formats an explicit SNS-share result without manuscript text or final manuscript length", () => {
-    expect(
-      formatSessionActivityShareText({ insertedCodePoints: 12, deletedCodePoints: 3, totalActivity: 15 })
-    ).toBe("このセッションで15文字分編集しました（入力 12文字・削除 3文字） #TateSpun");
+  it("16. formats the exact canonical share text with grouped activity", () => {
+    expect(formatWorkSessionShareText(4823)).toBe(
+      "今日は4,823文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/"
+    );
   });
 });

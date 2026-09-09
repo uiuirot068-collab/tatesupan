@@ -1,70 +1,159 @@
-import { addActivity, type ActivityDelta, type SessionActivity, ZERO_ACTIVITY } from "./model";
+import type { ActivityDelta } from "./model";
 
-export const SESSION_ACTIVITY_STORAGE_KEY = "tatespun:editor-session-activity:v1";
+export const WORK_SESSION_STORAGE_KEY = "tatespun:work-sessions:v1";
+export const WORK_SESSION_HISTORY_LIMIT = 100;
 
-type SessionStorageLike = Pick<Storage, "getItem" | "setItem">;
+type LocalStorageLike = Pick<Storage, "getItem" | "setItem">;
 
-export interface EditorSessionActivityStore {
-  read: () => SessionActivity;
+export interface ActiveWorkSession {
+  id: string;
+  startedAt: number;
+  editingActivity: number;
+}
+
+export interface CompletedWorkSession extends ActiveWorkSession {
+  endedAt: number;
+  durationMs: number;
+}
+
+export interface WorkSessionState {
+  active: ActiveWorkSession | null;
+  history: readonly CompletedWorkSession[];
+}
+
+export const EMPTY_WORK_SESSION_STATE: WorkSessionState = Object.freeze({
+  active: null,
+  history: Object.freeze([]),
+});
+
+export interface WorkSessionStore {
+  read: () => WorkSessionState;
   subscribe: (listener: () => void) => () => void;
+  start: (startedAt?: number) => ActiveWorkSession;
   record: (delta: ActivityDelta) => void;
+  end: (endedAt?: number) => CompletedWorkSession | null;
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function parseActivity(raw: string | null): SessionActivity {
-  if (raw === null) return ZERO_ACTIVITY;
+function isSessionId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 200;
+}
+
+function parseActive(value: unknown): ActiveWorkSession | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<ActiveWorkSession>;
+  if (
+    !isSessionId(candidate.id) ||
+    !isNonNegativeSafeInteger(candidate.startedAt) ||
+    !isNonNegativeSafeInteger(candidate.editingActivity)
+  ) {
+    return null;
+  }
+  return {
+    id: candidate.id,
+    startedAt: candidate.startedAt,
+    editingActivity: candidate.editingActivity,
+  };
+}
+
+function parseCompleted(value: unknown): CompletedWorkSession | null {
+  const active = parseActive(value);
+  if (!active || !value || typeof value !== "object") return null;
+  const candidate = value as Partial<CompletedWorkSession>;
+  if (
+    !isNonNegativeSafeInteger(candidate.endedAt) ||
+    !isNonNegativeSafeInteger(candidate.durationMs) ||
+    candidate.endedAt < active.startedAt
+  ) {
+    return null;
+  }
+  return {
+    ...active,
+    endedAt: candidate.endedAt,
+    durationMs: candidate.durationMs,
+  };
+}
+
+function parseState(raw: string | null): WorkSessionState {
+  if (raw === null) return EMPTY_WORK_SESSION_STATE;
   try {
-    const value = JSON.parse(raw) as Partial<SessionActivity>;
-    if (
-      !isNonNegativeSafeInteger(value.insertedCodePoints) ||
-      !isNonNegativeSafeInteger(value.deletedCodePoints)
-    ) {
-      return ZERO_ACTIVITY;
-    }
-    return {
-      insertedCodePoints: value.insertedCodePoints,
-      deletedCodePoints: value.deletedCodePoints,
-      totalActivity: value.insertedCodePoints + value.deletedCodePoints,
-    };
+    const value = JSON.parse(raw) as { active?: unknown; history?: unknown };
+    const active = parseActive(value.active);
+    const history = Array.isArray(value.history)
+      ? value.history
+          .map(parseCompleted)
+          .filter((record): record is CompletedWorkSession => record !== null)
+          .slice(-WORK_SESSION_HISTORY_LIMIT)
+      : [];
+    if (active === null && history.length === 0) return EMPTY_WORK_SESSION_STATE;
+    return { active, history };
   } catch {
-    return ZERO_ACTIVITY;
+    return EMPTY_WORK_SESSION_STATE;
   }
 }
 
-function browserSessionStorage(): SessionStorageLike | null {
+function browserLocalStorage(): LocalStorageLike | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.sessionStorage;
+    return window.localStorage;
   } catch {
     return null;
   }
 }
 
-/** React-free sessionStorage store, injectable for deterministic Node tests. */
-export function createEditorSessionActivityStore(
-  getStorage: () => SessionStorageLike | null = browserSessionStorage
-): EditorSessionActivityStore {
+let fallbackIdSequence = 0;
+
+function createStableId(startedAt: number): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  fallbackIdSequence += 1;
+  return `${startedAt}-${fallbackIdSequence}`;
+}
+
+/** React-free localStorage store, injectable for deterministic Node tests. */
+export function createWorkSessionStore(
+  getStorage: () => LocalStorageLike | null = browserLocalStorage,
+  createId: (startedAt: number) => string = createStableId
+): WorkSessionStore {
   const listeners = new Set<() => void>();
   let cachedRaw: string | null | undefined;
-  let cachedValue: SessionActivity = ZERO_ACTIVITY;
+  let cachedValue: WorkSessionState = EMPTY_WORK_SESSION_STATE;
+  let storageUnavailable = false;
 
-  function read(): SessionActivity {
-    let storage: SessionStorageLike | null = null;
-    let raw: string | null = null;
+  function read(): WorkSessionState {
+    if (storageUnavailable) return cachedValue;
     try {
-      storage = getStorage();
-      if (!storage) return cachedRaw === undefined ? ZERO_ACTIVITY : cachedValue;
-      raw = storage.getItem(SESSION_ACTIVITY_STORAGE_KEY);
+      const storage = getStorage();
+      if (!storage) return cachedRaw === undefined ? EMPTY_WORK_SESSION_STATE : cachedValue;
+      const raw = storage.getItem(WORK_SESSION_STORAGE_KEY);
+      if (raw === cachedRaw) return cachedValue;
+      cachedRaw = raw;
+      cachedValue = parseState(raw);
+      return cachedValue;
     } catch {
-      return cachedRaw === undefined ? ZERO_ACTIVITY : cachedValue;
+      storageUnavailable = true;
+      return cachedRaw === undefined ? EMPTY_WORK_SESSION_STATE : cachedValue;
     }
-    if (raw === cachedRaw) return cachedValue;
+  }
+
+  function publish(next: WorkSessionState): void {
+    const raw = JSON.stringify(next);
     cachedRaw = raw;
-    cachedValue = parseActivity(raw);
-    return cachedValue;
+    cachedValue = next;
+    try {
+      const storage = getStorage();
+      if (storage) {
+        storage.setItem(WORK_SESSION_STORAGE_KEY, raw);
+        storageUnavailable = false;
+      }
+    } catch {
+      storageUnavailable = true;
+    }
+    listeners.forEach((listener) => listener());
   }
 
   function subscribe(listener: () => void): () => void {
@@ -72,21 +161,49 @@ export function createEditorSessionActivityStore(
     return () => listeners.delete(listener);
   }
 
-  function record(delta: ActivityDelta): void {
-    if (delta.insertedCodePoints === 0 && delta.deletedCodePoints === 0) return;
-    const next = addActivity(read(), delta);
-    const raw = JSON.stringify(next);
-    try {
-      getStorage()?.setItem(SESSION_ACTIVITY_STORAGE_KEY, raw);
-    } catch {
-      // The current in-memory session remains usable if storage is disabled.
-    }
-    cachedRaw = raw;
-    cachedValue = next;
-    listeners.forEach((listener) => listener());
+  function start(startedAt = Date.now()): ActiveWorkSession {
+    const current = read();
+    if (current.active) return current.active;
+    const active = {
+      id: createId(startedAt),
+      startedAt,
+      editingActivity: 0,
+    };
+    publish({ active, history: current.history });
+    return active;
   }
 
-  return { read, subscribe, record };
+  function record(delta: ActivityDelta): void {
+    const addedActivity = delta.insertedCodePoints + delta.deletedCodePoints;
+    if (addedActivity <= 0) return;
+    const current = read();
+    if (!current.active) return;
+    publish({
+      active: {
+        ...current.active,
+        editingActivity: current.active.editingActivity + addedActivity,
+      },
+      history: current.history,
+    });
+  }
+
+  function end(endedAt = Date.now()): CompletedWorkSession | null {
+    const current = read();
+    if (!current.active) return null;
+    const safeEndedAt = Math.max(endedAt, current.active.startedAt);
+    const completed: CompletedWorkSession = {
+      ...current.active,
+      endedAt: safeEndedAt,
+      durationMs: safeEndedAt - current.active.startedAt,
+    };
+    publish({
+      active: null,
+      history: [...current.history, completed].slice(-WORK_SESSION_HISTORY_LIMIT),
+    });
+    return completed;
+  }
+
+  return { read, subscribe, start, record, end };
 }
 
-export const editorSessionActivityStore = createEditorSessionActivityStore();
+export const workSessionStore = createWorkSessionStore();

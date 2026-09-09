@@ -7,8 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const ACTIVITY_STORAGE_KEY = "tatespun:editor-session-activity:v1";
-const ACTIVITY_LABEL = "このセッションの編集量";
+const WORK_SESSION_STORAGE_KEY = "tatespun:work-sessions:v1";
 const CURRENT_COUNT_TITLE = "現在の原稿文字数";
 
 function freePort() {
@@ -140,14 +139,20 @@ class CdpPage {
 function snapshotExpression() {
   return `(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
-    const activity = [...document.querySelectorAll('button')]
-      .find((button) => button.textContent.includes(${JSON.stringify(ACTIVITY_LABEL)}));
+    const activity = document.querySelector('[data-work-session-activity]');
+    const result = document.querySelector('[data-work-session-result]');
+    const history = document.querySelector('[data-work-session-history]');
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
       editorValue: editor?.value,
       activityText: activity?.textContent.trim(),
+      activityValue: activity?.getAttribute('data-work-session-activity'),
+      resultText: result?.textContent.replace(/\\s+/g, ' ').trim(),
+      historyText: history?.textContent.replace(/\\s+/g, ' ').trim(),
+      hasStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
+      hasEnd: Boolean(document.querySelector('[data-work-session-action="end"]')),
       currentCountText: currentCount?.textContent.trim(),
-      storage: sessionStorage.getItem(${JSON.stringify(ACTIVITY_STORAGE_KEY)}),
+      storage: localStorage.getItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}),
     };
   })()`;
 }
@@ -206,14 +211,16 @@ try {
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
   await cdp.waitFor(`Object.getOwnPropertyNames(document.querySelector('[data-demo-target="editor"]')).some((key) => key.startsWith('__reactProps'))`);
 
-  await cdp.evaluate(`sessionStorage.removeItem(${JSON.stringify(ACTIVITY_STORAGE_KEY)}); location.reload(); true`);
+  await cdp.evaluate(`localStorage.removeItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}); location.reload(); true`);
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
   await cdp.waitFor(`Object.getOwnPropertyNames(document.querySelector('[data-demo-target="editor"]')).some((key) => key.startsWith('__reactProps'))`);
 
-  const before = await cdp.evaluate(snapshotExpression());
-  assert.equal(before.activityText, `${ACTIVITY_LABEL} 0文字`);
-  assert.equal(before.storage, null);
-  assert.match(before.currentCountText, /^\d+ 文字$/);
+  const idleBefore = await cdp.evaluate(snapshotExpression());
+  assert.equal(idleBefore.hasStart, true);
+  assert.equal(idleBefore.hasEnd, false);
+  assert.equal(idleBefore.activityText, undefined);
+  assert.equal(idleBefore.storage, null);
+  assert.match(idleBefore.currentCountText, /^\d+ 文字$/);
 
   await cdp.evaluate(`(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
@@ -237,27 +244,69 @@ try {
     windowsVirtualKeyCode: 65,
     nativeVirtualKeyCode: 65,
   });
-  await cdp.waitFor(`sessionStorage.getItem(${JSON.stringify(ACTIVITY_STORAGE_KEY)}) !== null`);
+  const idleAfter = await cdp.evaluate(snapshotExpression());
+  assert.equal(idleAfter.storage, null);
+  assert.notEqual(idleAfter.currentCountText, idleBefore.currentCountText);
+  assert.equal(idleAfter.editorValue, `${idleBefore.editorValue}a`);
 
-  const after = await cdp.evaluate(snapshotExpression());
-  const stored = JSON.parse(after.storage);
-  assert.equal(after.activityText, `${ACTIVITY_LABEL} 1文字`);
-  assert.deepEqual(stored, {
-    insertedCodePoints: 1,
-    deletedCodePoints: 0,
-    totalActivity: 1,
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="start"]').click(); true`);
+  await cdp.waitFor(`document.querySelector('[data-work-session-activity]')?.getAttribute('data-work-session-activity') === '0'`);
+  const started = await cdp.evaluate(snapshotExpression());
+  assert.equal(started.hasStart, false);
+  assert.equal(started.hasEnd, true);
+  assert.match(started.activityText, /今回の編集量 0文字/);
+  assert.equal(JSON.parse(started.storage).active.editingActivity, 0);
+
+  await cdp.evaluate(`(() => {
+    const editor = document.querySelector('[data-demo-target="editor"]');
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+    return true;
+  })()`);
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "b",
+    code: "KeyB",
+    text: "b",
+    unmodifiedText: "b",
+    windowsVirtualKeyCode: 66,
+    nativeVirtualKeyCode: 66,
   });
-  assert.notEqual(after.currentCountText, before.currentCountText);
-  assert.equal(after.editorValue, `${before.editorValue}a`);
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "b",
+    code: "KeyB",
+    windowsVirtualKeyCode: 66,
+    nativeVirtualKeyCode: 66,
+  });
+  await cdp.waitFor(`document.querySelector('[data-work-session-activity]')?.getAttribute('data-work-session-activity') === '1'`);
+  const active = await cdp.evaluate(snapshotExpression());
+  assert.match(active.activityText, /今回の編集量 1文字/);
+  assert.equal(JSON.parse(active.storage).active.editingActivity, 1);
+
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="end"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-result]'))`);
+  const ended = await cdp.evaluate(snapshotExpression());
+  const completedState = JSON.parse(ended.storage);
+  assert.equal(ended.hasStart, true);
+  assert.match(ended.resultText, /今回の編集量\s*1文字/);
+  assert.match(ended.resultText, /作業時間/);
+  assert.equal(completedState.active, null);
+  assert.equal(completedState.history.length, 1);
+  assert.equal(completedState.history[0].editingActivity, 1);
 
   await cdp.evaluate("location.reload(); true");
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
   await cdp.waitFor(`Object.getOwnPropertyNames(document.querySelector('[data-demo-target="editor"]')).some((key) => key.startsWith('__reactProps'))`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="history"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-history-record]'))`);
   const reloaded = await cdp.evaluate(snapshotExpression());
-  assert.equal(reloaded.activityText, `${ACTIVITY_LABEL} 1文字`);
-  assert.equal(JSON.parse(reloaded.storage).totalActivity, 1);
+  assert.equal(reloaded.hasStart, true);
+  assert.match(reloaded.historyText, /作業記録/);
+  assert.match(reloaded.historyText, /1文字/);
+  assert.equal(JSON.parse(reloaded.storage).history[0].editingActivity, 1);
 
-  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (0 -> 1; same-tab reload retained)`);
+  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (idle -> Start 0 -> type 1 -> End -> reload history retained)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;

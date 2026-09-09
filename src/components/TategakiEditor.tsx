@@ -68,7 +68,12 @@ export default function TategakiEditor({
 }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { activity: sessionActivity, recordActivity } = useEditorSessionActivity();
+  const {
+    workSession,
+    recordActivity,
+    startWorkSession,
+    endWorkSession,
+  } = useEditorSessionActivity();
   const [docId, setDocId] = useState<number | null>(
     demoMode
       ? DEMO_PROJECT.id
@@ -677,8 +682,10 @@ export default function TategakiEditor({
             onTitleChange={setTitle}
             content={content}
             onContentChange={setContent}
-            sessionActivity={sessionActivity}
+            workSession={workSession}
             onRecordActivity={recordActivity}
+            onStartWorkSession={startWorkSession}
+            onEndWorkSession={endWorkSession}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenBookParts={() => setIsBookPartsModalOpen(true)}
             onOpenBetaFeedback={() => setIsBetaFeedbackOpen(true)}

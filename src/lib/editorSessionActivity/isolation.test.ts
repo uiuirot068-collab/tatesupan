@@ -15,25 +15,26 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("11-B architectural and persistence isolation", () => {
-  it("Core, canonical layout, Preview, and Publication never import Editor session metrics", () => {
+  it("Core, canonical layout, Preview, and Publication never import Editor work-session metrics", () => {
     const files = sourceFiles(join(ROOT, "typesetting-v2"));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
-      expect(readFileSync(file, "utf8")).not.toMatch(/editorSessionActivity|SessionActivityCounter/);
+      expect(readFileSync(file, "utf8")).not.toMatch(/editorSessionActivity|WorkSessionTracker/);
     }
   });
 
-  it("the persistence implementation names sessionStorage, never localStorage/cloud/database", () => {
+  it("the persistence implementation uses localStorage, never cloud/database or manuscript fields", () => {
     const storeSource = readFileSync(join(__dirname, "store.ts"), "utf8");
-    expect(storeSource).toContain("sessionStorage");
-    expect(storeSource).not.toMatch(/localStorage|supabase|indexedDB|\bfetch\s*\(/i);
+    expect(storeSource).toContain("localStorage");
+    expect(storeSource).not.toMatch(/supabase|indexedDB|\bfetch\s*\(|manuscript|content|text:/i);
   });
 
-  it("the compact UI visibly distinguishes session activity from current manuscript length", () => {
-    const counter = readFileSync(join(ROOT, "src", "components", "SessionActivityCounter.tsx"), "utf8");
+  it("18. the compact UI visibly distinguishes work activity from current manuscript length", () => {
+    const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
     const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
-    expect(counter).toContain("このセッションの編集量");
-    expect(counter).toContain("原稿の現在文字数とは別の値です");
+    expect(counter).toContain("今回の編集量");
+    expect(counter).toContain("現在の原稿文字数とは別の値です");
     expect(editor).toContain('title="現在の原稿文字数"');
+    expect(editor).toContain("countVisualLength(content)");
   });
 });

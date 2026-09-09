@@ -1,5 +1,5 @@
 /**
- * TateSpun 11-B — Editor Session Metrics.
+ * TateSpun 11-B — Work Session Editing Activity.
  *
  * This module measures manuscript editing activity only. It deliberately has
  * no dependency on typesetting, canonical layout, Preview, or publication.
@@ -281,6 +281,7 @@ export function measureEditorActivityOperation(operation: EditorActivityOperatio
   );
 }
 
-export function formatSessionActivityShareText(activity: SessionActivity): string {
-  return `このセッションで${activity.totalActivity}文字分編集しました（入力 ${activity.insertedCodePoints}文字・削除 ${activity.deletedCodePoints}文字） #TateSpun`;
+export function formatWorkSessionShareText(editingActivity: number): string {
+  const formattedActivity = new Intl.NumberFormat("ja-JP").format(editingActivity);
+  return `今日は${formattedActivity}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`;
 }

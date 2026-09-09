@@ -2,23 +2,30 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import {
-  editorSessionActivityStore,
+  EMPTY_WORK_SESSION_STATE,
+  workSessionStore,
   type ActivityDelta,
-  type SessionActivity,
-  ZERO_ACTIVITY,
+  type CompletedWorkSession,
+  type WorkSessionState,
 } from "@/lib/editorSessionActivity";
 
 export function useEditorSessionActivity(): {
-  activity: SessionActivity;
+  workSession: WorkSessionState;
   recordActivity: (delta: ActivityDelta) => void;
+  startWorkSession: () => void;
+  endWorkSession: () => CompletedWorkSession | null;
 } {
-  const activity = useSyncExternalStore(
-    editorSessionActivityStore.subscribe,
-    editorSessionActivityStore.read,
-    () => ZERO_ACTIVITY
+  const workSession = useSyncExternalStore(
+    workSessionStore.subscribe,
+    workSessionStore.read,
+    () => EMPTY_WORK_SESSION_STATE
   );
   const recordActivity = useCallback((delta: ActivityDelta) => {
-    editorSessionActivityStore.record(delta);
+    workSessionStore.record(delta);
   }, []);
-  return { activity, recordActivity };
+  const startWorkSession = useCallback(() => {
+    workSessionStore.start();
+  }, []);
+  const endWorkSession = useCallback(() => workSessionStore.end(), []);
+  return { workSession, recordActivity, startWorkSession, endWorkSession };
 }

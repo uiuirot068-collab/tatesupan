@@ -17,10 +17,11 @@ import {
   startComposition,
   syncTextInputActivityState,
   type ActivityDelta,
-  type SessionActivity,
+  type CompletedWorkSession,
+  type WorkSessionState,
 } from "@/lib/editorSessionActivity";
 import PageSettingsPanel from "./PageSettingsPanel";
-import SessionActivityCounter from "./SessionActivityCounter";
+import WorkSessionTracker from "./WorkSessionTracker";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
@@ -70,8 +71,10 @@ interface EditorPaneProps {
   onTitleChange: (title: string) => void;
   content: string;
   onContentChange: (content: string) => void;
-  sessionActivity: SessionActivity;
+  workSession: WorkSessionState;
   onRecordActivity: (delta: ActivityDelta) => void;
+  onStartWorkSession: () => void;
+  onEndWorkSession: () => CompletedWorkSession | null;
   onOpenSearchReplace: () => void;
   onOpenBookParts: () => void;
   /** β限定「報告」ボタン。BETA_FEEDBACK_ENABLED のときだけ表示。 */
@@ -100,8 +103,10 @@ export default function EditorPane({
   onTitleChange,
   content,
   onContentChange,
-  sessionActivity,
+  workSession,
   onRecordActivity,
+  onStartWorkSession,
+  onEndWorkSession,
   onOpenSearchReplace,
   onOpenBookParts,
   onOpenBetaFeedback,
@@ -494,7 +499,11 @@ export default function EditorPane({
           ルビ: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁を自動検知・
           <code>[tate]A5[/tate]</code>／改ページ: <code>{PAGE_BREAK_MARKER}</code>
         </span>
-        <SessionActivityCounter activity={sessionActivity} />
+        <WorkSessionTracker
+          state={workSession}
+          onStart={onStartWorkSession}
+          onEnd={onEndWorkSession}
+        />
         <span
           title="現在の原稿文字数"
           className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
