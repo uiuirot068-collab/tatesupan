@@ -1,6 +1,6 @@
 /**
- * Typography Parity -- Human recheck artifact (post column-pitch fix,
- * commit `6d51b4e`). Generates a real, normal-looking v2 Publication PDF
+ * Typography Parity -- FINAL Human recheck artifact (post ordinary-vpal
+ * and verified mojikumi fixes). Generates a real, normal-looking v2 Publication PDF
  * containing the actual continuous prose used for the InDesign reference
  * comparison -- for a direct Human BLACK(this)/RED(InDesign) overlay,
  * not another abstract column-grid-only diagnostic.
@@ -75,7 +75,7 @@ function buildMatchedPageSettings(): PageSettings {
   return { ...base, charsPerLine: derived.charsPerLine, linesPerColumn: derived.linesPerColumn };
 }
 
-describe("Typography Parity -- Human recheck v2 Publication PDF (post column-pitch fix)", () => {
+describe("Typography Parity -- final Human recheck v2 Publication PDF", () => {
   it("produces a real, vector, InDesign-matched-geometry v2 Publication PDF via the REAL v2Bridge end to end", async () => {
     const { createShipporiMinchoMeasurementProvider } = await import("../../../typesetting-v2/core/measurement/shipporiMinchoProvider");
     const measurement = createShipporiMinchoMeasurementProvider(FONT_PATH);
@@ -141,7 +141,7 @@ describe("Typography Parity -- Human recheck v2 Publication PDF (post column-pit
     const outDir = join(__dirname, "..", "..", "..", "typesetting-v2", "qa", "publication", "p3-o08");
     if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
     try {
-      writeFileSync(join(outDir, "typography-parity-human-recheck-v2.pdf"), result.bytes);
+      writeFileSync(join(outDir, "typography-parity-final-human-recheck-v2.pdf"), result.bytes);
     } catch {
       /* best-effort, transient Dropbox sync lock, non-fatal */
     }
