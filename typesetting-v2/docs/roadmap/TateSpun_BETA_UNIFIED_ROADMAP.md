@@ -605,6 +605,35 @@ next step for a future round: build per-page content-stream splitting
 (via the PDF's own page tree) before trusting further Y-position
 reconstruction from this reference.
 
+**Round 9 update (2026-09-09, HEAD `557b707`)**: fully explains the two
+real 0.25em events Round 8 flagged as unresolved, audit only, no
+production code touched. Found and fixed a real bug in Round 8's own
+extractor (a matrix-concatenation error doubled every glyph's advance
+beyond the first in a multi-glyph run, producing the implausible Y
+values -- down to -1651pt on a 595pt page -- Round 8 mis-read as a
+multi-column merge). This round's own page-tree inspection additionally
+confirms the reference has exactly ONE page and ONE content stream, so a
+multi-page merge was never structurally possible. Also corrected a sign
+error: per PDF spec, a vertical-writing TJ adjustment has opposite
+polarity from horizontal (positive expands, not tightens) -- Round 8's
+"-250 = extra gap" was backwards; verified computationally, it is a
+0.25em **compression** to 0.75em. Built the full 22-comma table: 20
+exactly uniform 1em, 2 negligible +0.01em noise, 2 real 0.75em
+compressions. Decisive finding: the document has exactly 2 TJ-using
+paragraphs, each containing 2 real commas; one paragraph's commas show
+zero compression, the other's both show the full 0.25em compression --
+ruling out a fixed per-character comma rule (a real rule would apply to
+all four identically) in favor of a paragraph-specific InDesign
+composition/justification artifact. Classification: **D** -- an
+InDesign-internal justification residual specific to one paragraph's own
+layout pass, not a general Japanese typesetting convention TateSpun is
+missing. TateSpun's Natural Pitch (uniform 1em, no per-document
+justification engine) is confirmed by design, not a gap; rendered both
+exceptional contexts through the real unmodified pipeline for the
+record. No production code changed, no Implementation Gate met, no
+frozen Human decision reopened. See
+`qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md` §11.
+
 ---
 
 ### 18. Real-manuscript End-to-End QA

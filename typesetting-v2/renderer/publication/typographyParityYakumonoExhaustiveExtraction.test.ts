@@ -220,7 +220,21 @@ function extractTextState(decoded: string, cidToUnicode: Map<string, string>): E
       // Uniform-1em vertical advance (no DW2 override present in this
       // document -- established Round 3/6/7). Vertical writing: Y
       // decreases per glyph (matches every measured delta this session).
-      Tm = multiply({ a: 1, b: 0, c: 0, d: 1, e: 0, f: -fontSizeFromTm }, Tm);
+      //
+      // BUG FIXED (Round 9): the translation applied here must be in
+      // UNSCALED glyph-space units (magnitude 1, i.e. "advance by 1 em")
+      // -- Tm's own scale (a=9,d=9 in this document) already converts
+      // that unit into device-space points when concatenated. Using
+      // `f: -fontSizeFromTm` here pre-scaled the translation by 9 BEFORE
+      // it was concatenated through Tm's own 9x scale, doubling the
+      // effect (81pt steps instead of 9pt). This corrupted every glyph
+      // beyond the first within a single multi-glyph Tj/TJ show
+      // operation (harmless for xPt, which this bug never touched, but
+      // wrong for every reported yPt beyond a run's first glyph) and was
+      // the real cause of the implausible Y values (down to -1651pt)
+      // Round 8 mis-attributed to a suspected multi-column merge -- see
+      // qa/evidence/TYPOGRAPHY_PARITY_YAKUMONO_MOJIKUMI.md SS11.
+      Tm = multiply({ a: 1, b: 0, c: 0, d: 1, e: 0, f: -1 }, Tm);
     }
   }
 
@@ -289,6 +303,13 @@ function extractTextState(decoded: string, cidToUnicode: Map<string, string>): E
           if (adj !== 0) {
             tjAdjustmentsFound.push(adj);
             pendingAdjustments.push({ adj, beforeIndex: glyphs.length - 1 });
+            // PDF 32000-1 SS9.4.3: for vertical writing, a POSITIVE
+            // adjustment moves the NEXT glyph further down (expansion);
+            // negative moves it up (compression) -- opposite of the
+            // horizontal-writing "positive = tighten" convention. Applied
+            // here as an extra translation (beyond each glyph's own -1em
+            // base step), in the same unscaled glyph-space units.
+            Tm = multiply({ a: 1, b: 0, c: 0, d: 1, e: 0, f: -(adj / 1000) }, Tm);
           }
         } else if (t.kind === "arrayClose") break;
         else if (t.kind === "str") { unsupportedOps.push("TJ with literal string operand (not modeled)"); }

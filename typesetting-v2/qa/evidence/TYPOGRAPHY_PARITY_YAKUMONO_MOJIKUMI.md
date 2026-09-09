@@ -408,3 +408,148 @@ build content-stream-per-page splitting (using the PDF's own page tree
 reconstruction from this reference beyond simple ordered-glyph advance
 checks, which remain valid regardless of the column-merge caveat (they
 only depend on within-Tm-run adjacency, not absolute column boundaries).
+
+## §11 — Round 9: localizing and explaining the two real -250 events (2026-09-09)
+
+**Round 8's own extractor had a real bug, now fixed.** It pre-scaled
+each glyph's advance by the font size (9) before concatenating through
+`Tm` (whose own scale already applies that same 9x), doubling the
+effective step for every glyph beyond the first in a multi-glyph
+Tj/TJ show operation (9pt steps became 81pt). This produced the
+implausible Y values (down to -1651pt on a 595pt-tall page) that Round 8
+mis-attributed to a suspected multi-column merge. **This round's own
+page-tree inspection additionally confirms the document has exactly ONE
+page and ONE `/Contents` stream** (`/Count 1`, single Kid, `/Contents 35
+0 R`, `MediaBox [0 0 419.528 595.276]` = A5, re-confirming Round 3's own
+fact) — so a multi-page merge was never structurally possible in the
+first place. With the bug fixed, the 54-glyph same-X run is a real,
+single, physically plausible column (486pt of a 595pt page).
+
+**Round 8's sign interpretation was also backwards, now corrected.** Per
+PDF 32000-1 §9.4.3, a TJ array's numeric adjustment has *opposite*
+effect for vertical vs. horizontal writing: positive **expands** (moves
+the next glyph further down) in vertical mode, the reverse of
+horizontal mode's "positive tightens" convention. Round 8 called `-250`
+an "extra gap"; verified computationally this round (not asserted from
+memory): it is a **compression**, i.e. the real physical advance from
+`、` to the next glyph is **0.75em (6.75pt)**, not 1.25em.
+
+### All 22 real commas (exhaustive, page-and-run-aware)
+
+| # | prev→、→next | Δ to next | run pos (start/end) | note |
+|---|---|---|---|---|
+| 1 | で、過 | 1.01em | 6/46 of 53 | negligible noise, TJ-span-1 |
+| 2 | は、当 | 1.01em | 33/19 of 53 | negligible noise, TJ-span-1 |
+| **3** | **た、と** | **0.75em** | **5/48 of 54** | **real compression, TJ-span-2** |
+| **4** | **ば、ど** | **0.75em** | **27/26 of 54** | **real compression, TJ-span-2** |
+| 5–21 | (17 commas, various) | 1.00em | various | plain `Tj`, zero deviation |
+| 22 | せ、(end of stream) | n/a | 52/0 of 53 | last glyph, no next |
+
+20 of 22 real commas: **exactly uniform 1em**, zero deviation. 2 of 22:
+negligible +0.01em (part of the same 49-count noise pattern found
+throughout TJ-span-1, unrelated to punctuation class). 2 of 22: the real
+0.75em compression, both in TJ-span-2 only.
+
+### Decisive structural finding
+
+The document contains exactly 2 `TJ` operator calls total, corresponding
+to exactly 2 paragraphs: **TJ-span-1** ("グリダニアで、過去の記憶も…それ
+からずいぶん長い時間を一緒に過ごした。", x=375.34) and **TJ-span-2**
+("気が合った、と言ってしまえばそれまでだ。　けれど気づけば、どこへ行くに
+も…", x=344.59). Each span contains exactly 2 real commas. **TJ-span-1's
+2 commas show no significant deviation (only the same negligible noise
+as every other pair in that span); TJ-span-2's 2 commas both show the
+real 0.75em compression.** If this were a fixed per-character mojikumi
+rule for "、+ ordinary kana," all four commas inside TJ spans would
+behave identically — they do not. The effect is tied to *which
+paragraph's own composition pass* produced it, not to the comma's local
+character-pair identity. Both real events also sit solidly mid-run
+(positions 5/54 and 27/54 from the start, 48/54 and 26/54 from the end)
+— not at any column edge, ruling out simple line-end fill.
+
+### Hypothesis testing (Step 7)
+
+- **M1 (normal comma mojikumi), M6 (comma→kana pair rule): REJECTED.**
+  TJ-span-1's own 2 real commas, in an equally real, equally TJ-composed
+  paragraph, show zero such compression. A fixed per-pair rule would
+  apply uniformly; it doesn't.
+- **M2 (line-end compression): REJECTED.** Both events are mid-run
+  (>25 positions from either edge in a 54-glyph run).
+- **M3 (kinsoku), M4 (hanging punctuation): REJECTED.** No kinsoku
+  relocation or hanging-punctuation context at either site (plain
+  mid-sentence dialogue/narration, verified via the ±10-character
+  context dump).
+- **M5 (paragraph/line-justification residual), M7 (InDesign composition
+  engine adjustment): SUPPORTED.** The clean TJ-span-1-vs-TJ-span-2 split
+  (uniform tiny +0.01em tracking throughout span 1; real -0.25em
+  correction exactly at both commas in span 2, nowhere else in span 2)
+  is the signature of a per-paragraph composition/justification pass —
+  InDesign distributing a line-fill correction across a paragraph, using
+  the comma's own mojikumi "grace space" as an absorption point in one
+  paragraph's specific composition, not a general rule.
+- **M8 (serialization artifact, no visible meaning): PARTIALLY
+  supported** for the negligible +0.01em noise only (below any visual
+  threshold); **REJECTED** as sole explanation for the real 0.75em
+  event, which is too large, too structured (exactly at commas, exactly
+  once per TJ-span-2 comma, twice, zero elsewhere) to be pure noise.
+- **M9: not needed** — M5/M7 fully explain the evidence.
+
+### Relation to the Human's InDesign mojikumi screenshot (Step 8)
+
+The screenshot's "comma line-middle ≈50%" and similar percentages
+describe **font-design-baked-in glyph side-bearing usage within the
+comma's own advance cell** (per this session's Round 7 §9 hypothesis,
+now reinforced) — a property of how much of the comma's 1em cell its
+ink occupies, not an active compression rule InDesign applies uniformly.
+**The screenshot does NOT explain this round's finding**: it would
+predict the SAME behavior for every comma in the document, but the real
+data shows the effect confined to one specific paragraph's own
+composition pass. The actual mechanism is InDesign's line/paragraph
+composition engine (justification-to-fill), a per-document layout
+behavior, not a fixed mojikumi percentage applied per character class.
+
+### TateSpun comparison (Step 9)
+
+TateSpun's `computeAtoms` (Core) applies strict, unconditional uniform
+1em advance with **no per-document justification/composition engine at
+all** — this is the deliberate Natural Pitch design (Core §18), not a
+gap. Rendered both exceptional contexts
+(`気が合った、と言ってしまえばそれまでだ`, `けれど気づけば、どこへ行くに
+も二人で`) through the real, unmodified pipeline
+(`typography-parity-comma-quarter-em-tatespun-exception{1,2}.pdf`):
+both produce uniform 1em spacing throughout, as architecturally
+guaranteed. **Visible difference: YES** (TateSpun's advance is uniform;
+InDesign's real output for this specific paragraph is not). **Logical
+difference: YES**, by design. **Classification: D** — a pure InDesign
+composition-engine artifact specific to how this one paragraph happened
+to be composed/justified in the source document, not a general Japanese
+typesetting convention TateSpun is missing. TateSpun's Natural Pitch
+contract (deterministic, uniform, no per-document justification
+variability) is an intentional, already-frozen architectural choice;
+replicating a single document's own justification residual would
+require building a justification/composition engine TateSpun does not
+have and was not designed to have.
+
+### Ordinary control (Step 11)
+
+No production code touched. `人は驚きすぎると本当に足が止まるらしい`
+unaffected; Round 6's fix and Round 7's own control artifact remain
+untouched and unregenerated by this round's own new test files.
+
+### Decision (Round 9)
+
+**EXPLAINED.** The two 0.25em events are real InDesign PDF-operator-level
+compressions, now fully localized (exact glyph pair, exact page, exact
+run position) and classified with decisive supporting evidence: an
+InDesign paragraph-composition/justification artifact specific to one
+paragraph's own layout pass (M5/M7), not a general Japanese mojikumi
+rule TateSpun is missing (M1/M6 rejected with direct counter-evidence
+from the sibling TJ-span-1 paragraph). **No Implementation Gate is
+met** — the Round 8/checkpoint's own explicit bar ("both exceptional
+events prove the SAME unambiguous general typesetting rule") is not
+satisfied; the two events prove a *document-specific* composition
+artifact, not a *general* rule. No production code changed. No frozen
+Human decision reopened. Yakumono parity classification is upgraded
+from Round 8's HOLD to **explained-and-closed for this specific
+finding** — TateSpun's existing uniform-advance architecture requires
+no change on account of this evidence.
