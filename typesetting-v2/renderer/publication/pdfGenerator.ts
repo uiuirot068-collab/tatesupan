@@ -341,6 +341,26 @@ function verticalGraphemeCommands(
     if (outlineGlyphId !== undefined && outlineContext) {
       return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
     }
+    // Browser Canvas has no vertical OpenType shaping API. The real PDF
+    // path above receives Shippori Mincho's `vert` GSUB outline for U+30FC,
+    // while the browser-only PaintPlan has no font bytes/outline context and
+    // therefore reaches this text fallback. Rotate ONLY the prolonged-sound
+    // mark around the center of its already-composed cell. This is paint-only:
+    // source, advance, line/page geometry, and U+2015's existing vertical-form
+    // substitution remain untouched. Both Web and print JPG consume this same
+    // command before print performs its final whole-page resize.
+    if (ch === "ー") {
+      return {
+        op: "text" as const,
+        text: ch,
+        xMm: xCenterMm,
+        yMm: topMm + i * perCharHeightMm + perCharHeightMm / 2,
+        fontSizePt,
+        align: "center" as const,
+        angle: 90,
+        baseline: "middle" as const,
+      };
+    }
     return {
       op: "text" as const,
       text: verticalPaintGraphemeFor(ch),
@@ -381,8 +401,14 @@ function tcyCommand(text: string, xCenterMm: number, yCenterMm: number, fontSize
 // vert/vrt2 substitution, no small-kana bbox correction, no yakumono
 // edge-alignment, no per-character split -- none of those are
 // vertical-writing-mode concerns that apply to a horizontal string.
-function horizontalFurnitureCommand(text: string, xCenterMm: number, yCenterMm: number, fontSizePt: number): PaintCommand {
-  return { op: "text", text, xMm: xCenterMm, yMm: yCenterMm, fontSizePt, align: "center", angle: 0, baseline: "middle" };
+function horizontalFurnitureCommand(
+  text: string,
+  xMm: number,
+  yCenterMm: number,
+  fontSizePt: number,
+  align: "left" | "center" | "right" = "center"
+): PaintCommand {
+  return { op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle" };
 }
 
 // Converts a physical mm length to the equivalent jsPDF font-size point
@@ -684,14 +710,14 @@ function buildBodyPaintPage(
       // physical width (jsPDF's own `align:"center"` in
       // `horizontalFurnitureCommand` already accounts for the real
       // text width -- no separate measurement needed here).
-      const xCenter =
+      const xAnchor =
         page.header.position.horizontal === "left"
-          ? marginLeftMm + doc.bodyEmMm / 2
+          ? marginLeftMm
           : page.header.position.horizontal === "right"
-            ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
+            ? paperWidthMm - marginRightMm
             : paperWidthMm / 2;
       const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
+      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, mmToPt(doc.bodyEmMm), page.header.position.horizontal));
     }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,

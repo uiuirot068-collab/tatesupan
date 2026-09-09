@@ -12,13 +12,14 @@ import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_FOLIO_SETTINGS, DEFAULT_RULE_SET_V2, mmToTicks, type HeaderSettings, type MeasurementFacts } from "../../core";
 import { buildPublicationDocument, type ImageResolver, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, deriveBaselineRatioFromFont, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, deriveBaselineRatioFromFont, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
 import { renderPaintPlanToRasterPages, RASTER_DPI, PRINT_JPG_LONG_SIDE_PX } from "./rasterGenerator";
+import { renderPaintPlanToBrowserRasterPages } from "./rasterGeneratorBrowser";
 import { exportPaintPlanToJpgPages, exportPaintPlanToJpgZip, sanitizeFilename, buildPageJpgFileName, buildZipFileName } from "./jpgExport";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 
@@ -91,6 +92,49 @@ function realMeasurementProvider(): MeasurementFacts {
       return { width: mmToTicks(40), height: mmToTicks(30) };
     },
   };
+}
+
+async function inkBounds(bytes: Uint8Array): Promise<{ width: number; height: number }> {
+  const decoded = await loadImage(Buffer.from(bytes));
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const canvas = createCanvas(decoded.width, decoded.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(decoded, 0, 0);
+  const pixels = ctx.getImageData(0, 0, decoded.width, decoded.height).data;
+  let minX = decoded.width;
+  let minY = decoded.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < decoded.height; y++) {
+    for (let x = 0; x < decoded.width; x++) {
+      const offset = (y * decoded.width + x) * 4;
+      if (pixels[offset] < 180 && pixels[offset + 1] < 180 && pixels[offset + 2] < 180) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  expect(maxX).toBeGreaterThanOrEqual(minX);
+  expect(maxY).toBeGreaterThanOrEqual(minY);
+  return { width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+async function darkPixelsInOuterStrip(bytes: Uint8Array, side: "left" | "right"): Promise<number> {
+  const decoded = await loadImage(Buffer.from(bytes));
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const canvas = createCanvas(decoded.width, decoded.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(decoded, 0, 0);
+  const stripWidth = Math.max(1, Math.round(decoded.width * (2 / GEOMETRY.paperWidthMm)));
+  const x = side === "left" ? 0 : decoded.width - stripWidth;
+  const pixels = ctx.getImageData(x, 0, stripWidth, decoded.height).data;
+  let dark = 0;
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    if (pixels[offset] < 210 && pixels[offset + 1] < 210 && pixels[offset + 2] < 210) dark++;
+  }
+  return dark;
 }
 
 interface ComposeOpts {
@@ -209,6 +253,78 @@ describe("Web JPG transform", () => {
     const expectedHeightPx = Math.round((GEOMETRY.paperHeightMm / 25.4) * RASTER_DPI);
     expect(webPages[0].pixelWidth).toBe(expectedWidthPx);
     expect(webPages[0].pixelHeight).toBe(expectedHeightPx);
+  });
+});
+
+describe("Human QA Round 1 browser/JPG paint parity regressions", () => {
+  it.each(["WEB", "PRINT"] as const)("paints U+30FC as a vertical mark in %s JPG without changing U+2015 dash handling", async (mode) => {
+    const { model } = compose([{ kind: "TEXT", text: "ー" }]);
+    // Browser production has no font-byte outline context, so this is the
+    // exact fallback PaintPlan shape the native Canvas executor receives.
+    const plan = buildPaintPlan(model, true, GEOMETRY);
+    const mark = plan[0].commands.find((command): command is Extract<PaintCommand, { op: "text" }> => command.op === "text" && command.text === "ー");
+    expect(mark).toMatchObject({ angle: 90, baseline: "middle", align: "center" });
+
+    const pages = await exportPaintPlanToJpgPages(plan, fontResource(), "Chouonpu", mode, 150);
+    const bounds = await inkBounds(pages[0].bytes);
+    expect(bounds.height).toBeGreaterThan(bounds.width * 2);
+
+    const { model: dashModel } = compose([{ kind: "TEXT", text: "―" }]);
+    const dashPlan = buildPaintPlan(dashModel, true, GEOMETRY);
+    const dash = dashPlan[0].commands.find((command): command is Extract<PaintCommand, { op: "text" }> => command.op === "text" && command.text === "︱");
+    expect(dash?.angle).toBeUndefined();
+  });
+
+  it("executes the rotated U+30FC command through the browser Canvas path itself", async () => {
+    const { model } = compose([{ kind: "TEXT", text: "ー" }]);
+    const plan = buildPaintPlan(model, true, GEOMETRY);
+    // Register the same font in the approved Canvas QA runtime before using
+    // that runtime as a DOM-canvas stand-in for the browser executor.
+    await exportPaintPlanToJpgPages(plan, fontResource(), "Chouonpu", "WEB", 150);
+    const { createCanvas } = await import("@napi-rs/canvas");
+    const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        fonts: { load: async () => [], ready: Promise.resolve(), check: () => true },
+        createElement: (tagName: string) => {
+          expect(tagName).toBe("canvas");
+          return createCanvas(1, 1);
+        },
+      } as unknown as Document,
+    });
+    try {
+      const pages = await renderPaintPlanToBrowserRasterPages(plan, "ShipporiMincho", 150);
+      const canvas = pages[0].canvas as unknown as { toBuffer: (mime: "image/jpeg") => Buffer };
+      const bounds = await inkBounds(new Uint8Array(canvas.toBuffer("image/jpeg")));
+      expect(bounds.height).toBeGreaterThan(bounds.width * 2);
+    } finally {
+      if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+      else Reflect.deleteProperty(globalThis, "document");
+    }
+  });
+
+  it.each(["WEB", "PRINT"] as const)("keeps odd-left and even-right running heads fully inside %s JPG", async (mode) => {
+    const runningHead = "TateSpun v2 Human E2E QA running head";
+    const headerSettings: HeaderSettings = {
+      hashiraOdd: runningHead,
+      hashiraEven: runningHead,
+      position: { band: "top", horizontal: "outer" },
+    };
+    const { model } = compose(
+      [{ kind: "TEXT", text: "奇数頁" }, { kind: "MANUAL_BREAK" }, { kind: "TEXT", text: "偶数頁" }],
+      { headerSettings },
+    );
+    const { outlineContext, gposContext, yakumonoContext } = realContexts();
+    const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    const oddHeader = plan[0].commands.find((command): command is Extract<PaintCommand, { op: "text" }> => command.op === "text" && command.text === runningHead)!;
+    const evenHeader = plan[1].commands.find((command): command is Extract<PaintCommand, { op: "text" }> => command.op === "text" && command.text === runningHead)!;
+    expect(oddHeader).toMatchObject({ xMm: GEOMETRY.marginLeftMm, align: "left" });
+    expect(evenHeader).toMatchObject({ xMm: GEOMETRY.paperWidthMm - GEOMETRY.marginRightMm, align: "right" });
+
+    const pages = await exportPaintPlanToJpgPages(plan, fontResource(), "Header", mode, 150);
+    expect(await darkPixelsInOuterStrip(pages[0].bytes, "left")).toBe(0);
+    expect(await darkPixelsInOuterStrip(pages[1].bytes, "right")).toBe(0);
   });
 });
 
