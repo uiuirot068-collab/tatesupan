@@ -143,16 +143,26 @@ function snapshotExpression() {
     const result = document.querySelector('[data-work-session-result]');
     const resultModal = document.querySelector('[data-work-session-result-modal]');
     const history = document.querySelector('[data-work-session-history]');
+    const historyModal = document.querySelector('[data-work-session-history-modal]');
+    const historyBody = history?.querySelector('[data-viewport-modal-body]');
     const footerHelp = document.querySelector('[data-editor-footer-help]');
     const footerControls = document.querySelector('[data-editor-footer-controls]');
     const helpRect = footerHelp?.getBoundingClientRect();
     const controlsRect = footerControls?.getBoundingClientRect();
     const resultRect = result?.getBoundingClientRect();
+    const resultModalRect = resultModal?.getBoundingClientRect();
+    const historyRect = history?.getBoundingClientRect();
+    const historyModalRect = historyModal?.getBoundingClientRect();
+    const helpStyle = footerHelp ? getComputedStyle(footerHelp) : null;
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
     const resultActions = result
       ? [...result.querySelectorAll('[data-work-session-result-action]')]
           .map((action) => action.getAttribute('data-work-session-result-action'))
+      : [];
+    const historyActions = history
+      ? [...history.querySelectorAll('[data-work-session-history-action]')]
+          .map((action) => action.getAttribute('data-work-session-history-action'))
       : [];
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
@@ -174,25 +184,42 @@ function snapshotExpression() {
       ),
       resultCenterDelta: resultRect
         ? {
-            x: Math.abs((resultRect.left + resultRect.right) / 2 - viewportWidth / 2),
-            y: Math.abs((resultRect.top + resultRect.bottom) / 2 - viewportHeight / 2),
+            x: Math.abs((resultRect.left + resultRect.right) / 2 - ((resultModalRect?.left ?? 0) + (resultModalRect?.right ?? viewportWidth)) / 2),
+            y: Math.abs((resultRect.top + resultRect.bottom) / 2 - ((resultModalRect?.top ?? 0) + (resultModalRect?.bottom ?? viewportHeight)) / 2),
           }
         : undefined,
       resultMargins: resultRect
         ? { left: resultRect.left, right: innerWidth - resultRect.right }
         : undefined,
       historyText: history?.textContent.replace(/\\s+/g, ' ').trim(),
+      historyActions,
+      historyModalPosition: historyModal ? getComputedStyle(historyModal).position : undefined,
+      historyPortalledToBody: historyModal?.parentElement === document.body,
+      historyInViewport: Boolean(
+        historyRect && historyRect.left >= 0 && historyRect.top >= 0 &&
+        historyRect.right <= innerWidth && historyRect.bottom <= innerHeight
+      ),
+      historyCenterDelta: historyRect
+        ? {
+            x: Math.abs((historyRect.left + historyRect.right) / 2 - ((historyModalRect?.left ?? 0) + (historyModalRect?.right ?? viewportWidth)) / 2),
+            y: Math.abs((historyRect.top + historyRect.bottom) / 2 - ((historyModalRect?.top ?? 0) + (historyModalRect?.bottom ?? viewportHeight)) / 2),
+          }
+        : undefined,
+      historyBodyOverflowY: historyBody ? getComputedStyle(historyBody).overflowY : undefined,
       hasStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
       hasEnd: Boolean(document.querySelector('[data-work-session-action="end"]')),
       undoText: document.querySelector('[data-editor-history-action="undo"]')?.textContent.replace(/\\s+/g, ' ').trim(),
       redoText: document.querySelector('[data-editor-history-action="redo"]')?.textContent.replace(/\\s+/g, ' ').trim(),
       footerRowsSeparated: Boolean(helpRect && controlsRect && helpRect.bottom <= controlsRect.top + 1),
-      footerHelpReadable: Boolean(
+      footerHelpCompact: Boolean(
         footerHelp &&
-        footerHelp.textContent.includes('ルビ:') &&
-        footerHelp.textContent.includes('縦中横:') &&
-        footerHelp.scrollWidth <= footerHelp.clientWidth + 1
+        footerHelp.textContent.includes('ルビ：') &&
+        footerHelp.textContent.includes('縦中横：') &&
+        footerHelp.textContent.endsWith('…') &&
+        helpStyle?.whiteSpace === 'nowrap' &&
+        helpStyle?.textOverflow === 'ellipsis'
       ),
+      footerHelpFullText: footerHelp?.getAttribute('title'),
       footerControlsWrap: footerControls ? getComputedStyle(footerControls).flexWrap : undefined,
       currentCountText: currentCount?.textContent.trim(),
       storage: localStorage.getItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}),
@@ -266,7 +293,8 @@ try {
   assert.equal(idleBefore.undoText, "↶ 元に戻す");
   assert.equal(idleBefore.redoText, "↷ やり直す");
   assert.equal(idleBefore.footerRowsSeparated, true);
-  assert.equal(idleBefore.footerHelpReadable, true);
+  assert.equal(idleBefore.footerHelpCompact, true);
+  assert.match(idleBefore.footerHelpFullText, /\[tate\]A5\[\/tate\]/);
   assert.equal(idleBefore.footerControlsWrap, "wrap");
   assert.match(idleBefore.currentCountText, /^現在の原稿文字数 \d+文字$/);
 
@@ -432,16 +460,45 @@ try {
     narrowResult.resultMargins.right >= 15,
     "missing narrow right margin: " + JSON.stringify(narrowResult.resultMargins)
   );
+  assert.ok(
+    narrowResult.resultCenterDelta.y <= 1,
+    "result modal is top-anchored on narrow viewport: " + JSON.stringify(narrowResult.resultCenterDelta)
+  );
 
   await cdp.evaluate("document.querySelector('[data-work-session-result-action=close]').click(); true");
   await cdp.waitFor("!document.querySelector('[data-work-session-result]')");
   const afterResultClose = await cdp.evaluate(snapshotExpression());
   assert.equal(JSON.parse(afterResultClose.storage).history.length, 1);
 
+  await cdp.evaluate("document.querySelector('[data-editor-footer-help]').click(); true");
+  await cdp.waitFor("Boolean(document.querySelector('[data-editor-syntax-help-modal]'))");
+  const syntaxHelp = await cdp.evaluate(`(() => {
+    const overlay = document.querySelector('[data-editor-syntax-help-modal]');
+    const dialog = document.querySelector('[data-editor-syntax-help-dialog]');
+    return {
+      portalledToBody: overlay?.parentElement === document.body,
+      fullText: dialog?.querySelector('[data-editor-syntax-help-full]')?.textContent,
+      role: dialog?.getAttribute('role'),
+      ariaModal: dialog?.getAttribute('aria-modal'),
+    };
+  })()`);
+  assert.equal(syntaxHelp.portalledToBody, true);
+  assert.match(syntaxHelp.fullText, /改ページ：【改ページ】/);
+  assert.equal(syntaxHelp.role, "dialog");
+  assert.equal(syntaxHelp.ariaModal, "true");
+  await cdp.evaluate("document.querySelector('[data-editor-syntax-help-modal]').click(); true");
+  await cdp.waitFor("!document.querySelector('[data-editor-syntax-help-modal]')");
+
   await cdp.evaluate("document.querySelector('[data-work-session-action=history]').click(); true");
   await cdp.waitFor("Boolean(document.querySelector('[data-work-session-history-record]'))");
   const historyAfterClose = await cdp.evaluate(snapshotExpression());
   assert.match(historyAfterClose.historyText, /5文字/);
+  assert.equal(historyAfterClose.historyModalPosition, "fixed");
+  assert.equal(historyAfterClose.historyPortalledToBody, true);
+  assert.equal(historyAfterClose.historyInViewport, true);
+  assert.ok(historyAfterClose.historyCenterDelta.y <= 1);
+  assert.equal(historyAfterClose.historyBodyOverflowY, "auto");
+  assert.deepEqual(historyAfterClose.historyActions, ["close-icon", "share-x", "close"]);
   assert.equal(JSON.parse(historyAfterClose.storage).history[0].writtenCharacterCount, 5);
 
   await cdp.evaluate("location.reload(); true");
@@ -455,7 +512,21 @@ try {
   assert.match(reloaded.historyText, /5文字/);
   assert.equal(JSON.parse(reloaded.storage).history[0].writtenCharacterCount, 5);
 
-  await cdp.evaluate("document.querySelector('[data-work-session-action=history]').click(); true");
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.waitFor("!document.querySelector('[data-work-session-history]')");
   await cdp.evaluate("document.querySelector('[data-work-session-action=start]').click(); true");
   await cdp.waitFor("document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '0'");
   await cdp.evaluate("document.querySelector('[data-work-session-action=end]').click(); true");
@@ -479,7 +550,7 @@ try {
   assert.equal(JSON.parse(afterEscapeClose.storage).history.length, 2);
   assert.equal(JSON.parse(afterEscapeClose.storage).history[1].writtenCharacterCount, 0);
 
-  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (viewport result modal desktop/narrow + copy/X + explicit/Escape close + retained history; visible Undo/Redo at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
+  console.log(`PASS real Editor UX + 11-B browser E2E: ${editorUrl} (single-line/touch syntax help; centered result/history modals desktop+narrow with copy/X and close/Escape; retained history; visible Undo/Redo at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;

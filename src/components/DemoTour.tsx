@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   DEMO_STEP_9_GUEST,
   DEMO_STEP_9_MEMBER,
@@ -8,6 +8,7 @@ import {
 } from "@/constants/demoData";
 import { useDemoTour } from "@/hooks/useDemoTour";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { computeDemoCardPlacement, type DemoCardPlacement } from "@/lib/demoPlacement";
 
 interface DemoTourProps {
   /** Signed-in state — decides STEP 9 copy only. Never triggers auth. */
@@ -38,6 +39,24 @@ export default function DemoTour({
 }: DemoTourProps) {
   const { step, stepNumber, total, isFirst, isLast, next, prev } = useDemoTour();
   const narrow = useIsNarrowViewport();
+  const cardRef = useRef<HTMLElement>(null);
+  const [placement, setPlacement] = useState<DemoCardPlacement | null>(null);
+
+  const updatePlacement = useCallback(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const targets = step.target
+      ? Array.from(document.querySelectorAll<HTMLElement>(`[data-demo-target="${step.target}"]`))
+      : [];
+    const target = targets.find((node) => node.offsetParent !== null) ?? null;
+    const targetRect = target?.getBoundingClientRect() ?? null;
+    const cardRect = card.getBoundingClientRect();
+    setPlacement(computeDemoCardPlacement(
+      targetRect,
+      { width: cardRect.width, height: card.scrollHeight },
+      { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight }
+    ));
+  }, [step.target]);
 
   // Non-destructive step preparation + spotlight. Never operates the control.
   useEffect(() => {
@@ -57,6 +76,7 @@ export default function DemoTour({
       if (!el || el.offsetParent === null) return;
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.classList.add("tsp-demo-spotlight");
+      window.requestAnimationFrame(updatePlacement);
     }, 120);
     return () => {
       window.clearTimeout(id);
@@ -65,14 +85,43 @@ export default function DemoTour({
         .querySelectorAll(".tsp-demo-spotlight")
         .forEach((n) => n.classList.remove("tsp-demo-spotlight"));
     };
-  }, [step.target, stepNumber]);
+  }, [step.target, stepNumber, updatePlacement]);
+
+  useLayoutEffect(() => {
+    const frame = window.requestAnimationFrame(updatePlacement);
+    return () => window.cancelAnimationFrame(frame);
+  }, [stepNumber, narrow, updatePlacement]);
+
+  useEffect(() => {
+    let frame = 0;
+    const schedulePlacement = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updatePlacement);
+    };
+    window.addEventListener("resize", schedulePlacement);
+    window.addEventListener("scroll", schedulePlacement, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedulePlacement);
+      window.removeEventListener("scroll", schedulePlacement, true);
+    };
+  }, [updatePlacement]);
+
+  const positionStyle: CSSProperties = placement
+    ? { top: placement.top, left: placement.left, maxHeight: placement.maxHeight }
+    : narrow
+      ? { right: 12, bottom: 12 }
+      : { right: 24, bottom: 24 };
 
   return (
     <aside
+      ref={cardRef}
       data-demo-tour=""
+      data-demo-placement={placement?.side ?? "pending"}
       role="region"
       aria-label={`おためしデモ ステップ ${stepNumber} / ${total}`}
-      className="pointer-events-auto fixed inset-x-3 bottom-3 z-[60] mx-auto flex max-h-[46dvh] max-w-md flex-col rounded-xl border border-ink/15 bg-base/98 p-3 shadow-2xl backdrop-blur md:inset-x-auto md:right-6 md:bottom-6 md:max-h-[72dvh] md:w-[380px]"
+      style={positionStyle}
+      className="pointer-events-auto fixed z-[60] flex w-[calc(100vw-1.5rem)] max-w-md flex-col rounded-xl border border-ink/15 bg-base/98 p-3 shadow-2xl backdrop-blur md:w-[380px]"
     >
       <div className="mb-1.5 flex flex-none items-center justify-between gap-2">
         <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-semibold text-ink/70">

@@ -38,13 +38,19 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain("countVisualLength(content)");
   });
 
-  it("keeps Ruby/TCY help and wrapping work-session controls in separate footer rows", () => {
+  it("keeps Ruby/TCY help compact with accessible hover, focus, and touch disclosure", () => {
     const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
     const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
-    expect(editor).toContain("data-editor-footer-help");
-    expect(editor).toContain("whitespace-normal break-words");
+    const help = readFileSync(join(ROOT, "src", "components", "EditorSyntaxHelp.tsx"), "utf8");
+    expect(editor).toContain("<EditorSyntaxHelp />");
+    expect(help).toContain("data-editor-footer-help");
     expect(editor).toContain("data-editor-footer-controls");
     expect(editor).toContain("現在の原稿文字数 {countVisualLength(content)}文字");
+    expect(help).toContain("truncate whitespace-nowrap");
+    expect(help).toContain("title={EDITOR_SYNTAX_HELP}");
+    expect(help).toContain("aria-label={EDITOR_SYNTAX_HELP}");
+    expect(help).toContain("data-editor-syntax-help-modal");
+    expect(help).toContain("data-editor-syntax-help-full");
     expect(counter).toContain("flex-wrap");
   });
 
@@ -57,17 +63,22 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain("document.execCommand(command)");
   });
 
-  it("renders the completed result as a viewport modal without changing its actions", () => {
+  it("renders result and history through one centered viewport modal shell", () => {
     const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
-    expect(counter).toContain('createPortal(');
-    expect(counter).toContain('document.body');
+    const modal = readFileSync(join(ROOT, "src", "components", "ViewportModal.tsx"), "utf8");
+    expect(modal).toContain('createPortal(');
+    expect(modal).toContain('document.body');
+    expect(modal).toContain('items-center justify-center');
+    expect(modal).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(modal).toContain('aria-modal="true"');
+    expect(modal).toContain('modalStack.at(-1)');
     expect(counter).toContain('data-work-session-result-modal');
-    expect(counter).toContain('className="fixed inset-0');
-    expect(counter).toContain('aria-modal="true"');
-    expect(counter).toContain('event.key !== "Escape"');
+    expect(counter).toContain('data-work-session-history-modal');
+    expect(counter).toContain('data-work-session-history-list');
     expect(counter).toContain('data-work-session-result-action="close"');
     expect(counter).toContain('data-work-session-result-action="copy"');
     expect(counter).toContain('data-work-session-result-action="share-x"');
-    expect(counter).not.toContain('data-work-session-result\n          className="absolute bottom-full');
+    expect(counter).toContain('data-work-session-history-action="share-x"');
+    expect(counter).not.toContain('className="absolute bottom-full');
   });
 });

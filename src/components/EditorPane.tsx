@@ -19,6 +19,7 @@ import {
   type WorkSessionState,
 } from "@/lib/editorSessionActivity";
 import PageSettingsPanel from "./PageSettingsPanel";
+import EditorSyntaxHelp from "./EditorSyntaxHelp";
 import WorkSessionTracker from "./WorkSessionTracker";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
@@ -27,14 +28,6 @@ import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
 const WRITING_CHECK_DEBOUNCE_MS = 300;
-
-// Plain-text form of the footer syntax reminder, used as the hover `title`
-// so the full guidance is still reachable when the one-line footer truncates
-// it. (The full DOM text stays present for screen readers regardless of the
-// visual `truncate`.) The detailed 3-case 改ページ explanation lives in Help /
-// 使い方ガイド — see PageBreakGuide.
-const FOOTER_SYNTAX_HELP =
-  "ルビ: ｜漢字《かんじ》 ／ 縦中横: 半角数字2桁を自動検知・[tate]A5[/tate] ／ 改ページ: 【改ページ】（詳しい使い方はヘルプ）";
 
 const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 
@@ -511,17 +504,10 @@ export default function EditorPane({
         />
       )}
 
-      {/* Help and work-session status have independent rows so neither can
-          hide the other. Both rows wrap naturally on narrow viewports. */}
+      {/* Compact syntax help never creates a second line; touch/keyboard users
+          can open its full text without permanently growing the footer. */}
       <div className="flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
-        <div
-          data-editor-footer-help
-          className="w-full whitespace-normal break-words leading-relaxed"
-          title={FOOTER_SYNTAX_HELP}
-        >
-          ルビ: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁を自動検知・
-          <code>[tate]A5[/tate]</code>／改ページ: <code>{PAGE_BREAK_MARKER}</code>
-        </div>
+        <EditorSyntaxHelp />
         <div
           data-editor-footer-controls
           className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5"

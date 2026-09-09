@@ -3,6 +3,7 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { capturePageToCanvas, EXPORT_TIMING_ENABLED, type RelativeRect } from './exportCapture';
+import { throwIfExportCancelled, waitForExportDelay } from '@/lib/exportCancellation';
 
 /** 書き出し対象の1ページ分: キャプチャ元DOM要素と、出力ファイル名。 */
 export interface ExportPageItem {
@@ -77,6 +78,12 @@ function resizeCanvasTo(canvas: HTMLCanvasElement, width: number, height: number
   return resized;
 }
 
+function releaseCanvas(canvas: HTMLCanvasElement | null): void {
+  if (!canvas) return;
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
 /**
  * `geometry`指定時は、TrimGuide位置に基づいて仕上がり範囲へcropした後、
  * 仕上がり物理比率を保った最終px（長辺1600px）へ1回だけresizeする
@@ -119,21 +126,29 @@ export async function exportPageToJpg(
   element: HTMLElement,
   fileName: string,
   scale: number,
-  geometry?: PrintJpgGeometry
+  geometry?: PrintJpgGeometry,
+  signal?: AbortSignal
 ): Promise<void> {
   if (typeof window === 'undefined' || !element) return;
 
   if (EXPORT_TIMING_ENABLED) console.groupCollapsed(`[export timing] ${fileName}`);
+  let capturedCanvas: HTMLCanvasElement | null = null;
+  let finalCanvas: HTMLCanvasElement | null = null;
   try {
-    const canvas = await capturePageToCanvas(element, { pixelRatio: scale });
-    const finalCanvas = applyPrintJpgGeometry(canvas, geometry);
+    throwIfExportCancelled(signal);
+    capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
+    throwIfExportCancelled(signal);
+    finalCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
     const tEncodeStart = performance.now();
     const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
     if (EXPORT_TIMING_ENABLED) {
       console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
     }
+    throwIfExportCancelled(signal);
     saveAs(dataUrl, fileName);
   } finally {
+    releaseCanvas(finalCanvas);
+    if (capturedCanvas !== finalCanvas) releaseCanvas(capturedCanvas);
     if (EXPORT_TIMING_ENABLED) console.groupEnd();
   }
 }
@@ -148,29 +163,37 @@ export async function exportPagesToZip(
   zipFileName: string,
   onProgress: ((current: number, total: number) => void) | undefined,
   scale: number,
-  geometry?: PrintJpgGeometry
+  geometry?: PrintJpgGeometry,
+  signal?: AbortSignal
 ): Promise<void> {
   if (typeof window === 'undefined' || items.length === 0) return;
 
+  throwIfExportCancelled(signal);
   const zip = new JSZip();
 
   for (let i = 0; i < items.length; i++) {
+    throwIfExportCancelled(signal);
     const { element, fileName } = items[i];
     onProgress?.(i + 1, items.length);
 
     if (EXPORT_TIMING_ENABLED) console.groupCollapsed(`[export timing] ${fileName}`);
+    let capturedCanvas: HTMLCanvasElement | null = null;
+    let finalCanvas: HTMLCanvasElement | null = null;
     try {
-      const canvas = await capturePageToCanvas(element, { pixelRatio: scale });
-      const finalCanvas = applyPrintJpgGeometry(canvas, geometry);
+      capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
+      throwIfExportCancelled(signal);
+      const processedCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
+      finalCanvas = processedCanvas;
 
       const tEncodeStart = performance.now();
       const blob = await new Promise<Blob | null>((resolve) => {
-        finalCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
+        processedCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
       });
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → JPEG blob: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
 
+      throwIfExportCancelled(signal);
       const tZipStart = performance.now();
       if (blob) {
         zip.file(fileName, blob);
@@ -179,14 +202,19 @@ export async function exportPagesToZip(
         console.log(`ZIP追加: ${(performance.now() - tZipStart).toFixed(1)} ms`);
       }
 
-      finalCanvas.width = 0;
-      finalCanvas.height = 0;
     } finally {
+      releaseCanvas(finalCanvas);
+      if (capturedCanvas !== finalCanvas) releaseCanvas(capturedCanvas);
       if (EXPORT_TIMING_ENABLED) console.groupEnd();
     }
   }
 
-  const content = await zip.generateAsync({ type: 'blob' });
+  throwIfExportCancelled(signal);
+  const content = await zip.generateAsync(
+    { type: 'blob' },
+    () => throwIfExportCancelled(signal)
+  );
+  throwIfExportCancelled(signal);
   saveAs(content, zipFileName);
 }
 
@@ -205,33 +233,39 @@ export async function exportPagesAsIndividualJpgs(
   onProgress: ((current: number, total: number) => void) | undefined,
   scale: number,
   geometry?: PrintJpgGeometry,
+  signal?: AbortSignal,
   delayMs: number = 300
 ): Promise<void> {
   if (typeof window === 'undefined' || items.length === 0) return;
 
   for (let i = 0; i < items.length; i++) {
+    throwIfExportCancelled(signal);
     const { element, fileName } = items[i];
     onProgress?.(i + 1, items.length);
 
     if (EXPORT_TIMING_ENABLED) console.groupCollapsed(`[export timing] ${fileName}`);
+    let capturedCanvas: HTMLCanvasElement | null = null;
+    let finalCanvas: HTMLCanvasElement | null = null;
     try {
-      const canvas = await capturePageToCanvas(element, { pixelRatio: scale });
-      const finalCanvas = applyPrintJpgGeometry(canvas, geometry);
+      capturedCanvas = await capturePageToCanvas(element, { pixelRatio: scale });
+      throwIfExportCancelled(signal);
+      finalCanvas = applyPrintJpgGeometry(capturedCanvas, geometry);
       const tEncodeStart = performance.now();
       const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → JPEG/dataURL: ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
+      throwIfExportCancelled(signal);
       saveAs(dataUrl, fileName);
 
-      finalCanvas.width = 0;
-      finalCanvas.height = 0;
     } finally {
+      releaseCanvas(finalCanvas);
+      if (capturedCanvas !== finalCanvas) releaseCanvas(capturedCanvas);
       if (EXPORT_TIMING_ENABLED) console.groupEnd();
     }
 
     if (i < items.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await waitForExportDelay(delayMs, signal);
     }
   }
 }

@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -7,6 +8,7 @@ import {
   useState,
   type DragEvent,
   type MouseEvent,
+  type HTMLAttributes,
 } from "react";
 import {
   computePageParagraphStarts,
@@ -61,6 +63,7 @@ import {
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import ExportProgressModal from "./ExportProgressModal";
+import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
 import ColophonPageCard from "./ColophonPageCard";
@@ -69,6 +72,10 @@ import {
   CLOUD_IMAGE_EXPORT_BLOCK_BODY,
   CLOUD_IMAGE_EXPORT_BLOCK_TITLE,
 } from "@/lib/cloudImageSync";
+import {
+  ExportCancellationCoordinator,
+  isExportCancelledError,
+} from "@/lib/exportCancellation";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -810,6 +817,48 @@ export default function PreviewPane({
   );
   const [exportLabel, setExportLabel] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
+  const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
+
+  const beginExport = useCallback((label: string, total = 0): AbortSignal => {
+    const signal = exportCancellation.begin();
+    setIsExportCancelConfirmOpen(false);
+    setIsExporting(true);
+    setExportLabel(label);
+    setExportProgress(total > 0 ? { current: 0, total } : null);
+    return signal;
+  }, [exportCancellation]);
+
+  const finishExport = useCallback((signal: AbortSignal) => {
+    if (!exportCancellation.finish(signal)) return;
+    setIsExportCancelConfirmOpen(false);
+    setIsExporting(false);
+    setExportProgress(null);
+  }, [exportCancellation]);
+
+  const continueExport = useCallback(() => {
+    exportCancellation.continueExport();
+    setIsExportCancelConfirmOpen(false);
+  }, [exportCancellation]);
+
+  const confirmExportCancellation = useCallback(() => {
+    exportCancellation.cancelExport();
+    setIsExportCancelConfirmOpen(false);
+  }, [exportCancellation]);
+
+  useEffect(() => {
+    const openCancellationConfirmation = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !isExporting || isExportCancelConfirmOpen) return;
+      if (exportCancellation.handleEscape() !== "open-confirmation") return;
+      event.preventDefault();
+      // The export confirmation is the intended top interaction. Do not let
+      // this same Escape close a work-session/help dialog underneath it.
+      event.stopImmediatePropagation();
+      setIsExportCancelConfirmOpen(true);
+    };
+    document.addEventListener("keydown", openCancellationConfirmation, true);
+    return () => document.removeEventListener("keydown", openCancellationConfirmation, true);
+  }, [exportCancellation, isExportCancelConfirmOpen, isExporting]);
 
   // TSP-LOOP-005: 横書き奥付ページのラッパー div（export capture は本文ページと
   // 同じく resolvePageCardElement で内部の `.page-card` へ解決する）。`showColophon`
@@ -913,19 +962,21 @@ export default function PreviewPane({
     }
     const el = pageElementsRef.current.get(index);
     if (!el) return;
-    setIsExporting(true);
-    setExportLabel("画像");
+    const signal = beginExport("画像");
     try {
       await exportPageToJpg(
         el,
         buildPageJpgFileName(title, index + 1),
         resolveJpgScale(el),
-        resolvePrintJpgGeometry(el)
+        resolvePrintJpgGeometry(el),
+        signal
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+      if (!isExportCancelledError(err)) {
+        alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+      }
     } finally {
-      setIsExporting(false);
+      finishExport(signal);
     }
   };
 
@@ -934,19 +985,21 @@ export default function PreviewPane({
     if (exportBlockedByUnresolvedImages()) return;
     const el = colophonElementRef.current;
     if (!el) return;
-    setIsExporting(true);
-    setExportLabel("画像");
+    const signal = beginExport("画像");
     try {
       await exportPageToJpg(
         el,
         buildPageJpgFileName(title, colophonPhysicalPageNumber),
         resolveJpgScale(el),
-        resolvePrintJpgGeometry(el)
+        resolvePrintJpgGeometry(el),
+        signal
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+      if (!isExportCancelledError(err)) {
+        alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
+      }
     } finally {
-      setIsExporting(false);
+      finishExport(signal);
     }
   };
 
@@ -958,21 +1011,21 @@ export default function PreviewPane({
     }
     const items = buildSelectedPageItems(getOrderedSelectedIndices());
     if (items.length === 0) return;
-    setIsExporting(true);
-    setExportLabel("画像");
-    setExportProgress({ current: 0, total: items.length });
+    const signal = beginExport("画像", items.length);
     try {
       await exportPagesAsIndividualJpgs(
         items,
         (current, total) => setExportProgress({ current, total }),
         resolveJpgScale(items[0].element),
-        resolvePrintJpgGeometry(items[0].element)
+        resolvePrintJpgGeometry(items[0].element),
+        signal
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : "JPG一括書き出しに失敗しました。");
+      if (!isExportCancelledError(err)) {
+        alert(err instanceof Error ? err.message : "JPG一括書き出しに失敗しました。");
+      }
     } finally {
-      setIsExporting(false);
-      setExportProgress(null);
+      finishExport(signal);
     }
   };
 
@@ -984,22 +1037,22 @@ export default function PreviewPane({
     }
     const items = buildSelectedPageItems(getOrderedSelectedIndices());
     if (items.length === 0) return;
-    setIsExporting(true);
-    setExportLabel("画像");
-    setExportProgress({ current: 0, total: items.length });
+    const signal = beginExport("画像", items.length);
     try {
       await exportPagesToZip(
         items,
         buildZipFileName(title),
         (current, total) => setExportProgress({ current, total }),
         resolveJpgScale(items[0].element),
-        resolvePrintJpgGeometry(items[0].element)
+        resolvePrintJpgGeometry(items[0].element),
+        signal
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
+      if (!isExportCancelledError(err)) {
+        alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
+      }
     } finally {
-      setIsExporting(false);
-      setExportProgress(null);
+      finishExport(signal);
     }
   };
 
@@ -1063,9 +1116,7 @@ export default function PreviewPane({
       elements.push(colophonElementRef.current);
     }
     if (elements.length === 0) return;
-    setIsExporting(true);
-    setExportLabel("PDF");
-    setExportProgress({ current: 0, total: elements.length });
+    const signal = beginExport("PDF", elements.length);
     try {
       // PDFは正式仕様で常に印刷用紙preset・600dpi固定（Web閲覧用はUI側で
       // 選択不可のためここに到達しない）。
@@ -1076,6 +1127,7 @@ export default function PreviewPane({
         fileName: buildPdfFileName(title, pdfMode, pdfScope),
         scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
+        signal,
       });
       // Success boundary: exportCustomPdf resolved — every page was captured
       // and jsPDF's `pdf.save()` download trigger fired without throwing. The
@@ -1086,10 +1138,11 @@ export default function PreviewPane({
       setIsPdfModalOpen(false);
       onPdfExportSuccess?.();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "PDF書き出しに失敗しました。");
+      if (!isExportCancelledError(err)) {
+        alert(err instanceof Error ? err.message : "PDF書き出しに失敗しました。");
+      }
     } finally {
-      setIsExporting(false);
-      setExportProgress(null);
+      finishExport(signal);
     }
   };
 
@@ -2023,6 +2076,42 @@ export default function PreviewPane({
           current={exportProgress?.current ?? 0}
           total={exportProgress?.total ?? 0}
         />
+      )}
+
+      {isExportCancelConfirmOpen && (
+        <ViewportModal
+          title="書き出しを中断しますか？"
+          titleId="export-cancel-confirm-title"
+          closeLabel="書き出し中断の確認を閉じる"
+          onClose={continueExport}
+          showCloseButton={false}
+          overlayProps={{ "data-export-cancel-confirm-modal": "" } as HTMLAttributes<HTMLDivElement>}
+          dialogProps={{ "data-export-cancel-confirm": "" } as HTMLAttributes<HTMLDivElement>}
+          footer={(
+            <>
+              <button
+                type="button"
+                data-export-cancel-action="continue"
+                onClick={continueExport}
+                className="rounded border border-ink/20 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5"
+              >
+                書き出しを続ける
+              </button>
+              <button
+                type="button"
+                data-export-cancel-action="abort"
+                onClick={confirmExportCancellation}
+                className="rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+              >
+                中断する
+              </button>
+            </>
+          )}
+        >
+          <p className="text-sm leading-relaxed text-ink/70">
+            現在処理しているページの完了後、残りの書き出しを安全に停止します。
+          </p>
+        </ViewportModal>
       )}
     </div>
   );

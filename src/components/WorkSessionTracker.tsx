@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useState, type HTMLAttributes } from "react";
 import {
   formatWorkSessionShareText,
   type CompletedWorkSession,
   type WorkSessionState,
 } from "@/lib/editorSessionActivity";
+import ViewportModal from "./ViewportModal";
 
 function formatElapsed(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -65,76 +65,17 @@ function WorkSessionResultModal({
   onCopy: () => void;
   onShare: () => void;
 }) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    closeButtonRef.current?.focus();
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape, true);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape, true);
-      if (previouslyFocused?.isConnected) previouslyFocused.focus();
-    };
-  }, [onClose]);
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      data-work-session-result-modal
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="work-session-result-title"
-        data-work-session-result
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-lg border border-ink/15 bg-base text-left shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-ink/10 px-4 py-3">
-          <p id="work-session-result-title" className="text-sm font-bold text-ink">
-            作業おつかれさまでした
-          </p>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            aria-label="作業結果を閉じる"
-            data-work-session-result-action="close-icon"
-            onClick={onClose}
-            className="rounded p-1 text-ink/55 hover:bg-ink/5 hover:text-ink"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-            <dt className="text-ink/55">今回書いた文字数</dt>
-            <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
-              {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
-            </dd>
-            <dt className="text-ink/55">作業時間</dt>
-            <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
-            <dt className="text-ink/55">開始時刻</dt>
-            <dd className="text-right tabular-nums text-ink">{formatClock(result.startedAt)}</dd>
-            <dt className="text-ink/55">終了時刻</dt>
-            <dd className="text-right tabular-nums text-ink">{formatClock(result.endedAt)}</dd>
-          </dl>
-          <p className="mt-2 text-[10px] text-ink/45">現在の原稿文字数とは別の値です。</p>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-ink/10 px-4 py-3">
+  return (
+    <ViewportModal
+      title="作業おつかれさまでした"
+      titleId="work-session-result-title"
+      closeLabel="作業結果を閉じる"
+      onClose={onClose}
+      overlayProps={{ "data-work-session-result-modal": "" } as HTMLAttributes<HTMLDivElement>}
+      dialogProps={{ "data-work-session-result": "" } as HTMLAttributes<HTMLDivElement>}
+      closeButtonProps={{ "data-work-session-result-action": "close-icon" } as HTMLAttributes<HTMLButtonElement>}
+      footer={(
+        <>
           <button
             type="button"
             data-work-session-result-action="close"
@@ -159,10 +100,87 @@ function WorkSessionResultModal({
           >
             Xでシェア
           </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        </>
+      )}
+    >
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+        <dt className="text-ink/55">今回書いた文字数</dt>
+        <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
+          {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
+        </dd>
+        <dt className="text-ink/55">作業時間</dt>
+        <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
+        <dt className="text-ink/55">開始時刻</dt>
+        <dd className="text-right tabular-nums text-ink">{formatClock(result.startedAt)}</dd>
+        <dt className="text-ink/55">終了時刻</dt>
+        <dd className="text-right tabular-nums text-ink">{formatClock(result.endedAt)}</dd>
+      </dl>
+      <p className="mt-2 text-[10px] text-ink/45">現在の原稿文字数とは別の値です。</p>
+    </ViewportModal>
+  );
+}
+
+function WorkSessionHistoryModal({
+  history,
+  onClose,
+  onShare,
+}: {
+  history: readonly CompletedWorkSession[];
+  onClose: () => void;
+  onShare: (record: CompletedWorkSession) => void;
+}) {
+  return (
+    <ViewportModal
+      title="作業記録"
+      titleId="work-session-history-title"
+      closeLabel="作業記録を閉じる"
+      onClose={onClose}
+      panelClassName="max-w-lg"
+      overlayProps={{ "data-work-session-history-modal": "" } as HTMLAttributes<HTMLDivElement>}
+      dialogProps={{ "data-work-session-history": "" } as HTMLAttributes<HTMLDivElement>}
+      closeButtonProps={{ "data-work-session-history-action": "close-icon" } as HTMLAttributes<HTMLButtonElement>}
+      footer={(
+        <button
+          type="button"
+          data-work-session-history-action="close"
+          onClick={onClose}
+          className="rounded bg-ink px-4 py-1.5 text-xs font-semibold text-base hover:opacity-90"
+        >
+          閉じる
+        </button>
+      )}
+    >
+      {history.length === 0 ? (
+        <p className="text-xs text-ink/50">完了した作業はまだありません。</p>
+      ) : (
+        <ul data-work-session-history-list="" className="divide-y divide-ink/10">
+          {[...history].reverse().map((record) => (
+            <li
+              key={record.id}
+              data-work-session-history-record={record.id}
+              className="flex items-center justify-between gap-3 py-3"
+            >
+              <div className="min-w-0 text-xs">
+                <p className="tabular-nums text-ink">
+                  {formatHistoryDate(record.startedAt)}〜{formatClock(record.endedAt)}
+                </p>
+                <p className="mt-0.5 tabular-nums text-ink/60">
+                  {formatDuration(record.durationMs)} / {record.writtenCharacterCount.toLocaleString("ja-JP")}文字
+                </p>
+              </div>
+              <button
+                type="button"
+                data-work-session-history-action="share-x"
+                onClick={() => onShare(record)}
+                className="shrink-0 rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5"
+              >
+                Xでシェア
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </ViewportModal>
   );
 }
 
@@ -270,38 +288,11 @@ export default function WorkSessionTracker({
       )}
 
       {panel === "history" && (
-        <div
-          role="dialog"
-          aria-label="作業記録"
-          data-work-session-history
-          className="absolute bottom-full right-0 z-30 mb-2 w-80 rounded-lg border border-ink/15 bg-base p-4 text-left shadow-xl"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-bold text-ink">作業記録</p>
-            <button type="button" onClick={() => setPanel(null)} className="rounded px-2 py-1 text-[11px] text-ink/55 hover:bg-ink/5">閉じる</button>
-          </div>
-          {state.history.length === 0 ? (
-            <p className="mt-3 text-xs text-ink/50">完了した作業はまだありません。</p>
-          ) : (
-            <ul className="mt-2 max-h-64 divide-y divide-ink/10 overflow-y-auto">
-              {[...state.history].reverse().map((record) => (
-                <li key={record.id} data-work-session-history-record={record.id} className="flex items-center justify-between gap-3 py-2">
-                  <div className="min-w-0 text-xs">
-                    <p className="truncate tabular-nums text-ink">
-                      {formatHistoryDate(record.startedAt)}〜{formatClock(record.endedAt)}
-                    </p>
-                    <p className="mt-0.5 tabular-nums text-ink/60">
-                      {formatDuration(record.durationMs)} / {record.writtenCharacterCount.toLocaleString("ja-JP")}文字
-                    </p>
-                  </div>
-                  <button type="button" onClick={() => openXShare(record)} className="shrink-0 rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5">
-                    Xでシェア
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <WorkSessionHistoryModal
+          history={state.history}
+          onClose={closePanel}
+          onShare={openXShare}
+        />
       )}
     </div>
   );
