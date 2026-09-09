@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "../pageLayout";
+import { DEFAULT_PAGE_SETTINGS, computeLinePitchMm, type PageSettings } from "../pageLayout";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2HeaderPageOverrides, buildV2ColophonText } from "./settingsAdapter";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 
@@ -8,8 +8,36 @@ describe("settingsAdapter -- real PageSettings -> v2 Core input contracts", () =
     it("uses the Editor's OWN real charsPerLine/linesPerColumn directly -- never a hardcoded default", () => {
       const layout = buildV2LayoutSettings(DEFAULT_PAGE_SETTINGS);
       const perCellAdvanceTick = mmToTicks((DEFAULT_PAGE_SETTINGS.fontSizePt * 25.4) / 72);
+      const linePitchTick = mmToTicks(computeLinePitchMm(DEFAULT_PAGE_SETTINGS.fontSizePt, DEFAULT_PAGE_SETTINGS.lineHeightRatio));
       expect(layout.lineExtentTicks).toBe(DEFAULT_PAGE_SETTINGS.charsPerLine * perCellAdvanceTick);
-      expect(layout.columnExtentTicks).toBe(DEFAULT_PAGE_SETTINGS.linesPerColumn * perCellAdvanceTick);
+      expect(layout.columnExtentTicks).toBe(DEFAULT_PAGE_SETTINGS.linesPerColumn * linePitchTick);
+    });
+
+    // Typography Parity Round 3: linePitchTicks (行間, spacing between
+    // adjacent 行 within a column) is a REAL, independent quantity from
+    // perCellAdvanceTick (character-to-character advance WITHIN one 行) --
+    // it reflects the Editor's own real lineHeightRatio (行間倍率, default
+    // 1.7), never the same value, matching the real, already-shipped
+    // legacy layout math (`computeLinePitchMm`, `pageLayout.ts`) and an
+    // independently-measured real InDesign reference PDF's own ~1.77x
+    // column-to-character-size ratio (see qa/evidence/
+    // TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md).
+    it("linePitchTicks reflects the Editor's own real lineHeightRatio, NOT the character advance -- these are genuinely independent physical quantities", () => {
+      const layout = buildV2LayoutSettings(DEFAULT_PAGE_SETTINGS);
+      const perCellAdvanceTick = mmToTicks((DEFAULT_PAGE_SETTINGS.fontSizePt * 25.4) / 72);
+      expect(DEFAULT_PAGE_SETTINGS.lineHeightRatio).not.toBe(1); // sanity: the default itself is non-trivial (1.7)
+      expect(layout.linePitchTicks).not.toBe(perCellAdvanceTick);
+      expect(layout.linePitchTicks / perCellAdvanceTick).toBeCloseTo(DEFAULT_PAGE_SETTINGS.lineHeightRatio, 2);
+    });
+
+    it("a different lineHeightRatio produces proportionally different linePitchTicks/columnExtentTicks, with lineExtentTicks (character direction) completely unaffected", () => {
+      const tight: PageSettings = { ...DEFAULT_PAGE_SETTINGS, lineHeightRatio: 1.0 };
+      const loose: PageSettings = { ...DEFAULT_PAGE_SETTINGS, lineHeightRatio: 2.0 };
+      const tightLayout = buildV2LayoutSettings(tight);
+      const looseLayout = buildV2LayoutSettings(loose);
+      expect(looseLayout.linePitchTicks / tightLayout.linePitchTicks).toBeCloseTo(2, 5);
+      expect(looseLayout.columnExtentTicks / tightLayout.columnExtentTicks).toBeCloseTo(2, 5);
+      expect(looseLayout.lineExtentTicks).toBe(tightLayout.lineExtentTicks);
     });
 
     it("two materially different Editor line-count settings produce measurably different tick geometry (not just different numbers on an unused object)", () => {

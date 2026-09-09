@@ -1,4 +1,129 @@
-# Typography Parity — InDesign Overlay Drift (Round 2)
+# Typography Parity — InDesign Overlay Drift
+
+Recorded: 2026-09-09
+Status: **ROOT CAUSE FOUND AND FIXED (Round 3)** — see §9 below for the current state. Round 1/Round 2 sections below are preserved unedited as history.
+
+---
+
+# Round 3 — exact InDesign-matched geometry, root cause, and fix
+
+Recorded: 2026-09-09
+HEAD at audit time: `4b8e8a4`
+Status: Column-pitch drift root-caused and fixed in the real product settings adapter. Natural Pitch (character-direction advance) untouched and preserved.
+
+## 9. Step 0 — reference file confirmation
+
+`qa/reference/indesign/molsui-indesign-reference.pdf` — **confirmed present** (49,414 bytes).
+
+## 10. Step 1 — InDesign reference geometry, independently extracted from raw PDF bytes
+
+Extracted via a new test,
+`renderer/publication/typographyParityIndesignExtraction.test.ts`, using
+only Node's built-in `zlib` (FlateDecode inflate) plus regex-based PDF
+structural parsing — the same technique
+`structuralColophonFreeTextFinalPdfParity.test.ts` already established in
+this directory. No new dependency.
+
+| Fact | Independently measured value | Matches Human-supplied fact? |
+|---|---|---|
+| Creator | `Adobe InDesign CS6 \(Windows\` | matches |
+| Producer | `Adobe PDF Library 10.0.1` | (not previously supplied) |
+| MediaBox | `[0 0 419.528 595.276]` pt | matches `419.528 × 595.276 pt` exactly |
+| Physical page | 148.0mm × 210.0mm (computed from MediaBox) | matches "A5 portrait / 148×210mm" |
+| Embedded font | `SWXGDE+ShipporiMincho-Regular`, `Type0`/`CIDFontType0` | matches "ShipporiMincho-Regular" |
+| Body font size | 9.0pt (from the `9 0 0 9 X Y Tm` text-matrix scale in the real content stream — the font itself is invoked at `1 Tf`, i.e. unscaled, with the actual size carried entirely by the Tm scale factors) | matches "9.0 pt" |
+| Column-to-column (行間) pitch | **15.9095pt**, measured as the mean delta between 20 consecutive real `Tm` X-coordinates across one full content stream (object 35) — every single delta in the sequence was 15.9094 or 15.9095pt, i.e. constant to within 0.0001pt | matches the Human-supplied "≈15.909pt" and its listed sample X positions, confirmed to much higher precision |
+| Vertical character pitch (per-glyph) | No `/DW2` or `/W2` override found anywhere in the font's CIDFont dictionary → the PDF spec's own default `DW2 = [880 -1000]` applies, i.e. exactly 1 em per character (9pt at this size) | matches "9.0 pt" (character pitch), and confirms it is genuinely a SEPARATE quantity from column pitch (15.9095pt ≠ 9pt) |
+
+**Column pitch ÷ character pitch = 15.9095 / 9.0 = 1.76772.** This ratio, not 1.0, is the real InDesign document's own actual typesetting convention — column-to-column spacing is nearly 1.77× the character size, not equal to it.
+
+## 11. Step 3 (performed before Step 2, since it explains what Step 2 must match) — v2 column-pitch model audit
+
+Direct code read, not assumed:
+
+- `core/compose/column.ts`'s own `ColumnCompositionSettings.linePitchTicks` is documented as "column-width consumed per line placed" — i.e., **the physical spacing between adjacent 行 (vertical text strips) within a column**. This is a genuinely free, independent field in the Canonical contract; nothing in Core forces `linePitchTicks === perCellAdvanceTick` (character advance).
+- `renderer/preview/paintModel.ts`'s `buildPaintLine` uses the identical concept (`line.rightPx = lineIndex * ctx.linePitchTicks`) — Preview already reads the SAME independent field, so a settings-layer fix reaches both renderers with no separate Preview change needed.
+- **The defect was entirely in the settings-adapter layer**: `src/lib/v2Bridge/settingsAdapter.ts`'s `buildV2LayoutSettings` set `linePitchTicks: perCellAdvanceTick` — i.e., forced the ratio to exactly 1.0 — regardless of any real product setting.
+- The current/legacy product **already has** a real, shipped, real `lineHeightRatio` field (`src/lib/pageLayout.ts`, `PageSettings.lineHeightRatio`, doc comment "行間倍率 (例: 1.6〜1.8)", `DEFAULT_PAGE_SETTINGS.lineHeightRatio = 1.7`) and a real, already-used formula, `computeLinePitchMm(fontSizePt, lineHeightRatio) = computeFontSizeMm(fontSizePt) * lineHeightRatio` — used throughout the legacy layout engine's own capacity math. **This is not a hypothesis; it is the same real 1.6–1.8 range that independently brackets the InDesign reference's own measured 1.7677 ratio.**
+- Conclusion: **no Core contract change is required.** This is a real, narrow, evidence-backed bug in one settings-adapter function, which was silently dropping an already-real, already-shipped product setting.
+
+### Root cause classification
+
+| Type | Verdict |
+|---|---|
+| T2 — page/content origin | Not the primary cause (see §13's disclosed approximation for absolute origin; the dominant, quantified effect is pitch, not origin) |
+| T3 — character pitch | **NO** — confirmed exactly 1em, matches InDesign's own DW2-default convention |
+| **T4 — column pitch** | **YES — primary, confirmed root cause.** `linePitchTicks` was hardcoded to the character-advance value instead of deriving from the real, already-existing `lineHeightRatio` product setting. |
+| T5 — font size/glyph scale | NO — font and size both confirmed identical |
+| T6 — glyph ink position | Not evaluated this round (secondary to the dominant T4 finding) |
+| T7 — paragraph/layout semantics | Not evaluated this round |
+| T8 — reference conditions not equivalent | Resolved this round (Round 2's guessed 文庫/10.5pt geometry replaced with confirmed A5/9pt facts) |
+
+## 12. Implementation — the fix
+
+**File**: `src/lib/v2Bridge/settingsAdapter.ts`, `buildV2LayoutSettings`.
+
+**Before**:
+```ts
+linePitchTicks: perCellAdvanceTick,
+columnExtentTicks: settings.linesPerColumn * perCellAdvanceTick,
+```
+
+**After**:
+```ts
+const linePitchTick = mmToTicks(computeLinePitchMm(settings.fontSizePt, settings.lineHeightRatio));
+// ...
+linePitchTicks: linePitchTick,
+columnExtentTicks: settings.linesPerColumn * linePitchTick,
+```
+
+Reuses the real, already-shipped legacy formula (`computeLinePitchMm`, `pageLayout.ts`) verbatim — no new formula invented, no magic ratio, no screenshot-derived constant. `lineExtentTicks` (the character-direction budget WITHIN one 行, governed by Natural Pitch) is completely untouched. `columnExtentTicks` is also corrected (from `linesPerColumn * perCellAdvanceTick` to `linesPerColumn * linePitchTick`) so that the Editor's own real `linesPerColumn` target still resolves to the correct physical column-capacity budget — leaving it unfixed would have caused only `linesPerColumn / lineHeightRatio` real lines to fit per column, a second, silent capacity regression.
+
+Two new regression tests added to `src/lib/v2Bridge/settingsAdapter.test.ts` proving: (a) `linePitchTicks` now reflects the real `lineHeightRatio`, not the character advance; (b) `lineExtentTicks` (character direction) is provably unaffected by `lineHeightRatio` changes, while `linePitchTicks`/`columnExtentTicks` scale proportionally with it.
+
+## 13. Step 2 — regenerated v2 Publication reference, matched to the real InDesign facts
+
+`qa/publication/p3-o08/typography-parity-v2-publication-reference.pdf` regenerated (superseding Round 2's own guessed 文庫/10.5pt version) using the confirmed facts: A5 148×210mm, Shippori Mincho, 9pt, column pitch = the measured 15.9095pt (this exercise's own matched value, used directly rather than re-derived through `lineHeightRatio`, per the checkpoint's own "do not derive column pitch from fontSize or 1em if the document demonstrably uses a different pitch" instruction).
+
+**Disclosed approximation**: margins (`marginTopMm`/`marginRightMm`/`marginBottomMm`/`marginLeftMm`) are derived from the raw `Tm` pen-position coordinates of the first painted glyph run, WITHOUT correcting for the CID vertical font's own position-vector offset (DW2's `v` component) — recovering the exact sub-pt content-origin would require full vertical-metrics-aware glyph-origin decoding, out of this round's scope. This affects only the absolute origin (T2), not the column-pitch finding (T4), which does not depend on margin values at all.
+
+Resulting matched geometry: `charPitchMm=3.175`, `columnPitchMm=5.6125`, `columnPitchOverCharPitchRatio=1.76772` (exactly the measured InDesign ratio, by construction), `charsPerLine=54`, `linesPerColumn=21`, 1 page.
+
+## 14. Steps 4/5 — quantified drift, before vs. after the fix
+
+A new diagnostic, `renderer/publication/typographyParityIndesignVsV2Comparison.test.ts`, computes v2's own column X-anchors two ways — using the SAME real 21 measured InDesign anchor positions as the comparison baseline — and writes
+`qa/publication/p3-o08/typography-parity-indesign-vs-v2-comparison.pdf` (a geometry-grid diagnostic: RED = real measured InDesign anchors, ORANGE = v2 BEFORE this round's fix, BLACK = v2 AFTER):
+
+| | Before fix (ratio 1.0) | After fix (ratio matched to InDesign) |
+|---|---|---|
+| Max drift across 21 columns | **48.750mm** | **0.0004mm** |
+
+48.75mm of cumulative horizontal drift on a 148mm-wide A5 page is enormous — nearly a third of the entire page width — fully sufficient on its own to explain a "looks systematically wrong" Human visual verdict, independent of any glyph-shape or origin question. This is classified **systematic and cumulative** (grows linearly with column index — `T4` per the checkpoint's own `deltaX(c) = columnOriginOffset + c * columnPitchError + residual` model, with `columnPitchError` the entire explanation and `columnOriginOffset`/`residual` negligible by comparison).
+
+**Disclosed limitation on this artifact**: the comparison PDF draws column-position GRID LINES only, not InDesign's own actual rendered glyphs — this repo has no CMap-aware PDF text extractor (the embedded font uses CID-subset encoding; the raw content stream's hex strings are CID codes, not Unicode), and building a general one was judged out of this round's scope (would itself be exactly the kind of speculative new-tooling investment the checkpoint's own "no magic" section cautions against for a single comparison). The grid-line diagnostic still directly proves the column-pitch drift and its elimination — it does not, on its own, resolve T2 (absolute origin) or T6 (glyph ink position) to the same precision.
+
+## 15. Preview
+
+Not separately audited this round beyond the code-read in §11: Preview's own `buildPaintLine` reads the identical `linePitchTicks` field from the SAME `PageCompositionSettings`/`PublicationRenderContext`-shaped input the Publication path uses. Since the fix lives entirely in the settings-adapter layer (upstream of both renderers), Preview inherits the corrected column pitch automatically, with no separate Preview-side change required or made.
+
+## 16. Regression
+
+Full suite run after the fix: Core 364/364, Stage C 21/21, Stage D 30/30, Preview 114/114, Publication 542/542 (540 pre-existing + 2 new Round-3 files), v2Bridge 26/26 (24 pre-existing + 2 new regression tests), `tsc --noEmit` clean.
+
+## 17. Remaining open items (explicitly NOT resolved this round)
+
+- **T2 (absolute page/content origin)**: only approximately estimated (§13), not proven to sub-pt precision.
+- **T6 (glyph ink position)**: not evaluated this round — Round 1's own audit (character-level ink-bbox measurement) found no anomaly in the font itself, but did not compare against InDesign's own rendered ink position directly.
+- **Full glyph-level visual overlay**: blocked on CID-to-Unicode decoding tooling this round did not build (see §14's own disclosed limitation).
+- The real product's Editor UI does not yet expose `lineHeightRatio` as a value the Human can directly compare/tune against a specific InDesign document — the fix makes the EXISTING `lineHeightRatio` setting finally reach v2 Publication output; it does not add new UI.
+
+## 18. Decision
+
+The primary, quantified, cumulative drift (T4, column pitch) is root-caused and fixed in the real product code path (`settingsAdapter.ts`), not merely in a QA fixture. This is now ready for a real Human visual recheck: with the fix in place, wiring the real Editor's own `lineHeightRatio` setting (default 1.7) into a real v2 Publication PDF should look qualitatively far closer to InDesign's own column spacing than before. A precise, sub-millimeter-confirmed final PASS still requires either (a) a full glyph-level overlay (blocked on tooling, §14), or (b) direct Human visual comparison of real output against the real InDesign reference.
+
+---
+
+# Round 2 (history, preserved unedited below)
 
 Recorded: 2026-09-09
 HEAD at audit time: `31a78b8`

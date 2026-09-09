@@ -19,7 +19,7 @@
  * column spacing" note asked to be proven: real Editor settings must
  * reach the canonical geometry, not a renderer-chosen default.
  */
-import { resolvePaperSize, type PageSettings } from "../pageLayout";
+import { resolvePaperSize, computeLinePitchMm, type PageSettings } from "../pageLayout";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 import type { PageCompositionSettings } from "../../../typesetting-v2/core/compose/page";
 import { headerSettingsFromLegacy, type HeaderSettings, type HeaderPageOverride } from "../../../typesetting-v2/core/header";
@@ -35,15 +35,36 @@ import type { PublicationPageGeometry } from "../../../typesetting-v2/renderer/p
  * synthetic id (v2's measurement-identity concept, not a real font
  * asset path) since the real font resource is only needed downstream by
  * the Publication paint/raster executors, never by composition itself.
+ *
+ * Typography Parity Round 3 (2026-09-09, `qa/evidence/
+ * TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md`): `linePitchTicks` --
+ * Core's own column-composer term for the physical spacing between
+ * adjacent 行 (vertical text strips) within a column -- was previously
+ * set equal to `perCellAdvanceTick` (the character-to-character advance
+ * WITHIN one 行), silently dropping the Editor's own real, pre-existing
+ * `lineHeightRatio` (行間倍率, `pageLayout.ts`, default 1.7) setting
+ * entirely. A real InDesign reference PDF, independently measured from
+ * its own raw PDF bytes (Tm text-matrix deltas between consecutive 行),
+ * showed a column-to-column pitch ratio of ~1.77x the character size --
+ * confirming line pitch and character advance are genuinely independent
+ * physical quantities in real typesetting, not the same value. This now
+ * reuses the SAME real, already-shipped legacy formula
+ * (`computeLinePitchMm`, `pageLayout.ts`) the current/legacy Editor
+ * itself already uses for its own layout math -- no new formula
+ * invented, no Core contract touched (`linePitchTicks` was always a
+ * free, independent field; see `core/compose/column.ts`'s own doc).
+ * `lineExtentTicks` (the character-direction budget WITHIN one 行,
+ * governed by Natural Pitch) is completely untouched by this fix.
  */
 export function buildV2LayoutSettings(settings: PageSettings): PageCompositionSettings {
   const perCellAdvanceTick = mmToTicks((settings.fontSizePt * 25.4) / 72);
+  const linePitchTick = mmToTicks(computeLinePitchMm(settings.fontSizePt, settings.lineHeightRatio));
   return {
     bodyFontRef: settings.fontFamily,
     bodyFontSizePt: settings.fontSizePt,
     lineExtentTicks: settings.charsPerLine * perCellAdvanceTick,
-    linePitchTicks: perCellAdvanceTick,
-    columnExtentTicks: settings.linesPerColumn * perCellAdvanceTick,
+    linePitchTicks: linePitchTick,
+    columnExtentTicks: settings.linesPerColumn * linePitchTick,
     columnsPerPage: settings.columnCount,
   };
 }

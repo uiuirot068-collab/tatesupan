@@ -342,7 +342,7 @@ character-spacing consistency and line/column spacing.
 ---
 
 ### 17b. Typography Parity — InDesign Character-Pitch Recheck (OPEN follow-up, recorded 2026-09-09)
-Status: OPEN — audit complete (2026-09-09, HEAD `985c415`), HUMAN GATE for next step
+Status: ROOT CAUSE FOUND AND FIXED (Round 3, 2026-09-09, HEAD `4b8e8a4`) — Human visual recheck still required before closing
 
 Audit findings: `qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_CHARACTER_PITCH.md`.
 Summary: canonical body pitch is uniform 1em, frozen, previously validated
@@ -382,6 +382,43 @@ full drift quantification (origin offset vs. per-character/per-column
 pitch slope) is blocked on it. See
 `qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md` for the full
 record. No Core/Preview/Publication code was changed this round.
+
+**Round 3 update (2026-09-09, HEAD `4b8e8a4`)**: InDesign reference PDF
+placed at `qa/reference/indesign/molsui-indesign-reference.pdf` and
+independently measured from its own raw PDF bytes (no new dependency —
+Node's built-in `zlib` + PDF structural regex parsing). Confirmed: A5
+148×210mm, Shippori Mincho 9pt, character pitch exactly 1em (9pt, via the
+PDF spec's own DW2 default — no override present), and a column-to-column
+(行間) pitch of 15.9095pt — a ratio of 1.7677x the character size, not
+1.0x.
+
+**Root cause found: `src/lib/v2Bridge/settingsAdapter.ts`'s
+`buildV2LayoutSettings` set `linePitchTicks` (Core's own independent
+column-spacing field, `core/compose/column.ts`) equal to the character
+advance, silently dropping the Editor's own real, already-shipped
+`lineHeightRatio` setting (`pageLayout.ts`, 行間倍率, default 1.7 —
+already in the same 1.6–1.8 range the InDesign reference's own measured
+1.7677 falls into). Not a Core contract defect — `linePitchTicks` was
+always a free field; Preview already reads the same field, so the fix
+reaches both renderers.**
+
+**Fixed**: `buildV2LayoutSettings` now derives `linePitchTicks` from the
+real, existing `computeLinePitchMm(fontSizePt, lineHeightRatio)` legacy
+formula (no new formula, no magic constant), and `columnExtentTicks` was
+corrected in step so the Editor's own real `linesPerColumn` target still
+resolves to the correct physical capacity. Quantified impact: a
+column-anchor diagnostic (`qa/publication/p3-o08/typography-parity-indesign-vs-v2-comparison.pdf`)
+shows cumulative drift across 21 columns of **48.75mm before the fix,
+0.0004mm after** — on a 148mm-wide A5 page, i.e. this alone was fully
+sufficient to explain a "looks systematically wrong" Human verdict.
+`qa/publication/p3-o08/typography-parity-v2-publication-reference.pdf`
+was regenerated to match the confirmed InDesign geometry exactly (A5,
+9pt, superseding Round 2's guessed 文庫/10.5pt version). Full regression
++ 2 new v2Bridge tests pass. Remaining open (not resolved this round):
+absolute page-origin precision (T2) and glyph-ink-position comparison
+(T6) — see the evidence doc §17. Human visual recheck of the real Editor
+(now that `lineHeightRatio` actually reaches v2 Publication output) is
+the recommended next step before this item closes.
 
 Human supplied a new comparison (TateSpun Preview vs. InDesign as reference) and observes that TateSpun's vertical character spacing / pitch may still look different from InDesign in continuous prose.
 

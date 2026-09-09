@@ -1,25 +1,14 @@
-// TYPOGRAPHY PARITY -- InDesign Overlay Drift, Round 2, Phase 1: a
-// CONTROLLED v2 Publication reference PDF. Real v2 Core
-// (`composeCanonicalDocument`), real `CanonicalDocument`, real Publication
-// renderer (`generatePublicationPdf`), real committed Shippori Mincho font
-// (via `createShipporiMinchoMeasurementProvider` -- NOT the fake/test
-// provider every other fixture in this directory uses, specifically so
-// this PDF's own measurement facts are the real font's, matching what a
-// Human InDesign-overlay comparison needs). No legacy screenshot
-// renderer, no DOM capture, no rasterized page wrapper -- this is the
-// exact same production entrypoint `generatePublicationPdf` the v2Bridge
-// (`src/lib/v2Bridge/composeV2Document.ts`) itself calls, just invoked
-// directly here (never importing FROM src/, preserving the existing
-// typesetting-v2-must-not-depend-on-src/ boundary).
+// TYPOGRAPHY PARITY -- InDesign Overlay Drift, Round 3, Step 2: a v2
+// Publication reference PDF geometrically MATCHED to the real InDesign
+// reference file (`qa/reference/indesign/molsui-indesign-reference.pdf`),
+// per facts independently extracted from that PDF's own raw bytes
+// (`typographyParityIndesignExtraction.test.ts`) -- superseding Round 2's
+// own guessed 文庫/10.5pt geometry.
 //
-// Geometry choice, disclosed: paper 文庫 (105x148mm) -- TateSpun's own
-// most common preset (see src/utils/exportPdf.ts's PAPER_SIZES table,
-// not imported here, value re-stated for evidence transparency), margins
-// matching the existing structuralColophonRealSettings.test.ts precedent
-// in this same directory (15/12/15/15mm). This is NOT known to match the
-// Human's own InDesign reference settings -- that fact is explicitly
-// unknown and recorded as such in qa/evidence/
-// TYPOGRAPHY_PARITY_INDDesign_OVERLAY_DRIFT.md, not guessed.
+// Real v2 Core (`composeCanonicalDocument`), real `CanonicalDocument`,
+// real Publication renderer (`generatePublicationPdf`), real committed
+// Shippori Mincho font. No legacy screenshot renderer, no DOM capture, no
+// rasterized page wrapper.
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -35,44 +24,64 @@ function fontResource(): PublicationFontResource {
   return { fileName: "ShipporiMincho-Regular.ttf", fontName: "ShipporiMincho", base64: readFileSync(FONT_PATH).toString("base64") };
 }
 
-// The checkpoint's own canonical continuous-prose sample, verbatim --
-// never substituted with punctuation-heavy diagnostic text.
+// The checkpoint's own canonical continuous-prose sample, verbatim.
 const PARAGRAPH_1 = "人は驚きすぎると、本当に足が止まるらしい。スイはそれを初めて知った。数歩先へ行ったモルが振り返る。";
 const PARAGRAPH_2 = "「気が合った、と言ってしまえばそれまでだ。けれど気づけば、どこへ行くにも二人でいることが当たり前になっていた。」";
 
-const BODY_FONT_SIZE_PT = 10.5; // same fixture convention as fixtures.ts's own BODY_FONT_SIZE_PT
+// ---- Facts independently confirmed from the real InDesign reference PDF's
+// own raw bytes (see typographyParityIndesignExtraction.test.ts and
+// qa/evidence/TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md Round 3 §1) ----
+const PT_PER_MM = 72 / 25.4;
+const BODY_FONT_SIZE_PT = 9.0; // confirmed via Tm text-matrix scale (9 0 0 9 ...)
+const MEASURED_COLUMN_PITCH_PT = 15.9095; // confirmed: mean of 20 consecutive Tm-X deltas, stddev < 0.0001pt
+const MEASURED_MEDIA_BOX_PT = { widthPt: 419.528, heightPt: 595.276 }; // confirmed via /MediaBox
+const PAPER_WIDTH_MM = MEASURED_MEDIA_BOX_PT.widthPt / PT_PER_MM; // 148.0mm -- A5 portrait, confirmed
+const PAPER_HEIGHT_MM = MEASURED_MEDIA_BOX_PT.heightPt / PT_PER_MM; // 210.0mm
 
-// 文庫 (105x148mm), margins matching this directory's own existing
-// structuralColophonRealSettings.test.ts precedent for the identical
-// paper size -- reused for consistency, not re-derived arbitrarily.
+// Margins are NOT precisely confirmed -- these are approximate, derived
+// from the raw Tm pen-position coordinates of the first painted glyph run
+// WITHOUT correcting for the CID vertical font's own position-vector
+// offset (a real, disclosed limitation: exact sub-pt origin recovery would
+// require decoding the embedded font's own DW2/W2 vertical metrics AND a
+// CID-to-Unicode mapping neither of which this round builds). Column PITCH
+// (the confirmed, high-precision fact, and the dimension that matters for
+// the drift this round actually root-caused) does not depend on this
+// approximation.
+const APPROX_MARGIN_TOP_MM = (MEASURED_MEDIA_BOX_PT.heightPt - 544.252) / PT_PER_MM; // ~18.0mm
+const APPROX_MARGIN_RIGHT_MM = PAPER_WIDTH_MM - 375.3425 / PT_PER_MM - MEASURED_COLUMN_PITCH_PT / PT_PER_MM / 2; // ~12.7mm, column-center approximation
+const APPROX_MARGIN_BOTTOM_MM = APPROX_MARGIN_TOP_MM; // unmeasured -- disclosed placeholder, symmetric with top
+const APPROX_MARGIN_LEFT_MM = APPROX_MARGIN_RIGHT_MM; // unmeasured -- disclosed placeholder, symmetric with right
+
 const PAGE_GEOMETRY: PublicationPageGeometry = {
-  paperWidthMm: 105,
-  paperHeightMm: 148,
-  marginTopMm: 15,
-  marginBottomMm: 12,
-  marginRightMm: 15,
-  marginLeftMm: 15,
+  paperWidthMm: PAPER_WIDTH_MM,
+  paperHeightMm: PAPER_HEIGHT_MM,
+  marginTopMm: APPROX_MARGIN_TOP_MM,
+  marginBottomMm: APPROX_MARGIN_BOTTOM_MM,
+  marginRightMm: APPROX_MARGIN_RIGHT_MM,
+  marginLeftMm: APPROX_MARGIN_LEFT_MM,
 };
 
 function buildSettings(): PageCompositionSettings {
-  const perCellAdvanceTick = mmToTicks((BODY_FONT_SIZE_PT * 25.4) / 72);
+  const perCellAdvanceTick = mmToTicks(BODY_FONT_SIZE_PT / PT_PER_MM); // character advance -- Natural Pitch, 1em, UNCHANGED by this round's own fix
+  const linePitchTick = mmToTicks(MEASURED_COLUMN_PITCH_PT / PT_PER_MM); // column-to-column pitch -- the REAL, independently-measured InDesign value, not 1em
   const contentHeightMm = PAGE_GEOMETRY.paperHeightMm - PAGE_GEOMETRY.marginTopMm - PAGE_GEOMETRY.marginBottomMm;
   const contentWidthMm = PAGE_GEOMETRY.paperWidthMm - PAGE_GEOMETRY.marginLeftMm - PAGE_GEOMETRY.marginRightMm;
-  const emMm = (BODY_FONT_SIZE_PT * 25.4) / 72;
+  const emMm = BODY_FONT_SIZE_PT / PT_PER_MM;
+  const columnPitchMm = MEASURED_COLUMN_PITCH_PT / PT_PER_MM;
   const charsPerLine = Math.floor(contentHeightMm / emMm);
-  const linesPerColumn = Math.floor(contentWidthMm / emMm);
+  const linesPerColumn = Math.floor(contentWidthMm / columnPitchMm);
   return {
-    bodyFontRef: "typography-parity-v2-reference",
+    bodyFontRef: "typography-parity-v2-reference-round3",
     bodyFontSizePt: BODY_FONT_SIZE_PT,
     lineExtentTicks: charsPerLine * perCellAdvanceTick,
-    linePitchTicks: perCellAdvanceTick,
-    columnExtentTicks: linesPerColumn * perCellAdvanceTick,
+    linePitchTicks: linePitchTick,
+    columnExtentTicks: linesPerColumn * linePitchTick,
     columnsPerPage: 1,
   };
 }
 
-describe("Typography Parity Round 2 -- controlled v2 Publication reference PDF", () => {
-  it("composes and paints the canonical continuous-prose sample through the REAL, unmodified production pipeline (real font measurement, real generatePublicationPdf)", async () => {
+describe("Typography Parity Round 3 -- v2 Publication reference PDF matched to the real InDesign reference geometry", () => {
+  it("composes and paints the canonical continuous-prose sample at A5/9pt/measured-column-pitch through the REAL, unmodified production pipeline", async () => {
     const { createShipporiMinchoMeasurementProvider } = await import("../../core/measurement/shipporiMinchoProvider");
     const measurement = createShipporiMinchoMeasurementProvider(FONT_PATH);
     const settings = buildSettings();
@@ -100,18 +109,19 @@ describe("Typography Parity Round 2 -- controlled v2 Publication reference PDF",
       measurementIdentity: document.version.measurementIdentity,
       paintFontIdentity: document.version.measurementIdentity,
     };
-    const model = buildPublicationDocument("typography-parity-v2-reference", "Typography Parity — v2 Publication Reference", document, units, source, ctx);
+    const model = buildPublicationDocument("typography-parity-v2-reference-round3", "Typography Parity Round 3 — v2 Publication (InDesign-matched geometry)", document, units, source, ctx);
 
     const font = fontResource();
     const result = generatePublicationPdf(model, font, PAGE_GEOMETRY);
     expect(new TextDecoder().decode(result.bytes.slice(0, 5))).toBe("%PDF-");
     expect(result.pageCount).toBeGreaterThan(0);
 
-    // Real geometry facts, recorded for the evidence doc -- not decorative.
-    const emMm = (BODY_FONT_SIZE_PT * 25.4) / 72;
+    // Real geometry facts, recorded for the evidence doc.
+    const emMm = BODY_FONT_SIZE_PT / PT_PER_MM;
+    const columnPitchMm = MEASURED_COLUMN_PITCH_PT / PT_PER_MM;
     // eslint-disable-next-line no-console
     console.log(
-      "V2_PUBLICATION_REFERENCE_GEOMETRY",
+      "V2_PUBLICATION_REFERENCE_ROUND3_GEOMETRY",
       JSON.stringify({
         paperWidthMm: PAGE_GEOMETRY.paperWidthMm,
         paperHeightMm: PAGE_GEOMETRY.paperHeightMm,
@@ -122,16 +132,13 @@ describe("Typography Parity Round 2 -- controlled v2 Publication reference PDF",
         bodyFontSizePt: BODY_FONT_SIZE_PT,
         bodyEmMm: emMm,
         charPitchMm: emMm,
-        columnPitchMm: emMm,
-        contentTopAnchorMm: PAGE_GEOMETRY.marginTopMm,
-        firstColumnRightAnchorMm: PAGE_GEOMETRY.paperWidthMm - PAGE_GEOMETRY.marginRightMm,
-        charsPerLine: settings.lineExtentTicks / settings.linePitchTicks,
+        columnPitchMm,
+        columnPitchOverCharPitchRatio: columnPitchMm / emMm,
+        charsPerLine: contentHeightChars(settings),
         linesPerColumn: settings.columnExtentTicks / settings.linePitchTicks,
-        columnsPerPage: settings.columnsPerPage,
         pageCount: result.pageCount,
         measurementIdentity: document.version.measurementIdentity,
         fontSha256Prefix: measurement.assetInfo.sha256.slice(0, 16),
-        fontUnitsPerEm: measurement.assetInfo.unitsPerEm,
       })
     );
 
@@ -144,3 +151,8 @@ describe("Typography Parity Round 2 -- controlled v2 Publication reference PDF",
     }
   });
 });
+
+function contentHeightChars(settings: PageCompositionSettings): number {
+  const perCellAdvanceTick = mmToTicks(BODY_FONT_SIZE_PT / PT_PER_MM);
+  return settings.lineExtentTicks / perCellAdvanceTick;
+}
