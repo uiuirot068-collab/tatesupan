@@ -121,11 +121,11 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     n: 7,
-    title: "プレビューはいつでもしまえるよ",
-    body: "書くことに集中したいときは、プレビューを右側にしまえます。もう一度開くのもワンタップです。",
-    target: "preview-collapse",
-    mobileNote:
-      "上のバーの「本文」「プレビュー」を切り替えて使います。",
+    title: "作業タイムを記録しよう",
+    body:
+      "「作業スタート」から「作業終了」までに新しく書いた文字数を記録できます。これまでの結果は「作業記録」から確認できます。",
+    target: "work-session",
+    prepare: "editor",
   },
   {
     n: 8,

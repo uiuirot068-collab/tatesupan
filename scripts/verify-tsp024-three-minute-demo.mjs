@@ -52,7 +52,7 @@ const stepTitles = [
   "困ったらヘルプへ",
   "エディターを使いやすくしてみよう",
   "実際に文章を書いてみよう",
-  "プレビューはいつでもしまえるよ",
+  "作業タイムを記録しよう",
   "作品を書き出してみよう",
   "クラウド保存について",
   "TateSpunの基本操作はこれで完了です！",
@@ -150,16 +150,17 @@ check(
 /* ---------------- 5. every step maps to a REAL control ---------------- */
 
 check(
-  "13. STEP targets are real data-demo-target hooks on real controls (title / settings / nombre / help / focus / editor / preview-collapse / export / cloud-save)",
+  "13. STEP targets are real data-demo-target hooks on real controls (title / settings / nombre / help / focus / editor / work-session / export / cloud-save)",
   !!editorPane && /data-demo-target="title"/.test(editorPane) && /data-demo-target="editor"/.test(editorPane) &&
     !!settingsPanel && /data-demo-target="page-settings"/.test(settingsPanel) && /data-demo-target="nombre-settings"/.test(settingsPanel) &&
     !!header && /data-demo-target="help"/.test(header) && /data-demo-target="focus-mode"/.test(header) && /data-demo-target="cloud-save"/.test(header) &&
-    !!preview && /data-demo-target="export"/.test(preview) && /data-demo-target="preview-collapse"/.test(preview)
+    !!preview && /data-demo-target="export"/.test(preview) &&
+    !!read("src/components/WorkSessionTracker.tsx") && /data-demo-target="work-session"/.test(read("src/components/WorkSessionTracker.tsx"))
 );
 check(
-  "14. STEP 5 focus-mode target is the TSP-023 hook; STEP 7 uses the TSP-023 preview-collapse hook",
+  "14. STEP 5 focus-mode target is the TSP-023 hook; STEP 7 teaches work-session Start/history without changing its semantics",
   !!header && /data-focus-mode-toggle=""\s*\n\s*data-demo-target="focus-mode"/.test(header) &&
-    !!preview && /data-preview-collapse-toggle=""\s*\n\s*data-demo-target="preview-collapse"/.test(preview)
+    !!demoData && /n:\s*7,[\s\S]{0,500}作業スタート[\s\S]{0,200}新しく書いた文字数[\s\S]{0,200}作業記録/.test(demoData)
 );
 check(
   "15. device-appropriate copy exists for phone-absent controls (mobileNote), + non-destructive prepare() only",
@@ -184,11 +185,11 @@ check(
     /onOpenFeatureGuide=\{\(\) => router\.push\("\/guide"\)\}/.test(editor)
 );
 check(
-  "17. feature guide route exists with 10 cards in approved order + a conditional beta card",
+  "17. feature guide route keeps the approved cards, adds the completion checklist, and retains a conditional beta card",
   !!guide &&
     (() => {
       const ns = [...guide.matchAll(/n:\s*"(\d\d)"/g)].map((m) => m[1]);
-      return ns.join(",") === "01,02,03,04,05,06,07,08,09,10";
+      return ns.join(",") === "01,02,03,04,05,06,07,08,09,10,11";
     })() &&
     /BETA_FEEDBACK_ENABLED &&/.test(guide) &&
     /data-feature-card="beta"/.test(guide)
@@ -204,13 +205,10 @@ check(
     /\/\/ \{ id: 'title'/.test(read("src/components/BookPartsModal.tsx") ?? "")
 );
 check(
-  "18b. HUMAN-QA: mobile STEP 7 points at the UPPER workspace bar (no 「下のバー」 anywhere)",
-  !!demoData &&
-    !/下のバー/.test(demoData) &&
-    (() => {
-      const s7 = demoData.match(/n:\s*7,[\s\S]{0,700}?\n  \},/);
-      return !!s7 && /上のバー/.test(s7[0]) && /本文/.test(s7[0]) && /プレビュー/.test(s7[0]);
-    })()
+  "18b. HUMAN-QA: detailed guide explains reusable local completion checklists without cloud claims",
+  !!guide &&
+    /title:\s*"完成前マイチェックリスト"[\s\S]{0,400}プリセット[\s\S]{0,200}自分専用[\s\S]{0,200}ブラウザに保存[\s\S]{0,200}入稿ミス/.test(guide) &&
+    !/完成前マイチェックリスト[\s\S]{0,500}(クラウド|同期)/.test(guide)
 );
 check(
   "18c. HUMAN-QA: /guide is a scrolling document (data-guide-page + globals opt-out) — not clipped by the app-shell overflow lock",

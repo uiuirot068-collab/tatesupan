@@ -232,7 +232,11 @@ export default function WorkSessionTracker({
   };
 
   return (
-    <div className="relative flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1" data-work-session-tracker>
+    <div
+      className="relative flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
+      data-work-session-tracker
+      data-demo-target="work-session"
+    >
       {state.active ? (
         <>
           <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">

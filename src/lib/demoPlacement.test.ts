@@ -39,4 +39,23 @@ describe("responsive demo card placement", () => {
     expect(tour).toMatch(/data-demo-next=""[\s\S]{0,200}次へ/);
     expect(tour.match(/flex-none/g)?.length).toBeGreaterThanOrEqual(3);
   });
+
+  it("keeps the primary tour concise while covering work sessions and the detailed checklist", () => {
+    const data = readFileSync(join(__dirname, "..", "constants", "demoData.ts"), "utf8");
+    const tracker = readFileSync(join(__dirname, "..", "components", "WorkSessionTracker.tsx"), "utf8");
+    const guide = readFileSync(join(__dirname, "..", "app", "guide", "page.tsx"), "utf8");
+
+    expect(data.match(/\bn:\s*\d+,/g)).toHaveLength(10);
+    expect(data).toContain('title: "作業タイムを記録しよう"');
+    expect(data).toContain("作業スタート");
+    expect(data).toContain("新しく書いた文字数");
+    expect(data).toContain("作業記録");
+    expect(tracker).toContain('data-demo-target="work-session"');
+
+    expect(guide).toContain('title: "完成前マイチェックリスト"');
+    expect(guide).toContain("プリセット");
+    expect(guide).toContain("自分専用のリスト");
+    expect(guide).toContain("このブラウザに保存");
+    expect(guide).toContain("入稿ミスを防ぎます");
+  });
 });

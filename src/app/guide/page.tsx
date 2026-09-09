@@ -25,7 +25,7 @@ interface Card {
   title: string;
   body: string;
   /** Stable Help section this card explains. */
-  helpSection: HelpSectionId;
+  helpSection?: HelpSectionId;
 }
 
 const CARDS: Card[] = [
@@ -97,6 +97,12 @@ const CARDS: Card[] = [
     body: "名前や表記、記号などをまとめて置換。長い原稿ほど便利になります。",
     helpSection: "replace",
   },
+  {
+    n: "11",
+    title: "完成前マイチェックリスト",
+    body:
+      "入稿前に繰り返し使えるチェックリストです。用意されたプリセットを編集したり、自分専用のリストを作ったりでき、状態はこのブラウザに保存されます。確認漏れによる入稿ミスを防ぎます。",
+  },
 ];
 
 export default function FeatureGuidePage() {
@@ -121,7 +127,7 @@ export default function FeatureGuidePage() {
         </Link>
       </div>
       <p className="mb-6 text-sm leading-relaxed text-ink/70">
-        操作の流れは「おためしデモ」で試せます。ここでは、TateSpun で何ができるかをまとめています。各カードの［使い方を見る →］から、詳しい説明を開けます。
+        操作の流れは「おためしデモ」で試せます。ここでは、TateSpun で何ができるかをまとめています。［使い方を見る →］のあるカードから、詳しい説明を開けます。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2" data-feature-cards="">
@@ -138,14 +144,16 @@ export default function FeatureGuidePage() {
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink/70">
               {card.body}
             </p>
-            <button
-              type="button"
-              data-feature-help-cta={card.helpSection}
-              onClick={() => setHelpSection(card.helpSection)}
-              className="mt-3 -ml-1.5 self-start rounded-md px-1.5 py-1 text-xs font-medium text-accent hover:bg-ink/5 hover:underline sm:mt-auto sm:pt-3"
-            >
-              使い方を見る →
-            </button>
+            {card.helpSection && (
+              <button
+                type="button"
+                data-feature-help-cta={card.helpSection}
+                onClick={() => setHelpSection(card.helpSection ?? null)}
+                className="mt-3 -ml-1.5 self-start rounded-md px-1.5 py-1 text-xs font-medium text-accent hover:bg-ink/5 hover:underline sm:mt-auto sm:pt-3"
+              >
+                使い方を見る →
+              </button>
+            )}
           </section>
         ))}
       </div>
