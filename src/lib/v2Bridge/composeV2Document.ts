@@ -12,6 +12,7 @@ import { buildV2UnitsFromManuscript } from "./manuscriptAdapter";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2HeaderPageOverrides, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
 import type { PageSettings } from "../pageLayout";
 import { composeCanonicalDocument } from "../../../typesetting-v2/core/layout/assemble";
+import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 import { DEFAULT_RULE_SET_V2 } from "../../../typesetting-v2/core/rules/defaultRuleSet";
 import type { MeasurementFacts } from "../../../typesetting-v2/core/measurement/facts";
 import type { CanonicalDocument } from "../../../typesetting-v2/core/layout/schema";
@@ -76,6 +77,12 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
     measurementIdentity: document.version.measurementIdentity,
     paintFontIdentity: document.version.measurementIdentity,
     imageResolver: input.imageResolver,
+    // Typography Parity Round 4 (2026-09-09): `linePitchTicks` above is now
+    // genuinely the column-to-column pitch (Round 3's own fix), no longer
+    // interchangeable with the body font's own em size -- glyph paint scale
+    // must be supplied separately, or every glyph paints at the (wrong)
+    // column-pitch size. See paintModel.ts's own `bodyFontSizeTick` doc.
+    bodyFontSizeTick: mmToTicks((layoutSettings.bodyFontSizePt * 25.4) / 72),
   };
 
   const model = colophonComposition

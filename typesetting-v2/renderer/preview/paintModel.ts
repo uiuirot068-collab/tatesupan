@@ -182,6 +182,18 @@ export interface PreviewRenderContext {
   // DEFAULT_DASH_OVERLAP_EM when omitted. Renderer-only paint tuning;
   // never read by Core, never fed back from a browser measurement.
   dashOverlapEm?: number;
+  // Typography Parity Round 3/4 (2026-09-09, qa/evidence/
+  // TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md): the body font's own em
+  // size (character-direction advance, GeometryTick), for GLYPH SCALE
+  // (`fontSizePx`) only -- completely independent of `linePitchTicks`
+  // (column-to-column pitch, Core's own real meaning). Optional for exact
+  // backward compatibility: every existing caller set `linePitchTicks ===
+  // perCellAdvanceTick` (ratio 1.0), so omitting this and falling back to
+  // `linePitchTicks` is byte-identical for all of them. Any NEW caller
+  // whose `linePitchTicks` genuinely differs from the character em (the
+  // real v2Bridge, post Round 3's own column-pitch fix) MUST supply this
+  // explicitly, or every glyph paints at the (wrong) column-pitch size.
+  bodyFontSizeTick?: number;
 }
 
 // Human Visual QA PASS (2026-09-07): candidate C (0.16em) from the 3-way
@@ -312,7 +324,7 @@ function dashGlyphsFor(text: string, heightPx: number, ctx: PreviewRenderContext
   if (n === 0) return [];
   if (n === 1) return [{ text: graphemes[0], topPx: 0, heightPx }];
 
-  const fontSizePx = tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier);
+  const fontSizePx = tickToPx(ctx.bodyFontSizeTick ?? ctx.linePitchTicks, ctx.scaleMultiplier);
   const overlapPx = (ctx.dashOverlapEm ?? DEFAULT_DASH_OVERLAP_EM) * fontSizePx;
   const nominalGlyphHeight = heightPx / n;
 
@@ -488,7 +500,7 @@ export function buildPaintDocument(
     totalPageCount: document.pages.length,
     renderedPageCount: renderedPages.length,
     pages,
-    fontSizePx: tickToPx(ctx.linePitchTicks, ctx.scaleMultiplier),
+    fontSizePx: tickToPx(ctx.bodyFontSizeTick ?? ctx.linePitchTicks, ctx.scaleMultiplier),
   };
 }
 

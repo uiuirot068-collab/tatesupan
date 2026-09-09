@@ -108,6 +108,11 @@ describe("Typography Parity Round 3 -- v2 Publication reference PDF matched to t
       columnsPerPage: settings.columnsPerPage,
       measurementIdentity: document.version.measurementIdentity,
       paintFontIdentity: document.version.measurementIdentity,
+      // Typography Parity Round 4: linePitchTicks here is the real,
+      // matched InDesign COLUMN pitch (not the character em) -- glyph
+      // scale must come from the character em separately, or every glyph
+      // paints far too large. See paintModel.ts's own bodyFontSizeTick doc.
+      bodyFontSizeTick: mmToTicks(BODY_FONT_SIZE_PT / PT_PER_MM),
     };
     const model = buildPublicationDocument("typography-parity-v2-reference-round3", "Typography Parity Round 3 — v2 Publication (InDesign-matched geometry)", document, units, source, ctx);
 

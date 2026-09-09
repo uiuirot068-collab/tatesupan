@@ -171,6 +171,21 @@ export interface PublicationRenderContext {
   measurementIdentity: string;
   paintFontIdentity: string;
   imageResolver?: ImageResolver;
+  // Typography Parity Round 3/4 (2026-09-09, qa/evidence/
+  // TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md): the body font's own em
+  // size (character-direction advance, GeometryTick), for GLYPH SCALE
+  // only -- completely independent of `linePitchTicks` (column-to-column
+  // pitch, Core's own real meaning, `core/compose/column.ts`). Optional
+  // for exact backward compatibility: every existing caller of this
+  // context set `linePitchTicks === perCellAdvanceTick` (ratio 1.0), so
+  // omitting this and falling back to `linePitchTicks` (below) is
+  // byte-identical for all of them. Any NEW caller whose `linePitchTicks`
+  // genuinely differs from the character em (the real v2Bridge, post
+  // Round 3's own column-pitch fix) MUST supply this explicitly, or
+  // every glyph paints at the (wrong) column-pitch size instead of the
+  // real declared font size -- the exact "giant/overlapping glyph" defect
+  // Round 4's own Human QA found.
+  bodyFontSizeTick?: number;
 }
 
 export interface PublicationDocument {
@@ -447,7 +462,7 @@ export function buildPublicationDocument(
     fontIdentityMismatch: ctx.measurementIdentity !== ctx.paintFontIdentity,
     totalPageCount: document.pages.length,
     renderedPageCount: pages.length,
-    bodyEmMm: tickToMm(ctx.linePitchTicks),
+    bodyEmMm: tickToMm(ctx.bodyFontSizeTick ?? ctx.linePitchTicks),
     pages,
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),
