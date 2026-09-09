@@ -141,6 +141,37 @@ export default function EditorPane({
     el.focus({ preventScroll: true });
   };
 
+  // Keep the textarea's native browser history as the single source of truth.
+  // Preventing toolbar focus on pointer-down preserves the current selection;
+  // execCommand then takes the same native undo/redo path as Ctrl/Cmd+Z/Y and
+  // emits the ordinary input event consumed by the controlled textarea.
+  const runNativeHistory = (command: "undo" | "redo") => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    // Chrome's command-driven Redo can emit `input` without `beforeinput`.
+    // Seed the existing input-state path with the native history inputType so
+    // both visible buttons retain the same written-count exclusion as keys.
+    inputActivityStateRef.current = captureBeforeInput(inputActivityStateRef.current, {
+      beforeText: el.value,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      inputType: command === "undo" ? "historyUndo" : "historyRedo",
+    });
+    document.execCommand(command);
+    // Clear a pending snapshot if the command had no history entry; if its
+    // input event was asynchronous, syncing the resulting DOM value still
+    // makes that later event a zero delta rather than suppressing future text.
+    const synchronizedState = syncTextInputActivityState(
+      inputActivityStateRef.current,
+      el.value
+    );
+    inputActivityStateRef.current = {
+      ...synchronizedState,
+      pendingBeforeInput: null,
+    };
+  };
+
   // ---- TSP-LOOP-004 → 文章チェック β 2.0 (local, deterministic, no network) ----
   const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
   const isComposingRef = useRef(false);
@@ -286,6 +317,26 @@ export default function EditorPane({
           className="w-full min-w-0 bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
         />
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            data-editor-history-action="undo"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runNativeHistory("undo")}
+            title="元に戻す（Ctrl/Cmd+Z）"
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            <span aria-hidden="true">↶</span> 元に戻す
+          </button>
+          <button
+            type="button"
+            data-editor-history-action="redo"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runNativeHistory("redo")}
+            title="やり直す（Ctrl/Cmd+Y）"
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            <span aria-hidden="true">↷</span> やり直す
+          </button>
           <button
             type="button"
             onClick={onOpenBookParts}
@@ -460,28 +511,33 @@ export default function EditorPane({
         />
       )}
 
-      {/* Two fixed zones: the syntax help sacrifices text with an ellipsis
-          first (min-w-0 + truncate), the character count is never wrapped
-          and never covered (shrink-0). No absolute positioning, one line,
-          footer height unchanged. Hovering the help text shows the full
-          string via the native `title`; the full DOM text also stays present
-          for screen readers regardless of the visual truncation. */}
-      <div className="flex flex-none items-center gap-3 border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
-        <span className="min-w-0 flex-1 cursor-help truncate" title={FOOTER_SYNTAX_HELP}>
+      {/* Help and work-session status have independent rows so neither can
+          hide the other. Both rows wrap naturally on narrow viewports. */}
+      <div className="flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
+        <div
+          data-editor-footer-help
+          className="w-full whitespace-normal break-words leading-relaxed"
+          title={FOOTER_SYNTAX_HELP}
+        >
           ルビ: <code>｜漢字《かんじ》</code>／縦中横: 半角数字2桁を自動検知・
           <code>[tate]A5[/tate]</code>／改ページ: <code>{PAGE_BREAK_MARKER}</code>
-        </span>
-        <WorkSessionTracker
-          state={workSession}
-          onStart={onStartWorkSession}
-          onEnd={onEndWorkSession}
-        />
-        <span
-          title="現在の原稿文字数"
-          className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
+        </div>
+        <div
+          data-editor-footer-controls
+          className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5"
         >
-          {countVisualLength(content)} 文字
-        </span>
+          <WorkSessionTracker
+            state={workSession}
+            onStart={onStartWorkSession}
+            onEnd={onEndWorkSession}
+          />
+          <span
+            title="現在の原稿文字数"
+            className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
+          >
+            現在の原稿文字数 {countVisualLength(content)}文字
+          </span>
+        </div>
       </div>
     </div>
   );

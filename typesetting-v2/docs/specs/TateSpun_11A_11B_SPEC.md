@@ -95,7 +95,7 @@ The same development Editor implements the approved UI-C drawer interaction and 
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Status: **IMPLEMENTED / HOLD FOR FOCUSED HUMAN QA (2026-09-09).**
+Status: **FUNCTIONAL HUMAN PASS / FINAL UI POLISH IMPLEMENTED / VISUAL CONFIRMATION PENDING (2026-09-10).**
 
 Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
@@ -106,6 +106,8 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Only newly inserted user-authored text adds positively. Deletion never subtracts, but also never adds.
 - Replacement and paste-over-selection count only the inserted side.
 - The compact Editor UI uses `作業スタート`, `作業中`, `今回書いた文字数`, `経過時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
+- The Editor footer keeps Ruby/TCY/page-break help on a readable row separate from a wrapping work-session/current-count row.
+- Visible `↶ 元に戻す` and `↷ やり直す` controls invoke the textarea's existing native history; Ctrl/Cmd+Z and platform redo remain available, and every Undo/Redo path adds 0.
 
 ### Counted operations
 
@@ -146,7 +148,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
-- 41 deterministic 11-B tests cover all 20 required written-count, lifecycle, storage, share, and isolation cases. The actual `/editor?demo=1` browser E2E covers Start at 0 → type +1 → delete +0 → replace two selected characters with four +4 → End at 5 → reload/history at 5. No new dependency was introduced.
+- 43 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, separate wrapping footer rows, and visible native-history controls. The actual `/editor?demo=1` browser E2E additionally proves visible Undo/Redo both mutate the manuscript through native history while the written count stays unchanged. No new dependency was introduced.
 
 ---
 

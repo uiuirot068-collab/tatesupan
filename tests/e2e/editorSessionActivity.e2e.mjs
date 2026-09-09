@@ -142,6 +142,10 @@ function snapshotExpression() {
     const activity = document.querySelector('[data-work-session-written-count]');
     const result = document.querySelector('[data-work-session-result]');
     const history = document.querySelector('[data-work-session-history]');
+    const footerHelp = document.querySelector('[data-editor-footer-help]');
+    const footerControls = document.querySelector('[data-editor-footer-controls]');
+    const helpRect = footerHelp?.getBoundingClientRect();
+    const controlsRect = footerControls?.getBoundingClientRect();
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
       editorValue: editor?.value,
@@ -151,6 +155,16 @@ function snapshotExpression() {
       historyText: history?.textContent.replace(/\\s+/g, ' ').trim(),
       hasStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
       hasEnd: Boolean(document.querySelector('[data-work-session-action="end"]')),
+      undoText: document.querySelector('[data-editor-history-action="undo"]')?.textContent.replace(/\\s+/g, ' ').trim(),
+      redoText: document.querySelector('[data-editor-history-action="redo"]')?.textContent.replace(/\\s+/g, ' ').trim(),
+      footerRowsSeparated: Boolean(helpRect && controlsRect && helpRect.bottom <= controlsRect.top + 1),
+      footerHelpReadable: Boolean(
+        footerHelp &&
+        footerHelp.textContent.includes('ルビ:') &&
+        footerHelp.textContent.includes('縦中横:') &&
+        footerHelp.scrollWidth <= footerHelp.clientWidth + 1
+      ),
+      footerControlsWrap: footerControls ? getComputedStyle(footerControls).flexWrap : undefined,
       currentCountText: currentCount?.textContent.trim(),
       storage: localStorage.getItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}),
     };
@@ -220,7 +234,12 @@ try {
   assert.equal(idleBefore.hasEnd, false);
   assert.equal(idleBefore.activityText, undefined);
   assert.equal(idleBefore.storage, null);
-  assert.match(idleBefore.currentCountText, /^\d+ 文字$/);
+  assert.equal(idleBefore.undoText, "↶ 元に戻す");
+  assert.equal(idleBefore.redoText, "↷ やり直す");
+  assert.equal(idleBefore.footerRowsSeparated, true);
+  assert.equal(idleBefore.footerHelpReadable, true);
+  assert.equal(idleBefore.footerControlsWrap, "wrap");
+  assert.match(idleBefore.currentCountText, /^現在の原稿文字数 \d+文字$/);
 
   await cdp.evaluate(`(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
@@ -284,6 +303,18 @@ try {
   assert.match(active.activityText, /今回書いた文字数 1文字/);
   assert.equal(JSON.parse(active.storage).active.writtenCharacterCount, 1);
 
+  await cdp.evaluate(`document.querySelector('[data-editor-history-action="undo"]').click(); true`);
+  await cdp.waitFor(`document.querySelector('[data-demo-target="editor"]').value === ${JSON.stringify(active.editorValue.slice(0, -1))}`);
+  const afterUndo = await cdp.evaluate(snapshotExpression());
+  assert.equal(afterUndo.activityValue, "1");
+  assert.equal(JSON.parse(afterUndo.storage).active.writtenCharacterCount, 1);
+
+  await cdp.evaluate(`document.querySelector('[data-editor-history-action="redo"]').click(); true`);
+  await cdp.waitFor(`document.querySelector('[data-demo-target="editor"]').value === ${JSON.stringify(active.editorValue)}`);
+  const afterRedo = await cdp.evaluate(snapshotExpression());
+  assert.equal(afterRedo.activityValue, "1");
+  assert.equal(JSON.parse(afterRedo.storage).active.writtenCharacterCount, 1);
+
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyDown",
     key: "Backspace",
@@ -337,7 +368,7 @@ try {
   assert.match(reloaded.historyText, /5文字/);
   assert.equal(JSON.parse(reloaded.storage).history[0].writtenCharacterCount, 5);
 
-  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (Start 0 -> type +1 -> delete +0 -> replace +4 -> End 5 -> reload history retained)`);
+  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (visible Undo/Redo reuse native history at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;

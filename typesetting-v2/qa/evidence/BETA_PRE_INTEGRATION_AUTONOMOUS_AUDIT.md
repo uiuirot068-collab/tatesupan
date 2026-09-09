@@ -146,3 +146,17 @@ Focused Human QA passed the work-session lifecycle, timer, reload recovery, End/
 - TypeScript and optimized Next.js 16.3.0 build: **PASS**.
 
 Start/End, elapsed time, reload persistence, bounded history, X/copy architecture, checklist, Ruby, Typography, Preview, PDF, JPG, and Production integration were not reopened.
+
+## 11-B final UI polish before formal close
+
+Date: 2026-09-10
+
+11-B functional behavior is Human PASS. The two remaining discoverability issues were addressed without changing counting, storage, Ruby, or typesetting behavior:
+
+- The Editor footer now renders Ruby/TCY/page-break help in its own readable, wrapping row. Work-session controls and the explicitly labelled current manuscript count occupy a separate wrapping row.
+- Visible `↶ 元に戻す` and `↷ やり直す` controls preserve the textarea's selection and invoke its native browser history rather than creating a second history system. The existing keyboard shortcuts remain untouched.
+- Chrome's command-driven Redo can emit `input` without `beforeinput`; the button seeds the existing input-state path with `historyRedo`, so both visible Undo and Redo retain the frozen +0 written-count rule.
+- Deterministic Editor/11-B tests: **43/43 PASS**.
+- Real Editor browser E2E: **PASS** for separate readable footer rows, visible Undo/Redo manuscript changes, unchanged written count during both, and the existing type/delete/replacement/End/history flow.
+
+Only two Human visual confirmations remain: footer separation/readability and visible Undo/Redo discoverability/function. Ruby remains CLOSED / Human PASS.

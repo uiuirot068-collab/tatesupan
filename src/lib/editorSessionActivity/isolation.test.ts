@@ -37,4 +37,23 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain('title="現在の原稿文字数"');
     expect(editor).toContain("countVisualLength(content)");
   });
+
+  it("keeps Ruby/TCY help and wrapping work-session controls in separate footer rows", () => {
+    const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
+    const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
+    expect(editor).toContain("data-editor-footer-help");
+    expect(editor).toContain("whitespace-normal break-words");
+    expect(editor).toContain("data-editor-footer-controls");
+    expect(editor).toContain("現在の原稿文字数 {countVisualLength(content)}文字");
+    expect(counter).toContain("flex-wrap");
+  });
+
+  it("exposes visible Undo/Redo controls through the textarea's native history path", () => {
+    const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
+    expect(editor).toContain('data-editor-history-action="undo"');
+    expect(editor).toContain('data-editor-history-action="redo"');
+    expect(editor).toContain("↶</span> 元に戻す");
+    expect(editor).toContain("↷</span> やり直す");
+    expect(editor).toContain("document.execCommand(command)");
+  });
 });

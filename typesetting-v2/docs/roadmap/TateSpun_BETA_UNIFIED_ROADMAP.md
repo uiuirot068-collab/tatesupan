@@ -44,7 +44,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
 - Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
-- 11-B explicit work-session written-character tracker: IMPLEMENTED / final focused Human QA pending
+- 11-B explicit work-session written-character tracker: FUNCTIONAL HUMAN PASS / final visual confirmation pending
 
 - Ordinary Glyph Parity: COMPLETE / Human E2E PASS
 - Yakumono Parity: COMPLETE / Human E2E PASS
@@ -93,7 +93,7 @@ Choose:
 Historical sequencing recommends non-destructive/flag-gated rollout.
 
 ### GATE-F — 11-B work-session semantics
-Status: RESOLVED BY CORRECTED PRODUCT SPEC (2026-09-09) / IMPLEMENTED / HUMAN QA PENDING
+Status: RESOLVED BY CORRECTED PRODUCT SPEC / FUNCTIONAL HUMAN PASS / FINAL VISUAL CONFIRMATION PENDING
 
 Human QA superseded both earlier product assumptions: automatic browser-tab/session measurement and inserted+deleted mutation activity. The final unit is an explicit Human-started `作業タイム` counting newly written/inserted user text only. Deletion/Cut and Undo/Redo are zero; replacement/paste-over-selection count only the inserted side; programmatic changes are zero. End freezes a metadata-only result; active state and the latest 100 completed records persist locally. No manuscript text, cloud, database, or event log is stored.
 
@@ -236,7 +236,7 @@ Production `src/`, frozen Typography states, push, and deploy remain outside thi
 ---
 
 ### 11-B. Explicit work-session written-character tracker
-Status: IMPLEMENTED / FOCUSED HUMAN QA PENDING (2026-09-09)
+Status: FUNCTIONAL HUMAN PASS / FINAL UI POLISH IMPLEMENTED / VISUAL CONFIRMATION PENDING (2026-09-10)
 
 - previous automatic browser-session definition and inserted+deleted mutation-activity semantics: **SUPERSEDED after Human QA**
 - explicit `作業スタート` / `作業終了`; idle edits add zero and each new work session starts at zero
@@ -249,9 +249,11 @@ Status: IMPLEMENTED / FOCUSED HUMAN QA PENDING (2026-09-09)
 - direct manual ruby/token/caption text counts; automatically generated Ruby/page-break/image structure does not
 - load/import/normalization/migration/autosave/Preview/typesetting/Publication generation excluded
 - compact active display (`作業中`, `今回書いた文字数`, `経過時間`) remains visibly distinct from current manuscript length
+- Editor footer separates readable Ruby/TCY/page-break help from a wrapping work-session/current-count row
+- visible `↶ 元に戻す` / `↷ やり直す` controls reuse the textarea's native history path; keyboard shortcuts remain native and Undo/Redo add zero written characters
 - End result contains written count/duration/start/end, exact X/copy share text, and a local `作業記録` view with X share per record
 - Editor-only implementation; static test proves no Core/Canonical/Preview/Publication dependency
-- deterministic test suite: 41/41 PASS across all 20 required cases; actual Editor browser E2E PASS for type/delete/replacement/final result; no new dependency
+- deterministic test suite: 43/43 PASS; actual Editor browser E2E PASS for separate readable footer rows, visible native Undo/Redo at +0, type/delete/replacement/final result; no new dependency
 
 ---
 
@@ -784,7 +786,7 @@ All β-required Master §17 acceptance conditions and newly-approved β product 
 
 - **CLOSED:** Typography parity (ordinary glyph, yakumono, Preview, Publication, InDesign-level quality).
 - **COMPLETE:** 11-A functional scope/Human QA; Real Image Embedding; Canonical Core/Preview/Publication foundations; JPG reference engine and browser executor.
-- **IMPLEMENTED / HUMAN QA PENDING:** corrected 11-B explicit work-session tracker.
+- **FUNCTIONAL HUMAN PASS / FINAL VISUAL CONFIRMATION PENDING:** corrected 11-B explicit work-session tracker; footer separation and visible native Undo/Redo polish implemented.
 - **IMPLEMENTED / HUMAN QA PENDING:** development-only 完成前マイチェックリスト; development UI-C/Memo/actions; current-development-manuscript browser JPG wiring.
 - **HOLD:** one artifact-writing Publication regression test is blocked by a repeatable Dropbox `EBUSY` lock on `typography-parity-yakumono-missing-cases-diagnostic.pdf`; its other eight assertions and 578/579 full-suite tests pass.
 - **HUMAN GATE:** TCY threshold; remaining ruby policy; bleed/trim β policy; browser PDF architecture; rollout strategy; TXT contract; P3-O11 profile transformations.
