@@ -174,4 +174,21 @@ The last Human-visible 11-B defect was presentation-only: the completed-session 
 - Deterministic Editor/11-B tests: **44/44 PASS**.
 - Real Editor browser E2E: **PASS** for body portal/fixed positioning, desktop/narrow geometry, copy/X actions, explicit/Escape close, retained history, and the existing Undo/Redo +0 and written-only flow.
 
-11-B status: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Exactly one Human check remains: the centered result modal is fully visible, unclipped, and operable. Formal Human CLOSED is not claimed yet.
+At that checkpoint, 11-B status was **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Exactly one Human check then remained: the centered result modal was fully visible, unclipped, and operable. The following focused UX pass supersedes that presentation-only recheck status without reopening 11-B semantics.
+
+## Pre-integration responsive UX polish and export cancellation
+
+Date: 2026-09-10
+
+The final current-Editor UX pass implements the four Human-approved presentation/cancellation changes without beginning the general Production integration:
+
+- Ruby/TCY help is one compact line ending in `…`; the full unchanged explanation is available by hover title/accessibility name and a keyboard/touch-activatable body-portal dialog. Ruby/TCY parsing and Canonical output are untouched.
+- Work-session result and history now share one body-portal, viewport-centered modal shell. Both remain centered on narrow widths, have safe margins and an internally scrolling body, and support consistent close/Escape/backdrop behavior. Result copy/X and per-history-record X actions are retained.
+- Demo card placement uses a reusable viewport/target geometry helper: lower targets prefer above, upper targets prefer below, and the fallback remains viewport-contained. Explanatory content and fixed navigation/exit actions remain visible.
+- PDF, Web/print JPG, individual all-page JPG, and ZIP receive one shared cooperative `AbortSignal`. Escape opens `書き出しを中断しますか？`; continuing or Escape closes only the confirmation, while confirmed cancellation is observed at safe capture/encode/page/generation/save boundaries. Cancelled work skips PDF success notification, suppresses unfinished final files, and resets busy/progress UI in `finally`.
+
+Verification: pre-integration UX/export unit and pipeline tests **9/9 PASS**; 11-B deterministic regression **44/44 PASS**; real Editor desktop/narrow browser E2E **PASS**; TSP-024 Demo, TSP-028 export UX, and TSP-029 export/typesetting integrity verifiers **PASS**; TypeScript, targeted ESLint, and direct Next.js 16.3.0 optimized production build **PASS**. The package `prebuild` environment gate remains unavailable without `NEXT_PUBLIC_SUPABASE_URL`; no secret/project value was invented.
+
+Exact best-effort boundary: an already-running synchronous canvas encode/grayscale conversion, browser capture call, or JSZip chunk cannot be interrupted inside that third-party/synchronous call. Cancellation is observed at the earliest following safe checkpoint; the current page may finish, but remaining pages and the final unsaved PDF/JPG/ZIP handoff do not proceed. A download already handed to the browser cannot be recalled. Production integration and Production-flow cancellation QA therefore remain **BETA REQUIRED**.
+
+Current status: **READY FOR TARGETED HUMAN QA** using only the ten-item recheck in `HUMAN_QA_PRE_INTEGRATION.md`. 11-B functionality, Ruby, TCY, Typography, Preview, and Publication remain Human-passed/closed and are not reopened.

@@ -44,7 +44,7 @@ Top-page implementation is not part of this documentation checkpoint.
 
 ### β demo requirement
 
-The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Demo changes are roadmap-only until Production integration is authorized.
+The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement is implemented in the current Editor and awaits targeted Human QA; the larger Hero/Demo product rebase remains roadmap-only until Production integration is authorized.
 
 ## 3. Closed state — do not reopen
 
@@ -60,7 +60,7 @@ The following state is closed or Human-passed and must be preserved through inte
 - UI-C drawer integration, Memo, Editor actions, and narrow-width behavior: **HUMAN PASS in the development Editor**.
 - Manual page break across Preview/PDF/Web JPG/print JPG: **HUMAN PASS**.
 - Writing Check 11-A functional scope: **COMPLETE / HUMAN PASS**.
-- 11-B work-session tracker: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION**. Ruby/TCY/page-break help-row readability and visible Undo/Redo discoverability/function are **HUMAN PASS**. The only remaining Human item is confirming that the completed-session result modal is fully visible and operable without clipping.
+- 11-B work-session tracker: **FUNCTIONAL HUMAN PASS**. Counting, Start/End, persistence, share/history data, result content, and visible Undo/Redo are Human PASS and frozen. Result/history now share a centered viewport-modal shell; presentation-only Human confirmation remains for those two dialogs. Ruby and TCY remain **CLOSED / HUMAN PASS**; their compact help disclosure changes presentation only.
 
 Passed typesetting quality is a regression guard for integration, not a new design loop.
 
@@ -70,7 +70,7 @@ Primary disposition A:
 
 | Item | Current state | Exit condition |
 | --- | --- | --- |
-| 11-B result-modal visual confirmation | READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION | Human confirms the centered completed-session modal is fully visible and operable without clipping. |
+| Pre-integration responsive UX recheck | READY FOR TARGETED HUMAN QA | Human confirms compact Ruby/TCY help, centered result/history dialogs, responsive Demo placement, and Esc export cancellation using the focused ten-item packet. |
 | Production integration | NOT_STARTED | The ordered integration in §11 is complete without reopening passed typesetting. |
 | Browser/Production PDF execution | NOT_STARTED; architecture decision required | Real Production browser flow downloads the same Publication PaintPlan with no Node-only leakage. |
 | Real-manuscript Production E2E | NOT_STARTED | A Human-authored manuscript passes the flow in §12, including reload, images, PDF/JPG, TXT, and preflight. |
@@ -114,6 +114,7 @@ Primary disposition B:
 - Escape must request cancellation during Production PDF, Web JPG, print JPG, and all-page ZIP work.
 - Cancellation is cooperative/best-effort: stop future page work at safe boundaries, do not announce incomplete output as success, restore normal UI state, and leave manuscript/settings/images unmodified and uncorrupted.
 - If a browser download has already been irreversibly handed off, do not claim it was recalled; report the last reliable application state.
+- The current Editor implementation now shares one `AbortSignal` across PDF, Web/print JPG, and ZIP paths and awaits targeted Human QA. This does **not** remove cancellation from the β critical path: Production integration and Production-flow verification remain required.
 
 ### Preflight and help polish
 
@@ -196,7 +197,7 @@ Historical audit/HOLD text remains evidence. This table, the closed-state list, 
 
 Production integration remains **NOT_STARTED**. It may begin only after:
 
-1. the single 11-B final result-modal visual confirmation passes;
+1. the focused pre-integration responsive UX/export-cancel Human recheck passes;
 2. the four F decisions in §8 are recorded;
 3. the task explicitly authorizes Production `src/` changes;
 4. the current Production diff/noise is inventoried and exact task-owned paths are established;
@@ -232,7 +233,7 @@ Do not batch all slices into one opaque migration. Do not retire the legacy path
 
 Critical path:
 
-> 11-B final result-modal visual confirmation → product/architecture decisions → Production integration → browser PDF → TXT and export-cancel UX → top page/demo → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
+> targeted pre-integration UX/export-cancel Human QA → product/architecture decisions → Production integration → browser PDF/TXT/export-cancel integration → top page/demo product rebase → real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
 
 ### Real-manuscript Production E2E
 

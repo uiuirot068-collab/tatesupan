@@ -1,4 +1,4 @@
-# TateSpun 11-A / 11-B Specification v1.5
+# TateSpun 11-A / 11-B Specification v1.6
 Updated: 2026-09-10
 Revision reason: preserve the final written-only semantics while moving the completed-session result into a viewport-centered modal.
 
@@ -95,7 +95,7 @@ The same development Editor implements the approved UI-C drawer interaction, Mem
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Status: **FUNCTIONAL HUMAN PASS / READY FOR FINAL RESULT-MODAL VISUAL CONFIRMATION (2026-09-10).** Footer readability and visible Undo/Redo are Human PASS; only result-modal visibility remains.
+Status: **FUNCTIONAL HUMAN PASS / PRESENTATION RECHECK PENDING (2026-09-10).** Counting, lifecycle, persistence, share/history data, result content, and visible Undo/Redo are Human PASS and frozen. Only the centered result/history modal presentation is included in the focused pre-integration UX recheck.
 
 Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
@@ -106,7 +106,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Only newly inserted user-authored text adds positively. Deletion never subtracts, but also never adds.
 - Replacement and paste-over-selection count only the inserted side.
 - The compact Editor UI uses `作業スタート`, `作業中`, `今回書いた文字数`, `経過時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
-- The Editor footer keeps Ruby/TCY/page-break help on a readable row separate from a wrapping work-session/current-count row.
+- The Editor footer keeps Ruby/TCY help on one compact ellipsized line. Its full explanation is exposed by the native hover title and accessible name, and activation opens a lightweight body-portal dialog for keyboard/touch users without permanently enlarging the footer.
 - Visible `↶ 元に戻す` and `↷ やり直す` controls invoke the textarea's existing native history; Ctrl/Cmd+Z and platform redo remain available, and every Undo/Redo path adds 0.
 
 ### Counted operations
@@ -134,7 +134,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Only newly inserted user-authored text occurring while ACTIVE adds to `writtenCharacterCount`. Elapsed time is derived from `startedAt`; there is no per-second persistent write or event log.
 - A normal reload restores the same active id, start time, active state, and aggregate activity from `localStorage`.
 - Selecting `作業終了` stops accumulation immediately and appends one completed metadata-only record containing `id`, `startedAt`, `endedAt`, `durationMs`, and `writtenCharacterCount`.
-- The result opens in a viewport-centered modal independent of Editor/footer overflow. It shows activity, duration, start time, and end time; supports explicit/Escape/backdrop close; and retains copy/X actions. Closing the modal does not delete history. Later idle edits cannot change the result. A later Start creates a new session at 0 while preserving completed history.
+- Result and history use the same body-portal, viewport-centered modal shell independent of Editor/footer overflow. Header/actions remain fixed and the bounded body scrolls internally. Result shows activity, duration, start time, and end time and retains copy/X actions. History shows date/time, duration, written count, and each record's X action, never manuscript text. Both support explicit/Escape/backdrop close. Closing either modal does not delete history. Later idle edits cannot change the result. A later Start creates a new session at 0 while preserving completed history.
 - Completed history is local-only, capped at the latest 100 records, and evicts the oldest first. No cloud synchronization, analytics, database, manuscript text, or mutation event log is used.
 - No pause state is introduced in this beta iteration.
 
@@ -148,7 +148,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
-- 44 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, separate wrapping footer rows, visible native-history controls, and the viewport-modal contract. The actual `/editor?demo=1` browser E2E additionally proves desktop/narrow modal geometry, canonical copy/X actions, explicit/Escape close, retained history, and visible Undo/Redo at +0. No new dependency was introduced.
+- 44 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, compact accessible help, visible native-history controls, and the shared viewport-modal contract. The actual `/editor?demo=1` browser E2E additionally proves desktop/narrow result/history geometry, touch help disclosure, canonical copy/X actions, explicit/Escape close, retained history, and visible Undo/Redo at +0. No new dependency was introduced.
 
 ---
 

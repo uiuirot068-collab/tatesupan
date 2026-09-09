@@ -24,7 +24,7 @@ From the repository root, run:
 npm.cmd run dev
 ```
 
-Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. 11-B work-session behavior and final written-character semantics are **FUNCTIONAL HUMAN PASS**. Footer readability and visible Undo/Redo are Human PASS. The only remaining check is the result-modal visual confirmation below.
+Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. 11-B work-session behavior and final written-character semantics are **FUNCTIONAL HUMAN PASS**. Visible Undo/Redo and result data/content are Human PASS. Do not repeat counting QA; use only the focused presentation/export recheck at the end of this packet.
 
 Round 2 found that this documented `127.0.0.1` route received only the server-rendered shell because Next 16 blocked its client assets; that hydration issue was fixed. Subsequent Human QA then established that the automatic browser-session concept itself was the wrong product definition. That earlier definition is superseded—not treated as a mutation-accounting bug—and the focused Human QA for the corrected product is listed below.
 
@@ -127,12 +127,17 @@ Record PASS/FAIL plus browser, viewport, and the first failing item. Keep failur
 8. **PASS — Human Round 2.** U+30FC `ー` is vertical in print JPG.
 9. **PASS — Human Round 2.** Odd-page JPG running head is fully visible at the left outer edge.
 10. **PASS — Human Round 2.** Even-page JPG running head is fully visible at the right outer edge.
-11. **FUNCTIONAL HUMAN PASS.** After the route hydration fix and two Human-directed product-semantics corrections, Start/End, written-only counting, timer, reload, result/share/history, and next-session reset pass. Footer readability and visible Undo/Redo subsequently received Human PASS; only result-modal visibility remains below.
+11. **FUNCTIONAL HUMAN PASS.** After the route hydration fix and two Human-directed product-semantics corrections, Start/End, written-only counting, timer, reload, result/share/history data, next-session reset, and visible Undo/Redo pass. Only the focused presentation/export recheck below remains.
 
-## Final Human confirmation — result modal only (1 item)
+## Pre-integration UX + export cancel — targeted Human recheck only
 
-Open the actual Editor: run `npm.cmd run dev`, use Next's printed port, and open `http://127.0.0.1:<port>/editor?demo=1`. Ruby is **CLOSED / HUMAN PASS**. Previously passed 11-B behavior, counting semantics, Typography, JPG, Preview, Publication, and Ruby QA are not reopened.
-
-Already confirmed **HUMAN PASS**: the Ruby/TCY/page-break explanatory row is readable and wraps sensibly; visible `↶ 元に戻す` / `↷ やり直す` is discoverable and functional.
-
-1. Select `作業終了`. PASS when the completed-session result opens as a viewport-centered modal, is fully visible without Editor/footer clipping, and its close/copy/X actions remain operable at desktop and narrow widths. Closing it must leave the completed record visible in `作業記録`.
+1. Ruby/TCY help stays one line with `…`.
+2. Desktop hover shows the full Ruby/TCY help.
+3. Mobile/touch can reveal the full Ruby/TCY help.
+4. Work-session result modal remains centered on a narrow viewport.
+5. Work-session history opens centered and is fully usable.
+6. Demo bottom-target step moves out of the way on mobile.
+7. Escape during export shows `書き出しを中断しますか？`.
+8. `書き出しを続ける` continues export.
+9. Escape on the confirmation closes the warning and continues export.
+10. `中断する` stops remaining export work and returns the UI to normal.
