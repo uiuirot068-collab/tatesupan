@@ -83,6 +83,46 @@ describe("VerticalYakumonoAlignContext -- real font-derived baseline ratios", ()
     expect(ctx.baselineRatioFor("。")).toBeCloseTo(expectedRatio, 10);
   });
 
+  it("、 alone preserves its painted vertical glyph's real vmtx top side bearing", () => {
+    const buf = loadFont();
+    const ctx = new VerticalYakumonoAlignContext(buf, 0.88);
+    const reader = new FontMetricsReader(buf);
+    const glyphIdFor = createGlyphIdLookup(buf);
+    const paintedChar = verticalPaintGraphemeFor("、");
+    expect(paintedChar.codePointAt(0)).toBe(0xfe11);
+    const glyphId = glyphIdFor(paintedChar.codePointAt(0)!)!;
+    const bbox = reader.glyphInkBBox(glyphId)!;
+    const vmtx = reader.verticalMetrics(glyphId)!;
+
+    expect(vmtx.topSideBearing).toBe(64);
+    expect(vmtx.originY).toBe(bbox.yMax + vmtx.topSideBearing);
+    expect(ctx.baselineRatioFor("、")).toBeCloseTo(vmtx.originY! / reader.unitsPerEm, 10);
+    expect(ctx.baselineRatioFor("、")! - bbox.yMax / reader.unitsPerEm).toBeCloseTo(0.064, 10);
+  });
+
+  it("the comma correction does not move other approved yakumono", () => {
+    const buf = loadFont();
+    const ctx = new VerticalYakumonoAlignContext(buf, 0.88);
+    const reader = new FontMetricsReader(buf);
+    const glyphIdFor = createGlyphIdLookup(buf);
+
+    for (const ch of ["。", "」"] as const) {
+      const paintedChar = verticalPaintGraphemeFor(ch);
+      const glyphId = glyphIdFor(paintedChar.codePointAt(0)!)!;
+      const bbox = reader.glyphInkBBox(glyphId)!;
+      expect(ctx.baselineRatioFor(ch)).toBeCloseTo(bbox.yMax / reader.unitsPerEm, 10);
+    }
+
+    const opening = verticalPaintGraphemeFor("「");
+    const openingGlyphId = glyphIdFor(opening.codePointAt(0)!)!;
+    const openingBBox = reader.glyphInkBBox(openingGlyphId)!;
+    expect(ctx.baselineRatioFor("「")).toBeCloseTo(1 + openingBBox.yMin / reader.unitsPerEm, 10);
+    expect(ctx.baselineRatioFor("？")).toBeUndefined();
+    expect(ctx.baselineRatioFor("！")).toBeUndefined();
+    expect(ctx.baselineRatioFor("―")).toBeUndefined();
+    expect(ctx.baselineRatioFor("…")).toBeUndefined();
+  });
+
   it("HANG_END formula: baselineRatio = 1 + yMin/unitsPerEm, verified directly against real font data for 「", () => {
     const buf = loadFont();
     const ctx = new VerticalYakumonoAlignContext(buf, 0.88);

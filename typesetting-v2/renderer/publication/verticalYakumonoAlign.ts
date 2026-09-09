@@ -123,6 +123,18 @@ export class VerticalYakumonoAlignContext {
     const unitsPerEm = this.reader.unitsPerEm;
 
     if (alignment === "HANG_START") {
+      // Final Typography Parity recheck: Shippori Mincho's vertical comma
+      // (U+FE11) carries a real 64-unit vmtx top side bearing. InDesign
+      // preserves that bearing, while the legacy ink-edge flush below
+      // discarded it and consequently painted 、 64/1000em too early in
+      // the vertical flow. Restore ONLY the comma's real vertical origin;
+      // every other HANG_START mark retains its already-approved position.
+      // This is glyph-in-cell paint placement only: canonical advance and
+      // the dedicated 。」/、」 pair rule remain untouched.
+      if (grapheme === "、") {
+        const verticalMetrics = this.reader.verticalMetrics(glyphId);
+        if (verticalMetrics?.originY !== undefined) return verticalMetrics.originY / unitsPerEm;
+      }
       // Flush the glyph's own ink TOP edge to the cell's own top edge:
       // baselineRatio = yMax / unitsPerEm (font Y-up: yMax is the ink's
       // own distance above the baseline; placing the baseline this far
