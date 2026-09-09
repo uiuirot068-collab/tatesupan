@@ -209,6 +209,17 @@ Recorded 2026-09-09. None of these block 11-A Phase 3 closure; scheduled as late
 - current Editor has NOT yet completed full settings-drawer integration
 - preserve as a future UI integration task (see also §16 Settings / UI-C / Export Profiles below)
 
+#### Autonomous pre-integration checkpoint (2026-09-09)
+
+The Human-decision-free, development-only portion of items D/E and final JPG wiring is now implemented under `typesetting-v2/tools/human-e2e-editor/`; Production `src/` remains untouched.
+
+- 完成前マイチェックリスト: **IMPLEMENTED / HUMAN QA PENDING** in the v2 development Editor. Three editable presets, personal reusable sets, checked state, item/name editing, reset/delete, safe schema parsing, and localStorage-only persistence are implemented. Cloud/work-specific synchronization remains intentionally absent; Production Editor placement is a **PRODUCTION INTEGRATION GATE**.
+- UI-C: **IMPLEMENTED / HUMAN QA PENDING** in the v2 development Editor. The horizontal Editor stays mounted/visible while Settings, Memo, or the checklist opens in the same right-side drawer. Memo is directly reachable from Editor. The approved ↶/↷/⏎/⚙️ symbols are used only for their approved actions; rejected prototype emoji are absent. Production `src/` adoption remains a **PRODUCTION INTEGRATION GATE**.
+- JPG final development wiring: **COMPLETE / HUMAN QA PENDING**. The current editable title/content/settings compose through the existing v2 bridge and the resulting canonical PaintPlan feeds the already-approved browser Canvas executor. Web first-page, Web all-pages ZIP, and print all-pages ZIP downloads use shared filename rules. Production Editor button wiring remains a **PRODUCTION INTEGRATION GATE**.
+- Writing Check visual polish, Help top TOC, and TOC-dialog alignment are confirmed to be owned by Production `src/components/*`; because this run explicitly forbids modifying Production `src/`, they are classified **PRODUCTION INTEGRATION GATE**, not silently omitted.
+
+Automated evidence: 10/10 focused tests (checklist state + UI/export static contracts), TypeScript PASS, standalone Vite production build PASS. Human QA packet: `qa/HUMAN_QA_PRE_INTEGRATION.md`.
+
 ---
 
 ### 11-B. Writing-session total activity counter
@@ -248,6 +259,8 @@ Conditional; first real-manuscript output should receive Human visual QA.
 ### 13. Browser PDF Publication path
 Status: NOT_STARTED
 
+2026-09-09 audit: **HUMAN_GATE / PRODUCTION INTEGRATION GATE**. The current vector PDF executor is not browser-safe: `pdfGenerator.ts` and its font/image paths use Node `Buffer`, while the development Editor deliberately calls a local Vite API backed by Node. Replacing those binary-reader boundaries is a meaningful architecture change; no server runtime or browser polyfill was invented in this run. The existing PDF path remains available for development Human QA only.
+
 Tasks:
 - audit current jsPDF Publication renderer for browser/client safety
 - build/verify a real browser PDF download path
@@ -263,6 +276,8 @@ real browser user can download v2 Publication PDF from a real v2-composed manusc
 
 ### 14. Export migration
 Status: NOT_STARTED
+
+2026-09-09 development checkpoint: browser-native JPG is wired end-to-end in the isolated v2 development Editor from its current manuscript/settings through the canonical PaintPlan. Real Production Editor migration remains **PRODUCTION INTEGRATION GATE** because this run forbids Production `src/` changes; PDF browser safety also remains blocked by the §13 audit above.
 
 Tasks:
 - wire live Editor export buttons to v2 PDF/JPG
@@ -310,10 +325,14 @@ Need scope audit before implementation.
 
 Confirmed (2026-09-09, 11-A Phase 3 Human QA checkpoint): UI-C settings drawer is the Human-selected PC settings model. The current Editor (including the new 文章チェック設定 modal) has NOT yet completed full settings-drawer integration — see 11-A's own Human QA polish backlog item E above.
 
+2026-09-09 development checkpoint: UI-C interaction structure is **IMPLEMENTED / HUMAN QA PENDING** in `typesetting-v2/tools/human-e2e-editor/`; Production `src/` is unchanged. P3-O11 Export Profiles remain **HUMAN_GATE** because the transformation details listed in V2-EXPORT-002 are still unresolved. Production UI-C adoption is a **PRODUCTION INTEGRATION GATE**.
+
 ---
 
 ### 17. Typography final contract closure
 Status: PARTIAL
+
+Superseded status note (2026-09-09): the later formal Human E2E closeout at HEAD `70287aa` is authoritative for shipped typography parity: **CLOSED**. The four product-policy questions below remain independently classified under GATE-A/GATE-B and are not authorization to reopen the Human-PASS ordinary glyph/yakumono/Preview/Publication implementation.
 
 Resolve:
 - P3-O07 TCY threshold
@@ -745,6 +764,19 @@ Status: NOT_STARTED
 
 Definition:
 All β-required Master §17 acceptance conditions and newly-approved β product requirements are PASS, or explicitly deferred by Human as post-β without contradicting the acceptance contract.
+
+### 2026-09-09 final pre-integration audit
+
+- **CLOSED:** Typography parity (ordinary glyph, yakumono, Preview, Publication, InDesign-level quality).
+- **COMPLETE:** 11-A functional scope/Human QA; Real Image Embedding; 11-B implementation; Canonical Core/Preview/Publication foundations; JPG reference engine and browser executor.
+- **IMPLEMENTED / HUMAN QA PENDING:** development-only 完成前マイチェックリスト; development UI-C/Memo/actions; current-development-manuscript browser JPG wiring.
+- **HOLD:** one artifact-writing Publication regression test is blocked by a repeatable Dropbox `EBUSY` lock on `typography-parity-yakumono-missing-cases-diagnostic.pdf`; its other eight assertions and 578/579 full-suite tests pass.
+- **HUMAN GATE:** TCY threshold; remaining ruby policy; bleed/trim β policy; browser PDF architecture; rollout strategy; TXT contract; P3-O11 profile transformations.
+- **PRODUCTION INTEGRATION GATE:** real Editor state/export buttons; Production UI-C/checklist; Writing Check visual polish; Help top TOC; TOC dialog polish; final site/release copy; Production smoke/push/deploy.
+- **Human QA:** consolidated development review, real-manuscript E2E, mandatory acceptance matrix, and final Production smoke.
+- **NOT_STARTED but not autonomously implementable under this run:** only the gated/Production/Human-QA items above. No additional Human-decision-free roadmap item was found.
+
+Checkpoint limitation: the task-owned changes could not be staged or committed because the worktree Git metadata directory is read-only to this sandbox (`index.lock: Permission denied`). No alternate index, permission escalation, push, or deploy was attempted.
 
 ---
 

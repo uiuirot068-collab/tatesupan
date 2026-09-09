@@ -1464,4 +1464,22 @@ LOGICAL CORRECTNESS（Core）、VISUAL PREVIEW QUALITY（Preview）、PUBLICATIO
 
 ---
 
+---
+
+# 29. BETA PRE-INTEGRATION DEVELOPMENT CHECKPOINT (2026-09-09)
+
+Without modifying Production `src/`, the isolated v2 Human E2E Editor now carries the Human-decision-free UI/product shell needed for consolidated review:
+
+- UI-C right-side Settings drawer while the horizontal Editor remains mounted and visible;
+- direct local Memo access;
+- local-only 完成前マイチェックリスト with editable presets/personal reusable sets and no cloud/external transmission;
+- undo/redo/manual page-break actions using only their individually approved symbols;
+- current development manuscript/settings → existing v2 bridge → Canonical PaintPlan → browser Web/print JPG (single first page or all-page ZIP).
+
+Status: **IMPLEMENTED / HUMAN QA PENDING** in development. Production Editor adoption, Writing Check visual polish, Help top TOC, TOC-dialog polish, and final export-button migration are **PRODUCTION INTEGRATION GATE** under the run's no-`src/` rule. Browser-native PDF remains **HUMAN_GATE / PRODUCTION INTEGRATION GATE** because the current vector PDF/font/image executor uses Node `Buffer`; the development Editor retains its local Vite API and does not invent a new server architecture.
+
+Evidence: `typesetting-v2/qa/evidence/BETA_PRE_INTEGRATION_AUTONOMOUS_AUDIT.md`. Consolidated Human QA: `typesetting-v2/qa/HUMAN_QA_PRE_INTEGRATION.md`.
+
+---
+
 END OF MASTER

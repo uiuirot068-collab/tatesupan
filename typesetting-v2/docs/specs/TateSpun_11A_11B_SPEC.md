@@ -83,6 +83,12 @@ Confirmed on the real Editor: preset switching (入稿前おすすめ/記号だ�
 
 A non-blocking Human polish backlog (visual/UI refinements, Help TOC, TOC-dialog alignment, 完成前マイチェックリスト, UI-C settings-drawer integration) and a separate open Typography Parity follow-up (InDesign character-pitch comparison) were recorded in the roadmap; neither blocks this Phase 3 closure.
 
+### Development-only follow-up checkpoint (2026-09-09)
+
+The safely frozen local portion of 完成前マイチェックリスト is implemented in `typesetting-v2/tools/human-e2e-editor/`, directly beside Memo in the development Editor toolbar. Its versioned model provides three editable presets, reusable personal lists, editable check state/text/name, reset, and defensive localStorage restoration. It has no manuscript dependency, cloud/database client, or external transmission. Status: **IMPLEMENTED / HUMAN QA PENDING**; placement in the real Editor is a **PRODUCTION INTEGRATION GATE**.
+
+The same development Editor implements the approved UI-C drawer interaction and browser JPG actions from the current Canonical PaintPlan. Writing Check visual polish, Help TOC, and TOC-dialog alignment remain a **PRODUCTION INTEGRATION GATE** because their owning components are under Production `src/`, which this run was explicitly forbidden to modify. This does not reopen 11-A detection/fix semantics or its Human PASS.
+
 ---
 
 ## 11-B frozen specification and implementation

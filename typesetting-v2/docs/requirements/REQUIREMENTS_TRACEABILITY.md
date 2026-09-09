@@ -100,6 +100,8 @@ Columns: **ID | Requirement | Source | Phase Responsible | QA Method | Human QA 
 | V2-UI-004 | Editor default writing direction is horizontal; optional vertical Editor mode is a desired direction pending feasibility research (shared manuscript model, cursor/IME/selection reliability, mobile/accessibility impact) | Master §22.2 (HD-011); Freeze §18 | 1–2 (research), not yet implemented | Architecture review | No | Approved (direction); feasibility genuinely open — Phase 1/2 engineering research required before any implementation |
 | V2-UI-005 | Emoji use in UI is limited/deliberate, never the primary icon language; every emoji use must be explicitly disclosed (exact emoji, location, purpose) and pass Human QA before Production adoption — no emoji carries over from prototype to Production by default | Master §23 (HD-012); `qa/human/UI_COMPARISON_SCORECARD.md` Emoji Disclosure table | 6 | Human QA per emoji use | Yes | Approved (Phase 1 UI Human QA Freeze 2026-09-05); final verdicts recorded 2026-09-05 (HD-014, Master §24): ↶/↷/⏎/⚙️ APPROVED for their stated purposes only; 💾/🖼/👁/📝/✏️ REJECTED, replace with text label or design-approved icon; any new emoji requires fresh disclosure |
 
+2026-09-09 pre-integration checkpoint: V2-UI-002/003/005 are implemented in the isolated development Editor (`typesetting-v2/tools/human-e2e-editor/`) and await Human QA. Production `src/` adoption remains an explicit integration gate. The local-only 完成前マイチェックリスト follow-up is implemented beside Memo; cloud/work-specific behavior is not inferred.
+
 ## Architecture (V2-ARCH-*)
 
 | ID | Requirement | Source | Phase | QA Method | Human QA? | Status |
