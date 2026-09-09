@@ -12,8 +12,6 @@ import {
   captureBeforeInput,
   createTextInputActivityState,
   finishComposition,
-  measureEditorActivityOperation,
-  reverseActivityDelta,
   startComposition,
   syncTextInputActivityState,
   type ActivityDelta,
@@ -162,7 +160,6 @@ export default function EditorPane({
   const [undoState, setUndoState] = useState<{
     before: string;
     after: string;
-    forwardActivity: ActivityDelta;
   } | null>(null);
 
   const writingCheckConfig: WritingCheckConfig = useMemo(
@@ -199,10 +196,9 @@ export default function EditorPane({
   };
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
-  const applyAutomatedTextChange = (next: string, forwardActivity: ActivityDelta) => {
+  const applyAutomatedTextChange = (next: string) => {
     if (next === content) return;
-    setUndoState({ before: content, after: next, forwardActivity });
-    onRecordActivity(forwardActivity);
+    setUndoState({ before: content, after: next });
     inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
     onContentChange(next);
   };
@@ -215,18 +211,7 @@ export default function EditorPane({
       setRecheckNonce((v) => v + 1);
       return;
     }
-    applyAutomatedTextChange(
-      result.text,
-      measureEditorActivityOperation({
-        kind: "explicit-replacements",
-        replacements: [
-          {
-            deletedText: issue.originalText,
-            insertedText: issue.suggestedReplacement?.text ?? "",
-          },
-        ],
-      })
-    );
+    applyAutomatedTextChange(result.text);
   };
 
   const handleIgnoreIssue = (issue: WritingDiagnostic) => {
@@ -236,24 +221,11 @@ export default function EditorPane({
   const handleBulkFix = () => {
     const result = applyBulkFix(content, writingIssuesForContent);
     if (result.appliedIds.length === 0) return;
-    const appliedIds = new Set(result.appliedIds);
-    applyAutomatedTextChange(
-      result.text,
-      measureEditorActivityOperation({
-        kind: "explicit-replacements",
-        replacements: writingIssuesForContent
-          .filter((issue) => appliedIds.has(issue.id) && issue.suggestedReplacement !== undefined)
-          .map((issue) => ({
-            deletedText: issue.originalText,
-            insertedText: issue.suggestedReplacement?.text ?? "",
-          })),
-      })
-    );
+    applyAutomatedTextChange(result.text);
   };
 
   const handleUndoFix = () => {
     if (!undoState) return;
-    onRecordActivity(reverseActivityDelta(undoState.forwardActivity));
     inputActivityStateRef.current = syncTextInputActivityState(
       inputActivityStateRef.current,
       undoState.before

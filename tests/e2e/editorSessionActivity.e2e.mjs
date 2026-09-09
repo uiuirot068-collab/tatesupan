@@ -139,14 +139,14 @@ class CdpPage {
 function snapshotExpression() {
   return `(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
-    const activity = document.querySelector('[data-work-session-activity]');
+    const activity = document.querySelector('[data-work-session-written-count]');
     const result = document.querySelector('[data-work-session-result]');
     const history = document.querySelector('[data-work-session-history]');
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
       editorValue: editor?.value,
       activityText: activity?.textContent.trim(),
-      activityValue: activity?.getAttribute('data-work-session-activity'),
+      activityValue: activity?.getAttribute('data-work-session-written-count'),
       resultText: result?.textContent.replace(/\\s+/g, ' ').trim(),
       historyText: history?.textContent.replace(/\\s+/g, ' ').trim(),
       hasStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
@@ -250,12 +250,12 @@ try {
   assert.equal(idleAfter.editorValue, `${idleBefore.editorValue}a`);
 
   await cdp.evaluate(`document.querySelector('[data-work-session-action="start"]').click(); true`);
-  await cdp.waitFor(`document.querySelector('[data-work-session-activity]')?.getAttribute('data-work-session-activity') === '0'`);
+  await cdp.waitFor(`document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '0'`);
   const started = await cdp.evaluate(snapshotExpression());
   assert.equal(started.hasStart, false);
   assert.equal(started.hasEnd, true);
-  assert.match(started.activityText, /今回の編集量 0文字/);
-  assert.equal(JSON.parse(started.storage).active.editingActivity, 0);
+  assert.match(started.activityText, /今回書いた文字数 0文字/);
+  assert.equal(JSON.parse(started.storage).active.writtenCharacterCount, 0);
 
   await cdp.evaluate(`(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
@@ -279,21 +279,52 @@ try {
     windowsVirtualKeyCode: 66,
     nativeVirtualKeyCode: 66,
   });
-  await cdp.waitFor(`document.querySelector('[data-work-session-activity]')?.getAttribute('data-work-session-activity') === '1'`);
+  await cdp.waitFor(`document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '1'`);
   const active = await cdp.evaluate(snapshotExpression());
-  assert.match(active.activityText, /今回の編集量 1文字/);
-  assert.equal(JSON.parse(active.storage).active.editingActivity, 1);
+  assert.match(active.activityText, /今回書いた文字数 1文字/);
+  assert.equal(JSON.parse(active.storage).active.writtenCharacterCount, 1);
+
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Backspace",
+    code: "Backspace",
+    windowsVirtualKeyCode: 8,
+    nativeVirtualKeyCode: 8,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Backspace",
+    code: "Backspace",
+    windowsVirtualKeyCode: 8,
+    nativeVirtualKeyCode: 8,
+  });
+  await cdp.waitFor(`document.querySelector('[data-demo-target="editor"]').value === ${JSON.stringify(active.editorValue.slice(0, -1))}`);
+  const afterDelete = await cdp.evaluate(snapshotExpression());
+  assert.equal(afterDelete.activityValue, "1");
+  assert.equal(JSON.parse(afterDelete.storage).active.writtenCharacterCount, 1);
+
+  await cdp.evaluate(`(() => {
+    const editor = document.querySelector('[data-demo-target="editor"]');
+    editor.focus();
+    editor.setSelectionRange(editor.value.length - 2, editor.value.length);
+    return true;
+  })()`);
+  await cdp.send("Input.insertText", { text: "WXYZ" });
+  await cdp.waitFor(`document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '5'`);
+  const afterReplacement = await cdp.evaluate(snapshotExpression());
+  assert.match(afterReplacement.activityText, /今回書いた文字数 5文字/);
+  assert.equal(JSON.parse(afterReplacement.storage).active.writtenCharacterCount, 5);
 
   await cdp.evaluate(`document.querySelector('[data-work-session-action="end"]').click(); true`);
   await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-result]'))`);
   const ended = await cdp.evaluate(snapshotExpression());
   const completedState = JSON.parse(ended.storage);
   assert.equal(ended.hasStart, true);
-  assert.match(ended.resultText, /今回の編集量\s*1文字/);
+  assert.match(ended.resultText, /今回書いた文字数\s*5文字/);
   assert.match(ended.resultText, /作業時間/);
   assert.equal(completedState.active, null);
   assert.equal(completedState.history.length, 1);
-  assert.equal(completedState.history[0].editingActivity, 1);
+  assert.equal(completedState.history[0].writtenCharacterCount, 5);
 
   await cdp.evaluate("location.reload(); true");
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
@@ -303,10 +334,10 @@ try {
   const reloaded = await cdp.evaluate(snapshotExpression());
   assert.equal(reloaded.hasStart, true);
   assert.match(reloaded.historyText, /作業記録/);
-  assert.match(reloaded.historyText, /1文字/);
-  assert.equal(JSON.parse(reloaded.storage).history[0].editingActivity, 1);
+  assert.match(reloaded.historyText, /5文字/);
+  assert.equal(JSON.parse(reloaded.storage).history[0].writtenCharacterCount, 5);
 
-  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (idle -> Start 0 -> type 1 -> End -> reload history retained)`);
+  console.log(`PASS real Editor 11-B browser E2E: ${editorUrl} (Start 0 -> type +1 -> delete +0 -> replace +4 -> End 5 -> reload history retained)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;

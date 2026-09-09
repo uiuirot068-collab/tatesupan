@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  addActivity,
   applyTextInputChange,
   captureBeforeInput,
   codePointLength,
@@ -11,19 +10,19 @@ import {
   measureContiguousMutation,
   measureEditorActivityOperation,
   measureReplacement,
-  reverseActivityDelta,
   startComposition,
-  ZERO_ACTIVITY,
 } from "./model";
 
-describe("11-B work-session activity purpose and Unicode unit", () => {
-  it("counts editing activity, not final manuscript length", () => {
-    let total = ZERO_ACTIVITY;
-    total = addActivity(total, measureContiguousMutation("", "あ".repeat(100)));
-    total = addActivity(total, measureContiguousMutation("あ".repeat(100), "あ".repeat(50)));
-    total = addActivity(total, measureContiguousMutation("あ".repeat(50), "あ".repeat(80)));
-    expect(total).toEqual({ insertedCodePoints: 130, deletedCodePoints: 50, totalActivity: 180 });
-    expect(total.totalActivity).not.toBe(80);
+describe("11-B written-text input detection and Unicode unit", () => {
+  it("detects inserted and deleted operands separately from final manuscript length", () => {
+    expect(measureContiguousMutation("あ".repeat(100), "あ".repeat(50))).toEqual({
+      insertedCodePoints: 0,
+      deletedCodePoints: 50,
+    });
+    expect(measureContiguousMutation("あ".repeat(50), "あ".repeat(80))).toEqual({
+      insertedCodePoints: 30,
+      deletedCodePoints: 0,
+    });
   });
 
   it("uses Unicode code points: an astral emoji is one, while base+combining mark is two", () => {
@@ -69,8 +68,8 @@ describe("11-B IME policy", () => {
   });
 });
 
-describe("11-B browser edit semantics", () => {
-  it("undo restoring 10 deleted characters counts 10 inserted; redo removing them counts 10 deleted", () => {
+describe("11-B browser input semantics", () => {
+  it("10-11. Undo and Redo both produce zero written-character delta", () => {
     const undo = measureBeforeInputCommit(
       { beforeText: "", selectionStart: 0, selectionEnd: 0, inputType: "historyUndo" },
       "0123456789"
@@ -79,12 +78,11 @@ describe("11-B browser edit semantics", () => {
       { beforeText: "0123456789", selectionStart: 10, selectionEnd: 10, inputType: "historyRedo" },
       ""
     );
-    expect(undo).toEqual({ insertedCodePoints: 10, deletedCodePoints: 0 });
-    expect(redo).toEqual({ insertedCodePoints: 0, deletedCodePoints: 10 });
-    expect(reverseActivityDelta(undo)).toEqual(redo);
+    expect(undo).toEqual({ insertedCodePoints: 0, deletedCodePoints: 0 });
+    expect(redo).toEqual({ insertedCodePoints: 0, deletedCodePoints: 0 });
   });
 
-  it("undo removing a 10-character insertion and redo restoring it each add 10 activity", () => {
+  it("the generic contiguous diff remains independent of Undo/Redo product meaning", () => {
     expect(measureContiguousMutation("0123456789", "")).toEqual({ insertedCodePoints: 0, deletedCodePoints: 10 });
     expect(measureContiguousMutation("", "0123456789")).toEqual({ insertedCodePoints: 10, deletedCodePoints: 0 });
   });
@@ -147,7 +145,7 @@ describe("11-B notation, structural UI, and Writing Check semantics", () => {
     });
   });
 
-  it("Ruby UI counts user-entered base/reading edits but not its generated markup transform", () => {
+  it("Ruby UI retains only user-entered inserted text, not removed text or generated markup", () => {
     expect(
       measureEditorActivityOperation({
         kind: "ruby-ui",
@@ -156,7 +154,7 @@ describe("11-B notation, structural UI, and Writing Check semantics", () => {
           { deletedText: "よみ", insertedText: "かんじ" },
         ],
       })
-    ).toEqual({ insertedCodePoints: 5, deletedCodePoints: 2 });
+    ).toEqual({ insertedCodePoints: 5, deletedCodePoints: 0 });
     expect(measureEditorActivityOperation({ kind: "excluded", source: "ruby-structural-transform" })).toEqual({ insertedCodePoints: 0, deletedCodePoints: 0 });
   });
 
@@ -170,7 +168,7 @@ describe("11-B notation, structural UI, and Writing Check semantics", () => {
     expect(measureEditorActivityOperation({ kind: "manual-text", before: "図", after: "図の説明" })).toEqual({ insertedCodePoints: 3, deletedCodePoints: 0 });
   });
 
-  it("explicit single and SAFE bulk Writing Check fixes count actual replacement operands", () => {
+  it("14. programmatic Writing Check replacements add zero", () => {
     expect(
       measureEditorActivityOperation({
         kind: "explicit-replacements",
@@ -179,7 +177,7 @@ describe("11-B notation, structural UI, and Writing Check semantics", () => {
           { deletedText: "  ", insertedText: "" },
         ],
       })
-    ).toEqual({ insertedCodePoints: 1, deletedCodePoints: 4 });
+    ).toEqual({ insertedCodePoints: 0, deletedCodePoints: 0 });
   });
 
   it("ignore/settings/internal analysis are zero", () => {

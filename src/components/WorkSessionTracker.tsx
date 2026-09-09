@@ -43,7 +43,7 @@ function formatHistoryDate(timestamp: number): string {
 }
 
 function openXShare(record: CompletedWorkSession): void {
-  const text = formatWorkSessionShareText(record.editingActivity);
+  const text = formatWorkSessionShareText(record.writtenCharacterCount);
   window.open(
     `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
     "_blank",
@@ -88,7 +88,7 @@ export default function WorkSessionTracker({
 
   const copyShareText = async (record: CompletedWorkSession) => {
     try {
-      await navigator.clipboard.writeText(formatWorkSessionShareText(record.editingActivity));
+      await navigator.clipboard.writeText(formatWorkSessionShareText(record.writtenCharacterCount));
       setCopiedId(record.id);
       window.setTimeout(() => setCopiedId((current) => current === record.id ? null : current), 1800);
     } catch {
@@ -105,9 +105,9 @@ export default function WorkSessionTracker({
           </span>
           <span
             className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-ink"
-            data-work-session-activity={state.active.editingActivity}
+            data-work-session-written-count={state.active.writtenCharacterCount}
           >
-            今回の編集量 {state.active.editingActivity.toLocaleString("ja-JP")}文字
+            今回書いた文字数 {state.active.writtenCharacterCount.toLocaleString("ja-JP")}文字
           </span>
           <span className="whitespace-nowrap text-[11px] tabular-nums text-ink/60" data-work-session-elapsed>
             経過時間 {formatElapsed(now - state.active.startedAt)}
@@ -151,9 +151,9 @@ export default function WorkSessionTracker({
         >
           <p className="text-sm font-bold text-ink">作業おつかれさまでした</p>
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-            <dt className="text-ink/55">今回の編集量</dt>
-            <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-activity>
-              {result.editingActivity.toLocaleString("ja-JP")}文字
+            <dt className="text-ink/55">今回書いた文字数</dt>
+            <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
+              {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
             </dd>
             <dt className="text-ink/55">作業時間</dt>
             <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
@@ -199,7 +199,7 @@ export default function WorkSessionTracker({
                       {formatHistoryDate(record.startedAt)}〜{formatClock(record.endedAt)}
                     </p>
                     <p className="mt-0.5 tabular-nums text-ink/60">
-                      {formatDuration(record.durationMs)} / {record.editingActivity.toLocaleString("ja-JP")}文字
+                      {formatDuration(record.durationMs)} / {record.writtenCharacterCount.toLocaleString("ja-JP")}文字
                     </p>
                   </div>
                   <button type="button" onClick={() => openXShare(record)} className="shrink-0 rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5">

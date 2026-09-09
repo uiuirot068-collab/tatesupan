@@ -14,7 +14,7 @@ npm.cmd exec -- vite --config typesetting-v2/tools/human-e2e-editor/vite.config.
 
 Open `http://127.0.0.1:5173/`.
 
-## 1. 11-B work-session activity tracker
+## 1. 11-B work-session written-character tracker
 
 This check uses the existing real Editor implementation. It is not duplicated in the isolated v2 development Editor and does not require Production deployment or integration.
 
@@ -24,17 +24,7 @@ From the repository root, run:
 npm.cmd run dev
 ```
 
-Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. In the left manuscript Editor footer, `作業スタート` and `作業記録` appear immediately before the separate current-manuscript character count.
-
-Steps:
-
-1. Type while idle and confirm that no work-session activity is created.
-2. Select `作業スタート`; confirm `作業中`, `今回の編集量 0文字`, elapsed time, and `作業終了`.
-3. Type Japanese via IME, paste over a selection, delete text, undo, and redo.
-4. Reload during the active session, then select `作業終了`.
-5. Check result, exact X/copy text, `作業記録`, and a later new session.
-
-PASS: idle edits add zero; each Start begins at zero; final IME commits and actual mutations count only while active; reload restores the active aggregate and timer origin; End freezes a metadata-only result; history persists; exact share text contains no manuscript; current manuscript length remains visibly distinct.
+Use the exact port printed by Next (it may not be 3000), then open `http://127.0.0.1:<port>/editor?demo=1`. In the left manuscript Editor footer, `作業スタート` and `作業記録` appear immediately before the separate current-manuscript character count. The only remaining Human recheck is the nine-item final section below.
 
 Round 2 found that this documented `127.0.0.1` route received only the server-rendered shell because Next 16 blocked its client assets; that hydration issue was fixed. Subsequent Human QA then established that the automatic browser-session concept itself was the wrong product definition. That earlier definition is superseded—not treated as a mutation-accounting bug—and the focused Human QA for the corrected product is listed below.
 
@@ -139,19 +129,16 @@ Record PASS/FAIL plus browser, viewport, and the first failing item. Keep failur
 10. **PASS — Human Round 2.** Even-page JPG running head is fully visible at the right outer edge.
 11. **SUPERSEDED after Human QA.** The route hydration failure was fixed and its browser E2E passed, after which Human QA corrected 11-B from an automatic browser-session counter to an explicit work-session tracker. The mutation accounting remains reused; only the corrected product needs the focused recheck below.
 
-## Final Human recheck — corrected 11-B only (12 items)
+## Final Human recheck — final 11-B semantics only (9 items)
 
 Open the actual Editor: run `npm.cmd run dev`, use Next's printed port, and open `http://127.0.0.1:<port>/editor?demo=1`. Previously passed Typography, JPG, Preview, Publication, and Ruby QA are not reopened.
 
-1. While idle, type in the manuscript. PASS if no work-session activity is accumulated and `作業スタート` remains available.
-2. Select `作業スタート`. PASS if `作業中` appears and `今回の編集量` begins at `0文字`.
-3. Type, delete, and replace manuscript text. PASS if activity increases by inserted + deleted code points while active.
-4. Wait briefly. PASS if `経過時間` runs without any extra configuration.
-5. Reload while active. PASS if the same start time, accumulated activity, active status, and continuing elapsed time return.
-6. Select `作業終了`, then edit again while idle. PASS if the completed activity freezes immediately and does not change.
-7. PASS if the result displays `今回の編集量`, `作業時間`, `開始時刻`, and `終了時刻`.
-8. Select `Xでシェア`. PASS if the normal X intent opens with exactly `今日は{表示された編集量}文字がんばりました！`, `#TateSpun`, and `https://spuntales.net/tatespun/`, with no manuscript text.
-9. Select `テキストをコピー`. PASS if the copied text is exactly the same three-line share text and contains no manuscript text.
-10. Open `作業記録`, then reload and open it again. PASS if the completed metadata record remains and can be shared to X.
-11. Select `作業スタート` again. PASS if the new session begins at `0文字` while the prior record remains in history.
-12. PASS if the footer's `現在の原稿文字数` remains separately visible and is understandable as different from `今回の編集量`.
+1. Select `作業スタート`. PASS if `今回書いた文字数` starts at `0文字`.
+2. Type five characters. PASS if `今回書いた文字数` is `5文字`.
+3. Delete two of those characters. PASS if the count remains `5文字`.
+4. Type three more characters. PASS if the count becomes `8文字`.
+5. Replace two existing characters with four new characters. PASS if only `+4` is added.
+6. Perform Undo and Redo. PASS if neither operation changes the written count.
+7. Select `作業終了`. PASS if the result uses the same final written count.
+8. PASS if X/copy share and `作業記録` all use that same count and contain no manuscript text.
+9. PASS if the active and result label is exactly `今回書いた文字数`, visibly separate from `現在の原稿文字数`.

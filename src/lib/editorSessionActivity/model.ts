@@ -1,27 +1,16 @@
 /**
- * TateSpun 11-B — Work Session Editing Activity.
+ * TateSpun 11-B — Work Session Written Character Counting.
  *
- * This module measures manuscript editing activity only. It deliberately has
- * no dependency on typesetting, canonical layout, Preview, or publication.
- * All string quantities are Unicode code points (never UTF-16 code units).
+ * This module detects textarea input operands; the work-session store retains
+ * only inserted user text. It deliberately has no dependency on typesetting,
+ * canonical layout, Preview, or publication. All string quantities are
+ * Unicode code points (never UTF-16 code units).
  */
-
-export interface SessionActivity {
-  insertedCodePoints: number;
-  deletedCodePoints: number;
-  totalActivity: number;
-}
 
 export interface ActivityDelta {
   insertedCodePoints: number;
   deletedCodePoints: number;
 }
-
-export const ZERO_ACTIVITY: SessionActivity = Object.freeze({
-  insertedCodePoints: 0,
-  deletedCodePoints: 0,
-  totalActivity: 0,
-});
 
 const ZERO_DELTA: ActivityDelta = Object.freeze({
   insertedCodePoints: 0,
@@ -42,16 +31,6 @@ export function activityDelta(
   };
 }
 
-export function addActivity(current: SessionActivity, delta: ActivityDelta): SessionActivity {
-  const insertedCodePoints = current.insertedCodePoints + delta.insertedCodePoints;
-  const deletedCodePoints = current.deletedCodePoints + delta.deletedCodePoints;
-  return {
-    insertedCodePoints,
-    deletedCodePoints,
-    totalActivity: insertedCodePoints + deletedCodePoints,
-  };
-}
-
 export function combineActivityDeltas(deltas: readonly ActivityDelta[]): ActivityDelta {
   return deltas.reduce(
     (sum, delta) => ({
@@ -62,17 +41,11 @@ export function combineActivityDeltas(deltas: readonly ActivityDelta[]): Activit
   );
 }
 
-export function reverseActivityDelta(delta: ActivityDelta): ActivityDelta {
-  return {
-    insertedCodePoints: delta.deletedCodePoints,
-    deletedCodePoints: delta.insertedCodePoints,
-  };
-}
-
 /**
  * Measures one contiguous resulting text mutation. Common code-point prefix
  * and suffix are retained; the changed middle is deletion + insertion.
- * This is used for ordinary typing/deletion and browser historyUndo/historyRedo.
+ * This is used for ordinary typing/deletion. Browser history actions are
+ * explicitly excluded from the written-character product count below.
  */
 export function measureContiguousMutation(before: string, after: string): ActivityDelta {
   if (before === after) return ZERO_DELTA;
@@ -126,7 +99,7 @@ export function measureBeforeInputCommit(
   afterText: string
 ): ActivityDelta {
   if (snapshot.inputType === "historyUndo" || snapshot.inputType === "historyRedo") {
-    return measureContiguousMutation(snapshot.beforeText, afterText);
+    return ZERO_DELTA;
   }
 
   const selectedCodePoints = codePointLength(selectedText(snapshot));
@@ -273,15 +246,15 @@ export function measureEditorActivityOperation(operation: EditorActivityOperatio
   if (operation.kind === "manual-text") {
     return measureContiguousMutation(operation.before, operation.after);
   }
-  const replacements = operation.kind === "ruby-ui" ? operation.userEdits : operation.replacements;
+  if (operation.kind === "explicit-replacements") return ZERO_DELTA;
   return combineActivityDeltas(
-    replacements.map(({ deletedText, insertedText }) =>
-      measureReplacement(deletedText, insertedText)
+    operation.userEdits.map(({ insertedText }) =>
+      activityDelta(0, codePointLength(insertedText))
     )
   );
 }
 
-export function formatWorkSessionShareText(editingActivity: number): string {
-  const formattedActivity = new Intl.NumberFormat("ja-JP").format(editingActivity);
-  return `今日は${formattedActivity}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`;
+export function formatWorkSessionShareText(writtenCharacterCount: number): string {
+  const formattedCount = new Intl.NumberFormat("ja-JP").format(writtenCharacterCount);
+  return `今日は${formattedCount}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`;
 }

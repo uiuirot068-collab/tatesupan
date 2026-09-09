@@ -99,7 +99,7 @@ Date: 2026-09-09
 
 The Human-observed failure was reproduced in a real headless Chromium session on the documented `http://127.0.0.1:<port>/editor?demo=1` route. Native `beforeinput` and `input` events fired and changed the textarea DOM, but neither the current manuscript count nor 11-B changed. Next.js 16's dev log showed the cause: `next dev` advertised `localhost` and rejected every client/HMR asset requested from the additional `127.0.0.1` origin. The page was an unhydrated SSR shell, so no React Editor mutation handler or 11-B accounting code could run.
 
-`next.config.ts` now declares development-only `allowedDevOrigins: ["127.0.0.1"]`. No 11-B policy/model/component semantics changed. A dependency-free CDP browser regression at `tests/e2e/editorSessionActivity.e2e.mjs` opens the actual demo Editor route, waits for React hydration, sends a real browser key event to the manuscript textarea, verifies visible activity `0文字 → 1文字`, verifies the separate manuscript count changes, inspects the persisted inserted/deleted totals, and reloads the same tab to prove retention.
+At that now-superseded automatic-counter checkpoint, `next.config.ts` added development-only `allowedDevOrigins: ["127.0.0.1"]`; no then-current 11-B semantics changed. Its dependency-free CDP regression proved real Editor hydration and input wiring. The final written-character E2E evidence is recorded below.
 
 ### Ruby audit — no regression found
 
@@ -122,10 +122,27 @@ Implementation evidence:
 - Existing Unicode code-point mutation policy is reused for typing, delete, replacement, IME final commit once, Undo/Redo, Writing Check fixes, and other already-frozen inclusions/exclusions.
 - The store ignores mutations while idle, starts every new work session at 0, freezes immediately on End, and preserves an active session across reload using timestamps plus aggregate activity only.
 - `localStorage` contains only session metadata. Completed history is bounded to the latest 100 entries and removes the oldest first. No manuscript text, per-keystroke event log, cloud synchronization, analytics, or database was added.
-- Result and history UI expose X sharing; result exposes text copy. Canonical text is exactly `今日は{editingActivity}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`.
+- At this intermediate, later-superseded checkpoint, result/history sharing used the same canonical three-line template with the then-current aggregate field.
 - The current manuscript character count remains separately visible.
 - Deterministic 11-B suite: **33/33 PASS**, covering all 18 requested lifecycle, mutation, persistence, cap/eviction, exact-share, manuscript-isolation, and current-count cases.
 - Real Editor browser E2E on `/editor?demo=1`: **PASS** for idle → Start at 0 → type → visible increase → End → result → reload → history retained.
 - TypeScript: **PASS**. Optimized Next.js 16.3.0 build: **PASS**.
 
 Ruby remains CLOSED / Human PASS. This correction changes only Editor/work-session state and does not reopen or modify Ruby, Canonical geometry, Preview, Publication PDF, JPG geometry, TCY, Typography, or Writing Check semantics.
+
+## 11-B final counting-semantics correction — newly written text only
+
+Date: 2026-09-09
+
+Focused Human QA passed the work-session lifecycle, timer, reload recovery, End/result, sharing, history, and next-session reset, but established that inserted+deleted mutation activity was not the intended count. That semantics is now **SUPERSEDED**. The final product count is Unicode code points of newly written/inserted user text during the active work session.
+
+- Typing and paste add their inserted side. Replacement and paste-over-selection ignore the removed side.
+- Backspace, Delete, selection deletion, Cut, Undo, and Redo add zero and never decrement the accumulated count.
+- Writing Check fixes, search/replace, generated book parts, structural operations, and other programmatic mutations add zero.
+- UI terminology is `今回書いた文字数`, separately from `現在の原稿文字数`.
+- Persisted aggregate metadata is now `writtenCharacterCount`. The reader defensively accepts prior `editingActivity` state/history so existing local records are not unexpectedly lost; all subsequent writes use the final field name.
+- Deterministic 11-B suite: **41/41 PASS** across all 20 required cases.
+- Real Editor browser E2E: **PASS** for Start 0 → type +1 → Backspace +0 → replace two selected characters with four +4 → End 5 → reload/history 5.
+- TypeScript and optimized Next.js 16.3.0 build: **PASS**.
+
+Start/End, elapsed time, reload persistence, bounded history, X/copy architecture, checklist, Ruby, Typography, Preview, PDF, JPG, and Production integration were not reopened.

@@ -29,10 +29,10 @@ describe("11-B architectural and persistence isolation", () => {
     expect(storeSource).not.toMatch(/supabase|indexedDB|\bfetch\s*\(|manuscript|content|text:/i);
   });
 
-  it("18. the compact UI visibly distinguishes work activity from current manuscript length", () => {
+  it("20. the UI distinguishes written count from current manuscript length", () => {
     const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
     const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
-    expect(counter).toContain("今回の編集量");
+    expect(counter).toContain("今回書いた文字数");
     expect(counter).toContain("現在の原稿文字数とは別の値です");
     expect(editor).toContain('title="現在の原稿文字数"');
     expect(editor).toContain("countVisualLength(content)");

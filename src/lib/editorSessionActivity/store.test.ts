@@ -23,37 +23,63 @@ function testStore(storage = new FakeLocalStorage()) {
   };
 }
 
-describe("11-B explicit work-session lifecycle", () => {
-  it("1. idle edits do not count or create persisted state", () => {
+describe("11-B newly written character counting", () => {
+  it("idle input does not create or change a work session", () => {
     const { store, storage } = testStore();
-    store.record({ insertedCodePoints: 5, deletedCodePoints: 3 });
+    store.record({ insertedCodePoints: 5, deletedCodePoints: 0 });
     expect(store.read()).toEqual({ active: null, history: [] });
     expect(storage.getItem(WORK_SESSION_STORAGE_KEY)).toBeNull();
   });
 
-  it("2. Start creates a stable active session beginning at zero", () => {
-    const { store } = testStore();
-    expect(store.start(1_000)).toEqual({ id: "work-1", startedAt: 1_000, editingActivity: 0 });
-    expect(store.start(2_000)).toEqual({ id: "work-1", startedAt: 1_000, editingActivity: 0 });
-  });
-
-  it("3-8. active typing, deletion, replacement, IME commit, Undo, and Redo deltas all accumulate", () => {
+  it("1. typing 10 counts 10", () => {
     const { store } = testStore();
     store.start(1_000);
-    for (const delta of [
-      { insertedCodePoints: 3, deletedCodePoints: 0 },
-      { insertedCodePoints: 0, deletedCodePoints: 2 },
-      { insertedCodePoints: 5, deletedCodePoints: 3 },
-      { insertedCodePoints: 2, deletedCodePoints: 0 },
-      { insertedCodePoints: 0, deletedCodePoints: 4 },
-      { insertedCodePoints: 4, deletedCodePoints: 0 },
-    ]) {
-      store.record(delta);
-    }
-    expect(store.read().active?.editingActivity).toBe(23);
+    store.record({ insertedCodePoints: 10, deletedCodePoints: 0 });
+    expect(store.read().active?.writtenCharacterCount).toBe(10);
   });
 
-  it("9-10. End freezes the result and later idle edits cannot alter it", () => {
+  it("2. deleting after typing does not increase or decrease the written count", () => {
+    const { store } = testStore();
+    store.start(1_000);
+    store.record({ insertedCodePoints: 10, deletedCodePoints: 0 });
+    store.record({ insertedCodePoints: 0, deletedCodePoints: 10 });
+    expect(store.read().active?.writtenCharacterCount).toBe(10);
+  });
+
+  it.each([
+    ["3. Backspace", 1],
+    ["4. Delete", 1],
+    ["5. selection delete", 3],
+    ["6. Cut", 4],
+  ])("%s adds zero", (_operation, deletedCodePoints) => {
+    const { store } = testStore();
+    store.start(1_000);
+    store.record({ insertedCodePoints: 0, deletedCodePoints });
+    expect(store.read().active?.writtenCharacterCount).toBe(0);
+  });
+
+  it("7. replacing 3 characters with 5 counts only the inserted 5", () => {
+    const { store } = testStore();
+    store.start(1_000);
+    store.record({ insertedCodePoints: 5, deletedCodePoints: 3 });
+    expect(store.read().active?.writtenCharacterCount).toBe(5);
+  });
+
+  it("8. pasting 100 characters counts 100", () => {
+    const { store } = testStore();
+    store.start(1_000);
+    store.record({ insertedCodePoints: 100, deletedCodePoints: 0 });
+    expect(store.read().active?.writtenCharacterCount).toBe(100);
+  });
+
+  it("9. pasting 100 over a 20-character selection still counts only 100", () => {
+    const { store } = testStore();
+    store.start(1_000);
+    store.record({ insertedCodePoints: 100, deletedCodePoints: 20 });
+    expect(store.read().active?.writtenCharacterCount).toBe(100);
+  });
+
+  it("15. End freezes the final written count and idle mutations cannot alter it", () => {
     const { store } = testStore();
     store.start(1_000);
     store.record({ insertedCodePoints: 7, deletedCodePoints: 2 });
@@ -63,50 +89,50 @@ describe("11-B explicit work-session lifecycle", () => {
       startedAt: 1_000,
       endedAt: 61_000,
       durationMs: 60_000,
-      editingActivity: 9,
+      writtenCharacterCount: 7,
     });
-    store.record({ insertedCodePoints: 100, deletedCodePoints: 100 });
+    store.record({ insertedCodePoints: 100, deletedCodePoints: 0 });
     expect(store.read()).toEqual({ active: null, history: [completed] });
   });
 
-  it("11. a reload restores active id, start time, and aggregate activity", () => {
+  it("16. reload restores the same active written count", () => {
     const { store, storage } = testStore();
     store.start(10_000);
-    store.record({ insertedCodePoints: 8, deletedCodePoints: 1 });
+    store.record({ insertedCodePoints: 8, deletedCodePoints: 9 });
     const afterReload = createWorkSessionStore(() => storage, () => "must-not-be-used");
     expect(afterReload.read().active).toEqual({
       id: "work-1",
       startedAt: 10_000,
-      editingActivity: 9,
+      writtenCharacterCount: 8,
     });
   });
 
-  it("12. a new session starts at zero while prior history remains", () => {
+  it("17. a new session starts at zero while prior history remains", () => {
     const { store } = testStore();
     store.start(1_000);
-    store.record({ insertedCodePoints: 12, deletedCodePoints: 0 });
+    store.record({ insertedCodePoints: 12, deletedCodePoints: 8 });
     store.end(2_000);
     store.start(3_000);
-    expect(store.read().active?.editingActivity).toBe(0);
-    expect(store.read().history).toHaveLength(1);
-    expect(store.read().history[0].editingActivity).toBe(12);
+    expect(store.read().active?.writtenCharacterCount).toBe(0);
+    expect(store.read().history[0].writtenCharacterCount).toBe(12);
   });
 
-  it("13. completed history persists across a reload", () => {
+  it("18. completed history persists the final written count", () => {
     const { store, storage } = testStore();
     store.start(1_000);
-    store.record({ insertedCodePoints: 4, deletedCodePoints: 2 });
+    store.record({ insertedCodePoints: 4, deletedCodePoints: 20 });
     const completed = store.end(4_000);
     const afterReload = createWorkSessionStore(() => storage);
     expect(afterReload.read().history).toEqual([completed]);
+    expect(afterReload.read().history[0].writtenCharacterCount).toBe(4);
   });
 
-  it("14-15. history is capped at 100 and evicts the oldest record first", () => {
+  it("keeps the latest 100 records and evicts the oldest first", () => {
     const { store } = testStore();
     for (let index = 0; index < WORK_SESSION_HISTORY_LIMIT + 1; index += 1) {
       const startedAt = index * 10 + 1;
       store.start(startedAt);
-      store.record({ insertedCodePoints: index, deletedCodePoints: 0 });
+      store.record({ insertedCodePoints: index, deletedCodePoints: index });
       store.end(startedAt + 5);
     }
     const history = store.read().history;
@@ -115,7 +141,31 @@ describe("11-B explicit work-session lifecycle", () => {
     expect(history.at(-1)?.id).toBe("work-101");
   });
 
-  it("17. persistence contains metadata only and never manuscript text", () => {
+  it("defensively migrates legacy editingActivity records without losing history", () => {
+    const storage = new FakeLocalStorage();
+    storage.setItem(WORK_SESSION_STORAGE_KEY, JSON.stringify({
+      active: { id: "legacy-active", startedAt: 1_000, editingActivity: 7 },
+      history: [{
+        id: "legacy-completed",
+        startedAt: 100,
+        endedAt: 200,
+        durationMs: 100,
+        editingActivity: 9,
+      }],
+    }));
+    expect(createWorkSessionStore(() => storage).read()).toEqual({
+      active: { id: "legacy-active", startedAt: 1_000, writtenCharacterCount: 7 },
+      history: [{
+        id: "legacy-completed",
+        startedAt: 100,
+        endedAt: 200,
+        durationMs: 100,
+        writtenCharacterCount: 9,
+      }],
+    });
+  });
+
+  it("stores metadata only and never manuscript text", () => {
     const { store, storage } = testStore();
     const manuscript = "絶対に保存してはいけない原稿本文";
     store.start(1_000);
@@ -123,16 +173,8 @@ describe("11-B explicit work-session lifecycle", () => {
     store.end(2_000);
     const raw = storage.getItem(WORK_SESSION_STORAGE_KEY) as string;
     expect(raw).not.toContain(manuscript);
-    expect(JSON.parse(raw)).toEqual({
-      active: null,
-      history: [{
-        id: "work-1",
-        startedAt: 1_000,
-        editingActivity: Array.from(manuscript).length,
-        endedAt: 2_000,
-        durationMs: 1_000,
-      }],
-    });
+    expect(raw).not.toContain("editingActivity");
+    expect(JSON.parse(raw).history[0].writtenCharacterCount).toBe(Array.from(manuscript).length);
   });
 
   it("rejects corrupted persisted values without starting automatically", () => {

@@ -49,8 +49,6 @@ import {
 import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
-import { measureEditorActivityOperation } from "@/lib/editorSessionActivity";
-import { PAGE_BREAK_MARKER } from "@/lib/tategaki";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -535,16 +533,8 @@ export default function TategakiEditor({
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
 
-    // Generated book-part prose is a real manuscript insertion. Only a
-    // dedicated UI's generated structural page-break token is excluded.
-    recordActivity(
-      measureEditorActivityOperation({
-        kind: "explicit-replacements",
-        replacements: [
-          { deletedText: "", insertedText: textToInsert.replaceAll(PAGE_BREAK_MARKER, "") },
-        ],
-      })
-    );
+    // Generated book-part prose is programmatic and excluded from the
+    // Human-written character count together with its structural markers.
 
     // 扉・目次・奥付は本文と異なりノンブルも柱も表示しないのが慣例なので、
     // 挿入した瞬間にそのパーツが占めるページへ自動でノンブル非表示・柱非表示
@@ -788,12 +778,7 @@ export default function TategakiEditor({
       {isSearchOpen && (
         <SearchReplaceModal
           content={content}
-          onReplace={(next, replacements) => {
-            if (next !== content) {
-              recordActivity(
-                measureEditorActivityOperation({ kind: "explicit-replacements", replacements })
-              );
-            }
+          onReplace={(next) => {
             setContent(next);
             setIsSearchOpen(false);
           }}

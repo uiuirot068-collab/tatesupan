@@ -8,7 +8,7 @@ type LocalStorageLike = Pick<Storage, "getItem" | "setItem">;
 export interface ActiveWorkSession {
   id: string;
   startedAt: number;
-  editingActivity: number;
+  writtenCharacterCount: number;
 }
 
 export interface CompletedWorkSession extends ActiveWorkSession {
@@ -45,17 +45,21 @@ function isSessionId(value: unknown): value is string {
 function parseActive(value: unknown): ActiveWorkSession | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<ActiveWorkSession>;
+  const legacyCandidate = value as { editingActivity?: unknown };
+  const writtenCharacterCount = isNonNegativeSafeInteger(candidate.writtenCharacterCount)
+    ? candidate.writtenCharacterCount
+    : legacyCandidate.editingActivity;
   if (
     !isSessionId(candidate.id) ||
     !isNonNegativeSafeInteger(candidate.startedAt) ||
-    !isNonNegativeSafeInteger(candidate.editingActivity)
+    !isNonNegativeSafeInteger(writtenCharacterCount)
   ) {
     return null;
   }
   return {
     id: candidate.id,
     startedAt: candidate.startedAt,
-    editingActivity: candidate.editingActivity,
+    writtenCharacterCount,
   };
 }
 
@@ -167,21 +171,21 @@ export function createWorkSessionStore(
     const active = {
       id: createId(startedAt),
       startedAt,
-      editingActivity: 0,
+      writtenCharacterCount: 0,
     };
     publish({ active, history: current.history });
     return active;
   }
 
   function record(delta: ActivityDelta): void {
-    const addedActivity = delta.insertedCodePoints + delta.deletedCodePoints;
-    if (addedActivity <= 0) return;
+    const writtenCharacters = delta.insertedCodePoints;
+    if (writtenCharacters <= 0) return;
     const current = read();
     if (!current.active) return;
     publish({
       active: {
         ...current.active,
-        editingActivity: current.active.editingActivity + addedActivity,
+        writtenCharacterCount: current.active.writtenCharacterCount + writtenCharacters,
       },
       history: current.history,
     });

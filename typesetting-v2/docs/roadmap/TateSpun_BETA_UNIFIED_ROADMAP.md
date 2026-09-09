@@ -44,7 +44,7 @@ Historical docs remain evidence, but stale statuses are superseded by later veri
 - Writing Check β 2.0 Phase 1: COMPLETE
 - Writing Check β 2.0 Phase 2: COMPLETE
 - Writing Check β 2.0 Phase 3: COMPLETE / Human QA PASS
-- 11-B explicit work-session activity tracker: IMPLEMENTED / focused Human QA pending
+- 11-B explicit work-session written-character tracker: IMPLEMENTED / final focused Human QA pending
 
 - Ordinary Glyph Parity: COMPLETE / Human E2E PASS
 - Yakumono Parity: COMPLETE / Human E2E PASS
@@ -95,7 +95,7 @@ Historical sequencing recommends non-destructive/flag-gated rollout.
 ### GATE-F — 11-B work-session semantics
 Status: RESOLVED BY CORRECTED PRODUCT SPEC (2026-09-09) / IMPLEMENTED / HUMAN QA PENDING
 
-Human QA superseded the earlier automatic browser-tab/session measurement unit. Its mutation accounting was correct, but the product contract was not the intended one. The frozen unit is now an explicit Human-started `作業タイム`: idle edits add zero; Start begins at zero; active edits use the existing Unicode code-point inserted+deleted semantics; End freezes a metadata-only result; active state and the latest 100 completed records persist locally. No manuscript text, cloud, database, or event log is stored.
+Human QA superseded both earlier product assumptions: automatic browser-tab/session measurement and inserted+deleted mutation activity. The final unit is an explicit Human-started `作業タイム` counting newly written/inserted user text only. Deletion/Cut and Undo/Redo are zero; replacement/paste-over-selection count only the inserted side; programmatic changes are zero. End freezes a metadata-only result; active state and the latest 100 completed records persist locally. No manuscript text, cloud, database, or event log is stored.
 
 ### GATE-G — 11-A β scope boundary
 Status: RESOLVED (Human decision, Phase 3 task)
@@ -235,24 +235,23 @@ Production `src/`, frozen Typography states, push, and deploy remain outside thi
 
 ---
 
-### 11-B. Explicit work-session activity tracker
+### 11-B. Explicit work-session written-character tracker
 Status: IMPLEMENTED / FOCUSED HUMAN QA PENDING (2026-09-09)
 
-- previous automatic browser-session product definition: **SUPERSEDED after Human QA**; underlying deterministic mutation accounting remains correct and is reused
+- previous automatic browser-session definition and inserted+deleted mutation-activity semantics: **SUPERSEDED after Human QA**
 - explicit `作業スタート` / `作業終了`; idle edits add zero and each new work session starts at zero
 - active-session aggregate, id, and start timestamp survive reload through `localStorage`; elapsed time derives from timestamps
-- metadata-only completed history (`id`, start/end, duration, editing activity), latest 100, oldest evicted first; no manuscript/event log/cloud/database
-- Unicode code-point `insertedCodePoints`, `deletedCodePoints`, and their positive sum `totalActivity`
-- selection-aware input accounting for typing/Delete/Cut/Paste/replacement, including paste-over-selection
+- metadata-only completed history (`id`, start/end, duration, `writtenCharacterCount`), latest 100, oldest evicted first; defensive read migration accepts prior `editingActivity`; no manuscript/event log/cloud/database
+- Unicode code-point newly inserted user text only; deletion/Cut add zero and never decrement
+- selection-aware typing/Paste/replacement counts the inserted side only, including paste-over-selection
 - IME intermediate=0, final commit exactly once, cancellation=0
-- browser and Writing Check undo/redo count their actual resulting mutation
-- explicit single/SAFE bulk Writing Check fixes and search/replace count full deleted+inserted operands
+- Undo/Redo, Writing Check fixes, search/replace, and other programmatic mutations add zero
 - direct manual ruby/token/caption text counts; automatically generated Ruby/page-break/image structure does not
 - load/import/normalization/migration/autosave/Preview/typesetting/Publication generation excluded
-- compact active display (`作業中`, `今回の編集量`, `経過時間`) remains visibly distinct from current manuscript length
-- End result contains activity/duration/start/end, exact X/copy share text, and a local `作業記録` view with X share per record
+- compact active display (`作業中`, `今回書いた文字数`, `経過時間`) remains visibly distinct from current manuscript length
+- End result contains written count/duration/start/end, exact X/copy share text, and a local `作業記録` view with X share per record
 - Editor-only implementation; static test proves no Core/Canonical/Preview/Publication dependency
-- deterministic test suite: 33/33 PASS across all 18 required cases; actual Editor browser E2E PASS; no new dependency
+- deterministic test suite: 41/41 PASS across all 20 required cases; actual Editor browser E2E PASS for type/delete/replacement/final result; no new dependency
 
 ---
 

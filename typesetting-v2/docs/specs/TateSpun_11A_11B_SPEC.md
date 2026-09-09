@@ -1,6 +1,6 @@
-# TateSpun 11-A / 11-B Specification v1.3
+# TateSpun 11-A / 11-B Specification v1.4
 Updated: 2026-09-09
-Revision reason: Human QA superseded 11-B's browser-session product definition with an explicit work-session tracker.
+Revision reason: final Human QA semantics correction: explicit work sessions count newly written/inserted text only.
 
 ## 11-A correction / recovered historical authority
 
@@ -97,41 +97,41 @@ Historical source: Master §9.2 `Session Editing Metrics`.
 
 Status: **IMPLEMENTED / HOLD FOR FOCUSED HUMAN QA (2026-09-09).**
 
-The earlier automatic browser-tab/session lifecycle was implemented correctly against its then-current contract. Human QA established that the contract itself did not match the intended product. That product definition is therefore **SUPERSEDED**, not classified as an accounting-code bug. The mutation-accounting semantics below remain valid and are reused.
+Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
 ### Purpose and unit
 
-- Measures editing **activity during an explicit Human-started work session**, not final manuscript length, net growth, browser-tab lifetime activity, or automatic all-day activity.
+- Measures **how many new text characters the Human wrote/inserted during an explicit work session**, not final manuscript length, net growth, total mutations, browser-tab lifetime activity, or automatic all-day activity.
 - Every quantity is a Unicode code-point count.
-- Insertions and deletions each add positively; replacement is the full deleted operand plus the full inserted operand.
-- `totalActivity = insertedCodePoints + deletedCodePoints`.
-- The compact Editor UI uses `作業スタート`, `作業中`, `今回の編集量`, `経過時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
+- Only newly inserted user-authored text adds positively. Deletion never subtracts, but also never adds.
+- Replacement and paste-over-selection count only the inserted side.
+- The compact Editor UI uses `作業スタート`, `作業中`, `今回書いた文字数`, `経過時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
 
 ### Counted operations
 
-- Ordinary typing, Delete, Cut, Select-All Delete, and Paste count their actual inserted/deleted code points. Paste over a selection counts both sides.
+- Ordinary typing and pasted text count their inserted code points. Paste over a selection counts only the pasted text.
 - IME composition updates/intermediate conversion count 0. Composition end counts its final committed text delta exactly once. Cancellation counts 0.
-- Undo/redo count the actual resulting manuscript mutation in the direction it occurs.
 - Directly typed ruby source and directly typed structural-token text count normally.
-- A future Ruby UI counts user-entered base/readings (including their explicit replacements) but excludes generated markup/structural transformation.
-- Explicit Writing Check `直す` and SAFE bulk fix count every applied deleted+inserted operand. Undoing such a fix counts the inverse resulting mutation.
-- Search/replace counts each actual replacement's full deleted+inserted operands.
+- A future Ruby UI may count user-entered textual fields' inserted side, while generated markup/structural transformation remains excluded.
 - User-edited textual image captions or related manuscript text count normally.
 
 ### Exclusions
 
+- Backspace, Delete, selection deletion, and Cut count 0 and never decrement the accumulated total.
+- Undo and Redo count 0 and never decrement the accumulated total.
 - Dedicated UI insertion/removal or rewriting of page-break structure counts 0.
 - Image insertion/removal and generated/rewritten image structural tokens count 0.
-- Writing Check analysis, `無視`, dictionary settings, and NG-word settings count 0.
+- Writing Check automatic fixes/replacements, analysis, `無視`, dictionary settings, and NG-word settings count 0.
+- Search/replace, generated book parts, automatic formatting, and other programmatic manuscript mutations count 0.
 - Loading/opening existing manuscripts, import, normalization, internal migrations, autosave, Preview/typesetting recomposition, and Publication/PDF/JPG generation count 0.
 
 ### Work-session lifecycle and persistence
 
 - IDLE is the default. Editing while idle does not accumulate into any work session.
 - Selecting `作業スタート` creates a new active session at 0 with a stable id and current `startedAt`. Selecting Start while already active does not replace or reset it.
-- Only actual manuscript mutations occurring while ACTIVE add to `editingActivity`. Elapsed time is derived from `startedAt`; there is no per-second persistent write or event log.
+- Only newly inserted user-authored text occurring while ACTIVE adds to `writtenCharacterCount`. Elapsed time is derived from `startedAt`; there is no per-second persistent write or event log.
 - A normal reload restores the same active id, start time, active state, and aggregate activity from `localStorage`.
-- Selecting `作業終了` stops accumulation immediately and appends one completed metadata-only record containing `id`, `startedAt`, `endedAt`, `durationMs`, and `editingActivity`.
+- Selecting `作業終了` stops accumulation immediately and appends one completed metadata-only record containing `id`, `startedAt`, `endedAt`, `durationMs`, and `writtenCharacterCount`.
 - The result shows activity, duration, start time, and end time. Later idle edits cannot change it. A later Start creates a new session at 0 while preserving completed history.
 - Completed history is local-only, capped at the latest 100 records, and evicts the oldest first. No cloud synchronization, analytics, database, manuscript text, or mutation event log is used.
 - No pause state is introduced in this beta iteration.
@@ -139,14 +139,14 @@ The earlier automatic browser-tab/session lifecycle was implemented correctly ag
 ### Share contract
 
 - Result and history records expose `Xでシェア`; the result also exposes `テキストをコピー`.
-- The canonical text is exactly `今日は{editingActivity}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`, with the activity number grouped for Japanese display (for example `4,823`).
+- The canonical text is exactly `今日は{writtenCharacterCount}文字がんばりました！\n#TateSpun\nhttps://spuntales.net/tatespun/`, with the written count grouped for Japanese display (for example `4,823`).
 - X uses the ordinary intent flow with that text prefilled. Share and history data never contain manuscript text.
 
 ### Implementation boundary and verification
 
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
-- 33 deterministic 11-B tests cover mutation semantics plus all 18 required work-session/storage/history/share/isolation cases. The actual `/editor?demo=1` browser E2E covers idle → Start at 0 → type/increase → End/result → reload/history. No new dependency was introduced.
+- 41 deterministic 11-B tests cover all 20 required written-count, lifecycle, storage, share, and isolation cases. The actual `/editor?demo=1` browser E2E covers Start at 0 → type +1 → delete +0 → replace two selected characters with four +4 → End at 5 → reload/history at 5. No new dependency was introduced.
 
 ---
 
