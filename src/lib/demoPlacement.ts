@@ -13,6 +13,7 @@ export interface DemoViewport {
 }
 
 export type DemoPlacementSide = "above" | "below" | "floating";
+export type DemoPlacementPreference = "auto" | "lower-safe";
 
 export interface DemoCardPlacement {
   top: number;
@@ -31,12 +32,14 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Places a guided-demo card relative to the visible target without assuming
  * which page or control owns it. Bottom targets prefer an above placement;
- * top targets prefer below. The fallback is always viewport-contained.
+ * top targets prefer below. `lower-safe` reserves a bottom-aligned guide for
+ * an upper target such as Export, while retaining the target-safe fallback.
  */
 export function computeDemoCardPlacement(
   target: DemoRect | null,
   card: { width: number; height: number },
-  viewport: DemoViewport
+  viewport: DemoViewport,
+  preference: DemoPlacementPreference = "auto"
 ): DemoCardPlacement {
   const maxHeight = Math.max(0, viewport.height - EDGE_MARGIN * 2);
   const visibleCardHeight = Math.min(card.height, maxHeight);
@@ -51,6 +54,18 @@ export function computeDemoCardPlacement(
       EDGE_MARGIN,
       viewport.width - card.width - EDGE_MARGIN
     );
+
+  if (target && preference === "lower-safe") {
+    const lowerTop = viewport.height - visibleCardHeight - EDGE_MARGIN;
+    if (lowerTop >= target.bottom + TARGET_GAP) {
+      return {
+        top: lowerTop,
+        left,
+        maxHeight,
+        side: "below",
+      };
+    }
+  }
 
   if (target) {
     const targetCenter = (target.top + target.bottom) / 2;

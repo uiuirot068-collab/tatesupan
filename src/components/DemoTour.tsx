@@ -53,7 +53,8 @@ export default function DemoTour({
     setPlacement(computeDemoCardPlacement(
       targetRect,
       { width: cardRect.width, height: card.scrollHeight },
-      { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight }
+      { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight },
+      step.target === "export" ? "lower-safe" : "auto"
     ));
   }, [step.target]);
 

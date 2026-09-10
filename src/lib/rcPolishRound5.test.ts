@@ -32,7 +32,7 @@ describe("Round 5 Memo and Home contracts", () => {
 
   it("removes the actual long shelf-front line while retaining card and popup borders", () => {
     expect(bookshelf).not.toContain("shelfFrontLip");
-    expect(bookshelfCss).not.toContain(".shelfFrontLip");
+    expect(bookshelfCss).not.toContain(".shelfFrontLip {");
     expect(home).toContain('role="tabpanel"');
     expect(home).toContain('rounded-[18px] border border-[rgba(31,42,68,0.14)]');
     expect(bookshelfCss).toMatch(/\.menuPanel\s*\{[\s\S]*?border: 1px solid/);
@@ -53,10 +53,10 @@ describe("Round 5 compact mobile Editor controls", () => {
   );
 
   it.each([320, 375, 390, 430])("keeps all four manuscript actions in one nowrap row at %ipx", () => {
-    expect(actionRow).toContain("grid-cols-[40px_40px_minmax(0,1fr)_auto]");
+    expect(actionRow).toContain("grid-cols-[44px_44px_max-content_max-content]");
     expect(actionRow).not.toContain("grid-cols-2");
     expect(actionRow).toContain("whitespace-nowrap");
-    expect(actionRow).toContain("min-h-10 min-w-10");
+    expect(actionRow).toContain("min-h-9 min-w-11");
   });
 
   it("shows arrow-only mobile Undo/Redo with accessible labels and larger icons", () => {

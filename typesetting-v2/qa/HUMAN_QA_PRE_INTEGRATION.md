@@ -35,7 +35,12 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Mobile Focus hides Writing Check, Ruby/TCY, and work-session/status surfaces and restores them on exit; `本文を書く` disappears without leaving space.
 - Demo Options/Memo/Help no-auto-open behavior, target highlighting, closable manually-opened drawers, and reachable mobile controls.
 - JPG empty selection exports all pages; explicit selection exports selected pages in canonical order.
-- Rollback through `V2_BETA → LEGACY` preserves the same work/title/text. Only the final return to `V2_BETA` remains.
+- Memo opens and closes from the same entry without losing draft/confirmed values.
+- Returning Home has no unwanted full-width shelf separator; title/delete popup remains readable.
+- Mobile primary/secondary controls stay on one row; Focus preserves core editing actions.
+- Demo Options/Focus content and target-only behavior; no Settings/Options/Memo/Help side effects.
+- Web JPG footer branding is sharp, single-painted, and keeps the source ratio.
+- Rollback `V2_BETA → LEGACY → V2_BETA` preserves the same work/title/text.
 
 ## Automated RC evidence
 
@@ -44,40 +49,21 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Round 3 deterministic coverage includes running-head all/selected parity scopes, replacement/outside-scope safety, JPG empty-selection/all and selected canonical order, publication `max(4, body - 3)` furniture, Web-only `30 / 15 / 20`, work-scoped Memo draft persistence/protection, visible Demo header wiring, and the branding asset's intrinsic `384:341` ratio.
 - Round 4 deterministic coverage includes explicit Settings rows, margin-mode defaults without overwriting stored modes, manual folio/header values below 4pt through persistence and the real PaintPlan, Memo placement inside the left Editor pane, mobile Focus visibility, state-based mobile writing action visibility, zero-work Home structure, and Demo transitions with no real UI open-state side effects.
 - Round 5 deterministic coverage includes Memo open/close from the same entry, removal of the actual shelf-front overlay line, one-row mobile action and secondary-navigation contracts at 320/375/390/430px, Focus preservation of core edit actions, target-preserving Demo placement, Options/Focus guide steps with array-derived totals, and one-paint Web JPG branding geometry from the original 384×341 source. The focused artifact is `typesetting-v2/qa/visual/rc-polish-round5/web-jpg-branding-single-paint.png`.
+- Round 6 deterministic coverage adds per-book shelf foreground layering, popup precedence, a shared spine/badge motion wrapper, the 36px mobile primary-action row with content-width tracks at 320/375/390/430px, and lower-safe target-preserving placement for Demo Step 9. Export remains guide-only.
 
 ## Remaining Human checks only
 
-### 1. Memo toggle
+### 1. Bookshelf physical layering and badge motion
 
-- Click `▶メモ`, then click the same entry again when it reads `▼メモ`. Expected PASS: it opens and closes inline; draft and confirmed values survive the toggle.
+- On returning Home, hover a book carrying the beginner/cloud marks, then open its title/delete popup. Expected PASS: the local shelf front edge overlaps only the foot of that book; the book remains in front of the shelf background; both marks rise with the book; the popup remains above every shelf/book layer; no full-width separator appears.
 
-### 2. Returning Home separator
+### 2. Mobile primary toolbar height
 
-- Open a work-item title/delete popup. Expected PASS: the former shelf-front overlay line no longer crosses the popup; the Bookshelf card and popup borders remain.
+- At 320/375/390/430px confirm `↶ | ↷ | 改ページ挿入 | 置換` is visibly shorter, remains on one line without horizontal overflow, and has comfortable 44px-wide arrow targets. Page Break uses only its readable content width.
 
-### 3. Mobile compact action toolbar
+### 3. Demo Step 9 placement
 
-- At 320/375/390/430px confirm `↶ | ↷ | 改ページ挿入 | 置換` stays on one row without page overflow. Arrow buttons retain comfortable tap targets; desktop keeps full Undo/Redo labels.
-
-### 4. Mobile Focus core actions
-
-- Enter Focus mode. Expected PASS: Undo, Redo, Page Break, and Replace remain reachable while Writing Check, Ruby/TCY, and work-session/status surfaces stay hidden.
-
-### 5. Mobile four-entry secondary navigation
-
-- At 320/375/390/430px confirm `設定 / オプション / メモ / ヘルプ` stays on one row and `オプション` does not wrap or create horizontal overflow.
-
-### 6. New Demo content and placement
-
-- On mobile and desktop, check the new Options step, Help placement, and Focus step. Expected PASS: Help uses safe target-preserving placement; totals are correct; steps highlight only and never open/toggle real UI or persistent state.
-
-### 7. Web JPG cat visual
-
-- Export a Web JPG and compare the footer cat with `typesetting-v2/qa/visual/rc-polish-round5/web-jpg-branding-single-paint.png`. Expected PASS: one sharp image, no bleed/double silhouette, original `384:341` ratio retained. Automated evidence proves one direct high-quality resample; final sharpness remains Human visual QA.
-
-### 8. Final rollback return only
-
-- Without clearing browser data, restart with `NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'`, open the same saved Editor URL used for the already-passed LEGACY check, and confirm the same work/title/text remains. No other rollback step needs repetition.
+- On mobile and desktop, reach Step 9 with Preview visible. Expected PASS: the Export target and guide are both readable, the guide prefers the safe lower area, `次へ` and `デモを終了` remain reachable, and Export does not open automatically.
 
 ## Human result
 

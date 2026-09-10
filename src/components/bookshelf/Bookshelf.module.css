@@ -91,6 +91,14 @@
   --book-status-band-color: #e8e1d3;
 }
 
+.bookMotion {
+  position: relative;
+  z-index: 2;
+  width: var(--book-width);
+  height: 161.3125px;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
 .bookButton {
   position: relative;
   display: block;
@@ -102,7 +110,6 @@
   background: #efe9dc;
   color: #26221d;
   cursor: pointer;
-  transition: transform 180ms ease, filter 180ms ease;
 }
 
 .bookButton:focus-visible {
@@ -169,6 +176,23 @@
 
 :global([data-theme="dark"]) .bookItem {
   --book-status-band-color: #2b2620;
+}
+
+/* A short, per-book foreground edge supplies the physical overlap without
+   bringing back the removed shelf-wide line or crossing an open popup. */
+.bookShelfForeground {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3.544px;
+  background: #000;
+  pointer-events: none;
+}
+
+:global([data-theme="dark"]) .bookShelfForeground {
+  background: #a0a0a0;
 }
 
 /* TSP-LOOP-007: overlay that mirrors the open button's box, so status icons
@@ -350,7 +374,7 @@
 
 .bookMenu {
   position: absolute;
-  z-index: 20;
+  z-index: 30;
   top: -5px;
   right: -5px;
 }
@@ -575,7 +599,8 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bookButton:hover {
+  .bookMotion:hover,
+  .bookMotion:focus-within {
     transform: translateY(-8px);
   }
 }
@@ -668,11 +693,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bookButton {
+  .bookMotion {
     transition: none;
   }
 
-  .bookButton:hover {
+  .bookMotion:hover,
+  .bookMotion:focus-within {
     transform: none;
   }
 }

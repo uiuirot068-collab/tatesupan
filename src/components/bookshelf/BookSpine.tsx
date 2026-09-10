@@ -185,52 +185,55 @@ export function BookSpine({
 
   return (
     <article className={styles.bookItem} style={colorStyle}>
-      <button
-        type="button"
-        className={styles.bookButton}
-        onClick={onOpen}
-        title={fullTitle}
-        aria-label={`「${fullTitle}」を開く${statusDescription ? `。${statusDescription}` : ""}`}
-      >
-        {bookArtwork ? (
-          <span
-            className={styles.bookSvg}
-            aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: bookArtwork }}
-          />
-        ) : (
-          <span className={`${styles.bookSvg} ${styles.bookSvgLoading}`} aria-hidden="true" />
-        )}
-        <span className={styles.bookTitle} aria-hidden="true">
-          <span className={styles.bookTitleText}>{visibleTitle}</span>
-        </span>
-      </button>
-
-      {/* Status icons live OUTSIDE the open button so a tap on the ⚠️ never
-          opens the work (TSP-LOOP-007 FINAL §4). Decorative icons keep
-          pointer-events:none; the warning gets its own real <button>. */}
-      {visibleStatusIcons.length > 0 && (
-        <div className={styles.spineStatusLayer}>
-          <SpineStatusIcons statuses={visibleStatusIcons} />
-          {cloudImageWarningText && (
-            <button
-              type="button"
-              className={styles.spineWarningButton}
-              aria-label={`クラウド画像の状態: ${cloudImageWarningText}`}
-              title={cloudImageWarningText}
-              aria-expanded={isMenuOpen}
-              aria-controls={menuId}
-              aria-haspopup="dialog"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsEditingTitle(false);
-                setTitleDraft(title);
-                onToggleMenu();
-              }}
+      <div className={styles.bookMotion}>
+        <button
+          type="button"
+          className={styles.bookButton}
+          onClick={onOpen}
+          title={fullTitle}
+          aria-label={`「${fullTitle}」を開く${statusDescription ? `。${statusDescription}` : ""}`}
+        >
+          {bookArtwork ? (
+            <span
+              className={styles.bookSvg}
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: bookArtwork }}
             />
+          ) : (
+            <span className={`${styles.bookSvg} ${styles.bookSvgLoading}`} aria-hidden="true" />
           )}
-        </div>
-      )}
+          <span className={styles.bookTitle} aria-hidden="true">
+            <span className={styles.bookTitleText}>{visibleTitle}</span>
+          </span>
+        </button>
+
+        {/* Status icons remain outside the open button, but share the spine's
+            motion wrapper so every badge follows the same hover/focus lift. */}
+        {visibleStatusIcons.length > 0 && (
+          <div className={styles.spineStatusLayer}>
+            <SpineStatusIcons statuses={visibleStatusIcons} />
+            {cloudImageWarningText && (
+              <button
+                type="button"
+                className={styles.spineWarningButton}
+                aria-label={`クラウド画像の状態: ${cloudImageWarningText}`}
+                title={cloudImageWarningText}
+                aria-expanded={isMenuOpen}
+                aria-controls={menuId}
+                aria-haspopup="dialog"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsEditingTitle(false);
+                  setTitleDraft(title);
+                  onToggleMenu();
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <span className={styles.bookShelfForeground} aria-hidden="true" />
 
       {showMenu && (
         <div className={styles.bookMenu} ref={menuRootRef}>

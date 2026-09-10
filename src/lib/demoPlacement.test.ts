@@ -23,6 +23,19 @@ describe("responsive demo card placement", () => {
     expect(placement.top).toBeGreaterThanOrEqual(92);
   });
 
+  it("bottom-aligns the export guide while leaving its upper target visible", () => {
+    const placement = computeDemoCardPlacement(rect(120, 160), card, viewport, "lower-safe");
+    expect(placement.side).toBe("below");
+    expect(placement.top).toBe(612);
+    expect(placement.top).toBeGreaterThanOrEqual(172);
+  });
+
+  it("falls back to the target-safe side when a lower export guide cannot fit", () => {
+    const placement = computeDemoCardPlacement(rect(720, 760), card, viewport, "lower-safe");
+    expect(placement.side).toBe("above");
+    expect(placement.top + card.height).toBeLessThanOrEqual(708);
+  });
+
   it("keeps an oversized card on the roomier target side with fixed controls inside the viewport", () => {
     const oversized = computeDemoCardPlacement(rect(390, 450), { width: 366, height: 900 }, viewport);
     expect(oversized.side).toBe("below");

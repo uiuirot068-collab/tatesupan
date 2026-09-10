@@ -294,7 +294,7 @@ export default function EditorPane({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
-      <div className="flex flex-none flex-col gap-2 border-b border-ink/10 px-2 py-2 md:px-4 md:py-3">
+      <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 px-2 py-1.5 md:gap-2 md:px-4 md:py-3">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
@@ -302,7 +302,7 @@ export default function EditorPane({
           data-demo-target="title"
           className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className="grid min-w-0 grid-cols-[40px_40px_minmax(0,1fr)_auto] items-stretch gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
+        <div data-editor-action-row="" className="grid min-w-0 grid-cols-[44px_44px_max-content_max-content] items-stretch justify-center gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
           <button
             type="button"
             data-editor-action="undo"
@@ -311,7 +311,7 @@ export default function EditorPane({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
             <span aria-hidden="true" className="text-xl leading-none md:text-xs">↶</span>
             <span className="hidden md:inline">元に戻す</span>
@@ -324,7 +324,7 @@ export default function EditorPane({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
             <span aria-hidden="true" className="text-xl leading-none md:text-xs">↷</span>
             <span className="hidden md:inline">やり直す</span>
@@ -334,7 +334,7 @@ export default function EditorPane({
             data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
-            className="min-h-10 min-w-0 whitespace-nowrap rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3"
+            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
           >
             改ページ挿入
           </button>
@@ -342,7 +342,7 @@ export default function EditorPane({
             type="button"
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
-            className="min-h-10 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3"
+            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
           >
             置換
           </button>
