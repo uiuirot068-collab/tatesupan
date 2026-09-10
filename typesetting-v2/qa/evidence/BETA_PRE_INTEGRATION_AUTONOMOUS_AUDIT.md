@@ -217,4 +217,18 @@ Focused automated verification:
 - Targeted ESLint for every changed source/test file except `PreviewPane.tsx`: **PASS**. Including the whole pre-existing `PreviewPane.tsx` reports seven existing `react-hooks/refs` findings at lines 114–142 in its unchanged callback helpers; the export-pause edit is outside those lines.
 - Direct optimized Next.js 16.3.0 build: **PASS**. The project `prebuild` environment gate remains separate and was not bypassed with invented Supabase values.
 
-The current Human packet contains only the 13 new remaining checks. Top/Hero implementation, Browser/Production PDF architecture, bleed/trim decision, TXT I/O, broad Production integration, Production real-manuscript E2E, RC, release approval, push, and deploy remain open/not authorized.
+At that checkpoint, the Human packet contained only the 13 then-new remaining checks. Top/Hero implementation, Browser/Production PDF architecture, bleed/trim decision, TXT I/O, broad Production integration, Production real-manuscript E2E, RC, release approval, push, and deploy remained open/not authorized. The next section records the superseding Human PASS and current packet.
+
+## Beta decision preparation and mobile Demo viewport fit
+
+Date: 2026-09-10
+
+The previous 13-item final content/UX packet subsequently received Human PASS. Demo work-session/checklist content, Help TOC/navigation/narrow behavior, TOC-dialog alignment, and export Esc pause/resume/cancel semantics are closed and are not reopened.
+
+The only new visual change is a narrow, Demo-only `100dvh` shell. It suppresses page-level scrolling and the duplicate full Header during `demo=1`, while manuscript, Preview, Settings, and the fixed instruction card retain bounded internal scrolling. The normal mobile Editor keeps its existing document-scroll behavior and `md+` keeps its existing viewport shell. Existing target preparation still calls `scrollIntoView` and recomputes card placement after the target becomes visible. Status: **IMPLEMENTED / HUMAN QA PENDING**; the canonical Human packet now contains only this focused check.
+
+Safe TXT preparation adds a strict UTF-8 encode/decode boundary, explicit no-default BOM/newline profiles, local file-read/download helpers, safe title-derived `.txt` naming, defensive Japanese errors, opaque existing-token preservation, and no-network tests. No TXT UI or unresolved Product default was introduced.
+
+The PDF feasibility spike produced a browser bundle and generated a fontless one-page PDF with `Buffer` removed from the runtime. The real-font path failed exactly at `Buffer.from`; the current static `output: "export"` configuration also rules out a Next Route Handler without changing deployment architecture. Detailed PDF, bleed/TXT/rollout options and the actual Production Integration map are recorded in `BETA_DECISION_PREP_AUDIT.md`.
+
+Final verification at this checkpoint: the complete pre-integration UX suite (Demo, TXT, Help, and cancellation) **25/25 PASS**; TypeScript **PASS**; direct optimized Next.js 16.3.0 static build **PASS**. Targeted changed-code ESLint **PASS** with the two pre-existing `TategakiEditor.tsx` effect rules explicitly disabled; an unfiltered run reports only those unchanged findings at lines 248/407 plus the existing dependency warning at 423 and the expected ignored-CSS warning. Typography/Publication visual QA was not reopened.
