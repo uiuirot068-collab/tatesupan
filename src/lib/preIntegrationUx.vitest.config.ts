@@ -13,6 +13,7 @@ export default defineConfig({
       "src/lib/demoPlacement.test.ts",
       "src/lib/exportCancellation.test.ts",
       "src/lib/helpTableOfContents.test.ts",
+      "src/lib/txtTransfer.test.ts",
       "src/utils/exportCancellation.integration.test.ts",
     ],
   },
