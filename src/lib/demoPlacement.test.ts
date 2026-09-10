@@ -58,4 +58,20 @@ describe("responsive demo card placement", () => {
     expect(guide).toContain("このブラウザに保存");
     expect(guide).toContain("入稿ミスを防ぎます");
   });
+
+  it("contains only the narrow guided Demo in one dynamic viewport", () => {
+    const editor = readFileSync(join(__dirname, "..", "components", "TategakiEditor.tsx"), "utf8");
+    const pane = readFileSync(join(__dirname, "..", "components", "EditorPane.tsx"), "utf8");
+    const css = readFileSync(join(__dirname, "..", "app", "globals.css"), "utf8");
+
+    expect(editor).toContain('data-demo-mode={demoMode ? "" : undefined}');
+    expect(editor).toContain('demoMode\n          ? "h-[100dvh] min-h-0');
+    expect(editor).toContain('guidedViewport={demoMode}');
+    expect(pane).toContain('guidedViewport ? "max-md:flex-1" : "max-md:h-[62dvh]"');
+    expect(css).toContain("[data-editor-shell][data-demo-mode]");
+    expect(css).toContain("height: 100dvh");
+    expect(css).toContain("overflow: hidden !important");
+    expect(css).toContain("Normal mobile");
+    expect(css).toContain("Editor keeps the document-scroll model above");
+  });
 });

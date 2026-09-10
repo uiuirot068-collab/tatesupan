@@ -124,6 +124,19 @@ body:has([data-guide-page]) {
   body:has([data-editor-shell]) {
     overflow-y: visible !important;
   }
+
+  /* The guided Demo is intentionally one dynamic viewport. Normal mobile
+     Editor keeps the document-scroll model above; only `demo=1` opts into
+     this fixed shell, whose manuscript/preview/settings surfaces scroll
+     internally. `dvh` follows the mobile browser toolbar instead of clipping
+     against a stale 100vh measurement. */
+  html:has([data-editor-shell][data-demo-mode]),
+  body:has([data-editor-shell][data-demo-mode]) {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
 }
 
 body {

@@ -87,6 +87,8 @@ interface EditorPaneProps {
    * desktop / tablet-wide layout is unaffected.
    */
   focusMode?: boolean;
+  /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
+  guidedViewport?: boolean;
 }
 
 export default function EditorPane({
@@ -110,6 +112,7 @@ export default function EditorPane({
   onCursorIndexChange,
   selectedPageNumbers,
   focusMode = false,
+  guidedViewport = false,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
@@ -414,7 +417,7 @@ export default function EditorPane({
           the scrolling document (TSP-022 gave it more of the viewport now
           that the settings strip is a separate workspace); desktop: flex-1
           fills the pane. */}
-      <div className="relative min-h-0 max-md:h-[62dvh] md:flex-1">
+      <div className={`relative min-h-0 ${guidedViewport ? "max-md:flex-1" : "max-md:h-[62dvh]"} md:flex-1`}>
         {writingCheckEnabled && (
           <WritingCheckOverlay
             textareaRef={textareaRef}

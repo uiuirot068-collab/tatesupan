@@ -573,7 +573,12 @@ export default function TategakiEditor({
     // viewport-locked, internally-scrolled workspace unchanged.
     <div
       data-editor-shell
-      className="box-border flex w-full min-h-[100dvh] flex-col gap-3 bg-canvas px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:h-screen md:w-screen md:gap-6 md:overflow-hidden md:pl-8 md:pr-10 md:pt-6 md:pb-10"
+      data-demo-mode={demoMode ? "" : undefined}
+      className={`box-border flex w-full flex-col bg-canvas md:h-screen md:w-screen md:gap-6 md:overflow-hidden md:pl-8 md:pr-10 md:pt-6 md:pb-10 ${
+        demoMode
+          ? "h-[100dvh] min-h-0 gap-2 overflow-hidden px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:min-h-[100dvh]"
+          : "min-h-[100dvh] gap-3 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+5rem)]"
+      }`}
     >
       {/* Focus mode collapses the full header on narrow viewports only; at md+
           the wrapper is `display:contents`, so the header lays out exactly as
@@ -581,7 +586,7 @@ export default function TategakiEditor({
           keeps only identity + account / theme / 保存作品一覧 — its 一覧 link,
           save button and ？ (all duplicated by the sticky MobileEditorNav) are
           `md+` only, so the phone header stops being a tall wrapped block. */}
-      <div className={focusMode ? "hidden md:contents" : "contents"}>
+      <div className={focusMode || demoMode ? "hidden md:contents" : "contents"}>
         <Header
           onSave={isSampleDocument ? undefined : handleSave}
           onSelectProject={isSampleDocument ? undefined : handleSelectProject}
@@ -651,7 +656,9 @@ export default function TategakiEditor({
         // scrolls. Editor / Preview are mutually exclusive here (mobileView).
         // Wide (md+): unchanged — side-by-side, viewport-locked, panes scroll
         // internally.
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6"
+        className={`flex min-h-0 min-w-0 flex-1 flex-col md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6 ${
+          demoMode ? "gap-2 overflow-hidden" : "gap-3"
+        }`}
       >
         <section
           id="tsp-manuscript"
@@ -665,7 +672,7 @@ export default function TategakiEditor({
           // EditorPane). Hidden whenever the phone is showing another
           // workspace (プレビュー or 設定). Wide: md overrides restore the
           // fitted, viewport-locked pane unchanged.
-          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${demoMode ? "max-md:h-full max-md:min-h-0" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             title={title}
@@ -688,6 +695,7 @@ export default function TategakiEditor({
             onCursorIndexChange={setCursorIndex}
             selectedPageNumbers={selectedPageNumbers}
             focusMode={focusMode}
+            guidedViewport={demoMode}
           />
         </section>
 
@@ -716,7 +724,7 @@ export default function TategakiEditor({
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileView === "preview" ? "flex h-[calc(100dvh-9rem)] shrink-0 flex-col" : "max-md:hidden"}`}
+          } ${mobileView === "preview" ? `flex shrink-0 flex-col ${demoMode ? "h-full" : "h-[calc(100dvh-9rem)]"}` : "max-md:hidden"}`}
         >
           <PreviewPane
             content={content}
@@ -758,9 +766,9 @@ export default function TategakiEditor({
         <section
           id="tsp-settings-view"
           aria-label="設定"
-          className={`scroll-mt-28 overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:hidden ${
+          className={`scroll-mt-28 rounded-2xl border border-ink/10 bg-base shadow-lg md:hidden ${demoMode ? "min-h-0 overflow-y-auto" : "overflow-hidden"} ${
             mobileView === "settings" ? "" : "hidden"
-          }`}
+          } ${demoMode && mobileView === "settings" ? "h-full" : ""}`}
         >
           <PageSettingsPanel
             settings={settings}
