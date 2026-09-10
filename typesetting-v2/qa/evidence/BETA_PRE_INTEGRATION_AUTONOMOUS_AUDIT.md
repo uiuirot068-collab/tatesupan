@@ -1,5 +1,7 @@
 # Beta pre-integration autonomous audit
 
+> Superseded for the authorized Production Integration MASTER by `BETA_RC_BRANCH_AUDIT.md`. This file remains baseline evidence; its former decision and integration gates are historical status.
+
 Date: 2026-09-09
 
 Scope: Human-decision-free work allowed entirely inside `typesetting-v2/`. Production `src/`, push, deploy, and live routing were excluded by the run contract.

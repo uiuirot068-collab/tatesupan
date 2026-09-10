@@ -1,5 +1,7 @@
 # TateSpun β decision-preparation audit
 
+> Decision result (2026-09-10): **PDF A / Bleed A / TXT A / Rollout B APPROVED and branch-integrated.** Implementation evidence now lives in `BETA_RC_BRANCH_AUDIT.md`; the option analysis below remains historical rationale.
+
 Date: 2026-09-10
 
 Baseline: `12d8c31`

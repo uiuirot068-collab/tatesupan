@@ -2,8 +2,8 @@
 
 - Updated: 2026-09-10
 - Decision-prep baseline HEAD: `12d8c312727c2b414f811ccb40398b274fe39454`
-- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / HUMAN DECISIONS PENDING**
-- Production integration: **AUDITED / PARTIAL BRANCH FOUNDATIONS PRESENT; FULL MASTER NOT STARTED**
+- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / APPROVED DECISIONS RECORDED / HUMAN BRANCH QA PENDING**
+- Production integration: **BRANCH-INTEGRATED; RELEASE ACTION NOT AUTHORIZED**
 
 ## 1. Authority and status model
 
@@ -16,7 +16,7 @@ Every genuine remaining item has exactly one primary disposition:
 - **C — BETA OPTIONAL IF TIME**
 - **D — POST-BETA**
 - **E — REJECTED / NO LONGER NEEDED**
-- **F — NEEDS HUMAN PRODUCT DECISION**
+- **F — NEEDS HUMAN PRODUCT DECISION** (none currently open for the four β architecture choices)
 
 An F item may be release-blocking. That dependency is stated explicitly; it does not give the item a second primary disposition.
 
@@ -40,11 +40,11 @@ The first viewport must make this journey immediately legible:
 
 > 原稿を持ち込む → 本の形で確認する → PDF / JPGで持ち帰る → 入稿前に確認する
 
-Top-page implementation is not part of this documentation checkpoint.
+Top-page implementation is **BRANCH-INTEGRATED / HUMAN QA PENDING**.
 
 ### β demo requirement
 
-The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, introduce explicit work-session tracking, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement, the concise work-session step, work-history discoverability, and 完成前マイチェックリスト guidance are **HUMAN PASS**. A narrow-only `100dvh` guided shell now removes the overall document-scroll burden while preserving internal Editor/Preview/Settings/card scrolling; status is **IMPLEMENTED / HUMAN QA PENDING**. Normal mobile Editor and desktop behavior remain separately scoped. The larger Hero implementation remains roadmap-only until Production integration is authorized.
+The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, introduce explicit work-session tracking, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement, the concise work-session step, work-history discoverability, and 完成前マイチェックリスト guidance are **HUMAN PASS**. A narrow-only `100dvh` guided shell now removes the overall document-scroll burden while preserving internal Editor/Preview/Settings/card scrolling; status is **IMPLEMENTED / HUMAN QA PENDING**. Normal mobile Editor and desktop behavior remain separately scoped. The frozen Hero is now **BRANCH-INTEGRATED / HUMAN QA PENDING**.
 
 ## 3. Closed state — do not reopen
 
@@ -70,13 +70,13 @@ Primary disposition A:
 
 | Item | Current state | Exit condition |
 | --- | --- | --- |
-| Production integration | AUDITED; full MASTER NOT_STARTED | The ordered integration in §11 is complete without reopening passed typesetting. |
-| Browser/Production PDF execution | FEASIBILITY AUDITED; Human architecture decision required | Real Production flow downloads the same Publication PaintPlan with the approved privacy/runtime boundary and no accidental Node-only leakage. |
-| Real-manuscript Production E2E | NOT_STARTED | A Human-authored manuscript passes the flow in §12, including reload, images, PDF/JPG, TXT, and preflight. |
-| Release Candidate gate | NOT_STARTED | Required tests, build, accessibility/responsive checks, rollback evidence, and Human QA pass; no unresolved A/F blocker remains. |
+| Production integration | BRANCH-INTEGRATED | Human branch QA confirms the consolidated packet without reopening passed typesetting. |
+| Browser/Production PDF execution | BRANCH-INTEGRATED | Worker output, real-font browser-safe bytes, privacy, pause/cancel, and representative files pass Human branch QA. |
+| Real-manuscript Production E2E | AUTOMATED BRANCH PASS / HUMAN QA PENDING | A Human-authored manuscript passes the flow in §12, including reload, images, PDF/JPG, TXT, and preflight. |
+| Release Candidate gate | AUTOMATED RC AUDIT PASS / HUMAN QA PENDING | Consolidated branch QA passes; no unresolved A/F blocker remains. |
 | Production authorization and smoke | NOT AUTHORIZED | Human explicitly approves the integrated release diff before push/deploy; production smoke passes after deploy. |
 
-The previous final content/UX recheck is Human PASS. Release-blocking F decisions are PDF execution architecture, bleed/trim β policy, TXT serialization contract, and integration rollout policy. They are listed in §8; the one new mobile Demo viewport-fit visual check is B / Human QA pending, not a reopened content gate.
+The previous final content/UX recheck is Human PASS. The four former F decisions are approved and recorded in §8. The new integration surfaces and mobile Demo viewport-fit remain Human branch QA pending, not reopened content or typography gates.
 
 ## 5. BETA REQUIRED
 
@@ -150,18 +150,18 @@ Primary disposition D:
 - “Excessive indentation” and ASCII-punctuation auto-conversion rules until false-positive contracts are product-approved.
 - Support/affiliate footer and richer monetization/recommendation surfaces. They are not required to validate the manuscript-to-book β promise.
 
-## 8. HUMAN DECISIONS REQUIRED
+## 8. APPROVED BETA DECISIONS — CLOSED
 
 Primary disposition F:
 
-| Decision | Why it is needed | Required before |
+| Decision | Approved choice | Branch status |
 | --- | --- | --- |
-| Browser/Production PDF execution architecture | Browser bundle spike isolates the blocker to Node `Buffer` font/image readers. The current `output: "export"` site cannot host a Next Route Handler without a deployment change. **Recommendation: client-side browser executor, preferably a Web Worker, using `Uint8Array`/`DataView`; manuscript stays local.** | PDF implementation; release-blocking |
-| Bleed/trim β policy | Legacy has fixed 3-mm bleed/full-page artwork; v2 has trim-page geometry only and print-JPG crop is a disclosed no-op. **Recommendation: honest trim-only v2 β with explicit full-bleed limitation and legacy rollback retained.** | Production export contract; release-blocking |
-| TXT serialization contract | Existing tokens are known (`【改ページ】`, Ruby, explicit TCY, `【IMG:…】`); safe UTF-8/local plumbing is implemented with no default. **Recommendation: UTF-8 no BOM + LF output, accept BOM/CRLF/LF input, preserve all visible source tokens, disclose that TXT does not contain image binaries or separate page/colophon settings.** | TXT UI/defaults; release-blocking |
-| Production export rollout | Production is legacy-pinned; v2 engines/foundations exist separately. **Recommendation: one user experience with an internal staged feature flag, fast legacy rollback, explicit removal criteria after E2E.** | Production export wiring; release-blocking |
+| Browser/Production PDF execution architecture | **PDF A:** browser-local Worker, `Uint8Array`/`DataView`-based font boundary; manuscript/images never uploaded for PDF. | BRANCH-INTEGRATED / HUMAN QA PENDING |
+| Bleed/trim β policy | **Bleed A:** v2 β is trim-only; concise UI disclosure; legacy bleed remains intact for rollback. | BRANCH-INTEGRATED / HUMAN QA PENDING |
+| TXT serialization contract | **TXT A:** UTF-8 no BOM + LF export; BOM/no-BOM and CRLF/LF import; source notation preserved; image binary excluded/disclosed. | BRANCH-INTEGRATED / HUMAN QA PENDING |
+| Production export rollout | **Rollout B:** internal `NEXT_PUBLIC_TATESPUN_RENDERER` build flag, no ordinary-user engine choice, fail-closed LEGACY fallback. | BRANCH-INTEGRATED / ROLLBACK REHEARSED |
 
-Full option/tradeoff evidence and the exact acceptance result for each recommendation are in `typesetting-v2/qa/evidence/BETA_DECISION_PREP_AUDIT.md`. No Human decision remains for the old TCY threshold or old Ruby-contract gates for β: those are E items below.
+The option/tradeoff evidence remains in `typesetting-v2/qa/evidence/BETA_DECISION_PREP_AUDIT.md`; the implementation evidence is in `BETA_RC_BRANCH_AUDIT.md`. No Human decision remains for the old TCY threshold or old Ruby-contract gates for β.
 
 ## 9. RECOVERED OLD ITEMS AND DISPOSITION AUDIT
 
@@ -169,12 +169,12 @@ Full option/tradeoff evidence and the exact acceptance result for each recommend
 | --- | --- | --- | --- |
 | Top-page positioning/Hero | Generic “final site copy” / not frozen | **B — BETA REQUIRED** | The product promise and first-viewport journey now have exact approved copy. |
 | Existing interactive demo | Content and target placement HUMAN PASS; narrow one-viewport fit implemented, Human QA pending | **B — BETA REQUIRED** | It is the shortest proof of manuscript → book → work session → export/preflight and already has a real-Editor foundation. |
-| TXT export | Combined TXT I/O HUMAN_GATE / NOT_STARTED | **B — BETA REQUIRED** | User-owned portability is core to the positioning; structural representation remains an F decision. |
-| TXT import | Combined TXT I/O HUMAN_GATE / NOT_STARTED | **B — BETA REQUIRED** | External-manuscript intake is fundamental to “どこで綴っても” and “原稿を持ち込む”. |
+| TXT export | BRANCH-INTEGRATED | **B — BETA REQUIRED** | Approved UTF-8/no-BOM/LF local download is wired with safe title-derived naming. |
+| TXT import | BRANCH-INTEGRATED | **B — BETA REQUIRED** | BOM/no-BOM CRLF/LF input is wired with replacement confirmation and image reattachment disclosure. |
 | Esc/best-effort export cancel | Current branch paths HUMAN PASS; final v2 path wiring pending | **B — BETA REQUIRED** | Multi-page PDF/JPG/ZIP can be long-running; safe cooperative pause/cancellation is required β export UX. |
-| Browser/Production PDF | HUMAN_GATE / NOT_STARTED | **F — NEEDS HUMAN PRODUCT DECISION** | Execution architecture is unresolved; the typesetting/PaintPlan quality is already passed and stays closed. |
-| Bleed/trim | HUMAN_GATE | **F — NEEDS HUMAN PRODUCT DECISION** | Existing v2 output cannot honestly claim separate bleed geometry. |
-| Export rollout strategy | HUMAN_GATE | **F — NEEDS HUMAN PRODUCT DECISION** | Migration/rollback shape changes Production risk. |
+| Browser/Production PDF | BRANCH-INTEGRATED / HUMAN QA PENDING | **A — BETA RELEASE BLOCKER** | Browser-local Worker consumes the canonical PaintPlan; global Node Buffer is absent from the browser boundary. |
+| Bleed/trim | APPROVED / BRANCH-INTEGRATED | **B — BETA REQUIRED** | v2 β is honestly trim-only; legacy bleed is preserved. |
+| Export rollout strategy | APPROVED / BRANCH-INTEGRATED | **B — BETA REQUIRED** | One internal build flag selects v2; unset/invalid restores legacy without manuscript migration. |
 | Writing Check visual polish | Branch-integrated; preserve/verify in Production E2E | **B — BETA REQUIRED** | Required clarity/accessibility polish; detection semantics remain closed. |
 | Help top TOC | Human PASS | **B — BETA REQUIRED** | Required discoverability for the β feature set. |
 | TOC-dialog alignment | Human PASS | **B — BETA REQUIRED** | Small, bounded usability correction already specified by Human QA. |
@@ -192,16 +192,16 @@ Full option/tradeoff evidence and the exact acceptance result for each recommend
 
 Historical audit/HOLD text remains evidence. This table, the closed-state list, and the primary dispositions above are authoritative for β planning.
 
-## 10. Production integration entry gate
+## 10. Production integration status
 
-The full Production Integration MASTER remains **NOT_STARTED**, but its existing `src/` foundations and development-only pieces have now been audited. It may begin only after:
+The Production Integration MASTER is **BRANCH-INTEGRATED / HUMAN QA PENDING**. Its entry conditions were satisfied:
 
-1. the four F decisions in §8 are recorded (the former 13-item content/UX gate is already Human PASS);
-2. the task explicitly authorizes the Production Integration MASTER;
-3. the current diff/noise is inventoried and exact task-owned paths are established;
-4. rollback/feature-flag strategy and regression commands are recorded.
+1. PDF A, Bleed A, TXT A, and Rollout B are recorded;
+2. branch-side Production integration was explicitly authorized;
+3. unrelated QA noise was inventoried and left untouched;
+4. activation, rollback, tests, and Human QA are recorded.
 
-This roadmap rebase does not grant Production integration permission.
+No merge, push, deploy, or Production release is authorized by this status.
 
 ## 11. PRODUCTION INTEGRATION ORDER
 
@@ -224,7 +224,7 @@ Do not batch all slices into one opaque migration. Do not retire the legacy path
 
 Critical path:
 
-> four Human product/architecture decisions → Production Integration MASTER → browser PDF/JPG/TXT/final cancellation integration → top-page product implementation → mobile Demo targeted Human QA + real-manuscript Production E2E → Release Candidate → fix-only window → explicit Human approval of the Production integration/release diff → push/deploy → Production smoke → β release
+> approved architecture decisions → branch-integrated browser PDF/JPG/TXT/cancellation + Top/Hero → consolidated Human branch QA → explicit Human approval of the release diff → merge/push/deploy → Production smoke → β release
 
 ### Real-manuscript Production E2E
 
@@ -249,7 +249,7 @@ Push and deploy remain a separate explicit Human gate after RC/fix-only review. 
 
 ## 13. DELIVERY VIEW
 
-- **3-DAY TARGET — Beta RC**, if the four Human/architecture decisions are prompt, Production integration has no material `src/` conflict, and real-manuscript E2E does not expose a blocker.
+- **CURRENT TARGET — Beta RC Human QA**, with implementation and automated branch audit complete; release action remains separately gated.
 - **5-DAY SAFE TARGET — Beta release**, allowing integration-regression and Production-smoke buffer.
 
 These are targets, not promises.
