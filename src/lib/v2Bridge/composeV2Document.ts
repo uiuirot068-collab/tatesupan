@@ -16,8 +16,10 @@ import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 import { DEFAULT_RULE_SET_V2 } from "../../../typesetting-v2/core/rules/defaultRuleSet";
 import type { MeasurementFacts } from "../../../typesetting-v2/core/measurement/facts";
 import type { CanonicalDocument } from "../../../typesetting-v2/core/layout/schema";
+import type { LogicalUnit } from "../../../typesetting-v2/core/units";
+import type { PageCompositionSettings } from "../../../typesetting-v2/core/compose/page";
 import { buildPublicationDocument, type ImageResolver, type PublicationRenderContext, type PublicationDocument } from "../../../typesetting-v2/renderer/publication/paintModel";
-import { buildPaintPlan, FALLBACK_BASELINE_RATIO, type PaintPlan } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { buildPaintPlan, FALLBACK_BASELINE_RATIO, type PaintPlan, type PublicationPageGeometry } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 
 export interface V2BridgeInput {
   title: string;
@@ -35,6 +37,12 @@ export interface V2BridgeResult {
   document: CanonicalDocument;
   model: PublicationDocument;
   plan: PaintPlan;
+  units: LogicalUnit[];
+  source: string;
+  colophonUnits?: LogicalUnit[];
+  colophonSource?: string;
+  layoutSettings: PageCompositionSettings;
+  pageGeometry: PublicationPageGeometry;
 }
 
 /**
@@ -91,5 +99,16 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
 
   const plan = buildPaintPlan(model, true, pageGeometry, FALLBACK_BASELINE_RATIO);
 
-  return { document, model, plan };
+  return {
+    document,
+    model,
+    plan,
+    units,
+    source,
+    ...(colophonComposition
+      ? { colophonUnits: colophonComposition.units, colophonSource: colophonComposition.source }
+      : {}),
+    layoutSettings,
+    pageGeometry,
+  };
 }

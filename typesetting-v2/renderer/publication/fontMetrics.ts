@@ -22,7 +22,9 @@
 // back to a documented "unavailable" result, never a guess), or hinting
 // instructions.
 
-function requireBytes(buf: Buffer, offset: number, length: number, what: string): void {
+import type { FontBinary } from "./fontBinary";
+
+function requireBytes(buf: FontBinary, offset: number, length: number, what: string): void {
   if (offset < 0 || offset + length > buf.length) {
     throw new Error(`fontMetrics: truncated/malformed font — cannot read ${what} at offset ${offset} (file is only ${buf.length} bytes)`);
   }
@@ -34,7 +36,7 @@ interface TableDirectoryEntry {
   length: number;
 }
 
-function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
+function readTableDirectory(buf: FontBinary): Map<string, TableDirectoryEntry> {
   requireBytes(buf, 0, 12, "the sfnt header");
   const numTables = buf.readUInt16BE(4);
   const tables = new Map<string, TableDirectoryEntry>();
@@ -48,7 +50,7 @@ function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
 }
 
 /** Every table tag physically present in this font — the audit's own raw evidence, no interpretation. */
-export function listTables(buf: Buffer): string[] {
+export function listTables(buf: FontBinary): string[] {
   return Array.from(readTableDirectory(buf).keys()).sort();
 }
 
@@ -57,7 +59,7 @@ interface HeadInfo {
   indexToLocFormat: number; // 0 = short (uint16, x2), 1 = long (uint32)
 }
 
-function readHead(buf: Buffer, tables: Map<string, TableDirectoryEntry>): HeadInfo {
+function readHead(buf: FontBinary, tables: Map<string, TableDirectoryEntry>): HeadInfo {
   const head = tables.get("head");
   if (!head) throw new Error("fontMetrics: font has no 'head' table");
   requireBytes(buf, head.offset, 54, "head table");
@@ -67,14 +69,14 @@ function readHead(buf: Buffer, tables: Map<string, TableDirectoryEntry>): HeadIn
   };
 }
 
-function readNumGlyphs(buf: Buffer, tables: Map<string, TableDirectoryEntry>): number {
+function readNumGlyphs(buf: FontBinary, tables: Map<string, TableDirectoryEntry>): number {
   const maxp = tables.get("maxp");
   if (!maxp) throw new Error("fontMetrics: font has no 'maxp' table");
   requireBytes(buf, maxp.offset + 4, 2, "maxp.numGlyphs");
   return buf.readUInt16BE(maxp.offset + 4);
 }
 
-function readLoca(buf: Buffer, tables: Map<string, TableDirectoryEntry>, numGlyphs: number, indexToLocFormat: number): number[] {
+function readLoca(buf: FontBinary, tables: Map<string, TableDirectoryEntry>, numGlyphs: number, indexToLocFormat: number): number[] {
   const loca = tables.get("loca");
   if (!loca) throw new Error("fontMetrics: font has no 'loca' table");
   const offsets: number[] = [];
@@ -118,7 +120,7 @@ export interface VerticalMetrics {
  * `unitsPerEm` — callers convert to em-relative fractions themselves.
  */
 export class FontMetricsReader {
-  private readonly buf: Buffer;
+  private readonly buf: FontBinary;
   private readonly tables: Map<string, TableDirectoryEntry>;
   readonly unitsPerEm: number;
   /** vhea.ascent / vhea.descent, font units -- undefined if `vhea` is absent. Recorded for reference only (this task uses per-glyph originY, not these font-wide extremes, for placement). */
@@ -132,7 +134,7 @@ export class FontMetricsReader {
   private readonly vmtxOffset: number | undefined;
   private readonly numVMetrics: number | undefined;
 
-  constructor(buf: Buffer) {
+  constructor(buf: FontBinary) {
     this.buf = buf;
     this.tables = readTableDirectory(buf);
     const head = readHead(buf, this.tables);

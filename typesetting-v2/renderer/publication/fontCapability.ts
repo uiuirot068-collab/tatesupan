@@ -15,13 +15,15 @@
 // unsupported cmap throws a structured error rather than silently
 // reporting false coverage.
 
-function requireBytes(buf: Buffer, offset: number, length: number, what: string): void {
+import type { FontBinary } from "./fontBinary";
+
+function requireBytes(buf: FontBinary, offset: number, length: number, what: string): void {
   if (offset < 0 || offset + length > buf.length) {
     throw new Error(`fontCapability: truncated/malformed font — cannot read ${what} at offset ${offset} (file is only ${buf.length} bytes)`);
   }
 }
 
-function findCmapTableOffset(buf: Buffer): number {
+function findCmapTableOffset(buf: FontBinary): number {
   requireBytes(buf, 0, 12, "the sfnt header");
   const numTables = buf.readUInt16BE(4);
   for (let i = 0; i < numTables; i++) {
@@ -39,7 +41,7 @@ interface CmapSubtableRef {
   offset: number; // absolute byte offset from the start of `buf`
 }
 
-function findBestSubtable(buf: Buffer, cmapOffset: number): CmapSubtableRef {
+function findBestSubtable(buf: FontBinary, cmapOffset: number): CmapSubtableRef {
   requireBytes(buf, cmapOffset, 4, "cmap header");
   const numSubtables = buf.readUInt16BE(cmapOffset + 2);
   const subtables: CmapSubtableRef[] = [];
@@ -68,7 +70,7 @@ function findBestSubtable(buf: Buffer, cmapOffset: number): CmapSubtableRef {
 type CoverageCheck = (codePoint: number) => boolean;
 type GlyphIdLookup = (codePoint: number) => number | undefined;
 
-function parseFormat4Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
+function parseFormat4Lookup(buf: FontBinary, tableOffset: number): GlyphIdLookup {
   requireBytes(buf, tableOffset, 14, "cmap format 4 header");
   const segCountX2 = buf.readUInt16BE(tableOffset + 6);
   const segCount = segCountX2 / 2;
@@ -102,7 +104,7 @@ function parseFormat4Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
   };
 }
 
-function parseFormat12Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
+function parseFormat12Lookup(buf: FontBinary, tableOffset: number): GlyphIdLookup {
   requireBytes(buf, tableOffset, 16, "cmap format 12 header");
   const numGroups = buf.readUInt32BE(tableOffset + 12);
   const groupsOffset = tableOffset + 16;
@@ -129,7 +131,7 @@ function parseFormat12Lookup(buf: Buffer, tableOffset: number): GlyphIdLookup {
  * returning the real numeric glyph ID (needed by fontMetrics.ts's own
  * `glyf`/`hmtx` lookups) instead of a boolean.
  */
-export function createGlyphIdLookup(buf: Buffer): GlyphIdLookup {
+export function createGlyphIdLookup(buf: FontBinary): GlyphIdLookup {
   const cmapOffset = findCmapTableOffset(buf);
   const subtable = findBestSubtable(buf, cmapOffset);
   requireBytes(buf, subtable.offset, 2, "cmap subtable format");
@@ -144,7 +146,7 @@ export function createGlyphIdLookup(buf: Buffer): GlyphIdLookup {
  * bytes. Throws a structured error for a malformed/unsupported font rather
  * than silently returning false for everything.
  */
-export function createGlyphCoverageChecker(buf: Buffer): CoverageCheck {
+export function createGlyphCoverageChecker(buf: FontBinary): CoverageCheck {
   const lookup = createGlyphIdLookup(buf);
   return (codePoint: number) => lookup(codePoint) !== undefined;
 }
@@ -158,7 +160,7 @@ export function createGlyphCoverageChecker(buf: Buffer): CoverageCheck {
 // most kana vertical alternates have no such code point). Scans the SAME
 // preferred cmap subtable `createGlyphIdLookup` uses; returns the first
 // matching code point, or `undefined` if genuinely unreachable.
-export function findCodePointForGlyphId(buf: Buffer, targetGlyphId: number): number | undefined {
+export function findCodePointForGlyphId(buf: FontBinary, targetGlyphId: number): number | undefined {
   const cmapOffset = findCmapTableOffset(buf);
   const subtable = findBestSubtable(buf, cmapOffset);
   requireBytes(buf, subtable.offset, 2, "cmap subtable format");

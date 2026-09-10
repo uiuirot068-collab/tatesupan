@@ -76,6 +76,7 @@ import {
   ExportCancellationCoordinator,
   isExportCancelledError,
 } from "@/lib/exportCancellation";
+import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -501,21 +502,18 @@ export default function PreviewPane({
   // The renderer this pane actually renders with. Single choke point: in every
   // non-dev build (β/production) RENDERER_TOGGLE_ENABLED is false, so this is
   // hard-pinned to "current" regardless of `rendererMode`.
-  const activeRenderer: "current" | "new" = RENDERER_TOGGLE_ENABLED ? rendererMode : "current";
-  const [newRendererWarning, setNewRendererWarning] = useState<string | null>(null);
-  const handleNewRendererUnavailable = () => {
-    setRendererMode("current");
-    setNewRendererWarning(
-      "New renderer preview unavailable — bridge/Vivliostyleが起動していないため Current へ戻しました。"
-    );
-  };
-  const rendererToggle = RENDERER_TOGGLE_ENABLED ? (
+  const internalV2Beta = isV2BetaRendererEnabled();
+  const activeRenderer: "current" | "new" = internalV2Beta
+    ? "new"
+    : RENDERER_TOGGLE_ENABLED
+      ? rendererMode
+      : "current";
+  const rendererToggle = RENDERER_TOGGLE_ENABLED && !internalV2Beta ? (
     <span className="flex flex-shrink-0 items-center gap-1 rounded border border-dashed border-amber-400 px-1.5 py-1">
       <span className="whitespace-nowrap text-[10px] text-amber-700">Renderer(dev):</span>
       <button
         type="button"
         onClick={() => {
-          setNewRendererWarning(null);
           setRendererMode("current");
         }}
         className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
@@ -527,7 +525,6 @@ export default function PreviewPane({
       <button
         type="button"
         onClick={() => {
-          setNewRendererWarning(null);
           setRendererMode("new");
         }}
         className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
@@ -1552,17 +1549,16 @@ export default function PreviewPane({
             <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
             {rendererToggle}
           </div>
-          {newRendererWarning && (
-            <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{newRendererWarning}</p>
-          )}
         </div>
         <div className="min-h-0 flex-1">
           <PreviewPaneNew
             content={content}
             settings={settings}
-            layout={layout}
             title={title}
-            onUnavailable={handleNewRendererUnavailable}
+            images={images}
+            unresolvedImageIds={unresolvedImageIds ?? new Set<string>()}
+            blockExportForUnresolvedImages={blockExportForUnresolvedImages}
+            onPdfExportSuccess={onPdfExportSuccess}
           />
         </div>
       </div>
@@ -1743,9 +1739,6 @@ export default function PreviewPane({
           <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
             奥付が1ページに収まっていません。配置・項目・自由記述を見直してください。
           </p>
-        )}
-        {newRendererWarning && (
-          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{newRendererWarning}</p>
         )}
       </div>
 

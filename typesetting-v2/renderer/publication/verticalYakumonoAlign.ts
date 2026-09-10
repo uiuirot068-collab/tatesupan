@@ -40,6 +40,7 @@
 import { FontMetricsReader } from "./fontMetrics";
 import { createGlyphIdLookup } from "./fontCapability";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
+import type { FontBinary } from "./fontBinary";
 
 // Ported VERBATIM from src/components/PageCard.tsx:47 — closing-type
 // marks (句読点 + 終わり括弧・引用符): anchor to the cell's own START
@@ -86,7 +87,7 @@ export class VerticalYakumonoAlignContext {
   private readonly cache = new Map<string, number | undefined>();
   private readonly fallbackBaselineRatio: number;
 
-  constructor(fontBuf: Buffer, fallbackBaselineRatio: number) {
+  constructor(fontBuf: FontBinary, fallbackBaselineRatio: number) {
     this.reader = new FontMetricsReader(fontBuf);
     this.glyphIdFor = createGlyphIdLookup(fontBuf);
     this.fallbackBaselineRatio = fallbackBaselineRatio;

@@ -1,140 +1,259 @@
 "use client";
 
-/**
- * TateSpun — P2-B: Experimental "New" preview (dev-only A/B against Current).
- *
- * Renders the real Editor `content` through the existing P1 PoC pipeline
- * (tokenizeTategaki → tokensToP1Document → repo外 scratch bridge/Vivliostyle
- * — unmodified, see src/app/renderer-poc/) instead of the production
- * FixedSlot renderer. This file does NOT reimplement export, page reorder,
- * or image-layer editing — those remain Current-only for this A/B pass
- * (see PreviewPane.tsx's P2-B toggle). Image tokens fall back to
- * p1Adapter's existing `.p1-image-placeholder`, unchanged.
- *
- * Settings/layout parity: only page size, 4-side margins (gutter/outer
- * mapped to a single fixed left/right, no recto/verso alternation),
- * font-family, font-size, and line-height are passed through to
- * tokensToP1Document. columnCount (段組み) is NOT supported — see P2-B
- * REPORT.
- */
-import { useEffect, useRef, useState } from "react";
-import { tokensToP1Document } from "@/app/renderer-poc/p1Adapter";
-import type { PageLayout, PageSettings } from "@/lib/pageLayout";
-
-const BRIDGE_ORIGIN = "http://127.0.0.1:13021";
-const VIV_VIEWER_ORIGIN = "http://127.0.0.1:13020";
-const DEBOUNCE_MS = 400;
-
-type Status = "idle" | "pending" | "ok" | "unavailable";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
+import type { PageSettings } from "@/lib/pageLayout";
+import { composeV2Document, type V2BridgeResult } from "@/lib/v2Bridge/composeV2Document";
+import { prepareImageResolver } from "@/lib/v2Bridge/imageResolverAdapter";
+import { createFakeMeasurementProvider } from "../../typesetting-v2/core/measurement/fakeProvider";
+import { mmToTicks } from "../../typesetting-v2/core/geometry/tick";
+import {
+  buildColophonPaintPages,
+  buildPaintDocument,
+  type PaintDocument,
+  type PreviewRenderContext,
+} from "../../typesetting-v2/renderer/preview/paintModel";
+import { PREVIEW_RENDERER_STYLES, PreviewDocumentView } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
+import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
+import { exportPaintPlanToBrowserJpgPages, type JpgExportMode } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
+import { buildPageJpgFileName, buildZipFileName, sanitizeFilename } from "../../typesetting-v2/renderer/publication/jpgFilename";
+import { ExportCancellationCoordinator, isExportCancelledError, waitForExportPermission } from "@/lib/exportCancellation";
+import { downloadBytes, loadV2PublicationFont, startV2PdfWorker, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 
 export interface PreviewPaneNewProps {
   content: string;
   settings: PageSettings;
-  layout: PageLayout;
   title?: string;
-  /** Called once when the bridge/Vivliostyle preview turns out to be unreachable, so the parent can revert to Current and show a warning. */
-  onUnavailable?: () => void;
+  images: Record<string, string>;
+  unresolvedImageIds: ReadonlySet<string>;
+  blockExportForUnresolvedImages: boolean;
+  onPdfExportSuccess?: () => void;
 }
 
-export default function PreviewPaneNew({ content, settings, layout, title, onUnavailable }: PreviewPaneNewProps) {
-  const [status, setStatus] = useState<Status>("idle");
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestSeqRef = useRef(0);
-  // Ref-wrapped so the debounce effect below doesn't need onUnavailable in
-  // its dependency array (it's typically a fresh closure every parent render).
-  const onUnavailableRef = useRef(onUnavailable);
-  onUnavailableRef.current = onUnavailable;
+type ExportProgress = { label: string; current: number; total: number };
+
+function buildPreview(bridge: V2BridgeResult, images: Record<string, string>): PaintDocument {
+  const context: PreviewRenderContext = {
+    scaleMultiplier: 0.72,
+    linePitchTicks: bridge.layoutSettings.linePitchTicks,
+    lineExtentTicks: bridge.layoutSettings.lineExtentTicks,
+    columnExtentTicks: bridge.layoutSettings.columnExtentTicks,
+    columnsPerPage: bridge.layoutSettings.columnsPerPage,
+    nominalCellTicks: mmToTicks((bridge.layoutSettings.bodyFontSizePt * 25.4) / 72),
+    measurementIdentity: bridge.document.version.measurementIdentity,
+    paintFontIdentity: bridge.document.version.measurementIdentity,
+    bodyFontSizeTick: mmToTicks((bridge.layoutSettings.bodyFontSizePt * 25.4) / 72),
+    imageResolver: (id) => images[id] ? { kind: "RESOLVED", url: images[id] } : { kind: "PLACEHOLDER" },
+  };
+  const body = buildPaintDocument("editor-v2", "本の形で確認", bridge.document, bridge.units, bridge.source, context);
+  if (!bridge.document.colophon || !bridge.colophonUnits || bridge.colophonSource === undefined) return body;
+
+  const colophonPages = buildColophonPaintPages(
+    bridge.document.colophon,
+    bridge.colophonUnits,
+    bridge.colophonSource,
+    context
+  );
+  body.pages = bridge.document.pageSequence.map((page) =>
+    page.kind === "body" ? body.pages[page.index] : colophonPages[page.index]
+  );
+  body.totalPageCount = body.pages.length;
+  body.renderedPageCount = body.pages.length;
+  return body;
+}
+
+export default function PreviewPaneNew({
+  content,
+  settings,
+  title,
+  images,
+  unresolvedImageIds,
+  blockExportForUnresolvedImages,
+  onPdfExportSuccess,
+}: PreviewPaneNewProps) {
+  const [bridge, setBridge] = useState<V2BridgeResult | null>(null);
+  const [preview, setPreview] = useState<PaintDocument | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [coordinator] = useState(() => new ExportCancellationCoordinator());
+  const pdfHandleRef = useRef<WorkerPdfHandle | null>(null);
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      void runUpdate(content, settings, layout);
-    }, DEBOUNCE_MS);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void prepareImageResolver(images)
+        .then((imageResolver) => composeV2Document({
+          title: title?.trim() || "TateSpun",
+          content,
+          settings,
+          measurement: createFakeMeasurementProvider(),
+          imageResolver,
+        }))
+        .then((nextBridge) => {
+          if (cancelled) return;
+          setBridge(nextBridge);
+          setPreview(buildPreview(nextBridge, images));
+          setError(null);
+        })
+        .catch((cause: unknown) => {
+          if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+        });
+    }, 180);
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      cancelled = true;
+      window.clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, settings, layout]);
+  }, [content, images, settings, title]);
 
-  async function runUpdate(currentContent: string, currentSettings: PageSettings, currentLayout: PageLayout) {
-    const seq = ++requestSeqRef.current;
-    setStatus("pending");
+  const safeTitle = useMemo(() => sanitizeFilename(title?.trim() || "TateSpun"), [title]);
 
-    let html: string;
-    try {
-      html = tokensToP1Document(currentContent, {
-        fontFamily: currentSettings.fontFamily,
-        pageWidthMm: currentLayout.paper.widthMm,
-        pageHeightMm: currentLayout.paper.heightMm,
-        marginTopMm: currentSettings.marginTop,
-        marginBottomMm: currentSettings.marginBottom,
-        marginLeftMm: currentSettings.marginGutter,
-        marginRightMm: currentSettings.marginOuter,
-        fontSizePt: currentSettings.fontSizePt,
-        lineHeightRatio: currentSettings.lineHeightRatio,
-        grid: false,
-      });
-    } catch {
-      if (seq !== requestSeqRef.current) return;
-      setStatus("unavailable");
-      onUnavailableRef.current?.();
-      return;
-    }
+  const beginExport = useCallback((label: string, total: number) => {
+    const signal = coordinator.begin();
+    setProgress({ label, current: 0, total: Math.max(total, 1) });
+    return signal;
+  }, [coordinator]);
 
-    try {
-      const res = await fetch(`${BRIDGE_ORIGIN}/update`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html }),
-      });
-      if (seq !== requestSeqRef.current) return;
-      if (!res.ok) {
-        setStatus("unavailable");
-        onUnavailableRef.current?.();
-        return;
+  const finishExport = useCallback((signal: AbortSignal) => {
+    coordinator.finish(signal);
+    pdfHandleRef.current = null;
+    setProgress(null);
+    setConfirmOpen(false);
+  }, [coordinator]);
+
+  useEffect(() => {
+    if (!progress) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (coordinator.handleEscape() === "open-confirmation") {
+        pdfHandleRef.current?.pause();
+        setConfirmOpen(true);
+      } else {
+        pdfHandleRef.current?.resume();
+        setConfirmOpen(false);
       }
-      // Response shape: {pages, elapsedMs, timedOut} — not surfaced in this
-      // minimal experimental view (see tools/renderer-poc/README.md).
-      await res.json();
-      setStatus("ok");
-      setIframeSrc(
-        `${VIV_VIEWER_ORIGIN}/__vivliostyle-viewer/index.html#src=${VIV_VIEWER_ORIGIN}/vivliostyle/current.html?v=${Date.now()}&bookMode=false&renderAllPages=true`
-      );
-    } catch {
-      if (seq !== requestSeqRef.current) return;
-      setStatus("unavailable");
-      setIframeSrc(null);
-      onUnavailableRef.current?.();
-    }
-  }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [coordinator, progress]);
 
-  if (status === "unavailable") {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm text-ink/70">New renderer preview unavailable</p>
-        <p className="text-xs text-ink/40">
-          bridge (127.0.0.1:13021) / Vivliostyle preview (127.0.0.1:13020) が起動していません。
-          <br />
-          tools/renderer-poc/README.md を参照してください。
-        </p>
-      </div>
-    );
-  }
+  const requirePlan = useCallback(async () => {
+    if (!bridge) throw new Error("Canonical Preview の準備が完了していません。");
+    if (blockExportForUnresolvedImages || unresolvedImageIds.size > 0) {
+      throw new Error("未解決の画像があります。画像を再設定してから書き出してください。");
+    }
+    const font = await loadV2PublicationFont();
+    return { font, plan: buildPublicationPaintPlan(bridge.model, font, bridge.pageGeometry, "v2 Beta export") };
+  }, [blockExportForUnresolvedImages, bridge, unresolvedImageIds]);
+
+  const exportPdf = useCallback(async () => {
+    let signal: AbortSignal | null = null;
+    try {
+      const { font, plan } = await requirePlan();
+      signal = beginExport("PDF", plan.length);
+      const handle = startV2PdfWorker(plan, font, ({ current, total }) => setProgress({ label: "PDF", current, total }));
+      pdfHandleRef.current = handle;
+      const abort = () => handle.cancel();
+      signal.addEventListener("abort", abort, { once: true });
+      const bytes = await handle.result;
+      signal.removeEventListener("abort", abort);
+      await waitForExportPermission(signal);
+      downloadBytes(bytes, `${safeTitle}.pdf`, "application/pdf");
+      onPdfExportSuccess?.();
+    } catch (cause: unknown) {
+      if (!isExportCancelledError(cause)) setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (signal) finishExport(signal);
+    }
+  }, [beginExport, finishExport, onPdfExportSuccess, requirePlan, safeTitle]);
+
+  const exportJpg = useCallback(async (mode: JpgExportMode, scope: "first" | "zip") => {
+    let signal: AbortSignal | null = null;
+    try {
+      const { plan } = await requirePlan();
+      const exportPlan = scope === "first" ? plan.slice(0, 1) : plan;
+      const label = mode === "PRINT" ? "印刷用JPG" : "Web用JPG";
+      signal = beginExport(label, exportPlan.length);
+      const pages = await exportPaintPlanToBrowserJpgPages(
+        exportPlan,
+        "Shippori Mincho",
+        (pageNumber) => buildPageJpgFileName(safeTitle, pageNumber),
+        mode,
+        undefined,
+        {
+          beforePage: async () => waitForExportPermission(signal ?? undefined),
+          onProgress: (current, total) => setProgress({ label, current, total }),
+        }
+      );
+      await waitForExportPermission(signal);
+      if (scope === "first") {
+        saveAs(pages[0].blob, pages[0].fileName);
+      } else {
+        const zip = new JSZip();
+        for (let index = 0; index < pages.length; index += 1) {
+          await waitForExportPermission(signal);
+          zip.file(pages[index].fileName, pages[index].blob);
+          setProgress({ label: `${label} ZIP`, current: index + 1, total: pages.length });
+        }
+        await waitForExportPermission(signal);
+        const blob = await zip.generateAsync({ type: "blob" });
+        await waitForExportPermission(signal);
+        saveAs(blob, buildZipFileName(safeTitle));
+      }
+    } catch (cause: unknown) {
+      if (!isExportCancelledError(cause)) setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (signal) finishExport(signal);
+    }
+  }, [beginExport, finishExport, requirePlan, safeTitle]);
+
+  const continueExport = () => {
+    coordinator.continueExport();
+    pdfHandleRef.current?.resume();
+    setConfirmOpen(false);
+  };
+  const cancelExport = () => {
+    coordinator.cancelExport();
+    pdfHandleRef.current?.cancel();
+    setConfirmOpen(false);
+  };
 
   return (
-    <div className="flex h-full w-full flex-col p-3">
-      {iframeSrc ? (
-        <iframe
-          key={iframeSrc}
-          className="h-full w-full flex-1 rounded-lg border border-ink/10 bg-white"
-          src={iframeSrc}
-          sandbox="allow-scripts allow-same-origin"
-          title={`New Renderer Preview${title ? `: ${title}` : ""}`}
-        />
-      ) : (
-        <div className="flex h-full w-full flex-1 items-center justify-center text-xs text-ink/40">
-          {status === "pending" ? "組版中…" : "プレビュー取得中…"}
+    <div className="flex h-full min-h-0 w-full flex-col bg-ink/[0.04]">
+      <style>{`${PREVIEW_RENDERER_STYLES}
+        .tsp-v2-preview .fixture{border:0;margin:0}.tsp-v2-preview .fixture>h2{display:none}
+        .tsp-v2-preview .page-row{display:flex;align-items:flex-start;flex-wrap:wrap;gap:20px}
+        .tsp-v2-preview .page{flex:none;box-shadow:0 3px 14px rgba(28,24,20,.18);font-family:"Shippori Mincho",serif}
+        .tsp-v2-preview .image-placeholder{display:block;width:100%;height:100%;object-fit:contain}
+      `}</style>
+      <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 bg-base px-3 py-2">
+        <span className="mr-auto text-xs font-semibold text-ink/70">本の形で確認</span>
+        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportPdf()} className="rounded bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-40">PDF</button>
+        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("WEB", "first")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG 1ページ</button>
+        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("WEB", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG ZIP</button>
+        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("PRINT", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">印刷用JPG ZIP</button>
+      </div>
+      <p className="border-b border-ink/10 bg-base px-3 py-1.5 text-[11px] text-ink/55">v2 Beta の PDF/JPG は仕上がりサイズ（裁ち落としなし）です。原稿と画像はブラウザ内で処理されます。</p>
+      {(blockExportForUnresolvedImages || unresolvedImageIds.size > 0) && (
+        <div role="alert" className="border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">HOLD: 未解決の画像があります。画像は省略せず、再設定されるまで書き出しを停止します。</div>
+      )}
+      {error && <div role="alert" className="border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">{error}</div>}
+      <div className="tsp-v2-preview min-h-0 flex-1 overflow-auto p-5">
+        {preview ? <PreviewDocumentView model={preview} mode="normal" /> : <p className="text-sm text-ink/60">Canonical Preview を準備しています…</p>}
+      </div>
+      {progress && <div className="border-t border-ink/10 bg-base px-3 py-2 text-xs text-ink/70">{progress.label} 書き出し中 ({progress.current}/{progress.total}) — Escで中断確認</div>}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/35 p-4" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="v2-export-cancel-title" className="w-full max-w-sm rounded-xl bg-base p-5 shadow-2xl">
+            <h2 id="v2-export-cancel-title" className="text-base font-bold">書き出しを中断しますか？</h2>
+            <p className="mt-2 text-sm text-ink/65">確認中は次のページ処理を開始しません。未完成ファイルは保存されません。</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={continueExport} className="rounded border border-ink/20 px-4 py-2 text-sm">書き出しを続ける</button>
+              <button type="button" onClick={cancelExport} className="rounded bg-red-700 px-4 py-2 text-sm text-white">中断する</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

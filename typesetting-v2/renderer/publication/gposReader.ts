@@ -19,7 +19,9 @@
 // positioning. LookupType 9 (Extension) is unwrapped one level, exactly
 // like gsubReader.ts's own Extension handling.
 
-function requireBytes(buf: Buffer, offset: number, length: number, what: string): void {
+import type { FontBinary } from "./fontBinary";
+
+function requireBytes(buf: FontBinary, offset: number, length: number, what: string): void {
   if (offset < 0 || offset + length > buf.length) {
     throw new Error(`gposReader: truncated/malformed font — cannot read ${what} at offset ${offset} (file is only ${buf.length} bytes)`);
   }
@@ -30,7 +32,7 @@ interface TableDirectoryEntry {
   length: number;
 }
 
-function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
+function readTableDirectory(buf: FontBinary): Map<string, TableDirectoryEntry> {
   requireBytes(buf, 0, 12, "the sfnt header");
   const numTables = buf.readUInt16BE(4);
   const tables = new Map<string, TableDirectoryEntry>();
@@ -43,7 +45,7 @@ function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
   return tables;
 }
 
-export function hasGposTable(buf: Buffer): boolean {
+export function hasGposTable(buf: FontBinary): boolean {
   return readTableDirectory(buf).has("GPOS");
 }
 
@@ -52,7 +54,7 @@ interface FeatureRecord {
   lookupListIndices: number[];
 }
 
-function readFeatureList(buf: Buffer, gposOffset: number, featureListOffset: number): FeatureRecord[] {
+function readFeatureList(buf: FontBinary, gposOffset: number, featureListOffset: number): FeatureRecord[] {
   const fl = gposOffset + featureListOffset;
   requireBytes(buf, fl, 2, "FeatureList.featureCount");
   const featureCount = buf.readUInt16BE(fl);
@@ -73,7 +75,7 @@ function readFeatureList(buf: Buffer, gposOffset: number, featureListOffset: num
   return records;
 }
 
-function readScriptDefaultLangSysFeatureIndices(buf: Buffer, gposOffset: number, scriptListOffset: number): Set<number> {
+function readScriptDefaultLangSysFeatureIndices(buf: FontBinary, gposOffset: number, scriptListOffset: number): Set<number> {
   const sl = gposOffset + scriptListOffset;
   requireBytes(buf, sl, 2, "ScriptList.scriptCount");
   const scriptCount = buf.readUInt16BE(sl);
@@ -99,7 +101,7 @@ interface LookupTable {
   subtableOffsets: number[]; // absolute
 }
 
-function readLookupList(buf: Buffer, gposOffset: number, lookupListOffset: number): LookupTable[] {
+function readLookupList(buf: FontBinary, gposOffset: number, lookupListOffset: number): LookupTable[] {
   const ll = gposOffset + lookupListOffset;
   requireBytes(buf, ll, 2, "LookupList.lookupCount");
   const lookupCount = buf.readUInt16BE(ll);
@@ -119,7 +121,7 @@ function readLookupList(buf: Buffer, gposOffset: number, lookupListOffset: numbe
   return lookups;
 }
 
-function readCoverage(buf: Buffer, coverageOffset: number): number[] {
+function readCoverage(buf: FontBinary, coverageOffset: number): number[] {
   requireBytes(buf, coverageOffset, 2, "Coverage.coverageFormat");
   const format = buf.readUInt16BE(coverageOffset);
   if (format === 1) {
@@ -172,7 +174,7 @@ function valueRecordSize(valueFormat: number): number {
   return size;
 }
 
-function readValueRecord(buf: Buffer, offset: number, valueFormat: number): GposValueRecord {
+function readValueRecord(buf: FontBinary, offset: number, valueFormat: number): GposValueRecord {
   let cursor = offset;
   const value: GposValueRecord = { ...ZERO_VALUE };
   if (valueFormat & VF_X_PLACEMENT) {
@@ -195,7 +197,7 @@ function readValueRecord(buf: Buffer, offset: number, valueFormat: number): Gpos
 }
 
 /** Parses ONE GPOS LookupType 1 (Single Adjustment) subtable into {glyphId -> ValueRecord}, merged into `into`. */
-function parseSingleAdjustSubtable(buf: Buffer, subtableOffset: number, into: Map<number, GposValueRecord>): void {
+function parseSingleAdjustSubtable(buf: FontBinary, subtableOffset: number, into: Map<number, GposValueRecord>): void {
   requireBytes(buf, subtableOffset, 4, "SinglePos header");
   const posFormat = buf.readUInt16BE(subtableOffset);
   const coverageOffset = subtableOffset + buf.readUInt16BE(subtableOffset + 2);
@@ -246,7 +248,7 @@ export interface GposAudit {
 }
 
 /** Full audit: does this font have GPOS, which feature tags does it declare (regardless of resolvability), and for the named vertical/contextual features, resolve their real Single-Adjustment value records (other lookup types recorded, not resolved). */
-export function auditGpos(buf: Buffer): GposAudit {
+export function auditGpos(buf: FontBinary): GposAudit {
   const tables = readTableDirectory(buf);
   const gpos = tables.get("GPOS");
   const emptyResult = {

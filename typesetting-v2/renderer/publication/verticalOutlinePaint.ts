@@ -21,6 +21,7 @@
 import { Font as OpenTypeFont, parse as parseOpenTypeFont, type Glyph as OpenTypeGlyph, type PathCommand as OpenTypePathCommand } from "opentype.js";
 import { auditGsub, type GsubAudit } from "./gsubReader";
 import { createGlyphIdLookup, findCodePointForGlyphId } from "./fontCapability";
+import type { FontBinary } from "./fontBinary";
 
 // Human Visual QA HOLD round 23 -- ported VERBATIM from
 // `core/rules/defaultRuleSet.ts`'s own cl-11 (small kana) member list,
@@ -97,7 +98,7 @@ export class VerticalOutlineContext {
   private readonly audit: GsubAudit;
   private readonly glyphIdFor: (codePoint: number) => number | undefined;
   private readonly font: OpenTypeFont;
-  private readonly fontBuf: Buffer;
+  private readonly fontBuf: FontBinary;
   private readonly outlineGlyphCache = new Map<number, number | undefined>();
   // Human Visual QA HOLD round 29D: `advanceWidthMm` is now called
   // per-character, potentially thousands of times across a real
@@ -109,7 +110,7 @@ export class VerticalOutlineContext {
   // measured result `advanceWidthMm` would otherwise recompute.
   private readonly advanceWidthCache = new Map<string, number>();
 
-  constructor(fontBuf: Buffer) {
+  constructor(fontBuf: FontBinary) {
     this.fontBuf = fontBuf;
     this.audit = auditGsub(fontBuf);
     this.glyphIdFor = createGlyphIdLookup(fontBuf);

@@ -160,18 +160,30 @@ export interface BrowserRasterPage {
   pixelHeight: number;
 }
 
+export interface BrowserRasterProgressOptions {
+  beforePage?: (pageNumber: number, pageCount: number) => Promise<void>;
+  onProgress?: (completedPages: number, pageCount: number) => void;
+}
+
 // Renders every page of the SAME `PaintPlan` PDF/Node-QA use to a real
 // `HTMLCanvasElement`, at the canonical page's own real physical size
 // (mm) converted to px at `dpi`. White background painted explicitly
 // first (JPEG has no alpha; a transparent PNG must composite onto white,
 // not the canvas's own default transparent-black).
-export async function renderPaintPlanToBrowserRasterPages(plan: PaintPlan, fontFamily: BrowserFontFamily | undefined, dpi: number = RASTER_DPI): Promise<BrowserRasterPage[]> {
+export async function renderPaintPlanToBrowserRasterPages(
+  plan: PaintPlan,
+  fontFamily: BrowserFontFamily | undefined,
+  dpi: number = RASTER_DPI,
+  options: BrowserRasterProgressOptions = {}
+): Promise<BrowserRasterPage[]> {
   if (typeof document === "undefined") {
     throw new Error("renderPaintPlanToBrowserRasterPages: browser-only (no `document`) -- use rasterGenerator.ts (Node) instead");
   }
   if (fontFamily) await ensureFontReady(fontFamily);
   const pages: BrowserRasterPage[] = [];
-  for (const page of plan) {
+  for (let index = 0; index < plan.length; index += 1) {
+    await options.beforePage?.(index + 1, plan.length);
+    const page = plan[index];
     const widthPx = Math.max(1, Math.round(mmToPx(page.widthMm, dpi)));
     const heightPx = Math.max(1, Math.round(mmToPx(page.heightMm, dpi)));
     const canvas = document.createElement("canvas");
@@ -183,6 +195,8 @@ export async function renderPaintPlanToBrowserRasterPages(plan: PaintPlan, fontF
     ctx.fillRect(0, 0, widthPx, heightPx);
     await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily);
     pages.push({ canvas, pixelWidth: widthPx, pixelHeight: heightPx });
+    options.onProgress?.(index + 1, plan.length);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   return pages;
 }
@@ -228,14 +242,26 @@ export interface BrowserJpgPageResult {
 // image. `buildFileName` is injected (not hardcoded) so callers reuse
 // the SAME `buildPageJpgFileName` contract (`jpgFilename.ts`) the Node
 // path uses, without this module needing to know about titles.
-export async function exportPaintPlanToBrowserJpgPages(plan: PaintPlan, fontFamily: BrowserFontFamily | undefined, buildFileName: (pageNumber: number) => string, mode: JpgExportMode, dpi: number = RASTER_DPI): Promise<BrowserJpgPageResult[]> {
-  const basePages = await renderPaintPlanToBrowserRasterPages(plan, fontFamily, dpi);
+export async function exportPaintPlanToBrowserJpgPages(
+  plan: PaintPlan,
+  fontFamily: BrowserFontFamily | undefined,
+  buildFileName: (pageNumber: number) => string,
+  mode: JpgExportMode,
+  dpi: number = RASTER_DPI,
+  options: BrowserRasterProgressOptions = {}
+): Promise<BrowserJpgPageResult[]> {
+  const basePages = await renderPaintPlanToBrowserRasterPages(plan, fontFamily, dpi, {
+    beforePage: options.beforePage,
+  });
   const results: BrowserJpgPageResult[] = [];
   for (let i = 0; i < basePages.length; i++) {
+    await options.beforePage?.(i + 1, basePages.length);
     const base = basePages[i];
     const targetCanvas = mode === "PRINT" ? toPrintCanvas(base) : base.canvas;
     const blob = await canvasToJpegBlob(targetCanvas, JPEG_QUALITY);
     results.push({ fileName: buildFileName(i + 1), blob, pixelWidth: targetCanvas.width, pixelHeight: targetCanvas.height });
+    options.onProgress?.(i + 1, basePages.length);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   return results;
 }

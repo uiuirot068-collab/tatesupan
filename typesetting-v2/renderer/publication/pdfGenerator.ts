@@ -56,6 +56,7 @@ import { FontMetricsReader } from "./fontMetrics";
 import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
+import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 
 export interface PublicationFontResource {
@@ -197,7 +198,7 @@ export const FALLBACK_BASELINE_RATIO = 0.88;
 // better: they deviated away from a position the font itself defines as
 // correct, uniformly, for every character class.
 export function deriveBaselineRatioFromFont(fontResource: PublicationFontResource): number {
-  const buf = Buffer.from(fontResource.base64, "base64");
+  const buf = FontBinary.fromBase64(fontResource.base64);
   const reader = new FontMetricsReader(buf);
   if (!reader.hasTable("vhea") || !reader.hasTable("vmtx")) return FALLBACK_BASELINE_RATIO;
   // Any covered glyph gives the identical answer (measured uniform above);
@@ -1149,10 +1150,9 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
         // reimplemented here, this executor only calls jsPDF's own API
         // with the already-decided real bytes/box, exactly like every
         // other command in this switch makes no typography/decode
-        // decision of its own. `Buffer.from` (not the raw `Uint8Array`)
-        // is what jsPDF's own Node code path expects for real binary
-        // image data.
-        pdf.addImage(Buffer.from(cmd.bytes), cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
+        // decision of its own. jsPDF accepts Uint8Array in browsers and
+        // Node, so the canonical bytes cross this boundary unchanged.
+        pdf.addImage(cmd.bytes, cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
         continue;
       }
       if (cmd.op === "glyphOutline") {
@@ -1197,6 +1197,69 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
   });
   pdf.deletePage(1);
 
+  const arrayBuffer = pdf.output("arraybuffer") as ArrayBuffer;
+  return { bytes: new Uint8Array(arrayBuffer), pageCount: plan.length };
+}
+
+export interface AsyncPdfRenderOptions {
+  beforePage?: (pageNumber: number, pageCount: number) => Promise<void>;
+  onProgress?: (completedPages: number, pageCount: number) => void;
+}
+
+/**
+ * Browser-worker executor. The paint decisions remain the PaintPlan's; this
+ * variant only adds an awaitable boundary between pages so pause/cancel and
+ * progress messages can be honored without publishing a partial document.
+ */
+export async function renderPaintPlanToPdfAsync(
+  plan: PaintPlan,
+  fontResource?: PublicationFontResource,
+  options: AsyncPdfRenderOptions = {}
+): Promise<PublicationPdfResult> {
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1] });
+  if (fontResource) {
+    pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
+    pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
+  }
+  for (let index = 0; index < plan.length; index += 1) {
+    await options.beforePage?.(index + 1, plan.length);
+    const page = plan[index];
+    pdf.addPage([page.widthMm, page.heightMm], "portrait");
+    pdf.setPage(index + 2);
+    if (fontResource) pdf.setFont(fontResource.fontName);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.05);
+    pdf.setFillColor(0, 0, 0);
+    for (const cmd of page.commands) {
+      if (cmd.op === "rect") {
+        pdf.rect(cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
+      } else if (cmd.op === "image") {
+        pdf.addImage(cmd.bytes, cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
+      } else if (cmd.op === "glyphOutline") {
+        for (const outlineCmd of cmd.commands) {
+          if (outlineCmd.type === "M") pdf.moveTo(outlineCmd.x, outlineCmd.y);
+          else if (outlineCmd.type === "L") pdf.lineTo(outlineCmd.x, outlineCmd.y);
+          else if (outlineCmd.type === "C") pdf.curveTo(outlineCmd.x1, outlineCmd.y1, outlineCmd.x2, outlineCmd.y2, outlineCmd.x, outlineCmd.y);
+          else pdf.close();
+        }
+        pdf.fill();
+      } else {
+        pdf.setFontSize(cmd.fontSizePt);
+        if (cmd.maxWidthMm !== undefined) {
+          const widthMm = pdf.getTextWidth(cmd.text);
+          if (widthMm > cmd.maxWidthMm) pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
+        }
+        pdf.text(cmd.text, cmd.xMm, cmd.yMm, {
+          align: cmd.align,
+          ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
+          ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
+        });
+      }
+    }
+    options.onProgress?.(index + 1, plan.length);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  pdf.deletePage(1);
   const arrayBuffer = pdf.output("arraybuffer") as ArrayBuffer;
   return { bytes: new Uint8Array(arrayBuffer), pageCount: plan.length };
 }
@@ -1257,9 +1320,10 @@ export function buildPublicationPaintPlan(doc: PublicationDocument, fontResource
     throw new Error(`${refusalPrefix} with unresolved required image(s): ${imageIssues.join("; ")}`);
   }
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
-  const outlineContext = fontResource ? new VerticalOutlineContext(Buffer.from(fontResource.base64, "base64")) : undefined;
-  const gposContext = fontResource ? new VerticalGposContext(Buffer.from(fontResource.base64, "base64")) : undefined;
-  const yakumonoContext = fontResource ? new VerticalYakumonoAlignContext(Buffer.from(fontResource.base64, "base64"), baselineRatio) : undefined;
+  const fontBytes = fontResource ? FontBinary.fromBase64(fontResource.base64) : undefined;
+  const outlineContext = fontBytes ? new VerticalOutlineContext(fontBytes) : undefined;
+  const gposContext = fontBytes ? new VerticalGposContext(fontBytes) : undefined;
+  const yakumonoContext = fontBytes ? new VerticalYakumonoAlignContext(fontBytes, baselineRatio) : undefined;
   return buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
 }
 

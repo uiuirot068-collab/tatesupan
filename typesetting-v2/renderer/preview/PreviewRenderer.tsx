@@ -24,7 +24,7 @@ import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export type PreviewMode = "normal" | "debug";
 
-const STYLE = `
+export const PREVIEW_RENDERER_STYLES = `
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
   h1 { font-size: 16px; }
@@ -190,7 +190,11 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           descendants, never siblings. */}
       <span className="unit-ink">
         {unit.kind === "IMAGE" ? (
-          <span className="image-placeholder" />
+          unit.imageResolution?.kind === "RESOLVED" ? (
+            <img className="image-placeholder" src={unit.imageResolution.url} alt="" />
+          ) : (
+            <span className="image-placeholder" />
+          )
         ) : unit.kind === "TCY" ? (
           // P3-O03-TCY-VISUAL: wraps ONLY the TCY unit's own text — the
           // canonical GeometryTick-derived position/extent (`.unit`'s own
@@ -317,7 +321,7 @@ export function PreviewFoundationArtifact({ models, mode }: { models: PaintDocum
       <head>
         <meta charSet="utf-8" />
         <title>TateSpun v2 — P3-O09 Preview Renderer Foundation</title>
-        <style dangerouslySetInnerHTML={{ __html: STYLE }} />
+        <style dangerouslySetInnerHTML={{ __html: PREVIEW_RENDERER_STYLES }} />
       </head>
       <body className={mode === "debug" ? "debug" : ""}>
         <h1>P3-O09 Preview Renderer Foundation — {mode === "debug" ? "DEBUG / INSPECTION" : "NORMAL PREVIEW"}</h1>

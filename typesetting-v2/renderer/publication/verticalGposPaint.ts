@@ -29,6 +29,7 @@ import { auditGsub, type GsubAudit } from "./gsubReader";
 import { auditGpos, type GposAudit } from "./gposReader";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
+import type { FontBinary } from "./fontBinary";
 
 /**
  * Built once per document render (GSUB + GPOS + head table each parsed
@@ -44,7 +45,7 @@ export class VerticalGposContext {
   private readonly unitsPerEm: number;
   private readonly cache = new Map<number, number>();
 
-  constructor(fontBuf: Buffer) {
+  constructor(fontBuf: FontBinary) {
     this.gsub = auditGsub(fontBuf);
     this.gpos = auditGpos(fontBuf);
     this.glyphIdFor = createGlyphIdLookup(fontBuf);

@@ -18,7 +18,9 @@
 // substitution map — this audit does not fabricate a substitution for a
 // lookup type it cannot actually parse.
 
-function requireBytes(buf: Buffer, offset: number, length: number, what: string): void {
+import type { FontBinary } from "./fontBinary";
+
+function requireBytes(buf: FontBinary, offset: number, length: number, what: string): void {
   if (offset < 0 || offset + length > buf.length) {
     throw new Error(`gsubReader: truncated/malformed font — cannot read ${what} at offset ${offset} (file is only ${buf.length} bytes)`);
   }
@@ -29,7 +31,7 @@ interface TableDirectoryEntry {
   length: number;
 }
 
-function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
+function readTableDirectory(buf: FontBinary): Map<string, TableDirectoryEntry> {
   requireBytes(buf, 0, 12, "the sfnt header");
   const numTables = buf.readUInt16BE(4);
   const tables = new Map<string, TableDirectoryEntry>();
@@ -43,7 +45,7 @@ function readTableDirectory(buf: Buffer): Map<string, TableDirectoryEntry> {
 }
 
 /** Does this font have a GSUB table at all? Cheap presence check, no parsing. */
-export function hasGsubTable(buf: Buffer): boolean {
+export function hasGsubTable(buf: FontBinary): boolean {
   return readTableDirectory(buf).has("GSUB");
 }
 
@@ -52,7 +54,7 @@ interface ScriptRecord {
   scriptOffset: number; // absolute
 }
 
-function readScriptList(buf: Buffer, gsubOffset: number, scriptListOffset: number): ScriptRecord[] {
+function readScriptList(buf: FontBinary, gsubOffset: number, scriptListOffset: number): ScriptRecord[] {
   const sl = gsubOffset + scriptListOffset;
   requireBytes(buf, sl, 2, "ScriptList.scriptCount");
   const scriptCount = buf.readUInt16BE(sl);
@@ -68,7 +70,7 @@ function readScriptList(buf: Buffer, gsubOffset: number, scriptListOffset: numbe
 }
 
 /** Feature indices (into the FeatureList) that a script's own default LangSys activates. */
-function readDefaultLangSysFeatureIndices(buf: Buffer, scriptTableOffset: number): number[] {
+function readDefaultLangSysFeatureIndices(buf: FontBinary, scriptTableOffset: number): number[] {
   requireBytes(buf, scriptTableOffset, 4, "Script table header");
   const defaultLangSysOffset = buf.readUInt16BE(scriptTableOffset);
   if (defaultLangSysOffset === 0) return [];
@@ -86,7 +88,7 @@ interface FeatureRecord {
   lookupListIndices: number[];
 }
 
-function readFeatureList(buf: Buffer, gsubOffset: number, featureListOffset: number): FeatureRecord[] {
+function readFeatureList(buf: FontBinary, gsubOffset: number, featureListOffset: number): FeatureRecord[] {
   const fl = gsubOffset + featureListOffset;
   requireBytes(buf, fl, 2, "FeatureList.featureCount");
   const featureCount = buf.readUInt16BE(fl);
@@ -112,7 +114,7 @@ interface LookupTable {
   subtableOffsets: number[]; // absolute
 }
 
-function readLookupList(buf: Buffer, gsubOffset: number, lookupListOffset: number): LookupTable[] {
+function readLookupList(buf: FontBinary, gsubOffset: number, lookupListOffset: number): LookupTable[] {
   const ll = gsubOffset + lookupListOffset;
   requireBytes(buf, ll, 2, "LookupList.lookupCount");
   const lookupCount = buf.readUInt16BE(ll);
@@ -133,7 +135,7 @@ function readLookupList(buf: Buffer, gsubOffset: number, lookupListOffset: numbe
 }
 
 /** Parses a Coverage table into an ordered array of covered glyph IDs (index = coverage index). */
-function readCoverage(buf: Buffer, coverageOffset: number): number[] {
+function readCoverage(buf: FontBinary, coverageOffset: number): number[] {
   requireBytes(buf, coverageOffset, 2, "Coverage.coverageFormat");
   const format = buf.readUInt16BE(coverageOffset);
   if (format === 1) {
@@ -159,7 +161,7 @@ function readCoverage(buf: Buffer, coverageOffset: number): number[] {
 }
 
 /** Parses ONE GSUB LookupType 1 (Single Substitution) subtable into {sourceGlyphId -> substituteGlyphId} entries, merged into `into`. */
-function parseSingleSubstSubtable(buf: Buffer, subtableOffset: number, into: Map<number, number>): void {
+function parseSingleSubstSubtable(buf: FontBinary, subtableOffset: number, into: Map<number, number>): void {
   requireBytes(buf, subtableOffset, 4, "SingleSubst header");
   const substFormat = buf.readUInt16BE(subtableOffset);
   const coverageOffset = subtableOffset + buf.readUInt16BE(subtableOffset + 2);
@@ -205,7 +207,7 @@ export interface GsubAudit {
  * recorded, not resolved). Throws a structured error for a malformed GSUB
  * rather than silently reporting no substitution.
  */
-export function auditGsub(buf: Buffer): GsubAudit {
+export function auditGsub(buf: FontBinary): GsubAudit {
   const tables = readTableDirectory(buf);
   const gsub = tables.get("GSUB");
   if (!gsub) return { hasGsub: false, scriptTags: [], vert: NO_FEATURE, vrt2: NO_FEATURE };
