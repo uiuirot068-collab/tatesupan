@@ -101,7 +101,7 @@ export default function WritingCheckOverlay({
           segment.flagged ? (
             <span
               key={index}
-              className={segment.severity === "REVIEW" ? "tsp-writing-wavy-review" : "tsp-writing-wavy"}
+              className={segment.severity === "HIGH_CONFIDENCE" ? "tsp-writing-wavy" : segment.ngWord ? "tsp-writing-wavy-ng" : "tsp-writing-wavy-review"}
             >
               {segment.text}
             </span>

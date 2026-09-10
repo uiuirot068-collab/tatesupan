@@ -64,7 +64,17 @@
 .tsp-writing-wavy-review {
   text-decoration-line: underline;
   text-decoration-style: wavy;
-  text-decoration-color: #b45309;
+  text-decoration-color: #d99a28;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.15em;
+}
+
+/* NG words retain their explicit textual identity in the results and use a
+   separate purple wave in the editor; this does not alter detection meaning. */
+.tsp-writing-wavy-ng {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #7e22ce;
   text-decoration-skip-ink: none;
   text-underline-offset: 0.15em;
 }

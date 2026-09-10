@@ -170,7 +170,7 @@ export default function WritingCheckBar({
                       >
                         {isRed ? "事故確認" : "確認推奨"}
                       </span>
-                      <span className="block truncate font-mono text-[11px] text-ink/55">
+                      <span className="block truncate font-mono text-sm text-ink/55">
                         {before}
                         <mark className={isRed ? "bg-[#dc2626]/15 text-[#b91c1c]" : "bg-[#b45309]/15 text-[#92400e]"}>
                           {target || "∅"}
@@ -178,7 +178,7 @@ export default function WritingCheckBar({
                         {after}
                       </span>
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-ink/80">{issue.message}</span>
+                    <span className="mt-1 block text-sm leading-relaxed text-ink/80">{issue.message}</span>
                   </button>
                   <div className="mt-1 flex gap-2">
                     {issue.suggestedReplacement && (

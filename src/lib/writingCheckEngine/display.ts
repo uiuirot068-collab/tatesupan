@@ -6,7 +6,7 @@
  */
 import type { WritingDiagnostic, WritingSeverity } from "./types";
 
-export type WritingDisplayRange = { start: number; end: number; severity: WritingSeverity };
+export type WritingDisplayRange = { start: number; end: number; severity: WritingSeverity; ngWord?: true };
 
 /**
  * Collapses overlapping / touching issue ranges into the minimal set of
@@ -24,19 +24,20 @@ export type WritingDisplayRange = { start: number; end: number; severity: Writin
 export function mergeIssueRanges(issues: WritingDiagnostic[]): WritingDisplayRange[] {
   const sorted = [...issues].sort((a, b) => a.start - b.start || a.end - b.end);
   const merged: WritingDisplayRange[] = [];
-  for (const { start, end, severity } of sorted) {
+  for (const { start, end, severity, ruleId } of sorted) {
     const last = merged[merged.length - 1];
     if (last && start <= last.end) {
       last.end = Math.max(last.end, end);
       if (severity === "HIGH_CONFIDENCE") last.severity = "HIGH_CONFIDENCE";
+      if (last.severity !== "HIGH_CONFIDENCE" && ruleId === "R12-ngword") last.ngWord = true;
     } else {
-      merged.push({ start, end, severity });
+      merged.push({ start, end, severity, ...(ruleId === "R12-ngword" ? { ngWord: true as const } : {}) });
     }
   }
   return merged;
 }
 
-export type WritingSegment = { text: string; flagged: boolean; severity?: WritingSeverity };
+export type WritingSegment = { text: string; flagged: boolean; severity?: WritingSeverity; ngWord?: true };
 
 /**
  * Splits `text` into consecutive segments, each either plain or
@@ -55,7 +56,7 @@ export function buildWritingSegments(text: string, ranges: WritingDisplayRange[]
     const start = Math.max(cursor, Math.min(range.start, text.length));
     const end = Math.max(start, Math.min(range.end, text.length));
     if (start > cursor) segments.push({ text: text.slice(cursor, start), flagged: false });
-    if (end > start) segments.push({ text: text.slice(start, end), flagged: true, severity: range.severity });
+    if (end > start) segments.push({ text: text.slice(start, end), flagged: true, severity: range.severity, ...(range.ngWord ? { ngWord: true as const } : {}) });
     cursor = end;
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor), flagged: false });

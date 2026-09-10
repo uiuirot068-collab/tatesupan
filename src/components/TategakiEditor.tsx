@@ -49,6 +49,10 @@ import {
 import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
+import { downloadLocalTxt, readLocalTxtFile } from "@/lib/txtTransfer";
+import ChecklistPanel from "./ChecklistPanel";
+import ViewportModal from "./ViewportModal";
+import EditorSettingsDrawer from "./EditorSettingsDrawer";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -168,6 +172,9 @@ export default function TategakiEditor({
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
   const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
   const [isBetaFeedbackOpen, setIsBetaFeedbackOpen] = useState(false);
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
+  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
   // 本文の総ページ数（PreviewPane の pagination 結果）。奥付編集ポップアップの
   // 「本文の何ページ後」入力の目安・範囲外警告に使う。
   const [bodyPageCount, setBodyPageCount] = useState(0);
@@ -216,6 +223,7 @@ export default function TategakiEditor({
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
+  const txtInputRef = useRef<HTMLInputElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = demoMode || isEphemeralDocId(docId);
@@ -226,6 +234,24 @@ export default function TategakiEditor({
     () => Array.from(selectedPages, (index) => index + 1).sort((a, b) => a - b),
     [selectedPages]
   );
+
+  const exportTxt = () => {
+    downloadLocalTxt(title || "TateSpun", content, { bom: false, newlines: "lf" });
+    setToast("TXTを書き出しました（UTF-8・BOMなし・LF）。");
+  };
+
+  const importTxt = async (file: File) => {
+    const replacement = await readLocalTxtFile(file, { newlines: "lf" });
+    if (content.length > 0 && !window.confirm("現在の原稿をTXTの内容で置き換えます。続けますか？")) return;
+    const imageIds = Array.from(replacement.matchAll(/【IMG:([^:：】]+):/g), (match) => match[1]);
+    setContent(replacement);
+    setImages({});
+    setImageLayerOrder({});
+    setUnresolvedCloudImages(imageIds.length > 0 ? { missing: imageIds, unmanifested: [] } : null);
+    setToast(imageIds.length > 0
+      ? "TXTを読み込みました。画像データはTXTに含まれないため、画像を再設定してください。"
+      : "TXTを読み込みました。");
+  };
 
   const applyCloudProject = useCallback((project: Project) => {
     setCurrentProjectId(project.id);
@@ -580,6 +606,17 @@ export default function TategakiEditor({
           : "min-h-[100dvh] gap-3 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+5rem)]"
       }`}
     >
+      <input
+        ref={txtInputRef}
+        type="file"
+        accept=".txt,text/plain"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void importTxt(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
+        }}
+      />
       {/* Focus mode collapses the full header on narrow viewports only; at md+
           the wrapper is `display:contents`, so the header lays out exactly as
           before on desktop / tablet-wide. TSP-LOOP-022: on a phone the Header
@@ -685,6 +722,11 @@ export default function TategakiEditor({
             onEndWorkSession={endWorkSession}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenBookParts={() => setIsBookPartsModalOpen(true)}
+            onImportTxt={() => txtInputRef.current?.click()}
+            onExportTxt={exportTxt}
+            onOpenMemo={() => setIsMemoOpen(true)}
+            onOpenChecklist={() => setIsChecklistOpen(true)}
+            onOpenSettingsDrawer={() => setIsSettingsDrawerOpen(true)}
             onOpenBetaFeedback={() => setIsBetaFeedbackOpen(true)}
             settings={settings}
             layout={layout}
@@ -793,6 +835,17 @@ export default function TategakiEditor({
           onClose={() => setIsSearchOpen(false)}
         />
       )}
+
+      {isMemoOpen && (
+        <ViewportModal title="メモ" titleId="editor-memo-title" closeLabel="メモを閉じる" onClose={() => setIsMemoOpen(false)} panelClassName="max-w-2xl">
+          <textarea autoFocus value={plotNote} onChange={(event) => setPlotNote(event.target.value)} className="min-h-[50dvh] w-full resize-y rounded border border-ink/20 bg-paper p-4 font-mono text-sm leading-relaxed outline-none focus:ring-2 focus:ring-accent/30" />
+          <p className="mt-2 text-xs text-ink/55">原稿と一緒に保存されます。本文や書き出し内容には入りません。</p>
+        </ViewportModal>
+      )}
+
+      {isChecklistOpen && <ChecklistPanel onClose={() => setIsChecklistOpen(false)} />}
+
+      {isSettingsDrawerOpen && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} plotNote={plotNote} onPlotNoteChange={setPlotNote} onOpenHelp={() => setIsHelpOpen(true)} selectedPageNumbers={selectedPageNumbers} onClose={() => setIsSettingsDrawerOpen(false)} />}
 
       {isPdfNoticeOpen && (
         <PdfExportNoticeModal

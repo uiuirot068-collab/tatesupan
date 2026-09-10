@@ -185,6 +185,19 @@ export default function Home() {
             : "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center px-4 py-10"
         }
       >
+        <section className="mb-10 w-full overflow-hidden rounded-[28px] border border-ink/10 bg-[radial-gradient(circle_at_top_right,rgba(197,160,89,0.20),transparent_42%),linear-gradient(135deg,#fffdf8,#f1ece3)] px-5 py-10 text-center shadow-sm sm:px-10 sm:py-14 dark:border-[#2A3240] dark:bg-[linear-gradient(135deg,#171C26,#11151D)]" aria-labelledby="tatespun-hero-title">
+          <p className="text-xs font-bold tracking-[0.22em] text-accent dark:text-[#C6AF63]">MANUSCRIPT TO BOOK</p>
+          <h1 id="tatespun-hero-title" className="mx-auto mt-4 max-w-3xl font-serif text-[clamp(32px,6vw,64px)] font-medium leading-[1.25] tracking-[0.03em] text-ink dark:text-[#D4DBE7]">どこで綴っても、ひとつの本になる。</h1>
+          <p className="mx-auto mt-5 max-w-2xl text-sm leading-8 text-ink/70 sm:text-base dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>
+          <ol className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs font-medium text-ink/70 sm:text-sm dark:text-[#AEB7C6]">
+            <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
+          </ol>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <button type="button" onClick={handleCreate} disabled={creating} className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品を作成する</button>
+            <Link href="/editor?demo=1" className="rounded-full border border-ink/20 bg-white/60 px-6 py-3 text-sm font-semibold text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]">おためしデモ</Link>
+          </div>
+          <p className="mx-auto mt-6 max-w-2xl text-[11px] leading-5 text-ink/55 dark:text-[#939DAF]">他のアプリで書いた原稿もTXTで読み込めます。プレビューと書き出しは手元のブラウザで処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>
+        </section>
         {isNonEmptyVisual ? (
           <div className="mb-10 flex w-full flex-col items-center gap-6 border-b border-ink/10 pb-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left dark:border-[#2A3240]">
             <div>

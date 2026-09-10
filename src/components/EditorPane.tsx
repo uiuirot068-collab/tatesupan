@@ -68,6 +68,11 @@ interface EditorPaneProps {
   onEndWorkSession: () => CompletedWorkSession | null;
   onOpenSearchReplace: () => void;
   onOpenBookParts: () => void;
+  onImportTxt: () => void;
+  onExportTxt: () => void;
+  onOpenMemo: () => void;
+  onOpenChecklist: () => void;
+  onOpenSettingsDrawer: () => void;
   /** β限定「報告」ボタン。BETA_FEEDBACK_ENABLED のときだけ表示。 */
   onOpenBetaFeedback: () => void;
   settings: PageSettings;
@@ -102,6 +107,11 @@ export default function EditorPane({
   onEndWorkSession,
   onOpenSearchReplace,
   onOpenBookParts,
+  onImportTxt,
+  onExportTxt,
+  onOpenMemo,
+  onOpenChecklist,
+  onOpenSettingsDrawer,
   onOpenBetaFeedback,
   settings,
   layout,
@@ -313,6 +323,7 @@ export default function EditorPane({
           className="w-full min-w-0 bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
         />
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onOpenSettingsDrawer} className="hidden rounded border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 hover:bg-ink/5 md:inline-flex">設定</button>
           <button
             type="button"
             data-editor-history-action="undo"
@@ -349,6 +360,22 @@ export default function EditorPane({
           >
             改ページ挿入
           </button>
+          <button
+            type="button"
+            onClick={onImportTxt}
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            TXTを読み込む
+          </button>
+          <button
+            type="button"
+            onClick={onExportTxt}
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+          >
+            TXTを書き出す
+          </button>
+          <button type="button" onClick={onOpenMemo} className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5">メモ</button>
+          <button type="button" onClick={onOpenChecklist} className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5">完成前チェック</button>
           <button
             type="button"
             onClick={onOpenSearchReplace}
