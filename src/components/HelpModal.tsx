@@ -184,14 +184,20 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
                 className="rounded-lg border border-ink/10 bg-ink/[0.025] p-3"
               >
                 <p className="text-xs font-bold text-ink/75">目次</p>
-                <ul className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 min-[420px]:grid-cols-2">
+                <ul className="mt-2 grid !list-none grid-cols-1 gap-x-3 gap-y-1 !pl-0 min-[420px]:grid-cols-2">
                   {sections.map((section) => (
-                    <li key={section.id} className="min-w-0">
+                    <li key={section.id} className="flex min-w-0 items-start gap-1">
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 py-1 text-sm leading-relaxed text-accent"
+                      >
+                        •
+                      </span>
                       <button
                         type="button"
                         data-help-toc-target={section.id}
                         onClick={() => activateTableOfContentsItem(section.id)}
-                        className="w-full truncate rounded px-1.5 py-1 text-left text-xs text-accent hover:bg-ink/5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1"
+                        className="min-w-0 flex-1 truncate rounded px-0.5 py-1 text-left text-sm leading-relaxed text-accent hover:bg-ink/5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1"
                         title={section.title}
                       >
                         {section.title}

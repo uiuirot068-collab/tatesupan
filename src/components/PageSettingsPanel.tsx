@@ -811,7 +811,7 @@ export default function PageSettingsPanel({
 
       {(settingsOnly || activeTab === "page") && (
         <div className="w-full">
-          {settingsOnly && <h3 data-settings-section="page" className="border-b border-ink/10 px-4 py-3 font-serif text-base font-semibold text-ink">用紙・本文</h3>}
+          {settingsOnly && <h3 data-settings-section="page" className="w-full border-b border-ink/10 bg-ink/[0.045] px-4 py-2.5 text-sm font-semibold tracking-[0.02em] text-ink">用紙・本文</h3>}
           <div className="flex flex-col gap-3 px-4 pb-4 pt-3">
         <label data-settings-row="paper" data-settings-order="paper" className="order-[1] flex flex-col gap-1">
           <span className="text-xs text-ink/60">用紙サイズ</span>
@@ -1058,8 +1058,8 @@ export default function PageSettingsPanel({
 
       {(settingsOnly || activeTab === "master") && (
         <div className={`w-full ${settingsOnly ? "border-t border-ink/10" : ""}`}>
-          {settingsOnly && <h3 data-settings-section="master" className="border-b border-ink/10 px-4 py-3 font-serif text-base font-semibold text-ink">ページ・ノンブル・柱</h3>}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
+          {settingsOnly && <h3 data-settings-section="master" className="w-full border-b border-ink/10 bg-ink/[0.045] px-4 py-2.5 text-sm font-semibold tracking-[0.02em] text-ink">ページ・ノンブル・柱</h3>}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
         <div className="col-span-2 flex flex-wrap items-end gap-3 sm:col-span-4">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-ink/60">ノンブル表示位置</span>

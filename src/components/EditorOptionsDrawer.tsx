@@ -35,7 +35,8 @@ export default function EditorOptionsDrawer({
     onClose();
     action();
   };
-  const optionClass = "rounded-xl border border-ink/15 bg-base p-3";
+  const flatOptionClass = "border-b border-ink/10 pb-3";
+  const groupedOptionClass = "rounded-xl border border-ink/15 bg-base p-3";
   const buttonClass = "rounded border border-ink/20 px-3 py-2 text-left text-sm font-medium text-ink/75 hover:bg-ink/5";
 
   return (
@@ -46,27 +47,27 @@ export default function EditorOptionsDrawer({
           <button type="button" onClick={onClose} aria-label="オプションを閉じる" className="rounded p-2 text-xl text-ink/55 hover:bg-ink/5">×</button>
         </header>
         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">
-          <section data-editor-option="vertical-colophon" className={optionClass}>
-            <h3 className="text-sm font-semibold">奥付（縦）</h3>
+          <section data-editor-option="vertical-colophon" className={flatOptionClass}>
+            <h3 className="text-sm font-semibold text-accent">奥付（縦）</h3>
             <p className="mt-1 text-xs text-ink/55">本文ページとして縦書きの奥付を作成します。</p>
             <button type="button" onClick={() => open(onOpenVerticalColophon)} className={`${buttonClass} mt-2 w-full`}>奥付（縦）を開く</button>
           </section>
-          <section data-editor-option="horizontal-colophon" className={optionClass}>
-            <h3 className="text-sm font-semibold">奥付（横）</h3>
+          <section data-editor-option="horizontal-colophon" className={flatOptionClass}>
+            <h3 className="text-sm font-semibold text-accent">奥付（横）</h3>
             <p className="mt-1 text-xs text-ink/55">本文とは独立した横書き専用ページを設定します。</p>
             <button type="button" onClick={() => open(onOpenHorizontalColophon)} className={`${buttonClass} mt-2 w-full`}>奥付（横）を開く</button>
           </section>
-          <section data-editor-option="toc" className={optionClass}>
-            <h3 className="text-sm font-semibold">目次</h3>
+          <section data-editor-option="toc" className={flatOptionClass}>
+            <h3 className="text-sm font-semibold text-accent">目次</h3>
             <p className="mt-1 text-xs text-ink/55">本文の見出しから目次を作成します。</p>
             <button type="button" onClick={() => open(onOpenToc)} className={`${buttonClass} mt-2 w-full`}>目次を開く</button>
           </section>
-          <section data-editor-option="checklist" className={optionClass}>
-            <h3 className="text-sm font-semibold">完成前チェック</h3>
+          <section data-editor-option="checklist" className={flatOptionClass}>
+            <h3 className="text-sm font-semibold text-accent">完成前チェック</h3>
             <p className="mt-1 text-xs text-ink/55">入稿前に自分の確認項目を見直します。</p>
             <button type="button" onClick={() => open(onOpenChecklist)} className={`${buttonClass} mt-2 w-full`}>完成前チェックを開く</button>
           </section>
-          <section data-editor-option="txt-transfer" className={optionClass}>
+          <section data-editor-option="txt-transfer" className={groupedOptionClass}>
             <h3 className="text-sm font-semibold">TXT出入力</h3>
             <div className="mt-2 grid gap-3">
               <div className="rounded-lg bg-ink/[0.035] p-3">
