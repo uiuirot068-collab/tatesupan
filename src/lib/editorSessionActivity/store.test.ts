@@ -104,6 +104,9 @@ describe("11-B newly written character counting", () => {
       id: "work-1",
       startedAt: 10_000,
       writtenCharacterCount: 8,
+      status: "active",
+      pausedAt: null,
+      accumulatedPausedMs: 0,
     });
   });
 
@@ -154,7 +157,14 @@ describe("11-B newly written character counting", () => {
       }],
     }));
     expect(createWorkSessionStore(() => storage).read()).toEqual({
-      active: { id: "legacy-active", startedAt: 1_000, writtenCharacterCount: 7 },
+      active: {
+        id: "legacy-active",
+        startedAt: 1_000,
+        writtenCharacterCount: 7,
+        status: "active",
+        pausedAt: null,
+        accumulatedPausedMs: 0,
+      },
       history: [{
         id: "legacy-completed",
         startedAt: 100,

@@ -52,8 +52,8 @@ describe("Round 5 compact mobile Editor controls", () => {
     pane.indexOf("<InlineMemoAccordion")
   );
 
-  it.each([320, 375, 390, 430])("keeps all four manuscript actions in one nowrap row at %ipx", () => {
-    expect(actionRow).toContain("grid-cols-[44px_44px_max-content_max-content]");
+  it.each([320, 375, 390, 430])("keeps all five manuscript actions in one nowrap row at %ipx", () => {
+    expect(actionRow).toContain("grid-cols-[44px_44px_max-content_max-content_max-content]");
     expect(actionRow).not.toContain("grid-cols-2");
     expect(actionRow).toContain("whitespace-nowrap");
     expect(actionRow).toContain("min-h-9 min-w-11");
@@ -72,6 +72,7 @@ describe("Round 5 compact mobile Editor controls", () => {
     expect(actionRow).toContain('data-editor-action="redo"');
     expect(actionRow).toContain('data-editor-action="page-break"');
     expect(actionRow).toContain('data-editor-action="replace"');
+    expect(actionRow).toContain('data-editor-action="report"');
     expect(pane).toMatch(/data-writing-check-surface=""[\s\S]*?max-md:hidden/);
     expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]*?max-md:hidden/);
   });

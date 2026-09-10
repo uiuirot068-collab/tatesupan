@@ -1,8 +1,8 @@
 # TateSpun β Unified Roadmap
 
-- Updated: 2026-09-10
+- Updated: 2026-09-11
 - Decision-prep baseline HEAD: `12d8c312727c2b414f811ccb40398b274fe39454`
-- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / RC POLISH ROUND 3 INTEGRATED / REDUCED HUMAN QA PENDING**
+- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / RC POLISH ROUND 7 IMPLEMENTED / REDUCED HUMAN QA PENDING**
 - Production integration: **BRANCH-INTEGRATED; RELEASE ACTION NOT AUTHORIZED**
 
 ## 1. Authority and status model
@@ -69,7 +69,7 @@ The following state is closed or Human-passed and must be preserved through inte
 - UI-C drawer integration, Memo, Editor actions, and narrow-width behavior: **HUMAN PASS in the development Editor**.
 - Manual page break across Preview/PDF/Web JPG/print JPG: **HUMAN PASS**.
 - Writing Check 11-A functional scope: **COMPLETE / HUMAN PASS**.
-- 11-B work-session tracker: **CLOSED / FORMAL HUMAN PASS**. Counting, Start/End, persistence, share/history data, result/history modal presentation, narrow-width usability, X/copy share, and visible Undo/Redo are Human PASS and frozen. Ruby and TCY remain **CLOSED / HUMAN PASS**.
+- 11-B work-session tracker core: **CLOSED / FORMAL HUMAN PASS**. Existing counting, Start/End, persistence, share/history data, result/history presentation, narrow-width usability, X/copy share, and Undo/Redo remain frozen. Pause/Resume: **BETA RC LIMITED EXTENSION — IMPLEMENTED / HUMAN QA PENDING**. Ruby and TCY remain **CLOSED / HUMAN PASS**.
 - Canonical Preview edit/multi-page behavior, valid-image Preview, normal PDF download, export Escape pause/resume/cancel, manuscript/Memo/checklist/work-session persistence, and Help TOC: **HUMAN PASS**.
 - Missing required-image binary: **AUTOMATED PASS**. Preview shows model-derived HOLD, PDF/JPG controls disable, and shared Publication preflight refuses incomplete export without discarding surrounding manuscript content.
 

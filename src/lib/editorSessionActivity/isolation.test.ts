@@ -81,4 +81,16 @@ describe("11-B architectural and persistence isolation", () => {
     expect(counter).toContain('data-work-session-history-action="share-x"');
     expect(counter).not.toContain('className="absolute bottom-full');
   });
+
+  it("wires compact Pause/Resume controls, active-time results, and an explicit resume baseline", () => {
+    const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
+    const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
+    expect(counter).toContain('data-work-session-action="pause"');
+    expect(counter).toContain('data-work-session-action="resume"');
+    expect(counter).toContain("一時停止中");
+    expect(counter).toContain("実作業時間");
+    expect(counter).toContain('className="flex shrink-0 items-center gap-1"');
+    expect(editor).toContain("inputActivityStateRef.current = createTextInputActivityState(content)");
+    expect(editor).toMatch(/data-editor-status-surfaces=[\s\S]*?focusMode \? "max-md:hidden"/);
+  });
 });

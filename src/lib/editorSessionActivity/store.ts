@@ -5,13 +5,21 @@ export const WORK_SESSION_HISTORY_LIMIT = 100;
 
 type LocalStorageLike = Pick<Storage, "getItem" | "setItem">;
 
+export type WorkSessionStatus = "active" | "paused";
+
 export interface ActiveWorkSession {
   id: string;
   startedAt: number;
   writtenCharacterCount: number;
+  status: WorkSessionStatus;
+  pausedAt: number | null;
+  accumulatedPausedMs: number;
 }
 
-export interface CompletedWorkSession extends ActiveWorkSession {
+export interface CompletedWorkSession {
+  id: string;
+  startedAt: number;
+  writtenCharacterCount: number;
   endedAt: number;
   durationMs: number;
 }
@@ -30,6 +38,8 @@ export interface WorkSessionStore {
   read: () => WorkSessionState;
   subscribe: (listener: () => void) => () => void;
   start: (startedAt?: number) => ActiveWorkSession;
+  pause: (pausedAt?: number) => ActiveWorkSession | null;
+  resume: (resumedAt?: number) => ActiveWorkSession | null;
   record: (delta: ActivityDelta) => void;
   end: (endedAt?: number) => CompletedWorkSession | null;
 }
@@ -56,10 +66,23 @@ function parseActive(value: unknown): ActiveWorkSession | null {
   ) {
     return null;
   }
+  const accumulatedPausedMs = isNonNegativeSafeInteger(candidate.accumulatedPausedMs)
+    ? candidate.accumulatedPausedMs
+    : 0;
+  const persistedPausedAt = isNonNegativeSafeInteger(candidate.pausedAt)
+    ? candidate.pausedAt
+    : null;
+  const isValidPause =
+    candidate.status === "paused" &&
+    persistedPausedAt !== null &&
+    persistedPausedAt >= candidate.startedAt;
   return {
     id: candidate.id,
     startedAt: candidate.startedAt,
     writtenCharacterCount,
+    status: isValidPause ? "paused" : "active",
+    pausedAt: isValidPause ? persistedPausedAt : null,
+    accumulatedPausedMs,
   };
 }
 
@@ -75,10 +98,24 @@ function parseCompleted(value: unknown): CompletedWorkSession | null {
     return null;
   }
   return {
-    ...active,
+    id: active.id,
+    startedAt: active.startedAt,
+    writtenCharacterCount: active.writtenCharacterCount,
     endedAt: candidate.endedAt,
     durationMs: candidate.durationMs,
   };
+}
+
+/** Active work time excludes every completed pause and the current pause. */
+export function activeWorkDurationMs(session: ActiveWorkSession, now: number): number {
+  const safeNow = Math.max(now, session.startedAt);
+  const currentPauseMs = session.status === "paused" && session.pausedAt !== null
+    ? Math.max(0, safeNow - session.pausedAt)
+    : 0;
+  return Math.max(
+    0,
+    safeNow - session.startedAt - session.accumulatedPausedMs - currentPauseMs
+  );
 }
 
 function parseState(raw: string | null): WorkSessionState {
@@ -172,6 +209,39 @@ export function createWorkSessionStore(
       id: createId(startedAt),
       startedAt,
       writtenCharacterCount: 0,
+      status: "active" as const,
+      pausedAt: null,
+      accumulatedPausedMs: 0,
+    };
+    publish({ active, history: current.history });
+    return active;
+  }
+
+  function pause(pausedAt = Date.now()): ActiveWorkSession | null {
+    const current = read();
+    if (!current.active) return null;
+    if (current.active.status === "paused") return current.active;
+    const active: ActiveWorkSession = {
+      ...current.active,
+      status: "paused",
+      pausedAt: Math.max(pausedAt, current.active.startedAt),
+    };
+    publish({ active, history: current.history });
+    return active;
+  }
+
+  function resume(resumedAt = Date.now()): ActiveWorkSession | null {
+    const current = read();
+    if (!current.active) return null;
+    if (current.active.status === "active") return current.active;
+    const pausedAt = current.active.pausedAt ?? current.active.startedAt;
+    const safeResumedAt = Math.max(resumedAt, pausedAt);
+    const active: ActiveWorkSession = {
+      ...current.active,
+      status: "active",
+      pausedAt: null,
+      accumulatedPausedMs:
+        current.active.accumulatedPausedMs + (safeResumedAt - pausedAt),
     };
     publish({ active, history: current.history });
     return active;
@@ -181,7 +251,7 @@ export function createWorkSessionStore(
     const writtenCharacters = delta.insertedCodePoints;
     if (writtenCharacters <= 0) return;
     const current = read();
-    if (!current.active) return;
+    if (!current.active || current.active.status !== "active") return;
     publish({
       active: {
         ...current.active,
@@ -194,11 +264,17 @@ export function createWorkSessionStore(
   function end(endedAt = Date.now()): CompletedWorkSession | null {
     const current = read();
     if (!current.active) return null;
-    const safeEndedAt = Math.max(endedAt, current.active.startedAt);
+    const safeEndedAt = Math.max(
+      endedAt,
+      current.active.startedAt,
+      current.active.pausedAt ?? 0
+    );
     const completed: CompletedWorkSession = {
-      ...current.active,
+      id: current.active.id,
+      startedAt: current.active.startedAt,
+      writtenCharacterCount: current.active.writtenCharacterCount,
       endedAt: safeEndedAt,
-      durationMs: safeEndedAt - current.active.startedAt,
+      durationMs: activeWorkDurationMs(current.active, safeEndedAt),
     };
     publish({
       active: null,
@@ -207,7 +283,7 @@ export function createWorkSessionStore(
     return completed;
   }
 
-  return { read, subscribe, start, record, end };
+  return { read, subscribe, start, pause, resume, record, end };
 }
 
 export const workSessionStore = createWorkSessionStore();

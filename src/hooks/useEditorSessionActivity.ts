@@ -13,6 +13,8 @@ export function useEditorSessionActivity(): {
   workSession: WorkSessionState;
   recordActivity: (delta: ActivityDelta) => void;
   startWorkSession: () => void;
+  pauseWorkSession: () => void;
+  resumeWorkSession: () => void;
   endWorkSession: () => CompletedWorkSession | null;
 } {
   const workSession = useSyncExternalStore(
@@ -26,6 +28,19 @@ export function useEditorSessionActivity(): {
   const startWorkSession = useCallback(() => {
     workSessionStore.start();
   }, []);
+  const pauseWorkSession = useCallback(() => {
+    workSessionStore.pause();
+  }, []);
+  const resumeWorkSession = useCallback(() => {
+    workSessionStore.resume();
+  }, []);
   const endWorkSession = useCallback(() => workSessionStore.end(), []);
-  return { workSession, recordActivity, startWorkSession, endWorkSession };
+  return {
+    workSession,
+    recordActivity,
+    startWorkSession,
+    pauseWorkSession,
+    resumeWorkSession,
+    endWorkSession,
+  };
 }

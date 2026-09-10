@@ -10,7 +10,6 @@ interface EditorOptionsDrawerProps {
   onImportSourceTxt: () => void;
   onExportSourceTxt: () => void;
   onExportReadableTxt: () => void;
-  onOpenFeedback?: () => void;
   onClose: () => void;
 }
 
@@ -22,7 +21,6 @@ export default function EditorOptionsDrawer({
   onImportSourceTxt,
   onExportSourceTxt,
   onExportReadableTxt,
-  onOpenFeedback,
   onClose,
 }: EditorOptionsDrawerProps) {
   useEffect(() => {
@@ -86,9 +84,6 @@ export default function EditorOptionsDrawer({
               </div>
             </div>
           </section>
-          {onOpenFeedback && (
-            <button type="button" onClick={() => open(onOpenFeedback)} className={buttonClass}>β版フィードバックを送る</button>
-          )}
         </div>
       </aside>
     </div>

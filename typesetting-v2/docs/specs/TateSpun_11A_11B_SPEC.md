@@ -1,6 +1,6 @@
-# TateSpun 11-A / 11-B Specification v1.7
-Updated: 2026-09-10
-Revision reason: record the completed Human confirmation and formally close 11-B without changing its frozen semantics.
+# TateSpun 11-A / 11-B Specification v1.8
+Updated: 2026-09-11
+Revision reason: record the approved Beta RC limited Pause/Resume extension without reopening the Human-passed 11-B counting semantics.
 
 ## 11-A correction / recovered historical authority
 
@@ -95,7 +95,7 @@ The same development Editor implements the approved UI-C drawer interaction, Mem
 
 Historical source: Master §9.2 `Session Editing Metrics`.
 
-Status: **CLOSED / FORMAL HUMAN PASS (2026-09-10).** Counting, lifecycle, persistence, share/history data, result/history modal presentation, narrow-width usability, compact Ruby/TCY help, and visible Undo/Redo are Human PASS and frozen. No 11-B recheck remains in the final pre-integration Human QA packet.
+Status: **CORE CLOSED / FORMAL HUMAN PASS (2026-09-10); PAUSE/RESUME BETA RC LIMITED EXTENSION IMPLEMENTED / HUMAN QA PENDING.** Existing counting, Start/End, share/history, result/history presentation, compact Ruby/TCY help, and Undo/Redo semantics remain frozen. Only the additive Pause/Resume lifecycle and active-time behavior are reopened for focused Human QA.
 
 Human QA produced two product corrections. First, the automatic browser-tab/session lifecycle was superseded by explicit Human-started work sessions. Second, the inserted+deleted mutation-activity total was superseded by a newly written text total. Both implementations matched their then-current specifications; these are product-semantics corrections, not incidental E2E bugs.
 
@@ -105,7 +105,7 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 - Every quantity is a Unicode code-point count.
 - Only newly inserted user-authored text adds positively. Deletion never subtracts, but also never adds.
 - Replacement and paste-over-selection count only the inserted side.
-- The compact Editor UI uses `作業スタート`, `作業中`, `今回書いた文字数`, `経過時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
+- The compact Editor UI uses `作業スタート`, `作業中`, `一時停止`, `一時停止中`, `作業を再開`, `今回書いた文字数`, `実作業時間`, and `作業終了`. The existing `現在の原稿文字数` remains separately visible.
 - The Editor footer keeps Ruby/TCY help on one compact ellipsized line. Its full explanation is exposed by the native hover title and accessible name, and activation opens a lightweight body-portal dialog for keyboard/touch users without permanently enlarging the footer.
 - Visible `↶ 元に戻す` and `↷ やり直す` controls invoke the textarea's existing native history; Ctrl/Cmd+Z and platform redo remain available, and every Undo/Redo path adds 0.
 
@@ -131,12 +131,14 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 
 - IDLE is the default. Editing while idle does not accumulate into any work session.
 - Selecting `作業スタート` creates a new active session at 0 with a stable id and current `startedAt`. Selecting Start while already active does not replace or reset it.
-- Only newly inserted user-authored text occurring while ACTIVE adds to `writtenCharacterCount`. Elapsed time is derived from `startedAt`; there is no per-second persistent write or event log.
-- A normal reload restores the same active id, start time, active state, and aggregate activity from `localStorage`.
+- Only newly inserted user-authored text occurring while ACTIVE adds to `writtenCharacterCount`. All input while PAUSED adds 0; the separate current manuscript count continues to follow the real document.
+- `一時停止` preserves the existing session id/count and freezes active duration. `作業を再開` re-anchors input tracking to the current manuscript before returning to ACTIVE, so paused-period edits never count retroactively. Multiple pause cycles remain one work session.
+- Active duration is derived from `startedAt`, accumulated completed pauses, and the current `pausedAt`; paused wall time is excluded. There is no per-second persistent write or event log.
+- A normal reload/navigation restore keeps the same id, start time, count, status, `pausedAt`, and accumulated paused duration from `localStorage`. A paused session never silently resumes.
 - Selecting `作業終了` stops accumulation immediately and appends one completed metadata-only record containing `id`, `startedAt`, `endedAt`, `durationMs`, and `writtenCharacterCount`.
+- Ending while paused is valid: `endedAt` is the actual End action time while `durationMs` contains active work time only. Pause/Resume never create history rows.
 - Result and history use the same body-portal, viewport-centered modal shell independent of Editor/footer overflow. Header/actions remain fixed and the bounded body scrolls internally. Result shows activity, duration, start time, and end time and retains copy/X actions. History shows date/time, duration, written count, and each record's X action, never manuscript text. Both support explicit/Escape/backdrop close. Closing either modal does not delete history. Later idle edits cannot change the result. A later Start creates a new session at 0 while preserving completed history.
 - Completed history is local-only, capped at the latest 100 records, and evicts the oldest first. No cloud synchronization, analytics, database, manuscript text, or mutation event log is used.
-- No pause state is introduced in this beta iteration.
 
 ### Share contract
 
@@ -148,11 +150,11 @@ Human QA produced two product corrections. First, the automatic browser-tab/sess
 
 - Pure policy/input-state/store code lives under `src/lib/editorSessionActivity/`; the React hook and compact Editor UI live under `src/hooks/` and `src/components/`.
 - The tracker remains outside Core typesetting, Canonical Layout, Preview layout, Publication output, Ruby, TCY, Typography, and Writing Check semantics. A static isolation test enforces this boundary.
-- 44 deterministic 11-B/UI tests cover written-count semantics, lifecycle, storage, share, isolation, compact accessible help, visible native-history controls, and the shared viewport-modal contract. The actual `/editor?demo=1` browser E2E additionally proves desktop/narrow result/history geometry, touch help disclosure, canonical copy/X actions, explicit/Escape close, retained history, and visible Undo/Redo at +0. No new dependency was introduced.
+- 63 deterministic 11-B/UI tests cover the frozen written-count semantics plus Pause/Resume state, paused input/IME exclusion, resume baseline, active-time accounting, reload/navigation recovery, legacy defaults, single-record history, isolation, responsive controls, and the shared viewport-modal contract. The existing `/editor?demo=1` browser E2E remains the visual regression baseline. No new dependency was introduced.
 
 ### Formal close record
 
-The Human final pass confirms Start/End, newly-written-only counting (including delete/cut/Undo/Redo = +0 and inserted-side replacement/paste), reload recovery, history, X/copy sharing, result/history dialogs at desktop and narrow widths, compact Ruby/TCY help, and visible functional Undo/Redo. 11-B and Ruby are therefore **CLOSED / HUMAN PASS**. Later onboarding copy may point to these features, but must not change their semantics.
+The Human final pass confirms Start/End, newly-written-only counting (including delete/cut/Undo/Redo = +0 and inserted-side replacement/paste), reload recovery, history, X/copy sharing, result/history dialogs at desktop and narrow widths, compact Ruby/TCY help, and visible functional Undo/Redo. Those 11-B semantics and Ruby remain **CLOSED / HUMAN PASS**. The additive Pause/Resume extension is **IMPLEMENTED / HUMAN QA PENDING** and does not reopen the closed behavior.
 
 ---
 

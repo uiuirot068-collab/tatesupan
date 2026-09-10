@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type HTMLAttributes } from "react";
 import {
+  activeWorkDurationMs,
   formatWorkSessionShareText,
   type CompletedWorkSession,
   type WorkSessionState,
@@ -108,7 +109,7 @@ function WorkSessionResultModal({
         <dd className="text-right text-lg font-bold tabular-nums text-ink" data-work-session-result-written-count>
           {result.writtenCharacterCount.toLocaleString("ja-JP")}文字
         </dd>
-        <dt className="text-ink/55">作業時間</dt>
+        <dt className="text-ink/55">実作業時間</dt>
         <dd className="text-right font-semibold text-ink">{formatDuration(result.durationMs)}</dd>
         <dt className="text-ink/55">開始時刻</dt>
         <dd className="text-right tabular-nums text-ink">{formatClock(result.startedAt)}</dd>
@@ -187,10 +188,14 @@ function WorkSessionHistoryModal({
 export default function WorkSessionTracker({
   state,
   onStart,
+  onPause,
+  onResume,
   onEnd,
 }: {
   state: WorkSessionState;
   onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onEnd: () => CompletedWorkSession | null;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -198,14 +203,15 @@ export default function WorkSessionTracker({
   const [result, setResult] = useState<CompletedWorkSession | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const activeId = state.active?.id;
+  const activeStatus = state.active?.status;
 
   const closePanel = useCallback(() => setPanel(null), []);
 
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || activeStatus !== "active") return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [activeId]);
+  }, [activeId, activeStatus]);
 
   const start = () => {
     setNow(Date.now());
@@ -219,6 +225,16 @@ export default function WorkSessionTracker({
     if (!completed) return;
     setResult(completed);
     setPanel("result");
+  };
+
+  const pause = () => {
+    setNow(Date.now());
+    onPause();
+  };
+
+  const resume = () => {
+    setNow(Date.now());
+    onResume();
   };
 
   const copyShareText = async (record: CompletedWorkSession) => {
@@ -235,12 +251,13 @@ export default function WorkSessionTracker({
     <div
       className="relative flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
       data-work-session-tracker
+      data-work-session-status={state.active?.status ?? "idle"}
       data-demo-target="work-session"
     >
       {state.active ? (
         <>
-          <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-            作業中
+          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${state.active.status === "paused" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+            {state.active.status === "paused" ? "一時停止中" : "作業中"}
           </span>
           <span
             className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-ink"
@@ -249,16 +266,40 @@ export default function WorkSessionTracker({
             今回書いた文字数 {state.active.writtenCharacterCount.toLocaleString("ja-JP")}文字
           </span>
           <span className="whitespace-nowrap text-[11px] tabular-nums text-ink/60" data-work-session-elapsed>
-            経過時間 {formatElapsed(now - state.active.startedAt)}
+            経過時間 {formatElapsed(activeWorkDurationMs(
+              state.active,
+              state.active.status === "paused" ? state.active.pausedAt ?? now : now
+            ))}
           </span>
-          <button
-            type="button"
-            data-work-session-action="end"
-            onClick={end}
-            className="whitespace-nowrap rounded-full border border-ink/25 px-2 py-0.5 text-[11px] font-semibold text-ink hover:bg-ink/5"
-          >
-            作業終了
-          </button>
+          <span className="flex shrink-0 items-center gap-1">
+            {state.active.status === "paused" ? (
+              <button
+                type="button"
+                data-work-session-action="resume"
+                onClick={resume}
+                className="whitespace-nowrap rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-base hover:opacity-90"
+              >
+                作業を再開
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-work-session-action="pause"
+                onClick={pause}
+                className="whitespace-nowrap rounded-full border border-ink/25 px-2 py-0.5 text-[11px] font-semibold text-ink hover:bg-ink/5"
+              >
+                一時停止
+              </button>
+            )}
+            <button
+              type="button"
+              data-work-session-action="end"
+              onClick={end}
+              className="whitespace-nowrap rounded-full border border-ink/25 px-2 py-0.5 text-[11px] font-semibold text-ink hover:bg-ink/5"
+            >
+              作業終了
+            </button>
+          </span>
         </>
       ) : (
         <button

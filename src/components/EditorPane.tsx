@@ -62,8 +62,12 @@ interface EditorPaneProps {
   workSession: WorkSessionState;
   onRecordActivity: (delta: ActivityDelta) => void;
   onStartWorkSession: () => void;
+  onPauseWorkSession: () => void;
+  onResumeWorkSession: () => void;
   onEndWorkSession: () => CompletedWorkSession | null;
   onOpenSearchReplace: () => void;
+  /** Opens the existing beta Report flow. Omitted when beta feedback is disabled. */
+  onOpenBetaFeedback?: () => void;
   onOpenOptions: () => void;
   onToggleMemo: () => void;
   memoOpen: boolean;
@@ -92,8 +96,11 @@ export default function EditorPane({
   workSession,
   onRecordActivity,
   onStartWorkSession,
+  onPauseWorkSession,
+  onResumeWorkSession,
   onEndWorkSession,
   onOpenSearchReplace,
+  onOpenBetaFeedback,
   onOpenOptions,
   onToggleMemo,
   memoOpen,
@@ -292,6 +299,14 @@ export default function EditorPane({
     });
   };
 
+  const resumeWorkSession = () => {
+    // Paused-period edits are valid manuscript changes but must never become
+    // one large insertion when counting resumes. Re-anchor to the current
+    // controlled document and clear any stale beforeinput/composition state.
+    inputActivityStateRef.current = createTextInputActivityState(content);
+    onResumeWorkSession();
+  };
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 px-2 py-1.5 md:gap-2 md:px-4 md:py-3">
@@ -302,7 +317,7 @@ export default function EditorPane({
           data-demo-target="title"
           className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className="grid min-w-0 grid-cols-[44px_44px_max-content_max-content] items-stretch justify-center gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
+        <div data-editor-action-row="" className="grid min-w-0 max-w-full grid-cols-[44px_44px_max-content_max-content_max-content] items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
           <button
             type="button"
             data-editor-action="undo"
@@ -346,6 +361,17 @@ export default function EditorPane({
           >
             置換
           </button>
+          {onOpenBetaFeedback && (
+            <button
+              type="button"
+              data-editor-action="report"
+              onClick={onOpenBetaFeedback}
+              title="β版フィードバック（不具合・気になる事・要望）"
+              className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1"
+            >
+              報告
+            </button>
+          )}
         </div>
         <div className={focusMode ? "max-md:hidden" : ""}>
           <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-2 md:grid-cols-4 md:gap-1">
@@ -494,6 +520,8 @@ export default function EditorPane({
           <WorkSessionTracker
             state={workSession}
             onStart={onStartWorkSession}
+            onPause={onPauseWorkSession}
+            onResume={resumeWorkSession}
             onEnd={onEndWorkSession}
           />
           <span

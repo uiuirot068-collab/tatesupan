@@ -4,7 +4,9 @@
 }
 
 .bookshelfEmpty {
+  --empty-shelf-right-inset: clamp(20px, 4vw, 28px);
   width: 100%;
+  max-width: 660px;
   margin-inline: auto;
 }
 
@@ -81,7 +83,7 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding-right: 22px;
+  padding-right: var(--empty-shelf-right-inset, 22px);
 }
 
 .bookItem {
@@ -176,23 +178,6 @@
 
 :global([data-theme="dark"]) .bookItem {
   --book-status-band-color: #2b2620;
-}
-
-/* A short, per-book foreground edge supplies the physical overlap without
-   bringing back the removed shelf-wide line or crossing an open popup. */
-.bookShelfForeground {
-  position: absolute;
-  z-index: 3;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 3.544px;
-  background: #000;
-  pointer-events: none;
-}
-
-:global([data-theme="dark"]) .bookShelfForeground {
-  background: #a0a0a0;
 }
 
 /* TSP-LOOP-007: overlay that mirrors the open button's box, so status icons
@@ -608,6 +593,7 @@
 @media (max-width: 639px) {
   .bookshelfEmpty {
     width: 100%;
+    max-width: 100%;
   }
 
   .mobileMenuBackdrop {
@@ -688,7 +674,7 @@
 
   .booksRowEmpty {
     justify-content: flex-end;
-    padding-right: 22px;
+    padding-right: var(--empty-shelf-right-inset, 22px);
   }
 }
 

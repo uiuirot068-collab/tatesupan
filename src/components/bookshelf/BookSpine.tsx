@@ -233,8 +233,6 @@ export function BookSpine({
         )}
       </div>
 
-      <span className={styles.bookShelfForeground} aria-hidden="true" />
-
       {showMenu && (
         <div className={styles.bookMenu} ref={menuRootRef}>
           <button

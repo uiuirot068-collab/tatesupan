@@ -41,6 +41,8 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Demo Options/Focus content and target-only behavior; no Settings/Options/Memo/Help side effects.
 - Web JPG footer branding is sharp, single-painted, and keeps the source ratio.
 - Rollback `V2_BETA → LEGACY → V2_BETA` preserves the same work/title/text.
+- Round 6 bookshelf layering/badge motion, compact mobile toolbar, and Demo Step 9 placement are visually accepted for closeout polish.
+- Final Home underline removal, shelf/book depth, popup priority, badge motion, Hero structure, lower sections, mobile cat/scroll behavior, Demo-card flow/CTA, returning Home, and visible Editor/Demo/JPG/PDF/TXT regressions are Human PASS. Only the zero-work shelf's final right inset remains.
 
 ## Automated RC evidence
 
@@ -49,21 +51,24 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Round 3 deterministic coverage includes running-head all/selected parity scopes, replacement/outside-scope safety, JPG empty-selection/all and selected canonical order, publication `max(4, body - 3)` furniture, Web-only `30 / 15 / 20`, work-scoped Memo draft persistence/protection, visible Demo header wiring, and the branding asset's intrinsic `384:341` ratio.
 - Round 4 deterministic coverage includes explicit Settings rows, margin-mode defaults without overwriting stored modes, manual folio/header values below 4pt through persistence and the real PaintPlan, Memo placement inside the left Editor pane, mobile Focus visibility, state-based mobile writing action visibility, zero-work Home structure, and Demo transitions with no real UI open-state side effects.
 - Round 5 deterministic coverage includes Memo open/close from the same entry, removal of the actual shelf-front overlay line, one-row mobile action and secondary-navigation contracts at 320/375/390/430px, Focus preservation of core edit actions, target-preserving Demo placement, Options/Focus guide steps with array-derived totals, and one-paint Web JPG branding geometry from the original 384×341 source. The focused artifact is `typesetting-v2/qa/visual/rc-polish-round5/web-jpg-branding-single-paint.png`.
-- Round 6 deterministic coverage adds per-book shelf foreground layering, popup precedence, a shared spine/badge motion wrapper, the 36px mobile primary-action row with content-width tracks at 320/375/390/430px, and lower-safe target-preserving placement for Demo Step 9. Export remains guide-only.
+- Round 6 deterministic coverage adds popup precedence, a shared spine/badge motion wrapper, the 36px mobile primary-action row with content-width tracks at 320/375/390/430px, and lower-safe target-preserving placement for Demo Step 9. Export remains guide-only.
+- Final Home polish coverage removes the per-book underline without altering shared motion or popup precedence, constrains only the zero-work shelf to a 660px measurement container (about 633px of rendered shelf art), derives a 20–28px guide-book inset from that shelf-local geometry, hides only the onboarding cat below 720px, and keeps the zero-work Demo card in a single compact text flow. Returning-user Home retains its separate branch.
+- 11-B Pause/Resume limited-extension coverage verifies PAUSED input/IME/paste/replacement exclusions, explicit resume re-baselining, first post-resume input, multiple cycles, active-time-only duration, end-while-paused, reload/navigation recovery, legacy active-session defaults, one-record history, unchanged share text, and responsive/Focus source contracts. The closed Start/End and written-only semantics remain regression guards.
+- Report restoration coverage verifies that the pre-existing beta-feedback entry is immediately after Replace in the primary Editor action row, retains its established amber action styling, opens the existing `BetaFeedbackModal` only on explicit click, and has no manuscript or Work Session mutation path. The compact five-action row is guarded at 320/375/390/430px; Report is no longer routed through Options.
 
 ## Remaining Human checks only
 
-### 1. Bookshelf physical layering and badge motion
+### 1. Zero-work shelf final position
 
-- On returning Home, hover a book carrying the beginner/cloud marks, then open its title/delete popup. Expected PASS: the local shelf front edge overlaps only the foot of that book; the book remains in front of the shelf background; both marks rise with the book; the popup remains above every shelf/book layer; no full-width separator appears.
+- At desktop, tablet, and mobile widths, confirm the guide book remains right-biased but fully on the modestly widened shelf, with a visible 20–28px right inset and no collision with the empty-state text. Approved Hero/mobile/lower/returning Home behavior must remain unchanged.
 
-### 2. Mobile primary toolbar height
+### 2. Work Session Pause / Resume
 
-- At 320/375/390/430px confirm `↶ | ↷ | 改ページ挿入 | 置換` is visibly shorter, remains on one line without horizontal overflow, and has comfortable 44px-wide arrow targets. Page Break uses only its readable content width.
+- Start, write, Pause, edit/IME/paste while paused, reload once while paused, Resume, write again, and End. Expected PASS: paused count/time freeze; paused edits affect only current manuscript count; Resume keeps the same session and excludes paused changes; post-resume input counts; End while paused also works; result/history show one record with active duration only; mobile controls remain compact and Focus still hides the surface.
 
-### 3. Demo Step 9 placement
+### 3. Report restoration
 
-- On mobile and desktop, reach Step 9 with Preview visible. Expected PASS: the Export target and guide are both readable, the guide prefers the safe lower area, `次へ` and `デモを終了` remain reachable, and Export does not open automatically.
+- At desktop and 320/375/390/430px mobile widths, confirm the yellow `報告` button appears immediately beside `置換` without wrapping or horizontal page overflow. Click it and confirm the pre-existing beta Report modal opens normally; closing it must preserve the current manuscript and Work Session count.
 
 ## Human result
 

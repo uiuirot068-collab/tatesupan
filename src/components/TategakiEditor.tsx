@@ -74,6 +74,8 @@ export default function TategakiEditor({
     workSession,
     recordActivity,
     startWorkSession,
+    pauseWorkSession,
+    resumeWorkSession,
     endWorkSession,
   } = useEditorSessionActivity();
   const [docId, setDocId] = useState<number | null>(
@@ -695,8 +697,11 @@ export default function TategakiEditor({
             workSession={workSession}
             onRecordActivity={recordActivity}
             onStartWorkSession={startWorkSession}
+            onPauseWorkSession={pauseWorkSession}
+            onResumeWorkSession={resumeWorkSession}
             onEndWorkSession={endWorkSession}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
+            onOpenBetaFeedback={BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined}
             onOpenOptions={() => setActiveDrawer("options")}
             onToggleMemo={() => { setActiveDrawer(null); setIsMemoOpen((open) => !open); }}
             memoOpen={isMemoOpen}
@@ -789,7 +794,6 @@ export default function TategakiEditor({
           onImportSourceTxt={() => txtInputRef.current?.click()}
           onExportSourceTxt={exportSourceTxt}
           onExportReadableTxt={exportReadableTxt}
-          onOpenFeedback={BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined}
           onClose={() => setActiveDrawer(null)}
         />
       )}
