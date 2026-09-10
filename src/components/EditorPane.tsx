@@ -21,6 +21,7 @@ import WorkSessionTracker from "./WorkSessionTracker";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
+import InlineMemoAccordion from "./InlineMemoAccordion";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -65,6 +66,11 @@ interface EditorPaneProps {
   onOpenSearchReplace: () => void;
   onOpenOptions: () => void;
   onOpenMemo: () => void;
+  memoOpen: boolean;
+  memoStorageKey: string;
+  confirmedMemo: string;
+  onConfirmMemo: (memo: string) => void;
+  onCloseMemo: () => void;
   onOpenSettingsDrawer: () => void;
   onOpenHelp: () => void;
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
@@ -91,6 +97,11 @@ export default function EditorPane({
   onOpenSearchReplace,
   onOpenOptions,
   onOpenMemo,
+  memoOpen,
+  memoStorageKey,
+  confirmedMemo,
+  onConfirmMemo,
+  onCloseMemo,
   onOpenSettingsDrawer,
   onOpenHelp,
   onCursorIndexChange,
@@ -98,6 +109,7 @@ export default function EditorPane({
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
+  const [mobileWritingActive, setMobileWritingActive] = useState(false);
 
   // Parent-driven changes (load/switch, structural UI, Preview operations)
   // become the next input baseline without themselves becoming activity.
@@ -117,6 +129,7 @@ export default function EditorPane({
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.focus({ preventScroll: true });
+    setMobileWritingActive(true);
   };
 
   // Keep the textarea's native browser history as the single source of truth.
@@ -336,17 +349,25 @@ export default function EditorPane({
           </button>
         </div>
         <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid grid-cols-4 gap-1 border-t border-ink/10 pt-2">
-          <button type="button" data-editor-secondary="settings" onClick={onOpenSettingsDrawer} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶設定</button>
+          <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶設定</button>
           <button type="button" data-editor-secondary="options" onClick={onOpenOptions} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶オプション</button>
           <button type="button" data-editor-secondary="memo" onClick={onOpenMemo} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶メモ</button>
           <button type="button" data-editor-secondary="help" onClick={onOpenHelp} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶ヘルプ</button>
         </nav>
+        <InlineMemoAccordion
+          key={memoStorageKey}
+          open={memoOpen}
+          storageKey={memoStorageKey}
+          confirmedMemo={confirmedMemo}
+          onConfirm={onConfirmMemo}
+          onClose={onCloseMemo}
+        />
       </div>
 
       {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved
           work the user must immediately see "this is where I continue
           writing". `md:hidden` — desktop never shows this tutorial line. */}
-      <div className="flex flex-none items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2 md:hidden">
+      {!mobileWritingActive && !focusMode && <div data-mobile-write-action="" className="flex flex-none items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2 md:hidden">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink">✏️ 本文を書く</p>
           <p className="text-[11px] leading-snug text-ink/55">
@@ -360,7 +381,7 @@ export default function EditorPane({
         >
           本文を書く
         </button>
-      </div>
+      </div>}
 
       {/* The textarea stays the sole input surface. WritingCheckOverlay is a
           read-only, pointer-events-none mirror rendered behind it (only the
@@ -402,6 +423,7 @@ export default function EditorPane({
           onSelect={reportCursorIndex}
           onClick={reportCursorIndex}
           onKeyUp={reportCursorIndex}
+          onFocus={() => setMobileWritingActive(true)}
           onCompositionStart={(event) => {
             isComposingRef.current = true;
             const el = event.currentTarget;
@@ -428,6 +450,7 @@ export default function EditorPane({
         />
       </div>
 
+      <div data-writing-check-surface="" className={focusMode ? "max-md:hidden" : ""}>
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
@@ -457,11 +480,12 @@ export default function EditorPane({
           onRemoveNgWordEntry={ngWords.removeEntry}
         />
       )}
+      </div>
 
       {/* Compact syntax help never creates a second line; touch/keyboard users
           can open its full text without permanently growing the footer. */}
-      <div className="flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60">
-        <EditorSyntaxHelp />
+      <div data-editor-status-surfaces="" className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden" : ""}`}>
+        <div data-ruby-tcy-status=""><EditorSyntaxHelp /></div>
         <div
           data-editor-footer-controls
           className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5"

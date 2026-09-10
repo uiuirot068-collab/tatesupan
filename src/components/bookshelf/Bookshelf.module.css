@@ -4,7 +4,7 @@
 }
 
 .bookshelfEmpty {
-  width: clamp(360px, 48vw, 520px);
+  width: 100%;
   margin-inline: auto;
 }
 

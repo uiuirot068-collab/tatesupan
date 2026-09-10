@@ -186,6 +186,9 @@ export interface PublicationRenderContext {
   // real declared font size -- the exact "giant/overlapping glyph" defect
   // Round 4's own Human QA found.
   bodyFontSizeTick?: number;
+  /** Explicit Editor-selected publication furniture sizes. */
+  folioFontSizePt?: number;
+  runningHeadFontSizePt?: number;
 }
 
 export interface PublicationDocument {
@@ -208,6 +211,8 @@ export interface PublicationDocument {
   // (divided by grapheme count for multi-character atoms), regardless of
   // how compressed or approximate its own positioning `heightMm` is.
   bodyEmMm: number;
+  folioFontSizePt?: number;
+  runningHeadFontSizePt?: number;
   pages: PaintPage[];
   // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
   // 2, structural colophon): Core's own `CanonicalDocument.colophon`
@@ -463,6 +468,8 @@ export function buildPublicationDocument(
     totalPageCount: document.pages.length,
     renderedPageCount: pages.length,
     bodyEmMm: tickToMm(ctx.bodyFontSizeTick ?? ctx.linePitchTicks),
+    ...(ctx.folioFontSizePt !== undefined ? { folioFontSizePt: ctx.folioFontSizePt } : {}),
+    ...(ctx.runningHeadFontSizePt !== undefined ? { runningHeadFontSizePt: ctx.runningHeadFontSizePt } : {}),
     pages,
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),

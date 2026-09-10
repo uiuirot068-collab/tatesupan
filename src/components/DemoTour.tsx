@@ -13,8 +13,6 @@ import { computeDemoCardPlacement, type DemoCardPlacement } from "@/lib/demoPlac
 interface DemoTourProps {
   /** Signed-in state — decides STEP 9 copy only. Never triggers auth. */
   isMember: boolean;
-  /** Non-destructive phone-workspace switch for a step's `prepare`. */
-  onPrepare: (view: "editor" | "preview" | "settings") => void;
   /** STEP 10 exits — each fully leaves demo mode. */
   onExitToNewProject: () => void;
   onExitToBookshelf: () => void;
@@ -31,7 +29,6 @@ function stepBody(step: DemoStep, isMember: boolean, narrow: boolean): string {
 
 export default function DemoTour({
   isMember,
-  onPrepare,
   onExitToNewProject,
   onExitToBookshelf,
   onOpenFeatureGuide,
@@ -57,11 +54,6 @@ export default function DemoTour({
       { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight }
     ));
   }, [step.target]);
-
-  // Non-destructive step preparation + spotlight. Never operates the control.
-  useEffect(() => {
-    if (step.prepare) onPrepare(step.prepare);
-  }, [step.prepare, onPrepare]);
 
   useEffect(() => {
     if (!step.target) return;

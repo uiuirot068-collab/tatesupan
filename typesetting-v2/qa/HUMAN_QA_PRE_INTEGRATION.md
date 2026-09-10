@@ -26,41 +26,51 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Manuscript, confirmed Memo, checklist, and work-session persistence.
 - Writing Check, 完成前チェック, 11-B (including delete/Undo/Redo counting), and Help TOC.
 - Returning-user Home bookshelf-first architecture.
+- Running-head apply for all pages and selected odd/even scopes, including outside-scope protection.
+- Web `30 / 15 / 20` typography and print/PDF separation.
+- Memo edit/confirm, draft recovery after reload/navigation/collapse, and confirmed-value protection.
+- Mobile Editor header/bottom-control visibility, manuscript/Preview internal scrolling, viewport containment, and small-height structure.
 
 ## Automated RC evidence
 
 - **UNRESOLVED IMAGE HOLD: AUTOMATED PASS.** A composed manuscript fixture contains valid text before/after a required image token whose resolver returns `MISSING`. The model reports the unresolved source, browser Preview derives an explicit HOLD from that model, PDF/JPG controls are disabled, and the shared Publication preflight refuses export. Other manuscript content remains in the composed source/document. Human data corruption is not required.
 - Conditional Home structure, the single-column Settings contract, mobile `100dvh` shell/internal-scroll contract, Editor IA, and TXT A/B are covered by focused source/behavior tests. Real viewport appearance remains in the Human checks below.
 - Round 3 deterministic coverage includes running-head all/selected parity scopes, replacement/outside-scope safety, JPG empty-selection/all and selected canonical order, publication `max(4, body - 3)` furniture, Web-only `30 / 15 / 20`, work-scoped Memo draft persistence/protection, visible Demo header wiring, and the branding asset's intrinsic `384:341` ratio.
+- Round 4 deterministic coverage includes explicit Settings rows, margin-mode defaults without overwriting stored modes, manual folio/header values below 4pt through persistence and the real PaintPlan, Memo placement inside the left Editor pane, mobile Focus visibility, state-based mobile writing action visibility, zero-work Home structure, and Demo transitions with no real UI open-state side effects.
 
 ## Remaining Human checks only
 
-### 1. Running-head apply
+### 1. Settings rows and manual furniture size
 
-- In a multi-page work, set different odd/even values. With no page selection press `柱を反映`; then select a mixed set such as 2, 3, 4, 7, change both values, and apply again.
-- Expected PASS: all-page mode updates old assignments everywhere; selected mode splits by actual parity, replaces only selected assignments, leaves pages outside the selection and all folio settings untouched, and reports only parity groups actually present.
+- Confirm the visible rows are: paper; font/font size/line-height; columns/gap; mode; then capacity, with margin/text-frame controls kept beside their mode. Create a new work and confirm `余白から設定する`; reopen an existing work saved in the other mode and confirm it remains unchanged.
+- Enter folio/header values below 4pt (for example 2.5/2), reload, and change an unrelated setting. Expected PASS: the manual values remain and reach Preview/PDF/print JPG. Web remains fixed at `30 / 15 / 20`; do not repeat the already-passed Web/print separation review.
 
-### 2. Responsive Editor and Demo
+### 2. Memo location only
 
-- Check a real Editor and `http://localhost:3000/editor?demo=1` at small, normal, and large phone heights, orientation change where practical, then tablet/desktop.
-- Expected PASS: global header, Editor navigation/toolbars, Writing Check/work-session/bottom controls, and Demo actions remain reachable. Only the center manuscript/Preview area flexes and scrolls internally; Settings, Options, and the Demo guide use their own scrolling; the normal Editor has no body-level scroll or horizontal overflow. `次へ` and `デモを終了` remain reachable.
+- Open `▶メモ`. Expected PASS: it expands directly below the four secondary Editor entries, inside the left Editor pane, and shrinks/pushes the manuscript surface. It is not a global-header sibling, modal, drawer, or full-page surface.
+- Memo persistence and protection are already Human PASS; repeat only if moving the surface visibly regressed them.
 
-### 3. Zero-work Home only
+### 3. Zero-work Home and separator
 
 - With zero real works, compare only the upper Hero + CTA + Bookshelf region against `typesetting-v2/qa/reference/ui/home-empty-state-target.png` at mobile/tablet/desktop.
-- Expected PASS: open Hero, character, primary CTA, bordered Demo CTA, and empty bookshelf/rack follow the reference's hierarchy without a large bordered empty-shelf card. The work popup is visually above the shelf and no separator crosses it. Do not review or redesign lower Home sections; returning-user Home is already PASS.
+- Expected PASS: open two-column Hero, large character, primary CTA, bordered Demo CTA, then the reference-like wide empty shelf with guide book. The prior intermediate `ここから、最初の一冊を。` block is absent. In a returning-user shelf, the title/delete popup has a clean background with no unrelated horizontal rule crossing it. Do not review or redesign lower Home sections; returning-user architecture is already PASS.
 
-### 4. Settings order and inline Memo
+### 4. Mobile Focus and writing action
 
-- Expected Settings order: paper; font/font size/line-height; columns/gap; mode buttons; chars-per-line/lines-per-column; then existing margin/text-frame controls nearby. All remain in one scrolling drawer.
-- Open only `▶メモ`, edit without confirming, collapse/reload/navigate away and back, then confirm. Expected PASS: it is inline, the draft returns in each case, and a blank draft cannot overwrite a non-empty confirmed Memo. There is no one-tap delete.
+- Enter mobile Focus mode. Expected PASS: the Writing Check controls, Ruby/TCY syntax/status helper, and work-session/count strip disappear; exiting Focus restores them with state intact.
+- Before activating the manuscript, `本文を書く` may be shown. Tap it. Expected PASS: it focuses the manuscript and the prompt consumes no further layout space.
 
-### 5. JPG scope and Web branding
+### 5. Demo guide side effects
+
+- On mobile and desktop, advance through Settings/Options/editor/Preview-related steps and manually open/close a real control once.
+- Expected PASS: step changes only highlight/scroll to targets; they do not open Settings, Options, Memo, or Help, alter manuscript/settings, or leave a drawer locked open. `次へ` and `デモを終了` remain usable.
+
+### 6. JPG scope and Web branding
 
 - With no selected pages run Web and print ZIP/all-page JPG; repeat with pages selected out of order.
-- Expected PASS: no selection exports every canonical page; selection exports only those pages in book order. In Web JPG the TateSpun cat/logo keeps its source `384:341` aspect ratio. Web output uses body/folio/header `30 / 15 / 20`; print/PDF use `max(4, body - 3)` for folio/header and do not inherit Web values.
+- Expected PASS: no selection exports every canonical page; selection exports only those pages in book order. In Web JPG the TateSpun cat/logo keeps its source `384:341` aspect ratio. Typography separation is already Human PASS.
 
-### 6. Rollout B rollback — exact PowerShell procedure
+### 7. Rollout B rollback — exact PowerShell procedure
 
 Use the same browser profile and do not clear site data/local storage. From the repository root:
 

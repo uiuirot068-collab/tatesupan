@@ -272,7 +272,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   // showing 40/17, disagreeing with the Preview status ("39字×15行").
   charsPerLine: 39,
   linesPerColumn: 15,
-  layoutMode: "capacity",
+  layoutMode: "margin",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
   colophon: createDefaultColophonSettings(),

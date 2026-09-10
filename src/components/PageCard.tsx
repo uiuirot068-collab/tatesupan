@@ -26,7 +26,6 @@ import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/p
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import {
-  publicationFurnitureFontSizePt,
   WEB_READING_FOLIO_FONT_SIZE,
   WEB_READING_RUNNING_HEAD_FONT_SIZE,
 } from "@/lib/outputTypography";
@@ -522,7 +521,8 @@ function PageCard({
   const showHashira = Boolean(hashiraText) && !hideHashira;
 
   const showWebFooter = settings.paperSize === "Web閲覧用";
-  const furnitureFontSizePt = publicationFurnitureFontSizePt(settings.fontSizePt);
+  const folioFontSizePt = masterPage.nombreFontSize;
+  const runningHeadFontSizePt = masterPage.headerFontSize;
 
   const isInteractive = Boolean(onToggleSelect);
 
@@ -1148,7 +1148,7 @@ function PageCard({
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
             fontFamily={lineStyle.fontFamily as string}
-            fontSize={showWebFooter ? WEB_READING_RUNNING_HEAD_FONT_SIZE : furnitureFontSizePt}
+            fontSize={showWebFooter ? WEB_READING_RUNNING_HEAD_FONT_SIZE : runningHeadFontSizePt}
             bleedMm={bleedMm}
           />
         )}
@@ -1163,7 +1163,7 @@ function PageCard({
             bottomMarginMm={masterPage.nombreBottomMargin}
             marginGutterMm={settings.marginGutter}
             marginOuterMm={settings.marginOuter}
-            fontSize={showWebFooter ? WEB_READING_FOLIO_FONT_SIZE : furnitureFontSizePt}
+            fontSize={showWebFooter ? WEB_READING_FOLIO_FONT_SIZE : folioFontSizePt}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
           />
@@ -1330,7 +1330,7 @@ export function NombreOverlay({
   fontFamily: string;
   bleedMm: number;
 }) {
-  const nombreFontSizePt = Math.max(fontSize ?? 4, 4);
+  const nombreFontSizePt = fontSize ?? 4;
 
   // Web閲覧用のノンブルは左下に固定表示する。
   if (position === "left") {

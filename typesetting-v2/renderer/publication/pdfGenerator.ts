@@ -702,7 +702,7 @@ function buildBodyPaintPage(
             ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
             : paperWidthMm / 2;
       const yCenter = paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), "center", "folio"));
+      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, doc.folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), "center", "folio"));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
       // Human Visual QA HOLD round 25 (correction to round 24's own
@@ -722,7 +722,7 @@ function buildBodyPaintPage(
             ? paperWidthMm - marginRightMm
             : paperWidthMm / 2;
       const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), page.header.position.horizontal, "running-head"));
+      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, doc.runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), page.header.position.horizontal, "running-head"));
     }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
@@ -763,7 +763,7 @@ export function buildPaintPlan(
   // resolution, via the SAME `resolveFolioPhysicalSide` Core's own
   // folio/header logic already uses (round 22).
   const colophonPageAt = (i: number, physicalIndex: number) =>
-    buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount, (physicalIndex + 1) % 2 === 1, outlineContext);
+    buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount, (physicalIndex + 1) % 2 === 1, outlineContext, doc.folioFontSizePt, doc.runningHeadFontSizePt);
 
   if (doc.pageSequence) {
     return doc.pageSequence.map((ref, physicalIndex) => (ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index, physicalIndex)));
@@ -869,7 +869,9 @@ function buildColophonPaintPage(
   placement: ColophonPlacement | undefined,
   colophonPageCount: number,
   isOddPage: boolean,
-  outlineContext?: VerticalOutlineContext
+  outlineContext?: VerticalOutlineContext,
+  folioFontSizePt?: number,
+  runningHeadFontSizePt?: number
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1099,7 +1101,7 @@ function buildColophonPaintPage(
     const xCenter =
       page.folio.position === "left" ? marginLeftMm + bodyEmMm / 2 : page.folio.position === "right" ? paperWidthMm - marginRightMm - bodyEmMm / 2 : paperWidthMm / 2;
     const yCenter = paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "folio"));
+    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "folio"));
   }
   // Human Visual QA HOLD round 28: colophon pages have carried a real,
   // Core-generated `header` since round 26 (`assemble.ts`'s own
@@ -1114,7 +1116,7 @@ function buildColophonPaintPage(
           ? paperWidthMm - marginRightMm - bodyEmMm / 2
           : paperWidthMm / 2;
     const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "running-head"));
+    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "running-head"));
   }
   return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }

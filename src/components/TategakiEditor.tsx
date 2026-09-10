@@ -52,7 +52,6 @@ import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/
 import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
-import InlineMemoAccordion from "./InlineMemoAccordion";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
@@ -675,15 +674,6 @@ export default function TategakiEditor({
         isSaving={isSaving}
       />
 
-      <InlineMemoAccordion
-        key={memoStorageKey}
-        open={isMemoOpen}
-        storageKey={memoStorageKey}
-        confirmedMemo={plotNote}
-        onConfirm={setPlotNote}
-        onClose={() => setIsMemoOpen(false)}
-      />
-
       <main
         ref={mainRef}
         className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row md:pr-6 md:pb-6"
@@ -709,6 +699,11 @@ export default function TategakiEditor({
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenOptions={() => setActiveDrawer("options")}
             onOpenMemo={() => { setActiveDrawer(null); setIsMemoOpen(true); }}
+            memoOpen={isMemoOpen}
+            memoStorageKey={memoStorageKey}
+            confirmedMemo={plotNote}
+            onConfirmMemo={setPlotNote}
+            onCloseMemo={() => setIsMemoOpen(false)}
             onOpenSettingsDrawer={() => setActiveDrawer("settings")}
             onOpenHelp={() => { setActiveDrawer(null); setIsHelpOpen(true); }}
             onCursorIndexChange={setCursorIndex}
@@ -846,15 +841,6 @@ export default function TategakiEditor({
       {demoMode && (
         <DemoTour
           isMember={!!user}
-          onPrepare={(view) => {
-            if (view === "settings") {
-              setMobileView("editor");
-              setActiveDrawer("settings");
-            } else {
-              setActiveDrawer(null);
-              setMobileView(view);
-            }
-          }}
           onExit={() => router.push("/")}
           onExitToBookshelf={() => router.push("/")}
           onExitToNewProject={async () => {

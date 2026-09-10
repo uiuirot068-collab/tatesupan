@@ -68,7 +68,11 @@ describe("Round 3 output typography", () => {
     expect([web.fontSizePt, web.masterPage.nombreFontSize, web.masterPage.headerFontSize]).toEqual([30, 15, 20]);
   });
   it("does not leak Web sizes into print/PDF settings", () => {
-    const print = normalizeOutputTypography({ ...DEFAULT_PAGE_SETTINGS, fontSizePt: 9.5 });
+    const print = normalizeOutputTypography({
+      ...DEFAULT_PAGE_SETTINGS,
+      fontSizePt: 9.5,
+      masterPage: { ...DEFAULT_PAGE_SETTINGS.masterPage, nombreFontSize: undefined, headerFontSize: undefined },
+    });
     expect(print.fontSizePt).toBe(9.5);
     expect(print.masterPage.nombreFontSize).toBe(6.5);
     expect(print.masterPage.headerFontSize).toBe(6.5);

@@ -30,8 +30,8 @@ describe("RC Home information architecture", () => {
     const end = home.indexOf("</main>", start);
     const emptyState = home.slice(start, end);
     expect(emptyState).toContain('renderBrandPanel("onboarding")');
-    expect(emptyState).toContain("ここから、最初の一冊を。");
-    expect(emptyState).toContain("新しい作品を作るか、おためしデモでTateSpunを試せます。");
+    expect(emptyState).not.toContain("ここから、最初の一冊を。");
+    expect(emptyState).not.toContain("新しい作品を作るか、おためしデモでTateSpunを試せます。");
     expect(emptyState).toContain('data-home-empty-bookshelf=""');
     expect(emptyState).toContain("<Bookshelf");
     expect(home).toContain("3分でわかる TateSpun おためしデモ");
@@ -86,17 +86,16 @@ describe("RC Editor information architecture", () => {
   });
 
   it("keeps the requested main Settings visual order in one continuous drawer", () => {
-    expect(Array.from(settingsPanel.matchAll(/data-settings-order="([^"]+)"[^>]*order-\[(\d+)\]/g), (match) => [match[1], Number(match[2])]))
-      .toEqual([
-        ["paper", 1], ["mode", 7], ["layout-controls", 9], ["layout-controls", 9], ["font", 2],
-        ["font-size", 3], ["line-height", 4], ["columns", 5], ["column-gap", 6],
-        ["capacity", 8], ["capacity", 8], ["apply", 10],
-      ]);
+    expect(Array.from(settingsPanel.matchAll(/data-settings-row="([^"]+)"/g), (match) => match[1]))
+      .toEqual(["paper", "typography", "columns", "layout-mode", "capacity", "capacity", "apply"]);
+    expect(settingsPanel).toContain('data-settings-row="typography" className="order-[2]');
+    expect(settingsPanel).toContain('data-settings-row="columns" className="order-[3]');
   });
 
   it("uses the single Memo entry to open an inline persistent accordion", () => {
     const memo = readSource("src/components/InlineMemoAccordion.tsx");
-    expect(shell).toContain("<InlineMemoAccordion");
+    expect(editor).toContain("<InlineMemoAccordion");
+    expect(shell).not.toContain("<InlineMemoAccordion");
     expect(shell).not.toMatch(/isMemoOpen[\s\S]{0,120}<ViewportModal/);
     expect(memo).toContain('data-inline-memo=""');
     expect(memo).toContain("writeMemoDraft(window.localStorage");

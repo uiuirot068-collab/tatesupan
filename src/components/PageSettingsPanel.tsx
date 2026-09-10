@@ -138,13 +138,13 @@ const applyPaperTemplate = (
       : {
         nombrePosition: profile.nombrePosition as NombrePosition,
         nombreBottomMargin: profile.nombreDistance,
+        nombreFontSize: paperSize === "Web閲覧用"
+          ? WEB_READING_FOLIO_FONT_SIZE
+          : recommendedNombreFontSizePt(profile.fontSizePt),
+        headerFontSize: paperSize === "Web閲覧用"
+          ? WEB_READING_RUNNING_HEAD_FONT_SIZE
+          : recommendedNombreFontSizePt(profile.fontSizePt),
       }),
-    nombreFontSize: paperSize === "Web閲覧用"
-      ? WEB_READING_FOLIO_FONT_SIZE
-      : recommendedNombreFontSizePt(profile.fontSizePt),
-    headerFontSize: paperSize === "Web閲覧用"
-      ? WEB_READING_RUNNING_HEAD_FONT_SIZE
-      : recommendedNombreFontSizePt(profile.fontSizePt),
   };
   return {
     ...base,
@@ -812,8 +812,8 @@ export default function PageSettingsPanel({
       {(settingsOnly || activeTab === "page") && (
         <div className="w-full">
           {settingsOnly && <h3 data-settings-section="page" className="border-b border-ink/10 px-4 py-3 font-serif text-base font-semibold text-ink">用紙・本文</h3>}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
-        <label data-settings-order="paper" className="order-[1] col-span-2 flex flex-col gap-1 sm:col-span-4">
+          <div className="flex flex-col gap-3 px-4 pb-4 pt-3">
+        <label data-settings-row="paper" data-settings-order="paper" className="order-[1] flex flex-col gap-1">
           <span className="text-xs text-ink/60">用紙サイズ</span>
           <select
             value={settings.paperSize}
@@ -828,89 +828,8 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <div data-settings-order="mode" className="order-[7] col-span-2 flex flex-wrap items-center justify-between gap-2 sm:col-span-4">
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => handleLayoutModeChange("margin")}
-              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-                settings.layoutMode === "margin"
-                  ? "bg-accent text-paper-ink"
-                  : "bg-ink/10 text-ink/60 hover:bg-ink/15"
-              }`}
-            >
-              余白から設定する
-            </button>
-            <button
-              type="button"
-              onClick={() => handleLayoutModeChange("capacity")}
-              className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
-                settings.layoutMode === "capacity"
-                  ? "bg-accent text-paper-ink"
-                  : "bg-ink/10 text-ink/60 hover:bg-ink/15"
-              }`}
-            >
-              文字数・行数から設定する
-            </button>
-          </div>
-
-          <div className="ml-auto flex items-center gap-1.5 text-xs font-semibold">
-            {settings.columnCount === 2 && (
-              <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
-                {layout.charsPerColumn}字
-                <span className="ml-1 text-[10px] font-normal opacity-80">1段の文字数</span>
-              </span>
-            )}
-            <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
-              {layout.charsPerPage}字
-              <span className="ml-1 text-[10px] font-normal opacity-80">1ページの文字数</span>
-            </span>
-          </div>
-        </div>
-
-        {settings.layoutMode === "margin" ? (
-          <div data-settings-order="layout-controls" className="order-[9] col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:col-span-4 sm:grid-cols-4">
-            <MarginField
-              label="天（上）"
-              value={draft.marginTop}
-              onChange={(v) => setDraftField("marginTop", v)}
-              onKeyDown={handleDraftKeyDown}
-            />
-            <MarginField
-              label="地（下）"
-              value={draft.marginBottom}
-              onChange={(v) => setDraftField("marginBottom", v)}
-              onKeyDown={handleDraftKeyDown}
-            />
-            <MarginField
-              label="ノド（閉じ側）"
-              value={draft.marginGutter}
-              onChange={(v) => setDraftField("marginGutter", v)}
-              onKeyDown={handleDraftKeyDown}
-            />
-            <MarginField
-              label="小口（外側）"
-              value={draft.marginOuter}
-              onChange={(v) => setDraftField("marginOuter", v)}
-              onKeyDown={handleDraftKeyDown}
-            />
-          </div>
-        ) : (
-          <div data-settings-order="layout-controls" className="order-[9] col-span-2 sm:col-span-4">
-            <TextFramePositionField
-              position={position}
-              onPositionChange={setPositionField}
-              verticalAnchorValue={verticalAnchorDraft}
-              onVerticalAnchorChange={setVerticalAnchorField}
-              horizontalAnchorValue={horizontalAnchorDraft}
-              onHorizontalAnchorChange={setHorizontalAnchorField}
-              onKeyDown={handleDraftKeyDown}
-              derivedPreview={derivedPreview}
-            />
-          </div>
-        )}
-
-        <label data-settings-order="font" className="order-[2] flex flex-col gap-1">
+        <div data-settings-row="typography" className="order-[2] grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
+        <label data-settings-order="font" className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">フォント</span>
           <select
             value={settings.fontFamily}
@@ -954,8 +873,10 @@ export default function PageSettingsPanel({
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
+        </div>
 
-        <label data-settings-order="columns" className="order-[5] flex flex-col gap-1">
+        <div data-settings-row="columns" className="order-[3] grid grid-cols-2 gap-x-4 gap-y-3">
+        <label data-settings-order="columns" className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">段数</span>
           <select
             value={settings.columnCount}
@@ -969,7 +890,7 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <label data-settings-order="column-gap" className="order-[6] flex flex-col gap-1">
+        <label data-settings-order="column-gap" className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">段間 mm</span>
           <input
             type="number"
@@ -983,12 +904,77 @@ export default function PageSettingsPanel({
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink disabled:opacity-40"
           />
         </label>
+        </div>
+
+        <div data-settings-row="layout-mode" className="order-[4] flex flex-col gap-3">
+          <div data-settings-order="mode" className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => handleLayoutModeChange("margin")}
+                className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  settings.layoutMode === "margin"
+                    ? "bg-accent text-paper-ink"
+                    : "bg-ink/10 text-ink/60 hover:bg-ink/15"
+                }`}
+              >
+                余白から設定する
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLayoutModeChange("capacity")}
+                className={`cursor-pointer select-none rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  settings.layoutMode === "capacity"
+                    ? "bg-accent text-paper-ink"
+                    : "bg-ink/10 text-ink/60 hover:bg-ink/15"
+                }`}
+              >
+                文字数・行数から設定する
+              </button>
+            </div>
+
+            <div className="ml-auto flex items-center gap-1.5 text-xs font-semibold">
+              {settings.columnCount === 2 && (
+                <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
+                  {layout.charsPerColumn}字
+                  <span className="ml-1 text-[10px] font-normal opacity-80">1段の文字数</span>
+                </span>
+              )}
+              <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-paper-ink">
+                {layout.charsPerPage}字
+                <span className="ml-1 text-[10px] font-normal opacity-80">1ページの文字数</span>
+              </span>
+            </div>
+          </div>
+
+          {settings.layoutMode === "margin" ? (
+            <div data-settings-order="layout-controls" className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+              <MarginField label="天（上）" value={draft.marginTop} onChange={(v) => setDraftField("marginTop", v)} onKeyDown={handleDraftKeyDown} />
+              <MarginField label="地（下）" value={draft.marginBottom} onChange={(v) => setDraftField("marginBottom", v)} onKeyDown={handleDraftKeyDown} />
+              <MarginField label="ノド（閉じ側）" value={draft.marginGutter} onChange={(v) => setDraftField("marginGutter", v)} onKeyDown={handleDraftKeyDown} />
+              <MarginField label="小口（外側）" value={draft.marginOuter} onChange={(v) => setDraftField("marginOuter", v)} onKeyDown={handleDraftKeyDown} />
+            </div>
+          ) : (
+            <div data-settings-order="layout-controls">
+              <TextFramePositionField
+                position={position}
+                onPositionChange={setPositionField}
+                verticalAnchorValue={verticalAnchorDraft}
+                onVerticalAnchorChange={setVerticalAnchorField}
+                horizontalAnchorValue={horizontalAnchorDraft}
+                onHorizontalAnchorChange={setHorizontalAnchorField}
+                onKeyDown={handleDraftKeyDown}
+                derivedPreview={derivedPreview}
+              />
+            </div>
+          )}
+        </div>
 
         {settings.layoutMode === "margin" ? (
           // TSP-LOOP-031B: 余白モードでは1行の文字数・1段の行数を独立入力
           // させない（隠れた別設定として残さない）——draft の余白から
           // 実際に入る最大値を読み取り専用サマリーとして示す。
-          <div data-settings-order="capacity" className="order-[8] col-span-2 flex flex-col gap-1 sm:col-span-2">
+          <div data-settings-row="capacity" data-settings-order="capacity" className="order-[5] flex flex-col gap-1">
             <span className="text-xs text-ink/60">この設定で入る本文</span>
             {marginCapacityPreview?.ok ? (
               <>
@@ -1011,7 +997,7 @@ export default function PageSettingsPanel({
             )}
           </div>
         ) : (
-          <div data-settings-order="capacity" className="order-[8] col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:col-span-4 sm:grid-cols-4">
+          <div data-settings-row="capacity" data-settings-order="capacity" className="order-[5] grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-ink/60">1行の文字数</span>
               <input
@@ -1042,7 +1028,7 @@ export default function PageSettingsPanel({
 
         {/* grid-cols-4 上で「段間mm・(1行の文字数・1段の行数 or 本文サマリー)」が
             2〜3枠を占め、このセルが同じ行の空いた枠へ自然に収まる（col-spanなし）。 */}
-        <div data-settings-order="apply" className="order-[10] flex flex-col justify-end gap-1">
+        <div data-settings-row="apply" data-settings-order="apply" className="order-[6] flex flex-col justify-end gap-1 sm:max-w-xs">
           <button
             type="button"
             onClick={commitDraft}
@@ -1124,12 +1110,17 @@ export default function PageSettingsPanel({
             <span className="text-xs text-ink/60">ノンブルの文字サイズ (pt)</span>
             <input
               type="number"
-              min={4}
+              min={0.1}
               max={24}
-              value={settings.paperSize === "Web閲覧用" ? WEB_READING_FOLIO_FONT_SIZE : recommendedNombreFontSizePt(settings.fontSizePt)}
-              readOnly
-              title="本文サイズから自動計算されます"
-              className="rounded border border-ink/20 bg-ink/[0.04] px-2 py-1.5 text-sm text-ink"
+              step={0.1}
+              value={settings.paperSize === "Web閲覧用" ? WEB_READING_FOLIO_FONT_SIZE : settings.masterPage.nombreFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
+              readOnly={settings.paperSize === "Web閲覧用"}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isFinite(value) && value > 0) updateMasterPage("nombreFontSize", value);
+              }}
+              title={settings.paperSize === "Web閲覧用" ? "Web出力では15に固定されます" : "初期値は本文サイズから算出。手動値は保存されます"}
+              className={`rounded border border-ink/20 px-2 py-1.5 text-sm text-ink ${settings.paperSize === "Web閲覧用" ? "bg-ink/[0.04]" : "bg-base"}`}
             />
           </label>
 
@@ -1227,16 +1218,21 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink/60">柱の文字サイズ (pt)</span>
-          <input
-            type="number"
-            min={4}
-            max={24}
-            value={settings.paperSize === "Web閲覧用" ? WEB_READING_RUNNING_HEAD_FONT_SIZE : recommendedNombreFontSizePt(settings.fontSizePt)}
-            readOnly
-            title="本文サイズから自動計算されます"
-            className="rounded border border-ink/20 bg-ink/[0.04] px-2 py-1.5 text-sm text-ink"
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink/60">柱の文字サイズ (pt)</span>
+            <input
+              type="number"
+              min={0.1}
+              max={24}
+              step={0.1}
+              value={settings.paperSize === "Web閲覧用" ? WEB_READING_RUNNING_HEAD_FONT_SIZE : settings.masterPage.headerFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
+              readOnly={settings.paperSize === "Web閲覧用"}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isFinite(value) && value > 0) updateMasterPage("headerFontSize", value);
+              }}
+              title={settings.paperSize === "Web閲覧用" ? "Web出力では20に固定されます" : "初期値は本文サイズから算出。手動値は保存されます"}
+              className={`rounded border border-ink/20 px-2 py-1.5 text-sm text-ink ${settings.paperSize === "Web閲覧用" ? "bg-ink/[0.04]" : "bg-base"}`}
           />
         </label>
 

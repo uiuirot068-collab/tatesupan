@@ -178,16 +178,16 @@ export default function Home() {
     return (
       <section
         data-home-brand-panel={mode}
-        className={`w-full overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(197,160,89,0.16),transparent_42%),linear-gradient(135deg,#fffdf8,#f1ece3)] px-5 py-7 sm:px-8 sm:py-8 dark:bg-[linear-gradient(135deg,#171C26,#11151D)] ${
-          onboarding ? "max-w-[1160px]" : "border-y border-ink/10 dark:border-[#2A3240]"
-        }`}
+        className={`w-full overflow-hidden ${onboarding ? "max-w-[980px] bg-transparent px-2 py-8 sm:px-8 sm:py-10" : "border-y border-ink/10 bg-[radial-gradient(circle_at_top_right,rgba(197,160,89,0.16),transparent_42%),linear-gradient(135deg,#fffdf8,#f1ece3)] px-5 py-7 sm:px-8 sm:py-8 dark:border-[#2A3240] dark:bg-[linear-gradient(135deg,#171C26,#11151D)]"}`}
         aria-labelledby={`tatespun-home-title-${mode}`}
       >
-        <div className={`grid items-center gap-5 ${onboarding ? "grid-cols-[minmax(0,1fr)_100px] sm:grid-cols-[minmax(0,1fr)_210px]" : "grid-cols-[minmax(0,1fr)_80px] sm:grid-cols-[minmax(0,1fr)_112px]"}`}>
+        <div className={`grid items-center ${onboarding ? "grid-cols-1 gap-8 min-[720px]:grid-cols-[minmax(0,1fr)_minmax(230px,310px)] min-[720px]:gap-12" : "grid-cols-[minmax(0,1fr)_80px] gap-5 sm:grid-cols-[minmax(0,1fr)_112px]"}`}>
           <div>
-            <p className="text-[10px] font-bold tracking-[0.2em] text-accent dark:text-[#C6AF63]">MANUSCRIPT TO BOOK</p>
-            <h1 id={`tatespun-home-title-${mode}`} className="mt-2 font-serif text-[clamp(24px,4vw,38px)] font-medium leading-tight tracking-[0.02em] text-ink dark:text-[#D4DBE7]">どこで綴っても、ひとつの本になる。</h1>
-            <p className="mt-2 text-sm text-ink/70 dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>
+            {!onboarding && <p className="text-[10px] font-bold tracking-[0.2em] text-accent dark:text-[#C6AF63]">MANUSCRIPT TO BOOK</p>}
+            <h1 id={`tatespun-home-title-${mode}`} className={`${onboarding ? "font-serif text-[clamp(34px,7vw,60px)] leading-[1.18]" : "mt-2 font-serif text-[clamp(24px,4vw,38px)] leading-tight"} font-medium tracking-[0.02em] text-ink dark:text-[#D4DBE7]`}>
+              {onboarding ? <><span className="block">どこで綴っても、</span><span className="block">ひとつの本になる。</span></> : "どこで綴っても、ひとつの本になる。"}
+            </h1>
+            {!onboarding && <p className="mt-2 text-sm text-ink/70 dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>}
             <ol className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-ink/65 sm:text-xs dark:text-[#AEB7C6]">
               <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
             </ol>
@@ -197,9 +197,9 @@ export default function Home() {
                 <Link href="/editor?demo=1" className="group grid max-w-md grid-cols-[1fr_auto] items-center gap-4 rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><span><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><small className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</small></span><span className="text-xs font-semibold">デモを始める ▶</span></Link>
               </div>
             )}
-            <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>
+            {!onboarding && <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>}
           </div>
-          <Image src={withBasePath("/caroad_main1.png")} alt="縦書きWebエディタ" width={384} height={578} priority={onboarding} className={`h-auto w-full justify-self-end ${onboarding ? "max-w-[210px]" : "max-w-[112px]"}`} />
+          <Image src={withBasePath("/caroad_main1.png")} alt="縦書きWebエディタ" width={384} height={578} priority={onboarding} className={`h-auto w-full ${onboarding ? "max-w-[310px] justify-self-center min-[720px]:justify-self-end" : "max-w-[112px] justify-self-end"}`} />
         </div>
       </section>
     );
@@ -340,17 +340,12 @@ export default function Home() {
             {documents !== undefined && (
               <>
                 {renderBrandPanel("onboarding")}
-                <div className="mx-auto mt-8 max-w-xl text-center">
-                  <h2 className="font-serif text-2xl text-ink dark:text-[#D4DBE7]">ここから、最初の一冊を。</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-ink/65 dark:text-[#AEB7C6]">新しい作品を作るか、おためしデモでTateSpunを試せます。</p>
-                  <p className="mt-4 text-xs text-ink/45 dark:text-[#939DAF]">あなたの本が、ここに増えていきます。</p>
-                </div>
-                <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="mx-auto mt-8 w-full max-w-4xl">
-                  <div className="px-2 sm:px-5">
+                <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="mx-auto mt-12 w-full max-w-[820px] border-t border-ink/10 pt-12 dark:border-[#2A3240] sm:mt-16 sm:pt-14">
+                  <div className="px-2 sm:px-7">
                     <p className="text-[10px] font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
                     <h2 id="empty-bookshelf-title" className="mt-1 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
                   </div>
-                  <div className="relative z-10 mt-2">
+                  <div className="relative z-10 mt-1">
                     <Bookshelf
                       documents={documents}
                       onOpen={(id) => router.push(`/editor?id=${id}`)}
@@ -369,7 +364,7 @@ export default function Home() {
           data-nonempty-shellと同じmax-widthをここでも明示している。 */}
       <div className="mx-auto w-full max-w-[1160px]">
         <section
-          className="border-t border-[rgba(31,42,68,0.14)] px-4 pt-[45px] pb-[65px] sm:px-[clamp(20px,5vw,62px)] sm:pt-[50px] sm:pb-[90px] dark:border-[#2A3240]"
+          className="px-4 pt-[45px] pb-[65px] sm:px-[clamp(20px,5vw,62px)] sm:pt-[50px] sm:pb-[90px]"
           aria-labelledby="quick-actions-title"
         >
           <div className="mb-[22px] text-center">

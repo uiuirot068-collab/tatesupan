@@ -59,14 +59,6 @@ export interface DemoStep {
    * on screen — device-appropriate wording, never a fabricated control.
    */
   mobileNote?: string;
-  /**
-   * Non-destructive view preparation to run when the step becomes active:
-   *  - "settings": switch the phone workspace to 設定 (desktop: no-op)
-   *  - "editor":   switch the phone workspace to 本文
-   *  - "preview":  switch the phone workspace to プレビュー
-   * Never types text, never changes a setting, never downloads.
-   */
-  prepare?: "settings" | "editor" | "preview";
 }
 
 export const DEMO_STEPS: DemoStep[] = [
@@ -75,25 +67,22 @@ export const DEMO_STEPS: DemoStep[] = [
     title: "作品にタイトルをつけよう",
     body: "ここに入力したタイトルは、本棚の作品一覧に表示されます。",
     target: "title",
-    prepare: "editor",
   },
   {
     n: 2,
     title: "本のサイズを決めよう",
     body: "ページ設定から用紙サイズを選べます。文字サイズ・余白・段組なども調整できます。",
-    target: "page-settings",
+    target: "settings",
     mobileNote:
       "下の「設定」画面の「ページ設定」から、用紙サイズ・文字サイズ・余白・段組を調整できます。",
-    prepare: "settings",
   },
   {
     n: 3,
     title: "ノンブルや柱も設定できるよ",
     body: "本らしいページになるよう、ノンブルや柱なども細かく設定できます。",
-    target: "nombre-settings",
+    target: "settings",
     mobileNote:
       "「設定」画面の「ノンブル・柱」から、ページ番号やヘッダー／フッターを設定できます。",
-    prepare: "settings",
   },
   {
     n: 4,
@@ -109,7 +98,6 @@ export const DEMO_STEPS: DemoStep[] = [
     target: "focus-mode",
     mobileNote:
       "スマートフォンでは、画面上部のバーで「本文」「プレビュー」「設定」を切り替えます。プレビューは拡大・縮小したり、ドラッグして動かせます。書きながら、完成ページがリアルタイムで変わっていきます。",
-    prepare: "editor",
   },
   {
     n: 6,
@@ -117,7 +105,6 @@ export const DEMO_STEPS: DemoStep[] = [
     body:
       "本文に「吾輩は猫である」と入力してみましょう。プレビューがリアルタイムで変わります。ルビ（｜漢字《かんじ》）や【改ページ】も使えます。括弧や表記が気になるときは、文章チェックβも使えます。原稿をAIへ送らず、ブラウザ内でチェックします。",
     target: "editor",
-    prepare: "editor",
   },
   {
     n: 7,
@@ -125,7 +112,6 @@ export const DEMO_STEPS: DemoStep[] = [
     body:
       "「作業スタート」から「作業終了」までに新しく書いた文字数を記録できます。これまでの結果は「作業記録」から確認できます。",
     target: "work-session",
-    prepare: "editor",
   },
   {
     n: 8,
@@ -133,7 +119,6 @@ export const DEMO_STEPS: DemoStep[] = [
     body:
       "プレビュー上部の「選択」で2ページ目にチェックを入れ、「書き出し」→ JPG → 書き出し設定 →「設定済みにする」→ ダウンロード、の順で書き出せます。JPGだけでなく、PDFやWeb版にも書き出せます。ダウンロードは任意です。",
     target: "export",
-    prepare: "preview",
   },
   {
     n: 9,

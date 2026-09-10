@@ -91,6 +91,8 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
     // must be supplied separately, or every glyph paints at the (wrong)
     // column-pitch size. See paintModel.ts's own `bodyFontSizeTick` doc.
     bodyFontSizeTick: mmToTicks((layoutSettings.bodyFontSizePt * 25.4) / 72),
+    folioFontSizePt: input.settings.masterPage.nombreFontSize,
+    runningHeadFontSizePt: input.settings.masterPage.headerFontSize,
   };
 
   const model = colophonComposition
