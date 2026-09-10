@@ -104,47 +104,17 @@ body:has([data-guide-page]) {
   overflow-y: visible !important;
 }
 
-/* TSP-LOOP-020 — mobile editor scroll model. On a phone-width viewport the
-   editor stops being a viewport-locked, internally-scrolled app shell and
-   becomes an ordinary vertically-scrolling document (header → editor →
-   bottom breathing room), so a normal swipe anywhere reliably scrolls the
-   page and the user is never trapped behind a nested overflow container.
-   Desktop / tablet-wide (>=768px) keeps the original `overflow:hidden`
-   viewport lock untouched — the rule is scoped both to `max-width:767px`
-   and to `:has([data-editor-shell])` (only TategakiEditor's shell). This
-   mirrors the existing `[data-bookshelf-page]` / `[data-renderer-poc-page]`
-   opt-out pattern. */
+/* RC UI Round 2 — only the phone-width Editor route owns one dynamic
+   viewport. Manuscript, Preview and drawers scroll internally. The selector
+   is route-scoped via :has(), so Home and every unrelated route keep normal
+   document scrolling. */
 @media (max-width: 767px) {
   html:has([data-editor-shell]),
   body:has([data-editor-shell]) {
-    height: auto;
-    min-height: 100%;
-    overflow-x: clip !important;
-  }
-  /* The document scroll lives on <html>. TSP-LOOP-022: <body> must NOT also
-     be `overflow-y: auto` — pairing it with `overflow-x: clip` makes the
-     used value of overflow-x compute to `hidden` (CSS Overflow 3 §3.2),
-     which turns <body> into a scroll container and silently defeats the
-     `position: sticky` MobileEditorNav (it then scrolls away with the page
-     instead of pinning). `overflow-y: visible` keeps <body> a plain box; the
-     horizontal `clip` still contains any stray fixed-width overflow. */
-  html:has([data-editor-shell]) {
-    overflow-y: auto !important;
-  }
-  body:has([data-editor-shell]) {
-    overflow-y: visible !important;
-  }
-
-  /* The guided Demo is intentionally one dynamic viewport. Normal mobile
-     Editor keeps the document-scroll model above; only `demo=1` opts into
-     this fixed shell, whose manuscript/preview/settings surfaces scroll
-     internally. `dvh` follows the mobile browser toolbar instead of clipping
-     against a stale 100vh measurement. */
-  html:has([data-editor-shell][data-demo-mode]),
-  body:has([data-editor-shell][data-demo-mode]) {
     height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden !important;
+    overflow-x: clip !important;
+    overflow-y: hidden !important;
     overscroll-behavior: none;
   }
 }

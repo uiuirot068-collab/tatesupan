@@ -59,19 +59,20 @@ describe("responsive demo card placement", () => {
     expect(guide).toContain("入稿ミスを防ぎます");
   });
 
-  it("contains only the narrow guided Demo in one dynamic viewport", () => {
+  it("contains both normal and guided narrow Editors in one dynamic viewport", () => {
     const editor = readFileSync(join(__dirname, "..", "components", "TategakiEditor.tsx"), "utf8");
     const pane = readFileSync(join(__dirname, "..", "components", "EditorPane.tsx"), "utf8");
     const css = readFileSync(join(__dirname, "..", "app", "globals.css"), "utf8");
 
     expect(editor).toContain('data-demo-mode={demoMode ? "" : undefined}');
-    expect(editor).toContain('demoMode\n          ? "h-[100dvh] min-h-0');
-    expect(editor).toContain('guidedViewport={demoMode}');
-    expect(pane).toContain('guidedViewport ? "max-md:flex-1" : "max-md:h-[62dvh]"');
-    expect(css).toContain("[data-editor-shell][data-demo-mode]");
+    expect(editor).toContain('className="box-border flex h-[100dvh] min-h-0');
+    expect(editor).toContain('className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden');
+    expect(editor).toContain('data-editor-header-slot=""');
+    expect(editor).not.toContain('focusMode || demoMode ? "hidden');
+    expect(pane).toContain('className="relative min-h-0 flex-1"');
+    expect(css).toContain("html:has([data-editor-shell])");
     expect(css).toContain("height: 100dvh");
-    expect(css).toContain("overflow: hidden !important");
-    expect(css).toContain("Normal mobile");
-    expect(css).toContain("Editor keeps the document-scroll model above");
+    expect(css).toContain("overflow-y: hidden !important");
+    expect(css).not.toContain("[data-editor-shell][data-demo-mode]");
   });
 });

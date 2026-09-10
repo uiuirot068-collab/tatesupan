@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
-type MobileView = "editor" | "preview" | "settings";
+type MobileView = "editor" | "preview";
 
 const SAVE_TEXT: Record<SaveStatus, string> = {
   loading: "読み込み中…",
@@ -26,10 +26,6 @@ interface MobileEditorNavProps {
   onShowEditor: () => void;
   /** Show the vertical-writing preview. */
   onShowPreview: () => void;
-  /** Show the dedicated 設定 workspace. */
-  onShowSettings: () => void;
-  /** Open the help guide (same modal the desktop header's ？ opens). */
-  onOpenHelp?: () => void;
   /** Whether the narrow-viewport 集中モード is active. */
   focusMode: boolean;
   onEnterFocus: () => void;
@@ -39,11 +35,6 @@ interface MobileEditorNavProps {
   /** Cloud-save handler. Omitted for the sample document. */
   onSave?: () => void;
   isSaving?: boolean;
-  /**
-   * Opens the canonical β beta-feedback modal — the SAME handler the editor
-   * toolbar's「報告」button uses. Omitted when beta feedback is disabled.
-   */
-  onOpenFeedback?: () => void;
 }
 
 /**
@@ -66,15 +57,12 @@ export default function MobileEditorNav({
   mobileView,
   onShowEditor,
   onShowPreview,
-  onShowSettings,
-  onOpenHelp,
   focusMode,
   onEnterFocus,
   onExitFocus,
   saveStatus,
   onSave,
   isSaving,
-  onOpenFeedback,
 }: MobileEditorNavProps) {
   const tab = (active: boolean) =>
     `flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors ${
@@ -120,27 +108,7 @@ export default function MobileEditorNav({
           >
             プレビュー
           </button>
-          <button
-            type="button"
-            onClick={onShowSettings}
-            aria-pressed={mobileView === "settings"}
-            className={tab(mobileView === "settings")}
-          >
-            設定
-          </button>
         </div>
-
-        {onOpenHelp && (
-          <button
-            type="button"
-            onClick={onOpenHelp}
-            aria-label="ヘルプ"
-            title="ヘルプ"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ink/15 text-xs font-semibold text-ink/70 hover:bg-ink/5"
-          >
-            ？
-          </button>
-        )}
       </div>
 
       <div className="flex items-center gap-2 text-xs">
@@ -160,16 +128,6 @@ export default function MobileEditorNav({
               className="rounded-full bg-[#c5a059] px-3 py-1 font-medium text-white shadow-sm transition-colors hover:bg-[#b38f48] disabled:opacity-50"
             >
               {isSaving ? "保存中…" : "クラウド保存"}
-            </button>
-          )}
-          {onOpenFeedback && (
-            <button
-              type="button"
-              onClick={onOpenFeedback}
-              title="β版フィードバック（不具合・気になる事・要望）"
-              className="rounded-full border border-amber-400 bg-amber-50 px-3 py-1 font-medium text-amber-800 hover:bg-amber-100"
-            >
-              報告
             </button>
           )}
           <button

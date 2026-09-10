@@ -25,6 +25,11 @@ import {
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
+import {
+  publicationFurnitureFontSizePt,
+  WEB_READING_FOLIO_FONT_SIZE,
+  WEB_READING_RUNNING_HEAD_FONT_SIZE,
+} from "@/lib/outputTypography";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -517,6 +522,7 @@ function PageCard({
   const showHashira = Boolean(hashiraText) && !hideHashira;
 
   const showWebFooter = settings.paperSize === "Web閲覧用";
+  const furnitureFontSizePt = publicationFurnitureFontSizePt(settings.fontSizePt);
 
   const isInteractive = Boolean(onToggleSelect);
 
@@ -1142,7 +1148,7 @@ function PageCard({
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
             fontFamily={lineStyle.fontFamily as string}
-            fontSize={masterPage.headerFontSize}
+            fontSize={showWebFooter ? WEB_READING_RUNNING_HEAD_FONT_SIZE : furnitureFontSizePt}
             bleedMm={bleedMm}
           />
         )}
@@ -1157,7 +1163,7 @@ function PageCard({
             bottomMarginMm={masterPage.nombreBottomMargin}
             marginGutterMm={settings.marginGutter}
             marginOuterMm={settings.marginOuter}
-            fontSize={masterPage.nombreFontSize}
+            fontSize={showWebFooter ? WEB_READING_FOLIO_FONT_SIZE : furnitureFontSizePt}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
           />
@@ -1324,8 +1330,7 @@ export function NombreOverlay({
   fontFamily: string;
   bleedMm: number;
 }) {
-  // §7B: 極端に小さいノンブルを避ける下限（6pt）。
-  const nombreFontSizePt = Math.max(fontSize ?? 8, 6);
+  const nombreFontSizePt = Math.max(fontSize ?? 4, 4);
 
   // Web閲覧用のノンブルは左下に固定表示する。
   if (position === "left") {
@@ -1465,8 +1470,8 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // のようにscreen-space固定にはしない——canonical DOM上でpaperと一緒に
   // scaleされる、という既存の挙動はそのまま。ただし固定"9.5px"は、Web閲覧用の
   // 本文フォントがまだ16ptだった頃の値がそのまま残ったもので、本文フォント比
-  // 約76%（9.5÷12.42px）で釣り合っていた。今回の正式preset化で本文が36pt
-  // （27.9px canonical）へ拡大された一方、この9.5pxだけ取り残されたため、
+  // 約76%（9.5÷12.42px）で釣り合っていた。Web本文サイズの変更時にも
+  // この固定値だけを取り残すと本文との比率が崩れるため、
   // 本文に対して比率にして約1/3まで縮んで見えていた。本文フォントに対する
   // 比率で算出し直すことで、以後どの本文サイズでも同じ見えの強さを保つ。
   const FOOTER_TO_BODY_FONT_RATIO = 0.75;
@@ -1475,7 +1480,7 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // let the URL / hashtag read as quiet supporting text — a size step down
   // (~18%), not a different visual weight.
   const finePrintFontSizePx = footerFontSizePx * 0.82;
-  const LOGO_SIZE_PX = 17;
+  const LOGO_WIDTH_PX = 19;
 
   const contentStyle: CSSProperties = {
     display: "flex",
@@ -1504,7 +1509,9 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
           alt="logo"
           data-logo-img="true"
           className="footer-logo"
-          style={{ width: `${LOGO_SIZE_PX}px`, height: `${LOGO_SIZE_PX}px`, objectFit: "contain" }}
+          width={384}
+          height={341}
+          style={{ width: `${LOGO_WIDTH_PX}px`, height: "auto", aspectRatio: "384 / 341", objectFit: "contain", flexShrink: 0 }}
         />
         <span>TateSpun</span>
         <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>

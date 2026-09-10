@@ -16,7 +16,6 @@ import { CombineModal } from "@/components/CombineModal";
 import HelpModal from "@/components/HelpModal";
 import { Header } from "@/components/Header";
 import { Bookshelf } from "@/components/bookshelf/Bookshelf";
-import DemoEntryCard from "@/components/DemoEntryCard";
 import { useAuth } from "@/components/AuthProvider";
 import { withBasePath } from "@/lib/basePath";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
@@ -174,6 +173,38 @@ export default function Home() {
   const nonEmptyShellClassName =
     "flex min-h-dvh w-full max-w-[1160px] flex-1 flex-col mx-auto bg-[#f9f8f6] text-[#1f2a44] shadow-[0_0_0_1px_rgba(31,42,68,0.04)] dark:bg-[#11151D] dark:text-[#D4DBE7] dark:shadow-none";
 
+  const renderBrandPanel = (mode: "onboarding" | "informational") => {
+    const onboarding = mode === "onboarding";
+    return (
+      <section
+        data-home-brand-panel={mode}
+        className={`w-full overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(197,160,89,0.16),transparent_42%),linear-gradient(135deg,#fffdf8,#f1ece3)] px-5 py-7 sm:px-8 sm:py-8 dark:bg-[linear-gradient(135deg,#171C26,#11151D)] ${
+          onboarding ? "max-w-[1160px]" : "border-y border-ink/10 dark:border-[#2A3240]"
+        }`}
+        aria-labelledby={`tatespun-home-title-${mode}`}
+      >
+        <div className={`grid items-center gap-5 ${onboarding ? "grid-cols-[minmax(0,1fr)_100px] sm:grid-cols-[minmax(0,1fr)_210px]" : "grid-cols-[minmax(0,1fr)_80px] sm:grid-cols-[minmax(0,1fr)_112px]"}`}>
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.2em] text-accent dark:text-[#C6AF63]">MANUSCRIPT TO BOOK</p>
+            <h1 id={`tatespun-home-title-${mode}`} className="mt-2 font-serif text-[clamp(24px,4vw,38px)] font-medium leading-tight tracking-[0.02em] text-ink dark:text-[#D4DBE7]">どこで綴っても、ひとつの本になる。</h1>
+            <p className="mt-2 text-sm text-ink/70 dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>
+            <ol className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-ink/65 sm:text-xs dark:text-[#AEB7C6]">
+              <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
+            </ol>
+            {onboarding && (
+              <div data-home-onboarding-actions="" className="mt-5 grid max-w-xl gap-3">
+                <button type="button" onClick={handleCreate} disabled={creating} className="w-fit rounded-full bg-ink px-7 py-3 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">＋ 新しい作品を作成する</button>
+                <Link href="/editor?demo=1" className="group grid max-w-md grid-cols-[1fr_auto] items-center gap-4 rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><span><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><small className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</small></span><span className="text-xs font-semibold">デモを始める ▶</span></Link>
+              </div>
+            )}
+            <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>
+          </div>
+          <Image src={withBasePath("/caroad_main1.png")} alt="縦書きWebエディタ" width={384} height={578} priority={onboarding} className={`h-auto w-full justify-self-end ${onboarding ? "max-w-[210px]" : "max-w-[112px]"}`} />
+        </div>
+      </section>
+    );
+  };
+
   const homeContent = (
     <>
       <Header variant={isNonEmptyVisual ? "home" : "editor"} />
@@ -182,87 +213,20 @@ export default function Home() {
         className={
           isNonEmptyVisual
             ? "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-4 py-10"
-            : "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center px-4 py-10"
+            : "mx-auto flex min-h-0 w-full max-w-[1160px] flex-1 flex-col items-center px-4 py-6 sm:py-10"
         }
       >
-        <section className="mb-10 w-full overflow-hidden rounded-[28px] border border-ink/10 bg-[radial-gradient(circle_at_top_right,rgba(197,160,89,0.20),transparent_42%),linear-gradient(135deg,#fffdf8,#f1ece3)] px-5 py-10 text-center shadow-sm sm:px-10 sm:py-14 dark:border-[#2A3240] dark:bg-[linear-gradient(135deg,#171C26,#11151D)]" aria-labelledby="tatespun-hero-title">
-          <p className="text-xs font-bold tracking-[0.22em] text-accent dark:text-[#C6AF63]">MANUSCRIPT TO BOOK</p>
-          <h1 id="tatespun-hero-title" className="mx-auto mt-4 max-w-3xl font-serif text-[clamp(32px,6vw,64px)] font-medium leading-[1.25] tracking-[0.03em] text-ink dark:text-[#D4DBE7]">どこで綴っても、ひとつの本になる。</h1>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-8 text-ink/70 sm:text-base dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>
-          <ol className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs font-medium text-ink/70 sm:text-sm dark:text-[#AEB7C6]">
-            <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
-          </ol>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <button type="button" onClick={handleCreate} disabled={creating} className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品を作成する</button>
-            <Link href="/editor?demo=1" className="rounded-full border border-ink/20 bg-white/60 px-6 py-3 text-sm font-semibold text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]">おためしデモ</Link>
-          </div>
-          <p className="mx-auto mt-6 max-w-2xl text-[11px] leading-5 text-ink/55 dark:text-[#939DAF]">他のアプリで書いた原稿もTXTで読み込めます。プレビューと書き出しは手元のブラウザで処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>
-        </section>
         {isNonEmptyVisual ? (
-          <div className="mb-10 flex w-full flex-col items-center gap-6 border-b border-ink/10 pb-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left dark:border-[#2A3240]">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
-              <h1 className="mt-2 font-serif text-[40px] font-medium leading-[1.15] text-ink sm:text-[clamp(37px,5vw,56px)] dark:text-[#D4DBE7]">あなたの本棚</h1>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-ink/70 dark:text-[#939DAF]">
-                書きかけも、できあがった本も。
-                <br />
-                TateSpunでつくる本は、ここへ戻ってきます。
-              </p>
+          <section data-home-returning-bookshelf="" className="w-full" aria-label="本棚">
+            <div className="mb-5 border-b border-ink/10 pb-4 dark:border-[#2A3240]">
+              <p className="text-[10px] font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
+              <h1 className="mt-1 font-serif text-2xl font-medium text-ink sm:text-3xl dark:text-[#D4DBE7]">あなたの本棚</h1>
+              <div data-home-returning-actions="" className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={handleCreate} disabled={creating} className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-base disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品を作成する</button>
+                <Link href="/editor?demo=1" className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink dark:border-[#3A4658] dark:text-[#D4DBE7]">おためしデモ</Link>
+                <button type="button" onClick={() => setIsCombineModalOpen(true)} disabled={!documents || documents.length < 2} className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5 disabled:opacity-40 dark:border-[#3A4658] dark:text-[#D4DBE7]">総集編を編成する</button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating}
-                className="rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D] dark:hover:bg-[#D1BC78] dark:hover:opacity-100"
-              >
-                + 新しい作品を作成する
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCombineModalOpen(true)}
-                disabled={!documents || documents.length < 2}
-                className="rounded-full border border-[rgba(31,42,68,0.28)] bg-[rgba(255,255,255,0.56)] px-4 py-2 font-medium text-[#1F2A44] transition-transform hover:-translate-y-0.5 disabled:opacity-40 dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
-              >
-                総集編を編成する
-              </button>
-            </div>
-            <DemoEntryCard className="mt-4" />
-          </div>
-        ) : (
-          <div className="mb-8 flex w-full flex-col items-center gap-8 text-center min-[921px]:flex-row min-[921px]:items-center min-[921px]:justify-center min-[921px]:gap-20 min-[921px]:text-left">
-            <div className="flex flex-col items-center min-[921px]:items-start">
-              <p className="text-xs font-semibold tracking-[0.2em] text-accent">YOUR BOOKSHELF</p>
-              <h1 className="mt-2 text-2xl font-bold text-ink sm:text-3xl">あなたの本棚</h1>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-ink/70">
-                書きかけも、できあがった本も。
-                <br />
-                TateSpunでつくる本は、ここへ戻ってきます。
-              </p>
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating}
-                className="mt-6 rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                + 新しい作品を作成する
-              </button>
-              <DemoEntryCard className="mt-4" />
-            </div>
-
-            <Image
-              src={withBasePath("/caroad_main1.png")}
-              alt="縦書きWebエディタ"
-              width={384}
-              height={578}
-              priority
-              className="h-auto w-full max-w-[220px] shrink-0 sm:max-w-[260px] min-[921px]:max-w-[320px]"
-            />
-          </div>
-        )}
-
-        {isNonEmptyVisual ? (
-          <section className="w-full" aria-label="本棚">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div
                 className="flex w-fit max-w-full flex-wrap rounded-full border border-ink/12 bg-ink/[0.025] p-0.5"
@@ -307,7 +271,7 @@ export default function Home() {
               role="tabpanel"
               className="rounded-[18px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] px-2.5 pt-4 pb-6 shadow-[0_18px_48px_rgba(26,31,45,0.08)] sm:px-6 sm:pt-5 sm:pb-7 dark:border-[#2A3240] dark:bg-[#171C26] dark:shadow-none"
             >
-              <div className="flex items-center justify-between gap-4 border-b border-[rgba(31,42,68,0.14)] pb-3 dark:border-[#2A3240]">
+              <div className="flex items-center justify-between gap-4 pb-3">
                 <div className="grid gap-1">
                   <span className="text-sm font-extrabold tracking-[0.14em] text-accent dark:text-[#C6AF63]">BOOKS</span>
                   <strong className="text-lg font-bold text-ink dark:text-[#D4DBE7]">
@@ -371,19 +335,30 @@ export default function Home() {
             </div>
           </section>
         ) : (
-          <section className="w-full" aria-label="本棚">
+          <section data-home-empty-onboarding="" className="w-full" aria-label="最初の一冊">
             {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
-            {documents && documents.length > 0 && (
-              <Bookshelf
-                documents={documents}
-                onOpen={(id) => router.push(`/editor?id=${id}`)}
-                onRename={async (id, title) => {
-                  await db.documents.update(id, { title });
-                }}
-                onDelete={setPendingDeleteId}
-                showLocalOnlyLabel={!!user}
-                showEmptyState={showEmptyState}
-              />
+            {documents !== undefined && (
+              <>
+                {renderBrandPanel("onboarding")}
+                <div className="mx-auto mt-8 max-w-xl text-center">
+                  <h2 className="font-serif text-2xl text-ink dark:text-[#D4DBE7]">ここから、最初の一冊を。</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-ink/65 dark:text-[#AEB7C6]">新しい作品を作るか、おためしデモでTateSpunを試せます。</p>
+                  <p className="mt-4 text-xs text-ink/45 dark:text-[#939DAF]">あなたの本が、ここに増えていきます。</p>
+                </div>
+                <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="mx-auto mt-8 w-full max-w-4xl">
+                  <div className="px-2 sm:px-5">
+                    <p className="text-[10px] font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
+                    <h2 id="empty-bookshelf-title" className="mt-1 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
+                  </div>
+                  <div className="relative z-10 mt-2">
+                    <Bookshelf
+                      documents={documents}
+                      onOpen={(id) => router.push(`/editor?id=${id}`)}
+                      showEmptyState
+                    />
+                  </div>
+                </section>
+              </>
             )}
           </section>
         )}
@@ -512,7 +487,7 @@ export default function Home() {
           </aside>
         </section>
 
-        <section
+        {isNonEmptyVisual ? renderBrandPanel("informational") : <section
           className="border-t border-[rgba(31,42,68,0.14)] bg-ink/[0.025] px-[18px] py-[50px] sm:px-[clamp(24px,6vw,72px)] sm:py-[54px] dark:border-[#2A3240]"
           aria-label="TateSpunについて"
         >
@@ -544,7 +519,7 @@ export default function Home() {
               />
             </div>
           </div>
-        </section>
+        </section>}
 
         <footer className="flex flex-col items-center gap-3 border-t border-[rgba(31,42,68,0.14)] px-[clamp(20px,5vw,58px)] pt-[25px] pb-10 text-center dark:border-[#2A3240] sm:flex-row sm:flex-wrap sm:items-center sm:text-left">
           <div className="flex items-baseline gap-1.5">

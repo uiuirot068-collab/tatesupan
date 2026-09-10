@@ -15,9 +15,10 @@ interface BookPartsModalProps {
   content: string;
   layout: PageLayout;
   settings: PageSettings;
+  initialTab?: BookPartTab;
 }
 
-type BookPartTab = 'colophon' | 'colophon-h' | 'title' | 'toc';
+export type BookPartTab = 'colophon' | 'colophon-h' | 'title' | 'toc';
 
 // 「本のパーツ」入口。初見でも違いが分かるよう、1行の補足を必ず添える。
 //
@@ -42,12 +43,17 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   content,
   layout,
   settings,
+  initialTab = 'colophon',
 }) => {
-  const [activeTab, setActiveTab] = useState<BookPartTab>('colophon');
+  const [activeTab, setActiveTab] = useState<BookPartTab>(initialTab);
 
   // 目次作成タブ
-  const [tocItems, setTocItems] = useState<TocItem[]>([]);
-  const [tocDetected, setTocDetected] = useState(false);
+  const [tocItems, setTocItems] = useState<TocItem[]>(() =>
+    initialTab === 'toc'
+      ? computeTocItemsWithOffset(content, { charsPerLine: layout.charsPerLine, linesPerPage: layout.linesPerPage }, settings.masterPage.nombreStart)
+      : []
+  );
+  const [tocDetected, setTocDetected] = useState(initialTab === 'toc');
 
   // 扉フォーム
   const [titleAuthor, setTitleAuthor] = useState('');

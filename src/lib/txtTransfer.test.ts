@@ -4,6 +4,7 @@ import {
   decodeUtf8Txt,
   encodeUtf8Txt,
   readLocalTxtFile,
+  serializeReadableTxt,
 } from "./txtTransfer";
 
 const SOURCE = [
@@ -54,5 +55,37 @@ describe("safe TXT transfer boundary", () => {
       readFile(new URL("./txtTransfer.ts", import.meta.url), "utf8")
     );
     expect(source).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
+  });
+
+  it("creates readable TXT while preserving visible prose", () => {
+    const source = [
+      "# 第一章",
+      "",
+      "これは**強い**言葉と*静かな*言葉です。",
+      "｜東京《とうきょう》で[tate]25[/tate]年を迎えた。",
+      "【改ページ】",
+      "【IMG:local:20:30:center】",
+      "![挿絵](https://example.invalid/private-image.jpg)",
+      "続きの段落です。通常URL https://example.com/story は残します。",
+    ].join("\n");
+
+    expect(serializeReadableTxt(source)).toBe([
+      "第一章",
+      "",
+      "　これは強い言葉と静かな言葉です。",
+      "　東京で25年を迎えた。",
+      "",
+      "　続きの段落です。通常URL https://example.com/story は残します。",
+    ].join("\n"));
+  });
+
+  it("normalizes paragraph gaps and never double-indents suitable lines", () => {
+    expect(serializeReadableTxt("　字下げ済み。\n\n\n\n次の段落。\n■ 特殊構造\n- 箇条書き"))
+      .toBe("　字下げ済み。\n\n　次の段落。\n■ 特殊構造\n箇条書き");
+  });
+
+  it("keeps A round-trip opaque after readable TXT support is added", () => {
+    const bytes = encodeUtf8Txt(SOURCE, { bom: false, newlines: "lf" });
+    expect(decodeUtf8Txt(bytes, { newlines: "lf" })).toBe(SOURCE.replace(/\r\n?/g, "\n"));
   });
 });

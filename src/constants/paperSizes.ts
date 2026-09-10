@@ -27,7 +27,7 @@ export interface PaperSizeColumnProfile {
   nombreDistance: number; // ノンブル: 地からの距離 (mm)
   /**
    * ノンブルの文字サイズ (pt)。TSP-LOOP-022 HUMAN-QA: preset ごとに明示。
-   * 省略時は本文フォント -3pt / 最小6pt（recommendedNombreFontSizePt）へ
+   * 省略時は本文フォント -3pt / 最小4pt（recommendedNombreFontSizePt）へ
    * フォールバック。ユーザー手動変更後は保持（nombreLayoutCustomized）。
    */
   nombreFontSize?: number;
@@ -257,7 +257,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       marginBottom: 40,
       marginGutter: 20,
       marginOuter: 20,
-      fontSizePt: 36,
+      fontSizePt: 30,
       lineSpacing: 1.8,
       columnGap: 0,
       // charsPerLine/linesPerColumn は margin/font から calculateCapacityFromMargins()
@@ -278,7 +278,7 @@ export const PAPER_SIZE_TEMPLATES: Record<string, PaperSizeConfig> = {
       marginBottom: 20,
       marginGutter: 20,
       marginOuter: 20,
-      fontSizePt: 32,
+      fontSizePt: 30,
       lineSpacing: 1.75,
       columnGap: 10,
       // 同上: margin/fontから導出した値と一致させてある。

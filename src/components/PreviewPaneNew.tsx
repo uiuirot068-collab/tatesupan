@@ -15,11 +15,12 @@ import {
   type PreviewRenderContext,
 } from "../../typesetting-v2/renderer/preview/paintModel";
 import { PREVIEW_RENDERER_STYLES, PreviewDocumentView } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
-import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
+import { buildPublicationPaintPlan, findUnresolvedImageIssues } from "../../typesetting-v2/renderer/publication/pdfGenerator";
 import { exportPaintPlanToBrowserJpgPages, type JpgExportMode } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { buildPageJpgFileName, buildZipFileName, sanitizeFilename } from "../../typesetting-v2/renderer/publication/jpgFilename";
 import { ExportCancellationCoordinator, isExportCancelledError, waitForExportPermission } from "@/lib/exportCancellation";
 import { downloadBytes, loadV2PublicationFont, startV2PdfWorker, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 
 export interface PreviewPaneNewProps {
   content: string;
@@ -29,6 +30,8 @@ export interface PreviewPaneNewProps {
   unresolvedImageIds: ReadonlySet<string>;
   blockExportForUnresolvedImages: boolean;
   onPdfExportSuccess?: () => void;
+  selectedPageIndices: ReadonlySet<number>;
+  onSelectedPageIndicesChange: (next: Set<number>) => void;
 }
 
 type ExportProgress = { label: string; current: number; total: number };
@@ -71,6 +74,8 @@ export default function PreviewPaneNew({
   unresolvedImageIds,
   blockExportForUnresolvedImages,
   onPdfExportSuccess,
+  selectedPageIndices,
+  onSelectedPageIndicesChange,
 }: PreviewPaneNewProps) {
   const [bridge, setBridge] = useState<V2BridgeResult | null>(null);
   const [preview, setPreview] = useState<PaintDocument | null>(null);
@@ -108,6 +113,11 @@ export default function PreviewPaneNew({
   }, [content, images, settings, title]);
 
   const safeTitle = useMemo(() => sanitizeFilename(title?.trim() || "TateSpun"), [title]);
+  const bridgeImageIssues = useMemo(
+    () => bridge ? findUnresolvedImageIssues(bridge.model) : [],
+    [bridge]
+  );
+  const imageHoldActive = blockExportForUnresolvedImages || unresolvedImageIds.size > 0 || bridgeImageIssues.length > 0;
 
   const beginExport = useCallback((label: string, total: number) => {
     const signal = coordinator.begin();
@@ -141,12 +151,12 @@ export default function PreviewPaneNew({
 
   const requirePlan = useCallback(async () => {
     if (!bridge) throw new Error("Canonical Preview の準備が完了していません。");
-    if (blockExportForUnresolvedImages || unresolvedImageIds.size > 0) {
+    if (imageHoldActive) {
       throw new Error("未解決の画像があります。画像を再設定してから書き出してください。");
     }
     const font = await loadV2PublicationFont();
     return { font, plan: buildPublicationPaintPlan(bridge.model, font, bridge.pageGeometry, "v2 Beta export") };
-  }, [blockExportForUnresolvedImages, bridge, unresolvedImageIds]);
+  }, [bridge, imageHoldActive]);
 
   const exportPdf = useCallback(async () => {
     let signal: AbortSignal | null = null;
@@ -173,13 +183,16 @@ export default function PreviewPaneNew({
     let signal: AbortSignal | null = null;
     try {
       const { plan } = await requirePlan();
-      const exportPlan = scope === "first" ? plan.slice(0, 1) : plan;
+      const pageIndices = scope === "first"
+        ? [0]
+        : resolveJpgPageIndices(plan.length, selectedPageIndices);
+      const exportPlan = pageIndices.map((index) => plan[index]);
       const label = mode === "PRINT" ? "印刷用JPG" : "Web用JPG";
       signal = beginExport(label, exportPlan.length);
       const pages = await exportPaintPlanToBrowserJpgPages(
         exportPlan,
         "Shippori Mincho",
-        (pageNumber) => buildPageJpgFileName(safeTitle, pageNumber),
+        (pageNumber) => buildPageJpgFileName(safeTitle, pageIndices[pageNumber - 1] + 1),
         mode,
         undefined,
         {
@@ -207,7 +220,7 @@ export default function PreviewPaneNew({
     } finally {
       if (signal) finishExport(signal);
     }
-  }, [beginExport, finishExport, requirePlan, safeTitle]);
+  }, [beginExport, finishExport, requirePlan, safeTitle, selectedPageIndices]);
 
   const continueExport = () => {
     coordinator.continueExport();
@@ -219,29 +232,41 @@ export default function PreviewPaneNew({
     pdfHandleRef.current?.cancel();
     setConfirmOpen(false);
   };
+  const togglePageSelection = (index: number) => {
+    const next = new Set(selectedPageIndices);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    onSelectedPageIndicesChange(next);
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-ink/[0.04]">
       <style>{`${PREVIEW_RENDERER_STYLES}
         .tsp-v2-preview .fixture{border:0;margin:0}.tsp-v2-preview .fixture>h2{display:none}
         .tsp-v2-preview .page-row{display:flex;align-items:flex-start;flex-wrap:wrap;gap:20px}
+        .tsp-v2-preview .page-selection-item{position:relative;padding:28px 5px 5px;border:2px solid transparent;border-radius:8px}
+        .tsp-v2-preview .page-selection-item.selected{border-color:var(--accent)}
+        .tsp-v2-preview .page-selection-control{position:absolute;top:4px;left:6px;display:flex;align-items:center;gap:4px;font:12px sans-serif;color:var(--ink);cursor:pointer}
         .tsp-v2-preview .page{flex:none;box-shadow:0 3px 14px rgba(28,24,20,.18);font-family:"Shippori Mincho",serif}
         .tsp-v2-preview .image-placeholder{display:block;width:100%;height:100%;object-fit:contain}
       `}</style>
       <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 bg-base px-3 py-2">
         <span className="mr-auto text-xs font-semibold text-ink/70">本の形で確認</span>
-        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportPdf()} className="rounded bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-40">PDF</button>
-        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("WEB", "first")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG 1ページ</button>
-        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("WEB", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG ZIP</button>
-        <button type="button" disabled={!bridge || !!progress} onClick={() => void exportJpg("PRINT", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">印刷用JPG ZIP</button>
+        {selectedPageIndices.size > 0 && (
+          <button type="button" onClick={() => onSelectedPageIndicesChange(new Set())} className="rounded px-2 py-1 text-[11px] text-ink/55 hover:bg-ink/5">選択解除</button>
+        )}
+        <button type="button" disabled={!bridge || !!progress || imageHoldActive} onClick={() => void exportPdf()} className="rounded bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-40">PDF</button>
+        <button type="button" disabled={!bridge || !!progress || imageHoldActive} onClick={() => void exportJpg("WEB", "first")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG 1ページ</button>
+        <button type="button" disabled={!bridge || !!progress || imageHoldActive} onClick={() => void exportJpg("WEB", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">Web JPG ZIP</button>
+        <button type="button" disabled={!bridge || !!progress || imageHoldActive} onClick={() => void exportJpg("PRINT", "zip")} className="rounded border border-ink/20 px-3 py-1.5 text-xs disabled:opacity-40">印刷用JPG ZIP</button>
       </div>
       <p className="border-b border-ink/10 bg-base px-3 py-1.5 text-[11px] text-ink/55">v2 Beta の PDF/JPG は仕上がりサイズ（裁ち落としなし）です。原稿と画像はブラウザ内で処理されます。</p>
-      {(blockExportForUnresolvedImages || unresolvedImageIds.size > 0) && (
+      {imageHoldActive && (
         <div role="alert" className="border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">HOLD: 未解決の画像があります。画像は省略せず、再設定されるまで書き出しを停止します。</div>
       )}
       {error && <div role="alert" className="border-b border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">{error}</div>}
       <div className="tsp-v2-preview min-h-0 flex-1 overflow-auto p-5">
-        {preview ? <PreviewDocumentView model={preview} mode="normal" /> : <p className="text-sm text-ink/60">Canonical Preview を準備しています…</p>}
+        {preview ? <PreviewDocumentView model={preview} mode="normal" selectedPageIndices={selectedPageIndices} onTogglePage={togglePageSelection} /> : <p className="text-sm text-ink/60">Canonical Preview を準備しています…</p>}
       </div>
       {progress && <div className="border-t border-ink/10 bg-base px-3 py-2 text-xs text-ink/70">{progress.label} 書き出し中 ({progress.current}/{progress.total}) — Escで中断確認</div>}
       {confirmOpen && (

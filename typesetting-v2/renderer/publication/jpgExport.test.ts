@@ -19,7 +19,7 @@ import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
 import { renderPaintPlanToRasterPages, RASTER_DPI, PRINT_JPG_LONG_SIDE_PX } from "./rasterGenerator";
-import { renderPaintPlanToBrowserRasterPages } from "./rasterGeneratorBrowser";
+import { renderPaintPlanToBrowserRasterPages, resolveRasterCommandFontSizePt } from "./rasterGeneratorBrowser";
 import { exportPaintPlanToJpgPages, exportPaintPlanToJpgZip, sanitizeFilename, buildPageJpgFileName, buildZipFileName } from "./jpgExport";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 
@@ -39,6 +39,20 @@ function realContexts() {
     yakumonoContext: new VerticalYakumonoAlignContext(buf, deriveBaselineRatioFromFont(font)),
   };
 }
+
+describe("Round 3 Web-only furniture sizing", () => {
+  const textCommand = (fontSizePt: number, furnitureRole?: "folio" | "running-head"): Extract<PaintCommand, { op: "text" }> => ({
+    op: "text", text: "x", xMm: 0, yMm: 0, fontSizePt, align: "left", ...(furnitureRole ? { furnitureRole } : {}),
+  });
+
+  it("uses 15pt folio and 20pt running head only for Web JPG", () => {
+    expect(resolveRasterCommandFontSizePt(textCommand(6, "folio"), "WEB")).toBe(15);
+    expect(resolveRasterCommandFontSizePt(textCommand(6, "running-head"), "WEB")).toBe(20);
+    expect(resolveRasterCommandFontSizePt(textCommand(6), "WEB")).toBe(6);
+    expect(resolveRasterCommandFontSizePt(textCommand(6, "folio"), "PRINT")).toBe(6);
+    expect(resolveRasterCommandFontSizePt(textCommand(6, "running-head"), "PRINT")).toBe(6);
+  });
+});
 
 function buildPngFixture(refId: string, pixelWidth: number, pixelHeight: number, pixelFn: (x: number, y: number) => [number, number, number, number]) {
   const data = new Uint8Array(pixelWidth * pixelHeight * 4);

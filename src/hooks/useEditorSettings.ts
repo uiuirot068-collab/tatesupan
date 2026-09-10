@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   DEFAULT_MASTER_PAGE_SETTINGS,
   DEFAULT_PAGE_SETTINGS,
   type PageSettings,
 } from "@/lib/pageLayout";
 import { normalizeColophonSettings } from "@/lib/colophon";
+import { normalizeOutputTypography } from "@/lib/outputTypography";
 
 const STORAGE_KEY = "tatespun_settings";
 
@@ -16,7 +17,7 @@ function loadStoredSettings(): PageSettings | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PageSettings>;
-    return {
+    return normalizeOutputTypography({
       ...DEFAULT_PAGE_SETTINGS,
       ...parsed,
       masterPage: {
@@ -25,7 +26,7 @@ function loadStoredSettings(): PageSettings | null {
       },
       pageOverrides: {},
       colophon: normalizeColophonSettings(parsed.colophon),
-    };
+    });
   } catch {
     return null;
   }
@@ -43,13 +44,13 @@ function loadStoredSettings(): PageSettings | null {
  * the server-rendered HTML and trigger a hydration error).
  */
 export function useEditorSettings({ persist = true }: { persist?: boolean } = {}) {
-  const [settings, setSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
+  const [settings, setRawSettings] = useState<PageSettings>(() => normalizeOutputTypography(DEFAULT_PAGE_SETTINGS));
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!persist) return;
     const stored = loadStoredSettings();
-    if (stored) setSettings(stored);
+    if (stored) setRawSettings(stored);
     hasLoadedRef.current = true;
   }, [persist]);
 
@@ -61,6 +62,12 @@ export function useEditorSettings({ persist = true }: { persist?: boolean } = {}
       // Ignore storage failures (e.g. private browsing quota exceeded).
     }
   }, [persist, settings]);
+
+  const setSettings: Dispatch<SetStateAction<PageSettings>> = useCallback((next) => {
+    setRawSettings((previous) => normalizeOutputTypography(
+      typeof next === "function" ? next(previous) : next
+    ));
+  }, []);
 
   return [settings, setSettings] as const;
 }

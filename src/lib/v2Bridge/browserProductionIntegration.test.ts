@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFakeMeasurementProvider } from "../../../typesetting-v2/core/measurement/fakeProvider";
-import { buildPublicationPaintPlan, renderPaintPlanToPdf, type PublicationFontResource } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { buildPublicationPaintPlan, findUnresolvedImageIssues, renderPaintPlanToPdf, type PublicationFontResource } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
 import { decodeUtf8Txt, encodeUtf8Txt } from "../txtTransfer";
 import { composeV2Document } from "./composeV2Document";
@@ -73,5 +73,29 @@ describe("v2 branch production integration", () => {
     const bytes = encodeUtf8Txt(source, { bom: false, newlines: "lf" });
     expect(Array.from(bytes.slice(0, 3))).not.toEqual([0xef, 0xbb, 0xbf]);
     expect(decodeUtf8Txt(bytes, { newlines: "lf" })).toBe(source.replace(/\r\n/g, "\n"));
+  });
+
+  it("holds every browser export when a required image is unresolved without discarding safe text", () => {
+    const content = "書き出しに残す本文。\n【IMG:missing-image:20:30:center】\n画像後にも残す本文。";
+    const bridge = composeV2Document({
+      title: "未解決画像HOLD",
+      content,
+      settings: DEFAULT_PAGE_SETTINGS,
+      measurement: createFakeMeasurementProvider(),
+      imageResolver: () => ({ kind: "MISSING" }),
+    });
+
+    expect(bridge.source).toContain("書き出しに残す本文。");
+    expect(bridge.source).toContain("画像後にも残す本文。");
+    expect(bridge.document.pages.length).toBeGreaterThan(0);
+    expect(findUnresolvedImageIssues(bridge.model)).toEqual([
+      expect.stringContaining("source not found"),
+    ]);
+    expect(() => buildPublicationPaintPlan(
+      bridge.model,
+      undefined,
+      bridge.pageGeometry,
+      "browser export",
+    )).toThrow(/unresolved required image/i);
   });
 });

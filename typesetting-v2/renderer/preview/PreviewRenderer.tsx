@@ -281,7 +281,28 @@ export function PreviewPage({ page, fontSizePx, mode }: { page: PaintPage; fontS
   );
 }
 
-export function PreviewDocumentView({ model, mode }: { model: PaintDocument; mode: PreviewMode }) {
+export function PreviewDocumentView({
+  model,
+  mode,
+  selectedPageIndices,
+  onTogglePage,
+}: {
+  model: PaintDocument;
+  mode: PreviewMode;
+  selectedPageIndices?: ReadonlySet<number>;
+  onTogglePage?: (index: number) => void;
+}) {
+  const renderSelectablePage = (page: PaintPage, index: number) => onTogglePage ? (
+    <div key={page.id} className={`page-selection-item ${selectedPageIndices?.has(index) ? "selected" : ""}`}>
+      <label className="page-selection-control">
+        <input type="checkbox" checked={selectedPageIndices?.has(index) ?? false} onChange={() => onTogglePage(index)} />
+        <span>{index + 1}ページ</span>
+      </label>
+      <PreviewPage page={page} fontSizePx={model.fontSizePx} mode={mode} />
+    </div>
+  ) : (
+    <PreviewPage key={page.id} page={page} fontSizePx={model.fontSizePx} mode={mode} />
+  );
   return (
     <section className="fixture" id={model.id}>
       <h2>{model.label}</h2>
@@ -303,12 +324,8 @@ export function PreviewDocumentView({ model, mode }: { model: PaintDocument; mod
         </div>
       ) : (
         <div className="page-row">
-          {model.pages.map((page) => (
-            <PreviewPage key={page.id} page={page} fontSizePx={model.fontSizePx} mode={mode} />
-          ))}
-          {model.colophonPages?.map((page) => (
-            <PreviewPage key={page.id} page={page} fontSizePx={model.fontSizePx} mode={mode} />
-          ))}
+          {model.pages.map((page, index) => renderSelectablePage(page, index))}
+          {model.colophonPages?.map((page, index) => renderSelectablePage(page, model.pages.length + index))}
         </div>
       )}
     </section>

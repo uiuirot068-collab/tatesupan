@@ -2,7 +2,7 @@
 
 - Updated: 2026-09-10
 - Decision-prep baseline HEAD: `12d8c312727c2b414f811ccb40398b274fe39454`
-- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / APPROVED DECISIONS RECORDED / HUMAN BRANCH QA PENDING**
+- Status: **AUTHORITATIVE BETA RELEASE ROADMAP / RC POLISH ROUND 3 INTEGRATED / REDUCED HUMAN QA PENDING**
 - Production integration: **BRANCH-INTEGRATED; RELEASE ACTION NOT AUTHORIZED**
 
 ## 1. Authority and status model
@@ -40,11 +40,20 @@ The first viewport must make this journey immediately legible:
 
 > 原稿を持ち込む → 本の形で確認する → PDF / JPGで持ち帰る → 入稿前に確認する
 
-Top-page implementation is **BRANCH-INTEGRATED / HUMAN QA PENDING**.
+Top-page implementation is **BRANCH-INTEGRATED / HUMAN QA PENDING**. Zero-work Home is an open onboarding layout; returning Home is bookshelf-first with Create/Demo/Anthology together and the informational brand panel below bookshelf utilities.
 
 ### β demo requirement
 
-The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, introduce explicit work-session tracking, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement, the concise work-session step, work-history discoverability, and 完成前マイチェックリスト guidance are **HUMAN PASS**. A narrow-only `100dvh` guided shell now removes the overall document-scroll burden while preserving internal Editor/Preview/Settings/card scrolling; status is **IMPLEMENTED / HUMAN QA PENDING**. Normal mobile Editor and desktop behavior remain separately scoped. The frozen Hero is now **BRANCH-INTEGRATED / HUMAN QA PENDING**.
+The existing real-Editor demo history is retained, but its β purpose is now explicit: provide a sample manuscript, expose Preview early, show that settings affect the book, introduce explicit work-session tracking, make PDF/JPG export and preflight checking discoverable, and state that the sample/local flow does not silently upload the manuscript. Target-aware responsive card placement, the concise work-session step, work-history discoverability, and 完成前マイチェックリスト guidance are **HUMAN PASS**. Round 3 keeps the global Header in both normal and Demo mobile compositions and assigns dynamic height only to the center manuscript/Preview surface; implementation is **AUTOMATED PASS / HUMAN QA PENDING**. Returning-user Home is **HUMAN PASS**; only the zero-work cropped-reference region remains **HUMAN QA PENDING**.
+
+### RC polish Round 3 status
+
+- Running-head apply (all pages or selected pages split by physical parity, replacing in-scope overrides only): **AUTOMATED PASS / HUMAN QA PENDING**.
+- Main Settings visual order and single continuous drawer: **AUTOMATED PASS / HUMAN QA PENDING**.
+- Publication folio/running-head `max(4, body - 3)` and Web-only body/folio/header `30 / 15 / 20`: **AUTOMATED PASS / HUMAN QA PENDING**.
+- Inline work-scoped Memo draft autosave/restore and confirmed-value protection: **AUTOMATED PASS / HUMAN QA PENDING**.
+- JPG no-selection/all, selected canonical order, and Web branding aspect-fit: **AUTOMATED PASS / HUMAN QA PENDING**.
+- Rollout B exact PowerShell rollback procedure is recorded in the consolidated QA packet: **DOCUMENTED / HUMAN REHEARSAL PENDING**.
 
 ## 3. Closed state — do not reopen
 
@@ -61,6 +70,8 @@ The following state is closed or Human-passed and must be preserved through inte
 - Manual page break across Preview/PDF/Web JPG/print JPG: **HUMAN PASS**.
 - Writing Check 11-A functional scope: **COMPLETE / HUMAN PASS**.
 - 11-B work-session tracker: **CLOSED / FORMAL HUMAN PASS**. Counting, Start/End, persistence, share/history data, result/history modal presentation, narrow-width usability, X/copy share, and visible Undo/Redo are Human PASS and frozen. Ruby and TCY remain **CLOSED / HUMAN PASS**.
+- Canonical Preview edit/multi-page behavior, valid-image Preview, normal PDF download, export Escape pause/resume/cancel, manuscript/Memo/checklist/work-session persistence, and Help TOC: **HUMAN PASS**.
+- Missing required-image binary: **AUTOMATED PASS**. Preview shows model-derived HOLD, PDF/JPG controls disable, and shared Publication preflight refuses incomplete export without discarding surrounding manuscript content.
 
 Passed typesetting quality is a regression guard for integration, not a new design loop.
 
@@ -76,7 +87,7 @@ Primary disposition A:
 | Release Candidate gate | AUTOMATED RC AUDIT PASS / HUMAN QA PENDING | Consolidated branch QA passes; no unresolved A/F blocker remains. |
 | Production authorization and smoke | NOT AUTHORIZED | Human explicitly approves the integrated release diff before push/deploy; production smoke passes after deploy. |
 
-The previous final content/UX recheck is Human PASS. The four former F decisions are approved and recorded in §8. The new integration surfaces and mobile Demo viewport-fit remain Human branch QA pending, not reopened content or typography gates.
+The previous final content/UX recheck and the explicit Human passes in §3 remain closed. The four former F decisions are approved and recorded in §8. Remaining Human branch QA is limited to conditional Home, responsive Editor/single-column Settings, real-file TXT A/B, multi-page/full PDF, JPG/ZIP, mobile Demo viewport fit, and rollout/rollback; it does not reopen content or typography gates.
 
 ## 5. BETA REQUIRED
 

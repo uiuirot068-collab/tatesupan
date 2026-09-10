@@ -18,62 +18,82 @@ npm.cmd run dev
 
 The rollout value is build/start-time internal configuration. It is not stored in a manuscript and no engine selector is shown to ordinary users.
 
-## New checks
+## Human PASS already recorded — do not repeat
 
-### 1. Top/Hero and journey
+- Canonical Preview normal editing and multi-page behavior; normal image Preview.
+- Normal PDF, long PDF, and PDF with image/header/folio/colophon; PDF completion returns to a usable Editor.
+- Export Escape confirmation, pause, Continue, second-Escape resume, and Cancel.
+- Manuscript, confirmed Memo, checklist, and work-session persistence.
+- Writing Check, 完成前チェック, 11-B (including delete/Undo/Redo counting), and Help TOC.
+- Returning-user Home bookshelf-first architecture.
 
-- URL: `http://localhost:3000/`
-- Action: open at desktop, then 768 px and 390 px widths; inspect the first viewport.
-- Expected PASS: `どこで綴っても、ひとつの本になる。` and the frozen subcopy are legible; the manuscript → book preview → PDF/JPG → preflight journey is clear; create/demo actions are reachable; TXT/local-processing/privacy copy is factual and does not dominate.
+## Automated RC evidence
 
-### 2. Real Editor UI-C integration
+- **UNRESOLVED IMAGE HOLD: AUTOMATED PASS.** A composed manuscript fixture contains valid text before/after a required image token whose resolver returns `MISSING`. The model reports the unresolved source, browser Preview derives an explicit HOLD from that model, PDF/JPG controls are disabled, and the shared Publication preflight refuses export. Other manuscript content remains in the composed source/document. Human data corruption is not required.
+- Conditional Home structure, the single-column Settings contract, mobile `100dvh` shell/internal-scroll contract, Editor IA, and TXT A/B are covered by focused source/behavior tests. Real viewport appearance remains in the Human checks below.
+- Round 3 deterministic coverage includes running-head all/selected parity scopes, replacement/outside-scope safety, JPG empty-selection/all and selected canonical order, publication `max(4, body - 3)` furniture, Web-only `30 / 15 / 20`, work-scoped Memo draft persistence/protection, visible Demo header wiring, and the branding asset's intrinsic `384:341` ratio.
 
-- URL: `http://localhost:3000/` then select `新しい作品を作成する`.
-- Action: use `設定`, `メモ`, `完成前チェック`, visible Undo/Redo, `改ページ挿入`, Ruby/TCY help, and the existing work-session controls. Resize to tablet/mobile.
-- Expected PASS: settings opens as a right drawer on desktop; Memo is directly reachable and persists with the document; checklist state persists locally; no control hides or changes the manuscript; horizontal Editor input remains the default. Existing 11-B result/history behavior is unchanged.
+## Remaining Human checks only
 
-### 3. TXT export/import
+### 1. Running-head apply
 
-- URL: the real Editor created in check 2.
-- Action: enter text containing `【改ページ】`, `｜親文字《よみ》`, `[tate]25[/tate]`, and an image token if available. Select `TXTを書き出す`; inspect bytes/newlines. Then select `TXTを読み込む` with UTF-8 BOM/CRLF and confirm replacement.
-- Expected PASS: export filename derives from the title, encoding is UTF-8 without BOM and LF; notation is byte-preserved except approved newline normalization. Import asks before replacing non-empty content. An imported image token produces a clear reattachment/HOLD warning; no image binary is claimed to be restored.
+- In a multi-page work, set different odd/even values. With no page selection press `柱を反映`; then select a mixed set such as 2, 3, 4, 7, change both values, and apply again.
+- Expected PASS: all-page mode updates old assignments everywhere; selected mode splits by actual parity, replaces only selected assignments, leaves pages outside the selection and all folio settings untouched, and reports only parity groups actually present.
 
-### 4. Canonical Preview and real images
+### 2. Responsive Editor and Demo
 
-- URL: the same Editor with internal v2 candidate active.
-- Action: enter a multi-page Japanese manuscript with Ruby, TCY, U+30FC, dash, ellipsis, manual break, running head/folio, colophon, and add a PNG/JPEG.
-- Expected PASS: the visible book Preview updates from Canonical geometry without DOM reflow decisions; manual break/order/headers/folio match; the real image appears. Removing/unresolving image data creates an explicit `HOLD` and disables successful export instead of silently omitting it.
+- Check a real Editor and `http://localhost:3000/editor?demo=1` at small, normal, and large phone heights, orientation change where practical, then tablet/desktop.
+- Expected PASS: global header, Editor navigation/toolbars, Writing Check/work-session/bottom controls, and Demo actions remain reachable. Only the center manuscript/Preview area flexes and scrolls internally; Settings, Options, and the Demo guide use their own scrolling; the normal Editor has no body-level scroll or horizontal overflow. `次へ` and `デモを終了` remain reachable.
 
-### 5. Browser-local PDF
+### 3. Zero-work Home only
 
-- URL: the same Editor.
-- Action: select `PDF`; while Network tools are open, wait for completion and inspect every page.
-- Expected PASS: the UI remains responsive because PDF paint runs in a Worker; progress advances per canonical page; the downloaded file is complete and uses the passed v2 typography/image path; manuscript/image payloads are not uploaded. Output is trim-size only.
+- With zero real works, compare only the upper Hero + CTA + Bookshelf region against `typesetting-v2/qa/reference/ui/home-empty-state-target.png` at mobile/tablet/desktop.
+- Expected PASS: open Hero, character, primary CTA, bordered Demo CTA, and empty bookshelf/rack follow the reference's hierarchy without a large bordered empty-shelf card. The work popup is visually above the shelf and no separator crosses it. Do not review or redesign lower Home sections; returning-user Home is already PASS.
 
-### 6. v2 JPG/ZIP
+### 4. Settings order and inline Memo
 
-- URL: the same Editor.
-- Action: run `Web JPG 1ページ`, `Web JPG ZIP`, and `印刷用JPG ZIP`; inspect filenames, ordering, first/last pages, vertical U+30FC, heads/folio, manual break, Ruby/dash/ellipsis, and image.
-- Expected PASS: first-page Web exports one file; both ZIP actions contain one title-derived file per canonical page in order; print JPG long side is 1600 px; output is trim-only and never claims bleed support.
+- Expected Settings order: paper; font/font size/line-height; columns/gap; mode buttons; chars-per-line/lines-per-column; then existing margin/text-frame controls nearby. All remain in one scrolling drawer.
+- Open only `▶メモ`, edit without confirming, collapse/reload/navigate away and back, then confirm. Expected PASS: it is inline, the draft returns in each case, and a blank draft cannot overwrite a non-empty confirmed Memo. There is no one-tap delete.
 
-### 7. Export pause/cancel
+### 5. JPG scope and Web branding
 
-- URL: the same Editor with a long (preferably 100+ page) manuscript.
-- Action: start each PDF/JPG/ZIP path and press Escape; once choose `書き出しを続ける`, once press Escape again while the warning is open, and once choose `中断する`.
-- Expected PASS: the warning opens and no new cooperative page unit starts while open; Continue or the second Escape resumes; confirmed cancellation stops remaining units, delivers no incomplete file as success, and restores normal UI. Already-running atomic Canvas/ZIP work may finish before the next boundary.
+- With no selected pages run Web and print ZIP/all-page JPG; repeat with pages selected out of order.
+- Expected PASS: no selection exports every canonical page; selection exports only those pages in book order. In Web JPG the TateSpun cat/logo keeps its source `384:341` aspect ratio. Web output uses body/folio/header `30 / 15 / 20`; print/PDF use `max(4, body - 3)` for folio/header and do not inherit Web values.
 
-### 8. Mobile Demo viewport fit
+### 6. Rollout B rollback — exact PowerShell procedure
 
-- URL: `http://localhost:3000/editor?demo=1`
-- Action: use a common 390 px mobile viewport and advance through the guided tour.
-- Expected PASS: the Demo uses available dynamic viewport height; its card stays visible; internal surfaces scroll; `次へ` / `デモを終了` remain reachable; each target scrolls into view. The primary tour remains concise.
+Use the same browser profile and do not clear site data/local storage. From the repository root:
 
-### 9. Rollback rehearsal
+1. Start v2:
 
-- URL: record the real Editor URL/id from check 2, stop dev, unset the v2 value (`Remove-Item Env:NEXT_PUBLIC_TATESPUN_RENDERER -ErrorAction SilentlyContinue`), restart, then reopen the exact URL.
-- Action: inspect the same manuscript and settings in LEGACY; optionally set `V2_BETA` and restart once more.
-- Expected PASS: the same document remains accessible with no migration or fork; ordinary users see no engine selector; unset/`LEGACY`/unknown values restore legacy immediately, and `V2_BETA` restores the candidate.
+   ```powershell
+   $env:NEXT_PUBLIC_SUPABASE_URL='https://vjgxrqgnbgnewfvissgd.supabase.co'
+   $env:NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'
+   npm.cmd run dev
+   ```
+
+2. Open a known saved manuscript. Record its exact Editor URL, title, and a short text sample.
+3. Stop the server with `Ctrl+C` in that PowerShell window.
+4. Start legacy in the same window:
+
+   ```powershell
+   $env:NEXT_PUBLIC_TATESPUN_RENDERER='LEGACY'
+   npm.cmd run dev
+   ```
+
+5. Open the exact saved Editor URL in the same browser profile and confirm the recorded title/text remain.
+6. Stop the server with `Ctrl+C`.
+7. Switch back to v2:
+
+   ```powershell
+   $env:NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'
+   npm.cmd run dev
+   ```
+
+8. Open the exact saved Editor URL again and confirm the manuscript remains. Stop with `Ctrl+C` when finished.
+
+Expected PASS: renderer mode changes only after restart; manuscript identity/data survive both switches; no ordinary-user renderer selector appears.
 
 ## Human result
 
-Record one outcome: `PASS`, or `HOLD` with the exact check number, URL, viewport/browser, action, and observed result. A PASS makes the branch RC eligible for a separate explicit release-diff approval; it does not authorize merge, push, deploy, or Production release.
+Record `PASS`, or `HOLD` with the exact remaining check number, URL, viewport/browser, action, and observation. A PASS makes the branch RC eligible for separate release-diff approval; it does not authorize merge, push, deploy, or Production release.

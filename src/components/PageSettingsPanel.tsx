@@ -28,14 +28,19 @@ import {
   positionsEqual,
   type TextFramePosition,
 } from "@/lib/textFramePosition";
+import { applyRunningHeads } from "@/lib/runningHeadApply";
+import {
+  WEB_READING_FOLIO_FONT_SIZE,
+  WEB_READING_RUNNING_HEAD_FONT_SIZE,
+} from "@/lib/outputTypography";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
   layout: PageLayout;
   onChange: (next: PageSettings) => void;
-  plotNote: string;
-  onPlotNoteChange: (plotNote: string) => void;
-  onOpenHelp: () => void;
+  plotNote?: string;
+  onPlotNoteChange?: (plotNote: string) => void;
+  onOpenHelp?: () => void;
   /** 1-based printed page numbers currently selected in the preview. */
   selectedPageNumbers: number[];
   /**
@@ -46,6 +51,8 @@ interface PageSettingsPanelProps {
    * sense for the inline strip is skipped.
    */
   mobileSurface?: boolean;
+  /** Drawer IA: expose only page/master categories; Memo and Help live elsewhere. */
+  settingsOnly?: boolean;
 }
 
 type SettingsTab = "page" | "master" | "plot";
@@ -125,17 +132,20 @@ const applyPaperTemplate = (
   // しない）。
   // TSP-LOOP-022 HUMAN-QA: preset ごとに明示された nombreFontSize /
   // headerFontSize を優先し、無い preset は従来どおり本文 -3pt へフォールバック。
-  const nombreOverrides: Partial<MasterPageSettings> = base.masterPage.nombreLayoutCustomized
-    ? {}
-    : {
+  const nombreOverrides: Partial<MasterPageSettings> = {
+    ...(base.masterPage.nombreLayoutCustomized
+      ? {}
+      : {
         nombrePosition: profile.nombrePosition as NombrePosition,
         nombreBottomMargin: profile.nombreDistance,
-        nombreFontSize:
-          profile.nombreFontSize ?? recommendedNombreFontSizePt(profile.fontSizePt),
-        ...(profile.headerFontSize != null
-          ? { headerFontSize: profile.headerFontSize }
-          : {}),
-      };
+      }),
+    nombreFontSize: paperSize === "Web閲覧用"
+      ? WEB_READING_FOLIO_FONT_SIZE
+      : recommendedNombreFontSizePt(profile.fontSizePt),
+    headerFontSize: paperSize === "Web閲覧用"
+      ? WEB_READING_RUNNING_HEAD_FONT_SIZE
+      : recommendedNombreFontSizePt(profile.fontSizePt),
+  };
   return {
     ...base,
     paperSize,
@@ -172,11 +182,12 @@ export default function PageSettingsPanel({
   settings,
   layout,
   onChange,
-  plotNote,
+  plotNote = "",
   onPlotNoteChange,
   onOpenHelp,
   selectedPageNumbers,
   mobileSurface = false,
+  settingsOnly = false,
 }: PageSettingsPanelProps) {
   // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
   // 同じ "page" に固定し、window/localStorage に依存する判定は
@@ -667,6 +678,7 @@ export default function PageSettingsPanel({
   // 個別指定を上書きしてしまいかねない。選択が変わるたびに空へリセットする
   // ことで、直前の選択向けに書いたdraftを別ページへ誤爆させないようにする。
   const [hashiraDraft, setHashiraDraft] = useState("");
+  const [runningHeadApplyNote, setRunningHeadApplyNote] = useState<string | null>(null);
   const selectedPageKey = selectedPageNumbers.join(",");
   // 選択の変化をレンダー中に検知して同期リセットする（React公式が推奨する
   // 「レンダー中にstateを調整する」パターン）。useEffectで行うと余分な
@@ -679,6 +691,20 @@ export default function PageSettingsPanel({
   }
 
   const hasSelection = selectedPageNumbers.length > 0;
+
+  const handleApplyRunningHeads = () => {
+    const result = applyRunningHeads(settings, selectedPageNumbers);
+    onChange(result.settings);
+    if (result.scope === "all") {
+      setRunningHeadApplyNote("全ページの柱を奇数・偶数の設定値で更新しました。");
+      return;
+    }
+    const parts = [
+      result.oddPages.length > 0 ? `奇数 ${result.oddPages.join("、")}ページ` : null,
+      result.evenPages.length > 0 ? `偶数 ${result.evenPages.join("、")}ページ` : null,
+    ].filter(Boolean);
+    setRunningHeadApplyNote(`選択範囲を更新しました（${parts.join("／")}）。`);
+  };
 
   const handleApplyHashiraOverride = () => {
     if (!hasSelection) return;
@@ -736,7 +762,7 @@ export default function PageSettingsPanel({
 
   return (
     <div className="border-b border-ink/10">
-      <div className="grid grid-cols-4">
+      {!settingsOnly && <div data-settings-tabs="" className="grid grid-cols-4">
         <button
           type="button"
           data-demo-target="page-settings"
@@ -761,7 +787,7 @@ export default function PageSettingsPanel({
         >
           {activeTab === "master" ? "▼" : "▶"} ノンブル・柱
         </button>
-        <button
+        {!settingsOnly && <button
           type="button"
           onClick={() => toggleTab("plot")}
           className={`cursor-pointer select-none border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
@@ -771,8 +797,8 @@ export default function PageSettingsPanel({
           }`}
         >
           {activeTab === "plot" ? "▼" : "▶"} メモ
-        </button>
-        <button
+        </button>}
+        {!settingsOnly && <button
           type="button"
           onClick={onOpenHelp}
           className="m-1 cursor-pointer whitespace-nowrap rounded-md border border-ink/15 bg-ink/5 px-2 py-1 text-sm font-medium text-ink/70 transition-colors hover:bg-ink/10 hover:text-ink sm:px-3"
@@ -780,13 +806,14 @@ export default function PageSettingsPanel({
           title="使い方ガイドを開く"
         >
           ヘルプ
-        </button>
-      </div>
+        </button>}
+      </div>}
 
-      {activeTab === "page" && (
+      {(settingsOnly || activeTab === "page") && (
         <div className="w-full">
+          {settingsOnly && <h3 data-settings-section="page" className="border-b border-ink/10 px-4 py-3 font-serif text-base font-semibold text-ink">用紙・本文</h3>}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-3 sm:grid-cols-4">
-        <label className="col-span-2 flex flex-col gap-1 sm:col-span-4">
+        <label data-settings-order="paper" className="order-[1] col-span-2 flex flex-col gap-1 sm:col-span-4">
           <span className="text-xs text-ink/60">用紙サイズ</span>
           <select
             value={settings.paperSize}
@@ -801,7 +828,7 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 sm:col-span-4">
+        <div data-settings-order="mode" className="order-[7] col-span-2 flex flex-wrap items-center justify-between gap-2 sm:col-span-4">
           <div className="flex gap-1">
             <button
               type="button"
@@ -842,7 +869,7 @@ export default function PageSettingsPanel({
         </div>
 
         {settings.layoutMode === "margin" ? (
-          <>
+          <div data-settings-order="layout-controls" className="order-[9] col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:col-span-4 sm:grid-cols-4">
             <MarginField
               label="天（上）"
               value={draft.marginTop}
@@ -867,9 +894,9 @@ export default function PageSettingsPanel({
               onChange={(v) => setDraftField("marginOuter", v)}
               onKeyDown={handleDraftKeyDown}
             />
-          </>
+          </div>
         ) : (
-          <div className="col-span-2 sm:col-span-4">
+          <div data-settings-order="layout-controls" className="order-[9] col-span-2 sm:col-span-4">
             <TextFramePositionField
               position={position}
               onPositionChange={setPositionField}
@@ -883,7 +910,7 @@ export default function PageSettingsPanel({
           </div>
         )}
 
-        <label className="flex flex-col gap-1">
+        <label data-settings-order="font" className="order-[2] flex flex-col gap-1">
           <span className="text-xs text-ink/60">フォント</span>
           <select
             value={settings.fontFamily}
@@ -898,7 +925,7 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label data-settings-order="font-size" className="order-[3] flex flex-col gap-1">
           <span className="text-xs text-ink/60">
             フォントサイズ（pt）
           </span>
@@ -914,7 +941,7 @@ export default function PageSettingsPanel({
           />
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label data-settings-order="line-height" className="order-[4] flex flex-col gap-1">
           <span className="text-xs text-ink/60">行間倍率</span>
           <input
             type="number"
@@ -928,7 +955,7 @@ export default function PageSettingsPanel({
           />
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label data-settings-order="columns" className="order-[5] flex flex-col gap-1">
           <span className="text-xs text-ink/60">段数</span>
           <select
             value={settings.columnCount}
@@ -942,7 +969,7 @@ export default function PageSettingsPanel({
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label data-settings-order="column-gap" className="order-[6] flex flex-col gap-1">
           <span className="text-xs text-ink/60">段間 mm</span>
           <input
             type="number"
@@ -961,7 +988,7 @@ export default function PageSettingsPanel({
           // TSP-LOOP-031B: 余白モードでは1行の文字数・1段の行数を独立入力
           // させない（隠れた別設定として残さない）——draft の余白から
           // 実際に入る最大値を読み取り専用サマリーとして示す。
-          <div className="col-span-2 flex flex-col gap-1 sm:col-span-2">
+          <div data-settings-order="capacity" className="order-[8] col-span-2 flex flex-col gap-1 sm:col-span-2">
             <span className="text-xs text-ink/60">この設定で入る本文</span>
             {marginCapacityPreview?.ok ? (
               <>
@@ -984,7 +1011,7 @@ export default function PageSettingsPanel({
             )}
           </div>
         ) : (
-          <>
+          <div data-settings-order="capacity" className="order-[8] col-span-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:col-span-4 sm:grid-cols-4">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-ink/60">1行の文字数</span>
               <input
@@ -1010,12 +1037,12 @@ export default function PageSettingsPanel({
                 className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
               />
             </label>
-          </>
+          </div>
         )}
 
         {/* grid-cols-4 上で「段間mm・(1行の文字数・1段の行数 or 本文サマリー)」が
             2〜3枠を占め、このセルが同じ行の空いた枠へ自然に収まる（col-spanなし）。 */}
-        <div className="flex flex-col justify-end gap-1">
+        <div data-settings-order="apply" className="order-[10] flex flex-col justify-end gap-1">
           <button
             type="button"
             onClick={commitDraft}
@@ -1043,8 +1070,9 @@ export default function PageSettingsPanel({
         </div>
       )}
 
-      {activeTab === "master" && (
-        <div className="w-full">
+      {(settingsOnly || activeTab === "master") && (
+        <div className={`w-full ${settingsOnly ? "border-t border-ink/10" : ""}`}>
+          {settingsOnly && <h3 data-settings-section="master" className="border-b border-ink/10 px-4 py-3 font-serif text-base font-semibold text-ink">ページ・ノンブル・柱</h3>}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-4 pt-1 sm:grid-cols-4">
         <div className="col-span-2 flex flex-wrap items-end gap-3 sm:col-span-4">
           <label className="flex flex-col gap-1">
@@ -1096,13 +1124,12 @@ export default function PageSettingsPanel({
             <span className="text-xs text-ink/60">ノンブルの文字サイズ (pt)</span>
             <input
               type="number"
-              min={5}
+              min={4}
               max={24}
-              value={settings.masterPage.nombreFontSize ?? 8}
-              onChange={(e) =>
-                updateMasterPage("nombreFontSize", Number(e.target.value))
-              }
-              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+              value={settings.paperSize === "Web閲覧用" ? WEB_READING_FOLIO_FONT_SIZE : recommendedNombreFontSizePt(settings.fontSizePt)}
+              readOnly
+              title="本文サイズから自動計算されます"
+              className="rounded border border-ink/20 bg-ink/[0.04] px-2 py-1.5 text-sm text-ink"
             />
           </label>
 
@@ -1171,6 +1198,21 @@ export default function PageSettingsPanel({
           />
         </label>
 
+        <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-4">
+          <button
+            type="button"
+            data-apply-running-heads=""
+            onClick={handleApplyRunningHeads}
+            className="rounded bg-accent px-3 py-1.5 text-xs font-semibold text-paper-ink hover:opacity-90"
+          >
+            柱を反映
+          </button>
+          <span className="text-xs text-ink/55">
+            {hasSelection ? `選択中の${selectedPageNumbers.length}ページへ奇数・偶数別に反映` : "全ページへ奇数・偶数別に反映"}
+          </span>
+          {runningHeadApplyNote && <span role="status" className="basis-full text-xs text-accent">{runningHeadApplyNote}</span>}
+        </div>
+
         <label className="flex flex-col gap-1">
           <span className="text-xs text-ink/60">柱表示位置</span>
           <select
@@ -1189,13 +1231,12 @@ export default function PageSettingsPanel({
           <span className="text-xs text-ink/60">柱の文字サイズ (pt)</span>
           <input
             type="number"
-            min={5}
+            min={4}
             max={24}
-            value={settings.masterPage.headerFontSize ?? 8}
-            onChange={(e) =>
-              updateMasterPage("headerFontSize", Number(e.target.value))
-            }
-            className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+            value={settings.paperSize === "Web閲覧用" ? WEB_READING_RUNNING_HEAD_FONT_SIZE : recommendedNombreFontSizePt(settings.fontSizePt)}
+            readOnly
+            title="本文サイズから自動計算されます"
+            className="rounded border border-ink/20 bg-ink/[0.04] px-2 py-1.5 text-sm text-ink"
           />
         </label>
 
@@ -1263,7 +1304,7 @@ export default function PageSettingsPanel({
         </div>
       )}
 
-      {activeTab === "plot" && (
+      {!settingsOnly && activeTab === "plot" && (
         <div className="w-full">
           <div className="flex items-center justify-end gap-1 px-4 pb-2 pt-1">
             <button
@@ -1294,7 +1335,7 @@ export default function PageSettingsPanel({
             {plotMode === "edit" ? (
               <textarea
                 value={plotNote}
-                onChange={(e) => onPlotNoteChange(e.target.value)}
+                onChange={(e) => onPlotNoteChange?.(e.target.value)}
                 placeholder="プロットや設定メモを入力してください&#10;&#10;# 見出し&#10;**太字** や *強調* 、- 箇条書きが使えます"
                 spellCheck={false}
                 className="h-64 w-full resize-y rounded border border-ink/20 bg-base p-2 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"

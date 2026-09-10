@@ -66,6 +66,7 @@ import ExportProgressModal from "./ExportProgressModal";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import PreviewPaneNew from "./PreviewPaneNew";
+import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 import ColophonPageCard from "./ColophonPageCard";
 import { resolveColophonInsertion } from "@/lib/colophon";
 import {
@@ -866,6 +867,7 @@ export default function PreviewPane({
 
   /** 選択中ページを物理ページ順（昇順）の0-basedインデックス配列で返す。画面上の選択順ではなく本のページ順。 */
   const getOrderedSelectedIndices = (): number[] => Array.from(selected).sort((a, b) => a - b);
+  const getJpgScopeIndices = (): number[] => resolveJpgPageIndices(pages.length, selected);
 
   /** 指定インデックス群を、実在するDOM要素だけの {element, fileName} 配列に解決する。JPG一括・ZIPで共通。 */
   const buildSelectedPageItems = (indices: number[]): ExportPageItem[] =>
@@ -1002,11 +1004,7 @@ export default function PreviewPane({
 
   const handleExportJpgBatch = async () => {
     if (exportBlockedByUnresolvedImages()) return;
-    if (selected.size === 0) {
-      alert("書き出すページを選択してください。");
-      return;
-    }
-    const items = buildSelectedPageItems(getOrderedSelectedIndices());
+    const items = buildSelectedPageItems(getJpgScopeIndices());
     if (items.length === 0) return;
     const signal = beginExport("画像", items.length);
     try {
@@ -1028,11 +1026,7 @@ export default function PreviewPane({
 
   const handleExportZip = async () => {
     if (exportBlockedByUnresolvedImages()) return;
-    if (selected.size === 0) {
-      alert("書き出すページを選択してください。");
-      return;
-    }
-    const items = buildSelectedPageItems(getOrderedSelectedIndices());
+    const items = buildSelectedPageItems(getJpgScopeIndices());
     if (items.length === 0) return;
     const signal = beginExport("画像", items.length);
     try {
@@ -1559,6 +1553,8 @@ export default function PreviewPane({
             unresolvedImageIds={unresolvedImageIds ?? new Set<string>()}
             blockExportForUnresolvedImages={blockExportForUnresolvedImages}
             onPdfExportSuccess={onPdfExportSuccess}
+            selectedPageIndices={selected}
+            onSelectedPageIndicesChange={setSelected}
           />
         </div>
       </div>

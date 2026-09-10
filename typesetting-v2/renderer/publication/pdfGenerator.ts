@@ -53,6 +53,7 @@ import type { PaintPage, PaintPlacedUnit, PublicationDocument } from "./paintMod
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
+import { publicationFurnitureFontSizePt } from "../../core/settings/outputTypography";
 import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
@@ -131,6 +132,8 @@ export type PaintCommand =
       angle?: number;
       baseline?: "alphabetic" | "middle";
       maxWidthMm?: number;
+      /** Page-furniture identity lets Web raster output apply its fixed 15/20 scale without changing PDF/print. */
+      furnitureRole?: "folio" | "running-head";
     }
   | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
   // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
@@ -407,9 +410,10 @@ function horizontalFurnitureCommand(
   xMm: number,
   yCenterMm: number,
   fontSizePt: number,
-  align: "left" | "center" | "right" = "center"
+  align: "left" | "center" | "right" = "center",
+  furnitureRole?: "folio" | "running-head"
 ): PaintCommand {
-  return { op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle" };
+  return { op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle", ...(furnitureRole ? { furnitureRole } : {}) };
 }
 
 // Converts a physical mm length to the equivalent jsPDF font-size point
@@ -698,7 +702,7 @@ function buildBodyPaintPage(
             ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
             : paperWidthMm / 2;
       const yCenter = paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(doc.bodyEmMm)));
+      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), "center", "folio"));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
       // Human Visual QA HOLD round 25 (correction to round 24's own
@@ -718,7 +722,7 @@ function buildBodyPaintPage(
             ? paperWidthMm - marginRightMm
             : paperWidthMm / 2;
       const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, mmToPt(doc.bodyEmMm), page.header.position.horizontal));
+      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), page.header.position.horizontal, "running-head"));
     }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
@@ -1095,7 +1099,7 @@ function buildColophonPaintPage(
     const xCenter =
       page.folio.position === "left" ? marginLeftMm + bodyEmMm / 2 : page.folio.position === "right" ? paperWidthMm - marginRightMm - bodyEmMm / 2 : paperWidthMm / 2;
     const yCenter = paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, mmToPt(bodyEmMm)));
+    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "folio"));
   }
   // Human Visual QA HOLD round 28: colophon pages have carried a real,
   // Core-generated `header` since round 26 (`assemble.ts`'s own
@@ -1110,7 +1114,7 @@ function buildColophonPaintPage(
           ? paperWidthMm - marginRightMm - bodyEmMm / 2
           : paperWidthMm / 2;
     const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, mmToPt(bodyEmMm)));
+    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "running-head"));
   }
   return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }
@@ -1273,7 +1277,7 @@ export async function renderPaintPlanToPdfAsync(
 // which is genuinely a Publication-only concern Core cannot see).
 // PLACEHOLDER is NOT a failure here — it means no resolver was wired at
 // all (every existing typography test's own real, intentional mode).
-function findUnresolvedImageIssues(doc: PublicationDocument): string[] {
+export function findUnresolvedImageIssues(doc: PublicationDocument): string[] {
   const issues: string[] = [];
   const scanPages = (pages: PublicationDocument["pages"]) => {
     for (const page of pages) {

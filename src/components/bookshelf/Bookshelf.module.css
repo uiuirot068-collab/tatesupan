@@ -350,7 +350,7 @@
 
 .bookMenu {
   position: absolute;
-  z-index: 5;
+  z-index: 20;
   top: -5px;
   right: -5px;
 }

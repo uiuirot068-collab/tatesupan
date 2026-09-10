@@ -209,7 +209,7 @@ export interface MasterPageSettings {
   hashiraEven: string; // 偶数ページ柱（例: 章名）
   hashiraPosition: HashiraPosition;
   headerFontSize?: number; // 柱のフォントサイズ (pt, デフォルト: 8)
-  // ノンブルのフォントサイズ (pt)。推奨デフォルトは本文フォント -3pt / 最小6pt
+  // ノンブルのフォントサイズ (pt)。出力契約は本文フォント -3pt / 最小4pt
   // （recommendedNombreFontSizePt。TSP-LOOP-021 §4）。手動変更後は保持される。
   nombreFontSize?: number;
   // ノンブル（ページ番号）のフォント。"" = 本文と同じ（既定）。それ以外は
@@ -226,12 +226,13 @@ export interface MasterPageSettings {
 
 /**
  * TSP-LOOP-021 §4: recommended default page-number size — body font size
- * minus 3pt, never below 6pt (e.g. 10pt→7, 9pt→6, 8pt→6). Applied only to a
+ * minus 3pt, never below 4pt. This value is the canonical publication size
+ * for both folio and running head.
  * layout the user has NOT customised (see MasterPageSettings.nombreLayoutCustomized);
  * a manual choice is always preserved, including across a paper-preset switch.
  */
 export function recommendedNombreFontSizePt(bodyFontSizePt: number): number {
-  return Math.max(6, Math.round(bodyFontSizePt - 3));
+  return Math.max(4, bodyFontSizePt - 3);
 }
 
 export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
@@ -246,9 +247,9 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   hashiraOdd: "",
   hashiraEven: "",
   hashiraPosition: "top",
-  headerFontSize: 8,
+  headerFontSize: 6,
   // 文庫（既定用紙）の preset 値。TSP-LOOP-022 HUMAN-QA で 6pt → 5pt。
-  nombreFontSize: 5,
+  nombreFontSize: 6,
   nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
   nombreLayoutCustomized: false,
 };

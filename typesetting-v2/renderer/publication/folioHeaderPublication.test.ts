@@ -124,13 +124,12 @@ describe("Folio Publication paint -- real Core data, real geometry resolution", 
     expect(["text", "glyphOutline"]).toContain(last.op);
   });
 
-  it("folio font size matches the fixed body-em size (HD-005 default: inherits body font unless overridden)", () => {
+  it("folio font size follows the publication max(4, body - 3) contract", () => {
     const { model } = composeModel("今日は", DEFAULT_FOLIO_SETTINGS);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const textCommands = plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
-    const first = textCommands[0].fontSizePt;
-    for (const c of textCommands) expect(c.fontSizePt).toBe(first);
+    const folio = plan[0].commands.find((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && c.furnitureRole === "folio");
+    expect(folio?.fontSizePt).toBe(Math.max(4, model.bodyEmMm * (72 / 25.4) - 3));
   });
 
   it("suppressed page (hideNombreOnFirstPage) paints no folio command at all -- the existing optional-field mechanism IS the suppression rule", () => {

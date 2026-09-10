@@ -62,6 +62,49 @@ export function buildTxtFileName(title: string): string {
   return `${sanitizeFilename(title)}.txt`;
 }
 
+/**
+ * Produces a human-readable manuscript without TateSpun control notation.
+ * This is deliberately a pure source transformation: Preview/DOM output is
+ * never consulted, and the round-trip serialization functions above remain
+ * completely unchanged.
+ */
+export function serializeReadableTxt(source: string): string {
+  const withoutControls = source
+    .replace(/\r\n?/g, "\n")
+    .replace(/!\[[^\]\n]*\]\([^\)\n]*\)/g, "")
+    .replace(/【IMG:[^】\n]*】/g, "")
+    .replace(/【改ページ】/g, "\n\n")
+    .replace(/｜([^《\n]+)《[^》\n]*》/g, "$1")
+    .replace(/\[tate\]([\s\S]*?)\[\/tate\]/gi, "$1")
+    .replace(/\[([^\]\n]+)\]\([^\)\n]*\)/g, "$1");
+
+  const lines = withoutControls.split("\n").map((rawLine) => {
+    let line = rawLine.replace(/[ \t]+$/g, "");
+    if (line.trim() === "") return "";
+
+    const heading = /^\s{0,3}#{1,6}\s+/.test(line);
+    const list = /^\s*(?:[-+*]\s+|\d+[.)]\s+)/.test(line);
+    const quote = /^\s*>\s?/.test(line);
+    line = line
+      .replace(/^\s{0,3}#{1,6}\s+/, "")
+      .replace(/^\s*(?:[-+*]\s+|\d+[.)]\s+)/, "")
+      .replace(/^\s*>\s?/, "")
+      .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+      .replace(/__([^_\n]+)__/g, "$1")
+      .replace(/\*([^*\n]+)\*/g, "$1")
+      .replace(/_([^_\n]+)_/g, "$1")
+      .replace(/`([^`\n]+)`/g, "$1");
+
+    const structural = heading || list || quote || /^■\s*/.test(line);
+    const alreadyIndented = /^[\s　]/.test(line);
+    return structural || alreadyIndented ? line : `　${line}`;
+  });
+
+  while (lines[0] === "") lines.shift();
+  while (lines.at(-1) === "") lines.pop();
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
 /** Local File API only; no network boundary exists in this helper. */
 export async function readLocalTxtFile(
   file: Pick<File, "arrayBuffer">,

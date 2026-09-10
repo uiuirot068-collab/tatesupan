@@ -29,10 +29,9 @@ import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/ma
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane from "./EditorPane";
-import PageSettingsPanel from "./PageSettingsPanel";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
-import { BookPartsModal } from "./BookPartsModal";
+import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
 import HelpModal from "./HelpModal";
 import PdfExportNoticeModal from "./PdfExportNoticeModal";
@@ -49,10 +48,12 @@ import {
 import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
-import { downloadLocalTxt, readLocalTxtFile } from "@/lib/txtTransfer";
+import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/txtTransfer";
 import ChecklistPanel from "./ChecklistPanel";
-import ViewportModal from "./ViewportModal";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
+import EditorOptionsDrawer from "./EditorOptionsDrawer";
+import InlineMemoAccordion from "./InlineMemoAccordion";
+import { memoDraftStorageKey } from "@/lib/memoDraft";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -104,7 +105,7 @@ export default function TategakiEditor({
   // inside the editor" to a first-class workspace of its own. At `md+` this
   // is ignored: the editor+preview split and the inline settings strip render
   // exactly as before.
-  const [mobileView, setMobileView] = useState<"editor" | "preview" | "settings">(
+  const [mobileView, setMobileView] = useState<"editor" | "preview">(
     "editor"
   );
   // 「集中モード」— a per-device localStorage-only UI preference (never
@@ -162,19 +163,14 @@ export default function TategakiEditor({
     // document was scrolled to under the previous workspace.
     scrollWindowTop();
   };
-  const showSettingsView = () => {
-    // TSP-LOOP-022: 設定 is its own workspace now — no longer "switch to the
-    // editor and scroll down to a strip".
-    setMobileView("settings");
-    scrollWindowTop();
-  };
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBookPartsModalOpen, setIsBookPartsModalOpen] = useState(false);
+  const [bookPartsInitialTab, setBookPartsInitialTab] = useState<BookPartTab>("colophon");
   const [isColophonModalOpen, setIsColophonModalOpen] = useState(false);
   const [isBetaFeedbackOpen, setIsBetaFeedbackOpen] = useState(false);
   const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
-  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [activeDrawer, setActiveDrawer] = useState<"settings" | "options" | null>(null);
   // 本文の総ページ数（PreviewPane の pagination 結果）。奥付編集ポップアップの
   // 「本文の何ページ後」入力の目安・範囲外警告に使う。
   const [bodyPageCount, setBodyPageCount] = useState(0);
@@ -209,6 +205,10 @@ export default function TategakiEditor({
       ]),
     [unresolvedCloudImages]
   );
+  const memoStorageKey = useMemo(
+    () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
+    [currentProjectId, docId]
+  );
   const [cloudLimitPlan, setCloudLimitPlan] = useState<CloudPlan | null>(null);
   // プレビューで選択中のページ（0-based index into PreviewPane's `pages`）。
   // 「ノンブル・柱」タブの選択ページパネル（PageSettingsPanel、EditorPane側）
@@ -235,9 +235,14 @@ export default function TategakiEditor({
     [selectedPages]
   );
 
-  const exportTxt = () => {
+  const exportSourceTxt = () => {
     downloadLocalTxt(title || "TateSpun", content, { bom: false, newlines: "lf" });
-    setToast("TXTを書き出しました（UTF-8・BOMなし・LF）。");
+    setToast("原稿データTXTを書き出しました（UTF-8・BOMなし・LF）。");
+  };
+
+  const exportReadableTxt = () => {
+    downloadLocalTxt(`${title || "TateSpun"}_整形本文`, serializeReadableTxt(content), { bom: false, newlines: "lf" });
+    setToast("整形本文TXTを書き出しました（記法・画像情報なし）。");
   };
 
   const importTxt = async (file: File) => {
@@ -592,19 +597,13 @@ export default function TategakiEditor({
   };
 
   return (
-    // TSP-LOOP-020 — `data-editor-shell` opts this route out of the global
-    // `html/body { overflow:hidden; height:100vh }` viewport lock **only at
-    // `< 768px`** (see globals.css), so a phone gets an ordinary scrolling
-    // document. At `md+` every `md:` class below restores the original
-    // viewport-locked, internally-scrolled workspace unchanged.
+    // Round 2: the route shell owns one dynamic viewport on narrow screens.
+    // Each active manuscript/preview/drawer surface scrolls internally; no
+    // global body lock is introduced, so other routes retain normal scrolling.
     <div
       data-editor-shell
       data-demo-mode={demoMode ? "" : undefined}
-      className={`box-border flex w-full flex-col bg-canvas md:h-screen md:w-screen md:gap-6 md:overflow-hidden md:pl-8 md:pr-10 md:pt-6 md:pb-10 ${
-        demoMode
-          ? "h-[100dvh] min-h-0 gap-2 overflow-hidden px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:min-h-[100dvh]"
-          : "min-h-[100dvh] gap-3 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+5rem)]"
-      }`}
+      className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
       <input
         ref={txtInputRef}
@@ -623,13 +622,12 @@ export default function TategakiEditor({
           keeps only identity + account / theme / 保存作品一覧 — its 一覧 link,
           save button and ？ (all duplicated by the sticky MobileEditorNav) are
           `md+` only, so the phone header stops being a tall wrapped block. */}
-      <div className={focusMode || demoMode ? "hidden md:contents" : "contents"}>
+      <div data-editor-header-slot="" className={focusMode ? "hidden md:block md:flex-none" : "flex-none"}>
         <Header
           onSave={isSampleDocument ? undefined : handleSave}
           onSelectProject={isSampleDocument ? undefined : handleSelectProject}
           isSaving={isSaving}
           saveStatus={isSampleDocument ? undefined : saveStatus}
-          onOpenHelp={() => setIsHelpOpen(true)}
           focusMode={focusMode}
           onEnterFocus={enterFocusMode}
           onExitFocus={exitFocusMode}
@@ -663,39 +661,32 @@ export default function TategakiEditor({
         <BetaFeedbackModal onClose={() => setIsBetaFeedbackOpen(false)} />
       )}
 
-      {/* Phone-only sticky nav. A direct shell child (not inside <main>) so its
-          only scroll ancestor is the document — `position:sticky; top:0`
-          therefore pins it to the VIEWPORT and it stays reachable no matter
-          which inner surface (textarea, preview canvas) owns a touch gesture.
-          `md:hidden`, so desktop layout is untouched. */}
+      {/* Phone-only navigation remains a fixed flex row in the viewport shell;
+          manuscript and preview own their independent scrolling surfaces. */}
       <MobileEditorNav
         mobileView={mobileView}
         onShowEditor={showEditorView}
         onShowPreview={showPreviewView}
-        onShowSettings={showSettingsView}
         focusMode={focusMode}
         onEnterFocus={enterFocusMode}
         onExitFocus={exitFocusMode}
         saveStatus={isSampleDocument ? undefined : saveStatus}
         onSave={isSampleDocument ? undefined : handleSave}
         isSaving={isSaving}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenFeedback={
-          BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined
-        }
+      />
+
+      <InlineMemoAccordion
+        key={memoStorageKey}
+        open={isMemoOpen}
+        storageKey={memoStorageKey}
+        confirmedMemo={plotNote}
+        onConfirm={setPlotNote}
+        onClose={() => setIsMemoOpen(false)}
       />
 
       <main
         ref={mainRef}
-        // Narrow (< md): an ordinary block in the scrolling document with NO
-        // overflow of its own (the body's `overflow-x: clip` from globals.css
-        // handles horizontal), so the page — not a nested container —
-        // scrolls. Editor / Preview are mutually exclusive here (mobileView).
-        // Wide (md+): unchanged — side-by-side, viewport-locked, panes scroll
-        // internally.
-        className={`flex min-h-0 min-w-0 flex-1 flex-col md:flex-row md:gap-2 md:overflow-hidden md:pr-6 md:pb-6 ${
-          demoMode ? "gap-2 overflow-hidden" : "gap-3"
-        }`}
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row md:pr-6 md:pb-6"
       >
         <section
           id="tsp-manuscript"
@@ -704,12 +695,7 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          // Narrow: a natural-height block in the scrolling document; the
-          // textarea inside owns an intentional manuscript scroll (see
-          // EditorPane). Hidden whenever the phone is showing another
-          // workspace (プレビュー or 設定). Wide: md overrides restore the
-          // fitted, viewport-locked pane unchanged.
-          className={`flex min-w-0 shrink-0 scroll-mt-28 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:scroll-mt-0 md:h-full md:min-h-full md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${demoMode ? "max-md:h-full max-md:min-h-0" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             title={title}
@@ -721,23 +707,12 @@ export default function TategakiEditor({
             onStartWorkSession={startWorkSession}
             onEndWorkSession={endWorkSession}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
-            onOpenBookParts={() => setIsBookPartsModalOpen(true)}
-            onImportTxt={() => txtInputRef.current?.click()}
-            onExportTxt={exportTxt}
-            onOpenMemo={() => setIsMemoOpen(true)}
-            onOpenChecklist={() => setIsChecklistOpen(true)}
-            onOpenSettingsDrawer={() => setIsSettingsDrawerOpen(true)}
-            onOpenBetaFeedback={() => setIsBetaFeedbackOpen(true)}
-            settings={settings}
-            layout={layout}
-            onSettingsChange={setSettings}
-            plotNote={plotNote}
-            onPlotNoteChange={setPlotNote}
-            onOpenHelp={() => setIsHelpOpen(true)}
+            onOpenOptions={() => setActiveDrawer("options")}
+            onOpenMemo={() => { setActiveDrawer(null); setIsMemoOpen(true); }}
+            onOpenSettingsDrawer={() => setActiveDrawer("settings")}
+            onOpenHelp={() => { setActiveDrawer(null); setIsHelpOpen(true); }}
             onCursorIndexChange={setCursorIndex}
-            selectedPageNumbers={selectedPageNumbers}
             focusMode={focusMode}
-            guidedViewport={demoMode}
           />
         </section>
 
@@ -750,23 +725,20 @@ export default function TategakiEditor({
 
         <section
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
-          // Narrow: a viewport-tall pane shown only when mobileView==="preview".
-          // `max-md:overflow-hidden` on a fixed-height box clips any transient
-          // spread overflow before the width-fit lands — PreviewPane owns the
-          // single inner scroll/pan surface. Wide: md overrides restore the
-          // side-by-side pane unchanged.
+          // Narrow: fills the remaining dynamic viewport; PreviewPane owns the
+          // single inner scroll/pan surface. Wide keeps the existing split.
           // TSP-LOOP-023: in desktop focus mode an *expanded* Preview is a
           // capped-width side panel (`md:flex-none`, ~38% up to 480px) so the
           // manuscript editor stays dominant; collapsed it is the same thin
           // rail as the normal desktop collapse. Outside focus mode the normal
           // split (`--preview-w` / `md:flex-1`) is unchanged.
-          className={`min-h-0 min-w-0 transition-all duration-200 max-md:overflow-hidden md:flex md:h-full md:flex-none ${
+          className={`min-h-0 min-w-0 transition-all duration-200 overflow-hidden md:flex md:h-full md:flex-none ${
             isPreviewCollapsed
               ? "md:w-12"
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileView === "preview" ? `flex shrink-0 flex-col ${demoMode ? "h-full" : "h-[calc(100dvh-9rem)]"}` : "max-md:hidden"}`}
+          } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : "max-md:hidden"}`}
         >
           <PreviewPane
             content={content}
@@ -796,33 +768,6 @@ export default function TategakiEditor({
           />
         </section>
 
-        {/* TSP-LOOP-022 — dedicated phone 設定 workspace. `md:hidden`, so the
-            desktop side-by-side layout (which keeps its settings strip inside
-            EditorPane) is untouched. A natural-height block in the scrolling
-            document, exactly like the phone 本文 surface — it uses the same
-            controlled PageSettingsPanel as desktop (shared settings + onChange,
-            no duplicated logic), just composed as its own full-width surface
-            instead of a strip the user scrolls past. Kept mounted (only
-            `hidden` toggles) so an in-progress settings draft / open tab
-            survives switching to 本文 or プレビュー and back. */}
-        <section
-          id="tsp-settings-view"
-          aria-label="設定"
-          className={`scroll-mt-28 rounded-2xl border border-ink/10 bg-base shadow-lg md:hidden ${demoMode ? "min-h-0 overflow-y-auto" : "overflow-hidden"} ${
-            mobileView === "settings" ? "" : "hidden"
-          } ${demoMode && mobileView === "settings" ? "h-full" : ""}`}
-        >
-          <PageSettingsPanel
-            settings={settings}
-            layout={layout}
-            onChange={setSettings}
-            plotNote={plotNote}
-            onPlotNoteChange={setPlotNote}
-            onOpenHelp={() => setIsHelpOpen(true)}
-            selectedPageNumbers={selectedPageNumbers}
-            mobileSurface
-          />
-        </section>
       </main>
 
       {isSearchOpen && (
@@ -836,16 +781,23 @@ export default function TategakiEditor({
         />
       )}
 
-      {isMemoOpen && (
-        <ViewportModal title="メモ" titleId="editor-memo-title" closeLabel="メモを閉じる" onClose={() => setIsMemoOpen(false)} panelClassName="max-w-2xl">
-          <textarea autoFocus value={plotNote} onChange={(event) => setPlotNote(event.target.value)} className="min-h-[50dvh] w-full resize-y rounded border border-ink/20 bg-paper p-4 font-mono text-sm leading-relaxed outline-none focus:ring-2 focus:ring-accent/30" />
-          <p className="mt-2 text-xs text-ink/55">原稿と一緒に保存されます。本文や書き出し内容には入りません。</p>
-        </ViewportModal>
-      )}
-
       {isChecklistOpen && <ChecklistPanel onClose={() => setIsChecklistOpen(false)} />}
 
-      {isSettingsDrawerOpen && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} plotNote={plotNote} onPlotNoteChange={setPlotNote} onOpenHelp={() => setIsHelpOpen(true)} selectedPageNumbers={selectedPageNumbers} onClose={() => setIsSettingsDrawerOpen(false)} />}
+      {activeDrawer === "settings" && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} selectedPageNumbers={selectedPageNumbers} onClose={() => setActiveDrawer(null)} />}
+
+      {activeDrawer === "options" && (
+        <EditorOptionsDrawer
+          onOpenVerticalColophon={() => { setBookPartsInitialTab("colophon"); setIsBookPartsModalOpen(true); }}
+          onOpenHorizontalColophon={() => setIsColophonModalOpen(true)}
+          onOpenToc={() => { setBookPartsInitialTab("toc"); setIsBookPartsModalOpen(true); }}
+          onOpenChecklist={() => setIsChecklistOpen(true)}
+          onImportSourceTxt={() => txtInputRef.current?.click()}
+          onExportSourceTxt={exportSourceTxt}
+          onExportReadableTxt={exportReadableTxt}
+          onOpenFeedback={BETA_FEEDBACK_ENABLED ? () => setIsBetaFeedbackOpen(true) : undefined}
+          onClose={() => setActiveDrawer(null)}
+        />
+      )}
 
       {isPdfNoticeOpen && (
         <PdfExportNoticeModal
@@ -872,6 +824,7 @@ export default function TategakiEditor({
           content={content}
           layout={layout}
           settings={settings}
+          initialTab={bookPartsInitialTab}
         />
       )}
 
@@ -893,7 +846,15 @@ export default function TategakiEditor({
       {demoMode && (
         <DemoTour
           isMember={!!user}
-          onPrepare={(view) => setMobileView(view)}
+          onPrepare={(view) => {
+            if (view === "settings") {
+              setMobileView("editor");
+              setActiveDrawer("settings");
+            } else {
+              setActiveDrawer(null);
+              setMobileView(view);
+            }
+          }}
           onExit={() => router.push("/")}
           onExitToBookshelf={() => router.push("/")}
           onExitToNewProject={async () => {

@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
-import type { PageLayout, PageSettings } from "@/lib/pageLayout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
 import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
-import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import {
   applyTextInputChange,
   captureBeforeInput,
@@ -18,7 +16,6 @@ import {
   type CompletedWorkSession,
   type WorkSessionState,
 } from "@/lib/editorSessionActivity";
-import PageSettingsPanel from "./PageSettingsPanel";
 import EditorSyntaxHelp from "./EditorSyntaxHelp";
 import WorkSessionTracker from "./WorkSessionTracker";
 import WritingCheckOverlay from "./WritingCheckOverlay";
@@ -34,12 +31,11 @@ const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 1. ここに本文を入力してください
 2. 上部の「ドキュメント名」はファイルの保存名になります
 
-■ 設定メニューの使い方
-編集画面のメニューから以下の調整が行えます：
-・① ページ設定：用紙サイズ・余白・フォント・段組みの変更
-・② ノンブル・柱：ページ番号やヘッダー／フッターの表示設定
-・③ メモ：プロットや執筆メモの記録
-・④ ヘルプ：ショートカットキーや特殊記法の使い方（「？」マークからも開けます）
+■ 上部メニューの使い方
+・▶設定：用紙・余白・フォント・段組み・ノンブル・柱
+・▶オプション：奥付・目次・完成前チェック・TXT出入力
+・▶メモ：プロットや執筆メモ
+・▶ヘルプ：ショートカットキーや特殊記法
 
 ■ 特殊記法・装飾
 1. 改ページ（記法は【改ページ】。＃改ページは使いません）
@@ -67,24 +63,12 @@ interface EditorPaneProps {
   onStartWorkSession: () => void;
   onEndWorkSession: () => CompletedWorkSession | null;
   onOpenSearchReplace: () => void;
-  onOpenBookParts: () => void;
-  onImportTxt: () => void;
-  onExportTxt: () => void;
+  onOpenOptions: () => void;
   onOpenMemo: () => void;
-  onOpenChecklist: () => void;
   onOpenSettingsDrawer: () => void;
-  /** β限定「報告」ボタン。BETA_FEEDBACK_ENABLED のときだけ表示。 */
-  onOpenBetaFeedback: () => void;
-  settings: PageSettings;
-  layout: PageLayout;
-  onSettingsChange: (settings: PageSettings) => void;
-  plotNote: string;
-  onPlotNoteChange: (plotNote: string) => void;
   onOpenHelp: () => void;
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
   onCursorIndexChange?: (index: number) => void;
-  /** 1-based printed page numbers currently selected in PreviewPane, for the 「ノンブル・柱」タブの選択ページパネル. */
-  selectedPageNumbers: number[];
   /**
    * TSP-LOOP-012: narrow-viewport 集中モード. When true, the title + toolbar
    * strip and the PageSettings/help strip are removed from the layout on
@@ -93,7 +77,6 @@ interface EditorPaneProps {
    */
   focusMode?: boolean;
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
-  guidedViewport?: boolean;
 }
 
 export default function EditorPane({
@@ -106,23 +89,12 @@ export default function EditorPane({
   onStartWorkSession,
   onEndWorkSession,
   onOpenSearchReplace,
-  onOpenBookParts,
-  onImportTxt,
-  onExportTxt,
+  onOpenOptions,
   onOpenMemo,
-  onOpenChecklist,
   onOpenSettingsDrawer,
-  onOpenBetaFeedback,
-  settings,
-  layout,
-  onSettingsChange,
-  plotNote,
-  onPlotNoteChange,
   onOpenHelp,
   onCursorIndexChange,
-  selectedPageNumbers,
   focusMode = false,
-  guidedViewport = false,
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
@@ -322,10 +294,10 @@ export default function EditorPane({
           data-demo-target="title"
           className="w-full min-w-0 bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
         />
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={onOpenSettingsDrawer} className="hidden rounded border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 hover:bg-ink/5 md:inline-flex">設定</button>
+        <div data-editor-action-row="" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           <button
             type="button"
+            data-editor-action="undo"
             data-editor-history-action="undo"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("undo")}
@@ -336,6 +308,7 @@ export default function EditorPane({
           </button>
           <button
             type="button"
+            data-editor-action="redo"
             data-editor-history-action="redo"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("redo")}
@@ -346,14 +319,7 @@ export default function EditorPane({
           </button>
           <button
             type="button"
-            onClick={onOpenBookParts}
-            title="奥付（縦／横）・目次を作成"
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
-          >
-            📖 奥付・目次
-          </button>
-          <button
-            type="button"
+            data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
@@ -362,59 +328,19 @@ export default function EditorPane({
           </button>
           <button
             type="button"
-            onClick={onImportTxt}
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
-          >
-            TXTを読み込む
-          </button>
-          <button
-            type="button"
-            onClick={onExportTxt}
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
-          >
-            TXTを書き出す
-          </button>
-          <button type="button" onClick={onOpenMemo} className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5">メモ</button>
-          <button type="button" onClick={onOpenChecklist} className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5">完成前チェック</button>
-          <button
-            type="button"
+            data-editor-action="replace"
             onClick={onOpenSearchReplace}
             className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
           >
             置換
           </button>
-          {BETA_FEEDBACK_ENABLED && (
-            <button
-              type="button"
-              onClick={onOpenBetaFeedback}
-              title="β版フィードバック（不具合・気になる事・要望）"
-              className="rounded border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
-            >
-              報告
-            </button>
-          )}
         </div>
-      </div>
-
-      {/* TSP-LOOP-022: on a phone 設定 is its own workspace (rendered by
-          TategakiEditor, `md:hidden`), so this inline settings strip is
-          desktop / tablet-wide only. TSP-LOOP-023: it also hides in desktop
-          「集中モード」 — the whole point of focus mode is to give the
-          manuscript this space; the settings data is untouched and the strip
-          returns on exit. */}
-      <div
-        id="tsp-settings"
-        className={`flex-none ${focusMode ? "hidden" : "hidden md:block"}`}
-      >
-        <PageSettingsPanel
-          settings={settings}
-          layout={layout}
-          onChange={onSettingsChange}
-          plotNote={plotNote}
-          onPlotNoteChange={onPlotNoteChange}
-          onOpenHelp={onOpenHelp}
-          selectedPageNumbers={selectedPageNumbers}
-        />
+        <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid grid-cols-4 gap-1 border-t border-ink/10 pt-2">
+          <button type="button" data-editor-secondary="settings" onClick={onOpenSettingsDrawer} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶設定</button>
+          <button type="button" data-editor-secondary="options" onClick={onOpenOptions} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶オプション</button>
+          <button type="button" data-editor-secondary="memo" onClick={onOpenMemo} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶メモ</button>
+          <button type="button" data-editor-secondary="help" onClick={onOpenHelp} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶ヘルプ</button>
+        </nav>
       </div>
 
       {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved
@@ -440,11 +366,9 @@ export default function EditorPane({
           read-only, pointer-events-none mirror rendered behind it (only the
           red wavy underline is visible); it shares the textarea's wrapping
           box via the same p-4/font-mono/text-sm/leading-relaxed classes.
-          Phone: a fixed-height intentional manuscript scroll surface inside
-          the scrolling document (TSP-022 gave it more of the viewport now
-          that the settings strip is a separate workspace); desktop: flex-1
-          fills the pane. */}
-      <div className={`relative min-h-0 ${guidedViewport ? "max-md:flex-1" : "max-md:h-[62dvh]"} md:flex-1`}>
+          Phone and desktop both assign remaining pane height here; the
+          textarea itself owns vertical scrolling. */}
+      <div className="relative min-h-0 flex-1">
         {writingCheckEnabled && (
           <WritingCheckOverlay
             textareaRef={textareaRef}

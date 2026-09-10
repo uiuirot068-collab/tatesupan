@@ -137,15 +137,12 @@ describe("Header (柱) -- ported verbatim from legacy MasterPageSettings/PageOve
     expect(header.sourceSpan).toBeUndefined();
   });
 
-  it("headerFontSize is HD-005's own default (body font inheritance) -- no separate font mechanism invented (test: body-font inheritance, headerFontSize)", () => {
+  it("running-head size follows the publication max(4, body - 3) contract", () => {
     const { model } = composeModel("今日は", undefined, { hashiraOdd: "作品名", hashiraEven: "章名", position: { band: "top", horizontal: "outer" } });
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
-    const textCommands = plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
-    if (textCommands.length > 1) {
-      const first = textCommands[0].fontSizePt;
-      for (const c of textCommands) expect(c.fontSizePt).toBe(first);
-    }
+    const header = plan[0].commands.find((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && c.furnitureRole === "running-head");
+    expect(header?.fontSizePt).toBe(Math.max(4, model.bodyEmMm * (72 / 25.4) - 3));
   });
 });
 
