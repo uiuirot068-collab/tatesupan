@@ -3,16 +3,14 @@
  *
  * - 呼び先は「同一 Supabase プロジェクトの Edge Function」ただ 1 つ。
  *   Discord Webhook / Google Apps Script / Storage 鍵には一切触れない。
- * - 送るのはユーザーが明示入力したものと clientContext（appVersion / path /
- *   viewport）のみ。原稿・タイトル・ドキュメント ID などは決して含めない。
+ * - 送るのはユーザーが明示入力・選択したもののみ。環境情報、原稿、タイトル、
+ *   ドキュメント ID、URL は決して含めない。
  * - サーバのエラー本文（stack / secret を含みうる）をそのまま UI へ出さない。
  */
 import {
-  BETA_FEEDBACK_APP_VERSION,
   BETA_FEEDBACK_FUNCTION_PATH,
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
   FEEDBACK_HONEYPOT_FIELD,
-  type BetaFeedbackClientContext,
   type BetaFeedbackSubmission,
 } from "./betaFeedback";
 
@@ -24,19 +22,6 @@ import {
 export interface BetaFeedbackSecurity {
   turnstileToken: string;
   honeypot: string;
-}
-
-function readClientContext(): BetaFeedbackClientContext {
-  let path = "";
-  let viewport = "";
-  try {
-    // クエリ文字列・ハッシュは載せない（作品 ID などが混じらないように）。
-    path = window.location.pathname;
-    viewport = `${window.innerWidth}x${window.innerHeight}`;
-  } catch {
-    // SSR / 制限環境。空のまま送る。
-  }
-  return { appVersion: BETA_FEEDBACK_APP_VERSION, path, viewport };
 }
 
 function functionUrl(): string | null {
@@ -64,7 +49,6 @@ export async function submitBetaFeedback(
     return { ok: false };
   }
 
-  const context = readClientContext();
   const turnstileToken = security.turnstileToken;
   const honeypot = security.honeypot;
 
@@ -82,7 +66,6 @@ export async function submitBetaFeedback(
       JSON.stringify({
         type: "feedback",
         message: submission.message,
-        clientContext: context,
         turnstileToken,
         [FEEDBACK_HONEYPOT_FIELD]: honeypot,
       })
@@ -101,7 +84,6 @@ export async function submitBetaFeedback(
       type: "review",
       checkedItems: submission.checkedItems,
       note: submission.note,
-      clientContext: context,
       turnstileToken,
       [FEEDBACK_HONEYPOT_FIELD]: honeypot,
     });

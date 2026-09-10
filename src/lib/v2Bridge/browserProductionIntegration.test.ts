@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFakeMeasurementProvider } from "../../../typesetting-v2/core/measurement/fakeProvider";
+import { createShipporiMinchoMeasurementProvider } from "../../../typesetting-v2/core/measurement/shipporiMinchoProvider";
 import { buildPublicationPaintPlan, findUnresolvedImageIssues, renderPaintPlanToPdf, type PublicationFontResource } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
 import { decodeUtf8Txt, encodeUtf8Txt } from "../txtTransfer";
@@ -35,15 +36,18 @@ describe("v2 branch production integration", () => {
       "base64"
     ));
     const started = performance.now();
+    const measurement = createShipporiMinchoMeasurementProvider(resolve("public/fonts/ShipporiMincho-Regular.ttf"));
     const bridge = composeV2Document({
       title: "RC長文",
       content,
       settings,
-      measurement: createFakeMeasurementProvider(),
+      measurement,
       imageResolver: (refId) => refId === "e2e-image"
         ? { kind: "RESOLVED", url: "local-editor-image://e2e-image", bytes: imageBytes, format: "PNG", pixelWidth: 1, pixelHeight: 1 }
         : { kind: "MISSING" },
     });
+    expect(measurement.providerId).toBe("tatespun-shippori-mincho-real-measurement-provider");
+    expect(bridge.document.version.measurementIdentity).toContain(measurement.providerId);
     expect(bridge.document.pages.length).toBeGreaterThan(100);
     expect(bridge.document.pages[0].folio).toBeDefined();
     expect(bridge.document.pages[0].header?.text).toBe("RC作品名");

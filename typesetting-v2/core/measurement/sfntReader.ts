@@ -31,20 +31,33 @@ const FLAVOR_TAGS: Record<number, SfntSummary["flavor"]> = {
   0x74797031: "typ1", // "typ1"
 };
 
-function requireBytes(buf: Buffer, offset: number, length: number, what: string): void {
+function requireBytes(buf: Uint8Array, offset: number, length: number, what: string): void {
   if (offset < 0 || offset + length > buf.length) {
     throw new Error(`sfntReader: truncated/malformed font — cannot read ${what} at offset ${offset} (file is only ${buf.length} bytes)`);
   }
 }
 
-export function readSfntSummary(buf: Buffer): SfntSummary {
+function readUint16BE(buf: Uint8Array, offset: number): number {
+  return new DataView(buf.buffer, buf.byteOffset, buf.byteLength).getUint16(offset, false);
+}
+
+function readUint32BE(buf: Uint8Array, offset: number): number {
+  return new DataView(buf.buffer, buf.byteOffset, buf.byteLength).getUint32(offset, false);
+}
+
+function readTag(buf: Uint8Array, offset: number): string {
+  return String.fromCharCode(...buf.subarray(offset, offset + 4)).trim();
+}
+
+/** Browser- and Node-compatible structural sfnt reader. */
+export function readSfntSummary(buf: Uint8Array): SfntSummary {
   requireBytes(buf, 0, 12, "the sfnt header");
-  const tag = buf.readUInt32BE(0);
+  const tag = readUint32BE(buf, 0);
   const flavor = FLAVOR_TAGS[tag];
   if (!flavor) {
     throw new Error(`sfntReader: not a recognized sfnt font (version tag 0x${tag.toString(16)})`);
   }
-  const numTables = buf.readUInt16BE(4);
+  const numTables = readUint16BE(buf, 4);
   if (numTables <= 0 || numTables > 100) {
     throw new Error(`sfntReader: implausible numTables (${numTables}) — refusing to parse further`);
   }
@@ -54,8 +67,8 @@ export function readSfntSummary(buf: Buffer): SfntSummary {
   for (let i = 0; i < numTables; i++) {
     const entryOffset = 12 + i * 16;
     requireBytes(buf, entryOffset, 16, `table directory entry ${i}`);
-    const tag4 = buf.toString("latin1", entryOffset, entryOffset + 4).trim();
-    const offset = buf.readUInt32BE(entryOffset + 8);
+    const tag4 = readTag(buf, entryOffset);
+    const offset = readUint32BE(buf, entryOffset + 8);
     tables.add(tag4);
     if (tag4 === "head") headOffset = offset;
   }
@@ -65,7 +78,7 @@ export function readSfntSummary(buf: Buffer): SfntSummary {
     // `head` table layout (OpenType spec): unitsPerEm is a uint16 at byte
     // offset 18 from the table's own start.
     requireBytes(buf, headOffset + 18, 2, "head.unitsPerEm");
-    unitsPerEm = buf.readUInt16BE(headOffset + 18);
+    unitsPerEm = readUint16BE(buf, headOffset + 18);
   }
 
   return { flavor, numTables, tables, unitsPerEm };

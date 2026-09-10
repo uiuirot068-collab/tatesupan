@@ -10,6 +10,8 @@ import {
   type MouseEvent,
   type HTMLAttributes,
 } from "react";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 import {
   computePageParagraphStarts,
   computePageSourceRanges,
@@ -65,7 +67,6 @@ import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import ExportProgressModal from "./ExportProgressModal";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
-import PreviewPaneNew from "./PreviewPaneNew";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 import ColophonPageCard from "./ColophonPageCard";
 import { resolveColophonInsertion } from "@/lib/colophon";
@@ -76,8 +77,15 @@ import {
 import {
   ExportCancellationCoordinator,
   isExportCancelledError,
+  waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
+import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
+import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
+import { exportPaintPlanToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
+import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
+import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -113,12 +121,10 @@ const SCROLL_CONTAINER_PADDING_X_PX = 48;
 /** page indexを取らない単一callbackを、参照だけ安定させて返す。 */
 function useStableCallback<Args extends unknown[], R>(fn: (...args: Args) => R): (...args: Args) => R {
   const fnRef = useRef(fn);
-  fnRef.current = fn;
-  const stableRef = useRef<((...args: Args) => R) | undefined>(undefined);
-  if (!stableRef.current) {
-    stableRef.current = (...args: Args) => fnRef.current(...args);
-  }
-  return stableRef.current;
+  useEffect(() => {
+    fnRef.current = fn;
+  }, [fn]);
+  return useCallback((...args: Args) => fnRef.current(...args), []);
 }
 
 /** `(index) => (...args) => R` 形のcurry factoryを、index単位で参照が安定するよう包む。 */
@@ -126,22 +132,22 @@ function useStableIndexedCallback<Args extends unknown[], R>(
   factory: (index: number) => (...args: Args) => R
 ): (index: number) => (...args: Args) => R {
   const factoryRef = useRef(factory);
-  factoryRef.current = factory;
-  const cacheRef = useRef<Map<number, (...args: Args) => R> | undefined>(undefined);
-  if (!cacheRef.current) cacheRef.current = new Map();
-  const getRef = useRef<((index: number) => (...args: Args) => R) | undefined>(undefined);
-  if (!getRef.current) {
-    getRef.current = (index: number) => {
-      const cache = cacheRef.current!;
+  useEffect(() => {
+    factoryRef.current = factory;
+  }, [factory]);
+  const cacheRef = useRef(new Map<number, (...args: Args) => R>());
+  return useCallback(
+    (index: number) => {
+      const cache = cacheRef.current;
       let wrapper = cache.get(index);
       if (!wrapper) {
         wrapper = (...args: Args) => factoryRef.current(index)(...args);
         cache.set(index, wrapper);
       }
       return wrapper;
-    };
-  }
-  return getRef.current;
+    },
+    []
+  );
 }
 
 // [TateSpun perf] drag調査で判明: dragIndex/dropIndexはPreviewPane自身の
@@ -164,6 +170,9 @@ interface PageSlotProps {
   physicalPageNumber: number;
   registerRef: (el: HTMLDivElement | null) => void;
   page: TategakiPage;
+  v2PreviewPage?: PaintPage;
+  v2PreviewFontSizePx?: number;
+  v2PreviewEnabled?: boolean;
   pageSignature: string;
   startsNewParagraph: boolean;
   settings: PageSettings;
@@ -208,6 +217,9 @@ const PageSlot = memo(function PageSlot({
   physicalPageNumber,
   registerRef,
   page,
+  v2PreviewPage,
+  v2PreviewFontSizePx,
+  v2PreviewEnabled,
   pageSignature,
   startsNewParagraph,
   settings,
@@ -262,6 +274,9 @@ const PageSlot = memo(function PageSlot({
       <PageCard
         pageNumber={physicalPageNumber}
         page={page}
+        v2PreviewPage={v2PreviewPage}
+        v2PreviewFontSizePx={v2PreviewFontSizePx}
+        v2PreviewEnabled={v2PreviewEnabled}
         pageSignature={pageSignature}
         startsNewParagraph={startsNewParagraph}
         settings={settings}
@@ -504,11 +519,28 @@ export default function PreviewPane({
   // non-dev build (β/production) RENDERER_TOGGLE_ENABLED is false, so this is
   // hard-pinned to "current" regardless of `rendererMode`.
   const internalV2Beta = isV2BetaRendererEnabled();
-  const activeRenderer: "current" | "new" = internalV2Beta
-    ? "new"
+  const useV2Engine = internalV2Beta
+    ? true
     : RENDERER_TOGGLE_ENABLED
-      ? rendererMode
-      : "current";
+      ? rendererMode === "new"
+      : false;
+  const v2Adapter = useV2PreviewAdapter(useV2Engine, {
+    content: deferredContent,
+    settings,
+    title,
+    images,
+  });
+  const v2BodyPreviewPages = useMemo(() => {
+    if (!v2Adapter.bridge || !v2Adapter.preview) return [];
+    return v2Adapter.bridge.document.pageSequence
+      .map((pageRef, physicalIndex) => pageRef.kind === "body" ? v2Adapter.preview?.pages[physicalIndex] : undefined)
+      .filter((page): page is NonNullable<typeof page> => page !== undefined);
+  }, [v2Adapter.bridge, v2Adapter.preview]);
+  useEffect(() => {
+    if (useV2Engine && v2BodyPreviewPages.length > 0) {
+      onBodyPageCountChange?.(v2BodyPreviewPages.length);
+    }
+  }, [onBodyPageCountChange, useV2Engine, v2BodyPreviewPages.length]);
   const rendererToggle = RENDERER_TOGGLE_ENABLED && !internalV2Beta ? (
     <span className="flex flex-shrink-0 items-center gap-1 rounded border border-dashed border-amber-400 px-1.5 py-1">
       <span className="whitespace-nowrap text-[10px] text-amber-700">Renderer(dev):</span>
@@ -817,6 +849,7 @@ export default function PreviewPane({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
+  const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
 
   const beginExport = useCallback((label: string, total = 0): AbortSignal => {
     const signal = exportCancellation.begin();
@@ -829,6 +862,7 @@ export default function PreviewPane({
 
   const finishExport = useCallback((signal: AbortSignal) => {
     if (!exportCancellation.finish(signal)) return;
+    v2PdfHandleRef.current = null;
     setIsExportCancelConfirmOpen(false);
     setIsExporting(false);
     setExportProgress(null);
@@ -836,11 +870,13 @@ export default function PreviewPane({
 
   const continueExport = useCallback(() => {
     exportCancellation.continueExport();
+    v2PdfHandleRef.current?.resume();
     setIsExportCancelConfirmOpen(false);
   }, [exportCancellation]);
 
   const confirmExportCancellation = useCallback(() => {
     exportCancellation.cancelExport();
+    v2PdfHandleRef.current?.cancel();
     setIsExportCancelConfirmOpen(false);
   }, [exportCancellation]);
 
@@ -848,6 +884,7 @@ export default function PreviewPane({
     const openCancellationConfirmation = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || !isExporting || isExportCancelConfirmOpen) return;
       if (exportCancellation.handleEscape() !== "open-confirmation") return;
+      v2PdfHandleRef.current?.pause();
       event.preventDefault();
       // The export confirmation is the intended top interaction. Do not let
       // this same Escape close a work-session/help dialog underneath it.
@@ -946,6 +983,72 @@ export default function PreviewPane({
     return true;
   };
 
+  const requireV2PublicationPlan = async () => {
+    if (!v2Adapter.bridge) {
+      throw new Error(v2Adapter.error ?? "V2 Canonical Preview is still loading. Please retry.");
+    }
+    const font = await loadV2PublicationFont();
+    const plan = buildPublicationPaintPlan(
+      v2Adapter.bridge.model,
+      font,
+      v2Adapter.bridge.pageGeometry,
+      "V2 Beta export"
+    );
+    return { font, plan };
+  };
+
+  const v2PhysicalIndexForBody = (bodyIndex: number): number =>
+    v2Adapter.bridge?.document.pageSequence.findIndex(
+      (pageRef) => pageRef.kind === "body" && pageRef.index === bodyIndex
+    ) ?? -1;
+
+  const exportV2JpgPages = async (
+    physicalIndices: number[],
+    filePageNumbers: number[],
+    zipDownload: boolean
+  ) => {
+    let signal: AbortSignal | null = null;
+    try {
+      const { plan } = await requireV2PublicationPlan();
+      const exportPlan = physicalIndices.map((index) => plan[index]).filter((page) => page !== undefined);
+      if (exportPlan.length !== physicalIndices.length || exportPlan.length === 0) {
+        throw new Error("V2 JPG export could not resolve the selected canonical pages.");
+      }
+      signal = beginExport("画像", exportPlan.length);
+      const mode = layout.paper.isPx ? "WEB" : "PRINT";
+      const output = await exportPaintPlanToBrowserJpgPages(
+        exportPlan,
+        "Shippori Mincho",
+        (pageNumber) => buildPageJpgFileName(title, filePageNumbers[pageNumber - 1]),
+        mode,
+        undefined,
+        {
+          beforePage: async () => waitForExportPermission(signal ?? undefined),
+          onProgress: (current, total) => setExportProgress({ current, total }),
+        }
+      );
+      await waitForExportPermission(signal);
+      if (zipDownload) {
+        const zip = new JSZip();
+        output.forEach((page) => zip.file(page.fileName, page.blob));
+        const blob = await zip.generateAsync({ type: "blob" });
+        await waitForExportPermission(signal);
+        saveAs(blob, buildZipFileName(title));
+      } else {
+        for (const page of output) {
+          await waitForExportPermission(signal);
+          saveAs(page.blob, page.fileName);
+        }
+      }
+    } catch (error: unknown) {
+      if (!isExportCancelledError(error)) {
+        alert(error instanceof Error ? error.message : "V2 JPG export failed.");
+      }
+    } finally {
+      if (signal) finishExport(signal);
+    }
+  };
+
   const handleExportJpg = async () => {
     if (exportBlockedByUnresolvedImages()) return;
     if (pages.length === 0) return;
@@ -958,6 +1061,11 @@ export default function PreviewPane({
       return;
     } else {
       index = activePageIndex ?? 0;
+    }
+    if (useV2Engine) {
+      const physicalIndex = v2PhysicalIndexForBody(index);
+      await exportV2JpgPages([physicalIndex], [index + 1], false);
+      return;
     }
     const el = pageElementsRef.current.get(index);
     if (!el) return;
@@ -982,6 +1090,13 @@ export default function PreviewPane({
   /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
   const handleExportColophonJpg = async () => {
     if (exportBlockedByUnresolvedImages()) return;
+    if (useV2Engine) {
+      const physicalIndex = v2Adapter.bridge?.document.pageSequence.findIndex(
+        (pageRef) => pageRef.kind === "colophon"
+      ) ?? -1;
+      await exportV2JpgPages([physicalIndex], [colophonPhysicalPageNumber], false);
+      return;
+    }
     const el = colophonElementRef.current;
     if (!el) return;
     const signal = beginExport("画像");
@@ -1004,6 +1119,15 @@ export default function PreviewPane({
 
   const handleExportJpgBatch = async () => {
     if (exportBlockedByUnresolvedImages()) return;
+    if (useV2Engine) {
+      const bodyIndices = getJpgScopeIndices();
+      await exportV2JpgPages(
+        bodyIndices.map(v2PhysicalIndexForBody),
+        bodyIndices.map((index) => index + 1),
+        false
+      );
+      return;
+    }
     const items = buildSelectedPageItems(getJpgScopeIndices());
     if (items.length === 0) return;
     const signal = beginExport("画像", items.length);
@@ -1026,6 +1150,15 @@ export default function PreviewPane({
 
   const handleExportZip = async () => {
     if (exportBlockedByUnresolvedImages()) return;
+    if (useV2Engine) {
+      const bodyIndices = getJpgScopeIndices();
+      await exportV2JpgPages(
+        bodyIndices.map(v2PhysicalIndexForBody),
+        bodyIndices.map((index) => index + 1),
+        true
+      );
+      return;
+    }
     const items = buildSelectedPageItems(getJpgScopeIndices());
     if (items.length === 0) return;
     const signal = beginExport("画像", items.length);
@@ -1086,6 +1219,46 @@ export default function PreviewPane({
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
       showColophon && (pdfScope === "all" || pdfIncludeColophon);
+    if (useV2Engine) {
+      let signal: AbortSignal | null = null;
+      try {
+        const { font, plan } = await requireV2PublicationPlan();
+        const physicalIndices = pdfScope === "all"
+          ? plan.map((_, index) => index)
+          : indices.map(v2PhysicalIndexForBody);
+        if (pdfScope === "selected" && includeColophonInPdf) {
+          const colophonIndex = v2Adapter.bridge?.document.pageSequence.findIndex(
+            (pageRef) => pageRef.kind === "colophon"
+          ) ?? -1;
+          if (colophonIndex >= 0) physicalIndices.push(colophonIndex);
+        }
+        const uniqueIndices = Array.from(new Set(physicalIndices)).sort((a, b) => a - b);
+        const exportPlan = uniqueIndices.map((index) => plan[index]).filter((page) => page !== undefined);
+        if (exportPlan.length === 0 || exportPlan.length !== uniqueIndices.length) {
+          throw new Error("V2 PDF export could not resolve the selected canonical pages.");
+        }
+        signal = beginExport("PDF", exportPlan.length);
+        const handle = startV2PdfWorker(exportPlan, font, ({ current, total }) => {
+          setExportProgress({ current, total });
+        });
+        v2PdfHandleRef.current = handle;
+        const cancelWorker = () => handle.cancel();
+        signal.addEventListener("abort", cancelWorker, { once: true });
+        const bytes = await handle.result;
+        signal.removeEventListener("abort", cancelWorker);
+        await waitForExportPermission(signal);
+        downloadBytes(bytes, buildPdfFileName(title, pdfMode, pdfScope), "application/pdf");
+        setIsPdfModalOpen(false);
+        onPdfExportSuccess?.();
+      } catch (error: unknown) {
+        if (!isExportCancelledError(error)) {
+          alert(error instanceof Error ? error.message : "V2 PDF export failed.");
+        }
+      } finally {
+        if (signal) finishExport(signal);
+      }
+      return;
+    }
     // 並び順は Presentation Sequence 上の相対順序を維持する——奥付を単純に
     // 末尾 append しない。奥付は「本文 precedingBodyPages ページ」の直後。
     const elements: HTMLElement[] = [];
@@ -1520,49 +1693,12 @@ export default function PreviewPane({
     );
   }
 
-  // P2-B: "New (Experimental)" renderer branch. Deliberately does not reuse
-  // any of the Current-only JSX below (zoom/export/reorder/PageCard) — this
-  // A/B pass is preview-only (see PreviewPaneNew.tsx header comment for what
-  // is intentionally out of scope). Current's own render path (below) is
-  // completely untouched by this branch existing.
-  if (activeRenderer === "new") {
-    return (
-      <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
-        <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
-          <div className="flex flex-wrap items-center gap-2">
-            {onToggleCollapse && (
-              <button
-                type="button"
-                onClick={onToggleCollapse}
-                title="プレビューを折りたたむ"
-                className="hidden flex-shrink-0 rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/60 hover:bg-ink/5 md:inline-flex"
-              >
-                ▶
-              </button>
-            )}
-            <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
-            {rendererToggle}
-          </div>
-        </div>
-        <div className="min-h-0 flex-1">
-          <PreviewPaneNew
-            content={content}
-            settings={settings}
-            title={title}
-            images={images}
-            unresolvedImageIds={unresolvedImageIds ?? new Set<string>()}
-            blockExportForUnresolvedImages={blockExportForUnresolvedImages}
-            onPdfExportSuccess={onPdfExportSuccess}
-            selectedPageIndices={selected}
-            onSelectedPageIndicesChange={setSelected}
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+      {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
+        [data-v2-preview-root] .page{border:0;background:transparent}
+        [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
+      `}</style>}
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           {onToggleCollapse && (
@@ -1738,6 +1874,17 @@ export default function PreviewPane({
         )}
       </div>
 
+      {useV2Engine && v2Adapter.error && (
+        <div role="alert" className="flex-none border-b border-red-300 bg-red-50 px-4 py-2 text-xs text-red-800">
+          {v2Adapter.error} フォント資産を確認してから再読み込みしてください。fake metrics では継続しません。
+        </div>
+      )}
+      {useV2Engine && v2Adapter.loading && (
+        <div className="flex-none border-b border-ink/10 bg-base px-4 py-1.5 text-xs text-ink/55">
+          Shippori Mincho を検証し、Canonical Preview を準備しています…
+        </div>
+      )}
+
       {canReorder && selected.size > 0 && (
         <div className="flex flex-none items-center gap-3 border-b border-ink/10 bg-accent/5 px-4 py-2 text-sm text-ink/70">
           <span>{selected.size} ページ選択中</span>
@@ -1890,6 +2037,9 @@ export default function PreviewPane({
                     physicalPageNumber={physicalPageNumber}
                     registerRef={stableRegisterPageElement(bodyIndex)}
                     page={pages[bodyIndex]}
+                    v2PreviewPage={useV2Engine ? v2BodyPreviewPages[bodyIndex] : undefined}
+                    v2PreviewFontSizePx={useV2Engine ? v2Adapter.preview?.fontSizePx : undefined}
+                    v2PreviewEnabled={useV2Engine}
                     pageSignature={pageSignatures[bodyIndex]}
                     startsNewParagraph={paragraphStarts[bodyIndex]}
                     settings={settings}

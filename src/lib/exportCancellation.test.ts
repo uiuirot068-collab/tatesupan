@@ -112,7 +112,8 @@ describe("beta export cancellation", () => {
     expect(preview).toContain("new ExportCancellationCoordinator()");
     expect(preview).toContain("書き出しを中断しますか？");
     expect(preview).toContain("isExportCancelledError(err)");
-    expect(preview.match(/finishExport\(signal\)/g)?.length).toBe(5);
+    // Five legacy export paths plus the V2 browser JPG and PDF paths.
+    expect(preview.match(/finishExport\(signal\)/g)?.length).toBe(7);
     expect(preview).toContain('data-export-cancel-action="continue"');
     expect(preview).toContain('data-export-cancel-action="abort"');
     expect(image.match(/waitForExportPermission\(signal\)/g)?.length).toBeGreaterThanOrEqual(10);

@@ -60,13 +60,15 @@ check(
   /NEXT_PUBLIC_BETA_FEEDBACK_ENABLED=false/.test(envExample)
 );
 check(
-  "toolbar: 報告 button rendered only when BETA_FEEDBACK_ENABLED",
-  /BETA_FEEDBACK_ENABLED\s*&&[\s\S]{0,400}報告/.test(editorPane)
+  "toolbar: BETA_FEEDBACK_ENABLED gates the callback supplied by TategakiEditor",
+  /onOpenBetaFeedback=\{BETA_FEEDBACK_ENABLED\s*\?\s*\(\)\s*=>\s*setIsBetaFeedbackOpen\(true\)\s*:\s*undefined\}/.test(tategaki) &&
+    /\{onOpenBetaFeedback\s*&&[\s\S]{0,500}報告/.test(editorPane)
 );
 check(
   "toolbar: 報告 button is yellow (amber) styled",
-  /報告[\s\S]{0,200}/.test(editorPane) && /border-amber-400 bg-amber-50[\s\S]{0,120}報告/.test(editorPane)
+  /data-editor-action="report"[\s\S]{0,300}border-amber-400 bg-amber-50[\s\S]{0,200}報告/.test(editorPane)
 );
+check("toolbar: exactly one Editor 報告 entry exists", (editorPane.match(/data-editor-action="report"/g) || []).length === 1);
 check(
   "toolbar: 報告 button sits after 置換 button",
   editorPane.indexOf("置換") < editorPane.indexOf(">\n              報告") ||
@@ -396,13 +398,21 @@ check(
   )
 );
 check(
-  "security: clientContext is only appVersion / path / viewport",
-  /return \{ appVersion:[^}]*\bpath\b[^}]*\bviewport\b[^}]*\}/.test(client) &&
-    !/userAgent|cookie|referrer|localStorage|title|content/i.test(
-      client.slice(client.indexOf("readClientContext"), client.indexOf("functionUrl"))
-    )
+  "privacy: feedback transport has no automatic clientContext/environment metadata",
+  !/clientContext|readClientContext|appVersion|viewport|userAgent|uaBrands|devicePixelRatio|screen\.|navigator\./i.test(client) &&
+    !/collectFeedbackEnvironment|appendEnvironmentBlock|envSummary|envDetail|使用環境（自動取得）/.test(modal)
 );
-check("security: client strips query/hash from path", /window\.location\.pathname/.test(client) && !/location\.search|location\.href/.test(client));
+check(
+  "privacy: client does not read or transmit URL/path/query/hash",
+  !/window\.location|document\.location|location\.(pathname|search|hash|href)|\bpath\s*:/.test(client)
+);
+check(
+  "privacy: transmitted product fields are explicit message/images or checkedItems/note only",
+  /message:\s*submission\.message/.test(client) &&
+    /submission\.images\.slice/.test(client) &&
+    /checkedItems:\s*submission\.checkedItems/.test(client) &&
+    /note:\s*submission\.note/.test(client)
+);
 
 // Edge Function
 check(

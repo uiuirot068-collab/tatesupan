@@ -102,6 +102,18 @@ check(
     : "5. β feedback disabled — Turnstile site key not required for this build",
   !feedbackEnabled || !placeholderKey,
 );
+const anonKey = (
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  readEnvLocalVar("NEXT_PUBLIC_SUPABASE_ANON_KEY") ??
+  ""
+).trim();
+const placeholderAnonKey = anonKey === "" || anonKey.startsWith("your-");
+check(
+  feedbackEnabled
+    ? "6. β feedback ENABLED → NEXT_PUBLIC_SUPABASE_ANON_KEY is a real production public key"
+    : "6. β feedback disabled — production anon key not required for this build",
+  !feedbackEnabled || !placeholderAnonKey,
+);
 
 console.log("");
 if (failures === 0) {

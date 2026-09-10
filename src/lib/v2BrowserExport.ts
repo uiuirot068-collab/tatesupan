@@ -1,7 +1,7 @@
 import type { PaintPlan, PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
 import { withBasePath } from "./basePath";
 
-const FONT_PATH = "/fonts/ShipporiMincho-Regular.ttf";
+export const V2_PUBLICATION_FONT_PATH = "/fonts/ShipporiMincho-Regular.ttf";
 
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
@@ -12,19 +12,36 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+let fontBytesPromise: Promise<Uint8Array> | null = null;
 let fontPromise: Promise<PublicationFontResource> | null = null;
 
-export function loadV2PublicationFont(): Promise<PublicationFontResource> {
-  fontPromise ??= fetch(withBasePath(FONT_PATH))
+export function loadV2FontBytes(): Promise<Uint8Array> {
+  fontBytesPromise ??= fetch(withBasePath(V2_PUBLICATION_FONT_PATH))
     .then((response) => {
-      if (!response.ok) throw new Error(`Publication font unavailable (${response.status})`);
+      if (!response.ok) {
+        throw new Error(`Shippori Mincho font unavailable (${response.status}). Retry after the asset is restored.`);
+      }
       return response.arrayBuffer();
     })
-    .then((buffer) => ({
+    .then((buffer) => new Uint8Array(buffer))
+    .catch((error: unknown) => {
+      fontBytesPromise = null;
+      throw error;
+    });
+  return fontBytesPromise;
+}
+
+export function loadV2PublicationFont(): Promise<PublicationFontResource> {
+  fontPromise ??= loadV2FontBytes()
+    .then((bytes) => ({
       fileName: "ShipporiMincho-Regular.ttf",
       fontName: "Shippori Mincho",
-      base64: bytesToBase64(new Uint8Array(buffer)),
-    }));
+      base64: bytesToBase64(bytes),
+    }))
+    .catch((error: unknown) => {
+      fontPromise = null;
+      throw error;
+    });
   return fontPromise;
 }
 

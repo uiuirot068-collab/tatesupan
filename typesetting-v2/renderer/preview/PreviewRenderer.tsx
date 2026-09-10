@@ -24,7 +24,7 @@ import { DEFAULT_RUBY_SCALE } from "../../core";
 
 export type PreviewMode = "normal" | "debug";
 
-export const PREVIEW_RENDERER_STYLES = `
+const PREVIEW_RENDERER_RULES = `
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
   h1 { font-size: 16px; }
@@ -152,6 +152,29 @@ export const PREVIEW_RENDERER_STYLES = `
   .debug .ruby-annotation-pending { font-size: 8px; color: #06c; background: #eef6ff; padding: 0 2px; }
   .debug-info { display: none; position: absolute; left: 100%; top: 0; white-space: nowrap; font-size: 9px; background: #222; color: #0f0; padding: 1px 3px; z-index: 5; pointer-events: none; }
   .debug .debug-info { display: block; }
+`;
+
+const V2_PREVIEW_SCOPE = ":where([data-v2-preview-root])";
+
+/**
+ * Embedded application stylesheet. Every ordinary rule is rooted below the
+ * dedicated v2 container, including the formerly global universal/body/h1
+ * rules. At no point is the unscoped source string injected into the app.
+ */
+export const PREVIEW_RENDERER_STYLES = PREVIEW_RENDERER_RULES.replace(
+  /(^|\n)(\s*)(?!@|\/\*|\*\/)([^\n{}]+)\s*\{/g,
+  (_match, lineStart: string, indent: string, selectors: string) =>
+    `${lineStart}${indent}${selectors
+      .split(",")
+      .map((selector) => `${V2_PREVIEW_SCOPE} ${selector.trim()}`)
+      .join(", ")} {`
+);
+
+/** Standalone QA document chrome; never imported by the product shell. */
+export const PREVIEW_RENDERER_DOCUMENT_STYLES = `
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
+  h1 { font-size: 16px; }
 `;
 
 function DebugBadge({ text }: { text: string }) {
@@ -304,7 +327,7 @@ export function PreviewDocumentView({
     <PreviewPage key={page.id} page={page} fontSizePx={model.fontSizePx} mode={mode} />
   );
   return (
-    <section className="fixture" id={model.id}>
+    <section data-v2-preview-root="" className="fixture" id={model.id}>
       <h2>{model.label}</h2>
       {mode === "debug" && (
         <div className="meta">
@@ -338,7 +361,7 @@ export function PreviewFoundationArtifact({ models, mode }: { models: PaintDocum
       <head>
         <meta charSet="utf-8" />
         <title>TateSpun v2 — P3-O09 Preview Renderer Foundation</title>
-        <style dangerouslySetInnerHTML={{ __html: PREVIEW_RENDERER_STYLES }} />
+        <style dangerouslySetInnerHTML={{ __html: PREVIEW_RENDERER_DOCUMENT_STYLES + PREVIEW_RENDERER_STYLES }} />
       </head>
       <body className={mode === "debug" ? "debug" : ""}>
         <h1>P3-O09 Preview Renderer Foundation — {mode === "debug" ? "DEBUG / INSPECTION" : "NORMAL PREVIEW"}</h1>

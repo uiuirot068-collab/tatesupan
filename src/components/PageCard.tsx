@@ -34,6 +34,8 @@ import {
   WEB_FOOTER_BRAND_SOURCE_HEIGHT,
   WEB_FOOTER_BRAND_SOURCE_WIDTH,
 } from "@/lib/webFooterBranding";
+import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
+import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -193,6 +195,10 @@ const IMAGE_POSITION_LABELS: Record<ImagePosition, string> = {
 interface PageCardProps {
   pageNumber: number;
   page: TategakiPage;
+  /** Canonical v2 body paint; when present only the paper body painter changes. */
+  v2PreviewPage?: PaintPage;
+  v2PreviewFontSizePx?: number;
+  v2PreviewEnabled?: boolean;
   /**
    * [TateSpun perf] Phase P1: `page`は`paginateTokens`が呼ばれるたび（＝
    * PreviewPane側の`pages` useMemoが再計算されるたび）に丸ごと新しい
@@ -294,6 +300,9 @@ interface PageCardProps {
 function PageCard({
   pageNumber,
   page,
+  v2PreviewPage,
+  v2PreviewFontSizePx,
+  v2PreviewEnabled = false,
   startsNewParagraph = true,
   settings,
   layout,
@@ -953,6 +962,7 @@ function PageCard({
       )}
       <div
         data-page-card="true"
+        data-v2-preview-root={v2PreviewEnabled ? "" : undefined}
         // isPx (Web閲覧用) pages author their outer size directly in target
         // *screen* px (768×1024) — exportCapture.ts reads this to decide
         // whether it must capture at the element's true outer (border
@@ -986,7 +996,28 @@ function PageCard({
         // and this resolves to 0 — a no-op, matching prior behavior.
         style={{ ...sheetStyle, marginTop: "auto" }}
       >
-        {fullImage ? (
+        {v2PreviewEnabled ? (
+          v2PreviewPage ? (
+            <div
+              className="absolute overflow-visible"
+              style={{
+                top: sheetStyle.paddingTop,
+                right: sheetStyle.paddingRight,
+                fontFamily: '"Shippori Mincho", serif',
+              }}
+            >
+              <PreviewPage
+                page={v2PreviewPage}
+                fontSizePx={v2PreviewFontSizePx ?? fontSizePx}
+                mode="normal"
+              />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-paper px-6 text-center text-xs text-paper-ink/55">
+              Canonical Preview を準備できません。フォント資産を確認して再試行してください。
+            </div>
+          )
+        ) : fullImage ? (
           <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} />
         ) : (
           <>
@@ -1270,7 +1301,11 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     prev.onMovePageForward === next.onMovePageForward &&
     prev.canMovePageBackward === next.canMovePageBackward &&
     prev.canMovePageForward === next.canMovePageForward;
-  const otherEqual = prev.chromeScale === next.chromeScale;
+  const otherEqual =
+    prev.chromeScale === next.chromeScale &&
+    prev.v2PreviewEnabled === next.v2PreviewEnabled &&
+    prev.v2PreviewPage === next.v2PreviewPage &&
+    prev.v2PreviewFontSizePx === next.v2PreviewFontSizePx;
 
   const equal =
     pageNumberEqual &&
