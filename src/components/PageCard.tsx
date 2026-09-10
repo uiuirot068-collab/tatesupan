@@ -29,6 +29,11 @@ import {
   WEB_READING_FOLIO_FONT_SIZE,
   WEB_READING_RUNNING_HEAD_FONT_SIZE,
 } from "@/lib/outputTypography";
+import {
+  WEB_FOOTER_BRAND_CSS_WIDTH,
+  WEB_FOOTER_BRAND_SOURCE_HEIGHT,
+  WEB_FOOTER_BRAND_SOURCE_WIDTH,
+} from "@/lib/webFooterBranding";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -1480,8 +1485,6 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // let the URL / hashtag read as quiet supporting text — a size step down
   // (~18%), not a different visual weight.
   const finePrintFontSizePx = footerFontSizePx * 0.82;
-  const LOGO_WIDTH_PX = 19;
-
   const contentStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
@@ -1508,10 +1511,11 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
           src={withBasePath("/caroad_main2.png")}
           alt="logo"
           data-logo-img="true"
+          data-export-branding="web-footer"
           className="footer-logo"
-          width={384}
-          height={341}
-          style={{ width: `${LOGO_WIDTH_PX}px`, height: "auto", aspectRatio: "384 / 341", objectFit: "contain", flexShrink: 0 }}
+          width={WEB_FOOTER_BRAND_SOURCE_WIDTH}
+          height={WEB_FOOTER_BRAND_SOURCE_HEIGHT}
+          style={{ width: `${WEB_FOOTER_BRAND_CSS_WIDTH}px`, height: "auto", aspectRatio: `${WEB_FOOTER_BRAND_SOURCE_WIDTH} / ${WEB_FOOTER_BRAND_SOURCE_HEIGHT}`, objectFit: "contain", flexShrink: 0 }}
         />
         <span>TateSpun</span>
         <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>

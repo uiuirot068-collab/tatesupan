@@ -23,11 +23,11 @@ describe("responsive demo card placement", () => {
     expect(placement.top).toBeGreaterThanOrEqual(92);
   });
 
-  it("keeps the fallback and its fixed action controls inside the viewport", () => {
+  it("keeps an oversized card on the roomier target side with fixed controls inside the viewport", () => {
     const oversized = computeDemoCardPlacement(rect(390, 450), { width: 366, height: 900 }, viewport);
-    expect(oversized.side).toBe("floating");
-    expect(oversized.top).toBe(12);
-    expect(oversized.maxHeight).toBe(820);
+    expect(oversized.side).toBe("below");
+    expect(oversized.top).toBe(462);
+    expect(oversized.maxHeight).toBe(370);
     expect(oversized.left).toBeGreaterThanOrEqual(12);
   });
 
@@ -45,7 +45,10 @@ describe("responsive demo card placement", () => {
     const tracker = readFileSync(join(__dirname, "..", "components", "WorkSessionTracker.tsx"), "utf8");
     const guide = readFileSync(join(__dirname, "..", "app", "guide", "page.tsx"), "utf8");
 
-    expect(data.match(/\bn:\s*\d+,/g)).toHaveLength(10);
+    expect(data.match(/^    title: "/gm)).toHaveLength(11);
+    expect(data).not.toMatch(/\bn:\s*\d+,/);
+    expect(data).toContain('title: "オプションも使えます"');
+    expect(data).toContain('title: "集中モードで本文を広く"');
     expect(data).toContain('title: "作業タイムを記録しよう"');
     expect(data).toContain("作業スタート");
     expect(data).toContain("新しく書いた文字数");

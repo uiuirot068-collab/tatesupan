@@ -1,7 +1,7 @@
 # TateSpun β RC — consolidated branch Human QA
 
 Status: **BRANCH-INTEGRATED / HUMAN QA PENDING / NOT RELEASED**
-Date: 2026-09-10
+Date: 2026-09-11
 Branch: `design/tatespun-typesetting-v2`
 
 This packet covers only newly integrated behavior. Do not repeat the closed Typography/Ruby/TCY/punctuation/dash/ellipsis/small-kana/folio/header/colophon/11-B semantic passes.
@@ -30,6 +30,12 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Web `30 / 15 / 20` typography and print/PDF separation.
 - Memo edit/confirm, draft recovery after reload/navigation/collapse, and confirmed-value protection.
 - Mobile Editor header/bottom-control visibility, manuscript/Preview internal scrolling, viewport containment, and small-height structure.
+- Settings row structure, new-work margin mode, saved-mode preservation, folio/running-head preset, below-4pt override, and manual-value persistence.
+- Zero-work Home reference layout, removal of the intermediate block, and unchanged lower Home; returning-user layout remains PASS.
+- Mobile Focus hides Writing Check, Ruby/TCY, and work-session/status surfaces and restores them on exit; `本文を書く` disappears without leaving space.
+- Demo Options/Memo/Help no-auto-open behavior, target highlighting, closable manually-opened drawers, and reachable mobile controls.
+- JPG empty selection exports all pages; explicit selection exports selected pages in canonical order.
+- Rollback through `V2_BETA → LEGACY` preserves the same work/title/text. Only the final return to `V2_BETA` remains.
 
 ## Automated RC evidence
 
@@ -37,72 +43,41 @@ The rollout value is build/start-time internal configuration. It is not stored i
 - Conditional Home structure, the single-column Settings contract, mobile `100dvh` shell/internal-scroll contract, Editor IA, and TXT A/B are covered by focused source/behavior tests. Real viewport appearance remains in the Human checks below.
 - Round 3 deterministic coverage includes running-head all/selected parity scopes, replacement/outside-scope safety, JPG empty-selection/all and selected canonical order, publication `max(4, body - 3)` furniture, Web-only `30 / 15 / 20`, work-scoped Memo draft persistence/protection, visible Demo header wiring, and the branding asset's intrinsic `384:341` ratio.
 - Round 4 deterministic coverage includes explicit Settings rows, margin-mode defaults without overwriting stored modes, manual folio/header values below 4pt through persistence and the real PaintPlan, Memo placement inside the left Editor pane, mobile Focus visibility, state-based mobile writing action visibility, zero-work Home structure, and Demo transitions with no real UI open-state side effects.
+- Round 5 deterministic coverage includes Memo open/close from the same entry, removal of the actual shelf-front overlay line, one-row mobile action and secondary-navigation contracts at 320/375/390/430px, Focus preservation of core edit actions, target-preserving Demo placement, Options/Focus guide steps with array-derived totals, and one-paint Web JPG branding geometry from the original 384×341 source. The focused artifact is `typesetting-v2/qa/visual/rc-polish-round5/web-jpg-branding-single-paint.png`.
 
 ## Remaining Human checks only
 
-### 1. Settings rows and manual furniture size
+### 1. Memo toggle
 
-- Confirm the visible rows are: paper; font/font size/line-height; columns/gap; mode; then capacity, with margin/text-frame controls kept beside their mode. Create a new work and confirm `余白から設定する`; reopen an existing work saved in the other mode and confirm it remains unchanged.
-- Enter folio/header values below 4pt (for example 2.5/2), reload, and change an unrelated setting. Expected PASS: the manual values remain and reach Preview/PDF/print JPG. Web remains fixed at `30 / 15 / 20`; do not repeat the already-passed Web/print separation review.
+- Click `▶メモ`, then click the same entry again when it reads `▼メモ`. Expected PASS: it opens and closes inline; draft and confirmed values survive the toggle.
 
-### 2. Memo location only
+### 2. Returning Home separator
 
-- Open `▶メモ`. Expected PASS: it expands directly below the four secondary Editor entries, inside the left Editor pane, and shrinks/pushes the manuscript surface. It is not a global-header sibling, modal, drawer, or full-page surface.
-- Memo persistence and protection are already Human PASS; repeat only if moving the surface visibly regressed them.
+- Open a work-item title/delete popup. Expected PASS: the former shelf-front overlay line no longer crosses the popup; the Bookshelf card and popup borders remain.
 
-### 3. Zero-work Home and separator
+### 3. Mobile compact action toolbar
 
-- With zero real works, compare only the upper Hero + CTA + Bookshelf region against `typesetting-v2/qa/reference/ui/home-empty-state-target.png` at mobile/tablet/desktop.
-- Expected PASS: open two-column Hero, large character, primary CTA, bordered Demo CTA, then the reference-like wide empty shelf with guide book. The prior intermediate `ここから、最初の一冊を。` block is absent. In a returning-user shelf, the title/delete popup has a clean background with no unrelated horizontal rule crossing it. Do not review or redesign lower Home sections; returning-user architecture is already PASS.
+- At 320/375/390/430px confirm `↶ | ↷ | 改ページ挿入 | 置換` stays on one row without page overflow. Arrow buttons retain comfortable tap targets; desktop keeps full Undo/Redo labels.
 
-### 4. Mobile Focus and writing action
+### 4. Mobile Focus core actions
 
-- Enter mobile Focus mode. Expected PASS: the Writing Check controls, Ruby/TCY syntax/status helper, and work-session/count strip disappear; exiting Focus restores them with state intact.
-- Before activating the manuscript, `本文を書く` may be shown. Tap it. Expected PASS: it focuses the manuscript and the prompt consumes no further layout space.
+- Enter Focus mode. Expected PASS: Undo, Redo, Page Break, and Replace remain reachable while Writing Check, Ruby/TCY, and work-session/status surfaces stay hidden.
 
-### 5. Demo guide side effects
+### 5. Mobile four-entry secondary navigation
 
-- On mobile and desktop, advance through Settings/Options/editor/Preview-related steps and manually open/close a real control once.
-- Expected PASS: step changes only highlight/scroll to targets; they do not open Settings, Options, Memo, or Help, alter manuscript/settings, or leave a drawer locked open. `次へ` and `デモを終了` remain usable.
+- At 320/375/390/430px confirm `設定 / オプション / メモ / ヘルプ` stays on one row and `オプション` does not wrap or create horizontal overflow.
 
-### 6. JPG scope and Web branding
+### 6. New Demo content and placement
 
-- With no selected pages run Web and print ZIP/all-page JPG; repeat with pages selected out of order.
-- Expected PASS: no selection exports every canonical page; selection exports only those pages in book order. In Web JPG the TateSpun cat/logo keeps its source `384:341` aspect ratio. Typography separation is already Human PASS.
+- On mobile and desktop, check the new Options step, Help placement, and Focus step. Expected PASS: Help uses safe target-preserving placement; totals are correct; steps highlight only and never open/toggle real UI or persistent state.
 
-### 7. Rollout B rollback — exact PowerShell procedure
+### 7. Web JPG cat visual
 
-Use the same browser profile and do not clear site data/local storage. From the repository root:
+- Export a Web JPG and compare the footer cat with `typesetting-v2/qa/visual/rc-polish-round5/web-jpg-branding-single-paint.png`. Expected PASS: one sharp image, no bleed/double silhouette, original `384:341` ratio retained. Automated evidence proves one direct high-quality resample; final sharpness remains Human visual QA.
 
-1. Start v2:
+### 8. Final rollback return only
 
-   ```powershell
-   $env:NEXT_PUBLIC_SUPABASE_URL='https://vjgxrqgnbgnewfvissgd.supabase.co'
-   $env:NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'
-   npm.cmd run dev
-   ```
-
-2. Open a known saved manuscript. Record its exact Editor URL, title, and a short text sample.
-3. Stop the server with `Ctrl+C` in that PowerShell window.
-4. Start legacy in the same window:
-
-   ```powershell
-   $env:NEXT_PUBLIC_TATESPUN_RENDERER='LEGACY'
-   npm.cmd run dev
-   ```
-
-5. Open the exact saved Editor URL in the same browser profile and confirm the recorded title/text remain.
-6. Stop the server with `Ctrl+C`.
-7. Switch back to v2:
-
-   ```powershell
-   $env:NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'
-   npm.cmd run dev
-   ```
-
-8. Open the exact saved Editor URL again and confirm the manuscript remains. Stop with `Ctrl+C` when finished.
-
-Expected PASS: renderer mode changes only after restart; manuscript identity/data survive both switches; no ordinary-user renderer selector appears.
+- Without clearing browser data, restart with `NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'`, open the same saved Editor URL used for the already-passed LEGACY check, and confirm the same work/title/text remains. No other rollback step needs repetition.
 
 ## Human result
 

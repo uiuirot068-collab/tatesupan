@@ -110,8 +110,8 @@ export default function TategakiEditor({
   // 「集中モード」— a per-device localStorage-only UI preference (never
   // Supabase / manuscript data; default OFF). TSP-LOOP-012 introduced it for
   // narrow viewports; TSP-LOOP-023 extends the SAME flag to desktop:
-  //  - `< md`  : the existing behaviour — header + editor toolbar strip hide,
-  //              MobileEditorNav keeps 通常表示に戻す.
+  //  - `< md`  : secondary/status surfaces hide while the compact manuscript
+  //              action row remains; MobileEditorNav keeps 通常表示に戻す.
   //  - `md+`   : the desktop inline settings strip hides, the manuscript
   //              editor grows to (near) full width, and Preview is tucked to
   //              the right rail (kept one click away — same collapse
@@ -698,7 +698,7 @@ export default function TategakiEditor({
             onEndWorkSession={endWorkSession}
             onOpenSearchReplace={() => setIsSearchOpen(true)}
             onOpenOptions={() => setActiveDrawer("options")}
-            onOpenMemo={() => { setActiveDrawer(null); setIsMemoOpen(true); }}
+            onToggleMemo={() => { setActiveDrawer(null); setIsMemoOpen((open) => !open); }}
             memoOpen={isMemoOpen}
             memoStorageKey={memoStorageKey}
             confirmedMemo={plotNote}

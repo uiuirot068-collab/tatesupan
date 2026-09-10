@@ -16,6 +16,7 @@ export default defineConfig({
       "src/lib/rcUiInformationArchitecture.test.ts",
       "src/lib/rcPolishRound3.test.ts",
       "src/lib/rcPolishRound4.test.ts",
+      "src/lib/rcPolishRound5.test.ts",
       "src/lib/txtTransfer.test.ts",
       "src/lib/v2Rollout.test.ts",
       "src/lib/v2Bridge/**/*.test.ts",

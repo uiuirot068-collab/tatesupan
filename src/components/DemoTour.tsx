@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  DEMO_STEP_9_GUEST,
-  DEMO_STEP_9_MEMBER,
+  DEMO_CLOUD_SAVE_GUEST,
+  DEMO_CLOUD_SAVE_MEMBER,
   type DemoStep,
 } from "@/constants/demoData";
 import { useDemoTour } from "@/hooks/useDemoTour";
@@ -11,9 +11,9 @@ import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { computeDemoCardPlacement, type DemoCardPlacement } from "@/lib/demoPlacement";
 
 interface DemoTourProps {
-  /** Signed-in state — decides STEP 9 copy only. Never triggers auth. */
+  /** Signed-in state — decides the cloud-save step copy only. Never triggers auth. */
   isMember: boolean;
-  /** STEP 10 exits — each fully leaves demo mode. */
+  /** Final-step exits — each fully leaves demo mode. */
   onExitToNewProject: () => void;
   onExitToBookshelf: () => void;
   onOpenFeatureGuide: () => void;
@@ -22,7 +22,9 @@ interface DemoTourProps {
 }
 
 function stepBody(step: DemoStep, isMember: boolean, narrow: boolean): string {
-  if (step.n === 9) return isMember ? DEMO_STEP_9_MEMBER : DEMO_STEP_9_GUEST;
+  if (step.target === "cloud-save") {
+    return isMember ? DEMO_CLOUD_SAVE_MEMBER : DEMO_CLOUD_SAVE_GUEST;
+  }
   if (narrow && step.mobileNote) return step.mobileNote;
   return step.body;
 }
@@ -66,7 +68,7 @@ export default function DemoTour({
       );
       el = all.find((n) => n.offsetParent !== null) ?? all[0] ?? null;
       if (!el || el.offsetParent === null) return;
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       el.classList.add("tsp-demo-spotlight");
       window.requestAnimationFrame(updatePlacement);
     }, 120);

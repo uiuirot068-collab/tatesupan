@@ -132,6 +132,7 @@ export default function MobileEditorNav({
           )}
           <button
             type="button"
+            data-demo-target="focus-mode"
             onClick={focusMode ? onExitFocus : onEnterFocus}
             className="whitespace-nowrap rounded-full border border-ink/20 px-3 py-1 font-medium text-ink/70 hover:bg-ink/5"
           >

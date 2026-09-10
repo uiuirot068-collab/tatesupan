@@ -537,24 +537,6 @@
   transform: translateX(-50%);
 }
 
-/* Only the scaled 5-unit top edge of the rack sits in front of the books.
-   The rack body and legs stay behind in .rackRow, preserving natural depth. */
-.shelfFrontLip {
-  position: absolute;
-  z-index: 3;
-  right: 0;
-  bottom: 93.45px;
-  left: 0;
-  height: 3px;
-  margin-inline: auto;
-  background: #000;
-  pointer-events: none;
-}
-
-:global([data-theme="dark"]) .shelfFrontLip {
-  background: #a0a0a0;
-}
-
 .rackSegment {
   display: block;
   flex: none;

@@ -1,6 +1,7 @@
 'use client';
 
 import { toCanvas, getFontEmbedCSS } from 'html-to-image';
+import { containRasterRect } from '@/lib/webFooterBranding';
 
 /**
  * 計測ログの有効フラグ（開発時のみ）。exportImage.ts/exportPdf.tsの
@@ -156,17 +157,20 @@ interface ImageComposite {
 }
 
 /**
- * Prepares every real-URL `<img>` inside `root` for a capture:
- *   1. swaps its `src` for an inlined `data:` URL (helps html-to-image on
- *      engines that handle foreignObject raster images) — restored afterwards;
+ * Prepares the real-URL Web footer branding inside `root` for capture:
+ *   1. swaps its `src` for an inlined `data:` URL and hides its paint while
+ *      preserving its flex/layout box — both restored afterwards;
  *   2. records a decoded `HTMLImageElement` + the img's rect ratio so the
  *      caller can draw it directly onto the output canvas.
  *
  * TSP-LOOP-022 remediation: real iPad Safari drops raster `<img>`s from the
  * SVG `<foreignObject>` html-to-image rasterizes **even when the src is a
  * `data:` URL** (Preview + Chromium keep it; Safari JPG loses it — confirmed
- * by HUMAN QA after the src-inlining fix alone). Compositing the pixels onto
- * the finished canvas is deterministic on every engine.
+ * by HUMAN QA after the src-inlining fix alone). Chromium therefore used to
+ * paint the logo in the SVG and then paint it again in the direct composite,
+ * producing a dark/blurred double image. Hiding only the live image paint
+ * makes the original decoded source's direct canvas composite the one and
+ * only branding paint on every engine; layout geometry stays unchanged.
  *
  * Best-effort: an image that can't be fetched keeps its original src and is
  * skipped from compositing (never worse than before).
@@ -174,7 +178,9 @@ interface ImageComposite {
 async function prepareUrlImagesForCapture(
   root: HTMLElement
 ): Promise<{ restore: () => void; composites: ImageComposite[] }> {
-  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img")).filter(
+  const imgs = Array.from(
+    root.querySelectorAll<HTMLImageElement>('img[data-export-branding="web-footer"]')
+  ).filter(
     (img) => {
       const raw = img.getAttribute("src");
       return !!raw && !raw.startsWith("data:");
@@ -195,8 +201,6 @@ async function prepareUrlImagesForCapture(
         );
         img.setAttribute("src", dataUrl);
         if (typeof img.decode === "function") await img.decode().catch(() => {});
-        restores.push(() => img.setAttribute("src", original));
-
         if (rootRect.width > 0 && rootRect.height > 0) {
           const r = img.getBoundingClientRect();
           const decoded = new Image();
@@ -212,6 +216,21 @@ async function prepareUrlImagesForCapture(
             hr: r.height / rootRect.height,
             objectFit: window.getComputedStyle(img).objectFit || "fill",
           });
+          const previousVisibility = img.style.visibility;
+          const previousCompositeMarker = img.getAttribute("data-export-direct-composite");
+          img.style.visibility = "hidden";
+          img.setAttribute("data-export-direct-composite", "true");
+          restores.push(() => {
+            img.setAttribute("src", original);
+            img.style.visibility = previousVisibility;
+            if (previousCompositeMarker === null) {
+              img.removeAttribute("data-export-direct-composite");
+            } else {
+              img.setAttribute("data-export-direct-composite", previousCompositeMarker);
+            }
+          });
+        } else {
+          img.setAttribute("src", original);
         }
       } catch {
         /* keep original src — best effort */
@@ -230,9 +249,8 @@ async function prepareUrlImagesForCapture(
 /**
  * Draws each {@link ImageComposite} onto `canvas` at its recorded ratio rect,
  * replicating `object-fit: contain` (letterbox + centre) when the source
- * `<img>` used it. Idempotent on engines that already rasterized the image
- * (same pixels, same place); the fix that matters is on Safari, where the
- * canvas arrives without it.
+ * `<img>` used it. The DOM image is visibility-hidden during SVG capture, so
+ * this is exactly one paint rather than a second pass over existing pixels.
  */
 function compositeImagesOntoCanvas(
   canvas: HTMLCanvasElement,
@@ -241,6 +259,10 @@ function compositeImagesOntoCanvas(
   if (composites.length === 0) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  const previousSmoothing = ctx.imageSmoothingEnabled;
+  const previousSmoothingQuality = ctx.imageSmoothingQuality;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   for (const c of composites) {
     const nw = c.image.naturalWidth;
     const nh = c.image.naturalHeight;
@@ -251,11 +273,12 @@ function compositeImagesOntoCanvas(
     const boxH = c.hr * canvas.height;
     if (boxW <= 0 || boxH <= 0) continue;
     if (c.objectFit === "contain") {
-      const scale = Math.min(boxW / nw, boxH / nh);
-      const dw = nw * scale;
-      const dh = nh * scale;
+      const destination = containRasterRect(
+        { width: nw, height: nh },
+        { x: Math.round(boxX), y: Math.round(boxY), width: boxW, height: boxH }
+      );
       try {
-        ctx.drawImage(c.image, boxX + (boxW - dw) / 2, boxY + (boxH - dh) / 2, dw, dh);
+        ctx.drawImage(c.image, destination.x, destination.y, destination.width, destination.height);
       } catch {
         /* tainted / not decoded — leave whatever html-to-image produced */
       }
@@ -267,6 +290,8 @@ function compositeImagesOntoCanvas(
       }
     }
   }
+  ctx.imageSmoothingEnabled = previousSmoothing;
+  ctx.imageSmoothingQuality = previousSmoothingQuality;
 }
 
 /**
@@ -545,9 +570,8 @@ export async function capturePageToCanvas(
         background: '#ffffff',
       },
     });
-    // Safari-safe: draw the footer logo (and any other URL image) onto the
-    // finished canvas at its measured position. No-op on engines that already
-    // rasterized it.
+    // Draw the visibility-hidden footer logo once, directly from its original
+    // decoded pixels, at the measured production position.
     compositeImagesOntoCanvas(canvas, imageComposites);
     tCaptured = performance.now();
     return canvas;

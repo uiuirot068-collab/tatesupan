@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { DEMO_STEPS } from "@/constants/demoData";
 
 /**
- * TSP-LOOP-024 — tutorial-only state for the 10-step おためしデモ.
+ * TSP-LOOP-024 — tutorial-only state for the array-driven おためしデモ.
  *
  * Owns NOTHING about the manuscript: the real editor stays canonical. This is
  * plain in-memory `useState` (no localStorage / IndexedDB) so the demo is

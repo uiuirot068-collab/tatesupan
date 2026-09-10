@@ -65,7 +65,7 @@ interface EditorPaneProps {
   onEndWorkSession: () => CompletedWorkSession | null;
   onOpenSearchReplace: () => void;
   onOpenOptions: () => void;
-  onOpenMemo: () => void;
+  onToggleMemo: () => void;
   memoOpen: boolean;
   memoStorageKey: string;
   confirmedMemo: string;
@@ -76,10 +76,9 @@ interface EditorPaneProps {
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
   onCursorIndexChange?: (index: number) => void;
   /**
-   * TSP-LOOP-012: narrow-viewport 集中モード. When true, the title + toolbar
-   * strip and the PageSettings/help strip are removed from the layout on
-   * `< md` only (`max-md:hidden` → display:none, zero height, state kept). The
-   * desktop / tablet-wide layout is unaffected.
+   * TSP-LOOP-012: narrow-viewport 集中モード. When true, secondary/status
+   * surfaces are removed from the layout on `< md`; core manuscript actions
+   * remain reachable. The desktop / tablet-wide layout is unaffected.
    */
   focusMode?: boolean;
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
@@ -96,7 +95,7 @@ export default function EditorPane({
   onEndWorkSession,
   onOpenSearchReplace,
   onOpenOptions,
-  onOpenMemo,
+  onToggleMemo,
   memoOpen,
   memoStorageKey,
   confirmedMemo,
@@ -295,47 +294,47 @@ export default function EditorPane({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
-      <div
-        className={`flex flex-none flex-col gap-2 border-b border-ink/10 px-4 py-3 ${
-          focusMode ? "max-md:hidden" : ""
-        }`}
-      >
+      <div className="flex flex-none flex-col gap-2 border-b border-ink/10 px-2 py-2 md:px-4 md:py-3">
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="ドキュメント・タイトル名"
           data-demo-target="title"
-          className="w-full min-w-0 bg-transparent text-base md:text-lg font-bold text-ink outline-none placeholder:text-ink/40"
+          className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+        <div data-editor-action-row="" className="grid min-w-0 grid-cols-[40px_40px_minmax(0,1fr)_auto] items-stretch gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
           <button
             type="button"
             data-editor-action="undo"
             data-editor-history-action="undo"
+            aria-label="元に戻す"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
-            <span aria-hidden="true">↶</span> 元に戻す
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs">↶</span>
+            <span className="hidden md:inline">元に戻す</span>
           </button>
           <button
             type="button"
             data-editor-action="redo"
             data-editor-history-action="redo"
+            aria-label="やり直す"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runNativeHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
-            <span aria-hidden="true">↷</span> やり直す
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs">↷</span>
+            <span className="hidden md:inline">やり直す</span>
           </button>
           <button
             type="button"
             data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+            className="min-h-10 min-w-0 whitespace-nowrap rounded border border-ink/20 px-1.5 py-1 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3"
           >
             改ページ挿入
           </button>
@@ -343,25 +342,27 @@ export default function EditorPane({
             type="button"
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
-            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/70 hover:bg-ink/5"
+            className="min-h-10 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3"
           >
             置換
           </button>
         </div>
-        <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid grid-cols-4 gap-1 border-t border-ink/10 pt-2">
-          <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶設定</button>
-          <button type="button" data-editor-secondary="options" onClick={onOpenOptions} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶オプション</button>
-          <button type="button" data-editor-secondary="memo" onClick={onOpenMemo} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶メモ</button>
-          <button type="button" data-editor-secondary="help" onClick={onOpenHelp} className="rounded px-2 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 sm:text-xs">▶ヘルプ</button>
-        </nav>
-        <InlineMemoAccordion
-          key={memoStorageKey}
-          open={memoOpen}
-          storageKey={memoStorageKey}
-          confirmedMemo={confirmedMemo}
-          onConfirm={onConfirmMemo}
-          onClose={onCloseMemo}
-        />
+        <div className={focusMode ? "max-md:hidden" : ""}>
+          <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-2 md:grid-cols-4 md:gap-1">
+            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶設定</button>
+            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className="min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶オプション</button>
+            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
+            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶ヘルプ</button>
+          </nav>
+          <InlineMemoAccordion
+            key={memoStorageKey}
+            open={memoOpen}
+            storageKey={memoStorageKey}
+            confirmedMemo={confirmedMemo}
+            onConfirm={onConfirmMemo}
+            onClose={onCloseMemo}
+          />
+        </div>
       </div>
 
       {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved

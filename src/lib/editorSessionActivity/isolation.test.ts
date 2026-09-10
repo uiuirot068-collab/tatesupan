@@ -58,8 +58,8 @@ describe("11-B architectural and persistence isolation", () => {
     const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
     expect(editor).toContain('data-editor-history-action="undo"');
     expect(editor).toContain('data-editor-history-action="redo"');
-    expect(editor).toContain("↶</span> 元に戻す");
-    expect(editor).toContain("↷</span> やり直す");
+    expect(editor).toMatch(/aria-label="元に戻す"[\s\S]*?>↶<\/span>/);
+    expect(editor).toMatch(/aria-label="やり直す"[\s\S]*?>↷<\/span>/);
     expect(editor).toContain("document.execCommand(command)");
   });
 

@@ -21,7 +21,6 @@ import {
   GUIDE_BOOK_WIDTH,
   bookWidthForCharacterCount,
   packShelfBooks,
-  shelfFrontLipWidth,
   shelfMetricsForAvailableWidth,
   shelfMetricsForContentWidth,
 } from "./bookshelfLayout";
@@ -308,11 +307,6 @@ export function Bookshelf({
                     height="160.755"
                   />
                 </div>
-                <div
-                  className={styles.shelfFrontLip}
-                  style={{ width: shelfFrontLipWidth(centerCount) }}
-                  aria-hidden="true"
-                />
               </div>
             </div>
           );

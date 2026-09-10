@@ -74,6 +74,32 @@ export function computeDemoCardPlacement(
         side: "below",
       };
     }
+
+    // If the full card fits on neither side, keep the target uncovered and
+    // constrain the card to whichever side has more usable space. The card's
+    // own body scrolls while its navigation stays fixed, so Help and other
+    // mobile targets remain visible and 次へ／デモ終了 remain reachable.
+    const availableAbove = Math.max(0, target.top - TARGET_GAP - EDGE_MARGIN);
+    const availableBelow = Math.max(
+      0,
+      viewport.height - EDGE_MARGIN - target.bottom - TARGET_GAP
+    );
+    if (availableAbove >= availableBelow && availableAbove > 0) {
+      return {
+        top: EDGE_MARGIN,
+        left,
+        maxHeight: availableAbove,
+        side: "above",
+      };
+    }
+    if (availableBelow > 0) {
+      return {
+        top: target.bottom + TARGET_GAP,
+        left,
+        maxHeight: availableBelow,
+        side: "below",
+      };
+    }
   }
 
   return {

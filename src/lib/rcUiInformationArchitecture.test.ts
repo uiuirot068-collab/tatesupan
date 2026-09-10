@@ -108,7 +108,8 @@ describe("RC Editor information architecture", () => {
     expect(legacyPreview).toContain("resolveJpgPageIndices(pages.length, selected)");
     expect(preview).toContain("resolveJpgPageIndices(plan.length, selectedPageIndices)");
     expect(preview).toContain("onTogglePage={togglePageSelection}");
-    expect(pageCard).toContain('aspectRatio: "384 / 341"');
+    expect(pageCard).toContain('WEB_FOOTER_BRAND_SOURCE_WIDTH');
+    expect(pageCard).toContain('WEB_FOOTER_BRAND_SOURCE_HEIGHT');
     expect(pageCard).toContain('height: "auto"');
   });
 
