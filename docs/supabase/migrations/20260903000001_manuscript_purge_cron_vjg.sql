@@ -1,3 +1,7 @@
+-- SUPERSEDED / DO NOT RUN.
+-- The proposed rgv -> vjg migration was cancelled. TateSpun remains canonical
+-- on rgvqquuthovqjqfogfra. Use manuscript-cloud-images-setup.md for the active
+-- rgv purge configuration. This file is retained only as a historical record.
 -- ============================================================================
 -- TSP-LOOP-017B — manuscript-image-purge pg_cron on the canonical project
 -- ============================================================================

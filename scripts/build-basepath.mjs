@@ -15,9 +15,8 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-// TSP-LOOP-017B: fail the Cloudflare build if NEXT_PUBLIC_SUPABASE_URL is not
-// the canonical project (once TATESPUN_LOCK_CANONICAL=1 is set) — or if it is
-// some third/typo'd project regardless of the lock.
+// Fail the Cloudflare build unless NEXT_PUBLIC_SUPABASE_URL is the canonical
+// TateSpun project. The verifier rejects unrelated and typo'd refs outright.
 execSync("node scripts/verify-supabase-project.mjs", { stdio: "inherit", env: process.env });
 
 process.env.NEXT_PUBLIC_BASE_PATH =

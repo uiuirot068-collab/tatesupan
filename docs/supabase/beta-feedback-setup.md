@@ -37,9 +37,9 @@ Webhook 実行時に `thread_name` を毎回付けて新規スレッドを作成
 デプロイ:
 
 ```
-supabase functions deploy beta-feedback --project-ref vjgxrqgnbgnewfvissgd
+supabase functions deploy beta-feedback --project-ref rgvqquuthovqjqfogfra
 # config.toml の [functions.beta-feedback] verify_jwt = false で匿名呼び出し可
-# TSP-LOOP-017: canonical project = vjgxrqgnbgnewfvissgd. LOOP-014 の
+# canonical TateSpun project = rgvqquuthovqjqfogfra. LOOP-014 の
 # IMAGE_ATTACHMENTS_ENABLED = false（画像添付拒否）を含む repo 版をそのまま deploy する。
 ```
 

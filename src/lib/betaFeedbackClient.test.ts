@@ -46,7 +46,7 @@ describe("submitBetaFeedback — end-to-end Send pipeline", () => {
 
   it("calls the Edge Function with the verified token and the collected environment, and succeeds on ok:true", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "sb_publishable_test-key");
     const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify({ ok: true, reportId: "r1" }), { status: 200 })
     );
@@ -58,6 +58,7 @@ describe("submitBetaFeedback — end-to-end Send pipeline", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://project.supabase.co/functions/v1/beta-feedback");
+    expect(init.headers).toEqual({ apikey: "sb_publishable_test-key" });
     const form = init.body as FormData;
     const payload = JSON.parse(form.get("payload") as string);
     expect(payload.turnstileToken).toBe("tok-1");

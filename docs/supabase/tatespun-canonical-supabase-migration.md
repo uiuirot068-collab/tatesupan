@@ -1,4 +1,10 @@
-# TateSpun → canonical SpunTales Supabase (TSP-LOOP-017)
+# SUPERSEDED — historical TateSpun cross-project migration plan
+
+> **DO NOT EXECUTE THIS RUNBOOK.** The authoritative TateSpun project is
+> `rgvqquuthovqjqfogfra` (project name `tatespun`). The proposed move to
+> `vjgxrqgnbgnewfvissgd` was cancelled; that project is not TateSpun's canonical
+> project for this release. The material below is retained only as a historical
+> audit record and is not production/config guidance.
 
 Move TateSpun onto the **canonical SpunTales project `vjgxrqgnbgnewfvissgd`**
 (which already owns SpunTales Auth + `profiles` + the other tools). The old

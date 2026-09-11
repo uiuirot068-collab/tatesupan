@@ -1,19 +1,13 @@
-// TSP-LOOP-017 — canonical Supabase project guard.
+// TateSpun canonical Supabase project guard.
 //
-// TateSpun's backend (Auth + projects + user_plans + manuscript_cloud_images +
-// Storage + Edge Functions) is migrating onto the canonical SpunTales project
-// so a SpunTales account works in TateSpun with no second sign-up.
+// TateSpun's backend (Auth + projects + user_plans + manuscript_cloud_images,
+// Storage, and Edge Functions) belongs to the project named `tatespun`.
 //
-//   CANONICAL (SpunTales) : vjgxrqgnbgnewfvissgd
-//   ROLLBACK  (old TateSpun): rgvqquuthovqjqfogfra
+//   CANONICAL (TateSpun): rgvqquuthovqjqfogfra
 //
 // This gate checks NEXT_PUBLIC_SUPABASE_URL (from the environment, else
-// .env.local) points at the canonical project — or, until the flip is done,
-// at the documented rollback project. Anything else (typo, placeholder, a
-// third project) FAILS.
-//
-// After the production flip to vjg…, set TATESPUN_LOCK_CANONICAL=1 (in CI /
-// the shell) to make the rollback project a hard failure too.
+// .env.local) points at that exact project. Anything else (including the
+// unrelated project previously documented as canonical) FAILS.
 //
 // Run:  node scripts/verify-supabase-project.mjs
 import fs from "node:fs";
@@ -22,9 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const CANONICAL_REF = "vjgxrqgnbgnewfvissgd"; // SpunTales — canonical
-const ROLLBACK_REF = "rgvqquuthovqjqfogfra"; // old separate TateSpun
-const LOCKED = process.env.TATESPUN_LOCK_CANONICAL === "1";
+const CANONICAL_REF = "rgvqquuthovqjqfogfra"; // project name: tatespun
 
 let failures = 0;
 const check = (name, cond) => {
@@ -44,7 +36,7 @@ const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || readEnvLocalVar("NEXT_PUBLI
 const ref = (url.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co\/?$/i) || [])[1] || null;
 
 console.log(`source URL: ${url || "(none found — set NEXT_PUBLIC_SUPABASE_URL or .env.local)"}`);
-console.log(`project ref: ${ref ?? "(unrecognised)"}   locked-to-canonical: ${LOCKED}`);
+console.log(`project ref: ${ref ?? "(unrecognised)"}`);
 console.log("");
 
 check(
@@ -52,14 +44,12 @@ check(
   ref !== null,
 );
 check(
-  LOCKED
-    ? "2. project ref is the canonical SpunTales project (rollback is now locked out)"
-    : "2. project ref is the canonical SpunTales project OR the documented rollback",
-  ref === CANONICAL_REF || (!LOCKED && ref === ROLLBACK_REF),
+  "2. project ref is the canonical TateSpun project",
+  ref === CANONICAL_REF,
 );
 check(
-  "3. no third/placeholder project ref",
-  ref === CANONICAL_REF || ref === ROLLBACK_REF,
+  "3. no unrelated/placeholder project ref",
+  ref === CANONICAL_REF,
 );
 
 // The app must not hard-code a project ref anywhere in src/ — it is env-only.
@@ -70,7 +60,7 @@ const walk = (dir) => {
     if (e.isDirectory()) walk(fp);
     else if (/\.(ts|tsx|js|jsx)$/.test(e.name)) {
       const t = fs.readFileSync(fp, "utf8");
-      if (t.includes(CANONICAL_REF) || t.includes(ROLLBACK_REF)) {
+      if (/https:\/\/[a-z0-9]{20}\.supabase\.co/i.test(t)) {
         srcHits.push(path.relative(repoRoot, fp));
       }
     }
@@ -117,11 +107,7 @@ check(
 
 console.log("");
 if (failures === 0) {
-  console.log(
-    ref === CANONICAL_REF
-      ? "canonical Supabase project OK (vjg…)."
-      : "on the rollback project (rgv…) — expected only until the LOOP-017 flip.",
-  );
+  console.log("canonical TateSpun Supabase project OK (rgv…).");
 } else {
   console.log(`${failures} supabase-project check(s) FAILED.`);
   process.exit(1);

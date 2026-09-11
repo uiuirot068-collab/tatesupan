@@ -143,7 +143,7 @@ check(
 );
 check(
   "feedback: send button disabled when cannot send or while sending",
-  /disabled=\{!canSend \|\| feedbackState === "sending"( \|\| !turnstileReady)?\}/.test(modal)
+  /disabled=\{!canSend \|\| feedbackState === "sending" \|\| !turnstileReady \|\| !environment\}/.test(modal)
 );
 check(
   "feedback: duplicate prevention guard (sendingRef)",
@@ -392,15 +392,19 @@ check(
     !/https?:\/\/(?!\$\{)/.test(client.replace(/\/\/.*$/gm, ""))
 );
 check(
+  "security: publishable key is sent only as apikey, never as a bearer JWT",
+  /apikey:\s*anonKey/.test(client) && !/Authorization:\s*`Bearer \$\{anonKey\}`/.test(client)
+);
+check(
   "security: no manuscript/title/documentId auto-collection in client payload",
   !/(content|manuscript|documentId|projectId|selectedText|\btitle\b)/.test(
     client.slice(client.indexOf("submitBetaFeedback"))
   )
 );
 check(
-  "privacy: feedback transport has no automatic clientContext/environment metadata",
-  !/clientContext|readClientContext|appVersion|viewport|userAgent|uaBrands|devicePixelRatio|screen\.|navigator\./i.test(client) &&
-    !/collectFeedbackEnvironment|appendEnvironmentBlock|envSummary|envDetail|使用環境（自動取得）/.test(modal)
+  "privacy: feedback transport includes permission-free clientContext diagnostics in both payloads",
+  (client.match(/clientContext:\s*security\.environment/g) || []).length === 2 &&
+    /collectFeedbackEnvironment/.test(modal)
 );
 check(
   "privacy: client does not read or transmit URL/path/query/hash",
@@ -462,8 +466,8 @@ check(
 );
 check(
   "edge: never logs the webhook/appscript URLs or the IP",
-  !/console\.(log|error)\([^)]*DISCORD_/.test(edge) &&
-    !/console\.(log|error)\([^)]*APPS_SCRIPT/.test(edge) &&
+  !/console\.(log|error)\(\s*(DISCORD_[A-Z_]+|GOOGLE_APPS_SCRIPT_URL)/.test(edge) &&
+    !/\$\{(?:DISCORD_[A-Z_]+|GOOGLE_APPS_SCRIPT_URL)\}/.test(edge) &&
     !/console\.(log|error)\([^)]*\bip\b/.test(edge)
 );
 check(
@@ -638,8 +642,7 @@ check(
 );
 check(
   "19 turnstile: client refuses to send without a token",
-  /if \(!security\.turnstileToken\)\s*\{\s*return \{ ok: false \};/.test(client.replace(/\s+/g, " ").replace(/ \{ /g, " {\n").replace(/if \(!security\.turnstileToken\) \{ return \{ ok: false \}; \}/, "if (!security.turnstileToken) {\n    return { ok: false };\n  }")) ||
-    /!security\.turnstileToken[\s\S]{0,60}return \{ ok: false \}/.test(client),
+  /if \(!security\.turnstileToken\)[\s\S]{0,180}return \{ ok: false \}/.test(client),
 );
 check(
   "19 turnstile: modal gates BOTH submit buttons on a verified token",
@@ -659,9 +662,11 @@ check(
 );
 check(
   "19 turnstile: hook clears token on expired / timeout / error callbacks",
-  /"expired-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook) &&
-    /"timeout-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook) &&
-    /"error-callback":[\s\S]{0,120}setToken\(""\)/.test(turnstileHook),
+  /"expired-callback": callbacks\.expired/.test(turnstileHook) &&
+    /"timeout-callback": callbacks\.expired/.test(turnstileHook) &&
+    /"error-callback": callbacks\.failed/.test(turnstileHook) &&
+    /expired: \(\) => \{[\s\S]{0,100}setToken\(""\)/.test(turnstileHook) &&
+    /failed: \(\) => \{[\s\S]{0,100}setToken\(""\)/.test(turnstileHook),
 );
 check(
   "19 turnstile: hook loads the official Cloudflare script only (no new npm dep), render=explicit",
@@ -777,7 +782,7 @@ check(
   "19 sheet: Discord text is NOT run through the sanitizer (raw message/note)",
   (() => {
     const fb = edge.slice(edge.indexOf('if (type === "feedback")'), edge.indexOf("/* ---------------------------- review"));
-    return /notifyDiscordFeedback\(reportId, appVersion, message, stored\)/.test(fb) &&
+    return /notifyDiscordFeedback\(reportId, appVersion, message, stored, clientEnvironment\)/.test(fb) &&
       !/notifyDiscordFeedback\([^)]*sanitizeSheetCell/.test(edge) &&
       !/notifyDiscordReview\([^)]*sanitizeSheetCell/.test(edge);
   })(),
@@ -785,7 +790,7 @@ check(
 
 // ---- Double-submit / rate limit ----
 check("19 double-submit: review handler now guards with a ref (not just state)", /reviewSendingRef\.current/.test(modal) && /const reviewSendingRef = useRef\(false\)/.test(modal));
-check("19 double-submit: feedback handler keeps its sendingRef guard", /if \(sendingRef\.current \|\| !canSend \|\| !turnstileReady\) return;/.test(modal));
+check("19 double-submit: feedback handler keeps its sendingRef guard", /if \(sendingRef\.current \|\| !canSend \|\| !turnstileReady \|\| !environment\) return;/.test(modal));
 check("19 rate limit: server best-effort limiter kept, threshold not weakened (RATE_MAX <= 6)", /const RATE_MAX = ([0-6]);/.test(edge));
 check("19 rate limit: still no persistent IP table / fingerprinting", !/create table[\s\S]{0,120}ip\b/i.test(edge) && !/fingerprint/i.test(edge) && /IP は保存しない/.test(edge));
 

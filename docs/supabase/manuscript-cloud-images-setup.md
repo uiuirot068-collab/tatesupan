@@ -46,12 +46,12 @@ SQL エディタで実行（冪等・トランザクション・非破壊）。�
 ## 2. purge Edge Function（要 deploy + Cron）
 
 ```
-supabase functions deploy manuscript-image-purge --project-ref vjgxrqgnbgnewfvissgd
+supabase functions deploy manuscript-image-purge --project-ref rgvqquuthovqjqfogfra
 ```
 
-> TSP-LOOP-017: canonical project is `vjgxrqgnbgnewfvissgd`. During the migration
-> keep the old `rgvqquuthovqjqfogfra` deployment + cron running until production
-> QA passes. Cron recreation SQL: `docs/supabase/migrations/20260903000001_manuscript_purge_cron_vjg.sql`.
+> The canonical TateSpun project is `rgvqquuthovqjqfogfra`. Keep the Function,
+> secret, and cron in that project; the abandoned cross-project migration files
+> are historical records and must not be executed.
 
 Secrets（Edge Function 環境）:
 
@@ -68,7 +68,7 @@ select cron.schedule(
   '0 * * * *',
   $$
   select net.http_post(
-    url    := 'https://vjgxrqgnbgnewfvissgd.functions.supabase.co/manuscript-image-purge',
+    url    := 'https://rgvqquuthovqjqfogfra.functions.supabase.co/manuscript-image-purge',
     headers:= jsonb_build_object(
       'Content-Type','application/json',
       'Authorization','Bearer ' || current_setting('app.settings.service_role_key', true)

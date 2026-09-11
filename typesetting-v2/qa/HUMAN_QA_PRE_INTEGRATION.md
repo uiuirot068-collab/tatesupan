@@ -11,7 +11,7 @@ This packet covers only newly integrated behavior. Do not repeat the closed Typo
 In PowerShell, from the repository root:
 
 ```powershell
-$env:NEXT_PUBLIC_SUPABASE_URL='https://vjgxrqgnbgnewfvissgd.supabase.co'
+$env:NEXT_PUBLIC_SUPABASE_URL='https://rgvqquuthovqjqfogfra.supabase.co'
 $env:NEXT_PUBLIC_TATESPUN_RENDERER='V2_BETA'
 npm.cmd run dev
 ```

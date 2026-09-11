@@ -64,9 +64,10 @@ export async function submitBetaFeedback(
 
   let body: BodyInit;
   const headers: Record<string, string> = {
-    // Supabase API Gateway 用（anon key は公開値・RLS 前提で安全）。
+    // Supabase API Gateway 用。`sb_publishable_...` は JWT ではないため
+    // Authorization へ複製しない。この匿名 Function は verify_jwt=false で、
+    // API key は apikey ヘッダーだけに載せる。
     apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
   };
 
   if (submission.type === "feedback") {

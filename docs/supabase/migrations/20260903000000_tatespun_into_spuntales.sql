@@ -1,3 +1,6 @@
+-- SUPERSEDED / DO NOT RUN.
+-- The proposed rgv -> vjg migration was cancelled. TateSpun remains canonical
+-- on rgvqquuthovqjqfogfra. This file is retained only as a historical record.
 -- ============================================================================
 -- TSP-LOOP-017 — TateSpun schema INTO the canonical SpunTales Supabase project
 -- ============================================================================
