@@ -1011,9 +1011,11 @@ function PageCard({
               />
             </div>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-paper px-6 text-center text-xs text-paper-ink/55">
-              Canonical Preview を準備できません。フォント資産を確認して再試行してください。
-            </div>
+            // Empty manuscripts intentionally have no canonical body page,
+            // while the editor still keeps this physical PageCard as its
+            // normal blank canvas. Real adapter/font failures are reported
+            // outside the page by PreviewPane's dedicated alert.
+            <div data-v2-preview-blank-surface="" aria-hidden="true" />
           )
         ) : fullImage ? (
           <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} />
