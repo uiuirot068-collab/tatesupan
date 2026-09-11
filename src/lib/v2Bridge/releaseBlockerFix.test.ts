@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
+import { DEFAULT_PAGE_SETTINGS, PX_PER_MM } from "../pageLayout";
 import { composeV2Document } from "./composeV2Document";
-import { buildV2PreviewDocument } from "./useV2PreviewAdapter";
+import { buildV2PreviewDocument, PAGE_CARD_PREVIEW_SCALE_MULTIPLIER } from "./useV2PreviewAdapter";
 import { createShipporiMinchoMeasurementProviderFromBytes } from "../../../typesetting-v2/core/measurement/shipporiMinchoProviderCore";
 import { PREVIEW_RENDERER_STYLES } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
 
@@ -106,6 +106,88 @@ describe("Beta release blocker contracts", () => {
     expect(modal).toContain("原稿本文");
     expect(modal).toContain("作品タイトル");
     expect(modal).toContain("ドキュメントID");
+  });
+});
+
+describe("Preview page-margin regression", () => {
+  it("keeps the canonical Preview frame and every vertical line/unit inside the physical page margins at every visual zoom", () => {
+    const bytes = new Uint8Array(readFileSync(resolve("public/fonts/ShipporiMincho-Regular.ttf")));
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const measurement = createShipporiMinchoMeasurementProviderFromBytes(bytes, sha256, "/fonts/ShipporiMincho-Regular.ttf");
+    const bridge = composeV2Document({
+      title: "Preview margin regression",
+      content: "\u672c\u6587".repeat(600),
+      settings: DEFAULT_PAGE_SETTINGS,
+      measurement,
+    });
+    const publicationBeforePreview = structuredClone(bridge.plan);
+    const preview = buildV2PreviewDocument(bridge, {});
+    const page = preview.pages[0];
+    const geometry = bridge.pageGeometry;
+
+    // PreviewRenderer's native 96dpi conversion is deliberately counter-scaled
+    // into PageCard's established 2.2px/mm coordinate system.
+    expect(PAGE_CARD_PREVIEW_SCALE_MULTIPLIER).toBeCloseTo(PX_PER_MM / (96 / 25.4), 12);
+
+    const paperWidthPx = geometry.paperWidthMm * PX_PER_MM;
+    const paperHeightPx = geometry.paperHeightMm * PX_PER_MM;
+    const contentTopPx = geometry.marginTopMm * PX_PER_MM;
+    const contentBottomPx = paperHeightPx - geometry.marginBottomMm * PX_PER_MM;
+    const contentRightPx = paperWidthPx - geometry.marginRightMm * PX_PER_MM;
+    const contentLeftPx = geometry.marginLeftMm * PX_PER_MM;
+
+    expect(page.widthPx).toBeLessThanOrEqual(contentRightPx - contentLeftPx + 0.001);
+    expect(page.heightPx).toBeLessThanOrEqual(contentBottomPx - contentTopPx + 0.001);
+    expect(contentRightPx - page.widthPx).toBeGreaterThanOrEqual(contentLeftPx - 0.001);
+    expect(contentTopPx + page.heightPx).toBeLessThanOrEqual(contentBottomPx + 0.001);
+
+    const lines = page.columns.flatMap((column) =>
+      column.lines.map((line) => ({ column, line }))
+    );
+    expect(lines.length).toBe(DEFAULT_PAGE_SETTINGS.linesPerColumn);
+    for (const { column, line } of lines) {
+      const lineRightPx = contentRightPx - column.rightPx - line.rightPx;
+      const lineLeftPx = lineRightPx - line.widthPx;
+      expect(lineRightPx).toBeLessThanOrEqual(contentRightPx + 0.001);
+      expect(lineLeftPx).toBeGreaterThanOrEqual(contentLeftPx - 0.001);
+
+      for (const unit of line.units) {
+        const unitTopPx = contentTopPx + unit.topPx;
+        const unitBottomPx = unitTopPx + unit.heightPx;
+        expect(unitTopPx).toBeGreaterThanOrEqual(contentTopPx - 0.001);
+        expect(unitBottomPx).toBeLessThanOrEqual(contentBottomPx + 0.001);
+      }
+    }
+
+    // 50/100/200% are presentation-only transforms: dividing the painted
+    // rectangles by zoom returns the identical physical Preview geometry.
+    const logicalFrame = {
+      left: contentRightPx - page.widthPx,
+      top: contentTopPx,
+      right: contentRightPx,
+      bottom: contentTopPx + page.heightPx,
+    };
+    for (const zoom of [0.5, 1, 2]) {
+      const painted = Object.fromEntries(
+        Object.entries(logicalFrame).map(([key, value]) => [key, value * zoom])
+      ) as typeof logicalFrame;
+      expect(painted.left / zoom).toBeCloseTo(logicalFrame.left, 8);
+      expect(painted.top / zoom).toBeCloseTo(logicalFrame.top, 8);
+      expect(painted.right / zoom).toBeCloseTo(logicalFrame.right, 8);
+      expect(painted.bottom / zoom).toBeCloseTo(logicalFrame.bottom, 8);
+    }
+
+    // PDF and JPG both consume this Publication PaintPlan. Building Preview
+    // must neither rewrite it nor replace physical page/margin coordinates.
+    expect(bridge.plan).toEqual(publicationBeforePreview);
+    expect(bridge.plan[0].widthMm).toBe(geometry.paperWidthMm);
+    expect(bridge.plan[0].heightMm).toBe(geometry.paperHeightMm);
+    const firstBodyCommand = bridge.plan[0].commands.find((command) => command.op === "text" || command.op === "rect");
+    expect(firstBodyCommand).toBeDefined();
+    if (firstBodyCommand?.op === "text" || firstBodyCommand?.op === "rect") {
+      expect(firstBodyCommand.xMm).toBeLessThanOrEqual(geometry.paperWidthMm - geometry.marginRightMm + 0.001);
+      expect(firstBodyCommand.yMm).toBeGreaterThanOrEqual(geometry.marginTopMm - 0.001);
+    }
   });
 });
 

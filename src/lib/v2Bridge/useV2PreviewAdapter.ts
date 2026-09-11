@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PageSettings } from "../pageLayout";
+import { PX_PER_MM, type PageSettings } from "../pageLayout";
 import { loadV2BrowserMeasurementProvider } from "./browserMeasurementProvider";
 import { composeV2Document, type V2BridgeResult } from "./composeV2Document";
 import { prepareImageResolver } from "./imageResolverAdapter";
@@ -27,12 +27,20 @@ const DISABLED_STATE: V2PreviewAdapterState = {
   loading: false,
 };
 
+/**
+ * `PreviewRenderer` converts canonical millimeters at standard CSS density
+ * (96dpi), while the established editor `PageCard` paper surface uses the
+ * product's preview-only `PX_PER_MM`. Match that host coordinate system here
+ * so the canonical content frame and the paper margins share one scale.
+ */
+export const PAGE_CARD_PREVIEW_SCALE_MULTIPLIER = PX_PER_MM / (96 / 25.4);
+
 export function buildV2PreviewDocument(
   bridge: V2BridgeResult,
   images: Record<string, string>
 ): PaintDocument {
   const context: PreviewRenderContext = {
-    scaleMultiplier: 1,
+    scaleMultiplier: PAGE_CARD_PREVIEW_SCALE_MULTIPLIER,
     linePitchTicks: bridge.layoutSettings.linePitchTicks,
     lineExtentTicks: bridge.layoutSettings.lineExtentTicks,
     columnExtentTicks: bridge.layoutSettings.columnExtentTicks,
