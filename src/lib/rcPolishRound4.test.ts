@@ -97,8 +97,8 @@ describe("Round 4 Editor placement and visibility", () => {
   });
 
   it("hides focus-only status surfaces without deleting their state", () => {
-    expect(pane).toMatch(/data-writing-check-surface=""[\s\S]{0,100}focusMode \? "max-md:hidden"/);
-    expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]{0,180}focusMode \? "max-md:hidden"/);
+    expect(pane).toMatch(/data-writing-check-surface=""[\s\S]{0,100}focusMode \? "max-md:hidden md:hidden"/);
+    expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]{0,180}focusMode \? "max-md:hidden md:hidden"/);
     expect(pane).toContain('data-ruby-tcy-status=""');
     expect(pane).toContain("<WorkSessionTracker");
   });

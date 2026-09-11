@@ -53,6 +53,58 @@ function openXShare(record: CompletedWorkSession): void {
   );
 }
 
+function WorkSessionPauseModal({
+  onClose,
+  onResume,
+  onEnd,
+}: {
+  onClose: () => void;
+  onResume: () => void;
+  onEnd: () => void;
+}) {
+  return (
+    <ViewportModal
+      title="一時停止中"
+      titleId="work-session-pause-title"
+      closeLabel="一時停止の窓を閉じる"
+      onClose={onClose}
+      overlayProps={{ "data-work-session-pause-modal": "" } as HTMLAttributes<HTMLDivElement>}
+      dialogProps={{ "data-work-session-pause": "" } as HTMLAttributes<HTMLDivElement>}
+      closeButtonProps={{ "data-work-session-pause-action": "close-icon" } as HTMLAttributes<HTMLButtonElement>}
+      footer={(
+        <>
+          <button
+            type="button"
+            data-work-session-pause-action="close"
+            onClick={onClose}
+            className="rounded px-2 py-1 text-[11px] text-ink/55 hover:bg-ink/5"
+          >
+            一時停止の窓を閉じる
+          </button>
+          <button
+            type="button"
+            data-work-session-pause-action="resume"
+            onClick={onResume}
+            className="rounded border border-ink/20 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/5"
+          >
+            作業を再開する
+          </button>
+          <button
+            type="button"
+            data-work-session-pause-action="end"
+            onClick={onEnd}
+            className="rounded bg-ink px-2 py-1 text-[11px] font-semibold text-base hover:opacity-90"
+          >
+            今日の作業を終了する
+          </button>
+        </>
+      )}
+    >
+      <p className="text-xs text-ink/65">作業時間のカウントを停止しています。</p>
+    </ViewportModal>
+  );
+}
+
 function WorkSessionResultModal({
   result,
   copied,
@@ -199,7 +251,7 @@ export default function WorkSessionTracker({
   onEnd: () => CompletedWorkSession | null;
 }) {
   const [now, setNow] = useState(() => Date.now());
-  const [panel, setPanel] = useState<"result" | "history" | null>(null);
+  const [panel, setPanel] = useState<"pause" | "result" | "history" | null>(null);
   const [result, setResult] = useState<CompletedWorkSession | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const activeId = state.active?.id;
@@ -230,11 +282,13 @@ export default function WorkSessionTracker({
   const pause = () => {
     setNow(Date.now());
     onPause();
+    setPanel("pause");
   };
 
   const resume = () => {
     setNow(Date.now());
     onResume();
+    setPanel(null);
   };
 
   const copyShareText = async (record: CompletedWorkSession) => {
@@ -321,6 +375,14 @@ export default function WorkSessionTracker({
       >
         作業記録{state.history.length > 0 ? ` ${state.history.length}` : ""}
       </button>
+
+      {panel === "pause" && (
+        <WorkSessionPauseModal
+          onClose={closePanel}
+          onResume={resume}
+          onEnd={end}
+        />
+      )}
 
       {panel === "result" && result && (
         <WorkSessionResultModal

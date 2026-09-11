@@ -91,6 +91,6 @@ describe("11-B architectural and persistence isolation", () => {
     expect(counter).toContain("実作業時間");
     expect(counter).toContain('className="flex shrink-0 items-center gap-1"');
     expect(editor).toContain("inputActivityStateRef.current = createTextInputActivityState(content)");
-    expect(editor).toMatch(/data-editor-status-surfaces=[\s\S]*?focusMode \? "max-md:hidden"/);
+    expect(editor).toMatch(/data-editor-status-surfaces=[\s\S]*?focusMode \? "max-md:hidden md:hidden"/);
   });
 });

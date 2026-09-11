@@ -80,9 +80,9 @@ interface EditorPaneProps {
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
   onCursorIndexChange?: (index: number) => void;
   /**
-   * TSP-LOOP-012: narrow-viewport 集中モード. When true, secondary/status
-   * surfaces are removed from the layout on `< md`; core manuscript actions
-   * remain reachable. The desktop / tablet-wide layout is unaffected.
+   * Canonical 集中モード flag. Existing `< md` suppression stays intact;
+   * at `md+`, writing-adjacent settings/status surfaces are visually hidden
+   * without changing their underlying state.
    */
   focusMode?: boolean;
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
@@ -375,10 +375,10 @@ export default function EditorPane({
         </div>
         <div className={focusMode ? "max-md:hidden" : ""}>
           <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-2 md:grid-cols-4 md:gap-1">
-            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶設定</button>
-            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className="min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶オプション</button>
+            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定</button>
+            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className={`min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション</button>
             <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
-            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">▶ヘルプ</button>
+            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ</button>
           </nav>
           <InlineMemoAccordion
             key={memoStorageKey}
@@ -477,7 +477,7 @@ export default function EditorPane({
         />
       </div>
 
-      <div data-writing-check-surface="" className={focusMode ? "max-md:hidden" : ""}>
+      <div data-writing-check-surface="" className={focusMode ? "max-md:hidden md:hidden" : ""}>
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
@@ -511,7 +511,7 @@ export default function EditorPane({
 
       {/* Compact syntax help never creates a second line; touch/keyboard users
           can open its full text without permanently growing the footer. */}
-      <div data-editor-status-surfaces="" className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden" : ""}`}>
+      <div data-editor-status-surfaces="" className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : ""}`}>
         <div data-ruby-tcy-status=""><EditorSyntaxHelp /></div>
         <div
           data-editor-footer-controls

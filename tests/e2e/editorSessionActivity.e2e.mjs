@@ -145,6 +145,8 @@ function snapshotExpression() {
     const history = document.querySelector('[data-work-session-history]');
     const historyModal = document.querySelector('[data-work-session-history-modal]');
     const historyBody = history?.querySelector('[data-viewport-modal-body]');
+    const pause = document.querySelector('[data-work-session-pause]');
+    const pauseModal = document.querySelector('[data-work-session-pause-modal]');
     const footerHelp = document.querySelector('[data-editor-footer-help]');
     const footerControls = document.querySelector('[data-editor-footer-controls]');
     const helpRect = footerHelp?.getBoundingClientRect();
@@ -164,11 +166,23 @@ function snapshotExpression() {
       ? [...history.querySelectorAll('[data-work-session-history-action]')]
           .map((action) => action.getAttribute('data-work-session-history-action'))
       : [];
+    const pauseActions = pause
+      ? [...pause.querySelectorAll('[data-work-session-pause-action]')]
+          .map((action) => action.getAttribute('data-work-session-pause-action'))
+      : [];
     const currentCount = document.querySelector('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]');
     return {
       editorValue: editor?.value,
       activityText: activity?.textContent.trim(),
       activityValue: activity?.getAttribute('data-work-session-written-count'),
+      sessionStatus: document.querySelector('[data-work-session-tracker]')?.getAttribute('data-work-session-status'),
+      elapsedText: document.querySelector('[data-work-session-elapsed]')?.textContent.trim(),
+      pauseText: pause?.textContent.replace(/\\s+/g, ' ').trim(),
+      pauseActions,
+      pauseCount: document.querySelectorAll('[data-work-session-pause]').length,
+      pauseRole: pause?.getAttribute('role'),
+      pauseAriaModal: pause?.getAttribute('aria-modal'),
+      pausePortalledToBody: pauseModal?.parentElement === document.body,
       resultText: result?.textContent.replace(/\\s+/g, ' ').trim(),
       resultActions,
       resultRole: result?.getAttribute('role'),
@@ -223,6 +237,38 @@ function snapshotExpression() {
       footerControlsWrap: footerControls ? getComputedStyle(footerControls).flexWrap : undefined,
       currentCountText: currentCount?.textContent.trim(),
       storage: localStorage.getItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}),
+    };
+  })()`;
+}
+
+function focusSnapshotExpression() {
+  return `(() => {
+    const visible = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return false;
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+    };
+    return {
+      settings: visible('[data-editor-secondary="settings"]'),
+      options: visible('[data-editor-secondary="options"]'),
+      memo: visible('[data-editor-secondary="memo"]'),
+      help: visible('[data-editor-secondary="help"]'),
+      writingCheck: visible('[data-writing-check-surface]'),
+      rubyQuickControl: visible('[data-ruby-tcy-status]'),
+      workCounter: visible('[data-work-session-tracker]'),
+      manuscriptCount: visible('[title=${JSON.stringify(CURRENT_COUNT_TITLE)}]'),
+      previewExpanded: Boolean(document.querySelector('[data-preview-collapse-toggle]')),
+      previewCollapsed: Boolean(document.querySelector('[data-preview-collapsed-toggle]')),
+      header: visible('[data-editor-header-slot]'),
+      visibleFocusToggleCount: [...document.querySelectorAll('[data-demo-target="focus-mode"]')]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+        }).length,
+      editorValue: document.querySelector('[data-demo-target="editor"]')?.value,
+      storage: localStorage.getItem(${JSON.stringify(WORK_SESSION_STORAGE_KEY)}),
+      focusPreference: localStorage.getItem('tatespun_mobile_focus'),
     };
   })()`;
 }
@@ -290,8 +336,8 @@ try {
   assert.equal(idleBefore.hasEnd, false);
   assert.equal(idleBefore.activityText, undefined);
   assert.equal(idleBefore.storage, null);
-  assert.equal(idleBefore.undoText, "↶ 元に戻す");
-  assert.equal(idleBefore.redoText, "↷ やり直す");
+  assert.equal(idleBefore.undoText.replace(/\s+/g, ""), "↶元に戻す");
+  assert.equal(idleBefore.redoText.replace(/\s+/g, ""), "↷やり直す");
   assert.equal(idleBefore.footerRowsSeparated, true);
   assert.equal(idleBefore.footerHelpCompact, true);
   assert.match(idleBefore.footerHelpFullText, /\[tate\]A5\[\/tate\]/);
@@ -332,6 +378,173 @@ try {
   assert.equal(started.hasEnd, true);
   assert.match(started.activityText, /今回書いた文字数 0文字/);
   assert.equal(JSON.parse(started.storage).active.writtenCharacterCount, 0);
+
+  // Pause is canonical before the modal appears. A same-frame double click
+  // must remain one paused interval and one dialog.
+  await cdp.evaluate(`(() => {
+    const pause = document.querySelector('[data-work-session-action="pause"]');
+    pause.click();
+    pause.click();
+    return true;
+  })()`);
+  await cdp.waitFor(`document.querySelector('[data-work-session-status="paused"]') && Boolean(document.querySelector('[data-work-session-pause]'))`);
+  const firstPause = await cdp.evaluate(snapshotExpression());
+  const firstPausedState = JSON.parse(firstPause.storage).active;
+  assert.equal(firstPause.sessionStatus, "paused");
+  assert.equal(firstPause.pauseCount, 1);
+  assert.equal(firstPause.pauseRole, "dialog");
+  assert.equal(firstPause.pauseAriaModal, "true");
+  assert.equal(firstPause.pausePortalledToBody, true);
+  assert.match(firstPause.pauseText, /一時停止中/);
+  assert.match(firstPause.pauseText, /作業時間のカウントを停止しています。/);
+  assert.deepEqual(firstPause.pauseActions, ["close-icon", "close", "resume", "end"]);
+  assert.equal(firstPausedState.status, "paused");
+  assert.equal(typeof firstPausedState.pausedAt, "number");
+
+  await cdp.evaluate("new Promise((resolve) => setTimeout(() => resolve(true), 1100))");
+  const frozenPause = await cdp.evaluate(snapshotExpression());
+  assert.equal(frozenPause.elapsedText, firstPause.elapsedText);
+  assert.equal(JSON.parse(frozenPause.storage).active.pausedAt, firstPausedState.pausedAt);
+
+  // Explicit close is close-only. Settings and Options stay usable without
+  // changing the paused state or elapsed display.
+  await cdp.evaluate(`document.querySelector('[data-work-session-pause-action="close"]').click(); true`);
+  await cdp.waitFor(`!document.querySelector('[data-work-session-pause]')`);
+  const afterPauseClose = await cdp.evaluate(snapshotExpression());
+  assert.equal(afterPauseClose.sessionStatus, "paused");
+  assert.equal(afterPauseClose.elapsedText, firstPause.elapsedText);
+
+  await cdp.evaluate(`document.querySelector('[data-editor-secondary="settings"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[aria-label="設定を閉じる"]'))`);
+  await cdp.evaluate("new Promise((resolve) => setTimeout(() => resolve(true), 1100))");
+  const pausedInSettings = await cdp.evaluate(snapshotExpression());
+  assert.equal(pausedInSettings.sessionStatus, "paused");
+  assert.equal(pausedInSettings.elapsedText, firstPause.elapsedText);
+  await cdp.evaluate(`document.querySelector('[aria-label="設定を閉じる"]').click(); true`);
+  await cdp.waitFor(`!document.querySelector('[aria-label="設定を閉じる"]')`);
+
+  await cdp.evaluate(`document.querySelector('[data-editor-secondary="options"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[aria-label="オプションを閉じる"]'))`);
+  const pausedInOptions = await cdp.evaluate(snapshotExpression());
+  assert.equal(pausedInOptions.sessionStatus, "paused");
+  assert.equal(pausedInOptions.elapsedText, firstPause.elapsedText);
+  await cdp.evaluate(`document.querySelector('[aria-label="オプションを閉じる"]').click(); true`);
+  await cdp.waitFor(`!document.querySelector('[aria-label="オプションを閉じる"]')`);
+
+  // Existing inline Resume remains valid after a close-only dismissal.
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="resume"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-status="active"]'))`);
+
+  // The modal's Resume action uses that same transition and closes itself.
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="pause"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-pause]'))`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-pause-action="resume"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-status="active"]')) && !document.querySelector('[data-work-session-pause]')`);
+
+  // X, Escape, and backdrop are all close-only; each repeated cycle still
+  // leaves exactly one canonical session with no history records.
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="pause"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-pause]'))`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-pause-action="close-icon"]').click(); true`);
+  await cdp.waitFor(`!document.querySelector('[data-work-session-pause]')`);
+  assert.equal((await cdp.evaluate(snapshotExpression())).sessionStatus, "paused");
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="resume"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-status="active"]'))`);
+
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="pause"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-pause]'))`);
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  });
+  await cdp.waitFor(`!document.querySelector('[data-work-session-pause]')`);
+  assert.equal((await cdp.evaluate(snapshotExpression())).sessionStatus, "paused");
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="resume"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-status="active"]'))`);
+
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="pause"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-pause-modal]'))`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-pause-modal]').click(); true`);
+  await cdp.waitFor(`!document.querySelector('[data-work-session-pause]')`);
+  const afterGenericDismissals = await cdp.evaluate(snapshotExpression());
+  assert.equal(afterGenericDismissals.sessionStatus, "paused");
+  assert.equal(JSON.parse(afterGenericDismissals.storage).history.length, 0);
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="resume"]').click(); true`);
+  await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-status="active"]'))`);
+
+  // Desktop Focus Mode visually suppresses only the requested surfaces and
+  // restores them without changing manuscript or canonical session state.
+  const desktopNormal = await cdp.evaluate(focusSnapshotExpression());
+  assert.deepEqual(
+    {
+      settings: desktopNormal.settings,
+      options: desktopNormal.options,
+      help: desktopNormal.help,
+      writingCheck: desktopNormal.writingCheck,
+      rubyQuickControl: desktopNormal.rubyQuickControl,
+      workCounter: desktopNormal.workCounter,
+      manuscriptCount: desktopNormal.manuscriptCount,
+    },
+    {
+      settings: true,
+      options: true,
+      help: true,
+      writingCheck: true,
+      rubyQuickControl: true,
+      workCounter: true,
+      manuscriptCount: true,
+    }
+  );
+  assert.notEqual(desktopNormal.previewExpanded, desktopNormal.previewCollapsed);
+  assert.equal(desktopNormal.visibleFocusToggleCount, 1);
+
+  await cdp.evaluate(`(() => {
+    const visible = [...document.querySelectorAll('[data-demo-target="focus-mode"]')]
+      .find((element) => getComputedStyle(element).display !== 'none' && element.getClientRects().length > 0);
+    visible.click();
+    return true;
+  })()`);
+  await cdp.waitFor(`document.querySelector('[data-focus-mode-toggle]')?.getAttribute('aria-pressed') === 'true' && Boolean(document.querySelector('[data-preview-collapsed-toggle]'))`);
+  const desktopFocused = await cdp.evaluate(focusSnapshotExpression());
+  assert.equal(desktopFocused.settings, false);
+  assert.equal(desktopFocused.options, false);
+  assert.equal(desktopFocused.help, false);
+  assert.equal(desktopFocused.writingCheck, false);
+  assert.equal(desktopFocused.rubyQuickControl, false);
+  assert.equal(desktopFocused.workCounter, false);
+  assert.equal(desktopFocused.manuscriptCount, false);
+  assert.equal(desktopFocused.previewExpanded, false);
+  assert.equal(desktopFocused.previewCollapsed, true);
+  assert.equal(desktopFocused.editorValue, desktopNormal.editorValue);
+  assert.equal(desktopFocused.storage, desktopNormal.storage);
+
+  await cdp.evaluate(`document.querySelector('[data-focus-mode-toggle]').click(); true`);
+  const restoredPreviewSelector = desktopNormal.previewExpanded
+    ? '[data-preview-collapse-toggle]'
+    : '[data-preview-collapsed-toggle]';
+  await cdp.waitFor(`document.querySelector('[data-focus-mode-toggle]')?.getAttribute('aria-pressed') === 'false' && Boolean(document.querySelector('${restoredPreviewSelector}'))`);
+  const desktopRestored = await cdp.evaluate(focusSnapshotExpression());
+  assert.equal(desktopRestored.settings, true);
+  assert.equal(desktopRestored.options, true);
+  assert.equal(desktopRestored.help, true);
+  assert.equal(desktopRestored.writingCheck, true);
+  assert.equal(desktopRestored.rubyQuickControl, true);
+  assert.equal(desktopRestored.workCounter, true);
+  assert.equal(desktopRestored.manuscriptCount, true);
+  assert.equal(desktopRestored.previewExpanded, desktopNormal.previewExpanded);
+  assert.equal(desktopRestored.previewCollapsed, desktopNormal.previewCollapsed);
+  assert.equal(desktopRestored.editorValue, desktopNormal.editorValue);
+  assert.equal(desktopRestored.storage, desktopNormal.storage);
 
   await cdp.evaluate(`(() => {
     const editor = document.querySelector('[data-demo-target="editor"]');
@@ -403,7 +616,9 @@ try {
   assert.match(afterReplacement.activityText, /今回書いた文字数 5文字/);
   assert.equal(JSON.parse(afterReplacement.storage).active.writtenCharacterCount, 5);
 
-  await cdp.evaluate(`document.querySelector('[data-work-session-action="end"]').click(); true`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-action="pause"]').click(); true`);
+  await cdp.waitFor(`document.querySelector('[data-work-session-status="paused"]') && Boolean(document.querySelector('[data-work-session-pause]'))`);
+  await cdp.evaluate(`document.querySelector('[data-work-session-pause-action="end"]').click(); true`);
   await cdp.waitFor(`Boolean(document.querySelector('[data-work-session-result]'))`);
   const ended = await cdp.evaluate(snapshotExpression());
   const completedState = JSON.parse(ended.storage);
@@ -469,6 +684,49 @@ try {
   await cdp.waitFor("!document.querySelector('[data-work-session-result]')");
   const afterResultClose = await cdp.evaluate(snapshotExpression());
   assert.equal(JSON.parse(afterResultClose.storage).history.length, 1);
+
+  // The pre-existing phone Focus behavior stays intact: the same compact
+  // surfaces and header are suppressed, the sticky exit control remains, and
+  // disabling Focus restores the phone layout without touching state.
+  const mobileNormal = await cdp.evaluate(focusSnapshotExpression());
+  assert.equal(mobileNormal.settings, true);
+  assert.equal(mobileNormal.writingCheck, true);
+  assert.equal(mobileNormal.workCounter, true);
+  assert.equal(mobileNormal.header, true);
+  assert.equal(mobileNormal.visibleFocusToggleCount, 1);
+  await cdp.evaluate(`(() => {
+    const visible = [...document.querySelectorAll('[data-demo-target="focus-mode"]')]
+      .find((element) => getComputedStyle(element).display !== 'none' && element.getClientRects().length > 0);
+    visible.click();
+    return true;
+  })()`);
+  await cdp.waitFor(`localStorage.getItem('tatespun_mobile_focus') === 'on' && getComputedStyle(document.querySelector('[data-editor-header-slot]')).display === 'none'`);
+  const mobileFocused = await cdp.evaluate(focusSnapshotExpression());
+  assert.equal(mobileFocused.settings, false);
+  assert.equal(mobileFocused.options, false);
+  assert.equal(mobileFocused.help, false);
+  assert.equal(mobileFocused.writingCheck, false);
+  assert.equal(mobileFocused.rubyQuickControl, false);
+  assert.equal(mobileFocused.workCounter, false);
+  assert.equal(mobileFocused.manuscriptCount, false);
+  assert.equal(mobileFocused.header, false);
+  assert.equal(mobileFocused.visibleFocusToggleCount, 1);
+  assert.equal(mobileFocused.editorValue, mobileNormal.editorValue);
+  assert.equal(mobileFocused.storage, mobileNormal.storage);
+  await cdp.evaluate(`(() => {
+    const visible = [...document.querySelectorAll('[data-demo-target="focus-mode"]')]
+      .find((element) => getComputedStyle(element).display !== 'none' && element.getClientRects().length > 0);
+    visible.click();
+    return true;
+  })()`);
+  await cdp.waitFor(`localStorage.getItem('tatespun_mobile_focus') === 'off' && getComputedStyle(document.querySelector('[data-editor-header-slot]')).display !== 'none'`);
+  const mobileRestored = await cdp.evaluate(focusSnapshotExpression());
+  assert.equal(mobileRestored.settings, true);
+  assert.equal(mobileRestored.writingCheck, true);
+  assert.equal(mobileRestored.workCounter, true);
+  assert.equal(mobileRestored.header, true);
+  assert.equal(mobileRestored.editorValue, mobileNormal.editorValue);
+  assert.equal(mobileRestored.storage, mobileNormal.storage);
 
   await cdp.evaluate("document.querySelector('[data-editor-footer-help]').click(); true");
   await cdp.waitFor("Boolean(document.querySelector('[data-editor-syntax-help-modal]'))");
@@ -550,7 +808,7 @@ try {
   assert.equal(JSON.parse(afterEscapeClose.storage).history.length, 2);
   assert.equal(JSON.parse(afterEscapeClose.storage).history[1].writtenCharacterCount, 0);
 
-  console.log(`PASS real Editor UX + 11-B browser E2E: ${editorUrl} (single-line/touch syntax help; centered result/history modals desktop+narrow with copy/X and close/Escape; retained history; visible Undo/Redo at +0; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
+  console.log(`PASS real Editor UX + 11-B browser E2E: ${editorUrl} (Pause modal close/Resume/End + X/Escape/backdrop; frozen settings/options time; desktop Focus suppression/restore; mobile Focus unchanged; result/history retained; type +1 -> delete +0 -> replace +4 -> End/history 5)`);
 } catch (error) {
   if (browserOutput) console.error(browserOutput);
   throw error;
