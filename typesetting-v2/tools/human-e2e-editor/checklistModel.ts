@@ -17,7 +17,16 @@ export interface ChecklistSet {
 export interface ChecklistState {
   version: typeof CHECKLIST_SCHEMA_VERSION;
   activeSetId: string;
+  /** The one checklist shown before PDF export. Null keeps the legacy direct flow. */
+  pdfExportSetId: string | null;
   sets: ChecklistSet[];
+}
+
+export interface PdfExportChecklistAttempt {
+  setId: string;
+  name: string;
+  items: { id: string; text: string }[];
+  checkedItemIds: string[];
 }
 
 interface ChecklistPreset {
@@ -79,7 +88,12 @@ export function setFromPreset(presetId: string): ChecklistSet {
 
 export function createDefaultChecklistState(): ChecklistState {
   const sets = CHECKLIST_PRESETS.map((preset) => setFromPreset(preset.id));
-  return { version: CHECKLIST_SCHEMA_VERSION, activeSetId: sets[0].id, sets };
+  return {
+    version: CHECKLIST_SCHEMA_VERSION,
+    activeSetId: sets[0].id,
+    pdfExportSetId: null,
+    sets,
+  };
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -120,7 +134,11 @@ export function parseChecklistState(raw: string | null): ChecklistState {
     });
     if (sets.length === 0) return createDefaultChecklistState();
     const activeSetId = sets.some((set) => set.id === candidate.activeSetId) ? candidate.activeSetId! : sets[0].id;
-    return { version: CHECKLIST_SCHEMA_VERSION, activeSetId, sets };
+    const pdfExportSetId = typeof candidate.pdfExportSetId === "string"
+      && sets.some((set) => set.id === candidate.pdfExportSetId)
+      ? candidate.pdfExportSetId
+      : null;
+    return { version: CHECKLIST_SCHEMA_VERSION, activeSetId, pdfExportSetId, sets };
   } catch {
     return createDefaultChecklistState();
   }
@@ -150,7 +168,12 @@ export function removePersonalChecklist(state: ChecklistState, setId: string): C
   const target = state.sets.find((set) => set.id === setId);
   if (!target || target.presetId !== null || state.sets.length === 1) return state;
   const sets = state.sets.filter((set) => set.id !== setId);
-  return { ...state, sets, activeSetId: state.activeSetId === setId ? sets[0].id : state.activeSetId };
+  return {
+    ...state,
+    sets,
+    activeSetId: state.activeSetId === setId ? sets[0].id : state.activeSetId,
+    pdfExportSetId: state.pdfExportSetId === setId ? null : state.pdfExportSetId,
+  };
 }
 
 export function removePersonalChecklistWithConfirmation(
@@ -166,4 +189,52 @@ export function removePersonalChecklistWithConfirmation(
 export function completionFor(set: ChecklistSet): { checked: number; total: number; complete: boolean } {
   const checked = set.items.filter((item) => item.checked).length;
   return { checked, total: set.items.length, complete: set.items.length > 0 && checked === set.items.length };
+}
+
+/** Stores one canonical list reference, never independent per-list flags. */
+export function setPdfExportChecklist(state: ChecklistState, setId: string | null): ChecklistState {
+  if (setId !== null && !state.sets.some((set) => set.id === setId)) return state;
+  if (state.pdfExportSetId === setId) return state;
+  return { ...state, pdfExportSetId: setId };
+}
+
+export function pdfExportChecklistFor(state: ChecklistState): ChecklistSet | null {
+  if (!state.pdfExportSetId) return null;
+  return state.sets.find((set) => set.id === state.pdfExportSetId) ?? null;
+}
+
+/**
+ * Creates a fresh, non-persisted Human Gate for one PDF attempt. Existing
+ * editor checklist completion is intentionally ignored.
+ */
+export function beginPdfExportChecklistAttempt(state: ChecklistState): PdfExportChecklistAttempt | null {
+  const set = pdfExportChecklistFor(state);
+  if (!set) return null;
+  return {
+    setId: set.id,
+    name: set.name,
+    items: set.items.map(({ id, text }) => ({ id, text })),
+    checkedItemIds: [],
+  };
+}
+
+export function updatePdfExportChecklistAttempt(
+  attempt: PdfExportChecklistAttempt,
+  itemId: string,
+  checked: boolean
+): PdfExportChecklistAttempt {
+  if (!attempt.items.some((item) => item.id === itemId)) return attempt;
+  const nextChecked = new Set(attempt.checkedItemIds);
+  if (checked) nextChecked.add(itemId);
+  else nextChecked.delete(itemId);
+  return { ...attempt, checkedItemIds: [...nextChecked] };
+}
+
+export function pdfExportChecklistAttemptProgress(
+  attempt: PdfExportChecklistAttempt
+): { checked: number; total: number; complete: boolean } {
+  const itemIds = new Set(attempt.items.map((item) => item.id));
+  const checked = new Set(attempt.checkedItemIds.filter((id) => itemIds.has(id))).size;
+  const total = attempt.items.length;
+  return { checked, total, complete: total === 0 || checked === total };
 }

@@ -66,6 +66,7 @@ import {
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import ExportProgressModal from "./ExportProgressModal";
+import PdfExportChecklistGate from "./PdfExportChecklistGate";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
@@ -87,6 +88,13 @@ import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publica
 import { exportPaintPlanToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
+import {
+  CHECKLIST_STORAGE_KEY,
+  beginPdfExportChecklistAttempt,
+  parseChecklistState,
+  pdfExportChecklistAttemptProgress,
+  type PdfExportChecklistAttempt,
+} from "../../typesetting-v2/tools/human-e2e-editor/checklistModel";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -96,6 +104,19 @@ const SPREAD_GAP_PX = 4;
 
 /** Padding (px) of the scroll container per axis (`p-6` = 1.5rem × 2 sides, uniform on all four sides). */
 const SCROLL_CONTAINER_PADDING_X_PX = 48;
+
+function readPdfExportChecklistAttempt(): PdfExportChecklistAttempt | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return beginPdfExportChecklistAttempt(
+      parseChecklistState(window.localStorage.getItem(CHECKLIST_STORAGE_KEY))
+    );
+  } catch {
+    // localStorage can be unavailable in privacy-restricted contexts. The
+    // optional checklist must never deadlock the established PDF flow.
+    return null;
+  }
+}
 
 // [TateSpun perf] preview performance Phase P1: PageCardはReact.memo化した
 // (PageCard.tsx参照)が、per-page callback（onToggleSelect等）は元々
@@ -1132,6 +1153,7 @@ export default function PreviewPane({
   };
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfChecklistAttempt, setPdfChecklistAttempt] = useState<PdfExportChecklistAttempt | null>(null);
   const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
   const [pdfScope, setPdfScope] = useState<"all" | "selected">("all");
   // 選択ページPDFで奥付を含めるか。default OFF——「奥付ONなら常にappend」とは
@@ -1144,7 +1166,7 @@ export default function PreviewPane({
     setIsPdfModalOpen(true);
   };
 
-  const handleDownloadPdf = async () => {
+  const performDownloadPdf = async () => {
     if (exportBlockedByUnresolvedImages()) return;
     if (layout.paper.isPx) return;
     const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
@@ -1259,6 +1281,23 @@ export default function PreviewPane({
     } finally {
       finishExport(signal);
     }
+  };
+
+  const handleDownloadPdf = () => {
+    const attempt = readPdfExportChecklistAttempt();
+    if (attempt) {
+      // Fresh attempt means 0/N every time, regardless of the editor
+      // checklist's persistent completion state.
+      setPdfChecklistAttempt(attempt);
+      return;
+    }
+    void performDownloadPdf();
+  };
+
+  const confirmPdfChecklistAndDownload = () => {
+    if (!pdfChecklistAttempt || !pdfExportChecklistAttemptProgress(pdfChecklistAttempt).complete) return;
+    setPdfChecklistAttempt(null);
+    void performDownloadPdf();
   };
 
   useEffect(() => {
@@ -2169,6 +2208,15 @@ export default function PreviewPane({
             </div>
           </div>
         </div>
+      )}
+
+      {pdfChecklistAttempt && (
+        <PdfExportChecklistGate
+          attempt={pdfChecklistAttempt}
+          onAttemptChange={setPdfChecklistAttempt}
+          onCancel={() => setPdfChecklistAttempt(null)}
+          onConfirm={confirmPdfChecklistAndDownload}
+        />
       )}
 
       {isExporting && (

@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   CHECKLIST_PRESETS,
   addPersonalChecklist,
+  beginPdfExportChecklistAttempt,
   completionFor,
   createDefaultChecklistState,
   parseChecklistState,
+  pdfExportChecklistAttemptProgress,
+  pdfExportChecklistFor,
   removePersonalChecklist,
   removePersonalChecklistWithConfirmation,
   resetChecklistSet,
+  setPdfExportChecklist,
+  updatePdfExportChecklistAttempt,
   updateChecklistSet,
 } from "./checklistModel";
 
@@ -85,11 +90,93 @@ describe("preflight checklist model", () => {
       ],
     }));
     expect(parsed.activeSetId).toBe("valid");
+    expect(parsed.pdfExportSetId).toBeNull();
     expect(parsed.sets).toEqual([{ id: "valid", name: "Valid", presetId: null, items: [{ id: "a", text: "A", checked: true }] }]);
   });
 
   it("reports completion only for a non-empty fully checked set", () => {
     expect(completionFor({ id: "empty", name: "empty", presetId: null, items: [] })).toEqual({ checked: 0, total: 0, complete: false });
     expect(completionFor({ id: "x", name: "x", presetId: null, items: [{ id: "1", text: "a", checked: true }] })).toEqual({ checked: 1, total: 1, complete: true });
+  });
+});
+
+describe("PDF export checklist selection", () => {
+  it("keeps the old direct PDF flow when no list is selected", () => {
+    const state = createDefaultChecklistState();
+    expect(state.pdfExportSetId).toBeNull();
+    expect(pdfExportChecklistFor(state)).toBeNull();
+    expect(beginPdfExportChecklistAttempt(state)).toBeNull();
+  });
+
+  it("stores exactly one canonical list ID and can replace or clear it", () => {
+    const initial = createDefaultChecklistState();
+    const [listA, listB] = initial.sets;
+    const selectedA = setPdfExportChecklist(initial, listA.id);
+    expect(selectedA.pdfExportSetId).toBe(listA.id);
+    expect(pdfExportChecklistFor(selectedA)?.name).toBe(listA.name);
+
+    const selectedB = setPdfExportChecklist(selectedA, listB.id);
+    expect(selectedB.pdfExportSetId).toBe(listB.id);
+    expect(selectedB.sets.filter((set) => set.id === selectedB.pdfExportSetId)).toHaveLength(1);
+
+    const cleared = setPdfExportChecklist(selectedB, null);
+    expect(cleared.pdfExportSetId).toBeNull();
+    expect(setPdfExportChecklist(cleared, "missing")).toBe(cleared);
+  });
+
+  it("preserves selection through rename/reset and follows the current name", () => {
+    const initial = createDefaultChecklistState();
+    const selectedId = initial.sets[0].id;
+    const selected = setPdfExportChecklist(initial, selectedId);
+    const renamed = updateChecklistSet(selected, selectedId, (set) => ({ ...set, name: "最終確認（改訂）" }));
+    expect(renamed.pdfExportSetId).toBe(selectedId);
+    expect(pdfExportChecklistFor(renamed)?.name).toBe("最終確認（改訂）");
+    expect(resetChecklistSet(renamed, selectedId).pdfExportSetId).toBe(selectedId);
+  });
+
+  it("clears a selected personal-list reference on deletion and while parsing stale storage", () => {
+    const added = addPersonalChecklist(createDefaultChecklistState(), "personal-export", "自分用最終確認");
+    const selected = setPdfExportChecklist(added, "personal-export");
+    const deleted = removePersonalChecklistWithConfirmation(selected, "personal-export", () => true);
+    expect(deleted.pdfExportSetId).toBeNull();
+
+    const stale = parseChecklistState(JSON.stringify({ ...selected, pdfExportSetId: "missing" }));
+    expect(stale.pdfExportSetId).toBeNull();
+  });
+
+  it("persists only the selected list reference while every PDF attempt starts unchecked", () => {
+    const initial = createDefaultChecklistState();
+    const selectedId = initial.sets[0].id;
+    const editorChecked = updateChecklistSet(
+      setPdfExportChecklist(initial, selectedId),
+      selectedId,
+      (set) => ({ ...set, items: set.items.map((item) => ({ ...item, checked: true })) })
+    );
+    const reloaded = parseChecklistState(JSON.stringify(editorChecked));
+    const first = beginPdfExportChecklistAttempt(reloaded)!;
+    expect(first.checkedItemIds).toEqual([]);
+
+    const partial = updatePdfExportChecklistAttempt(first, first.items[0].id, true);
+    expect(pdfExportChecklistAttemptProgress(partial)).toEqual({
+      checked: 1,
+      total: first.items.length,
+      complete: false,
+    });
+    const allChecked = first.items.reduce(
+      (attempt, item) => updatePdfExportChecklistAttempt(attempt, item.id, true),
+      first
+    );
+    expect(pdfExportChecklistAttemptProgress(allChecked).complete).toBe(true);
+
+    const second = beginPdfExportChecklistAttempt(reloaded)!;
+    expect(second.checkedItemIds).toEqual([]);
+    expect(pdfExportChecklistAttemptProgress(second).checked).toBe(0);
+  });
+
+  it("allows a selected zero-item list to proceed without a deadlock", () => {
+    const personal = addPersonalChecklist(createDefaultChecklistState(), "empty", "空の確認リスト");
+    const attempt = beginPdfExportChecklistAttempt(setPdfExportChecklist(personal, "empty"))!;
+    expect(attempt.items).toEqual([]);
+    expect(pdfExportChecklistAttemptProgress(attempt)).toEqual({ checked: 0, total: 0, complete: true });
   });
 });
