@@ -493,6 +493,8 @@ export function composeLine(
         readingExtentTick,
         overhangAllowanceBeforeTick,
         overhangAllowanceAfterTick,
+        availableBeforeTick: yTick,
+        availableAfterTick: Math.max(0, effectiveLineExtentTicks - yTick - atom.advanceTick),
       });
       placed.rubyBoundaryPolicy = placement.policy;
       placed.rubyReadingOffsetTick = placement.readingOffsetTick;

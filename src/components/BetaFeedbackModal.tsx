@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ALLOWED_IMAGE_MIME,
   BETA_FEEDBACK_IMAGE_ATTACHMENTS_ENABLED,
@@ -21,6 +21,11 @@ import {
 } from "@/lib/betaFeedback";
 import { submitBetaFeedback } from "@/lib/betaFeedbackClient";
 import { useTurnstile } from "@/lib/turnstile";
+import {
+  collectFeedbackEnvironment,
+  feedbackUserVisibleRows,
+  type FeedbackEnvironment,
+} from "@/lib/feedbackEnvironment";
 
 /**
  * TSP-LOOP-006 — 「β版フィードバック」モーダル。
@@ -68,6 +73,19 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   } = useTurnstile();
   const [honeypot, setHoneypot] = useState("");
   const turnstileReady = turnstileStatus === "verified" && turnstileToken.length > 0;
+  const environmentStore = useMemo(() => {
+    let snapshot: FeedbackEnvironment | null = null;
+    return {
+      subscribe: () => () => undefined,
+      getSnapshot: () => (snapshot ??= collectFeedbackEnvironment()),
+      getServerSnapshot: () => null,
+    };
+  }, []);
+  const environment = useSyncExternalStore(
+    environmentStore.subscribe,
+    environmentStore.getSnapshot,
+    environmentStore.getServerSnapshot
+  );
 
   const messageMaxLen = MAX_MESSAGE_LENGTH;
   const noteMaxLen = MAX_REVIEW_NOTE_LENGTH;
@@ -155,7 +173,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
 
   const handleSendFeedback = async () => {
     // 二重送信ガード（ref）＋送信可否＋Turnstile 検証済みを必須にする。
-    if (sendingRef.current || !canSend || !turnstileReady) return;
+    if (sendingRef.current || !canSend || !turnstileReady || !environment) return;
     const submission = {
       type: "feedback" as const,
       message,
@@ -172,6 +190,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     const { ok } = await submitBetaFeedback(submission, {
       turnstileToken,
       honeypot,
+      environment,
     });
     sendingRef.current = false;
     // トークンは1回で使い切る。成否に関わらず必ず新しいトークンを要求する。
@@ -188,7 +207,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   };
 
   const handleSendReview = async () => {
-    if (reviewSendingRef.current || !turnstileReady) return;
+    if (reviewSendingRef.current || !turnstileReady || !environment) return;
     const submission = {
       type: "review" as const,
       checkedItems: [...checkedItems],
@@ -204,6 +223,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     const { ok } = await submitBetaFeedback(submission, {
       turnstileToken,
       honeypot,
+      environment,
     });
     reviewSendingRef.current = false;
     resetTurnstile();
@@ -354,6 +374,39 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
 
             </div>
           )}
+
+          <section
+            aria-label="送信される使用環境"
+            data-feedback-environment=""
+            className="mt-4 rounded-lg border border-ink/15 bg-ink/[0.025] p-3"
+          >
+            <h3 className="text-sm font-semibold text-ink">【送信される使用環境】</h3>
+            {environment ? (
+              <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs text-ink/70">
+                {feedbackUserVisibleRows(environment).map(([label, detail]) => (
+                  <div key={label} className="contents">
+                    <dt className="font-medium text-ink/60">{label}:</dt>
+                    <dd className="min-w-0 break-words">{detail}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="mt-1 text-xs text-ink/60">使用環境を取得しています…</p>
+            )}
+            <div className="mt-3 space-y-2 border-t border-ink/10 pt-2 text-[11px] leading-relaxed text-ink/65">
+              <div>
+                <p className="font-semibold">【デバッグ用に自動送信される情報】</p>
+                <p>上記に加え、再現確認に必要な端末・ブラウザ・表示環境情報</p>
+              </div>
+              <div>
+                <p className="font-semibold">【自動送信されないもの】</p>
+                <p>原稿本文</p>
+                <p>作品タイトル</p>
+                <p>ドキュメントID</p>
+              </div>
+              <p>位置情報など新しい権限は要求せず、表示中の値のみを不具合調査のためDiscord等へ送信します。</p>
+            </div>
+          </section>
         </div>
 
         {/* TSP-LOOP-019A: 送信アクション行。スクロール領域の外に置き、モバイルでも
@@ -378,7 +431,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               <button
                 type="button"
                 onClick={handleSendFeedback}
-                disabled={!canSend || feedbackState === "sending" || !turnstileReady}
+                disabled={!canSend || feedbackState === "sending" || !turnstileReady || !environment}
                 className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
@@ -397,7 +450,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               <button
                 type="button"
                 onClick={handleSendReview}
-                disabled={reviewState === "sending" || !turnstileReady}
+                disabled={reviewState === "sending" || !turnstileReady || !environment}
                 className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {reviewState === "sending" ? "送信中…" : "reviewを送信"}
@@ -423,7 +476,17 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
             />
           </div>
 
-          <div ref={turnstileMount} />
+          <p className="text-xs font-medium text-ink/70">送信前のCloudflare確認</p>
+          <div ref={turnstileMount} data-turnstile-widget="" className="min-h-[65px] w-full" />
+          {turnstileStatus === "loading" && (
+            <p role="status" className="text-xs text-ink/60">確認コンポーネントを読み込んでいます…</p>
+          )}
+          {turnstileStatus === "ready" && (
+            <p role="status" className="text-xs text-ink/60">確認待ちです。上のCloudflare確認を完了してください。</p>
+          )}
+          {turnstileStatus === "verified" && (
+            <p role="status" className="text-xs font-medium text-emerald-700">確認済みです。送信できます。</p>
+          )}
           {turnstileStatus === "unconfigured" && (
             <p className="text-xs text-red-600">
               いま送信の確認を利用できません。時間をおいて再度お試しください。

@@ -13,6 +13,7 @@ import {
   FEEDBACK_HONEYPOT_FIELD,
   type BetaFeedbackSubmission,
 } from "./betaFeedback";
+import type { FeedbackEnvironment } from "./feedbackEnvironment";
 
 /**
  * TSP-LOOP-019: 送信に必ず添える anti-abuse フィールド。
@@ -22,6 +23,7 @@ import {
 export interface BetaFeedbackSecurity {
   turnstileToken: string;
   honeypot: string;
+  environment: FeedbackEnvironment;
 }
 
 function functionUrl(): string | null {
@@ -66,6 +68,7 @@ export async function submitBetaFeedback(
       JSON.stringify({
         type: "feedback",
         message: submission.message,
+        clientContext: security.environment,
         turnstileToken,
         [FEEDBACK_HONEYPOT_FIELD]: honeypot,
       })
@@ -84,6 +87,7 @@ export async function submitBetaFeedback(
       type: "review",
       checkedItems: submission.checkedItems,
       note: submission.note,
+      clientContext: security.environment,
       turnstileToken,
       [FEEDBACK_HONEYPOT_FIELD]: honeypot,
     });

@@ -15,6 +15,7 @@ import {
   recommendedNombreFontSizePt,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { applyColumnCountPreset, applyDestinationPaperPreset } from "@/lib/paperPresets";
 import { FONT_FAMILY_OPTIONS, NOMBRE_FONT_SAME_AS_BODY } from "@/constants/fonts";
 import { calculateCapacityFromMargins } from "@/utils/layoutCalculator";
 import {
@@ -29,10 +30,6 @@ import {
   type TextFramePosition,
 } from "@/lib/textFramePosition";
 import { applyRunningHeads } from "@/lib/runningHeadApply";
-import {
-  WEB_READING_FOLIO_FONT_SIZE,
-  WEB_READING_RUNNING_HEAD_FONT_SIZE,
-} from "@/lib/outputTypography";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -117,55 +114,6 @@ const effectiveGrid = (settings: PageSettings, layout: PageLayout): PageSettings
 // そのまま settings に渡す——px→mm/pt変換が必要なのは用紙の外形
 // （width/height）だけで、それは pageLayout.ts の resolvePaperSize() 側で
 // 行われる。ここで変換すると computePageLayout() 側の変換と重複する。
-const applyPaperTemplate = (
-  base: PageSettings,
-  paperSize: PaperSizeKey,
-  columnCount: ColumnCount
-): PageSettings => {
-  const template = PAPER_SIZE_TEMPLATES[paperSize];
-  const profile = columnCount === 2 ? template.cols2 : template.cols1;
-  // TSP-LOOP-021 §7C: ノンブルの位置・地からの距離・文字サイズは、ユーザーが
-  // まだ手動で触っていない（nombreLayoutCustomized !== true）ときだけ、切り
-  // 替えた用紙 preset の推奨値へ追従させる。カスタム済みなら一切上書きしない。
-  // 推奨サイズは preset ごとに固定値を持たず、その preset の本文フォント -3pt
-  // （最小 6pt。TSP-LOOP-021 §4）を版面から導出する（§7B: 全 preset 同一座標に
-  // しない）。
-  // TSP-LOOP-022 HUMAN-QA: preset ごとに明示された nombreFontSize /
-  // headerFontSize を優先し、無い preset は従来どおり本文 -3pt へフォールバック。
-  const nombreOverrides: Partial<MasterPageSettings> = {
-    ...(base.masterPage.nombreLayoutCustomized
-      ? {}
-      : {
-        nombrePosition: profile.nombrePosition as NombrePosition,
-        nombreBottomMargin: profile.nombreDistance,
-        nombreFontSize: paperSize === "Web閲覧用"
-          ? WEB_READING_FOLIO_FONT_SIZE
-          : recommendedNombreFontSizePt(profile.fontSizePt),
-        headerFontSize: paperSize === "Web閲覧用"
-          ? WEB_READING_RUNNING_HEAD_FONT_SIZE
-          : recommendedNombreFontSizePt(profile.fontSizePt),
-      }),
-  };
-  return {
-    ...base,
-    paperSize,
-    columnCount,
-    marginTop: profile.marginTop,
-    marginBottom: profile.marginBottom,
-    marginGutter: profile.marginGutter,
-    marginOuter: profile.marginOuter,
-    fontSizePt: profile.fontSizePt,
-    lineHeightRatio: profile.lineSpacing,
-    columnGapMm: profile.columnGap,
-    charsPerLine: profile.charsPerLine,
-    linesPerColumn: profile.linesPerColumn,
-    masterPage: {
-      ...base.masterPage,
-      ...nombreOverrides,
-    },
-  };
-};
-
 // TSP-LOOP-021 §7C: これらのフィールドをユーザーが変更したら「ノンブル配置を
 // カスタムした」とみなし、以後の用紙 preset 切り替えで上書きしないようにする。
 const NOMBRE_LAYOUT_KEYS = new Set<keyof MasterPageSettings>([
@@ -651,12 +599,12 @@ export default function PageSettingsPanel({
   };
 
   const handlePaperSizeChange = (key: PaperSizeKey) => {
-    const next = applyPaperTemplate(settings, key, settings.columnCount);
+    const next = applyDestinationPaperPreset(settings, key);
     onChange(deriveCapacityFromCurrentMargins(next));
   };
 
   const handleColumnCountChange = (count: ColumnCount) => {
-    const next = applyPaperTemplate(settings, settings.paperSize, count);
+    const next = applyColumnCountPreset(settings, count);
     onChange(deriveCapacityFromCurrentMargins(next));
   };
 
@@ -1113,14 +1061,13 @@ export default function PageSettingsPanel({
               min={0.1}
               max={24}
               step={0.1}
-              value={settings.paperSize === "Web閲覧用" ? WEB_READING_FOLIO_FONT_SIZE : settings.masterPage.nombreFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
-              readOnly={settings.paperSize === "Web閲覧用"}
+              value={settings.masterPage.nombreFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
               onChange={(event) => {
                 const value = Number(event.target.value);
                 if (Number.isFinite(value) && value > 0) updateMasterPage("nombreFontSize", value);
               }}
-              title={settings.paperSize === "Web閲覧用" ? "Web出力では15に固定されます" : "初期値は本文サイズから算出。手動値は保存されます"}
-              className={`rounded border border-ink/20 px-2 py-1.5 text-sm text-ink ${settings.paperSize === "Web閲覧用" ? "bg-ink/[0.04]" : "bg-base"}`}
+              title="用紙presetの推奨初期値。手動値は次の用紙変更まで保存されます"
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
             />
           </label>
 
@@ -1225,14 +1172,13 @@ export default function PageSettingsPanel({
               min={0.1}
               max={24}
               step={0.1}
-              value={settings.paperSize === "Web閲覧用" ? WEB_READING_RUNNING_HEAD_FONT_SIZE : settings.masterPage.headerFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
-              readOnly={settings.paperSize === "Web閲覧用"}
+              value={settings.masterPage.headerFontSize ?? recommendedNombreFontSizePt(settings.fontSizePt)}
               onChange={(event) => {
                 const value = Number(event.target.value);
                 if (Number.isFinite(value) && value > 0) updateMasterPage("headerFontSize", value);
               }}
-              title={settings.paperSize === "Web閲覧用" ? "Web出力では20に固定されます" : "初期値は本文サイズから算出。手動値は保存されます"}
-              className={`rounded border border-ink/20 px-2 py-1.5 text-sm text-ink ${settings.paperSize === "Web閲覧用" ? "bg-ink/[0.04]" : "bg-base"}`}
+              title="用紙presetの推奨初期値。手動値は次の用紙変更まで保存されます"
+              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           />
         </label>
 

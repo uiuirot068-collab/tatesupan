@@ -99,6 +99,11 @@ const TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY");
 const TURNSTILE_ACTION = "tatespun-feedback";
 const TURNSTILE_VERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const OFFICIAL_TEST_TURNSTILE_SECRETS = new Set([
+  "1x0000000000000000000000000000000AA",
+  "2x0000000000000000000000000000000AA",
+  "3x0000000000000000000000000000000AA",
+]);
 const ALLOWED_ORIGINS = (env("BETA_FEEDBACK_ALLOWED_ORIGINS")
   ? env("BETA_FEEDBACK_ALLOWED_ORIGINS").split(",").map((s) => s.trim())
   : DEFAULT_ALLOWED_ORIGINS
@@ -136,7 +141,9 @@ function isAllowedTurnstileHostname(hostname: unknown): boolean {
   return (
     h === "spuntales.net" ||
     h === "tatespun.pages.dev" ||
-    h.endsWith(".tatespun.pages.dev")
+    h.endsWith(".tatespun.pages.dev") ||
+    (OFFICIAL_TEST_TURNSTILE_SECRETS.has(TURNSTILE_SECRET_KEY) &&
+      (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0"))
   );
 }
 
@@ -206,6 +213,85 @@ function sniffImageMime(bytes: Uint8Array): AllowedMime | null {
 
 /** Discord メンション無効化。webhook payload に必ず付ける。 */
 const ALLOWED_MENTIONS_NONE = { parse: [] as string[] };
+
+const ENVIRONMENT_KEYS = [
+  "osFamily", "osVersion", "platform", "deviceClass",
+  "browserName", "browserVersion", "engine", "userAgent", "uaBrands", "uaPlatform", "uaMobile",
+  "viewportWidth", "viewportHeight", "screenWidth", "screenHeight", "availScreenWidth", "availScreenHeight",
+  "devicePixelRatio", "colorDepth", "pixelDepth", "orientation",
+  "touch", "maxTouchPoints", "pointerCapability", "hoverCapability", "hardwareConcurrency", "deviceMemoryGb",
+  "language", "languages", "timezone", "timezoneOffsetMinutes",
+  "online", "cookieEnabled", "connectionEffectiveType", "connectionDownlinkMbps", "connectionRttMs", "connectionSaveData",
+  "colorScheme", "reducedMotion", "appVersion", "path", "rendererMode", "rolloutMode", "responsiveMode", "featureFlags",
+] as const;
+type EnvironmentKey = (typeof ENVIRONMENT_KEYS)[number];
+type EnvironmentValue = string | number | boolean | null;
+type ClientEnvironment = Partial<Record<EnvironmentKey, EnvironmentValue>>;
+
+function normalizeClientEnvironment(input: unknown): ClientEnvironment {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const raw = input as Record<string, unknown>;
+  const result: ClientEnvironment = {};
+  for (const key of ENVIRONMENT_KEYS) {
+    const item = raw[key];
+    if (typeof item === "string") {
+      result[key] = item.slice(0, key === "userAgent" ? 500 : 240);
+    } else if (typeof item === "boolean") {
+      result[key] = item;
+    } else if (typeof item === "number" && Number.isFinite(item)) {
+      result[key] = item;
+    } else if (item === null) {
+      result[key] = null;
+    }
+  }
+  return result;
+}
+
+function hasRequiredEnvironment(environment: ClientEnvironment): boolean {
+  return Boolean(
+    environment.browserName &&
+    environment.osFamily &&
+    environment.appVersion &&
+    environment.path &&
+    typeof environment.viewportWidth === "number" &&
+    typeof environment.viewportHeight === "number"
+  );
+}
+
+function envValue(value: EnvironmentValue | undefined): string {
+  if (value === undefined || value === null || value === "") return "unknown";
+  return typeof value === "boolean" ? (value ? "yes" : "no") : String(value);
+}
+
+function formatEnvironmentForDiscord(env: ClientEnvironment): string {
+  const v = (key: EnvironmentKey) => envValue(env[key]);
+  return [
+    `OS: ${v("osFamily")} ${v("osVersion")} / platform ${v("platform")}`,
+    `Browser: ${v("browserName")} ${v("browserVersion")} / engine ${v("engine")}`,
+    `Device: ${v("deviceClass")} / UA mobile ${v("uaMobile")}`,
+    `Touch/Input: touch ${v("touch")} (${v("maxTouchPoints")}) / pointer ${v("pointerCapability")} / hover ${v("hoverCapability")}`,
+    `Viewport: ${v("viewportWidth")}×${v("viewportHeight")}`,
+    `Screen: ${v("screenWidth")}×${v("screenHeight")} / available ${v("availScreenWidth")}×${v("availScreenHeight")}`,
+    `Display: DPR ${v("devicePixelRatio")} / color ${v("colorDepth")} / pixel ${v("pixelDepth")} / ${v("orientation")}`,
+    `Hardware: CPU ${v("hardwareConcurrency")} / memory ${v("deviceMemoryGb")}GB`,
+    `Locale: ${v("language")} / languages ${v("languages")}`,
+    `Timezone: ${v("timezone")} / offset ${v("timezoneOffsetMinutes")}min`,
+    `Connection: online ${v("online")} / ${v("connectionEffectiveType")} / ${v("connectionDownlinkMbps")}Mbps / RTT ${v("connectionRttMs")}ms / saveData ${v("connectionSaveData")}`,
+    `Preferences: color ${v("colorScheme")} / reduced motion ${v("reducedMotion")} / cookies enabled ${v("cookieEnabled")}`,
+    `App: ${v("appVersion")} / renderer ${v("rendererMode")} / rollout ${v("rolloutMode")} / responsive ${v("responsiveMode")}`,
+    `Path: ${v("path")}`,
+    `Feature flags: ${v("featureFlags")}`,
+    `UA-CH: ${v("uaBrands")} / platform ${v("uaPlatform")}`,
+    `User agent: ${v("userAgent")}`,
+  ].join("\n");
+}
+
+function environmentEmbed(environment: ClientEnvironment) {
+  return {
+    title: "【使用環境】",
+    description: formatEnvironmentForDiscord(environment),
+  };
+}
 
 function truncateForDiscord(text: string, limit = 1800): { text: string; truncated: boolean } {
   if (text.length <= limit) return { text, truncated: false };
@@ -335,6 +421,7 @@ async function notifyDiscordFeedback(
   appVersion: string,
   message: string,
   images: StoredImage[],
+  environment: ClientEnvironment,
 ): Promise<"sent" | "failed" | "skipped"> {
   if (!DISCORD_FEEDBACK_WEBHOOK_URL) return "skipped";
   const { text: safeMsg, truncated } = truncateForDiscord(message.trim());
@@ -353,6 +440,7 @@ async function notifyDiscordFeedback(
         // FORUM channel: 1 feedback = 1 新規スレッド。thread_name 必須。
         thread_name: feedbackThreadName(reportId, message),
         content: bodyText,
+        embeds: [environmentEmbed(environment)],
         allowed_mentions: ALLOWED_MENTIONS_NONE,
       }),
     );
@@ -378,6 +466,7 @@ async function notifyDiscordReview(
   appVersion: string,
   checkedItems: string[],
   note: string,
+  environment: ClientEnvironment,
 ): Promise<"sent" | "failed" | "skipped"> {
   if (!DISCORD_REVIEW_WEBHOOK_URL) return "skipped";
   const checkedSet = new Set(checkedItems);
@@ -400,6 +489,7 @@ async function notifyDiscordReview(
         // FORUM channel: 1 review = 1 新規スレッド。thread_name 必須。
         thread_name: reviewThreadName(reportId, checkedCount),
         content: bodyText,
+        embeds: [environmentEmbed(environment)],
         allowed_mentions: ALLOWED_MENTIONS_NONE,
       }),
     });
@@ -458,7 +548,7 @@ Deno.serve(async (req) => {
   let message = "";
   let checkedItems: string[] = [];
   let note = "";
-  let clientContext: { appVersion?: string; path?: string; viewport?: string } = {};
+  let clientContext: unknown = {};
   let turnstileToken = "";
   let honeypot = ""; // TSP-LOOP-019: bot 専用フィールド。値があれば拒否。
   const rawImages: { bytes: Uint8Array; mime: AllowedMime }[] = [];
@@ -519,6 +609,10 @@ Deno.serve(async (req) => {
   if (rawImages.length > MAX_FEEDBACK_IMAGES) {
     return json({ ok: false, error: "too_many_images" }, 400, origin);
   }
+  const clientEnvironment = normalizeClientEnvironment(clientContext);
+  if (!hasRequiredEnvironment(clientEnvironment)) {
+    return json({ ok: false, error: "environment_required" }, 400, origin);
+  }
 
   // TSP-LOOP-019: anti-abuse — Discord / Spreadsheet / Storage いずれの前に。
   // 1) honeypot に値があれば bot。汎用エラーで拒否（詳細は開示しない）。
@@ -536,9 +630,9 @@ Deno.serve(async (req) => {
     );
   }
 
-  const appVersion = String(clientContext.appVersion ?? "").slice(0, 64);
-  const path = String(clientContext.path ?? "").slice(0, 256);
-  const viewport = String(clientContext.viewport ?? "").slice(0, 32);
+  const appVersion = String(clientEnvironment.appVersion ?? "").slice(0, 64);
+  const path = String(clientEnvironment.path ?? "").slice(0, 256);
+  const viewport = `${envValue(clientEnvironment.viewportWidth)}×${envValue(clientEnvironment.viewportHeight)}`;
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -565,7 +659,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Discord notification (best-effort)
-    const discordStatus = await notifyDiscordFeedback(reportId, appVersion, message, stored);
+    const discordStatus = await notifyDiscordFeedback(reportId, appVersion, message, stored, clientEnvironment);
 
     // 3. Spreadsheet append (canonical success condition)
     const imagePaths = stored.map((s) => s.path);
@@ -578,6 +672,7 @@ Deno.serve(async (req) => {
       appVersion: sanitizeSheetCell(appVersion),
       path: sanitizeSheetCell(path),
       viewport: sanitizeSheetCell(viewport),
+      environment: sanitizeSheetCell(JSON.stringify(clientEnvironment)),
       message: sanitizeSheetCell(message),
       images: imagePaths,
       discordStatus,
@@ -612,7 +707,7 @@ Deno.serve(async (req) => {
     .map((item) => `${cleanChecked.includes(item) ? "✅" : "⬜"} ${item}`)
     .join("\n");
 
-  const discordStatus = await notifyDiscordReview(reportId, appVersion, cleanChecked, note);
+  const discordStatus = await notifyDiscordReview(reportId, appVersion, cleanChecked, note, clientEnvironment);
 
   const sheetOk = await appendToSpreadsheet({
     type: "review",
@@ -621,6 +716,7 @@ Deno.serve(async (req) => {
     appVersion: sanitizeSheetCell(appVersion),
     path: sanitizeSheetCell(path),
     viewport: sanitizeSheetCell(viewport),
+    environment: sanitizeSheetCell(JSON.stringify(clientEnvironment)),
     checkedCount,
     reviewItems: sanitizeSheetCell(reviewItems),
     note: sanitizeSheetCell(note),
@@ -641,4 +737,3 @@ Deno.serve(async (req) => {
   }
   return json({ ok: true, reportId }, 200, origin);
 });
-

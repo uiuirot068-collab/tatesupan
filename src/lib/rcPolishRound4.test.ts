@@ -68,7 +68,10 @@ describe("Round 4 publication furniture overrides", () => {
     expect(text.find((command) => command.furnitureRole === "running-head")?.fontSizePt).toBe(2);
   });
 
-  it("keeps Web output fixed at 30 / 15 / 20", () => {
+  it("keeps the Web body fixed at 30 while manual nombre/running-head values persist", () => {
+    // Item 6 of the final release fix: Web furniture is user-editable and
+    // must never silently snap back to the fixed 15 / 20 recommendation
+    // once the user has set their own values.
     const web = normalizeOutputTypography({
       ...DEFAULT_PAGE_SETTINGS,
       paperSize: "Web閲覧用",
@@ -76,9 +79,10 @@ describe("Round 4 publication furniture overrides", () => {
     });
     expect([web.fontSizePt, web.masterPage.nombreFontSize, web.masterPage.headerFontSize]).toEqual([
       WEB_READING_BODY_FONT_SIZE,
-      WEB_READING_FOLIO_FONT_SIZE,
-      WEB_READING_RUNNING_HEAD_FONT_SIZE,
+      2.5,
+      2,
     ]);
+    expect([WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE]).toEqual([15, 20]);
   });
 });
 

@@ -26,10 +26,6 @@ import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/p
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import {
-  WEB_READING_FOLIO_FONT_SIZE,
-  WEB_READING_RUNNING_HEAD_FONT_SIZE,
-} from "@/lib/outputTypography";
-import {
   WEB_FOOTER_BRAND_CSS_WIDTH,
   WEB_FOOTER_BRAND_SOURCE_HEIGHT,
   WEB_FOOTER_BRAND_SOURCE_WIDTH,
@@ -665,8 +661,6 @@ function PageCard({
       // against the true one-page width, so `flex-wrap` wraps overflowing
       // controls onto more lines instead of growing the column sideways.
       style={{ width: sheetStyle.width }}
-      draggable={isInteractive}
-      onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
@@ -711,6 +705,10 @@ function PageCard({
             <span className="flex items-center gap-1.5">
               {/* drag affordance — desktop only (HTML5 drag has no touch equivalent) */}
               <span
+                data-page-reorder-handle=""
+                draggable={Boolean(onDragStart)}
+                onPointerDown={(event) => event.stopPropagation()}
+                onDragStart={onDragStart}
                 className="hidden cursor-grab select-none px-1 text-ink/35 active:cursor-grabbing md:inline"
                 title="ドラッグでページを並べ替え"
                 aria-hidden="true"
@@ -1184,7 +1182,7 @@ function PageCard({
             insetLeftPx={sheetStyle.paddingLeft as number}
             insetRightPx={sheetStyle.paddingRight as number}
             fontFamily={lineStyle.fontFamily as string}
-            fontSize={showWebFooter ? WEB_READING_RUNNING_HEAD_FONT_SIZE : runningHeadFontSizePt}
+            fontSize={runningHeadFontSizePt}
             bleedMm={bleedMm}
           />
         )}
@@ -1199,7 +1197,7 @@ function PageCard({
             bottomMarginMm={masterPage.nombreBottomMargin}
             marginGutterMm={settings.marginGutter}
             marginOuterMm={settings.marginOuter}
-            fontSize={showWebFooter ? WEB_READING_FOLIO_FONT_SIZE : folioFontSizePt}
+            fontSize={folioFontSizePt}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
           />

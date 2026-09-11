@@ -62,10 +62,25 @@ describe("Round 3 output typography", () => {
   it.each([[9, 6], [6, 4], [4, 4], [9.5, 6.5]])("uses max(4, body - 3) for publication furniture", (body, expected) => {
     expect(publicationFurnitureFontSizePt(body)).toBe(expected);
   });
-  it("keeps Web reading output at 30 / 15 / 20", () => {
+  it("keeps the Web reading body fixed while nombre/running-head stay recommended-but-editable", () => {
+    // The final release fix (item 6) makes Web furniture user-editable and
+    // persistent — these constants remain the *recommended* preset values
+    // (applied by applyDestinationPaperPreset on paper switch), not a
+    // permanent override normalizeOutputTypography re-applies afterward.
     expect([WEB_READING_BODY_FONT_SIZE, WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE]).toEqual([30, 15, 20]);
-    const web = normalizeOutputTypography({ ...DEFAULT_PAGE_SETTINGS, paperSize: "Web閲覧用", fontSizePt: 36 });
-    expect([web.fontSizePt, web.masterPage.nombreFontSize, web.masterPage.headerFontSize]).toEqual([30, 15, 20]);
+    const web = normalizeOutputTypography({
+      ...DEFAULT_PAGE_SETTINGS,
+      paperSize: "Web閲覧用",
+      fontSizePt: 36,
+      masterPage: { ...DEFAULT_PAGE_SETTINGS.masterPage, nombreFontSize: undefined, headerFontSize: undefined },
+    });
+    expect(web.fontSizePt).toBe(WEB_READING_BODY_FONT_SIZE);
+    const manual = normalizeOutputTypography({
+      ...DEFAULT_PAGE_SETTINGS,
+      paperSize: "Web閲覧用",
+      masterPage: { ...DEFAULT_PAGE_SETTINGS.masterPage, nombreFontSize: 17, headerFontSize: 21 },
+    });
+    expect([manual.masterPage.nombreFontSize, manual.masterPage.headerFontSize]).toEqual([17, 21]);
   });
   it("does not leak Web sizes into print/PDF settings", () => {
     const print = normalizeOutputTypography({

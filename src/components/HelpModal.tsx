@@ -12,6 +12,11 @@ import {
   parseHelpMarkdown,
   scrollToHelpSection,
 } from "@/lib/helpTableOfContents";
+import {
+  copyHelpNotation,
+  RUBY_HELP_NOTATION,
+  TCY_HELP_NOTATION,
+} from "@/lib/helpNotationActions";
 
 interface HelpModalProps {
   onClose: () => void;
@@ -38,6 +43,7 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
   const scrollRef = useRef<HTMLDivElement>(null);
   const openedAtRef = useRef<number | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"ruby" | "tcy" | "error" | null>(null);
   useEffect(() => {
     openedAtRef.current = Date.now();
   }, []);
@@ -133,6 +139,10 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
     [headingIds],
   );
 
+  const copyNotation = async (kind: "ruby" | "tcy", notation: string) => {
+    setCopyStatus((await copyHelpNotation(notation)) ? kind : "error");
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -206,6 +216,41 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
                   ))}
                 </ul>
               </nav>
+              <section
+                aria-label="組版記法をコピー"
+                data-help-notation-actions=""
+                className="rounded-lg border border-ink/10 bg-ink/[0.025] p-3"
+              >
+                <p className="text-xs font-bold text-ink/75">すぐ使える組版記法</p>
+                <p className="mt-1 text-xs leading-relaxed text-ink/60">
+                  コピー後、本文の使いたい位置へ貼り付けて中身を書き換えてください。
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyNotation("ruby", RUBY_HELP_NOTATION)}
+                    className="rounded border border-accent/40 bg-base px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/5"
+                  >
+                    ルビ記法をコピー
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyNotation("tcy", TCY_HELP_NOTATION)}
+                    className="rounded border border-accent/40 bg-base px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/5"
+                  >
+                    縦中横記法をコピー
+                  </button>
+                </div>
+                {copyStatus && (
+                  <p role="status" className={`mt-2 text-xs ${copyStatus === "error" ? "text-red-600" : "text-emerald-700"}`}>
+                    {copyStatus === "ruby"
+                      ? "ルビ記法をコピーしました。"
+                      : copyStatus === "tcy"
+                        ? "縦中横記法をコピーしました。"
+                        : "コピーできませんでした。記法を選択してコピーしてください。"}
+                  </p>
+                )}
+              </section>
               <ReactMarkdown
                 components={{
                   h2: headingComponent("h2"),

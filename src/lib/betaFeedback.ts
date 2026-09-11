@@ -15,7 +15,7 @@
  *    一切クライアントに出さない。フロントは同一 Supabase プロジェクトの
  *    Edge Function だけを叩く。
  *  - 原稿本文・作品タイトル・ドキュメント ID・選択テキスト・アカウント情報は
- *    絶対に自動収集しない。送るのはユーザーが明示入力したものだけ。
+ *    絶対に自動収集しない。許可不要の使用環境診断だけは送信前に可視化して送る。
  */
 
 /** β フラグ（公開値・secret ではない）。ビルド時に静的置換される。 */
@@ -52,7 +52,10 @@ export const BETA_FEEDBACK_FUNCTION_PATH = "/functions/v1/beta-feedback";
  * secret key（TURNSTILE_SECRET_KEY）は Supabase Edge Function 環境のみ——
  * クライアント／repo／ログには絶対に出さない。
  */
-export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+export const TURNSTILE_DEVELOPMENT_SITE_KEY = "1x00000000000000000000AA";
+export const TURNSTILE_SITE_KEY =
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+  ?? (process.env.NODE_ENV === "development" ? TURNSTILE_DEVELOPMENT_SITE_KEY : "");
 
 /** この機能専用の固定 Turnstile action。フロントは render 時、サーバは検証時にこれを使う。 */
 export const TURNSTILE_ACTION = "tatespun-feedback";
@@ -104,28 +107,6 @@ export const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_MESSAGE_LENGTH = 4000;
 /** review メモの最大文字数。 */
 export const MAX_REVIEW_NOTE_LENGTH = 2000;
-
-/**
- * TSP-LOOP-030: 送信時に本文へ自動追記する「使用環境（自動取得）」ブロックの
- * 上限見積り。ユーザーが入力できる文字数は
- * `MAX_MESSAGE_LENGTH - FEEDBACK_ENV_BLOCK_RESERVE`（review は
- * `MAX_REVIEW_NOTE_LENGTH - …`）に制限し、追記後も必ずサーバ上限に収める。
- * UA 文字列（〜300字前後）＋メタ行で通常 500 字未満、長い UA でも 700 字強。
- */
-export const FEEDBACK_ENV_BLOCK_RESERVE = 800;
-
-/**
- * TSP-LOOP-030: ユーザー入力テキストの末尾へ「使用環境（自動取得）」ブロックを
- * 1 回だけ連結する。既存の送信トランスポート（message / note フィールド）を
- * そのまま使い、Edge Function / スキーマ / Discord フォーマットには一切触れない。
- * `detail` が空なら何もしない（環境検出失敗でも送信をブロックしない）。
- */
-export function appendEnvironmentBlock(text: string, detail: string): string {
-  if (!detail.trim()) return text;
-  const base = text.replace(/\s+$/u, "");
-  const sep = base ? "\n\n" : "";
-  return `${base}${sep}----------\n${detail}`;
-}
 
 /** 添付を許可する画像 MIME。SVG / HTML / PDF / 任意バイナリは不可。 */
 export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"] as const;

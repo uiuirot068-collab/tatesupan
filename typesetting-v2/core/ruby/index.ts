@@ -51,6 +51,10 @@ export interface RubyPlacementInput {
   readingExtentTick: GeometryTick; // extent the reading text needs (measurement.rubyReadingExtentTick)
   overhangAllowanceBeforeTick: GeometryTick; // resolved allowance on the preceding side (0 until HG-4 values are set)
   overhangAllowanceAfterTick: GeometryTick; // resolved allowance on the following side
+  /** Physical free extent from the base start back to the line start. */
+  availableBeforeTick?: GeometryTick;
+  /** Physical free extent from the base end forward to the line end. */
+  availableAfterTick?: GeometryTick;
 }
 
 export interface RubyPlacementResult {
@@ -80,29 +84,41 @@ export function resolveOverhangAllowance(ruleSet: RuleSetVersion, adjacentClassI
 // outcome (Master §25.6), not an error.
 export function placeRuby(input: RubyPlacementInput): RubyPlacementResult {
   const overflow = input.readingExtentTick - input.baseExtentTick;
+  const centerOffset = Math.floor((input.baseExtentTick - input.readingExtentTick) / 2);
   if (overflow <= 0) {
-    const centerOffset = Math.floor((input.baseExtentTick - input.readingExtentTick) / 2);
     return { policy: "CENTER", readingOffsetTick: centerOffset };
   }
 
-  // Absorb as much overflow as each side's own allowance permits — greedily,
-  // not by a rigid even split, so a side with full allowance can absorb the
-  // whole overflow on its own rather than being capped at "half."
-  const beforeUsed = Math.min(overflow, input.overhangAllowanceBeforeTick);
-  const afterUsed = Math.min(overflow - beforeUsed, input.overhangAllowanceAfterTick);
-  const stillOverflowing = overflow - beforeUsed - afterUsed > 0;
+  // Long ruby is centered over its base first. The annotation may extend on
+  // BOTH sides of the base; only the physical line edges are hard clamps.
+  // Callers predating the line-space fields retain their former allowance as
+  // the amount of known space, keeping this pure helper backwards-compatible.
+  const availableBefore = Math.max(
+    0,
+    input.availableBeforeTick ?? input.overhangAllowanceBeforeTick
+  );
+  const availableAfter = Math.max(
+    0,
+    input.availableAfterTick ?? input.overhangAllowanceAfterTick
+  );
+  const minimumOffset = availableBefore === 0 ? 0 : -availableBefore;
+  const maximumOffset = input.baseExtentTick + availableAfter - input.readingExtentTick;
 
-  if (stillOverflowing) {
-    return { policy: "OVERFLOW_OPEN", readingOffsetTick: -beforeUsed };
+  // The reading itself is longer than the whole available physical line.
+  // Keep its visual center honest and disclose the overflow instead of
+  // fabricating a renderer-specific shift.
+  if (minimumOffset > maximumOffset) {
+    return { policy: "OVERFLOW_OPEN", readingOffsetTick: centerOffset };
   }
-  if (beforeUsed > 0 && afterUsed === 0) {
-    return { policy: "START_CLAMP", readingOffsetTick: -beforeUsed };
+
+  const readingOffsetTick = Math.max(minimumOffset, Math.min(maximumOffset, centerOffset));
+  if (readingOffsetTick === centerOffset) {
+    return { policy: "CENTER", readingOffsetTick };
   }
-  if (afterUsed > 0 && beforeUsed === 0) {
-    return { policy: "END_CLAMP", readingOffsetTick: 0 };
-  }
-  // Both sides contributed (or overflow was exactly 0, unreachable here) —
-  // a balanced two-sided overhang stays classified as CENTER, the closest
-  // existing named policy (Master §25.6 does not define a fifth name).
-  return { policy: "CENTER", readingOffsetTick: -beforeUsed };
+  return {
+    // Preserve the established policy naming: shifting toward the preceding
+    // side is START_CLAMP; shifting toward the following side is END_CLAMP.
+    policy: readingOffsetTick < centerOffset ? "START_CLAMP" : "END_CLAMP",
+    readingOffsetTick,
+  };
 }

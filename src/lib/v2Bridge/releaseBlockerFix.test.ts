@@ -70,11 +70,19 @@ describe("Beta release blocker contracts", () => {
     expect(existsSync(resolve("src/app/renderer-poc/jpg-export/page.tsx"))).toBe(false);
   });
 
-  it("sends only explicit feedback fields plus anti-abuse proof", () => {
+  it("sends only explicit feedback fields plus anti-abuse proof and permission-free environment diagnostics", () => {
+    // Superseded by the final release fix's Feedback Environment Contract:
+    // permission-free environment diagnostics ARE now sent automatically
+    // (disclosed to the user, forwarded to Discord for debugging). What
+    // must still never happen is creative content leaking out, and the
+    // client must not read navigator/window directly — it only forwards
+    // the environment object the modal already collected and displayed.
     const client = readSource("src/lib/betaFeedbackClient.ts");
     const modal = readSource("src/components/BetaFeedbackModal.tsx");
-    expect(client).not.toMatch(/clientContext|appVersion|viewport|window\.location|navigator\./i);
-    expect(modal).not.toMatch(/collectFeedbackEnvironment|appendEnvironmentBlock|envSummary|envDetail/);
+    expect(client).not.toMatch(/window\.location|navigator\./i);
+    expect(client).toContain("clientContext: security.environment");
+    expect(modal).toContain("collectFeedbackEnvironment");
+    expect(client).not.toMatch(/manuscript|documentId|workTitle|原稿本文|作品タイトル|ドキュメントID/i);
     expect(client).toContain("message: submission.message");
     expect(client).toContain("checkedItems: submission.checkedItems");
     expect(client).toContain("note: submission.note");

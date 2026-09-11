@@ -94,15 +94,12 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(placed.rubyReadingExtentTick).toBe(READING_CELL * 2);
   });
 
-  it("2. annotation longer than body: reading extent > base extent -> overflow engages the clamp/overflow model", () => {
+  it("2. long ruby at line head clamps to the physical start instead of overflowing it", () => {
     const r = ruby("都", "とうきょう", 0); // base 1 cell, reading 5 chars at READING_CELL each
     const result = composeLine([r], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     const placed = result.line.placedUnits[0];
-    // Empty overhang table (P3-O06 residual) -> no allowance anywhere ->
-    // 5 x READING_CELL (8820) still exceeds the 1-cell (3528) base, so
-    // OVERFLOW_OPEN remains the only reachable outcome even at the smaller
-    // ruby scale.
-    expect(placed.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
+    expect(placed.rubyBoundaryPolicy).toBe("END_CLAMP");
+    expect(placed.rubyReadingOffsetTick).toBe(0);
     expect(placed.rubyReadingExtentTick).toBe(READING_CELL * 5);
   });
 
@@ -114,18 +111,16 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(placed.rubyReadingOffsetTick).toBe(Math.floor((CELL * 3 - READING_CELL * 2) / 2));
   });
 
-  it("4/5. START_CLAMP and END_CLAMP require nonzero overhang allowance — with today's shipped (empty) table, both degrade to OVERFLOW_OPEN, proving the capability is wired without fabricating a nonzero value", () => {
-    const r = ruby("都", "とうきょう", 0); // 4 cells overflow
-    const result = composeLine([r], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
-    const placed = result.line.placedUnits[0];
-    // P3-O06 residual: DEFAULT_RULE_SET_V2's rubyOverhangAllowance table is
-    // empty, so overhangAllowanceBeforeTick/AfterTick both resolve to 0 —
-    // core/ruby/index.ts's own placeRuby() therefore cannot reach
-    // START_CLAMP/END_CLAMP today (both require a nonzero allowance).
-    // Directly exercising placeRuby with a synthetic allowance (already
-    // covered by core/ruby/index.test.ts) proves the mechanism; this test
-    // proves the WIRING calls it with the correct (currently-zero) inputs.
-    expect(placed.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
+  it("4/5. centers a 2-kanji / 9-character reading in the middle of a line", () => {
+    const before = text("前前", 0);
+    const r = ruby("東京", "とうきょうていこく", 2);
+    const after = text("後後", 4);
+    const result = composeLine([before, r, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 12, false);
+    const placed = result.line.placedUnits.find((unit) => unit.rubyBoundaryPolicy !== undefined)!;
+    expect(placed.rubyBoundaryPolicy).toBe("CENTER");
+    expect(Math.abs(
+      (placed.rubyReadingOffsetTick! * 2 + placed.rubyReadingExtentTick!) - CELL * 2
+    )).toBeLessThanOrEqual(1);
   });
 
   it("6. ruby as the only content on a line (line/column edge): no same-line neighbor on either side -> overhang allowance resolves to 0 via the no-neighbor path, not a crash or a guess", () => {
@@ -133,7 +128,7 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     const result = composeLine([r], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(1);
-    expect(result.line.placedUnits[0].rubyBoundaryPolicy).toBeDefined();
+    expect(result.line.placedUnits[0].rubyBoundaryPolicy).toBe("END_CLAMP");
   });
 
   it("7. ruby adjacent to punctuation exercises the class-aware overhang lookup path (still resolves to 0 given the shipped empty table)", () => {
@@ -143,11 +138,7 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     const result = composeLine([before, r, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 10, false);
     const rubyPlaced = result.line.placedUnits[1];
     expect(rubyPlaced.rubyBoundaryPolicy).toBeDefined();
-    // Overflow (4 cells) with 0 allowance on both sides -> still OVERFLOW_OPEN.
-    // The point of this test is that composing with real adjacent TEXT
-    // neighbors does not throw, misclassify, or silently skip the lookup —
-    // not that a nonzero optical budget appears (P3-O06 residual, OPEN).
-    expect(rubyPlaced.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
+    expect(rubyPlaced.rubyBoundaryPolicy).toBe("CENTER");
   });
 
   it("8. atomic ruby places as exactly one atom — no internal break, matching INV-007", () => {
@@ -166,9 +157,9 @@ describe("Ruby Placement Micro-Loop — canonical annotation geometry", () => {
     expect(seg1.rubyReadingExtentTick).toBe(READING_CELL * 5); // "とうきょう" = 5 code points (と,う,き,ょ,う), each at READING_CELL
     expect(seg2.sourceSpan).toEqual(span(2, 3));
     expect(seg2.rubyReadingExtentTick).toBe(READING_CELL * 1); // "と" = 1 reading cell
-    // Independent geometry: segment 1 overflows (4 cells reading vs 2 cells
-    // base), segment 2 does not (1 vs 1) -> different policies.
-    expect(seg1.rubyBoundaryPolicy).toBe("OVERFLOW_OPEN");
+    // Independent geometry: the first long segment is line-head clamped;
+    // the second short segment is centered in its own base.
+    expect(seg1.rubyBoundaryPolicy).toBe("END_CLAMP");
     expect(seg2.rubyBoundaryPolicy).toBe("CENTER");
   });
 

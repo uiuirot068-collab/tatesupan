@@ -219,8 +219,8 @@ export interface MasterPageSettings {
   // TSP-LOOP-021 §7C: ユーザーがノンブルの位置・サイズを手動で変更したか。
   // 省略(undefined)/false = 未カスタム → 用紙サイズ preset を切り替えると、
   // その preset 推奨のノンブル位置・距離・サイズが自動で追従する。
-  // true = カスタム済み → preset を切り替えてもユーザーの指定を維持する
-  // （上書きしない）。旧レコードはキーが無く false 扱い（後方互換）。
+  // true = カスタム済み。用紙を切り替えるまではユーザー指定を維持する。
+  // 用紙変更時は新しいdestination presetが優先されfalseへ戻る。
   nombreLayoutCustomized?: boolean;
 }
 
@@ -229,7 +229,7 @@ export interface MasterPageSettings {
  * minus 3pt, never below 4pt. This value is the canonical publication size
  * for both folio and running head.
  * layout the user has NOT customised (see MasterPageSettings.nombreLayoutCustomized);
- * a manual choice is always preserved, including across a paper-preset switch.
+ * a manual choice is preserved until the next destination preset is applied.
  */
 export function recommendedNombreFontSizePt(bodyFontSizePt: number): number {
   return Math.max(4, bodyFontSizePt - 3);
@@ -247,31 +247,30 @@ export const DEFAULT_MASTER_PAGE_SETTINGS: MasterPageSettings = {
   hashiraOdd: "",
   hashiraEven: "",
   hashiraPosition: "top",
-  headerFontSize: 6,
-  // 文庫（既定用紙）の preset 値。TSP-LOOP-022 HUMAN-QA で 6pt → 5pt。
-  nombreFontSize: 6,
+  headerFontSize: 4,
+  nombreFontSize: 4,
   nombreFontFamily: "", // 本文と同じ（既存ドキュメントも含め既定はこれ）
   nombreLayoutCustomized: false,
 };
 
 export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   paperSize: "文庫",
-  marginTop: 12,
-  marginBottom: 12,
-  marginGutter: 12,
+  marginTop: 14,
+  marginBottom: 14,
+  marginGutter: 18,
   marginOuter: 10,
   fontSizePt: 9,
-  lineHeightRatio: 1.7,
+  lineHeightRatio: 1.5,
   columnCount: 1,
-  columnGapMm: 8,
+  columnGapMm: 0,
   fontFamily: "'Shippori Mincho', serif",
   // TSP-LOOP-029 issue C: self-consistent with the geometry above — 文庫
   // (105×148) minus 天地12 at 9pt holds 39 lines-of-characters, minus ノド12/
   // 小口10 at line-height 1.7 holds 15 columns. `computePageLayout` used to
   // clamp the old 40/17 targets down to these while the Settings panel kept
   // showing 40/17, disagreeing with the Preview status ("39字×15行").
-  charsPerLine: 39,
-  linesPerColumn: 15,
+  charsPerLine: 37,
+  linesPerColumn: 16,
   layoutMode: "margin",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},

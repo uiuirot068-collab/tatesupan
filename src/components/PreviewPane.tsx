@@ -8,6 +8,7 @@ import {
   useState,
   type DragEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type HTMLAttributes,
 } from "react";
 import JSZip from "jszip";
@@ -89,18 +90,6 @@ import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
-
-// The "New (Experimental)" renderer A/B toggle is a *local-development-only*
-// tool. `process.env.NODE_ENV` is inlined at build time, so this is a
-// compile-time constant: `true` only under `next dev`, and `false` in every
-// deployed build — β and production alike (`next build` sets NODE_ENV to
-// "production"). When false the toggle JSX and the New-renderer branch are
-// dead-code-eliminated, so "Renderer(dev)" never appears in a shipped bundle.
-// The toggle state (`rendererMode`) is never persisted anywhere
-// (no localStorage / IndexedDB / cloud / document settings), so it always
-// resets to "current" on reload and can never leak into a save; `activeRenderer`
-// below is additionally hard-pinned to "current" whenever this is false.
-const RENDERER_TOGGLE_ENABLED = process.env.NODE_ENV !== "production";
 
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
@@ -511,19 +500,8 @@ export default function PreviewPane({
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
 
-  // The user's dev-toggle choice. Local useState only — no persistence of any
-  // kind, never written to `settings`/document data, so it can never leak into
-  // a save and always resets to "current" on reload.
-  const [rendererMode, setRendererMode] = useState<"current" | "new">("current");
-  // The renderer this pane actually renders with. Single choke point: in every
-  // non-dev build (β/production) RENDERER_TOGGLE_ENABLED is false, so this is
-  // hard-pinned to "current" regardless of `rendererMode`.
   const internalV2Beta = isV2BetaRendererEnabled();
-  const useV2Engine = internalV2Beta
-    ? true
-    : RENDERER_TOGGLE_ENABLED
-      ? rendererMode === "new"
-      : false;
+  const useV2Engine = internalV2Beta;
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
@@ -541,34 +519,6 @@ export default function PreviewPane({
       onBodyPageCountChange?.(v2BodyPreviewPages.length);
     }
   }, [onBodyPageCountChange, useV2Engine, v2BodyPreviewPages.length]);
-  const rendererToggle = RENDERER_TOGGLE_ENABLED && !internalV2Beta ? (
-    <span className="flex flex-shrink-0 items-center gap-1 rounded border border-dashed border-amber-400 px-1.5 py-1">
-      <span className="whitespace-nowrap text-[10px] text-amber-700">Renderer(dev):</span>
-      <button
-        type="button"
-        onClick={() => {
-          setRendererMode("current");
-        }}
-        className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
-          rendererMode === "current" ? "bg-amber-400/80 font-semibold" : "text-ink/60 hover:bg-ink/5"
-        }`}
-      >
-        Current
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setRendererMode("new");
-        }}
-        className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs ${
-          rendererMode === "new" ? "bg-amber-400/80 font-semibold" : "text-ink/60 hover:bg-ink/5"
-        }`}
-      >
-        New (Experimental)
-      </button>
-    </span>
-  ) : null;
-
   // TSP-LOOP-021 §2: which page's ⋮ menu is open (bodyIndex), or null. Lifted
   // here so opening one closes any other, and so an outside pointerdown /
   // Escape closes it. UI-only, never persisted.
@@ -634,6 +584,7 @@ export default function PreviewPane({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isPanningRef = useRef(false);
+  const panPointerIdRef = useRef<number | null>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
   const scrollPosRef = useRef({ left: 0, top: 0 });
 
@@ -1335,23 +1286,27 @@ export default function PreviewPane({
     if (isAutoScrollingRef.current) return;
   };
 
-  const handlePanMouseDown = (event: MouseEvent) => {
+  const handlePanPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.button !== 1) return;
     // TSP-LOOP-020: on a phone, dragging = native touch scroll of the
     // container (touch-action: pan-x pan-y). Don't also run the mouse-driven
     // pan off synthesized post-touch mouse events.
-    if (isNarrow) return;
+    if (isNarrow || event.pointerType !== "mouse") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, select, textarea, a, [data-page-reorder-handle]")) return;
     const container = scrollContainerRef.current;
     if (!container) return;
     isPanningRef.current = true;
+    panPointerIdRef.current = event.pointerId;
+    container.setPointerCapture?.(event.pointerId);
     startPosRef.current = { x: event.clientX, y: event.clientY };
     scrollPosRef.current = { left: container.scrollLeft, top: container.scrollTop };
     container.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
   };
 
-  const handlePanMouseMove = (event: MouseEvent) => {
-    if (!isPanningRef.current) return;
+  const handlePanPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isPanningRef.current || panPointerIdRef.current !== event.pointerId) return;
     const container = scrollContainerRef.current;
     if (!container) return;
     const dx = event.clientX - startPosRef.current.x;
@@ -1364,7 +1319,14 @@ export default function PreviewPane({
     if (!isPanningRef.current) return;
     isPanningRef.current = false;
     const container = scrollContainerRef.current;
-    if (container) container.style.cursor = "grab";
+    const pointerId = panPointerIdRef.current;
+    panPointerIdRef.current = null;
+    if (container) {
+      container.style.cursor = "grab";
+      if (pointerId !== null && container.hasPointerCapture?.(pointerId)) {
+        container.releasePointerCapture(pointerId);
+      }
+    }
     document.body.style.userSelect = "";
   };
 
@@ -1716,7 +1678,6 @@ export default function PreviewPane({
             </button>
           )}
           <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
-          {rendererToggle}
           <span className="flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"
@@ -1915,10 +1876,11 @@ export default function PreviewPane({
         // pan-x/pan-y = drag to move the page, pinch-zoom still native.
         className="flex w-full flex-1 min-h-0 overflow-y-scroll overflow-x-auto overscroll-contain p-6"
         style={{ cursor: "grab", touchAction: "pan-x pan-y" }}
-        onMouseDown={handlePanMouseDown}
-        onMouseMove={handlePanMouseMove}
-        onMouseUp={stopPanning}
-        onMouseLeave={stopPanning}
+        onPointerDown={handlePanPointerDown}
+        onPointerMove={handlePanPointerMove}
+        onPointerUp={stopPanning}
+        onPointerCancel={stopPanning}
+        onLostPointerCapture={stopPanning}
         onScroll={handlePreviewScroll}
       >
         <div

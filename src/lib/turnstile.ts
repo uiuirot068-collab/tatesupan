@@ -16,7 +16,7 @@ import { TURNSTILE_ACTION, TURNSTILE_SITE_KEY } from "./betaFeedback";
 const SCRIPT_SRC =
   "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
-interface TurnstileApi {
+export interface TurnstileApi {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string;
   reset: (id?: string) => void;
   remove: (id?: string) => void;
@@ -38,7 +38,10 @@ function loadScript(): Promise<boolean> {
       return resolve(true);
     }
     if (scriptStatus === "ready") return resolve(true);
-    if (scriptStatus === "error") return resolve(false);
+    if (scriptStatus === "error") {
+      document.querySelector('script[data-tatespun-turnstile="true"]')?.remove();
+      scriptStatus = "none";
+    }
     scriptWaiters.add(resolve);
     if (scriptStatus === "loading") return;
     scriptStatus = "loading";
@@ -46,6 +49,7 @@ function loadScript(): Promise<boolean> {
     s.src = SCRIPT_SRC;
     s.async = true;
     s.defer = true;
+    s.dataset.tatespunTurnstile = "true";
     s.onload = () => {
       scriptStatus = window.turnstile ? "ready" : "error";
       const ok = scriptStatus === "ready";
@@ -76,6 +80,33 @@ export interface UseTurnstile {
   status: TurnstileStatus;
   /** トークンを破棄し widget を再チャレンジ可能状態へ戻す。 */
   reset: () => void;
+}
+
+interface VisibleTurnstileCallbacks {
+  verified: (token: string) => void;
+  expired: () => void;
+  failed: () => void;
+}
+
+export function renderVisibleTurnstile(
+  api: TurnstileApi,
+  container: HTMLElement,
+  sitekey: string,
+  callbacks: VisibleTurnstileCallbacks
+): string {
+  return api.render(container, {
+    sitekey,
+    action: TURNSTILE_ACTION,
+    appearance: "always",
+    size: "flexible",
+    theme: "auto",
+    retry: "auto",
+    "refresh-expired": "auto",
+    callback: callbacks.verified,
+    "expired-callback": callbacks.expired,
+    "timeout-callback": callbacks.expired,
+    "error-callback": callbacks.failed,
+  });
 }
 
 export function useTurnstile(): UseTurnstile {
@@ -110,31 +141,32 @@ export function useTurnstile(): UseTurnstile {
         return;
       }
       try {
-        widgetIdRef.current = window.turnstile.render(containerRef.current, {
-          sitekey: TURNSTILE_SITE_KEY,
-          action: TURNSTILE_ACTION,
-          callback: (t: string) => {
+        // Set ready before render: official test widgets may invoke callback
+        // synchronously. Writing "ready" after render would overwrite the
+        // verified state and leave Send permanently disabled.
+        setStatus("ready");
+        widgetIdRef.current = renderVisibleTurnstile(
+          window.turnstile,
+          containerRef.current,
+          TURNSTILE_SITE_KEY,
+          {
+            verified: (t: string) => {
             if (cancelled) return;
             setToken(t);
             setStatus("verified");
           },
-          "expired-callback": () => {
+            expired: () => {
             if (cancelled) return;
             setToken("");
             setStatus("expired");
           },
-          "timeout-callback": () => {
-            if (cancelled) return;
-            setToken("");
-            setStatus("expired");
-          },
-          "error-callback": () => {
+            failed: () => {
             if (cancelled) return;
             setToken("");
             setStatus("error");
           },
-        });
-        setStatus("ready");
+          }
+        );
       } catch {
         setStatus("error");
       }
