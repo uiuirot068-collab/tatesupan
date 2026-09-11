@@ -31,6 +31,11 @@
 //    Discord 本文は不変）。
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import {
+  turnstileFailureHttpStatus,
+  verifyTurnstileRequest,
+  type TurnstileDiagnostic,
+} from "../_shared/turnstileVerification.ts";
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -155,29 +160,19 @@ function isAllowedTurnstileHostname(hostname: unknown): boolean {
 async function verifyTurnstile(
   token: string,
 ): Promise<{ ok: true } | { ok: false; retriable: boolean }> {
-  if (!TURNSTILE_SECRET_KEY) return { ok: false, retriable: true }; // fail-closed
-  if (!token) return { ok: false, retriable: false };
-
-  let data: { success?: boolean; action?: string; hostname?: string } | null = null;
-  try {
-    const body = new URLSearchParams();
-    body.set("secret", TURNSTILE_SECRET_KEY);
-    body.set("response", token);
-    const res = await fetch(TURNSTILE_VERIFY_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!res.ok) return { ok: false, retriable: true }; // fail-closed
-    data = await res.json();
-  } catch {
-    return { ok: false, retriable: true }; // fail-closed
-  }
-
-  if (!data || data.success !== true) return { ok: false, retriable: false };
-  if (data.action !== TURNSTILE_ACTION) return { ok: false, retriable: false };
-  if (!isAllowedTurnstileHostname(data.hostname)) return { ok: false, retriable: false };
-  return { ok: true };
+  return verifyTurnstileRequest({
+    secretKey: TURNSTILE_SECRET_KEY,
+    token,
+    verifyUrl: TURNSTILE_VERIFY_URL,
+    expectedAction: TURNSTILE_ACTION,
+    isAllowedHostname: isAllowedTurnstileHostname,
+    fetchImpl: fetch,
+    log: (diagnostic: TurnstileDiagnostic) => {
+      // Deliberately log only the allowlisted diagnostic object. Never include
+      // the secret, token, request body, raw response, headers, or error message.
+      console.error(JSON.stringify({ source: "beta-feedback", ...diagnostic }));
+    },
+  });
 }
 
 /**
@@ -653,7 +648,7 @@ Deno.serve(async (req) => {
   if (!ts.ok) {
     return json(
       { ok: false, error: "verification_failed" },
-      ts.retriable ? 503 : 403,
+      turnstileFailureHttpStatus(ts),
       origin,
     );
   }

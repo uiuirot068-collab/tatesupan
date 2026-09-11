@@ -44,6 +44,7 @@ const client = read("src/lib/betaFeedbackClient.ts");
 const lib = read("src/lib/betaFeedback.ts");
 const turnstileHook = read("src/lib/turnstile.ts");
 const edge = read("supabase/functions/beta-feedback/index.ts");
+const turnstileServer = read("supabase/functions/_shared/turnstileVerification.ts");
 const verifySupabase = read("scripts/verify-supabase-project.mjs");
 const sql = read("docs/supabase/migrations/20260901000000_beta_feedback_storage.sql");
 const help = read("public/docs/help.md");
@@ -688,13 +689,12 @@ check(
 // ---- Turnstile: Edge Function verification, fail-closed ----
 {
   const h = edge.slice(edge.indexOf("async function verifyTurnstile"), edge.indexOf("function sanitizeSheetCell"));
-  check("19 turnstile server: missing TURNSTILE_SECRET_KEY → fail closed", /if \(!TURNSTILE_SECRET_KEY\) return \{ ok: false, retriable: true \}/.test(h));
-  check("19 turnstile server: missing token → reject", /if \(!token\) return \{ ok: false, retriable: false \}/.test(h));
-  check("19 turnstile server: siteverify non-200 → fail closed", /if \(!res\.ok\) return \{ ok: false, retriable: true \}/.test(h));
-  check("19 turnstile server: siteverify network error → fail closed", /catch \{\s*return \{ ok: false, retriable: true \}/.test(h));
-  check("19 turnstile server: rejects success:false / action mismatch / hostname mismatch", /data\.success !== true/.test(h) && /data\.action !== TURNSTILE_ACTION/.test(h) && /!isAllowedTurnstileHostname\(data\.hostname\)/.test(h));
-  check("19 turnstile server: does NOT send the user's IP (no remoteip param)", !/remoteip/i.test(h));
-  check("19 turnstile server: never logs token / secret / siteverify body", !/console\.(log|error)/.test(h));
+  check("19 turnstile server: safe diagnostic helper is wired", /verifyTurnstileRequest\(\{/.test(h) && /turnstileFailureHttpStatus\(ts\)/.test(edge));
+  check("19 turnstile server: missing secret / non-2xx / fetch error remain fail closed", /TURNSTILE_SECRET_MISSING/.test(turnstileServer) && /TURNSTILE_SITEVERIFY_HTTP_ERROR/.test(turnstileServer) && /TURNSTILE_SITEVERIFY_FETCH_ERROR/.test(turnstileServer) && (turnstileServer.match(/retriable: true/g) || []).length >= 3);
+  check("19 turnstile server: invalid / action / hostname diagnostics are distinct", /TURNSTILE_SITEVERIFY_INVALID/.test(turnstileServer) && /TURNSTILE_ACTION_MISMATCH/.test(turnstileServer) && /TURNSTILE_HOSTNAME_MISMATCH/.test(turnstileServer));
+  check("19 turnstile server: Cloudflare error codes and fetch names are allowlisted", /SAFE_TURNSTILE_ERROR_CODES/.test(turnstileServer) && /SAFE_TURNSTILE_ERROR_NAMES/.test(turnstileServer) && /unknown-error-code/.test(turnstileServer) && /UnknownError/.test(turnstileServer));
+  check("19 turnstile server: does NOT send the user's IP (no remoteip param)", !/remoteip/i.test(turnstileServer));
+  check("19 turnstile server: never logs token / secret / raw response", !/console\.(log|error)/.test(turnstileServer) && /log\(diagnostic\)/.test(turnstileServer) && !/error\.message/.test(turnstileServer));
 }
 const edgeHandler = edge.slice(edge.indexOf("Deno.serve(async (req)"));
 check(
