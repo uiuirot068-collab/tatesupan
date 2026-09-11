@@ -178,9 +178,14 @@ describe("paintModel.ts — CanonicalDocument -> paint-only PaintDocument", () =
     expect(rubyUnit!.rubyAnnotation?.status).toBe("PLACED");
     if (rubyUnit!.rubyAnnotation?.status === "PLACED") {
       expect(rubyUnit!.rubyAnnotation.text).toBe("とうきょう");
-      // base "東京" (2 cells) vs reading "とうきょう" (5 cells) overflows
-      // with the shipped (empty, P3-O06 residual) overhang table -> OVERFLOW_OPEN.
-      expect(rubyUnit!.rubyAnnotation.policy).toBe("OVERFLOW_OPEN");
+      // The fixture has ordinary content on both sides of the ruby, so the
+      // long reading has enough physical line space to extend equally in
+      // both directions. Since the line-space-aware placement fix, this is
+      // CENTER (the old OVERFLOW_OPEN expectation predated that fix).
+      expect(rubyUnit!.rubyAnnotation.policy).toBe("CENTER");
+      expect(
+        rubyUnit!.topPx + rubyUnit!.rubyAnnotation.offsetPx + rubyUnit!.rubyAnnotation.extentPx / 2
+      ).toBeCloseTo(rubyUnit!.topPx + rubyUnit!.heightPx / 2, 6);
     }
     // Body placement equals the plain tickToPx(yTick) conversion — the
     // annotation carries no coordinate of its own for the BASE and never

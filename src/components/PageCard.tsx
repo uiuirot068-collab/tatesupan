@@ -1938,12 +1938,10 @@ function rubyBaseGlyphLaneWidthPx(fontSizePx: number): number {
  * rt/base文字数によらず常に同じpitchを使う（新規のspace-betweenや
  * base範囲への均等割付はしない）。
  *
- *   - rtExtentPx(= rt文字数 × rubyPitchPx) <= baseExtentPx:
- *     rubyBlockTop = baseStartTop + (baseExtentPx - rtExtentPx) / 2
- *     （文字列はpitchのまま、ひとかたまりとしてbase範囲の中央へ）
- *   - rtExtentPx > baseExtentPx:
- *     rubyBlockTop = baseStartTop（base開始位置と正確に一致、
- *     base範囲を縦方向に越えて続く。line自体のheight/widthは変えない）
+ * rt/baseの長短にかかわらず、まず
+ * `baseStartTop + (baseExtentPx - rtExtentPx) / 2` で中央を合わせる。
+ * 長いrtが行頭・行末を越える場合だけ、lineの物理範囲へclampする。
+ * line自体のheight/widthは変えない。
  */
 function FixedSlotRubyAnnotation({
   annotation,
@@ -1951,12 +1949,14 @@ function FixedSlotRubyAnnotation({
   baseGlyphLaneWidthPx,
   rubyLaneWidthPx,
   fontSizePx,
+  lineExtentPx,
 }: {
   annotation: RubyAnnotation;
   slotExtentPx: number;
   baseGlyphLaneWidthPx: number;
   rubyLaneWidthPx: number;
   fontSizePx: number;
+  lineExtentPx: number;
 }) {
   // TSP-LOOP-029: same integer-rounded slot ladder as FixedSlotLine, so the
   // rt block sits on the exact base-slot edges Preview and export agree on.
@@ -1970,8 +1970,12 @@ function FixedSlotRubyAnnotation({
 
   const rtChars = Array.from(annotation.rt);
   const rtExtentPx = Math.max(1, rtChars.length) * rubyPitchPx;
-  const rubyBlockTop =
-    rtExtentPx <= baseExtentPx ? baseStartTop + (baseExtentPx - rtExtentPx) / 2 : baseStartTop;
+  const centeredRubyBlockTop = baseStartTop + (baseExtentPx - rtExtentPx) / 2;
+  const lastContainedRubyBlockTop = Math.max(0, lineExtentPx - rtExtentPx);
+  const rubyBlockTop = Math.min(
+    lastContainedRubyBlockTop,
+    Math.max(0, centeredRubyBlockTop)
+  );
 
   return (
     <>
@@ -2333,6 +2337,7 @@ function FixedSlotLine({
           baseGlyphLaneWidthPx={baseGlyphLaneWidthPx}
           rubyLaneWidthPx={rubyLaneWidthPx}
           fontSizePx={fontSizePx}
+          lineExtentPx={heightPx}
         />
       ))}
     </div>
