@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: [
+      "src/lib/betaFeedbackClient.test.ts",
       "src/lib/demoPlacement.test.ts",
       "src/lib/exportCancellation.test.ts",
       "src/lib/finalDrawerPolish.test.ts",

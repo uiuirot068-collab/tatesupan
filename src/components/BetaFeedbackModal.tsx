@@ -396,7 +396,10 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
             <div className="mt-3 space-y-2 border-t border-ink/10 pt-2 text-[11px] leading-relaxed text-ink/65">
               <div>
                 <p className="font-semibold">【デバッグ用に自動送信される情報】</p>
-                <p>上記に加え、再現確認に必要な端末・ブラウザ・表示環境情報</p>
+                <p>
+                  位置情報など新しい権限は要求しません。上記に加え、端末・ブラウザ・表示環境に関する情報を、
+                  不具合調査のため情報収集システムに送信します。
+                </p>
               </div>
               <div>
                 <p className="font-semibold">【自動送信されないもの】</p>
@@ -404,7 +407,6 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                 <p>作品タイトル</p>
                 <p>ドキュメントID</p>
               </div>
-              <p>位置情報など新しい権限は要求せず、表示中の値のみを不具合調査のためDiscord等へ送信します。</p>
             </div>
           </section>
         </div>

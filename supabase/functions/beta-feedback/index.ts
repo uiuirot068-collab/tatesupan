@@ -286,16 +286,29 @@ function formatEnvironmentForDiscord(env: ClientEnvironment): string {
   ].join("\n");
 }
 
-function environmentEmbed(environment: ClientEnvironment) {
-  return {
-    title: "【使用環境】",
-    description: formatEnvironmentForDiscord(environment),
-  };
-}
-
 function truncateForDiscord(text: string, limit = 1800): { text: string; truncated: boolean } {
   if (text.length <= limit) return { text, truncated: false };
   return { text: text.slice(0, limit), truncated: true };
+}
+
+// Discord hard-caps a single embed description at 4096 UTF-16 code units —
+// exceeding it makes Discord's API reject the whole webhook POST (400),
+// silently losing the entire diagnostics block instead of just trimming it.
+// Every ENVIRONMENT_KEYS field is already capped (240 chars, 500 for
+// userAgent) by normalizeClientEnvironment, but that many fields together
+// can still approach the limit; truncate defensively and disclose it rather
+// than either risk a rejected request or drop the block outright.
+const DISCORD_EMBED_DESCRIPTION_LIMIT = 4000;
+
+function environmentEmbed(environment: ClientEnvironment) {
+  const { text, truncated } = truncateForDiscord(
+    formatEnvironmentForDiscord(environment),
+    DISCORD_EMBED_DESCRIPTION_LIMIT
+  );
+  return {
+    title: "【使用環境】",
+    description: truncated ? `${text}\n…(truncated)` : text,
+  };
 }
 
 /* --- Discord FORUM channel: 新規ポストごとに thread_name 必須（100 字上限） --- */
@@ -500,17 +513,32 @@ async function notifyDiscordReview(
 }
 
 async function appendToSpreadsheet(payload: Record<string, unknown>): Promise<boolean> {
-  if (!GOOGLE_APPS_SCRIPT_URL || !GOOGLE_APPS_SCRIPT_SECRET) return false;
+  if (!GOOGLE_APPS_SCRIPT_URL || !GOOGLE_APPS_SCRIPT_SECRET) {
+    // This is the canonical success gate (see the two call sites below) —
+    // silently returning false here otherwise leaves an operator with only
+    // "spreadsheetStatus: failed" and no way to tell "not configured" apart
+    // from "misconfigured" or "the endpoint rejected this payload".
+    console.error("[beta-feedback] GOOGLE_APPS_SCRIPT_URL/SECRET not configured — every submission will report record_failed");
+    return false;
+  }
   try {
     const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ secret: GOOGLE_APPS_SCRIPT_SECRET, ...payload }),
     });
-    if (!res.ok) return false;
-    const j = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      console.error(`[beta-feedback] Apps Script rejected the append: HTTP ${res.status} ${bodyText.slice(0, 500)}`);
+      return false;
+    }
+    const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (j?.ok !== true) {
+      console.error(`[beta-feedback] Apps Script returned ok:false — error="${j?.error ?? "unknown"}"`);
+    }
     return j?.ok === true;
-  } catch {
+  } catch (err) {
+    console.error("[beta-feedback] fetch to Apps Script threw", err);
     return false;
   }
 }

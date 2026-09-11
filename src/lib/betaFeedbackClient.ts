@@ -44,10 +44,18 @@ export async function submitBetaFeedback(
   const url = functionUrl();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {
+    // Dev/local-only diagnostic: never shown to the user (UI always renders
+    // the generic FEEDBACK_FAILURE_MESSAGE), but without this a developer
+    // debugging "Turnstile verified, Send still fails" has zero signal that
+    // the cause is a missing NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, not a bug.
+    console.error(
+      "[betaFeedback] missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY — feedback cannot be submitted in this environment"
+    );
     return { ok: false };
   }
   // TSP-LOOP-019: Turnstile トークンなしでは送信しない（サーバも必須で拒否する）。
   if (!security.turnstileToken) {
+    console.error("[betaFeedback] submitBetaFeedback called without a Turnstile token");
     return { ok: false };
   }
 
@@ -95,10 +103,19 @@ export async function submitBetaFeedback(
 
   try {
     const res = await fetch(url, { method: "POST", headers, body });
-    if (!res.ok) return { ok: false };
-    const json = (await res.json().catch(() => null)) as { ok?: boolean } | null;
-    return { ok: json?.ok === true };
-  } catch {
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      console.error(`[betaFeedback] Edge Function rejected the request: HTTP ${res.status} ${bodyText.slice(0, 500)}`);
+      return { ok: false };
+    }
+    const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (json?.ok !== true) {
+      console.error(`[betaFeedback] Edge Function returned ok:false — error="${json?.error ?? "unknown"}"`);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[betaFeedback] fetch to Edge Function threw", err);
     return { ok: false };
   }
 }

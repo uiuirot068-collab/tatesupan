@@ -89,4 +89,61 @@ describe("Beta release blocker contracts", () => {
     expect(client).toContain("turnstileToken");
     expect(client).toContain("FEEDBACK_HONEYPOT_FIELD");
   });
+
+  it("discloses the feedback environment contract honestly: simple 3-field summary, no Discord mention, no false 'visible values only' claim", () => {
+    const modal = readSource("src/components/BetaFeedbackModal.tsx");
+    // The visible summary stays exactly 3 fields (Browser / Device / Viewport).
+    expect(modal).toContain("feedbackUserVisibleRows");
+    expect(modal).not.toContain("feedbackEnvironmentRows");
+    // Discord is an internal implementation detail — never surfaced to the user.
+    expect(modal).not.toMatch(/discord/i);
+    // This claim is factually wrong once broader diagnostics are collected —
+    // the internal payload always contains more than the 3 displayed fields.
+    expect(modal).not.toContain("表示中の値のみ");
+    // The disclosure must still say more is sent for debugging, and that
+    // creative content is not.
+    expect(modal).toContain("デバッグ用に自動送信される情報");
+    expect(modal).toContain("原稿本文");
+    expect(modal).toContain("作品タイトル");
+    expect(modal).toContain("ドキュメントID");
+  });
+});
+
+describe("Blocker 02 — long ruby centers over its base when the line has room on both sides", () => {
+  // Proves FINAL CANONICAL PAINT-MODEL geometry (topPx/offsetPx/extentPx —
+  // exactly what PreviewRenderer.tsx reads to paint the DOM), through the
+  // REAL manuscript->v2 pipeline with REAL font-derived measurement, not the
+  // abstract composeLine-only assertion in rubyPlacement.test.ts. Ordinary
+  // text sits on both sides of the ruby, deliberately far from the line's
+  // physical head/tail, so no clamp is expected — this is NOT the line-head
+  // case (that one legitimately clamps and is covered separately).
+  it("centers a mid-line 2-kanji base / 9-kana reading with ample room on both sides", () => {
+    const bytes = new Uint8Array(readFileSync(resolve("public/fonts/ShipporiMincho-Regular.ttf")));
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const measurement = createShipporiMinchoMeasurementProviderFromBytes(bytes, sha256, "/fonts/ShipporiMincho-Regular.ttf");
+
+    const content = "前前前｜東京《とうきょうていこく》後後後後後後後後後後後後後後後後後後後後";
+    const settings = { ...DEFAULT_PAGE_SETTINGS, charsPerLine: 20, linesPerColumn: 4 };
+    const bridge = composeV2Document({ title: "t", content, settings, measurement });
+    const preview = buildV2PreviewDocument(bridge, {});
+
+    const placedRubies = preview.pages
+      .flatMap((page) => page.columns)
+      .flatMap((column) => column.lines)
+      .flatMap((line) => line.units)
+      .filter((unit) => unit.rubyAnnotation?.status === "PLACED");
+
+    expect(placedRubies).toHaveLength(1);
+    const unit = placedRubies[0];
+    const ann = unit.rubyAnnotation as Extract<typeof unit.rubyAnnotation, { status: "PLACED" }>;
+    expect(ann.policy).toBe("CENTER");
+
+    // Final rendered geometry: PreviewRenderer.tsx paints the annotation at
+    // `top: unit.topPx + ann.offsetPx`, height `ann.extentPx`, inside the
+    // base's own box at `top: unit.topPx`, height `unit.heightPx` — so this
+    // is the exact arithmetic the DOM ends up with, not a paraphrase of it.
+    const baseCenter = unit.topPx + unit.heightPx / 2;
+    const annotationCenter = unit.topPx + ann.offsetPx + ann.extentPx / 2;
+    expect(annotationCenter).toBeCloseTo(baseCenter, 3);
+  });
 });
