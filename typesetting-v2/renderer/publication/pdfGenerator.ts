@@ -341,7 +341,17 @@ function verticalGraphemeCommands(
     // `yPlacementEmFor` for the generic/ordinary branch is removed.
     const gposOffsetMm = 0;
     const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
-    const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
+    // CSS Preview inherits `text-orientation: upright` from PageCard, so
+    // ordinary printable ASCII occupies one upright vertical cell per
+    // grapheme. Shippori's `vert` GSUB also exposes alternates for Latin,
+    // but those outlines are sideways and therefore do not represent that
+    // product contract. Keep ordinary ASCII on the unrotated text path.
+    // TCY never reaches this function (it has its own one-command path), so
+    // automatic two-digit and explicit [tate] behavior remain independent.
+    const useUprightAsciiText = /^[\x20-\x7e]$/.test(ch);
+    const outlineGlyphId = useUprightAsciiText
+      ? undefined
+      : outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {
       return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
     }
