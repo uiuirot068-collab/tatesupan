@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const WORK_SESSION_STORAGE_KEY = "tatespun:work-sessions:v1";
+const WORK_SESSION_STORAGE_KEY = "tatespun:work-sessions:v1:demo%3A-2";
 const CURRENT_COUNT_TITLE = "現在の原稿文字数";
 
 function freePort() {

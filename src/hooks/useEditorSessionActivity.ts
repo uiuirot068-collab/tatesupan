@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   EMPTY_WORK_SESSION_STATE,
-  workSessionStore,
+  workSessionStoreFor,
   type ActivityDelta,
   type CompletedWorkSession,
   type WorkSessionState,
 } from "@/lib/editorSessionActivity";
 
-export function useEditorSessionActivity(): {
+const subscribeEmpty = () => () => {};
+const readEmpty = () => EMPTY_WORK_SESSION_STATE;
+
+export function useEditorSessionActivity(scopeKey: string | null): {
   workSession: WorkSessionState;
   recordActivity: (delta: ActivityDelta) => void;
   startWorkSession: () => void;
@@ -17,24 +20,28 @@ export function useEditorSessionActivity(): {
   resumeWorkSession: () => void;
   endWorkSession: () => CompletedWorkSession | null;
 } {
+  const store = useMemo(
+    () => scopeKey === null ? null : workSessionStoreFor(scopeKey),
+    [scopeKey],
+  );
   const workSession = useSyncExternalStore(
-    workSessionStore.subscribe,
-    workSessionStore.read,
+    store?.subscribe ?? subscribeEmpty,
+    store?.read ?? readEmpty,
     () => EMPTY_WORK_SESSION_STATE
   );
   const recordActivity = useCallback((delta: ActivityDelta) => {
-    workSessionStore.record(delta);
-  }, []);
+    store?.record(delta);
+  }, [store]);
   const startWorkSession = useCallback(() => {
-    workSessionStore.start();
-  }, []);
+    store?.start();
+  }, [store]);
   const pauseWorkSession = useCallback(() => {
-    workSessionStore.pause();
-  }, []);
+    store?.pause();
+  }, [store]);
   const resumeWorkSession = useCallback(() => {
-    workSessionStore.resume();
-  }, []);
-  const endWorkSession = useCallback(() => workSessionStore.end(), []);
+    store?.resume();
+  }, [store]);
+  const endWorkSession = useCallback(() => store?.end() ?? null, [store]);
   return {
     workSession,
     recordActivity,

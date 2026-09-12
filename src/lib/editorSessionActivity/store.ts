@@ -3,6 +3,11 @@ import type { ActivityDelta } from "./model";
 export const WORK_SESSION_STORAGE_KEY = "tatespun:work-sessions:v1";
 export const WORK_SESSION_HISTORY_LIMIT = 100;
 
+/** Per-document key; the JSON payload format remains v1-compatible. */
+export function workSessionStorageKey(scopeKey: string): string {
+  return `${WORK_SESSION_STORAGE_KEY}:${encodeURIComponent(scopeKey)}`;
+}
+
 type LocalStorageLike = Pick<Storage, "getItem" | "setItem">;
 
 export type WorkSessionStatus = "active" | "paused";
@@ -158,7 +163,8 @@ function createStableId(startedAt: number): string {
 /** React-free localStorage store, injectable for deterministic Node tests. */
 export function createWorkSessionStore(
   getStorage: () => LocalStorageLike | null = browserLocalStorage,
-  createId: (startedAt: number) => string = createStableId
+  createId: (startedAt: number) => string = createStableId,
+  storageKey: string = WORK_SESSION_STORAGE_KEY,
 ): WorkSessionStore {
   const listeners = new Set<() => void>();
   let cachedRaw: string | null | undefined;
@@ -170,7 +176,7 @@ export function createWorkSessionStore(
     try {
       const storage = getStorage();
       if (!storage) return cachedRaw === undefined ? EMPTY_WORK_SESSION_STATE : cachedValue;
-      const raw = storage.getItem(WORK_SESSION_STORAGE_KEY);
+      const raw = storage.getItem(storageKey);
       if (raw === cachedRaw) return cachedValue;
       cachedRaw = raw;
       cachedValue = parseState(raw);
@@ -188,7 +194,7 @@ export function createWorkSessionStore(
     try {
       const storage = getStorage();
       if (storage) {
-        storage.setItem(WORK_SESSION_STORAGE_KEY, raw);
+        storage.setItem(storageKey, raw);
         storageUnavailable = false;
       }
     } catch {
@@ -287,3 +293,15 @@ export function createWorkSessionStore(
 }
 
 export const workSessionStore = createWorkSessionStore();
+
+const scopedStores = new Map<string, WorkSessionStore>();
+
+/** Stable store instance for React subscriptions, isolated by document. */
+export function workSessionStoreFor(scopeKey: string): WorkSessionStore {
+  const storageKey = workSessionStorageKey(scopeKey);
+  const existing = scopedStores.get(storageKey);
+  if (existing) return existing;
+  const store = createWorkSessionStore(browserLocalStorage, createStableId, storageKey);
+  scopedStores.set(storageKey, store);
+  return store;
+}

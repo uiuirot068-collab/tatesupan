@@ -70,14 +70,6 @@ export default function TategakiEditor({
 }) {
   const router = useRouter();
   const { user } = useAuth();
-  const {
-    workSession,
-    recordActivity,
-    startWorkSession,
-    pauseWorkSession,
-    resumeWorkSession,
-    endWorkSession,
-  } = useEditorSessionActivity();
   const [docId, setDocId] = useState<number | null>(
     demoMode
       ? DEMO_PROJECT.id
@@ -190,6 +182,20 @@ export default function TategakiEditor({
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const workSessionScope = useMemo(() => {
+    if (demoMode) return `demo:${DEMO_PROJECT.id}`;
+    const projectId = cloudProjectId ?? currentProjectId;
+    if (projectId) return `cloud:${projectId}`;
+    return docId === null ? null : `local:${docId}`;
+  }, [cloudProjectId, currentProjectId, demoMode, docId]);
+  const {
+    workSession,
+    recordActivity,
+    startWorkSession,
+    pauseWorkSession,
+    resumeWorkSession,
+    endWorkSession,
+  } = useEditorSessionActivity(workSessionScope);
   // TSP-LOOP-007: クラウド作品を開いた際、本文が参照するのに復元できなかった
   // 挿絵（missing = manifest にあるが Storage 取得不可 / unmanifested = 未同期）。
   // 非 null かつ配列が空でなければエディタ／エクスポートに警告を出す。
