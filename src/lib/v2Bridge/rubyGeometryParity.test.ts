@@ -131,7 +131,6 @@ describe("three-blocker ruby geometry parity", () => {
       bridge.model,
       fontResource(),
       bridge.pageGeometry,
-      "fixture",
     );
     expect(result.pageCount).toBeGreaterThan(0);
     expect(new TextDecoder().decode(result.bytes.slice(0, 5))).toBe("%PDF-");
