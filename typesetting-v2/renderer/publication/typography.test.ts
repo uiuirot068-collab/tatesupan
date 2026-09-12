@@ -139,20 +139,24 @@ describe("P3-O08 — Publication Typography", () => {
       expect(baseCmd && baseCmd.op === "text" ? baseCmd.fontSizePt : undefined).toBeCloseTo((ruby.heightMm / graphemeCount) * (72 / 25.4), 6);
     });
 
-    it("REGRESSION (Human Visual QA HOLD, catastrophic overlap): the annotation's own painted column never overlaps the base run's own line box", () => {
+    it("REGRESSION: the annotation starts after the fixed body em, not after the wider line-pitch box", () => {
       const { model } = composePublication("atomic-ruby");
       const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
       const line = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines)).find((l) => l.units.includes(ruby))!;
       const page = model.pages[0];
       const column = page.columns[0];
-      const baseRightEdgeMm = page.widthMm - column.rightMm - line.rightMm; // base line's own right physical edge
+      const lineLeftMm = page.widthMm - column.rightMm - line.rightMm - line.widthMm;
+      const bodyCenterMm = lineLeftMm + line.widthMm / 2;
+      const bodyRightEdgeMm = bodyCenterMm + model.bodyEmMm / 2;
+      const lineRightEdgeMm = lineLeftMm + line.widthMm;
       const plan = buildPaintPlan(model, true);
       const ann = ruby.rubyAnnotation!;
-      const annCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && ann.status === "PLACED" && c.text === Array.from(ann.text)[0] && c.xMm > baseRightEdgeMm - 1);
+      const annCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && ann.status === "PLACED" && c.text === Array.from(ann.text)[0] && c.xMm > bodyCenterMm);
       expect(annCmd).toBeDefined();
       if (annCmd && annCmd.op === "text") {
         const halfWidthMm = (annCmd.fontSizePt * (25.4 / 72)) / 2;
-        expect(annCmd.xMm - halfWidthMm).toBeGreaterThanOrEqual(baseRightEdgeMm);
+        expect(annCmd.xMm - halfWidthMm).toBeCloseTo(bodyRightEdgeMm, 6);
+        expect(annCmd.xMm).toBeLessThanOrEqual(lineRightEdgeMm + halfWidthMm);
       }
     });
   });

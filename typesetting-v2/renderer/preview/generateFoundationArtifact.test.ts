@@ -103,12 +103,12 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
     // Ruby Placement Micro-Loop: the geometry debug tooltip (policy/offset/
     // extent) is DEBUG-only decoration, even though the annotation text
     // itself is real content shown in both modes (checked separately below).
-    expect(normalHtml).not.toContain("policy=OVERFLOW_OPEN");
+    expect(normalHtml).not.toContain("policy=CENTER");
 
     // The same content, in DEBUG mode, does carry this decoration.
     expect(debugHtml).toContain('class="debug-info"');
     expect(debugHtml).toContain('class="page-label"');
-    expect(debugHtml).toContain("policy=OVERFLOW_OPEN");
+    expect(debugHtml).toContain("policy=CENTER");
   });
 
   it("ruby annotation text is real content, visible in both modes; its geometry debug tooltip is debug-only (Ruby Placement Micro-Loop)", () => {
@@ -397,13 +397,20 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(rubyUnits[0].rubyAnnotation?.status).toBe("PLACED");
     });
 
-    it("4/5/9. the annotation's painted start (topPx + offsetPx) equals the body run's own topPx exactly (offsetPx is 0 for this fixture's CENTER/OVERFLOW_OPEN case) — the annotation is anchored to the body run's own START, adjacent to 東, never shifted toward 京", () => {
+    it("4/5/9. the annotation uses Core's centered offset after the shared 0.5em ruby scale change", () => {
       const models = buildAllPaintDocuments();
       const { rubyUnit } = actualRubyPlacedUnit(models);
       expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
       if (rubyUnit.rubyAnnotation?.status === "PLACED") {
         const annotationStartPx = rubyUnit.topPx + rubyUnit.rubyAnnotation.offsetPx;
-        expect(annotationStartPx).toBeCloseTo(rubyUnit.topPx, 6);
+        expect(rubyUnit.rubyAnnotation.policy).toBe("CENTER");
+        expect(rubyUnit.rubyAnnotation.offsetPx).toBeCloseTo(
+          (rubyUnit.heightPx - rubyUnit.rubyAnnotation.extentPx) / 2,
+          6,
+        );
+        expect(
+          annotationStartPx + rubyUnit.rubyAnnotation.extentPx / 2,
+        ).toBeCloseTo(rubyUnit.topPx + rubyUnit.heightPx / 2, 6);
         // The annotation's own start must never coincide with, or be past,
         // the body run's own END (which would mean it visually starts at
         // or after the run's second character rather than its first).
@@ -420,11 +427,12 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(rubyUnit.rubyAnnotation?.status).toBe("PLACED");
       if (rubyUnit.rubyAnnotation?.status === "PLACED") {
         const annotationStartPx = rubyUnit.topPx + rubyUnit.rubyAnnotation.offsetPx;
-        // The annotation's start must never equal a LATER unit's own
-        // topPx (which would indicate the Renderer substituted the wrong
-        // anchor) — it must equal the ruby run's OWN topPx instead.
+        // The annotation's start must never equal a LATER unit's own topPx
+        // (which would indicate the Renderer substituted the wrong anchor).
         expect(annotationStartPx).not.toBeCloseTo(nextUnit!.topPx, 3);
-        expect(annotationStartPx).toBeCloseTo(rubyUnit.topPx, 6);
+        expect(
+          annotationStartPx + rubyUnit.rubyAnnotation.extentPx / 2,
+        ).toBeCloseTo(rubyUnit.topPx + rubyUnit.heightPx / 2, 6);
       }
     });
 

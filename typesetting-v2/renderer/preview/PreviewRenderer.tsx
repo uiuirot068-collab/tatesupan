@@ -139,7 +139,7 @@ const PREVIEW_RENDERER_RULES = `
      DEFAULT_RUBY_SCALE, the SAME single authoritative constant Core's own
      ruby-reading-extent measurement now uses -- no longer an independently
      -hardcoded 0.55 (Publication paint uses the identical constant). */
-  .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: ${DEFAULT_RUBY_SCALE}em; white-space: nowrap; color: #444; text-align: start; }
+  .ruby-annotation { position: absolute; font-size: ${DEFAULT_RUBY_SCALE}em; white-space: nowrap; color: #444; text-align: start; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -251,7 +251,17 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
       {unit.rubyAnnotation?.status === "PLACED" && (
         <span
           className="ruby-annotation"
-          style={{ top: unit.rubyAnnotation.offsetPx, height: unit.rubyAnnotation.extentPx }}
+          style={{
+            top: unit.rubyAnnotation.offsetPx,
+            // The line box is the column pitch, not the ruby base's ink box.
+            // Anchor the annotation immediately after the fixed body em so
+            // wider line leading cannot push ruby into the neighbouring line.
+            // This is paint-only: canonical top/extent and the base position
+            // remain unchanged, and Publication uses the identical formula.
+            left: `calc(50% + ${fontSizePx / 2}px)`,
+            width: fontSizePx * DEFAULT_RUBY_SCALE,
+            height: unit.rubyAnnotation.extentPx,
+          }}
           title={mode === "debug" ? rubyDebugText : undefined}
         >
           {unit.rubyAnnotation.text}

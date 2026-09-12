@@ -485,21 +485,14 @@ function unitCommands(
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
-      // Positioned to the physical right of the base run's own column —
-      // the vector-paint equivalent of Preview's `left: 100%` CSS (see
-      // this module's own RUBY_ANNOTATION_FONT_RATIO comment). BUG FIXED
-      // (Human Visual QA HOLD, catastrophic overlap): the clearance MUST be
-      // sized relative to the ANNOTATION's own font/glyph width, never the
-      // base run's own `lineWidthMm` — the two are unrelated scales, and
-      // using the base line's width as the clearance reference produced a
-      // gap far too small for the annotation's own (similarly-sized)
-      // glyphs, so the annotation visibly overlapped back into the base
-      // run's column. The annotation is now centered within its own
-      // em-sized column, placed just past the base run's right edge with a
-      // small proportional gap.
+      // The line box represents column pitch (body em + leading), not the
+      // base glyph's own ink box. Position ruby immediately after the fixed
+      // body em, measured from the unchanged body center. Basing this on the
+      // line's outer edge pushed ruby into the neighbouring line whenever
+      // line pitch exceeded one em. Preview uses this identical paint-only
+      // formula; canonical top/extent and body coordinates are untouched.
       const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
-      const annotationGapMm = annotationEmWidthMm * 0.25;
-      const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
+      const annotationX = xCenter + bodyEmMm / 2 + annotationEmWidthMm / 2;
       commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return commands;
