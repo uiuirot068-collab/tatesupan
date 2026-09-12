@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { decode } from "fast-png";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const EXPECTED_RUBY_LANE_CENTER_EM = 0.70;
+const EXPECTED_RUBY_LANE_CENTER_EM = 0.69;
 const CENTERING_SAMPLES = [
   { baseText: "親文字", readingText: "よみ", line: "あああ｜親文字《よみ》いいいいいい", policy: "CENTER" },
   { baseText: "残響", readingText: "ざんきょうきょう", line: "あああ｜残響《ざんきょうきょう》いいいいいい", policy: "CENTER" },
@@ -503,7 +503,7 @@ try {
         const expected = parseFloat(entry.computed.base.fontSize) * entry.dom.scale * EXPECTED_RUBY_LANE_CENTER_EM;
         return Math.abs(laneDelta - expected) <= 0.15;
       }),
-      "150% Ruby lane did not preserve the shared 0.70em center distance",
+      "150% Ruby lane did not preserve the default 0.69em center distance",
     );
     console.log(JSON.stringify({ zoom: "150%", measurements: zoom150 }, null, 2));
     if (process.env.TATESPUN_RUBY_SCREENSHOT_150) {
@@ -627,7 +627,7 @@ try {
         const expected = parseFloat(entry.computed.base.fontSize) * entry.dom.scale * EXPECTED_RUBY_LANE_CENTER_EM;
         return Math.abs(horizontalLaneDelta - expected) <= 0.15;
       }),
-      "rendered Ruby lane did not preserve the shared 0.70em center distance",
+      "rendered Ruby lane did not preserve the default 0.69em center distance",
     );
   }
   assert.ok(

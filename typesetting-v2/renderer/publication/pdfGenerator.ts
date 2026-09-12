@@ -504,11 +504,11 @@ function unitCommands(
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
       // The shared paint metric starts from the unchanged body center and
-      // compensates for the production font's measured cross-axis side
-      // bearings. It changes neither Core's reading-direction geometry nor
+      // uses the Human-selected fraction of the runtime line pitch. It
+      // changes neither Core's reading-direction geometry nor
       // the body position, and Preview consumes the identical lane contract.
       const annotationX =
-        xCenter + rubyLaneGeometry(bodyEmMm).annotationCenterFromParentCenter;
+        xCenter + rubyLaneGeometry(bodyEmMm, lineWidthMm).annotationCenterFromParentCenter;
       commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return commands;

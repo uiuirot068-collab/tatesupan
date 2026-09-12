@@ -18,7 +18,7 @@ import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
 import { composeV2Document } from "./composeV2Document";
 import { buildV2PreviewDocument } from "./useV2PreviewAdapter";
 import {
-  RUBY_PARENT_OPTICAL_INSET_EM,
+  RUBY_LANE_COLUMN_PITCH_RATIO,
   rubyLaneGeometry,
 } from "../../../typesetting-v2/renderer/rubyLane";
 
@@ -68,7 +68,7 @@ function textCommands(commands: PaintCommand[]) {
   );
 }
 
-function horizontalInkGapEm(base: string, reading: string, insetEm: number): number {
+function horizontalInkGapEm(base: string, reading: string, laneCenterEm: number): number {
   const font = FontBinary.fromBytes(readFileSync(FONT_PATH));
   const metrics = new FontMetricsReader(font);
   const glyphIdFor = createGlyphIdLookup(font);
@@ -81,10 +81,11 @@ function horizontalInkGapEm(base: string, reading: string, insetEm: number): num
       return box;
     });
   const parentInkRight = Math.max(...boxes(base).map((box) => box.xMax)) / metrics.unitsPerEm - 0.5;
+  const annotationWidth = rubyLaneGeometry(1, 1).annotationWidth;
   const rubyInkLeft =
-    rubyLaneGeometry(1).annotationCenterFromParentCenter - insetEm +
+    laneCenterEm +
     (Math.min(...boxes(reading).map((box) => box.xMin)) / metrics.unitsPerEm - 0.5) *
-      rubyLaneGeometry(1).annotationWidth;
+      annotationWidth;
   return rubyInkLeft - parentInkRight;
 }
 
@@ -125,7 +126,7 @@ describe("three-blocker ruby geometry parity", () => {
     expect(bridge.model).toEqual(publicationBefore);
   });
 
-  it("uses one measured optical lane inset in Preview and Publication, independent of line pitch", () => {
+  it("uses one runtime column-pitch-relative lane in Preview and Publication", () => {
     const { bridge, preview } = fixtureModels();
     const previewLine = preview.pages.flatMap((page) => page.columns.flatMap((column) => column.lines))
       .find((line) => line.units.some((unit) => unit.text === "髑髏"))!;
@@ -135,15 +136,19 @@ describe("three-blocker ruby geometry parity", () => {
     const commands = textCommands(bridge.plan.flatMap((page) => page.commands));
     const body = commands.find((command) => command.text === "髑")!;
     const annotation = commands.find((command) => command.text === "も" && command.xMm !== body.xMm)!;
-    const laneMm = rubyLaneGeometry(bridge.model.bodyEmMm);
-    const lanePx = rubyLaneGeometry(preview.fontSizePx);
+    const laneMm = rubyLaneGeometry(bridge.model.bodyEmMm, publicationLine.widthMm);
+    const lanePx = rubyLaneGeometry(preview.fontSizePx, previewLine.widthPx);
 
     expect(annotation.xMm).toBeCloseTo(
       body.xMm + laneMm.annotationCenterFromParentCenter,
       6,
     );
-    expect(laneMm.emBoxGap).toBeCloseTo(
-      -bridge.model.bodyEmMm * RUBY_PARENT_OPTICAL_INSET_EM,
+    expect(laneMm.annotationCenterFromParentCenter).toBeCloseTo(
+      publicationLine.widthMm * RUBY_LANE_COLUMN_PITCH_RATIO,
+      6,
+    );
+    expect(lanePx.annotationCenterFromParentCenter).toBeCloseTo(
+      previewLine.widthPx * RUBY_LANE_COLUMN_PITCH_RATIO,
       6,
     );
     const annotationRightFromParentCenter =
@@ -151,12 +156,7 @@ describe("three-blocker ruby geometry parity", () => {
     const neighboringBodyNearEdge =
       publicationLine.widthMm - bridge.model.bodyEmMm / 2;
     expect(annotationRightFromParentCenter).toBeLessThan(neighboringBodyNearEdge);
-    expect(neighboringBodyNearEdge - annotationRightFromParentCenter).toBeCloseTo(
-      bridge.model.bodyEmMm * RUBY_PARENT_OPTICAL_INSET_EM,
-      // Core's line pitch is an integer GeometryTick, so its mm projection
-      // differs from the ideal 1.5em by at most one sub-micron tick rounding.
-      2,
-    );
+    expect(neighboringBodyNearEdge - annotationRightFromParentCenter).toBeGreaterThan(0);
     expect(publicationLine.widthMm).toBeGreaterThan(bridge.model.bodyEmMm);
     expect(ruby.rubyAnnotation?.status).toBe("PLACED");
 
@@ -175,12 +175,14 @@ describe("three-blocker ruby geometry parity", () => {
     ["髑髏", "もぐらもち"],
     ["光", "ひかり"],
   ])("reduces the real-font %s《%s》 ink gap without collision", (base, reading) => {
-    const before = horizontalInkGapEm(base, reading, -RUBY_PARENT_OPTICAL_INSET_EM);
-    const after = horizontalInkGapEm(base, reading, 0);
+    const targetLaneCenterEm =
+      DEFAULT_PAGE_SETTINGS.lineHeightRatio * RUBY_LANE_COLUMN_PITCH_RATIO;
+    const before = horizontalInkGapEm(base, reading, 0.75);
+    const after = horizontalInkGapEm(base, reading, targetLaneCenterEm);
     expect(before).toBeGreaterThan(0.1);
     expect(after).toBeGreaterThanOrEqual(0);
     expect(after).toBeLessThan(0.09);
-    expect(before - after).toBeCloseTo(RUBY_PARENT_OPTICAL_INSET_EM, 6);
+    expect(before - after).toBeCloseTo(0.75 - targetLaneCenterEm, 6);
   });
 
   it("keeps short and long Ruby centered independently of the cross-axis lane inset", () => {

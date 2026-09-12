@@ -182,8 +182,8 @@ function DebugBadge({ text }: { text: string }) {
   return <span className="debug-info">{text}</span>;
 }
 
-function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
-  const rubyLane = rubyLaneGeometry(fontSizePx);
+function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode }) {
+  const rubyLane = rubyLaneGeometry(fontSizePx, linePitchPx);
   const debugText =
     `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
     (unit.semanticRunKind
@@ -256,8 +256,8 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           style={{
             top: unit.rubyAnnotation.offsetPx,
             // The line box is column pitch, not the base ink box. The shared
-            // lane metric starts from the unchanged body center, then applies
-            // the production font's measured optical side-bearing inset.
+            // lane metric starts from the unchanged body center and places
+            // Ruby at the Human-selected fraction of the runtime line pitch.
             // Publication consumes the same metric; Core's reading-direction
             // offset/extent and the body coordinate remain unchanged.
             left: `calc(50% + ${rubyLane.annotationStartFromParentCenter}px)`,
@@ -281,7 +281,7 @@ function LineView({ line, fontSizePx, pageHeightPx, mode }: { line: PaintLine; f
       {mode === "debug" && <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />}
       {mode === "debug" && line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
       {line.units.map((unit) => (
-        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} mode={mode} />
+        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} />
       ))}
     </div>
   );

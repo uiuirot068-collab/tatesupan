@@ -16,7 +16,7 @@ import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, re
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
-import { RUBY_PARENT_OPTICAL_INSET_EM } from "../rubyLane";
+import { RUBY_LANE_COLUMN_PITCH_RATIO, rubyLaneGeometry } from "../rubyLane";
 
 // Real horizontal bounds for any PaintCommand -- including "glyphOutline"
 // (round 7), whose own path commands carry the only x-coordinates
@@ -140,7 +140,7 @@ describe("P3-O08 — Publication Typography", () => {
       expect(baseCmd && baseCmd.op === "text" ? baseCmd.fontSizePt : undefined).toBeCloseTo((ruby.heightMm / graphemeCount) * (72 / 25.4), 6);
     });
 
-    it("REGRESSION: the annotation uses the shared optical inset from the fixed body em, not the wider line-pitch box", () => {
+    it("REGRESSION: the annotation uses the shared runtime column-pitch ratio", () => {
       const { model } = composePublication("atomic-ruby");
       const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
       const line = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines)).find((l) => l.units.includes(ruby))!;
@@ -148,8 +148,8 @@ describe("P3-O08 — Publication Typography", () => {
       const column = page.columns[0];
       const lineLeftMm = page.widthMm - column.rightMm - line.rightMm - line.widthMm;
       const bodyCenterMm = lineLeftMm + line.widthMm / 2;
-      const bodyRightEdgeMm = bodyCenterMm + model.bodyEmMm / 2;
       const lineRightEdgeMm = lineLeftMm + line.widthMm;
+      const lane = rubyLaneGeometry(model.bodyEmMm, line.widthMm);
       const plan = buildPaintPlan(model, true);
       const ann = ruby.rubyAnnotation!;
       const annCmd = plan.flatMap((p) => p.commands).find((c) => c.op === "text" && ann.status === "PLACED" && c.text === Array.from(ann.text)[0] && c.xMm > bodyCenterMm);
@@ -157,7 +157,11 @@ describe("P3-O08 — Publication Typography", () => {
       if (annCmd && annCmd.op === "text") {
         const halfWidthMm = (annCmd.fontSizePt * (25.4 / 72)) / 2;
         expect(annCmd.xMm - halfWidthMm).toBeCloseTo(
-          bodyRightEdgeMm - model.bodyEmMm * RUBY_PARENT_OPTICAL_INSET_EM,
+          bodyCenterMm + lane.annotationStartFromParentCenter,
+          6,
+        );
+        expect(annCmd.xMm - bodyCenterMm).toBeCloseTo(
+          line.widthMm * RUBY_LANE_COLUMN_PITCH_RATIO,
           6,
         );
         expect(annCmd.xMm).toBeLessThanOrEqual(lineRightEdgeMm + halfWidthMm);
