@@ -1,22 +1,25 @@
-// TateSpun canonical Supabase project guard.
+// TateSpun Supabase project + cutover guard.
 //
 // TateSpun's backend (Auth + projects + user_plans + manuscript_cloud_images,
 // Storage, and Edge Functions) belongs to the project named `tatespun`.
 //
 //   CANONICAL (TateSpun): rgvqquuthovqjqfogfra
 //
-// This gate checks NEXT_PUBLIC_SUPABASE_URL (from the environment, else
-// .env.local) points at that exact project. Anything else (including the
-// unrelated project previously documented as canonical) FAILS.
+// NEXT_PUBLIC_SUPABASE_URL normally must match the deployed Production ref
+// (defaulting to the current canonical ref above). A deliberate change is
+// accepted only with an explicit deployed ref and migration manifest, then the
+// read-only cross-database audit below must pass before the build can continue.
 //
 // Run:  node scripts/verify-supabase-project.mjs
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const CANONICAL_REF = "rgvqquuthovqjqfogfra"; // project name: tatespun
+const REF_RE = /^[a-z0-9]{20}$/;
 
 let failures = 0;
 const check = (name, cond) => {
@@ -34,9 +37,17 @@ function readEnvLocalVar(name) {
 
 const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || readEnvLocalVar("NEXT_PUBLIC_SUPABASE_URL") || "").trim();
 const ref = (url.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co\/?$/i) || [])[1] || null;
+const explicitDeployedRef = (process.env.TATESPUN_DEPLOYED_SUPABASE_REF ?? "").trim().toLowerCase();
+const deployedRef = explicitDeployedRef || CANONICAL_REF;
+const cutoverRequested = ref !== null && ref !== deployedRef;
+const cutoverConfigured =
+  cutoverRequested &&
+  REF_RE.test(explicitDeployedRef) &&
+  (process.env.TATESPUN_CUTOVER_MANIFEST_PATH ?? "").trim() !== "";
 
 console.log(`source URL: ${url || "(none found — set NEXT_PUBLIC_SUPABASE_URL or .env.local)"}`);
 console.log(`project ref: ${ref ?? "(unrecognised)"}`);
+console.log(`deployed ref: ${deployedRef}`);
 console.log("");
 
 check(
@@ -44,12 +55,14 @@ check(
   ref !== null,
 );
 check(
-  "2. project ref is the canonical TateSpun project",
-  ref === CANONICAL_REF,
+  "2. deployed production ref is well formed",
+  REF_RE.test(deployedRef),
 );
 check(
-  "3. no unrelated/placeholder project ref",
-  ref === CANONICAL_REF,
+  cutoverRequested
+    ? "3. ref change has explicit deployed-ref + migration-manifest configuration"
+    : "3. candidate ref matches deployed production ref",
+  ref !== null && (!cutoverRequested || cutoverConfigured),
 );
 
 // The app must not hard-code a project ref anywhere in src/ — it is env-only.
@@ -107,7 +120,16 @@ check(
 
 console.log("");
 if (failures === 0) {
-  console.log("canonical TateSpun Supabase project OK (rgv…).");
+  console.log("TateSpun Supabase ref configuration OK; running cutover audit gate.");
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(repoRoot, "scripts", "verify-supabase-cutover.mjs"), "--dry-run"],
+      { stdio: "inherit", env: process.env },
+    );
+  } catch {
+    process.exit(1);
+  }
 } else {
   console.log(`${failures} supabase-project check(s) FAILED.`);
   process.exit(1);
