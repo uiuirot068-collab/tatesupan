@@ -149,17 +149,21 @@ function updateExpression(content, expectedPages, minimumWaitMs) {
     return new Promise((resolve, reject) => {
       const deadline = performance.now() + 120000;
       const poll = () => {
+        const logicalPages = Number(root.getAttribute('data-preview-total-pages'));
         const cards = root.querySelectorAll('[data-page-card="true"]').length;
         const v2Pages = root.querySelectorAll('[data-v2-preview-root] .page').length;
+        const mountedSpreads = root.querySelectorAll('[data-preview-spread-mounted="true"]').length;
         const now = performance.now();
-        if (cards === ${expectedPages} && cards === v2Pages && now - started >= ${minimumWaitMs} && now - lastMutation >= ${QUIET_MS}) {
+        if (logicalPages === ${expectedPages} && cards > 0 && cards === v2Pages && now - started >= ${minimumWaitMs} && now - lastMutation >= ${QUIET_MS}) {
           mutations.disconnect();
           observer.disconnect();
           resolve({
             totalMs: now - started,
             dispatchMs,
-            pages: cards,
+            pages: logicalPages,
+            mountedPages: cards,
             v2Pages,
+            mountedSpreads,
             previewElements: root.querySelectorAll('*').length,
             longTaskCount: longTasks.length,
             longTaskTotalMs: longTasks.reduce((sum, value) => sum + value, 0),
@@ -170,13 +174,62 @@ function updateExpression(content, expectedPages, minimumWaitMs) {
         if (now >= deadline) {
           mutations.disconnect();
           observer.disconnect();
-          reject(new Error('Preview did not settle within 120s (cards=' + cards + ', v2Pages=' + v2Pages + ', expected=${expectedPages}, editorLength=' + editor.value.length + ')'));
+          reject(new Error('Preview did not settle within 120s (logicalPages=' + logicalPages + ', cards=' + cards + ', v2Pages=' + v2Pages + ', expected=${expectedPages}, editorLength=' + editor.value.length + ')'));
           return;
         }
         setTimeout(poll, 50);
       };
       poll();
     });
+  })()`;
+}
+
+function virtualizationScrollExpression() {
+  return `(async () => {
+    const scroller = document.querySelector('[data-preview-scroll-container="true"]');
+    const root = document.querySelector('[data-export-scale-root="true"]');
+    if (!(scroller instanceof HTMLElement) || !root) throw new Error('Preview scroller unavailable');
+    const waitFor = (predicate) => new Promise((resolve, reject) => {
+      const deadline = performance.now() + 10000;
+      const poll = () => {
+        if (predicate()) return resolve();
+        if (performance.now() >= deadline) return reject(new Error('Virtualized spread did not enter the paint window'));
+        setTimeout(poll, 50);
+      };
+      poll();
+    });
+    const spreads = [...root.querySelectorAll('[data-preview-spread]')];
+    const first = spreads[0];
+    const last = spreads.at(-1);
+    if (!first || !last) throw new Error('Preview spreads unavailable');
+
+    scroller.scrollTop = scroller.scrollHeight;
+    await waitFor(() => last.getAttribute('data-preview-spread-mounted') === 'true');
+    const bottomMountedPages = root.querySelectorAll('[data-page-card="true"]').length;
+    const bottomMountedSpreads = root.querySelectorAll('[data-preview-spread-mounted="true"]').length;
+
+    scroller.scrollTop = 0;
+    await waitFor(() => first.getAttribute('data-preview-spread-mounted') === 'true');
+    const editor = document.querySelector('[data-demo-target="editor"]');
+    const reactPropsKey = editor && Object.getOwnPropertyNames(editor).find((key) => key.startsWith('__reactProps'));
+    const onSelect = reactPropsKey ? editor[reactPropsKey]?.onSelect : undefined;
+    if (!(editor instanceof HTMLTextAreaElement) || typeof onSelect !== 'function') {
+      throw new Error('Editor cursor binding unavailable');
+    }
+    editor.setSelectionRange(0, 0);
+    onSelect({ target: editor, currentTarget: editor });
+    await waitFor(() => first.getAttribute('data-preview-spread-mounted') === 'true' && scroller.scrollTop < 1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+    onSelect({ target: editor, currentTarget: editor });
+    await waitFor(() => last.getAttribute('data-preview-spread-mounted') === 'true' && scroller.scrollTop > 0);
+    const cursorFollowed = true;
+
+    editor.setSelectionRange(0, 0);
+    onSelect({ target: editor, currentTarget: editor });
+    await waitFor(() => first.getAttribute('data-preview-spread-mounted') === 'true' && scroller.scrollTop < 1);
+    return { bottomMountedPages, bottomMountedSpreads, cursorFollowed, spreadCount: spreads.length };
   })()`;
 }
 
@@ -258,11 +311,16 @@ try {
   for (const size of requestedSizes) {
     const expectedPages = expectedPageCounts.get(size);
     const load = await cdp.evaluate(updateExpression(makeLongDocumentFixture(size), expectedPages, 1_000));
+    const windowing = await cdp.evaluate(virtualizationScrollExpression());
     const zoomMs = await cdp.evaluate(zoomExpression());
     const edit = await cdp.evaluate(updateExpression(`${makeLongDocumentFixture(size)}追`, expectedPages, 3_500));
     const metrics = await cdp.send("Performance.getMetrics");
     const heap = metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")?.value;
-    results.push({ size, load, edit, zoomMs, jsHeapUsedMb: heap ? heap / 1024 / 1024 : undefined });
+    if (expectedPages >= 54) {
+      assert(load.mountedPages <= 24, `initial paint mounted ${load.mountedPages}/${expectedPages} pages`);
+      assert(windowing.bottomMountedPages <= 24, `bottom paint mounted ${windowing.bottomMountedPages}/${expectedPages} pages`);
+    }
+    results.push({ size, load, edit, windowing, zoomMs, jsHeapUsedMb: heap ? heap / 1024 / 1024 : undefined });
     console.log(`TATESPUN_BROWSER_PERF ${JSON.stringify(results.at(-1))}`);
   }
 } catch (error) {

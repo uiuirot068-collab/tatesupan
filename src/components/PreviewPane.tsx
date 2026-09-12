@@ -6,10 +6,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   type HTMLAttributes,
+  type ReactNode,
 } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -95,6 +97,12 @@ import {
   pdfExportChecklistAttemptProgress,
   type PdfExportChecklistAttempt,
 } from "../../typesetting-v2/tools/human-e2e-editor/checklistModel";
+import {
+  PREVIEW_VIRTUALIZATION_OVERSCAN_PX,
+  findPreviewSpreadIndex,
+  initialPreviewSpreadIndices,
+  shouldVirtualizePreview,
+} from "@/lib/previewPageVirtualization";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -325,6 +333,75 @@ const PageSlot = memo(function PageSlot({
   );
 });
 
+interface PreviewSpreadProps {
+  spreadIndex: number;
+  mounted: boolean;
+  registerRef: (el: HTMLDivElement | null) => void;
+  estimatedHeight: number;
+  placeholderWidth: number;
+  onMeasuredHeight?: (height: number) => void;
+  style: CSSProperties;
+  children: ReactNode;
+}
+
+/**
+ * A spread keeps a lightweight, size-stable place in the scroll layout while
+ * its expensive page trees are outside the viewport. Once a spread has been
+ * painted we retain its measured height, so revisiting it cannot move the
+ * scrollbar even when its editor chrome is taller than the paper itself.
+ */
+const PreviewSpread = memo(function PreviewSpread({
+  spreadIndex,
+  mounted,
+  registerRef,
+  estimatedHeight,
+  placeholderWidth,
+  onMeasuredHeight,
+  style,
+  children,
+}: PreviewSpreadProps) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  const setElement = useCallback((element: HTMLDivElement | null) => {
+    elementRef.current = element;
+    registerRef(element);
+  }, [registerRef]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!mounted || !element) return;
+    const updateHeight = () => {
+      const nextHeight = element.offsetHeight;
+      if (nextHeight > 0) {
+        setMeasuredHeight((current) => current === nextHeight ? current : nextHeight);
+        onMeasuredHeight?.(nextHeight);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mounted, onMeasuredHeight]);
+
+  const placeholderHeight = measuredHeight ?? estimatedHeight;
+  return (
+    <div
+      ref={setElement}
+      data-preview-spread={spreadIndex}
+      data-preview-spread-mounted={mounted ? "true" : "false"}
+      className="flex flex-row items-stretch"
+      style={mounted ? style : {
+        ...style,
+        width: style.width ?? placeholderWidth,
+        height: placeholderHeight,
+        minHeight: placeholderHeight,
+      }}
+    >
+      {mounted ? children : null}
+    </div>
+  );
+});
+
 interface PreviewPaneProps {
   content: string;
   /** 作品タイトル。書き出しファイル名の生成に使う（空なら既定のフォールバック名）。 */
@@ -482,6 +559,14 @@ export default function PreviewPane({
     () => computeSpreadGroups(presentationSequence.length),
     [presentationSequence.length]
   );
+  const [visibleSpreadIndices, setVisibleSpreadIndices] = useState<Set<number>>(() =>
+    initialPreviewSpreadIndices(spreadGroups.length)
+  );
+  const spreadElementsRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const registerSpreadElement = (index: number) => (element: HTMLDivElement | null) => {
+    if (element) spreadElementsRef.current.set(index, element);
+    else spreadElementsRef.current.delete(index);
+  };
 
   // Web閲覧用 (isPx) authors its canonical DOM size directly in *screen*
   // pixels (768×1024) rather than the small mm-based magnitude every other
@@ -520,9 +605,25 @@ export default function PreviewPane({
   // room below a still-single-page manuscript (see the spacer below) — never
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
+  const spreadGeometryKey = `${spreadWidthPx}:${canonicalPageHeightPx}`;
+  const [defaultSpreadMeasurement, setDefaultSpreadMeasurement] = useState<{
+    geometryKey: string;
+    height: number;
+  } | null>(null);
+  const establishDefaultSpreadHeight = useCallback((height: number) => {
+    setDefaultSpreadMeasurement((current) =>
+      current?.geometryKey === spreadGeometryKey
+        ? current
+        : { geometryKey: spreadGeometryKey, height }
+    );
+  }, [spreadGeometryKey]);
+  const defaultSpreadHeight = defaultSpreadMeasurement?.geometryKey === spreadGeometryKey
+    ? defaultSpreadMeasurement.height
+    : canonicalPageHeightPx;
 
   const internalV2Beta = isV2BetaRendererEnabled();
   const useV2Engine = internalV2Beta;
+  const virtualizePreview = shouldVirtualizePreview(spreadGroups.length, useV2Engine);
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
@@ -812,6 +913,53 @@ export default function PreviewPane({
     () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
     [cursorIndex, pageSourceRanges]
   );
+  const activePresentationIndex = useMemo(
+    () => activePageIndex == null
+      ? -1
+      : presentationSequence.findIndex(
+          (item) => item.kind === "body" && item.bodyIndex === activePageIndex
+        ),
+    [activePageIndex, presentationSequence]
+  );
+  const activeSpreadIndex = useMemo(
+    () => findPreviewSpreadIndex(spreadGroups, activePresentationIndex),
+    [activePresentationIndex, spreadGroups]
+  );
+
+  useEffect(() => {
+    if (!virtualizePreview) return;
+    const root = scrollContainerRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") {
+      setVisibleSpreadIndices(new Set(spreadGroups.map((_, index) => index)));
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      setVisibleSpreadIndices((current) => {
+        const next = new Set(current);
+        let changed = false;
+        for (const entry of entries) {
+          const spreadIndex = Number((entry.target as HTMLElement).dataset.previewSpread);
+          if (!Number.isInteger(spreadIndex)) continue;
+          if (entry.isIntersecting) {
+            if (!next.has(spreadIndex)) {
+              next.add(spreadIndex);
+              changed = true;
+            }
+          } else if (next.delete(spreadIndex)) {
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, {
+      root,
+      rootMargin: `${PREVIEW_VIRTUALIZATION_OVERSCAN_PX}px 0px`,
+    });
+
+    spreadElementsRef.current.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [spreadGeometryKey, spreadGroups, virtualizePreview]);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(
@@ -1641,6 +1789,7 @@ export default function PreviewPane({
   // 他のindexed callbackと同じuseStableIndexedCallbackで包み、page index
   // ごとに参照を安定させる（登録先Map・attach/detachの意味は変更なし）。
   const stableRegisterPageElement = useStableIndexedCallback(registerPageElement);
+  const stableRegisterSpreadElement = useStableIndexedCallback(registerSpreadElement);
 
   // [TateSpun perf] 上記の各handlerは毎render新規に作られるcurry関数の
   // ままにしておき（挙動の重複実装を避けるため本体は書き換えない）、
@@ -1907,6 +2056,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
+        data-preview-scroll-container="true"
         // TSP-LOOP-020 — this is the ONE scroll/pan surface for the preview
         // (the outer section and the pane root no longer nest their own
         // scrollers on a phone). `overscroll-contain` keeps a swipe that
@@ -1932,6 +2082,7 @@ export default function PreviewPane({
         <div
           ref={scaleContentRef}
           data-export-scale-root="true"
+          data-preview-total-pages={pages.length}
           className="flex w-max h-max flex-col gap-6"
           style={{
             transform: `scale(${presentationScale})`,
@@ -1956,9 +2107,19 @@ export default function PreviewPane({
           // the even/verso page reads on the right (right-to-left reading
           // visits the right page first, i.e. the lower page number).
           const displayGroup = isSingle ? group : [group[1], group[0]];
+          const mountSpread =
+            !virtualizePreview ||
+            visibleSpreadIndices.has(spreadIndex) ||
+            activeSpreadIndex === spreadIndex;
           return (
-            <div
-              key={spreadIndex}
+            <PreviewSpread
+              key={`${spreadGeometryKey}:${spreadIndex}`}
+              spreadIndex={spreadIndex}
+              mounted={mountSpread}
+              registerRef={stableRegisterSpreadElement(spreadIndex)}
+              estimatedHeight={defaultSpreadHeight}
+              placeholderWidth={spreadWidthPx}
+              onMeasuredHeight={spreadIndex === 0 ? establishDefaultSpreadHeight : undefined}
               // `items-stretch` (the flexbox default, made explicit here)
               // makes both per-page wrapper columns in a spread exactly as
               // tall as the taller one — whichever page has the 挿絵
@@ -1980,7 +2141,6 @@ export default function PreviewPane({
               // so stretching is a no-op there — its height already *is*
               // the row's height, and its own `margin-top:auto` resolves
               // to 0 (no leftover space to absorb).
-              className="flex flex-row items-stretch"
               style={{
                 gap: SPREAD_GAP_PX,
                 // A lone page always reserves the full 2-up spread width and
@@ -2086,7 +2246,7 @@ export default function PreviewPane({
                   />
                 );
               })}
-            </div>
+            </PreviewSpread>
           );
         })}
         {/* A manuscript that's still just page 1 would otherwise have the
