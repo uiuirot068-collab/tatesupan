@@ -996,20 +996,38 @@ function PageCard({
       >
         {v2PreviewEnabled ? (
           v2PreviewPage ? (
-            <div
-              className="absolute overflow-visible"
-              style={{
-                top: sheetStyle.paddingTop,
-                right: sheetStyle.paddingRight,
-                fontFamily: '"Shippori Mincho", serif',
-              }}
-            >
-              <PreviewPage
-                page={v2PreviewPage}
-                fontSizePx={v2PreviewFontSizePx ?? fontSizePx}
-                mode="normal"
-              />
-            </div>
+            <>
+              <div
+                className="absolute overflow-visible"
+                style={{
+                  top: sheetStyle.paddingTop,
+                  right: sheetStyle.paddingRight,
+                  fontFamily: '"Shippori Mincho", serif',
+                }}
+              >
+                <PreviewPage
+                  page={v2PreviewPage}
+                  fontSizePx={v2PreviewFontSizePx ?? fontSizePx}
+                  mode="normal"
+                  paintImages={false}
+                />
+              </div>
+              {fullImage ? (
+                <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} />
+              ) : (
+                <>
+                  {topImages.length > 0 && (
+                    <ImagePositionOverlay tokens={topImages} images={images} unresolvedImageIds={unresolvedImageIds} position="top" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                  )}
+                  {centerImages.length > 0 && (
+                    <ImagePositionOverlay tokens={centerImages} images={images} unresolvedImageIds={unresolvedImageIds} position="center" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                  )}
+                  {bottomImages.length > 0 && (
+                    <ImagePositionOverlay tokens={bottomImages} images={images} unresolvedImageIds={unresolvedImageIds} position="bottom" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                  )}
+                </>
+              )}
+            </>
           ) : (
             // Empty manuscripts intentionally have no canonical body page,
             // while the editor still keeps this physical PageCard as its

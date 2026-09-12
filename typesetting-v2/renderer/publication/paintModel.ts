@@ -19,7 +19,7 @@
 // `rubyReadingOffsetTick`/`rubyReadingExtentTick` read-only, exactly like
 // Preview does).
 
-import type { CanonicalDocument, CanonicalPage, ColophonPlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
+import type { CanonicalDocument, CanonicalPage, ColophonPlacement, ImagePlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
 import type { SourceSpan } from "../../core/source/span";
 import { tickToMm } from "./geometry";
 
@@ -95,6 +95,10 @@ export interface PaintPlacedUnit {
   // paints at a shared, context-level width), so IMAGE carries its own
   // explicitly. Populated only for IMAGE units.
   imageIntrinsicWidthMm?: number;
+  /** Canonical IMAGE placement, passed through unchanged for page-relative paint. */
+  imagePlacement?: ImagePlacement;
+  /** Editor UI's explicit 「全面（ページを覆う）」 paint contract. */
+  imageFullPageCover?: boolean;
   semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER";
   debug: PaintDebugInfo;
 }
@@ -171,6 +175,8 @@ export interface PublicationRenderContext {
   measurementIdentity: string;
   paintFontIdentity: string;
   imageResolver?: ImageResolver;
+  /** Opt-in for the Editor's FULL-placement page-cover semantics. */
+  fullImageCoversPage?: boolean;
   // Typography Parity Round 3/4 (2026-09-09, qa/evidence/
   // TYPOGRAPHY_PARITY_INDESIGN_OVERLAY_DRIFT.md): the body font's own em
   // size (character-direction advance, GeometryTick), for GLYPH SCALE
@@ -353,7 +359,12 @@ function buildPaintLine(
       heightIsApproximate: isImage ? false : heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed) } : {}),
-      ...(isImage ? { imageResolution: resolveImage(owner.refId), imageIntrinsicWidthMm: tickToMm(owner.intrinsicWidth) } : {}),
+      ...(isImage ? {
+        imageResolution: resolveImage(owner.refId),
+        imageIntrinsicWidthMm: tickToMm(owner.intrinsicWidth),
+        imagePlacement: owner.placement,
+        imageFullPageCover: owner.placement === "FULL" && ctx.fullImageCoversPage === true,
+      } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),
       debug: {
         pageOrder,

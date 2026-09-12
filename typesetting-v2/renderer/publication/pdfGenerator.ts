@@ -453,7 +453,14 @@ function unitCommands(
   // caller that never supplied `pageGeometry` to `buildPaintPlan`), in
   // which case the IMAGE branch falls back to the prior `lineWidthMm`-based
   // sizing unchanged.
-  imageBoxMm?: { widthMm: number; centerXMm: number }
+  imageBoxMm?: {
+    contentLeftMm: number;
+    contentTopMm: number;
+    contentWidthMm: number;
+    contentHeightMm: number;
+    paperWidthMm: number;
+    paperHeightMm: number;
+  }
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -577,17 +584,55 @@ function unitCommands(
     // prior `lineWidthMm`/`xCenter` behavior only when no real page
     // geometry was supplied at all (preserves every pre-existing
     // geometry-less caller byte-for-byte).
-    const boxWidthMm = imageBoxMm?.widthMm ?? lineWidthMm;
-    const boxCenterXMm = imageBoxMm?.centerXMm ?? xCenter;
+    const boxWidthMm = imageBoxMm?.contentWidthMm ?? lineWidthMm;
+    const boxHeightMm = imageBoxMm?.contentHeightMm ?? unit.heightMm;
+    const boxLeftMm = imageBoxMm?.contentLeftMm ?? x;
+    const boxTopMm = imageBoxMm?.contentTopMm ?? y;
     const naturalWidthMm = unit.imageIntrinsicWidthMm ?? boxWidthMm;
     const naturalHeightMm = unit.heightMm;
-    const scale = naturalWidthMm > boxWidthMm ? boxWidthMm / naturalWidthMm : 1;
+    const placement = unit.imagePlacement ?? "CENTER";
+    if (placement === "FULL" && unit.imageFullPageCover && imageBoxMm) {
+      // Match the established editor contract: cover the physical page while
+      // preserving the marker box's aspect ratio. Any overflow is clipped by
+      // the PDF/JPG page surface; no raster-pixel remeasurement is involved.
+      const scale = Math.max(
+        imageBoxMm.paperWidthMm / naturalWidthMm,
+        imageBoxMm.paperHeightMm / naturalHeightMm
+      );
+      const widthMm = naturalWidthMm * scale;
+      const heightMm = naturalHeightMm * scale;
+      const imageX = (imageBoxMm.paperWidthMm - widthMm) / 2;
+      const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
+      const resolution = unit.imageResolution;
+      return resolution && resolution.kind === "RESOLVED"
+        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        : [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
+    }
+    if (placement === "FULL") {
+      // Preserve the renderer's pre-existing generic Core-fixture behavior:
+      // FULL isolates flow but only the Editor bridge's explicit UI contract
+      // opts into covering the physical page.
+      const scale = naturalWidthMm > boxWidthMm ? boxWidthMm / naturalWidthMm : 1;
+      const widthMm = naturalWidthMm * scale;
+      const heightMm = naturalHeightMm * scale;
+      const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
+      const resolution = unit.imageResolution;
+      return resolution && resolution.kind === "RESOLVED"
+        ? [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        : [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
+    }
+    const scale = Math.min(1, boxWidthMm / naturalWidthMm, boxHeightMm / naturalHeightMm);
     const widthMm = naturalWidthMm * scale;
     const heightMm = naturalHeightMm * scale;
-    const imageX = boxCenterXMm - widthMm / 2;
+    const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
+    const imageY = placement === "TOP"
+      ? boxTopMm
+      : placement === "BOTTOM"
+        ? boxTopMm + boxHeightMm - heightMm
+        : boxTopMm + (boxHeightMm - heightMm) / 2;
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
-      return [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
+      return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
     }
     // PLACEHOLDER (no resolver wired) or an unresolved failure kind that
     // reached paint time without going through `generatePublicationPdf`'s
@@ -595,7 +640,7 @@ function unitCommands(
     // as every typography test in this file does) — the same vector-rect
     // placeholder as before, now sized to the real aspect-correct box
     // instead of the full column width.
-    return [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
+    return [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
   }
 
   // Any other kind without real paint text yet: unchanged vector-rectangle
@@ -648,8 +693,14 @@ function buildBodyPaintPage(
     // doc) — undefined when no real page geometry was supplied, so
     // geometry-less callers keep their prior `lineWidthMm`-based behavior.
     const contentAreaWidthMm = pageGeometry ? contentRightEdgeMm - pageGeometry.marginLeftMm : undefined;
-    const contentAreaCenterXMm = pageGeometry && contentAreaWidthMm !== undefined ? pageGeometry.marginLeftMm + contentAreaWidthMm / 2 : undefined;
-    const imageBoxMm = contentAreaWidthMm !== undefined && contentAreaCenterXMm !== undefined ? { widthMm: contentAreaWidthMm, centerXMm: contentAreaCenterXMm } : undefined;
+    const imageBoxMm = pageGeometry && contentAreaWidthMm !== undefined ? {
+      contentLeftMm: pageGeometry.marginLeftMm,
+      contentTopMm: pageGeometry.marginTopMm,
+      contentWidthMm: contentAreaWidthMm,
+      contentHeightMm: pageGeometry.paperHeightMm - pageGeometry.marginTopMm - pageGeometry.marginBottomMm,
+      paperWidthMm: pageGeometry.paperWidthMm,
+      paperHeightMm: pageGeometry.paperHeightMm,
+    } : undefined;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {

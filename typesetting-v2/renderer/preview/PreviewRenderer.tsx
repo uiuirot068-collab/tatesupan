@@ -296,7 +296,7 @@ function ColumnView({ column, fontSizePx, pageHeightPx, mode }: { column: PaintC
   );
 }
 
-export function PreviewPage({ page, fontSizePx, mode }: { page: PaintPage; fontSizePx: number; mode: PreviewMode }) {
+export function PreviewPage({ page, fontSizePx, mode, paintImages = true }: { page: PaintPage; fontSizePx: number; mode: PreviewMode; paintImages?: boolean }) {
   const rootClass = ["page", page.orientation === "horizontal" ? "horizontal" : "", mode === "debug" ? "debug" : ""].filter(Boolean).join(" ");
   return (
     <div className={rootClass} style={{ width: page.widthPx, height: page.heightPx }}>
@@ -308,7 +308,13 @@ export function PreviewPage({ page, fontSizePx, mode }: { page: PaintPage; fontS
       )}
       {mode === "debug" && page.manualBreakBefore && <div className="page-break-marker" />}
       {page.columns.map((column) => (
-        <ColumnView key={column.id} column={column} fontSizePx={fontSizePx} pageHeightPx={page.heightPx} mode={mode} />
+        <ColumnView
+          key={column.id}
+          column={paintImages ? column : { ...column, lines: column.lines.map((line) => ({ ...line, units: line.units.filter((unit) => unit.kind !== "IMAGE") })) }}
+          fontSizePx={fontSizePx}
+          pageHeightPx={page.heightPx}
+          mode={mode}
+        />
       ))}
     </div>
   );
