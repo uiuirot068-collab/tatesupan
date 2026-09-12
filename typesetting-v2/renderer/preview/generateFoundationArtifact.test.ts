@@ -260,6 +260,10 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(unitRule).toContain("line-height: 1");
       expect(unitRule).toContain("writing-mode: vertical-rl");
       expect(unitRule).toContain("white-space: nowrap");
+      const pageRuleMatch = html.match(/(?<!-)\.page\s*\{[^}]*\}/);
+      expect(pageRuleMatch).not.toBeNull();
+      expect(pageRuleMatch![0]).toContain("text-orientation: upright");
+      expect(pageRuleMatch![0]).toContain('font-family: "Shippori Mincho"');
       // P3-O09-RUBY-ANNOTATION-MISSING-HOLD: overflow:hidden moved off
       // .unit itself onto the inner .unit-ink wrapper, so a ruby
       // annotation (a direct child of .unit, deliberately painted OUTSIDE
@@ -267,6 +271,8 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(unitRule).not.toContain("overflow: hidden");
       const unitInkRuleMatch = html.match(/\.unit-ink\s*\{[^}]*\}/);
       expect(unitInkRuleMatch).not.toBeNull();
+      expect(unitInkRuleMatch![0]).toContain("left: calc(50% - 0.5em)");
+      expect(unitInkRuleMatch![0]).toContain("width: 1em");
       expect(unitInkRuleMatch![0]).toContain("overflow: hidden");
     });
   });

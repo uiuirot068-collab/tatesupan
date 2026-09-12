@@ -35,7 +35,7 @@ const PREVIEW_RENDERER_RULES = `
   .hold-banner { background: #fee; border: 1px solid #c0392b; padding: 8px; font-size: 12px; }
   .font-warning { background: #ffe9c2; border: 1px solid #cc8b00; padding: 6px; font-size: 11px; margin-bottom: 6px; }
   .page-row { display: flex; flex-wrap: wrap; gap: 24px; }
-  .page { position: relative; background: #fff; writing-mode: vertical-rl; border: 1px solid #ccc; }
+  .page { position: relative; background: #fff; writing-mode: vertical-rl; text-orientation: upright; font-family: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif; border: 1px solid #ccc; }
   .page.horizontal { writing-mode: horizontal-tb; }
   .column { position: absolute; top: 0; }
   .line { position: absolute; top: 0; }
@@ -67,7 +67,7 @@ const PREVIEW_RENDERER_RULES = `
      clip -- CSS overflow only ever clips a box's own descendants, never
      its siblings, and moving the clip one level down is the minimal way
      to keep glyph-ink clipping while un-clipping the annotation. */
-  .unit-ink { display: block; width: 100%; height: 100%; overflow: hidden; }
+  .unit-ink { position: absolute; left: calc(50% - 0.5em); display: block; width: 1em; height: 100%; overflow: hidden; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   /* P3-O03-TCY-VISUAL: text-combine-upright is the standard CSS mechanism
      for tategaki 縦中横 (Phase 2's own P2-L06B evidence already identified
@@ -113,7 +113,6 @@ const PREVIEW_RENDERER_RULES = `
      analogue here. TWO_DOT_LEADER remains untouched/unused for the same
      reason (not yet exercised by any fixture). See
      qa/evidence/P3_O05_ELLIPSIS_VISUAL.md for the full audit record. */
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
   .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
