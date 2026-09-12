@@ -8,11 +8,22 @@ import { fileURLToPath } from "node:url";
 import { decode } from "fast-png";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const PRIMARY_SAMPLES = [
+const EXPECTED_RUBY_LANE_CENTER_EM = 0.65;
+const CENTERING_SAMPLES = [
   { baseText: "親文字", readingText: "よみ", line: "あああ｜親文字《よみ》いいいいいい", policy: "CENTER" },
   { baseText: "残響", readingText: "ざんきょうきょう", line: "あああ｜残響《ざんきょうきょう》いいいいいい", policy: "CENTER" },
   { baseText: "曇天", readingText: "どんてんてん", line: "あああ｜曇天《どんてんてん》いいいいいい", policy: "CENTER" },
 ];
+const DISTANCE_SAMPLES = [
+  { baseText: "髑髏", readingText: "もぐらもち", policy: "CENTER" },
+  { baseText: "聯想", readingText: "れんそう", policy: "CENTER" },
+];
+const DISTANCE_FIXTURE = [
+  "「モオル——Mole……」",
+  "モオルは｜髑髏《もぐらもち》と云ふ英語だった。",
+  "この｜聯想《れんそう》も僕には愉快ではなかった。",
+  "が、僕は三三秒の後、[tate]Mole[/tate]を la mort に綴り直した。",
+].join("\n");
 const EDGE_SAMPLES = [
   { baseText: "光", readingText: "ひかりかがやく", line: "あああ｜光《ひかりかがやく》いいいいいい", policy: "CENTER" },
   { baseText: "東西", readingText: "とう", line: "あああ｜東西《とう》いいいいいい", policy: "CENTER" },
@@ -22,10 +33,17 @@ const EDGE_SAMPLES = [
   // the 37th (last) A5 slot.
   { baseText: "涯", readingText: "はてのはて", line: `${"あ".repeat(35)}｜涯《はてのはて》`, policy: "END" },
 ];
-const SAMPLES = process.env.TATESPUN_RUBY_EDGE_CASES === "1" ? EDGE_SAMPLES : PRIMARY_SAMPLES;
+const distanceQa = process.env.TATESPUN_RUBY_DISTANCE === "1";
+const SAMPLES = distanceQa
+  ? DISTANCE_SAMPLES
+  : process.env.TATESPUN_RUBY_EDGE_CASES === "1"
+    ? EDGE_SAMPLES
+    : CENTERING_SAMPLES;
 const CENTERED_BASES = SAMPLES.filter((sample) => sample.policy === "CENTER").map((sample) => sample.baseText);
-const SCREENSHOT_BASES = PRIMARY_SAMPLES.map((sample) => sample.baseText);
-const FIXTURE = SAMPLES.map((sample) => sample.line).join("\n");
+const SCREENSHOT_BASES = distanceQa
+  ? DISTANCE_SAMPLES.map((sample) => sample.baseText)
+  : CENTERING_SAMPLES.map((sample) => sample.baseText);
+const FIXTURE = distanceQa ? DISTANCE_FIXTURE : SAMPLES.map((sample) => sample.line).join("\n");
 
 function visibleInkRect(image, cssRect, pixelScaleX, pixelScaleY) {
   const channels = image.channels ?? 4;
@@ -195,6 +213,7 @@ const measurementExpression = `(() => {
     left: round(value.left),
     right: round(value.right),
     width: round(value.width),
+    centerX: round((value.left + value.right) / 2),
   });
   const rangeRect = (node) => {
     const range = document.createRange();
@@ -426,6 +445,10 @@ try {
   const target = await targetResponse.json();
   cdp = new CdpPage(target.webSocketDebuggerUrl);
   await cdp.open();
+  // Keep requestAnimationFrame-based settle checks live in headless Chrome.
+  // A second about:blank target exists at startup and can otherwise leave the
+  // Editor target background-throttled between the 150% and 250% checks.
+  await cdp.send("Page.bringToFront");
   await cdp.send("Runtime.enable");
   await cdp.waitFor(`document.readyState === 'complete' && Boolean(document.querySelector('[data-demo-target="editor"]'))`);
   await cdp.waitFor(`Object.getOwnPropertyNames(document.querySelector('[data-demo-target="editor"]')).some((key) => key.startsWith('__reactProps'))`);
@@ -460,6 +483,42 @@ try {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return true;
   })()`);
+
+  if (distanceQa) {
+    await cdp.evaluate(`(async () => {
+      const reset = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '100%');
+      const plus = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '＋');
+      reset?.click();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      plus?.click();
+      await new Promise((resolve) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 200));
+      return true;
+    })()`);
+    const zoom150 = await cdp.evaluate(measurementExpression);
+    assert.deepEqual(zoom150.map((entry) => entry.baseText), SAMPLES.map((sample) => sample.baseText));
+    assert.ok(zoom150.every((entry) => entry.dom.scale > 0), "150% Ruby scale was not measurable");
+    assert.ok(
+      zoom150.every((entry) => {
+        const laneDelta = entry.dom.rubyTextRun.centerX - entry.dom.baseTextRun.centerX;
+        const expected = parseFloat(entry.computed.base.fontSize) * entry.dom.scale * EXPECTED_RUBY_LANE_CENTER_EM;
+        return Math.abs(laneDelta - expected) <= 0.15;
+      }),
+      "150% Ruby lane did not preserve the shared 0.65em center distance",
+    );
+    console.log(JSON.stringify({ zoom: "150%", measurements: zoom150 }, null, 2));
+    if (process.env.TATESPUN_RUBY_SCREENSHOT_150) {
+      const shot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
+      writeFileSync(process.env.TATESPUN_RUBY_SCREENSHOT_150, Buffer.from(shot.data, "base64"));
+    }
+    await cdp.evaluate(`(async () => {
+      const plus = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '＋');
+      plus?.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      plus?.click();
+      await new Promise((resolve) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 200));
+      return true;
+    })()`);
+  }
 
   if (process.env.TATESPUN_RUBY_ZOOM === "100" || process.env.TATESPUN_RUBY_ZOOM === "400") {
     await cdp.evaluate(`(async () => {
@@ -533,6 +592,7 @@ try {
     const canonicalDelta = Math.abs(entry.canonical.base.center - entry.canonical.ruby.center);
     const containerDelta = Math.abs(entry.dom.base.center - entry.dom.rubyContainer.center);
     const runDelta = Math.abs(entry.dom.baseTextRun.center - entry.dom.rubyTextRun.center);
+    const horizontalLaneDelta = entry.dom.rubyTextRun.centerX - entry.dom.baseTextRun.centerX;
     const visibleInkCenterDelta = baseInk && rubyInk ? rubyInk.center - baseInk.center : null;
     // Ink bounds are not advance bounds: asymmetric first/last glyph contours
     // and antialiasing can move the bitmap box while the text run stays exactly
@@ -547,12 +607,13 @@ try {
       canonicalCenterDeltaPx: canonicalDelta,
       domContainerCenterDeltaPx: containerDelta,
       renderedTextRunCenterDeltaPx: runDelta,
+      horizontalLaneDeltaPx: horizontalLaneDelta,
       visibleInkCenterDeltaPx: visibleInkCenterDelta,
       visibleInkTolerancePx: visibleInkTolerance,
       visibleInk: { base: baseInk, ruby: rubyInk },
       ...entry,
     }, null, 2));
-    return { entry, baseInk, rubyInk, canonicalDelta, containerDelta, runDelta, visibleInkCenterDelta, visibleInkTolerance };
+    return { entry, baseInk, rubyInk, canonicalDelta, containerDelta, runDelta, horizontalLaneDelta, visibleInkCenterDelta, visibleInkTolerance };
   });
 
   assert.equal(measurements.every((entry) => entry.fontLoaded), true, "the actual Preview font did not load for every ruby sample");
@@ -560,6 +621,15 @@ try {
     results.filter(({ entry }) => CENTERED_BASES.includes(entry.baseText)).every(({ canonicalDelta }) => canonicalDelta <= 0.01),
     "canonical base/ruby centers diverged"
   );
+  if (distanceQa) {
+    assert.ok(
+      results.every(({ entry, horizontalLaneDelta }) => {
+        const expected = parseFloat(entry.computed.base.fontSize) * entry.dom.scale * EXPECTED_RUBY_LANE_CENTER_EM;
+        return Math.abs(horizontalLaneDelta - expected) <= 0.15;
+      }),
+      "rendered Ruby lane did not preserve the shared 0.65em center distance",
+    );
+  }
   assert.ok(
     results.filter(({ entry }) => CENTERED_BASES.includes(entry.baseText)).every(({ containerDelta, runDelta }) => containerDelta <= 0.05 && runDelta <= 0.05),
     "rendered ruby container/text-run center diverged from its base"

@@ -16,6 +16,7 @@ import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, re
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
+import { RUBY_PARENT_OPTICAL_INSET_EM } from "../rubyLane";
 
 // Real horizontal bounds for any PaintCommand -- including "glyphOutline"
 // (round 7), whose own path commands carry the only x-coordinates
@@ -139,7 +140,7 @@ describe("P3-O08 — Publication Typography", () => {
       expect(baseCmd && baseCmd.op === "text" ? baseCmd.fontSizePt : undefined).toBeCloseTo((ruby.heightMm / graphemeCount) * (72 / 25.4), 6);
     });
 
-    it("REGRESSION: the annotation starts after the fixed body em, not after the wider line-pitch box", () => {
+    it("REGRESSION: the annotation uses the shared optical inset from the fixed body em, not the wider line-pitch box", () => {
       const { model } = composePublication("atomic-ruby");
       const ruby = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines.flatMap((l) => l.units))).find((u) => u.kind === "RUBY")!;
       const line = model.pages.flatMap((p) => p.columns.flatMap((c) => c.lines)).find((l) => l.units.includes(ruby))!;
@@ -155,7 +156,10 @@ describe("P3-O08 — Publication Typography", () => {
       expect(annCmd).toBeDefined();
       if (annCmd && annCmd.op === "text") {
         const halfWidthMm = (annCmd.fontSizePt * (25.4 / 72)) / 2;
-        expect(annCmd.xMm - halfWidthMm).toBeCloseTo(bodyRightEdgeMm, 6);
+        expect(annCmd.xMm - halfWidthMm).toBeCloseTo(
+          bodyRightEdgeMm - model.bodyEmMm * RUBY_PARENT_OPTICAL_INSET_EM,
+          6,
+        );
         expect(annCmd.xMm).toBeLessThanOrEqual(lineRightEdgeMm + halfWidthMm);
       }
     });

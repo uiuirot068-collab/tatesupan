@@ -59,6 +59,7 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
+import { rubyLaneGeometry } from "../rubyLane";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -502,14 +503,12 @@ function unitCommands(
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
-      // The line box represents column pitch (body em + leading), not the
-      // base glyph's own ink box. Position ruby immediately after the fixed
-      // body em, measured from the unchanged body center. Basing this on the
-      // line's outer edge pushed ruby into the neighbouring line whenever
-      // line pitch exceeded one em. Preview uses this identical paint-only
-      // formula; canonical top/extent and body coordinates are untouched.
-      const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
-      const annotationX = xCenter + bodyEmMm / 2 + annotationEmWidthMm / 2;
+      // The shared paint metric starts from the unchanged body center and
+      // compensates for the production font's measured cross-axis side
+      // bearings. It changes neither Core's reading-direction geometry nor
+      // the body position, and Preview consumes the identical lane contract.
+      const annotationX =
+        xCenter + rubyLaneGeometry(bodyEmMm).annotationCenterFromParentCenter;
       commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return commands;

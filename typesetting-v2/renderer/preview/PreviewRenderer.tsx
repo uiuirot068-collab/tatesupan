@@ -21,6 +21,7 @@ import type { PaintColumn, PaintDocument, PaintLine, PaintPage, PaintPlacedUnit 
 // Core's own unscaled measurement, is exactly the inconsistency this
 // decision resolves).
 import { DEFAULT_RUBY_SCALE } from "../../core";
+import { rubyLaneGeometry } from "../rubyLane";
 
 export type PreviewMode = "normal" | "debug";
 
@@ -182,6 +183,7 @@ function DebugBadge({ text }: { text: string }) {
 }
 
 function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
+  const rubyLane = rubyLaneGeometry(fontSizePx);
   const debugText =
     `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
     (unit.semanticRunKind
@@ -253,13 +255,13 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           className="ruby-annotation"
           style={{
             top: unit.rubyAnnotation.offsetPx,
-            // The line box is the column pitch, not the ruby base's ink box.
-            // Anchor the annotation immediately after the fixed body em so
-            // wider line leading cannot push ruby into the neighbouring line.
-            // This is paint-only: canonical top/extent and the base position
-            // remain unchanged, and Publication uses the identical formula.
-            left: `calc(50% + ${fontSizePx / 2}px)`,
-            width: fontSizePx * DEFAULT_RUBY_SCALE,
+            // The line box is column pitch, not the base ink box. The shared
+            // lane metric starts from the unchanged body center, then applies
+            // the production font's measured optical side-bearing inset.
+            // Publication consumes the same metric; Core's reading-direction
+            // offset/extent and the body coordinate remain unchanged.
+            left: `calc(50% + ${rubyLane.annotationStartFromParentCenter}px)`,
+            width: rubyLane.annotationWidth,
             height: unit.rubyAnnotation.extentPx,
           }}
           title={mode === "debug" ? rubyDebugText : undefined}
