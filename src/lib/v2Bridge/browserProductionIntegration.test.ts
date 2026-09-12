@@ -13,7 +13,7 @@ describe("v2 branch production integration", () => {
     const fontBytes = readFileSync(resolve("typesetting-v2/qa/publication/p3-o08/font-poc/fonts/ShipporiMincho-Regular.ttf"));
     const font: PublicationFontResource = { fileName: "ShipporiMincho-Regular.ttf", fontName: "Shippori Mincho", base64: fontBytes.toString("base64") };
     const paragraph = "人は歩く。「縦組み」｜親文字《よみ》 [tate]25[/tate] ー――……。\n";
-    const content = `${paragraph.repeat(55)}【IMG:e2e-image:20:30:center】\n【改ページ】\n${paragraph.repeat(55)}`;
+    const content = `${paragraph.repeat(55)}【IMG:e2e-image:10:10:center】\n【改ページ】\n${paragraph.repeat(55)}`;
     const settings = {
       ...DEFAULT_PAGE_SETTINGS,
       charsPerLine: 5,

@@ -254,8 +254,47 @@ export interface PublicationDocument {
   colophonPlacement?: ColophonPlacement;
 }
 
-function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
-  return units.find((u) => span.start >= u.span.start && span.end <= u.span.end) ?? null;
+interface PaintLookup {
+  units: LogicalUnit[];
+  sourceCodePoints: string[];
+  ownerByCodePoint: Array<LogicalUnit | undefined>;
+}
+
+function createPaintLookup(units: LogicalUnit[], source: string): PaintLookup {
+  const sourceCodePoints = Array.from(source);
+  const ownerByCodePoint = new Array<LogicalUnit | undefined>(sourceCodePoints.length);
+  const nextUnowned = new Int32Array(sourceCodePoints.length + 1);
+  for (let i = 0; i < nextUnowned.length; i++) nextUnowned[i] = i;
+  const findNextUnowned = (start: number): number => {
+    let root = start;
+    while (nextUnowned[root] !== root) root = nextUnowned[root];
+    while (nextUnowned[start] !== start) {
+      const parent = nextUnowned[start];
+      nextUnowned[start] = root;
+      start = parent;
+    }
+    return root;
+  };
+  for (const unit of units) {
+    const end = Math.min(unit.span.end, sourceCodePoints.length);
+    let position = findNextUnowned(Math.max(0, unit.span.start));
+    while (position < end) {
+      ownerByCodePoint[position] = unit;
+      nextUnowned[position] = findNextUnowned(position + 1);
+      position = nextUnowned[position];
+    }
+  }
+  return {
+    units,
+    sourceCodePoints,
+    ownerByCodePoint,
+  };
+}
+
+function findOwningUnit(lookup: PaintLookup, span: SourceSpan): LogicalUnit | null {
+  const indexed = lookup.ownerByCodePoint[span.start];
+  if (indexed && span.start >= indexed.span.start && span.end <= indexed.span.end) return indexed;
+  return lookup.units.find((unit) => span.start >= unit.span.start && span.end <= unit.span.end) ?? null;
 }
 
 function paintKindFor(unit: LogicalUnit): PaintUnitKind {
@@ -276,13 +315,9 @@ function paintKindFor(unit: LogicalUnit): PaintUnitKind {
   }
 }
 
-function sliceCodePoints(source: string, start: number, end: number): string {
-  return Array.from(source).slice(start, end).join("");
-}
-
-function textFor(kind: PaintUnitKind, placedSpan: SourceSpan, source: string): string {
+function textFor(kind: PaintUnitKind, placedSpan: SourceSpan, sourceCodePoints: string[]): string {
   if (kind === "IMAGE" || kind === "UNKNOWN") return "";
-  return sliceCodePoints(source, placedSpan.start, placedSpan.end).replace(/\n/g, "");
+  return sourceCodePoints.slice(placedSpan.start, placedSpan.end).join("").replace(/\n/g, "");
 }
 
 function rubyAnnotationFor(owner: LogicalUnit & { kind: "RUBY" }, placed: PlacedUnit): RubyAnnotationPaint {
@@ -304,15 +339,14 @@ function buildPaintLine(
   lineIndex: number,
   pageOrder: number,
   columnOrder: number,
-  units: LogicalUnit[],
-  source: string,
+  lookup: PaintLookup,
   ctx: PublicationRenderContext
 ): PaintLine {
   const indentOffsetTicks = line.indentTick ?? 0;
   const resolveImage = ctx.imageResolver ?? defaultPlaceholderImageResolver;
 
   const units_: PaintPlacedUnit[] = line.placedUnits.map((placed, i) => {
-    const owner = findOwningUnit(units, placed.sourceSpan);
+    const owner = findOwningUnit(lookup, placed.sourceSpan);
     const kind = owner ? paintKindFor(owner) : "UNKNOWN";
     const next = line.placedUnits[i + 1];
     const prev = line.placedUnits[i - 1];
@@ -331,7 +365,7 @@ function buildPaintLine(
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
-    const text = textFor(kind, placed.sourceSpan, source);
+    const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);
     // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
     // 3, real image embedding): an IMAGE unit's own REAL height is
     // already known exactly -- Core used it as this atom's own advance
@@ -392,8 +426,7 @@ function buildPaintColumn(
   column: { id: string; residualSpaceTick: number; lines: Array<{ id: string; indentTick?: number; placedUnits: PlacedUnit[] }> },
   columnIndex: number,
   pageOrder: number,
-  units: LogicalUnit[],
-  source: string,
+  lookup: PaintLookup,
   ctx: PublicationRenderContext
 ): PaintColumn {
   return {
@@ -402,18 +435,18 @@ function buildPaintColumn(
     rightMm: tickToMm(columnIndex * ctx.columnExtentTicks),
     widthMm: tickToMm(ctx.columnExtentTicks),
     residualSpaceMm: tickToMm(column.residualSpaceTick),
-    lines: column.lines.map((line, i) => buildPaintLine(line, i, pageOrder, columnIndex, units, source, ctx)),
+    lines: column.lines.map((line, i) => buildPaintLine(line, i, pageOrder, columnIndex, lookup, ctx)),
   };
 }
 
-function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, units: LogicalUnit[], source: string, ctx: PublicationRenderContext): PaintPage {
+function buildPaintPage(page: CanonicalPage, manualBreakBefore: boolean, lookup: PaintLookup, ctx: PublicationRenderContext): PaintPage {
   return {
     id: page.id,
     order: page.order,
     widthMm: tickToMm(ctx.columnsPerPage * ctx.columnExtentTicks),
     heightMm: tickToMm(ctx.lineExtentTicks),
     manualBreakBefore,
-    columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, units, source, ctx)),
+    columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, lookup, ctx)),
     ...(page.folio ? { folio: { text: page.folio.text, position: page.folio.position } } : {}),
     ...(page.header ? { header: { text: page.header.text, position: page.header.position } } : {}),
   };
@@ -463,11 +496,15 @@ export function buildPublicationDocument(
   colophonSource?: string
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
-  const pages = document.pages.map((page, i) => buildPaintPage(page, manualBreaks[i] ?? false, units, source, ctx));
+  const lookup = createPaintLookup(units, source);
+  const pages = document.pages.map((page, i) => buildPaintPage(page, manualBreaks[i] ?? false, lookup, ctx));
 
   const colophonPages =
     document.colophon && colophonUnits && colophonSource !== undefined
-      ? document.colophon.pages.map((page) => buildPaintPage(page, false, colophonUnits, colophonSource, ctx))
+      ? (() => {
+          const colophonLookup = createPaintLookup(colophonUnits, colophonSource);
+          return document.colophon.pages.map((page) => buildPaintPage(page, false, colophonLookup, ctx));
+        })()
       : undefined;
 
   return {

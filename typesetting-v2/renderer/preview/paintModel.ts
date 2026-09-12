@@ -217,8 +217,47 @@ export interface PaintDocument {
   fontSizePx: number;
 }
 
-function findOwningUnit(units: LogicalUnit[], span: SourceSpan): LogicalUnit | null {
-  return units.find((u) => span.start >= u.span.start && span.end <= u.span.end) ?? null;
+interface PaintLookup {
+  units: LogicalUnit[];
+  sourceCodePoints: string[];
+  ownerByCodePoint: Array<LogicalUnit | undefined>;
+}
+
+function createPaintLookup(units: LogicalUnit[], source: string): PaintLookup {
+  const sourceCodePoints = Array.from(source);
+  const ownerByCodePoint = new Array<LogicalUnit | undefined>(sourceCodePoints.length);
+  const nextUnowned = new Int32Array(sourceCodePoints.length + 1);
+  for (let i = 0; i < nextUnowned.length; i++) nextUnowned[i] = i;
+  const findNextUnowned = (start: number): number => {
+    let root = start;
+    while (nextUnowned[root] !== root) root = nextUnowned[root];
+    while (nextUnowned[start] !== start) {
+      const parent = nextUnowned[start];
+      nextUnowned[start] = root;
+      start = parent;
+    }
+    return root;
+  };
+  for (const unit of units) {
+    const end = Math.min(unit.span.end, sourceCodePoints.length);
+    let position = findNextUnowned(Math.max(0, unit.span.start));
+    while (position < end) {
+      ownerByCodePoint[position] = unit;
+      nextUnowned[position] = findNextUnowned(position + 1);
+      position = nextUnowned[position];
+    }
+  }
+  return {
+    units,
+    sourceCodePoints,
+    ownerByCodePoint,
+  };
+}
+
+function findOwningUnit(lookup: PaintLookup, span: SourceSpan): LogicalUnit | null {
+  const indexed = lookup.ownerByCodePoint[span.start];
+  if (indexed && span.start >= indexed.span.start && span.end <= indexed.span.end) return indexed;
+  return lookup.units.find((unit) => span.start >= unit.span.start && span.end <= unit.span.end) ?? null;
 }
 
 // Mirrors core/compose/line.ts's own `rubyReadingTextForAtom` — reads the
@@ -250,17 +289,13 @@ function paintKindFor(unit: LogicalUnit): PaintUnitKind {
   }
 }
 
-function sliceCodePoints(source: string, start: number, end: number): string {
-  return Array.from(source).slice(start, end).join("");
-}
-
 // Slices the PLACED ATOM's own span out of the read-only source string,
 // never the owning unit's full span — a unit can be split across several
 // placed atoms sharing one owner (the exact text-duplication bug this
 // convention avoids is documented in tools/compare/v2Adapter.ts).
-function textFor(kind: PaintUnitKind, placedSpan: SourceSpan, source: string): string {
+function textFor(kind: PaintUnitKind, placedSpan: SourceSpan, sourceCodePoints: string[]): string {
   if (kind === "IMAGE" || kind === "UNKNOWN") return "";
-  return sliceCodePoints(source, placedSpan.start, placedSpan.end).replace(/\n/g, "");
+  return sourceCodePoints.slice(placedSpan.start, placedSpan.end).join("").replace(/\n/g, "");
 }
 
 function flattenPlacedUnits(page: CanonicalPage): PlacedUnit[] {
@@ -343,8 +378,7 @@ function buildPaintLine(
   pageOrder: number,
   columnOrder: number,
   manualBreakBeforePage: boolean,
-  units: LogicalUnit[],
-  source: string,
+  lookup: PaintLookup,
   ctx: PreviewRenderContext
 ): PaintLine {
   // Core's own contract (schema.ts `CanonicalLine.indentTick` doc comment):
@@ -357,7 +391,7 @@ function buildPaintLine(
   const resolveImage = ctx.imageResolver ?? defaultPlaceholderImageResolver;
 
   const units_: PaintPlacedUnit[] = line.placedUnits.map((placed, i) => {
-    const owner = findOwningUnit(units, placed.sourceSpan);
+    const owner = findOwningUnit(lookup, placed.sourceSpan);
     const kind = owner ? paintKindFor(owner) : "UNKNOWN";
     const next = line.placedUnits[i + 1];
     const prev = line.placedUnits[i - 1];
@@ -390,7 +424,7 @@ function buildPaintLine(
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
-    const text = textFor(kind, placed.sourceSpan, source);
+    const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);
     const heightPx = Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1);
     const semanticRunKind = kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? owner.runKind : undefined;
     return {
@@ -435,8 +469,7 @@ function buildPaintColumn(
   columnIndex: number,
   pageOrder: number,
   manualBreakBeforePage: boolean,
-  units: LogicalUnit[],
-  source: string,
+  lookup: PaintLookup,
   ctx: PreviewRenderContext
 ): PaintColumn {
   return {
@@ -446,15 +479,14 @@ function buildPaintColumn(
     widthPx: tickToPx(ctx.columnExtentTicks, ctx.scaleMultiplier),
     residualSpacePx: tickToPx(column.residualSpaceTick, ctx.scaleMultiplier),
     residualSpaceTick: column.residualSpaceTick,
-    lines: column.lines.map((line, i) => buildPaintLine(line, i, pageOrder, columnIndex, manualBreakBeforePage, units, source, ctx)),
+    lines: column.lines.map((line, i) => buildPaintLine(line, i, pageOrder, columnIndex, manualBreakBeforePage, lookup, ctx)),
   };
 }
 
 function buildPaintPage(
   page: CanonicalPage,
   manualBreakBefore: boolean,
-  units: LogicalUnit[],
-  source: string,
+  lookup: PaintLookup,
   ctx: PreviewRenderContext,
   orientation: "vertical" | "horizontal" = "vertical"
 ): PaintPage {
@@ -464,7 +496,7 @@ function buildPaintPage(
     widthPx: tickToPx(ctx.columnsPerPage * ctx.columnExtentTicks, ctx.scaleMultiplier),
     heightPx: tickToPx(ctx.lineExtentTicks, ctx.scaleMultiplier),
     manualBreakBefore,
-    columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, manualBreakBefore, units, source, ctx)),
+    columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, manualBreakBefore, lookup, ctx)),
     folio: page.folio,
     header: page.header,
     orientation,
@@ -489,7 +521,8 @@ export function buildPaintDocument(
   const manualBreaks = detectManualBreaks(units, document.pages);
   const maxPages = ctx.maxPages ?? document.pages.length;
   const renderedPages = document.pages.slice(0, maxPages);
-  const pages = renderedPages.map((page, i) => buildPaintPage(page, manualBreaks[i] ?? false, units, source, ctx, "vertical"));
+  const lookup = createPaintLookup(units, source);
+  const pages = renderedPages.map((page, i) => buildPaintPage(page, manualBreaks[i] ?? false, lookup, ctx, "vertical"));
 
   return {
     id,
@@ -517,5 +550,6 @@ export function buildColophonPaintPages(
   source: string,
   ctx: PreviewRenderContext
 ): PaintPage[] {
-  return colophon.pages.map((page) => buildPaintPage(page, false, units, source, ctx, "horizontal"));
+  const lookup = createPaintLookup(units, source);
+  return colophon.pages.map((page) => buildPaintPage(page, false, lookup, ctx, "horizontal"));
 }

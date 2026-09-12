@@ -12,7 +12,11 @@ import type { SourceSpan } from "../source/span";
 import type { TraceRecorder } from "../trace";
 import type { CanonicalPage } from "../layout/schema";
 import { composeColumn, type ColumnCompositionSettings } from "./column";
-import type { LineCompositionHold } from "./line";
+import {
+  prepareLineComposition,
+  type LineCompositionHold,
+  type PreparedLineComposition,
+} from "./line";
 
 export interface PageCompositionSettings extends ColumnCompositionSettings {
   columnsPerPage: number;
@@ -34,7 +38,8 @@ export function composePage(
   measurement: MeasurementFacts,
   settings: PageCompositionSettings,
   isParagraphStart: boolean,
-  trace?: TraceRecorder
+  trace?: TraceRecorder,
+  prepared?: PreparedLineComposition
 ): PageCompositionResult {
   const columns: CanonicalPage["columns"] = [];
   let remaining = units;
@@ -42,7 +47,16 @@ export function composePage(
   let currentIsParagraphStart = isParagraphStart;
 
   for (let c = 0; c < settings.columnsPerPage && remaining.length > 0; c++) {
-    const columnResult = composeColumn(remaining, c, ruleSet, measurement, settings, currentIsParagraphStart, trace);
+    const columnResult = composeColumn(
+      remaining,
+      c,
+      ruleSet,
+      measurement,
+      settings,
+      currentIsParagraphStart,
+      trace,
+      prepared
+    );
     columns.push(columnResult.column);
     remaining = columnResult.remainingUnits;
     currentIsParagraphStart = columnResult.nextLineIsParagraphStart;
@@ -87,6 +101,7 @@ export function composePages(
   // `true` at document start, TSP-LOOP-029) — never reset by a page
   // boundary, only by an actual PARAGRAPH_FORCED cut.
   let isParagraphStart = true;
+  const prepared = prepareLineComposition(units, ruleSet, measurement, settings, trace);
 
   while (remaining.length > 0) {
     // Track progress by source START OFFSET, not array length: a single
@@ -94,7 +109,16 @@ export function composePages(
     // slot, so length alone would falsely look "stuck" every time a page
     // ends mid-unit.
     const beforeOffset = remaining[0]?.span.start;
-    const pageResult = composePage(remaining, order, ruleSet, measurement, settings, isParagraphStart, trace);
+    const pageResult = composePage(
+      remaining,
+      order,
+      ruleSet,
+      measurement,
+      settings,
+      isParagraphStart,
+      trace,
+      prepared
+    );
     pages.push(pageResult.page);
     remaining = pageResult.remainingUnits;
     isParagraphStart = pageResult.nextLineIsParagraphStart;

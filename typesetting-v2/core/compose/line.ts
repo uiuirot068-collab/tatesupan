@@ -108,6 +108,7 @@ function needsAutoIndent(firstChar: string | undefined): boolean {
 interface CompositionAtom {
   sourceSpan: SourceSpan;
   advanceTick: GeometryTick;
+  owner: LogicalUnit;
 }
 
 // One visual "cell" for Natural Pitch purposes. A grapheme cluster inside a
@@ -147,16 +148,6 @@ function advanceTickFor(
       // omission — bare newlines are never counted toward line capacity).
       return 0;
   }
-}
-
-function findOwningUnit(units: LogicalUnit[], start: number, end: number): LogicalUnit {
-  const owner = units.find((u) => start >= u.span.start && end <= u.span.end);
-  if (!owner) {
-    throw new Error(
-      `compose/line: no LogicalUnit owns source range [${start}, ${end}) — this indicates a boundary-derivation bug, not malformed input`
-    );
-  }
-  return owner;
 }
 
 // Ruby Placement Micro-Loop. A RUBY atom's own reading text: the matching
@@ -207,16 +198,14 @@ function lastCodePointOf(text: string): string {
 // resolves to 0 today regardless — but the class-lookup CAPABILITY itself
 // is real and wired, not stubbed out.
 function adjacentOverhangAllowance(
-  units: LogicalUnit[],
-  atoms: CompositionAtom[],
+  atoms: readonly CompositionAtom[],
   neighborIndex: number,
   side: "before" | "after",
   ruleSet: RuleSetVersion
 ): GeometryTick {
   const neighbor = atoms[neighborIndex];
   if (!neighbor) return 0;
-  const owner = findOwningUnit(units, neighbor.sourceSpan.start, neighbor.sourceSpan.end);
-  const text = literalTextForAtom(owner, neighbor.sourceSpan);
+  const text = literalTextForAtom(neighbor.owner, neighbor.sourceSpan);
   if (text === undefined || text.length === 0) return 0;
   const char = side === "before" ? lastCodePointOf(text) : firstCodePointOf(text);
   const cls = ruleSet.characterClassFor(char);
@@ -236,6 +225,65 @@ interface AtomComputationResult {
   // ("an image with no resolvable intrinsic size and no MeasurementFacts
   // entry"). Never silently treated as a zero-cost, always-fits atom.
   unresolvedImageSpan?: SourceSpan;
+}
+
+/**
+ * Resolve the first unit (in stream order) that owns each boundary interval.
+ * Logical units may overlap (notably Ruby/TCY source notation), so a single
+ * monotonic unit cursor is not equivalent to the former `units.find` rule.
+ * The min-heap keeps that exact first-owner precedence while every unit is
+ * inserted and removed at most once.
+ */
+function indexBoundaryOwners(
+  units: LogicalUnit[],
+  boundaries: number[]
+): Array<LogicalUnit | undefined> {
+  const byStart = units
+    .map((unit, index) => ({ unit, index }))
+    .filter(({ unit }) => unit.span.end > unit.span.start)
+    .sort((left, right) => left.unit.span.start - right.unit.span.start || left.index - right.index);
+  const heap: number[] = [];
+
+  const push = (index: number) => {
+    let position = heap.length;
+    heap.push(index);
+    while (position > 0) {
+      const parent = (position - 1) >>> 1;
+      if (heap[parent] <= index) break;
+      heap[position] = heap[parent];
+      position = parent;
+    }
+    heap[position] = index;
+  };
+  const pop = () => {
+    const last = heap.pop();
+    if (heap.length === 0 || last === undefined) return;
+    let position = 0;
+    while (true) {
+      const left = position * 2 + 1;
+      if (left >= heap.length) break;
+      const right = left + 1;
+      const child = right < heap.length && heap[right] < heap[left] ? right : left;
+      if (heap[child] >= last) break;
+      heap[position] = heap[child];
+      position = child;
+    }
+    heap[position] = last;
+  };
+
+  const owners: Array<LogicalUnit | undefined> = [];
+  let nextUnit = 0;
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const start = boundaries[i];
+    const end = boundaries[i + 1];
+    while (nextUnit < byStart.length && byStart[nextUnit].unit.span.start <= start) {
+      push(byStart[nextUnit].index);
+      nextUnit += 1;
+    }
+    while (heap.length > 0 && units[heap[0]].span.end < end) pop();
+    owners.push(heap.length > 0 ? units[heap[0]] : undefined);
+  }
+  return owners;
 }
 
 // Human Visual QA HOLD round 13 (legacy parity audit —
@@ -284,6 +332,7 @@ function computeAtoms(
     boundarySet.add(opportunity.position.start);
   }
   const boundaries = Array.from(boundarySet).sort((a, b) => a - b);
+  const owners = indexBoundaryOwners(units, boundaries);
 
   const perCellAdvance = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
   const atoms: CompositionAtom[] = [];
@@ -291,23 +340,30 @@ function computeAtoms(
     const start = boundaries[i];
     const end = boundaries[i + 1];
     if (end <= start) continue; // zero-width marker span (e.g. a MANUAL_BREAK) contributes no atom
-    const owner = findOwningUnit(units, start, end);
+    const owner = owners[i];
+    if (!owner) {
+      throw new Error(
+        `compose/line: no LogicalUnit owns source range [${start}, ${end}) — this indicates a boundary-derivation bug, not malformed input`
+      );
+    }
     const sourceSpan = { blockId, start, end };
     if (owner.kind === "IMAGE") {
       const advanceTick = advanceTickFor(owner, end - start, perCellAdvance, measurement);
       if (advanceTick <= 0) {
         return { atoms, unresolvedImageSpan: sourceSpan };
       }
-      atoms.push({ sourceSpan, advanceTick });
+      atoms.push({ sourceSpan, advanceTick, owner });
       continue;
     }
-    atoms.push({ sourceSpan, advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement) });
+    atoms.push({
+      sourceSpan,
+      advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement),
+      owner,
+    });
   }
   for (let i = 0; i < atoms.length - 1; i++) {
-    const leftOwner = findOwningUnit(units, atoms[i].sourceSpan.start, atoms[i].sourceSpan.end);
-    const rightOwner = findOwningUnit(units, atoms[i + 1].sourceSpan.start, atoms[i + 1].sourceSpan.end);
-    const leftText = literalTextForAtom(leftOwner, atoms[i].sourceSpan);
-    const rightText = literalTextForAtom(rightOwner, atoms[i + 1].sourceSpan);
+    const leftText = literalTextForAtom(atoms[i].owner, atoms[i].sourceSpan);
+    const rightText = literalTextForAtom(atoms[i + 1].owner, atoms[i + 1].sourceSpan);
     if (leftText === undefined || rightText === undefined) continue;
     const pair = `${lastCodePointOf(leftText)}${firstCodePointOf(rightText)}`;
     const ratio = ruleSet.pairAdvanceRatio.get(pair);
@@ -322,19 +378,7 @@ function computeAtoms(
 // FORCED_LINE ends only this line — ordinary column/page flow continues.
 type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED_LINE" | "FORCED_PAGE";
 
-function legalityAfter(offset: number, opportunities: BreakOpportunity[]): BoundaryLegality {
-  const candidates = opportunities.filter((o) => o.position.start === offset);
-  if (candidates.length === 0) return "LEGAL"; // no candidate recorded here (e.g. end of stream) — nothing prohibits it
-
-  // A normalized manual-page-break marker can share an offset with an
-  // adjacent newline's paragraph boundary. Page forcing is the stronger
-  // structural semantic and must win independently of opportunity traversal
-  // order; otherwise the first PARAGRAPH_FORCED entry downgrades the same
-  // boundary to an ordinary line break and the page break is lost.
-  const opportunity =
-    candidates.find((candidate) => candidate.reason === "MANUAL_FORCED") ??
-    candidates.find((candidate) => candidate.reason === "PARAGRAPH_FORCED") ??
-    candidates[0];
+function legalityForOpportunity(opportunity: BreakOpportunity): BoundaryLegality {
   switch (opportunity.reason) {
     case "ALLOWED":
     case "RUBY_INTERNAL_ALLOWED":
@@ -350,6 +394,71 @@ function legalityAfter(offset: number, opportunities: BreakOpportunity[]): Bound
   }
 }
 
+/**
+ * Index boundary legality once per line composition. The previous atom loop
+ * filtered the complete remaining-document opportunity array for every atom
+ * that fit on the line. That preserved the right answer but made each line
+ * O(visible atoms × remaining manuscript), which dominates long documents.
+ *
+ * Priority is exactly the former lookup contract: MANUAL_FORCED wins over a
+ * colocated PARAGRAPH_FORCED, which wins over the first ordinary candidate.
+ */
+function indexBoundaryLegalities(opportunities: BreakOpportunity[]): Map<number, BoundaryLegality> {
+  const indexed = new Map<number, { legality: BoundaryLegality; priority: number }>();
+  for (const opportunity of opportunities) {
+    const priority = opportunity.reason === "MANUAL_FORCED"
+      ? 2
+      : opportunity.reason === "PARAGRAPH_FORCED"
+        ? 1
+        : 0;
+    const offset = opportunity.position.start;
+    const existing = indexed.get(offset);
+    if (!existing || priority > existing.priority) {
+      indexed.set(offset, { legality: legalityForOpportunity(opportunity), priority });
+    }
+  }
+  return new Map(Array.from(indexed, ([offset, entry]) => [offset, entry.legality]));
+}
+
+export interface PreparedLineComposition {
+  readonly atoms: readonly CompositionAtom[];
+  readonly legalityByOffset: ReadonlyMap<number, BoundaryLegality>;
+  readonly unresolvedImageSpan?: SourceSpan;
+}
+
+/**
+ * Prepares immutable document-wide break/atom facts for multi-line flow.
+ * Every line reads the same facts by source offset, avoiding reconstruction
+ * of the complete remaining manuscript while preserving the exact existing
+ * opportunity, atom, advance and priority rules.
+ */
+export function prepareLineComposition(
+  units: LogicalUnit[],
+  ruleSet: RuleSetVersion,
+  measurement: MeasurementFacts,
+  settings: CompositionSettings,
+  trace?: TraceRecorder
+): PreparedLineComposition {
+  const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
+  const atomResult = computeAtoms(units, opportunities, measurement, settings, ruleSet);
+  return {
+    atoms: atomResult.atoms,
+    legalityByOffset: indexBoundaryLegalities(opportunities),
+    ...(atomResult.unresolvedImageSpan ? { unresolvedImageSpan: atomResult.unresolvedImageSpan } : {}),
+  };
+}
+
+function firstAtomAfterOffset(atoms: readonly CompositionAtom[], offset: number): number {
+  let low = 0;
+  let high = atoms.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (atoms[middle].sourceSpan.end <= offset) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 export function composeLine(
   units: LogicalUnit[],
   ruleSet: RuleSetVersion,
@@ -362,7 +471,8 @@ export function composeLine(
   // tracks it across lines exactly as legacy's `pendingParagraphStart` does
   // across its own line/page loop.
   isParagraphStart: boolean,
-  trace?: TraceRecorder
+  trace?: TraceRecorder,
+  prepared?: PreparedLineComposition
 ): LineCompositionResult {
   const streamStart = units[0]?.span.start ?? 0;
   const blockId = units[0]?.span.blockId ?? "";
@@ -382,8 +492,17 @@ export function composeLine(
   const indentTick = appliesIndent ? perCellAdvance : 0;
   const effectiveLineExtentTicks = lineExtentTicks - indentTick;
 
-  const opportunities = deriveBreakOpportunities(units, ruleSet, trace);
-  const atomResult = computeAtoms(units, opportunities, measurement, settings, ruleSet);
+  // Standalone line composition derives its own facts. Multi-line document
+  // flow supplies one shared preparation from composePages; trace events for
+  // those immutable facts are recorded once there rather than redundantly
+  // recording every remaining suffix for every line.
+  const localOpportunities = prepared ? undefined : deriveBreakOpportunities(units, ruleSet, trace);
+  const atomResult = prepared
+    ? { atoms: prepared.atoms, unresolvedImageSpan: prepared.unresolvedImageSpan }
+    : computeAtoms(units, localOpportunities!, measurement, settings, ruleSet);
+  const legalityByOffset = prepared
+    ? prepared.legalityByOffset
+    : indexBoundaryLegalities(localOpportunities!);
   if (atomResult.unresolvedImageSpan) {
     return {
       hold: {
@@ -398,6 +517,7 @@ export function composeLine(
     };
   }
   const atoms = atomResult.atoms;
+  const firstAtomIndex = prepared ? firstAtomAfterOffset(atoms, streamStart) : 0;
 
   let used = 0;
   let cutAtAtomIndex = -1; // last atom INCLUSIVE index this line takes
@@ -405,13 +525,15 @@ export function composeLine(
   let forcedCut = false;
   let endedAtParagraphBreak = false;
 
-  for (let i = 0; i < atoms.length; i++) {
+  for (let i = firstAtomIndex; i < atoms.length; i++) {
     const nextUsed = used + atoms[i].advanceTick;
     if (nextUsed > effectiveLineExtentTicks) {
       break;
     }
     used = nextUsed;
-    const legality = legalityAfter(atoms[i].sourceSpan.end, opportunities);
+    // No candidate recorded here (e.g. end of stream) means nothing
+    // prohibits the boundary, matching the previous legalityAfter fallback.
+    const legality = legalityByOffset.get(atoms[i].sourceSpan.end) ?? "LEGAL";
     if (legality === "FORCED_PAGE") {
       cutAtAtomIndex = i;
       sawAnyLegalCut = true;
@@ -437,11 +559,11 @@ export function composeLine(
     // fit. Structured hold, not a guess (Contract §26 direction; full
     // LayoutError/hold wiring is P3-L14 — this is the line-level signal it
     // will consume).
-    const failingAtom = atoms[0];
+    const failingAtom = atoms[firstAtomIndex];
     return {
       hold: {
         reason:
-          atoms.length > 0 && atoms[0].advanceTick > effectiveLineExtentTicks
+          firstAtomIndex < atoms.length && atoms[firstAtomIndex].advanceTick > effectiveLineExtentTicks
             ? "SINGLE_ATOM_EXCEEDS_LINE_EXTENT"
             : "NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT",
         sourceSpan: failingAtom?.sourceSpan ?? { blockId, start: streamStart, end: streamStart },
@@ -456,7 +578,7 @@ export function composeLine(
 
   const placedUnits: PlacedUnit[] = [];
   let yTick = 0;
-  for (let i = 0; i <= cutAtAtomIndex; i++) {
+  for (let i = firstAtomIndex; i <= cutAtAtomIndex; i++) {
     const atom = atoms[i];
     const placed: PlacedUnit = {
       id: `placed-${atom.sourceSpan.start}-${atom.sourceSpan.end}`,
@@ -470,7 +592,7 @@ export function composeLine(
     // `placed.xTick`/`placed.yTick` above (INV-003: the base run's own
     // coordinates are set identically whether or not this block runs at
     // all), only adds sibling metadata a Renderer reads back, unmodified.
-    const owner = findOwningUnit(units, atom.sourceSpan.start, atom.sourceSpan.end);
+    const owner = atom.owner;
     if (owner.kind === "RUBY") {
       const readingText = rubyReadingTextForAtom(owner, atom.sourceSpan);
       // Human/Product decision (2026-09-07, P3-O08 Publication ruby-scale
@@ -485,9 +607,11 @@ export function composeLine(
       // computation, never line/column/page composition.
       const rubyScale = settings.rubyScale ?? DEFAULT_RUBY_SCALE;
       const readingExtentTick = measurement.rubyReadingExtentTick(settings.bodyFontRef, settings.bodyFontSizePt * rubyScale, readingText);
-      const overhangAllowanceBeforeTick = adjacentOverhangAllowance(units, atoms, i - 1, "before", ruleSet);
+      const overhangAllowanceBeforeTick = i > firstAtomIndex
+        ? adjacentOverhangAllowance(atoms, i - 1, "before", ruleSet)
+        : 0;
       const overhangAllowanceAfterTick =
-        i < cutAtAtomIndex ? adjacentOverhangAllowance(units, atoms, i + 1, "after", ruleSet) : 0; // no same-line neighbor after the line's own last placed atom
+        i < cutAtAtomIndex ? adjacentOverhangAllowance(atoms, i + 1, "after", ruleSet) : 0; // no same-line neighbor after the line's own last placed atom
       const placement = placeRuby({
         baseExtentTick: atom.advanceTick,
         readingExtentTick,
@@ -512,7 +636,7 @@ export function composeLine(
   trace?.record({
     sourceSpan: { blockId, start: consumedThroughOffset, end: consumedThroughOffset },
     ruleApplied: "compose/line Natural-Pitch cut: latest legal boundary that fit",
-    alternativesConsidered: atoms.slice(0, cutAtAtomIndex + 1).map((a) => `atom@${a.sourceSpan.end}`),
+    alternativesConsidered: atoms.slice(firstAtomIndex, cutAtAtomIndex + 1).map((a) => `atom@${a.sourceSpan.end}`),
     outcome: `LINE_CUT_AT:${consumedThroughOffset}`,
   });
 
