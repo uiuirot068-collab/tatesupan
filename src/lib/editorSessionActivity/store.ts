@@ -42,6 +42,7 @@ export const EMPTY_WORK_SESSION_STATE: WorkSessionState = Object.freeze({
 export interface WorkSessionStore {
   read: () => WorkSessionState;
   subscribe: (listener: () => void) => () => void;
+  initializeEmpty: () => void;
   start: (startedAt?: number) => ActiveWorkSession;
   pause: (pausedAt?: number) => ActiveWorkSession | null;
   resume: (resumedAt?: number) => ActiveWorkSession | null;
@@ -208,6 +209,10 @@ export function createWorkSessionStore(
     return () => listeners.delete(listener);
   }
 
+  function initializeEmpty(): void {
+    publish(EMPTY_WORK_SESSION_STATE);
+  }
+
   function start(startedAt = Date.now()): ActiveWorkSession {
     const current = read();
     if (current.active) return current.active;
@@ -289,7 +294,7 @@ export function createWorkSessionStore(
     return completed;
   }
 
-  return { read, subscribe, start, pause, resume, record, end };
+  return { read, subscribe, initializeEmpty, start, pause, resume, record, end };
 }
 
 export const workSessionStore = createWorkSessionStore();
@@ -304,4 +309,9 @@ export function workSessionStoreFor(scopeKey: string): WorkSessionStore {
   const store = createWorkSessionStore(browserLocalStorage, createStableId, storageKey);
   scopedStores.set(storageKey, store);
   return store;
+}
+
+/** Claim a newly-created document's namespace without touching any other key. */
+export function initializeWorkSessionScope(scopeKey: string): void {
+  workSessionStoreFor(scopeKey).initializeEmpty();
 }

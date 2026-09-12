@@ -7,6 +7,7 @@ import {
 import { createGuideColophonSettings, normalizeColophonSettings } from "./colophon";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import { isEphemeralDocId } from "@/constants/demoData";
+import { initializeWorkSessionScope } from "./editorSessionActivity";
 
 export interface DocumentRecord {
   id: number;
@@ -144,6 +145,10 @@ export async function createDocument(): Promise<number> {
     plotNote: "",
     updatedAt: Date.now(),
   });
+  // A deleted document's scoped history intentionally survives in localStorage.
+  // If a timestamp id is ever reused (for example after a clock rollback), the
+  // new document must claim a clean namespace without erasing any other work.
+  initializeWorkSessionScope(`local:${id}`);
   return id;
 }
 

@@ -610,6 +610,7 @@ export default function TategakiEditor({
     <div
       data-editor-shell
       data-demo-mode={demoMode ? "" : undefined}
+      data-editor-save-status={saveStatus}
       className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
       <input

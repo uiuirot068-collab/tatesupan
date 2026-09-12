@@ -264,4 +264,30 @@ describe("work-session document isolation", () => {
       history: [],
     });
   });
+
+  it("initializes only a newly-created document namespace when an orphaned id is reused", () => {
+    const storage = new FakeLocalStorage();
+    const orphaned = scopedStore(storage, "local:reused", "old-session");
+    const surviving = scopedStore(storage, "local:surviving", "surviving-session");
+    orphaned.start(1_000);
+    orphaned.end(2_000);
+    surviving.start(3_000);
+    surviving.end(5_000);
+    storage.setItem(WORK_SESSION_STORAGE_KEY, JSON.stringify({
+      active: null,
+      history: [{
+        id: "legacy-session",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 1,
+        writtenCharacterCount: 1,
+      }],
+    }));
+
+    orphaned.initializeEmpty();
+
+    expect(orphaned.read()).toEqual({ active: null, history: [] });
+    expect(surviving.read().history).toHaveLength(1);
+    expect(JSON.parse(storage.getItem(WORK_SESSION_STORAGE_KEY) as string).history).toHaveLength(1);
+  });
 });

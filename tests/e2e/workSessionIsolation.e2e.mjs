@@ -133,38 +133,92 @@ try {
   await cdp.send("Runtime.enable");
   await cdp.waitFor("document.readyState === 'complete' && Boolean(document.querySelector('[data-bookshelf-page]'))");
 
-  await cdp.evaluate(`new Promise((resolve) => {
-    localStorage.clear();
-    const request = indexedDB.deleteDatabase('tategaki-editor-db');
-    request.onsuccess = request.onerror = request.onblocked = () => resolve(true);
-  }).then(() => { location.reload(); return true; })`);
-  await cdp.waitFor("document.readyState === 'complete' && Boolean(document.querySelector('[data-home-onboarding-actions]'))");
+  // The browser profile is new, but the test deliberately seeds persisted
+  // work-session data below. Do not clear localStorage: old browser data is
+  // the regression precondition that the former E2E omitted.
+  await cdp.waitFor("Boolean(document.querySelector('[data-home-onboarding-actions]'))");
   await cdp.evaluate(`document.querySelector('[data-home-onboarding-actions] button').click(); true`);
   await cdp.waitFor("location.pathname.endsWith('/editor') && new URLSearchParams(location.search).has('id')");
-  const documentA = await cdp.evaluate("new URLSearchParams(location.search).get('id')");
-  const keyA = `${STORAGE_PREFIX}${encodeURIComponent(`local:${documentA}`)}`;
-
-  await cdp.waitFor("Boolean(document.querySelector('[data-work-session-action=\"start\"]'))");
-  await cdp.evaluate("document.querySelector('[data-work-session-action=\"start\"]').click(); true");
-  await cdp.waitFor("Boolean(document.querySelector('[data-work-session-action=\"end\"]'))");
+  const oldDocument = await cdp.evaluate("new URLSearchParams(location.search).get('id')");
+  const oldKey = `${STORAGE_PREFIX}${encodeURIComponent(`local:${oldDocument}`)}`;
+  const oldState = {
+    active: null,
+    history: Array.from({ length: 4 }, (_, index) => ({
+      id: `old-session-${index + 1}`,
+      startedAt: 1_000 + index * 2_000,
+      endedAt: 2_000 + index * 2_000,
+      durationMs: 1_000,
+      writtenCharacterCount: index + 1,
+    })),
+  };
   await cdp.evaluate(`(() => {
-    const editor = document.querySelector('[data-demo-target="editor"]');
-    editor.focus();
-    editor.setSelectionRange(editor.value.length, editor.value.length);
+    localStorage.setItem(${JSON.stringify(oldKey)}, ${JSON.stringify(JSON.stringify(oldState))});
+    localStorage.setItem('tatespun:work-sessions:v1', ${JSON.stringify(JSON.stringify(oldState))});
+    location.reload();
     return true;
   })()`);
-  await cdp.send("Input.insertText", { text: "甲" });
-  await cdp.waitFor("document.querySelector('[data-work-session-written-count]')?.getAttribute('data-work-session-written-count') === '1'");
-  await cdp.evaluate("document.querySelector('[data-work-session-action=\"end\"]').click(); true");
-  await cdp.waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(keyA)})).history.length === 1`);
+  await cdp.waitFor("document.querySelector('[data-work-session-action=\"history\"]')?.textContent.includes('4')");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=\"history\"]').click(); true");
+  await cdp.waitFor("document.querySelectorAll('[data-work-session-history-record]').length === 4");
 
   await cdp.evaluate(`location.href = ${JSON.stringify(baseUrl)}; true`);
   await cdp.waitFor("document.readyState === 'complete' && Boolean(document.querySelector('[data-bookshelf-page]'))");
-  await cdp.waitFor("[...document.querySelectorAll('button[aria-label$=\"の作品メニュー\"]')].some((button) => !button.getAttribute('aria-label').includes('使い方ガイド'))");
+  await cdp.waitFor("Boolean(document.querySelector('[data-home-returning-actions] button'))");
+
+  // Simulate browser data left by a previously deleted document whose
+  // timestamp identity can be reused (for example after the device clock is
+  // moved backwards). The real create button must claim a clean namespace.
+  const newDocument = String(Number(oldDocument) + 10_000);
+  const newKey = `${STORAGE_PREFIX}${encodeURIComponent(`local:${newDocument}`)}`;
   await cdp.evaluate(`(() => {
-    const button = [...document.querySelectorAll('button[aria-label$="の作品メニュー"]')]
-      .find((candidate) => !candidate.getAttribute('aria-label').includes('使い方ガイド'));
-    button.click(); return true;
+    localStorage.setItem(${JSON.stringify(newKey)}, ${JSON.stringify(JSON.stringify(oldState))});
+    Date.now = () => ${JSON.stringify(Number(newDocument))};
+    document.querySelector('[data-home-returning-actions] button').click();
+    return true;
+  })()`);
+  await cdp.waitFor(`location.pathname.endsWith('/editor') && new URLSearchParams(location.search).get('id') === ${JSON.stringify(newDocument)}`);
+  await cdp.waitFor("document.querySelector('[data-editor-shell]')?.getAttribute('data-editor-save-status') === 'saved'");
+  const initialNew = await cdp.evaluate(`(() => {
+    const state = JSON.parse(localStorage.getItem(${JSON.stringify(newKey)}));
+    return {
+      historyCount: state?.history?.length ?? 0,
+      durationMs: (state?.history ?? []).reduce((sum, record) => sum + record.durationMs, 0),
+      active: state?.active ?? null,
+    };
+  })()`);
+  assert.deepEqual(initialNew, { historyCount: 0, durationMs: 0, active: null });
+
+  // A full reload restores the native clock. NEW must persist only its own
+  // first completed session.
+  await cdp.evaluate("location.reload(); true");
+  await cdp.waitFor("document.querySelector('[data-editor-shell]')?.getAttribute('data-editor-save-status') === 'saved'");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=\"start\"]').click(); true");
+  await cdp.waitFor("Boolean(document.querySelector('[data-work-session-action=\"end\"]'))");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=\"end\"]').click(); true");
+  await cdp.waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(newKey)})).history.length === 1`);
+  await cdp.evaluate("location.reload(); true");
+  await cdp.waitFor("document.querySelector('[data-work-session-action=\"history\"]')?.textContent.includes('1')");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=\"history\"]').click(); true");
+  await cdp.waitFor("document.querySelectorAll('[data-work-session-history-record]').length === 1");
+
+  // OLD remains intact while it exists.
+  await cdp.evaluate(`location.href = ${JSON.stringify(`${baseUrl}/editor?id=`)} + ${JSON.stringify(oldDocument)}; true`);
+  await cdp.waitFor("document.querySelector('[data-editor-shell]')?.getAttribute('data-editor-save-status') === 'saved' && document.querySelector('[data-work-session-action=\"history\"]')?.textContent.includes('4')");
+  await cdp.evaluate("document.querySelector('[data-work-session-action=\"history\"]').click(); true");
+  await cdp.waitFor("document.querySelectorAll('[data-work-session-history-record]').length === 4");
+  const preservedOld = await cdp.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(oldKey)})).history.length`);
+  assert.equal(preservedOld, 4);
+
+  // Delete OLD through the bookshelf UI, then deliberately reuse OLD's id.
+  // The newly-created document must still start empty without erasing NEW.
+  await cdp.evaluate(`location.href = ${JSON.stringify(baseUrl)}; true`);
+  await cdp.waitFor("document.readyState === 'complete' && Boolean(document.querySelector('[data-home-returning-actions]'))");
+  await cdp.waitFor("document.querySelectorAll('button[aria-haspopup=\"dialog\"]') .length >= 2");
+  await cdp.evaluate(`(() => {
+    const menus = [...document.querySelectorAll('button[aria-haspopup="dialog"]')]
+      .filter((button) => button.title === '作品メニュー');
+    menus.at(-1).click();
+    return true;
   })()`);
   await cdp.waitFor("Boolean(document.querySelector('[role=\"dialog\"]'))");
   await cdp.evaluate(`(() => {
@@ -178,30 +232,21 @@ try {
       .find((candidate) => candidate.textContent.trim() === '削除する');
     button.click(); return true;
   })()`);
-  await cdp.waitFor("![...document.querySelectorAll('button[aria-label$=\"の作品メニュー\"]')].some((button) => !button.getAttribute('aria-label').includes('使い方ガイド'))");
-  await cdp.waitFor("Boolean(document.querySelector('[data-home-onboarding-actions]'))");
-  await cdp.evaluate("document.querySelector('[data-home-onboarding-actions] button').click(); true");
-  await cdp.waitFor(`location.pathname.endsWith('/editor') && new URLSearchParams(location.search).get('id') !== ${JSON.stringify(documentA)}`);
-
-  const result = await cdp.evaluate(`(() => {
-    const documentB = new URLSearchParams(location.search).get('id');
-    const keyB = ${JSON.stringify(STORAGE_PREFIX)} + encodeURIComponent('local:' + documentB);
-    return {
-      documentB,
-      keyAExists: localStorage.getItem(${JSON.stringify(keyA)}) !== null,
-      keyBValue: localStorage.getItem(keyB),
-      canStart: Boolean(document.querySelector('[data-work-session-action="start"]')),
-      hasActive: Boolean(document.querySelector('[data-work-session-action="end"]')),
-      elapsed: document.querySelector('[data-work-session-elapsed]')?.textContent.trim(),
-    };
+  await cdp.waitFor("Boolean(document.querySelector('[data-home-returning-actions] button'))");
+  await cdp.evaluate(`(() => {
+    Date.now = () => ${JSON.stringify(Number(oldDocument))};
+    document.querySelector('[data-home-returning-actions] button').click();
+    return true;
   })()`);
-  assert.notEqual(result.documentB, documentA);
-  assert.equal(result.keyAExists, true); // deletion does not clear unrelated/global data
-  assert.equal(result.keyBValue, null);
-  assert.equal(result.canStart, true);
-  assert.equal(result.hasActive, false);
-  assert.equal(result.elapsed, undefined);
-  console.log(`PASS document delete -> new document work-session isolation: A=${documentA}, B=${result.documentB}`);
+  await cdp.waitFor(`location.pathname.endsWith('/editor') && new URLSearchParams(location.search).get('id') === ${JSON.stringify(oldDocument)}`);
+  await cdp.waitFor("document.querySelector('[data-editor-shell]')?.getAttribute('data-editor-save-status') === 'saved'");
+  const recreated = await cdp.evaluate(`(() => {
+    const old = JSON.parse(localStorage.getItem(${JSON.stringify(oldKey)}));
+    const own = JSON.parse(localStorage.getItem(${JSON.stringify(newKey)}));
+    return { oldHistory: old?.history?.length ?? 0, newHistory: own?.history?.length ?? 0 };
+  })()`);
+  assert.deepEqual(recreated, { oldHistory: 0, newHistory: 1 });
+  console.log(`PASS persisted history isolation: OLD=${oldDocument}, NEW=${newDocument}`);
 } finally {
   try { await cdp?.send("Browser.close"); } catch {}
   if (browserProcess?.exitCode === null) browserProcess.kill();
