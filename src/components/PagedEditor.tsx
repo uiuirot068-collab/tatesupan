@@ -33,12 +33,22 @@
  * only the current page's own local text/issue-offsets -- never a
  * full-document shadow textarea (Phase 8; Phase 14's "no second 300k
  * editable DOM").
+ *
+ * SELECTION: TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §C/§D -- Ctrl/Cmd+A is
+ * native, unintercepted browser "select all" over the MOUNTED page only
+ * (matching what's actually visible/editable, and ordinary user
+ * expectation of the shortcut). Selecting the WHOLE canonical manuscript
+ * (for Copy/Cut/typed-replacement) is instead an explicit, separate
+ * "全文を選択" action (see `selectEntireManuscript`) -- `allSelectedRef`
+ * (and the `isFullManuscriptSelected` state mirroring it for the button's
+ * own label) is now ONLY ever set by that action, never by Ctrl+A.
  */
 
 import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -124,10 +134,20 @@ function PagedEditorInner(
   const compositionSnapshotRef = useRef<BeforeInputEditSnapshot | null>(null);
   const pendingBeforeInputRef = useRef<BeforeInputEditSnapshot | null>(null);
   const undoHistoryRef = useRef<UndoHistory>(createUndoHistory());
-  // Application-level Ctrl/Cmd+A (native selection can only ever cover the
-  // mounted page) -- Copy/Cut/typed-replacement act on the full canonical
-  // text while this is set (Phase 9).
+  // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: application-level "select the
+  // WHOLE canonical manuscript" state, entered ONLY via the explicit
+  // "全文を選択" action (never by Ctrl/Cmd+A -- see the module doc). While
+  // set, Copy/Cut/typed-replacement act on the full canonical text instead
+  // of just the mounted page. `isFullManuscriptSelected` mirrors the ref
+  // into React state purely so the button's own label can react to it --
+  // every actual DECISION (Copy/Cut/replace) still reads the ref
+  // synchronously, never the possibly-stale state.
   const allSelectedRef = useRef(false);
+  const [isFullManuscriptSelected, setIsFullManuscriptSelected] = useState(false);
+  const setAllSelected = (value: boolean) => {
+    allSelectedRef.current = value;
+    setIsFullManuscriptSelected(value);
+  };
   const justSetAllSelectedRef = useRef(false);
   const contentRef = useRef(content);
   useEffect(() => {
@@ -167,26 +187,58 @@ function PagedEditorInner(
 
   const reportCaret = (globalCaret: number) => onCursorIndexChange?.(globalCaret);
 
-  /** Switches the mounted page (if needed) so `globalOffset` is visible, restoring a page-local caret at `localCaretHint` when already on the right page, or at a sensible default otherwise. */
+  // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: a selection to apply once
+  // the textarea's DOM `value` actually reflects the page we just switched
+  // to. A bare `requestAnimationFrame` scheduled at the SAME time as
+  // `setCurrentPageIndex` is not reliably ordered after React's commit in
+  // every invocation path (confirmed by Human QA: a Preview-page jump and a
+  // same-page-boundary IME transition both landed at the wrong end of the
+  // page instead of the intended local offset) -- `setSelectionRange`
+  // running against the textarea's STALE (pre-switch) value still succeeds
+  // silently (the old value is simply longer), and the selection it set is
+  // then clobbered when React reassigns `.value` moments later (browsers
+  // clamp/reset selection on a full value replacement). The
+  // `useLayoutEffect` below is tied to React's own commit for `pageText`,
+  // so it is GUARANTEED to run after the new value is in the DOM.
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  /** Switches the mounted page (if needed) so `globalOffset` is visible, then applies `selectLocal` (or a plain caret at the mapped local offset) once the target page's text is actually in the DOM. */
   const switchToPageForOffset = (
     globalOffset: number,
     latestPages: EditorPage[],
     selectLocal?: { start: number; end: number }
   ) => {
     const targetIndex = editorPageForGlobalOffset(latestPages, globalOffset);
-    setCurrentPageIndex(targetIndex);
     const targetPage = latestPages[targetIndex];
     const localStart = selectLocal
       ? globalToEditorPageLocal(targetPage, selectLocal.start)
       : globalToEditorPageLocal(targetPage, globalOffset);
     const localEnd = selectLocal ? globalToEditorPageLocal(targetPage, selectLocal.end) : localStart;
-    requestAnimationFrame(() => {
+
+    if (targetIndex === safePageIndex) {
+      // Already the mounted page: its DOM value already matches, so apply
+      // immediately -- `setCurrentPageIndex` with an unchanged value is a
+      // React no-op render, which the layout effect below would never see.
       const el = textareaRef.current;
       el?.focus({ preventScroll: true });
       el?.setSelectionRange(localStart, localEnd);
-    });
+    } else {
+      pendingSelectionRef.current = { start: localStart, end: localEnd };
+      setCurrentPageIndex(targetIndex);
+    }
     return targetIndex;
   };
+
+  // Applies a pending cross-page selection exactly once the switched-to
+  // page's text has actually committed to the textarea's DOM value.
+  useLayoutEffect(() => {
+    const pending = pendingSelectionRef.current;
+    if (!pending) return;
+    pendingSelectionRef.current = null;
+    const el = textareaRef.current;
+    el?.focus({ preventScroll: true });
+    el?.setSelectionRange(pending.start, pending.end);
+  }, [currentPageIndex, pageText]);
 
   /** Re-anchors the current page (and invalidates undo history) after a `content` change this component did NOT itself produce. Never called mid-composition (deferred to compositionend instead). */
   const reanchorForExternalContent = (newContent: string) => {
@@ -195,7 +247,7 @@ function PagedEditorInner(
     const newPages = computeEditorPages(newContent);
     lastOwnContentRef.current = newContent;
     undoHistoryRef.current = createUndoHistory();
-    allSelectedRef.current = false;
+    setAllSelected(false);
     switchToPageForOffset(clampedCaret, newPages);
   };
 
@@ -252,10 +304,10 @@ function PagedEditorInner(
     }
   };
 
-  /** Application-level Ctrl/Cmd+A: replaces the WHOLE canonical document with `typed` (or removes it, for Delete/Backspace/Cut), as ONE atomic undo step. */
+  /** Replaces the WHOLE canonical document with `typed` (or removes it, for Delete/Backspace/Cut) while explicit full-manuscript selection is active, as ONE atomic undo step. */
   const replaceWholeDocument = (typed: string) => {
     const removedText = content;
-    allSelectedRef.current = false;
+    setAllSelected(false);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: 0, removedText, insertedText: typed, atomic: true });
     commitCanonical(typed);
     const newPages = computeEditorPages(typed);
@@ -340,19 +392,32 @@ function PagedEditorInner(
     reportCaret(result.selectionEnd);
   };
 
+  /**
+   * TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: the explicit "全文を選択"
+   * action -- the ONLY way `allSelectedRef` is ever set now that Ctrl/Cmd+A
+   * is native, page-only selection (see the module doc). Also visually
+   * selects the mounted page's own text (the closest native affordance
+   * available -- unmounted pages have no DOM to highlight), matching the
+   * "全文選択中" label shown while this is active.
+   */
+  const selectEntireManuscript = () => {
+    if (isComposingRef.current) return;
+    setAllSelected(true);
+    justSetAllSelectedRef.current = true;
+    const el = textareaRef.current;
+    el?.focus({ preventScroll: true });
+    el?.setSelectionRange(0, el.value.length);
+  };
+
+  const deselectEntireManuscript = () => {
+    setAllSelected(false);
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
     const isMod = event.ctrlKey || event.metaKey;
     if (isMod && !event.nativeEvent.isComposing) {
       const key = event.key.toLowerCase();
-      if (key === "a") {
-        event.preventDefault();
-        allSelectedRef.current = true;
-        justSetAllSelectedRef.current = true;
-        el.setSelectionRange(0, el.value.length);
-        onNativeKeyDown?.(el);
-        return;
-      }
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         runHistory("undo");
@@ -364,6 +429,9 @@ function PagedEditorInner(
         return;
       }
     }
+    if (event.key === "Escape" && allSelectedRef.current) {
+      deselectEntireManuscript();
+    }
     onNativeKeyDown?.(el);
   };
 
@@ -372,7 +440,7 @@ function PagedEditorInner(
     if (justSetAllSelectedRef.current) {
       justSetAllSelectedRef.current = false;
     } else {
-      allSelectedRef.current = false;
+      setAllSelected(false);
     }
     reportCaret(editorPageLocalToGlobal(currentPage, el.selectionStart));
   };
@@ -409,6 +477,24 @@ function PagedEditorInner(
       const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
       commitCanonical(nextCanonical);
       reportCaret(globalCaret);
+
+      // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §B: an IME composition can
+      // ALSO push this page past its target size, exactly like ordinary
+      // typing (see `handleChange`'s identical reconciliation, which this
+      // path was previously missing entirely). When that happens, this
+      // page's own `end` moves EARLIER (a new page boundary now falls
+      // partway through what used to be one page -- see the module doc),
+      // so the just-composed text -- and the caret the IME left there --
+      // silently end up on the NEXT page while `currentPageIndex` still
+      // pointed at this one. The next render's now-shorter `pageText`
+      // slice then made the browser clamp the stale caret to that
+      // truncated length, landing it at this page's end instead of near
+      // the start of the (correct) next page.
+      const nextPages = computeEditorPages(nextCanonical);
+      const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
+      if (targetIndex !== safePageIndex) {
+        switchToPageForOffset(globalCaret, nextPages);
+      }
     }
 
     const pendingJump = pendingJumpRef.current;
@@ -450,14 +536,12 @@ function PagedEditorInner(
       return;
     }
     undoHistoryRef.current = flushBatch(undoHistoryRef.current);
-    setCurrentPageIndex(clamped);
-    const localCaret = 0;
-    reportCaret(editorPageLocalToGlobal(pages[clamped], localCaret));
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      el?.focus({ preventScroll: true });
-      el?.setSelectionRange(localCaret, localCaret);
-    });
+    // §D: an explicit full-manuscript selection can't mean anything once
+    // the mounted page (the only page with real DOM selection) changes.
+    setAllSelected(false);
+    const target = pages[clamped].start;
+    switchToPageForOffset(target, pages);
+    reportCaret(target);
   };
 
   useImperativeHandle(
@@ -497,7 +581,7 @@ function PagedEditorInner(
     <div className="absolute inset-0 flex flex-col">
       <div
         data-editor-page-navigator=""
-        className="flex flex-none items-center justify-center gap-3 border-b border-ink/10 bg-ink/[0.02] px-2 py-1 text-xs text-ink/70"
+        className="flex flex-none flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-ink/10 bg-ink/[0.02] px-2 py-1 text-xs text-ink/70"
       >
         <button
           type="button"
@@ -519,6 +603,26 @@ function PagedEditorInner(
           className="flex min-h-7 min-w-7 items-center justify-center rounded border border-ink/20 text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <span aria-hidden="true">→</span>
+        </button>
+        {/* TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: Ctrl/Cmd+A only ever
+            selects the mounted page now (native browser behaviour); this is
+            the sole entry point for the explicit full-canonical-manuscript
+            selection Copy/Cut/replace need. Unmounted pages have no DOM to
+            visually select, so the active state is announced in the label
+            itself instead of relying on a native highlight spanning pages
+            it can't reach. */}
+        <button
+          type="button"
+          aria-pressed={isFullManuscriptSelected}
+          data-editor-select-all=""
+          onClick={isFullManuscriptSelected ? deselectEntireManuscript : selectEntireManuscript}
+          className={`whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium ${
+            isFullManuscriptSelected
+              ? "border-accent bg-accent/10 text-ink"
+              : "border-ink/20 text-ink/70 hover:bg-ink/5"
+          }`}
+        >
+          {isFullManuscriptSelected ? "全文選択中　解除" : "全文を選択"}
         </button>
       </div>
 

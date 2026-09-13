@@ -111,9 +111,12 @@ describe("Round 6 Demo Step 9", () => {
   const data = source("src/constants/demoData.ts");
   const tour = source("src/components/DemoTour.tsx");
 
-  it("targets Export at step 9 and requests lower safe placement only", () => {
+  it("targets Export and requests lower safe placement only", () => {
+    // Not pinned to a numeric step index -- TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010
+    // §G added a new step, which would otherwise shift every later step's
+    // position without changing anything this test actually cares about.
     const targets = Array.from(data.matchAll(/target: "([^"]+)"/g), (match) => match[1]);
-    expect(targets[8]).toBe("export");
+    expect(targets).toContain("export");
     expect(tour).toContain('step.target === "export" ? "lower-safe" : "auto"');
     expect(tour).not.toMatch(/setExport|openExport|onOpenExport/);
   });

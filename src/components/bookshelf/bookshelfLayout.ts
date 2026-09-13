@@ -21,11 +21,22 @@ export function truncateSpineTitle(title: string): string {
   return `${characters.slice(0, MAX_VISIBLE_SPINE_TITLE_LENGTH - 1).join("")}…`;
 }
 
+/**
+ * TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §H: approved 5-level scheme --
+ * levels 1-4 are half-open below their upper bound, level 5 (and every
+ * larger manuscript, including a ~300k+ novel) stays capped at the same
+ * maximum thickness rather than growing indefinitely.
+ *   1: 0–9,999          -> 30px
+ *   2: 10,000–49,999    -> 40px
+ *   3: 50,000–99,999    -> 50px
+ *   4: 100,000–299,999  -> 60px
+ *   5: 300,000+         -> 70px
+ */
 export function bookWidthForCharacterCount(characterCount: number): BookWidth {
-  if (characterCount < 1_000) return 30;
-  if (characterCount < 10_000) return 40;
-  if (characterCount < 30_000) return 50;
-  if (characterCount <= 100_000) return 60;
+  if (characterCount < 10_000) return 30;
+  if (characterCount < 50_000) return 40;
+  if (characterCount < 100_000) return 50;
+  if (characterCount < 300_000) return 60;
   return 70;
 }
 

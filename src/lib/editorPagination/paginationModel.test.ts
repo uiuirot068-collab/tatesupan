@@ -183,6 +183,94 @@ describe("offset mapping", () => {
   });
 });
 
+describe("Preview -> Editor landing offset (TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A)", () => {
+  // A Preview publication page's own source-range start is the exact
+  // GLOBAL offset PagedEditor.tsx's `moveSelectionToGlobal` is asked to
+  // land on; this is the page-selection + local-offset half of that flow
+  // (the DOM-selection half has no automated coverage -- see the module's
+  // own comment in PagedEditor.tsx for why it was fixed structurally).
+  const content = flatText(220_000);
+  const pages = computeEditorPages(content);
+
+  it("maps a source target near an editor page's own start to a small local offset (not 0 unless it truly is the start)", () => {
+    const page = pages[1];
+    const sourceStart = page.start + 37; // a few chars into the page, not page.start itself
+    const targetIndex = editorPageForGlobalOffset(pages, sourceStart);
+    expect(targetIndex).toBe(1);
+    expect(globalToEditorPageLocal(pages[targetIndex], sourceStart)).toBe(37);
+  });
+
+  it("maps a source target in the middle of an editor page to the correct mid-page local offset", () => {
+    const page = pages[2];
+    const sourceStart = page.start + Math.floor(page.length / 2);
+    const targetIndex = editorPageForGlobalOffset(pages, sourceStart);
+    expect(targetIndex).toBe(2);
+    const local = globalToEditorPageLocal(pages[targetIndex], sourceStart);
+    expect(local).toBe(sourceStart - page.start);
+    expect(local).toBeGreaterThan(0);
+    expect(local).toBeLessThan(page.length);
+  });
+
+  it("maps a source target near an editor page's own end to a local offset near that page's length, not the next page's start", () => {
+    const page = pages[1];
+    const sourceStart = page.end - 5;
+    const targetIndex = editorPageForGlobalOffset(pages, sourceStart);
+    expect(targetIndex).toBe(1);
+    expect(globalToEditorPageLocal(pages[targetIndex], sourceStart)).toBe(page.length - 5);
+  });
+
+  it("switches to the correct editor page (not merely offset 0 on the current one) when the target is on a different page", () => {
+    const currentPageIndex = 0;
+    const sourceStart = pages[3].start + 12_345;
+    const targetIndex = editorPageForGlobalOffset(pages, sourceStart);
+    expect(targetIndex).not.toBe(currentPageIndex);
+    expect(targetIndex).toBe(3);
+    expect(globalToEditorPageLocal(pages[targetIndex], sourceStart)).toBe(12_345);
+  });
+});
+
+describe("editor-page-boundary typing lands near the new page's start, not its end (TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §B)", () => {
+  it("maps the caret right after a boundary-crossing keystroke to a small local offset on the NEW page", () => {
+    // A page long enough that adding one more character (past a paragraph
+    // break within the preferred search radius of the ~50k target) actually
+    // splits it -- simulates "type at the end of the current page until it
+    // splits". (A page merely just-under-target would simply absorb the
+    // single extra char as its own trailing remainder -- see
+    // `computeEditorPages`'s `minTrailingSize` -- and never split at all.)
+    const before = flatText(54_999);
+    const afterTyping = before + "\n" + flatText(1); // the boundary-crossing keystroke
+    const pages = computeEditorPages(afterTyping);
+    const globalCaret = afterTyping.length; // caret right after the just-typed char
+
+    const targetIndex = editorPageForGlobalOffset(pages, globalCaret);
+    const targetPage = pages[targetIndex];
+    const localCaret = globalToEditorPageLocal(targetPage, globalCaret);
+
+    // The caret must land near the START of whatever page it's now on, not
+    // pinned to that page's own end (the reported bug) -- for this
+    // single-extra-character keystroke the new/last page is only 1 char long,
+    // so "near the start" and "at the end" coincide at this exact boundary;
+    // the meaningful assertion is that it's the page's OWN small length, not
+    // some stale/larger value from the page it used to be on.
+    expect(localCaret).toBe(targetPage.length);
+    expect(targetPage.length).toBeLessThan(10);
+  });
+
+  it("keeps the caret at a small, correctly-mapped local offset when several more characters follow the boundary crossing", () => {
+    const before = flatText(54_998);
+    const afterTyping = before + "\n" + flatText(200); // composition/typing continues past the boundary
+    const pages = computeEditorPages(afterTyping);
+    const globalCaret = afterTyping.length;
+
+    const targetIndex = editorPageForGlobalOffset(pages, globalCaret);
+    const targetPage = pages[targetIndex];
+    const localCaret = globalToEditorPageLocal(targetPage, globalCaret);
+
+    expect(localCaret).toBe(200);
+    expect(targetPage.start).toBe(before.length + 1);
+  });
+});
+
 describe("continuous manuscript growth (0 -> 300k+)", () => {
   it("grows through every editor-page threshold without losing or duplicating text, preserving the caret's page", () => {
     const steps = [0, 10_000, 49_000, 51_000, 60_000, 100_000, 150_000, 200_000, 250_000, 300_000, 320_000];

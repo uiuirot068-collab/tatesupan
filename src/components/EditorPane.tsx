@@ -6,6 +6,7 @@ import WindowedEditorProbe from "./WindowedEditorProbe";
 import PagedEditor, { type PagedEditorHandle } from "./PagedEditor";
 import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
+import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
@@ -170,7 +171,6 @@ function EditorPaneInner(
   const isWindowed = isWindowedEditorEnabled();
   const pagedEditorRef = useRef<PagedEditorHandle>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
-  const [mobileWritingActive, setMobileWritingActive] = useState(false);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
   // recompute's scheduler priority -- it cannot interrupt `countVisualLength`
   // (which re-tokenizes the WHOLE manuscript) mid-call, so on a 260k-char
@@ -208,18 +208,6 @@ function EditorPaneInner(
     });
     inputActivityStateRef.current = after;
   }, [content]);
-
-  // TSP-LOOP-020: explicit "本文を書く" action (phone only). scrollIntoView is
-  // always done; focus() is only ever called from this direct user tap —
-  // never on project load / mount — so it can't trigger a Safari
-  // keyboard/viewport jump on open.
-  const goToManuscript = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.focus({ preventScroll: true });
-    setMobileWritingActive(true);
-  };
 
   // Keep the textarea's native browser history as the single source of truth.
   // Preventing toolbar focus on pointer-down preserves the current selection;
@@ -374,6 +362,15 @@ function EditorPaneInner(
       return;
     }
     applyAutomatedTextChange(result.text);
+    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §E: see writingCheckPostFixNavigation.ts's
+    // own doc -- the current default (RETURN_TO_PREVIOUS) resolves to `null`
+    // here, so this is a no-op and today's Human-QA-approved behavior is
+    // unchanged; flipping the policy constant is the only future change needed.
+    const postFixTarget = resolvePostFixCaretTarget(WRITING_CHECK_POST_FIX_NAVIGATION, {
+      start: issue.start,
+      replacementLength: issue.suggestedReplacement?.text.length ?? 0,
+    });
+    if (postFixTarget != null) navigateToGlobalOffset(postFixTarget, postFixTarget);
   };
 
   const handleIgnoreIssue = (issue: WritingDiagnostic) => {
@@ -538,25 +535,6 @@ function EditorPaneInner(
         </div>
       </div>
 
-      {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved
-          work the user must immediately see "this is where I continue
-          writing". `md:hidden` — desktop never shows this tutorial line. */}
-      {!mobileWritingActive && !focusMode && <div data-mobile-write-action="" className="flex flex-none items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2 md:hidden">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink">✏️ 本文を書く</p>
-          <p className="text-[11px] leading-snug text-ink/55">
-            ここに原稿を入力すると、縦書きプレビューに反映されます。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={goToManuscript}
-          className="shrink-0 whitespace-nowrap rounded-full border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 hover:bg-ink/5"
-        >
-          本文を書く
-        </button>
-      </div>}
-
       {/* The textarea stays the sole input surface. WritingCheckOverlay is a
           read-only, pointer-events-none mirror rendered behind it (only the
           red wavy underline is visible); it shares the textarea's wrapping
@@ -695,7 +673,6 @@ function EditorPaneInner(
           onSelect={reportCursorIndex}
           onClick={reportCursorIndex}
           onKeyUp={reportCursorIndex}
-          onFocus={() => setMobileWritingActive(true)}
           onCompositionStart={(event) => {
             const el = event.currentTarget;
             logNativeEvent("compositionstart", el);

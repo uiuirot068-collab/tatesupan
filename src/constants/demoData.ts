@@ -105,6 +105,19 @@ export const DEMO_STEPS: DemoStep[] = [
     target: "editor",
   },
   {
+    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G: describes the paged
+    // long-document editor surface (NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED).
+    // Kept as a general "did you know" step even when the default FULL
+    // surface is active (the demo manuscript is far too short to ever
+    // split into more than one 編集ページ either way) -- copy matches the
+    // ACTUAL implemented Preview interaction (⋮ メニュー →「編集位置へ移動」),
+    // never a direct page-click, which isn't implemented.
+    title: "長い原稿は「編集ページ」で軽やかに",
+    body:
+      "長い原稿でも快適に編集できるよう、エディターは約5万字前後ごとに「編集ページ」が切り替わります。原稿そのものはひとつにつながったままなので、保存や書き出しには影響しません。プレビューから「編集位置へ移動」を選ぶと、そのページの文章がある編集位置へ戻れます。",
+    target: "editor",
+  },
+  {
     title: "作業タイムを記録しよう",
     body:
       "「作業スタート」から「作業終了」までに新しく書いた文字数を記録できます。これまでの結果は「作業記録」から確認できます。",

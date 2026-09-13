@@ -58,7 +58,8 @@ describe("responsive demo card placement", () => {
     const tracker = readFileSync(join(__dirname, "..", "components", "WorkSessionTracker.tsx"), "utf8");
     const guide = readFileSync(join(__dirname, "..", "app", "guide", "page.tsx"), "utf8");
 
-    expect(data.match(/^    title: "/gm)).toHaveLength(11);
+    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G added one step (編集ページ).
+    expect(data.match(/^    title: "/gm)).toHaveLength(12);
     expect(data).not.toMatch(/\bn:\s*\d+,/);
     expect(data).toContain('title: "オプションも使えます"');
     expect(data).toContain('title: "集中モードで本文を広く"');

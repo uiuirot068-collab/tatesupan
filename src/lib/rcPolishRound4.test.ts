@@ -92,7 +92,7 @@ describe("Round 4 Editor placement and visibility", () => {
 
   it("renders Memo inside the Editor pane immediately after secondary navigation", () => {
     expect(pane.indexOf("data-editor-secondary-row")).toBeLessThan(pane.indexOf("<InlineMemoAccordion"));
-    expect(pane.indexOf("<InlineMemoAccordion")).toBeLessThan(pane.indexOf('data-mobile-write-action=""'));
+    expect(pane.indexOf("<InlineMemoAccordion")).toBeLessThan(pane.indexOf("ref={pagedEditorRef}"));
     expect(shell).not.toContain("<InlineMemoAccordion");
   });
 
@@ -103,10 +103,11 @@ describe("Round 4 Editor placement and visibility", () => {
     expect(pane).toContain("<WorkSessionTracker");
   });
 
-  it("removes the mobile write action after writing becomes active", () => {
-    expect(pane).toContain("setMobileWritingActive(true)");
-    expect(pane).toContain("!mobileWritingActive && !focusMode && <div data-mobile-write-action");
-    expect(pane).toContain("onFocus={() => setMobileWritingActive(true)}");
+  it("TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 §F: keeps the redundant mobile write-action guidance block removed so the textarea starts immediately below the toolbar", () => {
+    expect(pane).not.toContain("data-mobile-write-action");
+    expect(pane).not.toContain("mobileWritingActive");
+    expect(pane).not.toContain("goToManuscript");
+    expect(pane).not.toContain("本文を書く");
   });
 });
 
