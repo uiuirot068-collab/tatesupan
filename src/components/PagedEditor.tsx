@@ -548,7 +548,7 @@ function PagedEditorInner(
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           spellCheck={false}
-          className={className ?? "min-h-0 flex-1 resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none"}
+          className={className ?? "absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none"}
         />
       </div>
     </div>
