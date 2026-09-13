@@ -124,7 +124,7 @@ export const DEMO_STEPS: DemoStep[] = [
     // never a direct page-click, which isn't implemented.
     title: "長い原稿は「編集ページ」で軽やかに",
     body:
-      "長い原稿でも快適に編集できるよう、エディターは約5万字前後ごとに「編集ページ」が切り替わります。原稿そのものはひとつにつながったままなので、保存や書き出しには影響しません。プレビューから「編集位置へ移動」を選ぶと、そのページの文章がある編集位置へ戻れます。",
+      "長い原稿でも快適に編集できるよう、エディターは約5万字前後（段落の区切りに合わせて多少前後します）ごとに「編集ページ」が切り替わります。原稿そのものはひとつにつながったままなので、保存や書き出しには影響しません。次の編集ページまでの目安も表示されます。プレビューから「編集位置へ移動」を選ぶと、そのページの文章がある編集位置へ戻れます。",
     // TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: spotlight just the
     // ←編集ページN/M→ 全文を選択 nav row (PagedEditor.tsx's own
     // `data-editor-page-navigator` hook), not the whole editor textarea --

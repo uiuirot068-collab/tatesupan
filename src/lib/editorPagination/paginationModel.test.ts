@@ -181,6 +181,64 @@ describe("offset mapping", () => {
     expect(globalToEditorPageLocal(page, page.start - 500)).toBe(0);
     expect(globalToEditorPageLocal(page, page.end + 500)).toBe(page.length);
   });
+
+  it("half-open range: B-1 belongs to the previous page, B and B+1 belong to the next", () => {
+    const boundary = pages[0].end;
+    expect(editorPageForGlobalOffset(pages, boundary - 1)).toBe(0);
+    expect(editorPageForGlobalOffset(pages, boundary)).toBe(1);
+    expect(editorPageForGlobalOffset(pages, boundary + 1)).toBe(1);
+  });
+});
+
+// TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §L "BOUNDARY MODEL": the
+// task's own explicit boundary-value checklist, spelled out one by one
+// (rather than only exercised indirectly by the property tests above) so a
+// regression at any one of these exact values fails legibly.
+describe("exact boundary-value checklist (TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §L)", () => {
+  it.each([44_999, 45_000, 49_999, 50_000, 50_001])(
+    "content of exactly %i chars (no nearby newline) stays a single page -- all under the minTrailing-adjusted hard-cut threshold",
+    (length) => {
+      const content = flatText(length);
+      const pages = computeEditorPages(content);
+      expect(concatPages(content, pages)).toBe(content);
+      expect(pages).toHaveLength(1);
+    }
+  );
+
+  it("a natural newline at 47k from page start splits there (within the 45k-50k preferred range)", () => {
+    const content = flatText(47_000) + "\n" + flatText(20_000);
+    const pages = computeEditorPages(content);
+    expect(pages[0].end).toBe(47_001);
+  });
+
+  it("a natural newline at 50k from page start splits there (exactly the ideal offset)", () => {
+    const content = flatText(50_000) + "\n" + flatText(20_000);
+    const pages = computeEditorPages(content);
+    expect(pages[0].end).toBe(50_001);
+  });
+
+  it("a natural newline at 53k from page start splits there (within the 50k-55k preferred lookahead)", () => {
+    const content = flatText(53_000) + "\n" + flatText(20_000);
+    const pages = computeEditorPages(content);
+    expect(pages[0].end).toBe(53_001);
+  });
+
+  it("no newline anywhere through the hard maximum forces a split at the ideal offset once minTrailing is reached", () => {
+    const content = flatText(70_000); // no newlines anywhere
+    const pages = computeEditorPages(content);
+    expect(pages[0].end).toBe(EDITOR_PAGE_TARGET_SIZE);
+    expect(pages[0].length).toBeLessThanOrEqual(55_000);
+  });
+
+  it("never splits a surrogate pair sitting exactly at the hard-cut split point", () => {
+    const astral = "\u{1F600}";
+    const content = flatText(EDITOR_PAGE_TARGET_SIZE) + astral + flatText(20_000);
+    const pages = computeEditorPages(content);
+    expect(
+      pages[0].end === EDITOR_PAGE_TARGET_SIZE || pages[0].end === EDITOR_PAGE_TARGET_SIZE + 2
+    ).toBe(true);
+    expect(concatPages(content, pages)).toBe(content);
+  });
 });
 
 describe("Preview -> Editor landing offset (TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A)", () => {

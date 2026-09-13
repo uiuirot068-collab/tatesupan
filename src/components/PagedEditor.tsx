@@ -58,6 +58,7 @@ import {
   editorPageForGlobalOffset,
   editorPageLocalToGlobal,
   globalToEditorPageLocal,
+  EDITOR_PAGE_TARGET_SIZE,
   type EditorPage,
 } from "@/lib/editorPagination/paginationModel";
 import {
@@ -111,6 +112,90 @@ export interface PagedEditorProps {
 
 function clampPageIndex(index: number, pageCount: number): number {
   return Math.max(0, Math.min(pageCount - 1, index));
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+const CARET_SCROLL_MIRROR_PROPS = [
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "letterSpacing",
+  "lineHeight",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "boxSizing",
+  "width",
+  "whiteSpace",
+  "wordBreak",
+  "tabSize",
+] as const;
+
+/**
+ * TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: how tall `el`'s OWN
+ * wrapping would render if its value were truncated at `localOffset` --
+ * i.e. the caret's pixel `scrollTop` if it were the very last character
+ * visible. Built from a detached clone `<textarea>` (never the live `el`)
+ * so this can never itself perturb the live selection/composition/React
+ * value it's measuring around. Reuses the BROWSER's own line-wrapping
+ * (a real `<textarea>`, not a hand-rolled mirror div) instead of
+ * reimplementing wrap width/glyph-metrics math, which is exactly the kind
+ * of fragile glyph hit-testing the task explicitly asked to avoid.
+ */
+function measureCaretOffsetTop(el: HTMLTextAreaElement, localOffset: number): number {
+  if (typeof document === "undefined" || typeof window === "undefined") return 0;
+  const style = window.getComputedStyle(el);
+  const mirror = document.createElement("textarea");
+  mirror.setAttribute("aria-hidden", "true");
+  mirror.tabIndex = -1;
+  mirror.style.position = "absolute";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.top = "-9999px";
+  mirror.style.left = "-9999px";
+  mirror.style.height = "0px";
+  mirror.style.overflow = "hidden";
+  for (const prop of CARET_SCROLL_MIRROR_PROPS) {
+    mirror.style[prop] = style[prop];
+  }
+  document.body.appendChild(mirror);
+  mirror.value = el.value.slice(0, localOffset);
+  const top = mirror.scrollHeight;
+  document.body.removeChild(mirror);
+  return top;
+}
+
+/**
+ * Scrolls `el` so the character at `localOffset` lands near the UPPER
+ * portion of the visible area, never forced to the very top (offset 0) and
+ * never forced to the very bottom (the reported bug: `setSelectionRange`
+ * alone only scrolls the minimum distance needed, which for a forward jump
+ * typically leaves the target flush against the bottom edge -- reading as
+ * "landed at the wrong place" even though the selection offset itself is
+ * exact). A small margin above the target keeps a bit of preceding context
+ * visible "when practical" per the task's own requirement.
+ */
+function scrollCaretNearUpperView(el: HTMLTextAreaElement, localOffset: number): void {
+  const caretTop = measureCaretOffsetTop(el, localOffset);
+  const margin = Math.min(caretTop, Math.round(el.clientHeight * 0.15));
+  el.scrollTop = Math.max(0, caretTop - margin);
+}
+
+/** Rounds a remaining/length character count for the progress indicator: exact under 100 (small counts read oddly rounded to 0), nearest 100 above that. */
+function roundForDisplay(value: number): number {
+  return value < 100 ? value : Math.round(value / 100) * 100;
 }
 
 function PagedEditorInner(
@@ -200,13 +285,22 @@ function PagedEditorInner(
   // clamp/reset selection on a full value replacement). The
   // `useLayoutEffect` below is tied to React's own commit for `pageText`,
   // so it is GUARANTEED to run after the new value is in the DOM.
-  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
+  const pendingSelectionRef = useRef<{ start: number; end: number; scrollHint?: "upper" } | null>(null);
 
-  /** Switches the mounted page (if needed) so `globalOffset` is visible, then applies `selectLocal` (or a plain caret at the mapped local offset) once the target page's text is actually in the DOM. */
+  /**
+   * Switches the mounted page (if needed) so `globalOffset` is visible, then
+   * applies `selectLocal` (or a plain caret at the mapped local offset) once
+   * the target page's text is actually in the DOM. `scrollHint: "upper"`
+   * (TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B) additionally
+   * scrolls the target near the upper portion of the textarea instead of
+   * relying on `setSelectionRange`'s own minimal-scroll-into-view, which a
+   * forward jump can otherwise leave flush against the bottom edge.
+   */
   const switchToPageForOffset = (
     globalOffset: number,
     latestPages: EditorPage[],
-    selectLocal?: { start: number; end: number }
+    selectLocal?: { start: number; end: number },
+    options?: { scrollHint?: "upper" }
   ) => {
     const targetIndex = editorPageForGlobalOffset(latestPages, globalOffset);
     const targetPage = latestPages[targetIndex];
@@ -222,8 +316,9 @@ function PagedEditorInner(
       const el = textareaRef.current;
       el?.focus({ preventScroll: true });
       el?.setSelectionRange(localStart, localEnd);
+      if (el && options?.scrollHint === "upper") scrollCaretNearUpperView(el, localStart);
     } else {
-      pendingSelectionRef.current = { start: localStart, end: localEnd };
+      pendingSelectionRef.current = { start: localStart, end: localEnd, scrollHint: options?.scrollHint };
       setCurrentPageIndex(targetIndex);
     }
     return targetIndex;
@@ -238,6 +333,7 @@ function PagedEditorInner(
     const el = textareaRef.current;
     el?.focus({ preventScroll: true });
     el?.setSelectionRange(pending.start, pending.end);
+    if (el && pending.scrollHint === "upper") scrollCaretNearUpperView(el, pending.start);
   }, [currentPageIndex, pageText]);
 
   /** Re-anchors the current page (and invalidates undo history) after a `content` change this component did NOT itself produce. Never called mid-composition (deferred to compositionend instead). */
@@ -316,6 +412,60 @@ function PagedEditorInner(
   };
 
   /**
+   * TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §E: Backspace with a
+   * collapsed caret at local offset 0 of any page after the first has
+   * nothing to delete WITHIN the mounted page -- the native textarea sees
+   * an empty selection at its own start and no-ops. This reaches past the
+   * page boundary into the canonical manuscript instead, exactly as if the
+   * whole document were one continuous textarea: deletes the ONE character
+   * (never splitting a surrogate pair) immediately before the page's own
+   * `start`, then reconciles pages/caret onto wherever that now lands
+   * (typically the end of the previous page).
+   */
+  const deleteAcrossBoundaryBackward = () => {
+    if (currentPage.index === 0 || currentPage.start === 0) return false;
+    const globalCaret = currentPage.start;
+    const prevCode = content.charCodeAt(globalCaret - 1);
+    const deleteFrom =
+      isLowSurrogate(prevCode) && globalCaret - 2 >= 0 && isHighSurrogate(content.charCodeAt(globalCaret - 2))
+        ? globalCaret - 2
+        : globalCaret - 1;
+    const removedText = content.slice(deleteFrom, globalCaret);
+    undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: deleteFrom, removedText, insertedText: "" });
+    const nextCanonical = content.slice(0, deleteFrom) + content.slice(globalCaret);
+    commitCanonical(nextCanonical);
+    const newPages = computeEditorPages(nextCanonical);
+    switchToPageForOffset(deleteFrom, newPages);
+    reportCaret(deleteFrom);
+    return true;
+  };
+
+  /**
+   * TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §F: the symmetric
+   * forward case -- Delete with a collapsed caret at the END of a page that
+   * isn't the manuscript's own end. Deletes the ONE canonical character
+   * immediately after this page's `end` (never splitting a surrogate pair)
+   * and reconciles, exactly as a single continuous textarea would.
+   */
+  const deleteAcrossBoundaryForward = () => {
+    const globalCaret = currentPage.end;
+    if (globalCaret >= content.length) return false;
+    const nextCode = content.charCodeAt(globalCaret);
+    const deleteTo =
+      isHighSurrogate(nextCode) && globalCaret + 1 < content.length && isLowSurrogate(content.charCodeAt(globalCaret + 1))
+        ? globalCaret + 2
+        : globalCaret + 1;
+    const removedText = content.slice(globalCaret, deleteTo);
+    undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: globalCaret, removedText, insertedText: "" });
+    const nextCanonical = content.slice(0, globalCaret) + content.slice(deleteTo);
+    commitCanonical(nextCanonical);
+    const newPages = computeEditorPages(nextCanonical);
+    switchToPageForOffset(globalCaret, newPages);
+    reportCaret(globalCaret);
+    return true;
+  };
+
+  /**
    * `onBeforeInput`'s React prop does not forward the native `inputType`
    * (see `WindowedEditor.tsx`'s own doc for the confirmed-empirically
    * reasoning this is copied from); listen on the DOM node directly.
@@ -326,6 +476,35 @@ function PagedEditorInner(
     if (allSelectedRef.current && !isComposingRef.current && (inputType.startsWith("insert") || inputType.startsWith("delete"))) {
       nativeEvent.preventDefault();
       replaceWholeDocument(inputType.startsWith("insert") ? nativeEvent.data ?? "" : "");
+      onNativeBeforeInput?.(el, inputType);
+      return;
+    }
+
+    // §E/§F: a collapsed caret sitting exactly at this page's own start/end
+    // has nothing left for the native textarea to delete -- intercept
+    // BEFORE the native no-op so Backspace/Delete reach across the page
+    // boundary into the canonical manuscript instead.
+    if (
+      !isComposingRef.current &&
+      inputType === "deleteContentBackward" &&
+      el.selectionStart === 0 &&
+      el.selectionEnd === 0 &&
+      currentPage.index > 0
+    ) {
+      nativeEvent.preventDefault();
+      deleteAcrossBoundaryBackward();
+      onNativeBeforeInput?.(el, inputType);
+      return;
+    }
+    if (
+      !isComposingRef.current &&
+      inputType === "deleteContentForward" &&
+      el.selectionStart === el.value.length &&
+      el.selectionEnd === el.value.length &&
+      currentPage.end < content.length
+    ) {
+      nativeEvent.preventDefault();
+      deleteAcrossBoundaryForward();
       onNativeBeforeInput?.(el, inputType);
       return;
     }
@@ -500,18 +679,25 @@ function PagedEditorInner(
     const pendingJump = pendingJumpRef.current;
     pendingJumpRef.current = null;
     if (pendingJump?.kind === "global") {
-      switchToPageForOffset(pendingJump.end, computeEditorPages(contentRef.current), pendingJump);
+      switchToPageForOffset(pendingJump.end, computeEditorPages(contentRef.current), pendingJump, { scrollHint: "upper" });
     } else if (pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current) {
       reanchorForExternalContent(contentRef.current);
     }
   };
 
+  /**
+   * TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: the shared
+   * Preview-click / Writing-Check-jump entry point (via `EditorPane.tsx`'s
+   * `navigateToGlobalOffset`). `scrollHint: "upper"` keeps the jump target's
+   * own text visible near the top of the textarea instead of flush against
+   * whichever edge `setSelectionRange` happened to scroll to.
+   */
   const moveSelectionToGlobal = (start: number, end: number) => {
     if (isComposingRef.current) {
       pendingJumpRef.current = { kind: "global", start, end };
       return;
     }
-    switchToPageForOffset(end, pages, { start, end });
+    switchToPageForOffset(end, pages, { start, end }, { scrollHint: "upper" });
     reportCaret(end);
   };
 
@@ -562,6 +748,24 @@ function PagedEditorInner(
     }),
     [currentPage, moveSelectionToGlobal, replaceRangeGlobal, runHistory]
   );
+
+  // TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H: guidance-only
+  // estimate of when the next 編集ページ will appear -- NEVER the source of
+  // truth for pagination (that's still `computeEditorPages`, recomputed
+  // fresh every render above). Only the active LAST/growing page has a
+  // meaningful "remaining" count; a finalized earlier page already has a
+  // fixed length, so showing it as "N left" would misleadingly imply a
+  // transition that already happened.
+  const isLastPage = safePageIndex === pageCount - 1;
+  const progressLabel = isLastPage
+    ? currentPage.length < EDITOR_PAGE_TARGET_SIZE
+      ? `次の編集ページまで あと約${roundForDisplay(EDITOR_PAGE_TARGET_SIZE - currentPage.length).toLocaleString("ja-JP")}字`
+      : "区切り待ち"
+    : `この編集ページ：約${roundForDisplay(currentPage.length).toLocaleString("ja-JP")}字`;
+  const progressTitle =
+    isLastPage && currentPage.length >= EDITOR_PAGE_TARGET_SIZE
+      ? "次の段落区切りで編集ページが切り替わります（最大約5.5万字で自動的に切り替わります）"
+      : "最大約5.5万字で自動的に切り替わります";
 
   const showWritingCheck = Boolean(writingCheck?.enabled && writingCheck.analysisText === content);
   const pageLocalIssues = useMemo(() => {
@@ -624,6 +828,18 @@ function PagedEditorInner(
         >
           {isFullManuscriptSelected ? "全文選択中　解除" : "全文を選択"}
         </button>
+        {/* TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H/§I: `basis-full`
+            always drops this onto its own row (both desktop and the narrow
+            widths in §I) rather than only when the flex-wrap row happens to
+            run out of space, matching the compact two-row mobile layout the
+            task asks for without a separate responsive branch. */}
+        <span
+          data-editor-page-progress=""
+          title={progressTitle}
+          className="basis-full whitespace-nowrap text-center text-[10px] text-ink/50"
+        >
+          {progressLabel}
+        </span>
       </div>
 
       <div className="relative min-h-0 flex-1">
