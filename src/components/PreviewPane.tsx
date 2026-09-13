@@ -1176,6 +1176,46 @@ function PreviewPane({
   );
   const [exportLabel, setExportLabel] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  // TSP-ANNOUNCEMENT-VIDEO-PREVIEW-BLOCKERS-013: the menu panel used to be
+  // `position:absolute` under the button, which the Preview pane's own
+  // `overflow-hidden` root (needed for its rounded-corner frame) clips once
+  // the pane is narrow enough that the menu's fixed width no longer fits
+  // between the button and the pane's right edge. `position:fixed` with a
+  // JS-measured anchor escapes that clipping ancestor entirely (fixed
+  // positioning is relative to the viewport, never clipped by an ancestor's
+  // overflow, as long as no ancestor sets transform/filter/will-change --
+  // none does here) while keeping the exact same look at normal widths.
+  const exportMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previewRootRef = useRef<HTMLDivElement | null>(null);
+  const [exportMenuPos, setExportMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const EXPORT_MENU_WIDTH_PX = 192; // w-48
+  const EXPORT_MENU_VIEWPORT_MARGIN_PX = 8;
+  useLayoutEffect(() => {
+    // Closed: leave any stale position in state -- the JSX below only reads
+    // exportMenuPos while isExportMenuOpen is true, and the next open
+    // recomputes it fresh, so there's nothing to synchronize here.
+    if (!isExportMenuOpen) return;
+    const updatePosition = () => {
+      const button = exportMenuButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const fitsRight = rect.left + EXPORT_MENU_WIDTH_PX + EXPORT_MENU_VIEWPORT_MARGIN_PX <= window.innerWidth;
+      const left = fitsRight
+        ? rect.left
+        : Math.max(EXPORT_MENU_VIEWPORT_MARGIN_PX, rect.right - EXPORT_MENU_WIDTH_PX);
+      setExportMenuPos({ top: rect.bottom + 4, left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    // The Preview pane can narrow from a divider drag, which resizes this
+    // pane's own root element without firing a window resize event.
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (previewRootRef.current) resizeObserver.observe(previewRootRef.current);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      resizeObserver.disconnect();
+    };
+  }, [isExportMenuOpen]);
   const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
   const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
@@ -2097,7 +2137,7 @@ function PreviewPane({
   }
 
   return (
-    <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+    <div ref={previewRootRef} className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
       {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
@@ -2170,6 +2210,7 @@ function PreviewPane({
           )}
           <span className="relative flex flex-shrink-0 items-center gap-1.5">
             <button
+              ref={exportMenuButtonRef}
               type="button"
               data-demo-target="export"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
@@ -2180,14 +2221,22 @@ function PreviewPane({
                 ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
                 : "書き出し ▾"}
             </button>
-            {isExportMenuOpen && (
+            {isExportMenuOpen && exportMenuPos && (
               <>
                 {/* 背景クリックでメニューを閉じるための透明オーバーレイ。既存のPDFモーダルと同じパターン。 */}
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setIsExportMenuOpen(false)}
                 />
-                <div className="absolute left-0 top-full z-50 mt-1 flex w-48 flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
+                {/* TSP-ANNOUNCEMENT-VIDEO-PREVIEW-BLOCKERS-013: `fixed` +
+                    JS-measured top/left (see the effect above) instead of
+                    `absolute left-0 top-full` -- escapes this pane's own
+                    `overflow-hidden` frame so the menu is never cropped when
+                    the pane is narrow, and flips to right-aligned-under-the-
+                    button when there isn't room to the right of it. */}
+                <div
+                  style={{ position: "fixed", top: exportMenuPos.top, left: exportMenuPos.left, width: EXPORT_MENU_WIDTH_PX }}
+                  className="z-50 flex flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
                   <button
                     type="button"
                     onClick={() => {
