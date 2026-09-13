@@ -160,6 +160,7 @@ Primary disposition D:
 - Expressive dakuten attachment and 3+-dash Writing Check suggestions.
 - “Excessive indentation” and ASCII-punctuation auto-conversion rules until false-positive contracts are product-approved.
 - Support/affiliate footer and richer monetization/recommendation surfaces. They are not required to validate the manuscript-to-book β promise.
+- **V2 Renderer Migration — PLANNED.** β ships with LEGACY as the Preview/Publication default; LEGACY Preview is now virtualized (TSP-LEGACY-PREVIEW-VIRTUALIZATION-001) purely as a β safety/performance measure. The long-term plan remains migrating TateSpun's standard renderer to V2. LEGACY virtualization completing does **not** close this item — V2 default rollout stays HOLD until every item in the V2 default release gate passes (per-page `hideNombre`, TOC/pagination parity, full typography/page-feature parity, and an explicit, separately-approved raster→vector Publication sign-off). See `../implementation/V2_RENDERER_MIGRATION_SPEC.md` for the full specification, blockers, phased plan, and release gate checklist.
 
 ## 8. APPROVED BETA DECISIONS — CLOSED
 
