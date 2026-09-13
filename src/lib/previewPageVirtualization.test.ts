@@ -10,10 +10,13 @@ import {
 } from "./previewPageVirtualization";
 
 describe("preview page virtualization", () => {
-  it("keeps short previews eager and windows long v2 previews", () => {
-    expect(shouldVirtualizePreview(PREVIEW_VIRTUALIZATION_MIN_SPREADS, true)).toBe(false);
-    expect(shouldVirtualizePreview(PREVIEW_VIRTUALIZATION_MIN_SPREADS + 1, true)).toBe(true);
-    expect(shouldVirtualizePreview(100, false)).toBe(false);
+  it("keeps short previews eager and windows long previews regardless of renderer", () => {
+    // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: this windowing is renderer-
+    // agnostic -- both LEGACY and V2 windows once a preview exceeds the
+    // threshold; there is no longer a per-renderer gate.
+    expect(shouldVirtualizePreview(PREVIEW_VIRTUALIZATION_MIN_SPREADS)).toBe(false);
+    expect(shouldVirtualizePreview(PREVIEW_VIRTUALIZATION_MIN_SPREADS + 1)).toBe(true);
+    expect(shouldVirtualizePreview(100)).toBe(true);
   });
 
   it("seeds a bounded first-paint window", () => {

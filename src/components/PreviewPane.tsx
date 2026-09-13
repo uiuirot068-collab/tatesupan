@@ -13,6 +13,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import {
@@ -639,7 +640,10 @@ function PreviewPane({
 
   const internalV2Beta = isV2BetaRendererEnabled();
   const useV2Engine = internalV2Beta;
-  const virtualizePreview = shouldVirtualizePreview(spreadGroups.length, useV2Engine);
+  // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: renderer-agnostic now -- see the
+  // doc comment on `shouldVirtualizePreview` itself for why the previous
+  // V2-only gate was removed.
+  const virtualizePreview = shouldVirtualizePreview(spreadGroups.length);
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
@@ -980,6 +984,53 @@ function PreviewPane({
     pageElementsRef.current.set(index, el);
   };
 
+  // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: LEGACY's raster JPG/PDF export
+  // captures real DOM elements (html2canvas-style) via `pageElementsRef`/
+  // `colophonElementRef` below -- every page it needs must actually be
+  // mounted, unlike ordinary scrolling/typing which should only ever mount
+  // what's on screen. This is a THIRD override on top of the normal
+  // visible/active-page sets, populated immediately before an export run
+  // and cleared again in that export's `finally` block.
+  const [exportMountSpreadIndices, setExportMountSpreadIndices] = useState<Set<number>>(() => new Set());
+  const spreadIndexForBodyIndex = (bodyIndex: number): number | null => {
+    const presentationIndex = presentationSequence.findIndex(
+      (item) => item.kind === "body" && item.bodyIndex === bodyIndex
+    );
+    return findPreviewSpreadIndex(spreadGroups, presentationIndex);
+  };
+  const colophonSpreadIndex = (): number | null => {
+    const presentationIndex = presentationSequence.findIndex((item) => item.kind === "colophon");
+    return findPreviewSpreadIndex(spreadGroups, presentationIndex);
+  };
+  /**
+   * Synchronously (via `flushSync`) forces the spreads containing
+   * `bodyIndices` -- and the colophon spread, if requested -- to mount, so
+   * `pageElementsRef`/`colophonElementRef` are guaranteed populated the
+   * instant this returns. `PageSlot`/the colophon wrapper are plain
+   * synchronous components (no lazy/async mount of their own), so a single
+   * forced commit is sufficient. No-op when the preview isn't windowed at
+   * all (every page is already mounted). Pair with `releaseExportMount()`
+   * in a `finally` block.
+   */
+  const ensureExportMount = (bodyIndices: number[], includeColophon: boolean) => {
+    if (!virtualizePreview) return;
+    const needed = new Set<number>();
+    for (const bodyIndex of bodyIndices) {
+      const spreadIndex = spreadIndexForBodyIndex(bodyIndex);
+      if (spreadIndex != null) needed.add(spreadIndex);
+    }
+    if (includeColophon) {
+      const spreadIndex = colophonSpreadIndex();
+      if (spreadIndex != null) needed.add(spreadIndex);
+    }
+    if (needed.size === 0) return;
+    flushSync(() => setExportMountSpreadIndices(needed));
+  };
+  const releaseExportMount = () => {
+    if (!virtualizePreview) return;
+    setExportMountSpreadIndices((current) => (current.size === 0 ? current : new Set()));
+  };
+
   const activePageIndex = useMemo(
     () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
     [cursorIndex, pageSourceRanges]
@@ -1286,8 +1337,9 @@ function PreviewPane({
       await exportV2JpgPages([physicalIndex], [index + 1], false);
       return;
     }
+    ensureExportMount([index], false);
     const el = pageElementsRef.current.get(index);
-    if (!el) return;
+    if (!el) { releaseExportMount(); return; }
     const signal = beginExport("画像");
     try {
       await exportPageToJpg(
@@ -1303,6 +1355,7 @@ function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1316,8 +1369,9 @@ function PreviewPane({
       await exportV2JpgPages([physicalIndex], [colophonPhysicalPageNumber], false);
       return;
     }
+    ensureExportMount([], true);
     const el = colophonElementRef.current;
-    if (!el) return;
+    if (!el) { releaseExportMount(); return; }
     const signal = beginExport("画像");
     try {
       await exportPageToJpg(
@@ -1333,6 +1387,7 @@ function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1347,8 +1402,10 @@ function PreviewPane({
       );
       return;
     }
-    const items = buildSelectedPageItems(getJpgScopeIndices());
-    if (items.length === 0) return;
+    const scopeIndices = getJpgScopeIndices();
+    ensureExportMount(scopeIndices, false);
+    const items = buildSelectedPageItems(scopeIndices);
+    if (items.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("画像", items.length);
     try {
       await exportPagesAsIndividualJpgs(
@@ -1364,6 +1421,7 @@ function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1378,8 +1436,10 @@ function PreviewPane({
       );
       return;
     }
-    const items = buildSelectedPageItems(getJpgScopeIndices());
-    if (items.length === 0) return;
+    const scopeIndices = getJpgScopeIndices();
+    ensureExportMount(scopeIndices, false);
+    const items = buildSelectedPageItems(scopeIndices);
+    if (items.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("画像", items.length);
     try {
       await exportPagesToZip(
@@ -1396,6 +1456,7 @@ function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1481,6 +1542,7 @@ function PreviewPane({
     }
     // 並び順は Presentation Sequence 上の相対順序を維持する——奥付を単純に
     // 末尾 append しない。奥付は「本文 precedingBodyPages ページ」の直後。
+    ensureExportMount(indices, includeColophonInPdf);
     const elements: HTMLElement[] = [];
     let colophonPlaced = false;
     for (const bodyIdx of indices) {
@@ -1499,7 +1561,7 @@ function PreviewPane({
     if (includeColophonInPdf && !colophonPlaced && colophonElementRef.current) {
       elements.push(colophonElementRef.current);
     }
-    if (elements.length === 0) return;
+    if (elements.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("PDF", elements.length);
     try {
       // PDFは正式仕様で常に印刷用紙preset・600dpi固定（Web閲覧用はUI側で
@@ -1527,6 +1589,7 @@ function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -2218,7 +2281,8 @@ function PreviewPane({
           const mountSpread =
             !virtualizePreview ||
             visibleSpreadIndices.has(spreadIndex) ||
-            activeSpreadIndex === spreadIndex;
+            activeSpreadIndex === spreadIndex ||
+            exportMountSpreadIndices.has(spreadIndex);
           return (
             <PreviewSpread
               key={`${spreadGeometryKey}:${spreadIndex}`}

@@ -1,6 +1,19 @@
 /**
  * Keep short documents eager: the setup cost of windowing is only worthwhile
  * once the preview extends well beyond a normal viewport.
+ *
+ * TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: this windowing mechanism (the
+ * `PreviewSpread` placeholder/mount pattern, the IntersectionObserver-driven
+ * visible set, the zoom-anchor math below) was already fully renderer-
+ * agnostic -- it operates on spread layout, not on what a mounted spread's
+ * *content* happens to be. It was conservatively gated to V2-only for its
+ * initial rollout; that gate is removed here so a large LEGACY manuscript
+ * (real documents up to ~700 pages / ~300k DOM elements were measured
+ * producing 20-30s main-thread long tasks from full-tree mount/reconcile
+ * alone) gets the same bounded, windowed DOM. LEGACY's own raster export
+ * (JPG/PDF, real DOM capture) separately force-mounts exactly the pages it
+ * needs for the duration of the export -- see `ensureExportMount` in
+ * PreviewPane.tsx -- and reverts to windowed view immediately after.
  */
 export const PREVIEW_VIRTUALIZATION_MIN_SPREADS = 6;
 
@@ -10,11 +23,8 @@ export const PREVIEW_INITIAL_SPREAD_COUNT = 3;
 /** Prepaint roughly one desktop viewport on either side of the scrollport. */
 export const PREVIEW_VIRTUALIZATION_OVERSCAN_PX = 1_200;
 
-export function shouldVirtualizePreview(
-  spreadCount: number,
-  v2PreviewEnabled: boolean
-): boolean {
-  return v2PreviewEnabled && spreadCount > PREVIEW_VIRTUALIZATION_MIN_SPREADS;
+export function shouldVirtualizePreview(spreadCount: number): boolean {
+  return spreadCount > PREVIEW_VIRTUALIZATION_MIN_SPREADS;
 }
 
 export function initialPreviewSpreadIndices(spreadCount: number): Set<number> {
