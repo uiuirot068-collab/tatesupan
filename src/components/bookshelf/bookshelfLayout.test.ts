@@ -12,6 +12,7 @@ describe("bookWidthForCharacterCount — TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 
     [100_000, 60],
     [299_999, 60],
     [300_000, 70],
+    [300_001, 70],
     [500_000, 70],
   ])("maps %i characters to a %ipx spine", (characterCount, expectedWidth) => {
     expect(bookWidthForCharacterCount(characterCount)).toBe(expectedWidth);
