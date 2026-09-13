@@ -139,6 +139,50 @@ export function chooseSafeEditorPageBoundary(
 }
 
 /**
+ * TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E: the "pull-up" boundary a
+ * PARTIAL join (moving only a safe prefix of the page starting at
+ * `oldBoundary` into the page starting at `previousStart`, when a FULL join
+ * of the two would exceed the hard maximum) should move to -- preferring a
+ * natural boundary near the ordinary `targetSize` measured from
+ * `previousStart`, exactly the policy `chooseSafeEditorPageBoundary` already
+ * applies for automatic pagination. Reused here (not a second independent
+ * policy) by anchoring that SAME function at `oldBoundary` with a synthetic
+ * target of "remaining distance to the real ideal offset" -- its own
+ * `candidate <= pageStart` floor then does double duty as "never return
+ * anything at or before `oldBoundary`" (never moves the boundary backward),
+ * while the ideal offset it searches around is still the true
+ * `previousStart + targetSize`.
+ *
+ * Returns `null` when no safe forward movement exists:
+ * - the ordinary target already sits at or behind `oldBoundary` (the
+ *   previous page is already at/above the normal target -- nothing to
+ *   pull forward toward);
+ * - clamping the result into the current page's own `[oldBoundary, currentEnd]`
+ *   leaves no room (the natural boundary landed at or before `oldBoundary`
+ *   once bounded, so the only "movement" available isn't real movement); or
+ * - the result would make the combined region exceed
+ *   `EDITOR_PAGE_HARD_MAXIMUM_SIZE` from `previousStart` (the hard ceiling
+ *   always wins over any pull-up).
+ */
+export function computePartialJoinBoundary(
+  content: string,
+  previousStart: number,
+  oldBoundary: number,
+  currentEnd: number,
+  targetSize: number = EDITOR_PAGE_TARGET_SIZE
+): number | null {
+  const idealEnd = previousStart + targetSize;
+  if (idealEnd <= oldBoundary) return null;
+
+  const raw = chooseSafeEditorPageBoundary(content, oldBoundary, idealEnd - oldBoundary);
+  const candidate = Math.min(raw, currentEnd);
+  if (candidate <= oldBoundary) return null;
+  if (candidate - previousStart > EDITOR_PAGE_HARD_MAXIMUM_SIZE) return null;
+
+  return candidate;
+}
+
+/**
  * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: a SESSION-ONLY "keep joined"
  * preference from "前のページとつなぐ" across an ORIGINALLY AUTOMATIC
  * boundary (one with no `forcedBoundaries` entry to simply remove -- see

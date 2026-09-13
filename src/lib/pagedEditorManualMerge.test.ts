@@ -24,8 +24,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   EDITOR_PAGE_HARD_MAXIMUM_SIZE,
+  EDITOR_PAGE_TARGET_SIZE,
   adjustJoinedRanges,
   computeEditorPages,
+  computePartialJoinBoundary,
   editorPageForGlobalOffset,
   globalToEditorPageLocal,
 } from "./editorPagination/paginationModel";
@@ -178,6 +180,152 @@ describe("global caret preserved across a join (TSP-EDITOR-UNIFIED-SPLIT-JOIN-01
   });
 });
 
+describe("computePartialJoinBoundary (TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E)", () => {
+  it("40k + 30k: pulls the previous page up to the ordinary ~50k target", () => {
+    const content = flatText(70_000);
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, 70_000);
+    expect(boundary).toBe(50_000);
+  });
+
+  it("45k + 30k: pulls roughly a 5k prefix into the previous page", () => {
+    const content = flatText(75_000);
+    const boundary = computePartialJoinBoundary(content, 0, 45_000, 75_000);
+    expect(boundary).toBe(50_000);
+  });
+
+  it("49k + a large current page: a small valid prefix still moves", () => {
+    const content = flatText(200_000);
+    const boundary = computePartialJoinBoundary(content, 0, 49_000, 200_000);
+    expect(boundary).toBe(50_000);
+    expect(boundary! - 49_000).toBeGreaterThan(0);
+  });
+
+  it("never moves the boundary backward -- returns null once the previous page is already at/above the normal target", () => {
+    const content = flatText(200_000);
+    expect(computePartialJoinBoundary(content, 0, 50_000, 200_000)).toBeNull();
+    expect(computePartialJoinBoundary(content, 0, 52_000, 200_000)).toBeNull();
+  });
+
+  it("returns null rather than exceeding the hard maximum", () => {
+    // A previousStart far enough along that the ordinary ~50k target would
+    // still be reachable in isolation, but force the ceiling check by
+    // giving oldBoundary a value where the computed candidate would need to
+    // exceed EDITOR_PAGE_HARD_MAXIMUM_SIZE from previousStart. Since the
+    // natural computation targets exactly previousStart + targetSize
+    // (50,000, well under the 55,000 hard maximum), this only triggers when
+    // a custom targetSize pushes the ideal offset itself past the ceiling.
+    const content = flatText(200_000);
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, 200_000, 60_000);
+    expect(boundary).toBeNull();
+  });
+
+  it("clamps to the current page's own end -- never pulls from beyond it", () => {
+    // idealEnd sits past currentEnd entirely: nothing left to pull that is
+    // still inside the current page.
+    const content = flatText(200_000);
+    const boundary = computePartialJoinBoundary(content, 0, 30_000, 32_000);
+    // idealEnd (50,000) > currentEnd (32,000); clamped candidate <= 32,000
+    // must still be > oldBoundary (30,000) to count as real movement.
+    expect(boundary === null || boundary! <= 32_000).toBe(true);
+  });
+
+  it("never splits a surrogate pair", () => {
+    const astral = "\u{1F600}";
+    const content = flatText(49_999) + astral + flatText(50_000);
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, content.length);
+    expect(boundary === 49_999 || boundary === 50_001).toBe(true);
+  });
+
+  it("prefers a natural newline near the target over an exact hard cut", () => {
+    const content = flatText(48_000) + "\n" + flatText(50_000);
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, content.length);
+    expect(boundary).toBe(48_001);
+  });
+
+  it("uses EDITOR_PAGE_TARGET_SIZE as the default target, not the hard maximum", () => {
+    const content = flatText(200_000);
+    const boundary = computePartialJoinBoundary(content, 0, 10_000, 200_000);
+    expect(boundary).toBe(EDITOR_PAGE_TARGET_SIZE);
+    expect(boundary).not.toBe(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+  });
+});
+
+describe("partial join via computeEditorPages (TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E)", () => {
+  it("40k + 30k: after recording the pull-up joinedRange, previous page is ~50k and current keeps the remainder", () => {
+    const content = flatText(70_000);
+    const before = computeEditorPages(content, { forcedBoundaries: [40_000] });
+    expect(before).toHaveLength(2);
+    expect(before[0].end).toBe(40_000);
+
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, before[1].end)!;
+    expect(boundary).toBe(50_000);
+
+    const after = computeEditorPages(content, { forcedBoundaries: [], joinedRanges: [{ start: 0, end: boundary }] });
+    expect(after[0].end).toBe(50_000);
+    expect(after[after.length - 1].end).toBe(70_000);
+    for (const page of after) {
+      expect(page.length).toBeLessThanOrEqual(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+    }
+  });
+
+  it("the old boundary does not immediately return once a pull-up joinedRange is recorded", () => {
+    const content = flatText(70_000);
+    const after = computeEditorPages(content, { forcedBoundaries: [], joinedRanges: [{ start: 0, end: 50_000 }] });
+    expect(after.some((p) => p.end === 40_000)).toBe(false);
+  });
+
+  it("does not alter canonical text across a partial join", () => {
+    const content = flatText(70_000);
+    const before = computeEditorPages(content, { forcedBoundaries: [40_000] });
+    const after = computeEditorPages(content, { forcedBoundaries: [], joinedRanges: [{ start: 0, end: 50_000 }] });
+    const reconstruct = (pages: typeof before) => pages.map((p) => content.slice(p.start, p.end)).join("");
+    expect(reconstruct(before)).toBe(content);
+    expect(reconstruct(after)).toBe(content);
+  });
+
+  it("repeating the join after a partial pull-up has no further safe capacity, so it must be disabled next time", () => {
+    const content = flatText(70_000);
+    const afterFirstPartialJoin = computeEditorPages(content, { joinedRanges: [{ start: 0, end: 50_000 }] });
+    expect(afterFirstPartialJoin[0].end).toBe(50_000);
+    const nextBoundary = computePartialJoinBoundary(
+      content,
+      0,
+      afterFirstPartialJoin[1].start,
+      afterFirstPartialJoin[1].end
+    );
+    expect(nextBoundary).toBeNull();
+  });
+
+  it("preserves surrounding unrelated pages when partially joining in the middle of 3+ pages", () => {
+    const content = flatText(150_000);
+    // Page 0: [0, 40000) forced; Page 1: [40000, 70000) forced (the pair
+    // being partially joined); Page 2: [70000, 100000) forced; remainder
+    // automatic.
+    const before = computeEditorPages(content, { forcedBoundaries: [40_000, 70_000, 100_000] });
+    expect(before.map((p) => p.end)).toEqual([40_000, 70_000, 100_000, 150_000]);
+
+    const boundary = computePartialJoinBoundary(content, 0, 40_000, 70_000)!;
+    expect(boundary).toBe(50_000);
+
+    const after = computeEditorPages(content, {
+      forcedBoundaries: [70_000, 100_000],
+      joinedRanges: [{ start: 0, end: boundary }],
+    });
+    expect(after[0].end).toBe(50_000);
+    expect(after.some((p) => p.end === 70_000)).toBe(true);
+    expect(after.some((p) => p.end === 100_000)).toBe(true);
+  });
+
+  it("an explicit split inside the pulled-up region still wins", () => {
+    const content = flatText(70_000);
+    const after = computeEditorPages(content, {
+      forcedBoundaries: [45_000],
+      joinedRanges: [{ start: 0, end: 50_000 }],
+    });
+    expect(after[0].end).toBe(45_000);
+  });
+});
+
 describe("PagedEditor.tsx: unified 前のページとつなぐ visibility/enablement (TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D)", () => {
   const editor = source("src/components/PagedEditor.tsx");
 
@@ -189,12 +337,13 @@ describe("PagedEditor.tsx: unified 前のページとつなぐ visibility/enable
     expect(navigator).toContain("{previousPage && (");
   });
 
-  it("disables (never hides) the button when joining would exceed the Editor Page hard maximum", () => {
+  it("disables (never hides) the button only when neither a full nor a partial join is possible", () => {
     expect(editor).toContain(
-      "const mergeExceedsHardMaximum = previousPage !== null && combinedLengthWithPreviousPage > EDITOR_PAGE_HARD_MAXIMUM_SIZE;"
+      "const fullJoinPossible = previousPage !== null && combinedLengthWithPreviousPage <= EDITOR_PAGE_HARD_MAXIMUM_SIZE;"
     );
+    expect(editor).toContain("const joinHasSafeTarget = fullJoinPossible || partialJoinBoundary !== null;");
     expect(editor).toContain(
-      "この2ページをつなぐと編集ページの文字数上限を超えるため、つなげません。"
+      "前の編集ページにこれ以上つなげると文字数上限を超えるため、つなげません。"
     );
   });
 
@@ -216,10 +365,10 @@ describe("PagedEditor.tsx: unified 前のページとつなぐ visibility/enable
     expect(slice).not.toMatch(/amber|accent|red|destructive/);
   });
 
-  it("re-verifies the hard-maximum and selection guards inside the click handler itself, not just via `disabled`", () => {
+  it("re-verifies the selection guard and the partial-join null result inside the click handler itself, not just via `disabled`", () => {
     const fn = editor.slice(editor.indexOf("const mergeWithPreviousPage ="), editor.indexOf("useImperativeHandle("));
     expect(fn).toContain("if (selectionStart !== selectionEnd) return;");
-    expect(fn).toContain("if (combinedLength > EDITOR_PAGE_HARD_MAXIMUM_SIZE) return;");
+    expect(fn).toContain("if (partial === null) return;");
   });
 
   it("never touches canonical content -- no commitCanonical/onContentChange/pushEdit call, so it creates NO manuscript undo entry", () => {
@@ -234,11 +383,14 @@ describe("PagedEditor.tsx: unified 前のページとつなぐ visibility/enable
     expect(fn).toContain("forcedBoundaries.includes(boundaryOffset)");
     expect(fn).toContain("forcedBoundaries.filter((b) => b !== boundaryOffset)");
     expect(fn).toContain("joinedRanges.filter((r) => r.start !== previous.start)");
-    expect(fn).toContain("{ start: previous.start, end: currentPage.end }");
+    expect(fn).toContain("{ start: previous.start, end: newRangeEnd }");
   });
 
   it("forceSplitAtCaret trims any join preference that would otherwise claim the new forced boundary as interior", () => {
-    const fn = editor.slice(editor.indexOf("const forceSplitAtCaret ="), editor.indexOf("/**\n   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D:"));
+    const fn = editor.slice(
+      editor.indexOf("const forceSplitAtCaret ="),
+      editor.indexOf("/**\n   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D, extended by")
+    );
     expect(fn).toContain("joinedRanges.filter((r) => !(r.start < forcedOffset && r.end > forcedOffset))");
   });
 
@@ -252,5 +404,62 @@ describe("PagedEditor.tsx: unified 前のページとつなぐ visibility/enable
   it("joinedRanges is session-only React state, never written to a persistence layer", () => {
     expect(editor).toContain("useState<JoinedEditorPageRange[]>([])");
     expect(editor).not.toMatch(/joinedRanges[\s\S]{0,80}(supabase|localStorage|indexedDB)/i);
+  });
+});
+
+describe("PagedEditor.tsx: partial join / pull-up branch (TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E)", () => {
+  const editor = source("src/components/PagedEditor.tsx");
+
+  it("computes the partial-join candidate only when a full join is not possible", () => {
+    expect(editor).toContain(
+      "const partialJoinBoundary =\n    previousPage !== null && !fullJoinPossible\n      ? computePartialJoinBoundary(content, previousPage.start, currentPage.start, currentPage.end)\n      : null;"
+    );
+  });
+
+  it("the click handler branches on the SAME combinedLength check as the enablement logic, full join first", () => {
+    const fn = editor.slice(editor.indexOf("const mergeWithPreviousPage ="), editor.indexOf("useImperativeHandle("));
+    expect(fn).toContain("if (combinedLength <= EDITOR_PAGE_HARD_MAXIMUM_SIZE) {");
+    expect(fn).toContain("newRangeEnd = currentPage.end; // full join");
+    expect(fn).toContain(
+      "const partial = computePartialJoinBoundary(content, previous.start, boundaryOffset, currentPage.end);"
+    );
+    expect(fn).toContain("newRangeEnd = partial; // partial join / pull-up");
+  });
+});
+
+describe("PagedEditor.tsx: caret auto-scroll on explicit split/join actions (TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E §J-§N)", () => {
+  const editor = source("src/components/PagedEditor.tsx");
+
+  it("ここで区切る requests the upper-view scroll hint", () => {
+    const fn = editor.slice(editor.indexOf("const forceSplitAtCaret ="), editor.indexOf("/**\n   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D, extended by"));
+    expect(fn).toContain('switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper" });');
+  });
+
+  it("前のページとつなぐ (full or partial) requests the upper-view scroll hint using the preserved global caret", () => {
+    const fn = editor.slice(editor.indexOf("const mergeWithPreviousPage ="), editor.indexOf("useImperativeHandle("));
+    expect(fn).toContain('switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper" });');
+  });
+
+  it("reuses the existing scrollCaretNearUpperView/measureCaretOffsetTop helpers rather than a second scroll mechanism", () => {
+    // Both explicit actions funnel through switchToPageForOffset, whose own
+    // same-page and cross-page (useLayoutEffect) branches already call
+    // scrollCaretNearUpperView -- no new scroll helper needed for 012E.
+    expect(editor.match(/function scrollCaretNearUpperView/g)).toHaveLength(1);
+    expect(editor.match(/function measureCaretOffsetTop/g)).toHaveLength(1);
+    const switchFn = editor.slice(editor.indexOf("const switchToPageForOffset ="), editor.indexOf("// Applies a pending cross-page selection"));
+    expect(switchFn).toContain("scrollCaretNearUpperView(el, localStart)");
+  });
+
+  it("does not add a new continuous/per-render scroll-follow effect (one-shot, action-triggered only)", () => {
+    // scrollCaretNearUpperView is only ever reached via an explicit
+    // scrollHint passed at the call site (forceSplitAtCaret,
+    // mergeWithPreviousPage, moveSelectionToGlobal, runHistory's
+    // undo/redo) -- never from a bare useEffect keyed on caret/content.
+    expect(editor).not.toMatch(/useEffect\(\(\) => \{[\s\S]{0,200}scrollCaretNearUpperView/);
+  });
+
+  it("ordinary typing (handleChange's own boundary reconciliation) does not request the scroll hint", () => {
+    const fn = editor.slice(editor.indexOf("const handleChange ="), editor.indexOf("/** Replaces the WHOLE canonical document"));
+    expect(fn).not.toContain("scrollHint");
   });
 });

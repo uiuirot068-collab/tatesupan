@@ -44,7 +44,7 @@ describe("TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B: manual Editor Page 
 
   it("reconciles the current page/caret through the same switchToPageForOffset path as every other jump", () => {
     const fn = editor.slice(editor.indexOf("const forceSplitAtCaret ="), editor.indexOf("useImperativeHandle("));
-    expect(fn).toContain("switchToPageForOffset(forcedOffset, newPages)");
+    expect(fn).toContain('switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper" })');
     expect(fn).toContain("reportCaret(forcedOffset)");
   });
 

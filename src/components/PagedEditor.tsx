@@ -57,6 +57,7 @@ import {
   adjustForcedBoundaries,
   adjustJoinedRanges,
   computeEditorPages,
+  computePartialJoinBoundary,
   editorPageForGlobalOffset,
   editorPageLocalToGlobal,
   globalToEditorPageLocal,
@@ -964,37 +965,55 @@ function PagedEditorInner(
     const nextJoined = joinedRanges.filter((r) => !(r.start < forcedOffset && r.end > forcedOffset));
     if (nextJoined.length !== joinedRanges.length) setJoinedRanges(nextJoined);
     const newPages = computeEditorPages(content, { forcedBoundaries: nextForced, joinedRanges: nextJoined });
-    switchToPageForOffset(forcedOffset, newPages);
+    // TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E §J/§K/§L: reuses the
+    // same upper-view scroll landing Preview/Writing-Check jumps already
+    // use (`scrollCaretNearUpperView`, invoked by `switchToPageForOffset`
+    // itself) so the caret is immediately visible after an explicit layout
+    // action instead of the user having to search the page for it.
+    switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper" });
     reportCaret(forcedOffset);
   };
 
   /**
-   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: "前のページとつなぐ" is now shown for
-   * EVERY page after Page 1, regardless of whether the boundary immediately
-   * before it originated from "ここで区切る" (a `forcedBoundaries` entry) or
-   * from ordinary automatic ~50k pagination -- the user is never expected to
-   * know which. It is only DISABLED, never hidden, when joining would
-   * exceed the Editor Page hard maximum or while a non-collapsed/
-   * full-manuscript selection is active.
+   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D, extended by
+   * TSP-EDITOR-PARTIAL-JOIN-AND-CARET-LANDING-012E: "前のページとつなぐ" is
+   * shown for EVERY page after Page 1, regardless of whether the boundary
+   * immediately before it originated from "ここで区切る" (a
+   * `forcedBoundaries` entry) or from ordinary automatic ~50k pagination --
+   * the user is never expected to know which. It is only DISABLED, never
+   * hidden, when NEITHER a full nor a partial join is currently possible, or
+   * while a non-collapsed/full-manuscript selection is active.
    *
-   * Joining across a forced boundary simply removes that boundary (012C
-   * behavior, unchanged). Joining across an automatic boundary instead
-   * records a `joinedRanges` preference spanning the combined region so
-   * automatic pagination does not immediately recreate a split anywhere
-   * inside it (see `computeEditorPages`'s own doc) -- while still never
-   * touching canonical content: no commitCanonical/onContentChange/pushEdit
-   * call here, exactly like `forceSplitAtCaret` above, so this is layout
-   * housekeeping and never a manuscript undo step (§G).
+   * 012E adds a PARTIAL join ("pull-up"): when the previous+current pages
+   * together would exceed the hard maximum (so a FULL join is unsafe), only
+   * a safe prefix of the current page moves into the previous one, toward
+   * the ordinary ~50k target measured from the previous page's own start
+   * (`computePartialJoinBoundary` -- reuses the same natural-boundary
+   * policy `chooseSafeEditorPageBoundary` already applies for automatic
+   * pagination, never inventing a second one). Either way this is recorded
+   * as a `joinedRanges` preference spanning `[previousPage.start, newEnd)`
+   * so automatic pagination does not immediately recreate a split anywhere
+   * inside it (see `computeEditorPages`'s own doc); joining across a forced
+   * boundary additionally removes that boundary outright (012C, unchanged).
+   * Never touches canonical content -- no
+   * commitCanonical/onContentChange/pushEdit call here, exactly like
+   * `forceSplitAtCaret` above, so this is layout housekeeping and never a
+   * manuscript undo step (§G).
    */
   const previousPage = safePageIndex > 0 ? pages[safePageIndex - 1] : null;
   const combinedLengthWithPreviousPage = previousPage ? currentPage.end - previousPage.start : 0;
-  const mergeExceedsHardMaximum = previousPage !== null && combinedLengthWithPreviousPage > EDITOR_PAGE_HARD_MAXIMUM_SIZE;
+  const fullJoinPossible = previousPage !== null && combinedLengthWithPreviousPage <= EDITOR_PAGE_HARD_MAXIMUM_SIZE;
+  const partialJoinBoundary =
+    previousPage !== null && !fullJoinPossible
+      ? computePartialJoinBoundary(content, previousPage.start, currentPage.start, currentPage.end)
+      : null;
+  const joinHasSafeTarget = fullJoinPossible || partialJoinBoundary !== null;
   const mergeBlockedBySelection = isFullManuscriptSelected || globalCaretRange.start !== globalCaretRange.end;
-  const canMergeWithPreviousPage = previousPage !== null && !mergeExceedsHardMaximum && !mergeBlockedBySelection;
+  const canMergeWithPreviousPage = previousPage !== null && joinHasSafeTarget && !mergeBlockedBySelection;
   const mergeWithPreviousPageTitle = !previousPage
     ? ""
-    : mergeExceedsHardMaximum
-      ? "この2ページをつなぐと編集ページの文字数上限を超えるため、つなげません。"
+    : !joinHasSafeTarget
+      ? "前の編集ページにこれ以上つなげると文字数上限を超えるため、つなげません。"
       : mergeBlockedBySelection
         ? "選択を解除すると、前の編集ページとつなげます。"
         : "前の編集ページとつなぎます。原稿や印刷ページには影響しません。";
@@ -1007,10 +1026,18 @@ function PagedEditorInner(
     const selectionEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
     if (selectionStart !== selectionEnd) return;
     const previous = pages[safePageIndex - 1];
-    const combinedLength = currentPage.end - previous.start;
-    if (combinedLength > EDITOR_PAGE_HARD_MAXIMUM_SIZE) return;
-
     const boundaryOffset = currentPage.start;
+    const combinedLength = currentPage.end - previous.start;
+
+    let newRangeEnd: number;
+    if (combinedLength <= EDITOR_PAGE_HARD_MAXIMUM_SIZE) {
+      newRangeEnd = currentPage.end; // full join
+    } else {
+      const partial = computePartialJoinBoundary(content, previous.start, boundaryOffset, currentPage.end);
+      if (partial === null) return; // no safe movement -- the button should already be disabled
+      newRangeEnd = partial; // partial join / pull-up
+    }
+
     const nextForced = forcedBoundaries.includes(boundaryOffset)
       ? forcedBoundaries.filter((b) => b !== boundaryOffset)
       : forcedBoundaries;
@@ -1018,12 +1045,16 @@ function PagedEditorInner(
 
     const nextJoined = [
       ...joinedRanges.filter((r) => r.start !== previous.start),
-      { start: previous.start, end: currentPage.end },
+      { start: previous.start, end: newRangeEnd },
     ].sort((a, b) => a.start - b.start);
     setJoinedRanges(nextJoined);
 
     const newPages = computeEditorPages(content, { forcedBoundaries: nextForced, joinedRanges: nextJoined });
-    switchToPageForOffset(selectionStart, newPages);
+    // §J/§K/§L: preserved GLOBAL caret (`selectionStart`) is authoritative --
+    // `switchToPageForOffset` finds whichever page now actually contains it
+    // (the shrunk current page, or the expanded previous page) and the
+    // upper-view scroll hint makes it immediately visible either way.
+    switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper" });
     reportCaret(selectionStart);
   };
 
