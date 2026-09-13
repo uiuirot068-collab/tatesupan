@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
@@ -116,7 +116,19 @@ export default function EditorPane({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
   const [mobileWritingActive, setMobileWritingActive] = useState(false);
-  const deferredContent = useDeferredValue(content);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
+  // recompute's scheduler priority -- it cannot interrupt `countVisualLength`
+  // (which re-tokenizes the WHOLE manuscript) mid-call, so on a 260k-char
+  // document the "deferred" low-priority render still ran inside the same
+  // task as the keystroke's own commit, blocking the browser's paint of the
+  // just-typed character. A real `setTimeout` macrotask boundary (matching
+  // PreviewPane's own content debounce) guarantees a paint opportunity first.
+  const VISUAL_LENGTH_DEBOUNCE_MS = 180;
+  const [deferredContent, setDeferredContent] = useState(content);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDeferredContent(content), VISUAL_LENGTH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
   const visualLength = useMemo(() => countVisualLength(deferredContent), [deferredContent]);
 
   // Parent-driven changes (load/switch, structural UI, Preview operations)

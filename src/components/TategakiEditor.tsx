@@ -79,6 +79,25 @@ export default function TategakiEditor({
   );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: PreviewPane is wrapped in React.memo,
+  // but a *live* `content` prop changes every keystroke, so memo can never
+  // bail and React still has to reconcile the entire (in LEGACY/non-V2
+  // rendering, unvirtualized) page-list subtree on every keystroke -- real
+  // CPU profiling on a 260k-char manuscript showed this costing ~300ms per
+  // keystroke even after PreviewPane's own internal content debounce, purely
+  // from React re-visiting hundreds of PageCard fibers to confirm nothing
+  // changed. Feeding PreviewPane a debounced snapshot instead lets memo
+  // actually skip that whole subtree during a typing burst; PreviewPane's
+  // own internal debounce (for pagination) still governs how fresh the
+  // rendered pages are, unchanged from before. PDF/JPG export already
+  // captures whatever is currently rendered (html2canvas-style DOM capture),
+  // so this doesn't add any new staleness window beyond what already existed.
+  const PREVIEW_PROP_DEBOUNCE_MS = 180;
+  const [previewContent, setPreviewContent] = useState(content);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPreviewContent(content), PREVIEW_PROP_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
   const [plotNote, setPlotNote] = useState("");
   // The 使い方ガイド (SAMPLE_PROJECT) and the おためしデモ both run the real
   // editor with a document that lives only in memory — every persistence path
@@ -178,6 +197,16 @@ export default function TategakiEditor({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: cursorIndex advances on every
+  // keystroke same as content, so it must be debounced the same way before
+  // reaching PreviewPane -- otherwise React.memo's prop comparison would
+  // still see a change every keystroke (via this prop alone) and re-render/
+  // reconcile the whole page-list subtree even with `previewContent` stable.
+  const [previewCursorIndex, setPreviewCursorIndex] = useState(cursorIndex);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPreviewCursorIndex(cursorIndex), PREVIEW_PROP_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [cursorIndex]);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -403,13 +432,28 @@ export default function TategakiEditor({
     document.body.style.userSelect = "none";
   };
 
-  const handleImageAdd = (record: ImageRecord) => {
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: these 5 callbacks are PreviewPane
+  // props, and PreviewPane is wrapped in React.memo specifically so a
+  // typing burst (which only changes `previewContent`/`previewCursorIndex`
+  // on a debounce, not every keystroke) can skip reconciling its large
+  // page-list subtree. A plain function declaration is a NEW reference on
+  // every TategakiEditor render, which defeats that memo on its own --
+  // this codebase's `react-hooks/preserve-manual-memoization` ESLint rule
+  // assumes the React Compiler auto-memoizes these instead, but the
+  // compiler is not actually enabled (no `experimental.reactCompiler` in
+  // next.config.ts), so nothing does. useCallback with the real reactive
+  // dependencies (excluding the always-stable useState setters, per the
+  // ordinary react-hooks/exhaustive-deps convention) is correct for the
+  // runtime that actually ships; the lint rule is suppressed accordingly.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageAdd = useCallback((record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
     if (isSampleDocument) return;
     saveImage(record).catch(() => setSaveStatus("error"));
-  };
+  }, [isSampleDocument]);
 
-  const handleImageDelete = (id: string) => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageDelete = useCallback((id: string) => {
     setImages((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -417,12 +461,13 @@ export default function TategakiEditor({
     });
     if (isSampleDocument) return;
     deleteImage(id).catch(() => setSaveStatus("error"));
-  };
+  }, [isSampleDocument]);
 
   // Persists a front/back stacking swap for a small group of images (see
   // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,
   // so pagination/tokenLength are unaffected.
-  const handleImageLayerChange = (updates: { id: string; layerOrder: number }[]) => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageLayerChange = useCallback((updates: { id: string; layerOrder: number }[]) => {
     setImageLayerOrder((prev) => {
       const next = { ...prev };
       for (const update of updates) next[update.id] = update.layerOrder;
@@ -432,15 +477,16 @@ export default function TategakiEditor({
     for (const update of updates) {
       updateImageLayerOrder(update.id, update.layerOrder).catch(() => setSaveStatus("error"));
     }
-  };
+  }, [isSampleDocument]);
 
-  const handlePreviewPdfExportSuccess = () => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handlePreviewPdfExportSuccess = useCallback(() => {
     if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
-  };
+  }, [showPdfFilenameNotice]);
 
-  const handleTogglePreviewCollapse = () => {
+  const handleTogglePreviewCollapse = useCallback(() => {
     setIsPreviewCollapsed((prev) => !prev);
-  };
+  }, []);
 
   useEffect(() => {
     if (!hasLoadedRef.current || docId === null) return;
@@ -756,7 +802,7 @@ export default function TategakiEditor({
           } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : "max-md:hidden"}`}
         >
           <PreviewPane
-            content={content}
+            content={previewContent}
             title={title}
             settings={settings}
             layout={layout}
@@ -769,7 +815,7 @@ export default function TategakiEditor({
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
             onImageLayerChange={handleImageLayerChange}
-            cursorIndex={cursorIndex}
+            cursorIndex={previewCursorIndex}
             onBodyPageCountChange={setBodyPageCount}
             onPdfExportSuccess={handlePreviewPdfExportSuccess}
             // On a phone showing the プレビュー workspace the preview is always

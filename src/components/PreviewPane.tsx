@@ -1,7 +1,6 @@
 import {
   memo,
   useCallback,
-  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -465,11 +464,24 @@ function PreviewPane({
   selected,
   onSelectedChange: setSelected,
 }: PreviewPaneProps) {
-  // Deferring the (expensive, O(content length)) pagination recompute keeps
-  // keystrokes in the editor responsive on large manuscripts: React renders
-  // this at low priority and lets input updates interrupt it, instead of
-  // recomputing every page's layout synchronously on every keystroke.
-  const deferredContent = useDeferredValue(content);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
+  // recompute's React scheduler priority -- it cannot interrupt a single
+  // monolithic O(content length) call like tokenizeTategaki/paginateTokens
+  // mid-execution, since React can only yield BETWEEN fiber work units, not
+  // inside one. Real-browser CPU profiling on a 260k-char manuscript showed
+  // the "deferred" low-priority render for this pipeline still completing
+  // inside the SAME task as the keystroke's own commit, blocking the
+  // browser's paint of the just-typed character for ~300ms. A real
+  // `setTimeout` macrotask boundary (the same debounce pattern already used
+  // for the V2 canonical preview pipeline in useV2PreviewAdapter) guarantees
+  // the browser gets a paint opportunity before this recompute ever starts,
+  // and keeps resetting while the user keeps typing so it never runs mid-burst.
+  const PREVIEW_CONTENT_DEBOUNCE_MS = 180;
+  const [deferredContent, setDeferredContent] = useState(content);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDeferredContent(content), PREVIEW_CONTENT_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
 
   const pages = useMemo(() => {
     const tokens = tokenizeTategaki(deferredContent);
@@ -509,7 +521,7 @@ function PreviewPane({
   // token→原文復元ロジックをそのまま再利用した軽量な文字列化（深い
   // JSON.stringify等は行わない）で、ページ内容（ruby/tcy/画像markerを
   // 含む）が実質同一かどうかの比較に十分な信号になる。`pages`自体と同じ
-  // cadence（useDeferredValue経由）でしか再計算されないため、1文字入力
+  // cadence（debounce経由）でしか再計算されないため、1文字入力
   // ごとに毎回計算されるわけではない。
   const pageSignatures = useMemo(
     () => pages.map((page) => detokenizeTategaki(page.tokens)),
