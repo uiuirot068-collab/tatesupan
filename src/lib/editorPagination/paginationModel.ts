@@ -50,6 +50,17 @@ const DEFAULT_EXTENDED_SEARCH_RADIUS = 15_000;
  * near-empty final page). Scales with `targetSize` by default.
  */
 const DEFAULT_MIN_TRAILING_FRACTION = 0.1;
+/**
+ * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A: the actual, enforced ceiling on an
+ * Editor Page's length at the default target/minTrailing settings --
+ * `chooseSafeEditorPageBoundary` never lets a page grow past this (see its
+ * own doc). Exported so the UI can show a truthful "最大あと約N字" countdown
+ * instead of treating `EDITOR_PAGE_TARGET_SIZE` itself as the ceiling (the
+ * page legitimately keeps growing, without searching for a boundary at all,
+ * for up to `DEFAULT_MIN_TRAILING_FRACTION` beyond target -- see below).
+ */
+export const EDITOR_PAGE_HARD_MAXIMUM_SIZE =
+  EDITOR_PAGE_TARGET_SIZE + Math.max(1, Math.floor(EDITOR_PAGE_TARGET_SIZE * DEFAULT_MIN_TRAILING_FRACTION));
 
 function splitsSurrogatePair(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return false;
@@ -130,6 +141,21 @@ export function chooseSafeEditorPageBoundary(
 export interface ComputeEditorPagesOptions extends ChooseEditorPageBoundaryOptions {
   /** Target code units per page. Default `EDITOR_PAGE_TARGET_SIZE` (50,000). */
   targetSize?: number;
+  /**
+   * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E: global manuscript
+   * offsets where a page MUST end, chosen once by an explicit "今すぐ区切る"
+   * action (typically via `chooseSafeEditorPageBoundary` itself with
+   * `minTrailingSize: 0`, to force a split during the ordinary
+   * minTrailingSize "keep waiting" window) -- bypasses the normal
+   * search/minTrailing gating entirely for whichever page it falls in.
+   * Any earlier page's own boundary is picked normally first; a forced
+   * offset only ever overrides the SMALLEST forced offset still ahead of
+   * the current page's `start`, so this stays a pure function of
+   * `(content, forcedBoundaries)` -- no separate persisted "which page did
+   * I split" state is needed, and the existing "STABILITY" guarantee (an
+   * edit strictly after a page's own `end` can't move it) still holds.
+   */
+  forcedBoundaries?: readonly number[];
 }
 
 /**
@@ -145,16 +171,49 @@ export function computeEditorPages(content: string, options: ComputeEditorPagesO
     return [{ index: 0, start: 0, end: 0, length: 0 }];
   }
 
+  const forced =
+    options.forcedBoundaries && options.forcedBoundaries.length > 0
+      ? Array.from(new Set(options.forcedBoundaries))
+          .filter((b) => b > 0 && b < length)
+          .sort((a, b) => a - b)
+      : null;
+
   const pages: EditorPage[] = [];
   let start = 0;
   let index = 0;
   while (start < length) {
-    const end = chooseSafeEditorPageBoundary(content, start, targetSize, options);
+    const forcedEnd = forced?.find((b) => b > start);
+    const end = forcedEnd !== undefined ? forcedEnd : chooseSafeEditorPageBoundary(content, start, targetSize, options);
     pages.push({ index, start, end, length: end - start });
     start = end;
     index += 1;
   }
   return pages;
+}
+
+/**
+ * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E: keeps a set of forced page
+ * boundaries (see `ComputeEditorPagesOptions.forcedBoundaries`) meaningful
+ * after an edit that replaced `[editStart, editEnd)` of the OLD text with
+ * `insertedLength` code units of new text. A boundary strictly INSIDE the
+ * edited range is dropped (the text it split no longer exists, so forcing a
+ * split there no longer means anything); one at or after `editEnd` shifts
+ * by the length delta; one at or before `editStart` is untouched.
+ */
+export function adjustForcedBoundaries(
+  boundaries: readonly number[],
+  editStart: number,
+  editEnd: number,
+  insertedLength: number
+): number[] {
+  const delta = insertedLength - (editEnd - editStart);
+  const next: number[] = [];
+  for (const b of boundaries) {
+    if (b <= editStart) next.push(b);
+    else if (b >= editEnd) next.push(b + delta);
+    // else: b fell inside the edited range -- drop it.
+  }
+  return next;
 }
 
 /**

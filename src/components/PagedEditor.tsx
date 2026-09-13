@@ -54,10 +54,13 @@ import {
   useState,
 } from "react";
 import {
+  adjustForcedBoundaries,
+  chooseSafeEditorPageBoundary,
   computeEditorPages,
   editorPageForGlobalOffset,
   editorPageLocalToGlobal,
   globalToEditorPageLocal,
+  EDITOR_PAGE_HARD_MAXIMUM_SIZE,
   EDITOR_PAGE_TARGET_SIZE,
   type EditorPage,
 } from "@/lib/editorPagination/paginationModel";
@@ -119,6 +122,27 @@ function isHighSurrogate(code: number): boolean {
 }
 function isLowSurrogate(code: number): boolean {
   return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E: the common-prefix/suffix span
+ * that changed between `before` and `after`, as `[editStart, editEnd)` in
+ * `before`'s own offsets plus `after`'s length for that same span --
+ * exactly what `adjustForcedBoundaries` needs to keep a forced page
+ * boundary meaningful across an edit, without every call site having to
+ * thread its own already-known edit range through `commitCanonical`.
+ */
+function commonPrefixSuffixDiff(before: string, after: string): { editStart: number; editEnd: number; insertedLength: number } {
+  const maxPrefix = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < maxPrefix && before[prefix] === after[prefix]) prefix += 1;
+  const beforeRemaining = before.length - prefix;
+  const afterRemaining = after.length - prefix;
+  let suffix = 0;
+  while (suffix < beforeRemaining && suffix < afterRemaining && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) {
+    suffix += 1;
+  }
+  return { editStart: prefix, editEnd: before.length - suffix, insertedLength: after.length - prefix - suffix };
 }
 
 const CARET_SCROLL_MIRROR_PROPS = [
@@ -249,6 +273,14 @@ function PagedEditorInner(
   const lastOwnContentRef = useRef(content);
   const pageTextRef = useRef("");
 
+  // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E: global-offset overrides
+  // from an explicit "今すぐ区切る" action (see `forceSplitActivePage` and
+  // `computeEditorPages`'s own doc) -- kept in sync with edits via
+  // `adjustForcedBoundaries` inside `commitCanonical` below. Session-only by
+  // design (§F): never persisted, so a reload simply falls back to ordinary
+  // automatic pagination, same as before this action ever existed.
+  const [forcedBoundaries, setForcedBoundaries] = useState<number[]>([]);
+
   const [currentPageIndex, setCurrentPageIndex] = useState(() => {
     const pages = computeEditorPages(content);
     return editorPageForGlobalOffset(pages, content.length);
@@ -260,7 +292,10 @@ function PagedEditorInner(
     | null
   >(null);
 
-  const pages = useMemo(() => computeEditorPages(content), [content]);
+  const pages = useMemo(
+    () => computeEditorPages(content, { forcedBoundaries }),
+    [content, forcedBoundaries]
+  );
   const pageCount = pages.length;
 
   const safePageIndex = clampPageIndex(currentPageIndex, pageCount);
@@ -358,6 +393,16 @@ function PagedEditorInner(
   }, [content]);
 
   const commitCanonical = (nextCanonical: string) => {
+    // §E: only worth the O(n) prefix/suffix diff when a forced boundary
+    // actually exists -- the overwhelming common case (nobody has clicked
+    // "今すぐ区切る" this session) stays a single array-length check.
+    if (forcedBoundaries.length > 0 && nextCanonical !== content) {
+      const { editStart, editEnd, insertedLength } = commonPrefixSuffixDiff(content, nextCanonical);
+      const adjusted = adjustForcedBoundaries(forcedBoundaries, editStart, editEnd, insertedLength);
+      if (adjusted.length !== forcedBoundaries.length || adjusted.some((b, i) => b !== forcedBoundaries[i])) {
+        setForcedBoundaries(adjusted);
+      }
+    }
     lastOwnContentRef.current = nextCanonical;
     onContentChange(nextCanonical);
   };
@@ -730,6 +775,42 @@ function PagedEditorInner(
     reportCaret(target);
   };
 
+  // TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H: guidance-only --
+  // NEVER the source of truth for pagination (that's still
+  // `computeEditorPages`, recomputed fresh every render above). Only the
+  // active LAST/growing page has a meaningful "remaining" count.
+  const isLastPage = safePageIndex === pageCount - 1;
+  // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §A: the active last page has
+  // reached target and is now in the confirmed "not even searching for a
+  // paragraph break yet" dead zone up to the hard maximum -- see
+  // `chooseSafeEditorPageBoundary`'s own doc and `forceSplitActivePage`.
+  const isWaitingForBoundary = isLastPage && currentPage.length >= EDITOR_PAGE_TARGET_SIZE;
+
+  /**
+   * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D: "今すぐ区切る" -- forces an
+   * immediate split of the active (waiting) LAST Editor Page. Reuses the
+   * ordinary boundary chooser with `minTrailingSize: 0` so it actually
+   * SEARCHES for a paragraph break instead of the confirmed dead zone
+   * between target and the hard maximum, where the ordinary automatic path
+   * does not search at all (see `chooseSafeEditorPageBoundary`'s own doc).
+   * UI-only navigation, never a manuscript edit -- `content` itself is
+   * never touched, so this is NOT an undo step (§J) and the canonical
+   * manuscript stays byte-identical before/after.
+   */
+  const forceSplitActivePage = () => {
+    if (isComposingRef.current || !isWaitingForBoundary) return;
+    const forcedOffset = chooseSafeEditorPageBoundary(content, currentPage.start, EDITOR_PAGE_TARGET_SIZE, {
+      minTrailingSize: 0,
+    });
+    if (forcedOffset <= currentPage.start || forcedOffset >= content.length) return; // nothing left to split off
+    const nextForced = [...forcedBoundaries, forcedOffset];
+    setForcedBoundaries(nextForced);
+    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced });
+    const globalCaret = editorPageLocalToGlobal(currentPage, textareaRef.current?.selectionStart ?? currentPage.length);
+    switchToPageForOffset(globalCaret, newPages);
+    reportCaret(globalCaret);
+  };
+
   useImperativeHandle(
     ref,
     (): PagedEditorHandle => ({
@@ -749,23 +830,20 @@ function PagedEditorInner(
     [currentPage, moveSelectionToGlobal, replaceRangeGlobal, runHistory]
   );
 
-  // TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H: guidance-only
-  // estimate of when the next 編集ページ will appear -- NEVER the source of
-  // truth for pagination (that's still `computeEditorPages`, recomputed
-  // fresh every render above). Only the active LAST/growing page has a
-  // meaningful "remaining" count; a finalized earlier page already has a
-  // fixed length, so showing it as "N left" would misleadingly imply a
-  // transition that already happened.
-  const isLastPage = safePageIndex === pageCount - 1;
+  // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §B: `isWaitingForBoundary` now
+  // shows a truthful countdown to the actual enforced ceiling
+  // (`EDITOR_PAGE_HARD_MAXIMUM_SIZE`) instead of a bare "区切り待ち" that
+  // gave no indication of how much more typing (if any) was needed --
+  // confirmed by the Phase 0 audit to span a real ~5,000-char window where
+  // `chooseSafeEditorPageBoundary` isn't even searching for a break yet.
   const progressLabel = isLastPage
     ? currentPage.length < EDITOR_PAGE_TARGET_SIZE
       ? `次の編集ページまで あと約${roundForDisplay(EDITOR_PAGE_TARGET_SIZE - currentPage.length).toLocaleString("ja-JP")}字`
-      : "区切り待ち"
+      : `区切り待ち・最大あと約${roundForDisplay(Math.max(0, EDITOR_PAGE_HARD_MAXIMUM_SIZE - currentPage.length)).toLocaleString("ja-JP")}字`
     : `この編集ページ：約${roundForDisplay(currentPage.length).toLocaleString("ja-JP")}字`;
-  const progressTitle =
-    isLastPage && currentPage.length >= EDITOR_PAGE_TARGET_SIZE
-      ? "次の段落区切りで編集ページが切り替わります（最大約5.5万字で自動的に切り替わります）"
-      : "最大約5.5万字で自動的に切り替わります";
+  const progressTitle = isWaitingForBoundary
+    ? "段落の区切りで編集ページが切り替わります。「今すぐ区切る」でこの場で区切ることもできます（原稿本文や印刷ページには影響しません）。最大約5.5万字で自動的に切り替わります。"
+    : "最大約5.5万字で自動的に切り替わります";
 
   const showWritingCheck = Boolean(writingCheck?.enabled && writingCheck.analysisText === content);
   const pageLocalIssues = useMemo(() => {
@@ -833,12 +911,38 @@ function PagedEditorInner(
             widths in §I) rather than only when the flex-wrap row happens to
             run out of space, matching the compact two-row mobile layout the
             task asks for without a separate responsive branch. */}
+        {/* TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §B/§C: gold (not red/error --
+            this is guidance, never a failure) actionable waiting state,
+            reusing the same amber badge convention as `WorkSessionTracker`'s
+            own paused-state pill. `flex-wrap` keeps the badge and the
+            "今すぐ区切る" button from forcing horizontal overflow at narrow
+            widths (§H) -- they simply wrap onto their own line. */}
         <span
           data-editor-page-progress=""
           title={progressTitle}
-          className="basis-full whitespace-nowrap text-center text-[10px] text-ink/50"
+          className="basis-full flex flex-wrap items-center justify-center gap-1.5 whitespace-nowrap text-center text-[10px]"
         >
-          {progressLabel}
+          <span
+            className={
+              isWaitingForBoundary
+                ? "inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800"
+                : "text-ink/50"
+            }
+          >
+            {isWaitingForBoundary && <span aria-hidden="true">●</span>}
+            {progressLabel}
+          </span>
+          {isWaitingForBoundary && (
+            <button
+              type="button"
+              data-editor-force-split=""
+              onClick={forceSplitActivePage}
+              title="原稿本文や印刷ページには影響しません"
+              className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 hover:bg-amber-200"
+            >
+              今すぐ区切る
+            </button>
+          )}
         </span>
       </div>
 

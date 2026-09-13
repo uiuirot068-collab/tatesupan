@@ -124,7 +124,10 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H/§I: remaining-ch
   });
 
   it("shows a compact waiting-for-boundary state once the last page reaches target size", () => {
-    expect(editor).toContain('"区切り待ち"');
+    // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §B superseded the bare
+    // "区切り待ち" label with a truthful countdown -- see
+    // pagedEditorWaitingUxHotfix.test.ts for the full coverage of that.
+    expect(editor).toContain("区切り待ち");
   });
 
   it("shows a non-misleading informational length (not a remaining count) for a finalized, non-last page", () => {
@@ -138,7 +141,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H/§I: remaining-ch
 
   it("is guidance-only and never substitutes for computeEditorPages as the pagination source of truth", () => {
     const docBlock = editor.slice(editor.indexOf("// TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H:"), editor.indexOf("const isLastPage ="));
-    expect(docBlock).toMatch(/NEVER the source of\s*\n\s*\/\/ truth for pagination/);
+    expect(docBlock).toMatch(/NEVER the source of\s*\n\s*\/\/ truth for pagination|NEVER the source of truth for pagination/);
   });
 
   it("renders the progress span on its own row (basis-full) so it never bloats the navigator into a tall toolbar on narrow widths", () => {

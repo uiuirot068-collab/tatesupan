@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   EDITOR_PAGE_TARGET_SIZE,
+  EDITOR_PAGE_HARD_MAXIMUM_SIZE,
+  adjustForcedBoundaries,
   chooseSafeEditorPageBoundary,
   computeEditorPages,
   editorPageForGlobalOffset,
@@ -393,5 +395,153 @@ describe("continuous manuscript growth (0 -> 300k+)", () => {
 
     expect(transitions).toBeGreaterThanOrEqual(10);
     expect(concatPages(content, computeEditorPages(content, options))).toBe(content);
+  });
+});
+
+// TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §A/§L: the hard maximum is real and
+// enforced automatically, and the "waiting" window between target and hard
+// maximum (which does NOT search for a natural boundary at all -- see
+// `chooseSafeEditorPageBoundary`'s own doc) is exactly the confirmed root
+// cause of "shows 区切り待ち but nothing happens" -- these pin the exact
+// checklist the task asked for.
+describe("hard maximum invariant (TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §A)", () => {
+  it("EDITOR_PAGE_HARD_MAXIMUM_SIZE is 55,000 at the default target/minTrailing settings", () => {
+    expect(EDITOR_PAGE_HARD_MAXIMUM_SIZE).toBe(55_000);
+  });
+
+  it("49,999 chars (no newline): stays a single page, no waiting", () => {
+    const content = flatText(49_999);
+    const pages = computeEditorPages(content);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].length).toBeLessThan(EDITOR_PAGE_TARGET_SIZE);
+  });
+
+  it("50,000 chars (no newline): the active page has reached target -- this is the waiting window's own start", () => {
+    const content = flatText(50_000);
+    const pages = computeEditorPages(content);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].length).toBe(EDITOR_PAGE_TARGET_SIZE);
+  });
+
+  it("52,000 chars, no natural break anywhere: still a single page (the confirmed 'waiting but not actually searching yet' window)", () => {
+    const content = flatText(52_000);
+    const pages = computeEditorPages(content);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].length).toBe(52_000);
+    expect(pages[0].length).toBeLessThan(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+  });
+
+  it("54,999 chars, no natural break anywhere: still a single page, one char under the hard maximum", () => {
+    const content = flatText(54_999);
+    const pages = computeEditorPages(content);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].length).toBe(EDITOR_PAGE_HARD_MAXIMUM_SIZE - 1);
+  });
+
+  it("reaching the hard maximum forces a split even with no natural boundary anywhere", () => {
+    const content = flatText(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+    const pages = computeEditorPages(content);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    expect(pages[0].length).toBeLessThanOrEqual(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+  });
+
+  it("no computed Editor Page ever exceeds the hard maximum for content well beyond it", () => {
+    const content = flatText(300_000);
+    const pages = computeEditorPages(content);
+    for (const page of pages) {
+      expect(page.length).toBeLessThanOrEqual(EDITOR_PAGE_HARD_MAXIMUM_SIZE);
+    }
+  });
+
+  it("content already past the hard maximum always has 2+ pages, regardless of newlines", () => {
+    for (const length of [EDITOR_PAGE_HARD_MAXIMUM_SIZE + 1, EDITOR_PAGE_HARD_MAXIMUM_SIZE + 5_000, 80_000]) {
+      const pages = computeEditorPages(flatText(length));
+      expect(pages.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe("manual Editor Page split via forcedBoundaries (TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E)", () => {
+  it("a forced boundary inside the waiting window (50k-55k) splits immediately even with no natural break", () => {
+    const content = flatText(53_000); // squarely inside the confirmed dead zone
+    const before = computeEditorPages(content);
+    expect(before).toHaveLength(1); // confirms it's actually stuck, per the audit
+
+    // Mirrors what the "今すぐ区切る" action itself computes: the ordinary
+    // boundary chooser with minTrailingSize disabled.
+    const forcedOffset = chooseSafeEditorPageBoundary(content, 0, EDITOR_PAGE_TARGET_SIZE, { minTrailingSize: 0 });
+    const pages = computeEditorPages(content, { forcedBoundaries: [forcedOffset] });
+    expect(pages).toHaveLength(2);
+    expect(pages[0].end).toBe(forcedOffset);
+    expect(pages[1].start).toBe(forcedOffset);
+    expect(concatPages(content, pages)).toBe(content);
+  });
+
+  it("does not alter canonical text -- forcedBoundaries only changes where pages split, never the content", () => {
+    const content = flatText(30_000) + "\n" + flatText(23_000);
+    const forced = computeEditorPages(content, { forcedBoundaries: [40_000] });
+    expect(concatPages(content, forced)).toBe(content);
+  });
+
+  it("a caret after the forced split maps to the new next page at the correct local offset", () => {
+    const content = flatText(53_000);
+    const forcedOffset = chooseSafeEditorPageBoundary(content, 0, EDITOR_PAGE_TARGET_SIZE, { minTrailingSize: 0 });
+    const pages = computeEditorPages(content, { forcedBoundaries: [forcedOffset] });
+    const globalCaret = content.length; // caret was at the very end when the split was forced
+    const targetIndex = editorPageForGlobalOffset(pages, globalCaret);
+    expect(targetIndex).toBe(1);
+    expect(globalToEditorPageLocal(pages[targetIndex], globalCaret)).toBe(content.length - forcedOffset);
+  });
+
+  it("a caret before the forced split stays on the previous page", () => {
+    const content = flatText(53_000);
+    const forcedOffset = chooseSafeEditorPageBoundary(content, 0, EDITOR_PAGE_TARGET_SIZE, { minTrailingSize: 0 });
+    const pages = computeEditorPages(content, { forcedBoundaries: [forcedOffset] });
+    const targetIndex = editorPageForGlobalOffset(pages, forcedOffset - 10);
+    expect(targetIndex).toBe(0);
+  });
+
+  it("never splits a surrogate pair sitting at the target offset when forcing with no natural boundary", () => {
+    const astral = "\u{1F600}";
+    const content = flatText(EDITOR_PAGE_TARGET_SIZE) + astral + flatText(3_000);
+    const forcedOffset = chooseSafeEditorPageBoundary(content, 0, EDITOR_PAGE_TARGET_SIZE, { minTrailingSize: 0 });
+    expect(forcedOffset === EDITOR_PAGE_TARGET_SIZE || forcedOffset === EDITOR_PAGE_TARGET_SIZE + 2).toBe(true);
+    const pages = computeEditorPages(content, { forcedBoundaries: [forcedOffset] });
+    expect(concatPages(content, pages)).toBe(content);
+  });
+
+  it("a forced split survives subsequent typing appended after it", () => {
+    const content = flatText(53_000);
+    const forcedOffset = chooseSafeEditorPageBoundary(content, 0, EDITOR_PAGE_TARGET_SIZE, { minTrailingSize: 0 });
+    const grown = content + flatText(500);
+    const pages = computeEditorPages(grown, { forcedBoundaries: [forcedOffset] });
+    expect(pages[0].end).toBe(forcedOffset);
+    expect(pages[pages.length - 1].end).toBe(grown.length);
+  });
+});
+
+describe("adjustForcedBoundaries (TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E)", () => {
+  it("leaves a boundary before the edited range untouched", () => {
+    expect(adjustForcedBoundaries([100], 500, 510, 3)).toEqual([100]);
+  });
+
+  it("shifts a boundary after the edited range by the length delta (insertion)", () => {
+    expect(adjustForcedBoundaries([1_000], 100, 100, 50)).toEqual([1_050]);
+  });
+
+  it("shifts a boundary after the edited range by the length delta (deletion)", () => {
+    expect(adjustForcedBoundaries([1_000], 100, 150, 0)).toEqual([950]);
+  });
+
+  it("drops a boundary that fell strictly inside the edited/replaced range", () => {
+    expect(adjustForcedBoundaries([120], 100, 150, 0)).toEqual([]);
+  });
+
+  it("a boundary exactly at the edit's own start is kept; one exactly at its end shifts to meet it (both edges of a pure deletion collapse to the same point)", () => {
+    expect(adjustForcedBoundaries([100, 150], 100, 150, 0)).toEqual([100, 100]);
+  });
+
+  it("handles several boundaries at once, each independently", () => {
+    expect(adjustForcedBoundaries([50, 120, 300], 100, 150, 10)).toEqual([50, 260]);
   });
 });
