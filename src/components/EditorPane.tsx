@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import { ensureLongtaskObserver, getEditorProbeMode, isPerfDebugEnabled, perfMark, perfSpan } from "@/lib/perfDebug";
 import DiagnosticShadowEditor from "./DiagnosticShadowEditor";
 import WindowedEditorProbe from "./WindowedEditorProbe";
-import WindowedEditor, { type WindowedEditorHandle } from "./WindowedEditor";
+import PagedEditor, { type PagedEditorHandle } from "./PagedEditor";
 import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
@@ -93,31 +93,45 @@ interface EditorPaneProps {
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
 }
 
-export default function EditorPane({
-  title,
-  onTitleChange,
-  content,
-  onContentChange,
-  workSession,
-  onRecordActivity,
-  onStartWorkSession,
-  onPauseWorkSession,
-  onResumeWorkSession,
-  onEndWorkSession,
-  onOpenSearchReplace,
-  onOpenBetaFeedback,
-  onOpenOptions,
-  onToggleMemo,
-  memoOpen,
-  memoStorageKey,
-  confirmedMemo,
-  onConfirmMemo,
-  onCloseMemo,
-  onOpenSettingsDrawer,
-  onOpenHelp,
-  onCursorIndexChange,
-  focusMode = false,
-}: EditorPaneProps) {
+export interface EditorPaneHandle {
+  /**
+   * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: navigates the
+   * editor to canonical offset range `[start, end)` -- e.g. a Preview page
+   * click. Routes to the paged editor's own page switch when it's mounted,
+   * or a plain `setSelectionRange` on the legacy full-document textarea
+   * otherwise. Never mutates `content`.
+   */
+  navigateToGlobalOffset(start: number, end: number): void;
+}
+
+function EditorPaneInner(
+  {
+    title,
+    onTitleChange,
+    content,
+    onContentChange,
+    workSession,
+    onRecordActivity,
+    onStartWorkSession,
+    onPauseWorkSession,
+    onResumeWorkSession,
+    onEndWorkSession,
+    onOpenSearchReplace,
+    onOpenBetaFeedback,
+    onOpenOptions,
+    onToggleMemo,
+    memoOpen,
+    memoStorageKey,
+    confirmedMemo,
+    onConfirmMemo,
+    onCloseMemo,
+    onOpenSettingsDrawer,
+    onOpenHelp,
+    onCursorIndexChange,
+    focusMode = false,
+  }: EditorPaneProps,
+  ref: React.Ref<EditorPaneHandle>
+) {
   perfMark("EditorPane:render", { contentLength: content.length });
   ensureLongtaskObserver();
   // TSP-LONG-DOCUMENT-EDITOR-SURFACE-FORENSIC-005: the paint-probe rAF chain
@@ -145,15 +159,16 @@ export default function EditorPane({
     });
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // TSP-WINDOWED-EDITOR-PRODUCTION-PARITY-008: internal rollout gate, off by
-  // default (see editorSurfaceRollout.ts) -- independent of the perfDebug-only
-  // `probeMode === "windowed"` diagnostic probe above. When enabled, the
-  // active-window <WindowedEditor> mounts instead of the plain textarea;
-  // every other feature below (undo/redo, page-break insertion, writing-check
-  // jump) is routed through `windowedEditorRef`'s imperative handle instead of
-  // `textareaRef` so the SAME call sites serve both editor surfaces.
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: internal rollout gate,
+  // off by default (see editorSurfaceRollout.ts) -- independent of the
+  // perfDebug-only `probeMode === "windowed"` diagnostic probe above. When
+  // enabled, <PagedEditor> (one ~50k-char 編集ページ mounted at a time)
+  // replaces the plain full-document textarea; every other feature below
+  // (undo/redo, page-break insertion, writing-check jump) is routed through
+  // `pagedEditorRef`'s imperative handle instead of `textareaRef` so the
+  // SAME call sites serve both editor surfaces.
   const isWindowed = isWindowedEditorEnabled();
-  const windowedEditorRef = useRef<WindowedEditorHandle>(null);
+  const pagedEditorRef = useRef<PagedEditorHandle>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
   const [mobileWritingActive, setMobileWritingActive] = useState(false);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
@@ -244,7 +259,7 @@ export default function EditorPane({
   // application-level undo/redo instead of `execCommand` while it's mounted.
   const runHistory = (command: "undo" | "redo") => {
     if (isWindowed) {
-      windowedEditorRef.current?.runHistory(command);
+      pagedEditorRef.current?.runHistory(command);
       return;
     }
     runNativeHistory(command);
@@ -301,21 +316,46 @@ export default function EditorPane({
   );
   const writingIssuesForContent = analysisCurrent ? writingIssuesForAnalysis : [];
 
-  const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
+  const reportCursorIndex = () => {
+    const el = textareaRef.current;
+    if (!el || !onCursorIndexChange) return;
+    perfMark("EditorPane:cursorIndex", { index: el.selectionStart });
+    perfMark("EditorPane:native:select", {
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      isComposing: isComposingRef.current,
+      contentLength: el.value.length,
+    });
+    onCursorIndexChange(el.selectionStart);
+  };
+
+  /**
+   * Shared navigation entry point for both a Writing Check issue click
+   * (Phase 8) and a Preview page click (Phase 6) -- never mutates `content`.
+   * Routes to the paged editor's own page switch when it's mounted, or a
+   * plain `setSelectionRange` on the legacy full-document textarea otherwise.
+   */
+  const navigateToGlobalOffset = (start: number, end: number) => {
     if (isWindowed) {
-      const start = Math.min(issue.start, content.length);
-      const end = Math.min(issue.end, content.length);
-      windowedEditorRef.current?.moveSelectionToGlobal(start, end);
+      const s = Math.min(start, content.length);
+      const e = Math.min(end, content.length);
+      pagedEditorRef.current?.moveSelectionToGlobal(s, e);
       return;
     }
     const el = textareaRef.current;
     if (!el) return;
     el.focus();
-    const start = Math.min(issue.start, el.value.length);
-    const end = Math.min(issue.end, el.value.length);
-    el.setSelectionRange(start, end);
+    const s = Math.min(start, el.value.length);
+    const e = Math.min(end, el.value.length);
+    el.setSelectionRange(s, e);
     reportCursorIndex();
   };
+
+  const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
+    navigateToGlobalOffset(issue.start, issue.end);
+  };
+
+  useImperativeHandle(ref, (): EditorPaneHandle => ({ navigateToGlobalOffset }), [navigateToGlobalOffset]);
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
   const applyAutomatedTextChange = (next: string) => {
@@ -356,19 +396,6 @@ export default function EditorPane({
     setUndoState(null);
   };
 
-  const reportCursorIndex = () => {
-    const el = textareaRef.current;
-    if (!el || !onCursorIndexChange) return;
-    perfMark("EditorPane:cursorIndex", { index: el.selectionStart });
-    perfMark("EditorPane:native:select", {
-      selectionStart: el.selectionStart,
-      selectionEnd: el.selectionEnd,
-      isComposing: isComposingRef.current,
-      contentLength: el.value.length,
-    });
-    onCursorIndexChange(el.selectionStart);
-  };
-
   const captureTextareaInput = (el: HTMLTextAreaElement, inputType: string) => {
     perfMark("EditorPane:beforeinput", {
       inputType,
@@ -387,7 +414,7 @@ export default function EditorPane({
 
   const insertPageBreak = () => {
     const selection = isWindowed
-      ? windowedEditorRef.current?.getSelectionGlobal() ?? { start: content.length, end: content.length }
+      ? pagedEditorRef.current?.getSelectionGlobal() ?? { start: content.length, end: content.length }
       : { start: textareaRef.current?.selectionStart ?? content.length, end: textareaRef.current?.selectionEnd ?? content.length };
     const { start, end } = selection;
     const before = content.slice(0, start);
@@ -403,7 +430,7 @@ export default function EditorPane({
       // Dedicated structural page-break UI is explicitly outside 11-B.
       // WindowedEditor's own undo model records this as one atomic,
       // undoable edit (Phase 6: "page-break insertion is undoable").
-      windowedEditorRef.current?.replaceRangeGlobal(start, end, marker, { caretOffsetInInsertedText: caretOffsetInMarker });
+      pagedEditorRef.current?.replaceRangeGlobal(start, end, marker, { caretOffsetInInsertedText: caretOffsetInMarker });
       return;
     }
 
@@ -542,22 +569,20 @@ export default function EditorPane({
         ) : probeMode === "windowed" ? (
           <WindowedEditorProbe initialContent={content} />
         ) : isWindowed ? (
-          // TSP-WINDOWED-EDITOR-PRODUCTION-PARITY-008: production active-window
-          // editor surface, gated by `resolveEditorSurfaceRolloutMode()` (off by
-          // default). KNOWN GAP: the WritingCheckOverlay red-wavy-underline
-          // mirror is not yet mounted here (it would need issue offsets/text
-          // translated into window-local coordinates) -- the writing-check
-          // list, jump, fix, ignore, and bulk-fix all still fully work below
-          // (they operate on canonical `content`), only the inline underline
-          // is missing while this surface is active. See the task's final
-          // report for the full parity table.
-          <WindowedEditor
-            ref={windowedEditorRef}
+          // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: production
+          // long-document editor surface, gated by
+          // `resolveEditorSurfaceRolloutMode()` (off by default). Mounts
+          // exactly ONE ~50k-char 編集ページ at a time; the writing-check
+          // list, jump, fix, ignore, bulk-fix AND the inline red-wavy
+          // underline (via `writingCheck`, mapped to page-local coordinates
+          // inside PagedEditor) all work here.
+          <PagedEditor
+            ref={pagedEditorRef}
             content={content}
             onContentChange={(next) => {
               // Mirrors the legacy textarea's own undoState-clearing rule
-              // below, compared against canonical text (not a window-local
-              // slice) -- see WindowedEditor.tsx's module doc.
+              // below, compared against canonical text (not a page-local
+              // slice) -- see PagedEditor.tsx's module doc.
               if (undoState && next !== undoState.after) setUndoState(null);
               onContentChange(next);
             }}
@@ -593,6 +618,11 @@ export default function EditorPane({
               inputActivityStateRef.current = transition.state;
               onRecordActivity(transition.delta);
             }}
+            writingCheck={
+              writingCheckEnabled
+                ? { enabled: true, analysisText: analysis.text, issues: writingIssuesForAnalysis }
+                : undefined
+            }
             placeholder={DEFAULT_INITIAL_TEXT}
           />
         ) : (
@@ -761,3 +791,6 @@ export default function EditorPane({
     </div>
   );
 }
+
+const EditorPane = forwardRef(EditorPaneInner);
+export default EditorPane;

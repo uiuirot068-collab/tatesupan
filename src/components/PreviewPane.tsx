@@ -233,6 +233,8 @@ interface PageSlotProps {
   onMovePageForward?: () => void;
   canMovePageBackward?: boolean;
   canMovePageForward?: boolean;
+  /** TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: "編集位置へ移動" in the ⋮ menu. */
+  onNavigateToSource?: () => void;
 }
 
 const PageSlot = memo(function PageSlot({
@@ -276,6 +278,7 @@ const PageSlot = memo(function PageSlot({
   onMovePageForward,
   canMovePageBackward,
   canMovePageForward,
+  onNavigateToSource,
 }: PageSlotProps) {
   return (
     <div ref={registerRef} className="relative flex shrink-0">
@@ -332,6 +335,7 @@ const PageSlot = memo(function PageSlot({
         onMovePageForward={onMovePageForward}
         canMovePageBackward={canMovePageBackward}
         canMovePageForward={canMovePageForward}
+        onNavigateToSource={onNavigateToSource}
       />
     </div>
   );
@@ -426,6 +430,15 @@ interface PreviewPaneProps {
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
+  /**
+   * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: fired with a
+   * `[start, end)` canonical source range when the user asks to jump from a
+   * Preview page to its source text in the Editor (the page's own ⋮ menu --
+   * see `PageCard.tsx`'s `onNavigateToSource`). v1 precision is the page's
+   * own source-range START (`computePageSourceRanges`), not an exact
+   * clicked-token offset -- see this task's final report.
+   */
+  onNavigateToSource?: (start: number, end: number) => void;
   /** 本文の総ページ数（pagination 結果）が変わったら通知する——奥付編集ポップアップの
    *  「本文の何ページ後」入力の上限目安・範囲外警告に使う。 */
   onBodyPageCountChange?: (count: number) => void;
@@ -458,6 +471,7 @@ function PreviewPane({
   onImageDelete,
   onImageLayerChange,
   cursorIndex,
+  onNavigateToSource,
   onBodyPageCountChange,
   onPdfExportSuccess,
   isCollapsed = false,
@@ -1991,6 +2005,15 @@ function PreviewPane({
   const movePageForward = (bodyIndex: number) => () => movePageBy(bodyIndex, 1);
   const stableMovePageBackward = useStableIndexedCallback(movePageBackward);
   const stableMovePageForward = useStableIndexedCallback(movePageForward);
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: "編集位置へ移動"
+  // in the ⋮ menu. v1 precision: the page's own source-range START (see the
+  // `onNavigateToSource` prop's own doc) -- not an exact clicked-token offset.
+  const navigateToSource = (bodyIndex: number) => () => {
+    const range = pageSourceRanges[bodyIndex];
+    if (!range || !onNavigateToSource) return;
+    onNavigateToSource(range.start, range.start);
+  };
+  const stableNavigateToSource = useStableIndexedCallback(navigateToSource);
 
   if (isCollapsed) {
     // Right-edge affordance for the collapsed preview — shared by the normal
@@ -2412,6 +2435,9 @@ function PreviewPane({
                     }
                     onMovePageForward={
                       canReorder ? stableMovePageForward(bodyIndex) : undefined
+                    }
+                    onNavigateToSource={
+                      onNavigateToSource ? stableNavigateToSource(bodyIndex) : undefined
                     }
                     canMovePageBackward={canReorder && bodyIndex > 0}
                     canMovePageForward={canReorder && bodyIndex < pages.length - 1}

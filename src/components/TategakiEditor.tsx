@@ -28,7 +28,7 @@ import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type Clo
 import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
-import EditorPane from "./EditorPane";
+import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
@@ -197,6 +197,14 @@ export default function TategakiEditor({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: lets a Preview
+  // page click drive the Editor to that page's source location, regardless
+  // of which editor surface (FULL textarea or PagedEditor) is mounted.
+  const editorPaneRef = useRef<EditorPaneHandle>(null);
+  const navigateEditorToGlobalOffset = useCallback((start: number, end: number) => {
+    setMobileView("editor");
+    editorPaneRef.current?.navigateToGlobalOffset(start, end);
+  }, []);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: cursorIndex advances on every
   // keystroke same as content, so it must be debounced the same way before
   // reaching PreviewPane -- otherwise React.memo's prop comparison would
@@ -751,6 +759,7 @@ export default function TategakiEditor({
           className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
+            ref={editorPaneRef}
             title={title}
             onTitleChange={setTitle}
             content={content}
@@ -816,6 +825,7 @@ export default function TategakiEditor({
             onImageDelete={handleImageDelete}
             onImageLayerChange={handleImageLayerChange}
             cursorIndex={previewCursorIndex}
+            onNavigateToSource={navigateEditorToGlobalOffset}
             onBodyPageCountChange={setBodyPageCount}
             onPdfExportSuccess={handlePreviewPdfExportSuccess}
             // On a phone showing the プレビュー workspace the preview is always

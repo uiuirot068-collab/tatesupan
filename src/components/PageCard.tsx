@@ -291,6 +291,12 @@ interface PageCardProps {
   onMovePageForward?: () => void;
   canMovePageBackward?: boolean;
   canMovePageForward?: boolean;
+  /**
+   * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: "編集位置へ移動"
+   * in the ⋮ menu -- jumps the Editor to this page's source text. Undefined
+   * on non-interactive previews (mirrors the other ⋮ menu actions).
+   */
+  onNavigateToSource?: () => void;
 }
 
 function PageCard({
@@ -331,6 +337,7 @@ function PageCard({
   onMovePageForward,
   canMovePageBackward = false,
   canMovePageForward = false,
+  onNavigateToSource,
 }: PageCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Which of this page's inserted images the 挿絵 control bar below currently
@@ -760,6 +767,20 @@ function PageCard({
             >
               {/* Page selection is NOT here — it stays permanently visible in
                   the row above (multi-page export flow). */}
+              {onNavigateToSource && (
+                <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-0.5">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onNavigateToSource();
+                    }}
+                    className="flex min-h-[38px] items-center rounded px-2.5 text-left hover:bg-ink/[0.06]"
+                  >
+                    編集位置へ移動
+                  </button>
+                </div>
+              )}
               {(onMovePageBackward || onMovePageForward) && (
                 <div className="flex flex-col gap-0.5 border-b border-ink/10 pb-0.5">
                   <button
@@ -1318,7 +1339,8 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
     prev.onMovePageBackward === next.onMovePageBackward &&
     prev.onMovePageForward === next.onMovePageForward &&
     prev.canMovePageBackward === next.canMovePageBackward &&
-    prev.canMovePageForward === next.canMovePageForward;
+    prev.canMovePageForward === next.canMovePageForward &&
+    prev.onNavigateToSource === next.onNavigateToSource;
   const otherEqual =
     prev.chromeScale === next.chromeScale &&
     prev.v2PreviewEnabled === next.v2PreviewEnabled &&
