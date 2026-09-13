@@ -11,6 +11,7 @@ import {
   snapToSafeEditorPageBoundary,
   type EditorPage,
 } from "./paginationModel";
+import { createUndoHistory, pushEdit, undo } from "../windowedEditor/undoModel";
 
 /** Deterministic filler with no newlines (pathological "no paragraph nearby" case). */
 function flatText(length: number): string {
@@ -189,6 +190,14 @@ describe("offset mapping", () => {
     expect(editorPageForGlobalOffset(pages, boundary - 1)).toBe(0);
     expect(editorPageForGlobalOffset(pages, boundary)).toBe(1);
     expect(editorPageForGlobalOffset(pages, boundary + 1)).toBe(1);
+  });
+
+  it("uses explicit backward affinity only at an exact boundary", () => {
+    const boundary = pages[0].end;
+    expect(editorPageForGlobalOffset(pages, boundary, "forward")).toBe(1);
+    expect(editorPageForGlobalOffset(pages, boundary, "backward")).toBe(0);
+    expect(globalToEditorPageLocal(pages[0], boundary)).toBe(pages[0].length);
+    expect(editorPageForGlobalOffset(pages, boundary + 1, "backward")).toBe(1);
   });
 });
 
@@ -543,5 +552,138 @@ describe("adjustForcedBoundaries (TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E)", 
 
   it("handles several boundaries at once, each independently", () => {
     expect(adjustForcedBoundaries([50, 120, 300], 100, 150, 10)).toEqual([50, 260]);
+  });
+});
+
+describe("arbitrary manual Editor Page splits (TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B)", () => {
+  it.each([10_000, 27_345, 49_999])("splits at the exact caret offset %i", (caret) => {
+    const content = flatText(120_000);
+    const pages = computeEditorPages(content, { forcedBoundaries: [caret] });
+    expect(pages[0].end).toBe(caret);
+    expect(pages[1].start).toBe(caret);
+    expect(concatPages(content, pages)).toBe(content);
+    const caretPage = pages[editorPageForGlobalOffset(pages, caret)];
+    expect(caretPage.start).toBe(caret);
+    expect(globalToEditorPageLocal(caretPage, caret)).toBe(0);
+  });
+
+  it("splits inside Editor Page 2 without replacing Page 1's automatic boundary", () => {
+    const content = flatText(150_000);
+    const automatic = computeEditorPages(content);
+    const page2Caret = automatic[1].start + 27_345;
+    const pages = computeEditorPages(content, { forcedBoundaries: [page2Caret] });
+    expect(pages[0].end).toBe(automatic[0].end);
+    expect(pages[1].start).toBe(automatic[0].end);
+    expect(pages[1].end).toBe(page2Caret);
+    expect(pages[2].start).toBe(page2Caret);
+  });
+
+  it("keeps multiple manual boundaries ordered and coexisting", () => {
+    const content = flatText(140_000);
+    const boundaries = [10_000, 27_345, 49_999, 77_777];
+    const pages = computeEditorPages(content, { forcedBoundaries: boundaries });
+    expect(pages.slice(0, boundaries.length).map((page) => page.end)).toEqual(boundaries);
+    expect(concatPages(content, pages)).toBe(content);
+  });
+
+  it("deduplicates boundaries and ignores document endpoints", () => {
+    const content = flatText(30_000);
+    const pages = computeEditorPages(content, { forcedBoundaries: [0, 10_000, 10_000, content.length] });
+    expect(pages).toHaveLength(2);
+    expect(pages[0].end).toBe(10_000);
+  });
+
+  it("rejects a forced offset inside a surrogate pair instead of moving or splitting it", () => {
+    const content = flatText(9_999) + "\u{1F600}" + flatText(20_000);
+    const insidePair = 10_000;
+    const pages = computeEditorPages(content, { forcedBoundaries: [insidePair] });
+    expect(pages).toHaveLength(1);
+    expect(concatPages(content, pages)).toBe(content);
+  });
+
+  it("keeps a boundary stable after typing/editing after it", () => {
+    const boundary = 10_000;
+    const content = flatText(30_000);
+    const grown = content + "追記";
+    const pages = computeEditorPages(grown, { forcedBoundaries: [boundary] });
+    expect(pages[0].end).toBe(boundary);
+    expect(adjustForcedBoundaries([boundary], 20_000, 20_000, 2)).toEqual([boundary]);
+  });
+
+  it("shifts a boundary by the exact delta when editing before it", () => {
+    const shifted = adjustForcedBoundaries([10_000, 27_345], 5_000, 5_000, 3);
+    expect(shifted).toEqual([10_003, 27_348]);
+    const pages = computeEditorPages(flatText(40_003), { forcedBoundaries: shifted });
+    expect(pages[0].end).toBe(10_003);
+    expect(pages[1].end).toBe(27_348);
+  });
+});
+
+describe("cross-boundary Backspace integration (TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B)", () => {
+  function backspaceFromPage2Start(content: string, initialForced: number[] = []) {
+    const beforePages = computeEditorPages(content, { forcedBoundaries: initialForced });
+    const boundary = beforePages[1].start;
+    const low = content.charCodeAt(boundary - 1);
+    const deleteFrom =
+      low >= 0xdc00 && low <= 0xdfff && content.charCodeAt(boundary - 2) >= 0xd800 && content.charCodeAt(boundary - 2) <= 0xdbff
+        ? boundary - 2
+        : boundary - 1;
+    const removedText = content.slice(deleteFrom, boundary);
+    const nextContent = content.slice(0, deleteFrom) + content.slice(boundary);
+    let nextForced = adjustForcedBoundaries(initialForced, deleteFrom, boundary, 0);
+    if (deleteFrom > 0 && !nextForced.includes(deleteFrom)) nextForced = [...nextForced, deleteFrom].sort((a, b) => a - b);
+    const pages = computeEditorPages(nextContent, { forcedBoundaries: nextForced });
+    const pageIndex = editorPageForGlobalOffset(pages, deleteFrom, "backward");
+    return { boundary, deleteFrom, removedText, nextContent, nextForced, pages, pageIndex };
+  }
+
+  it.each([
+    { label: "automatic", forced: [] as number[] },
+    { label: "manual", forced: [10_000] },
+  ])("lands at the previous page end across a $label boundary", ({ forced }) => {
+    const result = backspaceFromPage2Start(flatText(70_000), forced);
+    expect(result.pageIndex).toBe(0);
+    expect(globalToEditorPageLocal(result.pages[0], result.deleteFrom)).toBe(result.pages[0].length);
+    expect(result.nextContent.length).toBe(69_999);
+  });
+
+  it("deletes exactly one newline before the boundary", () => {
+    const content = flatText(49_999) + "\n" + flatText(20_000);
+    const result = backspaceFromPage2Start(content);
+    expect(result.removedText).toBe("\n");
+    expect(result.nextContent).toBe(flatText(69_999));
+    expect(globalToEditorPageLocal(result.pages[0], result.deleteFrom)).toBe(result.pages[0].length);
+  });
+
+  it("deletes a complete surrogate pair and never half of it", () => {
+    const content = flatText(9_998) + "\u{1F600}" + flatText(20_000);
+    const result = backspaceFromPage2Start(content, [10_000]);
+    expect(result.removedText).toBe("\u{1F600}");
+    expect(result.nextContent).toBe(flatText(29_998));
+    expect(globalToEditorPageLocal(result.pages[0], result.deleteFrom)).toBe(result.pages[0].length);
+  });
+
+  it("keeps repeated Backspace on the previous page instead of bouncing to next-page local 0", () => {
+    const first = backspaceFromPage2Start(flatText(70_000));
+    const boundary = first.pages[0].end;
+    const deleteFrom = boundary - 1;
+    const nextContent = first.nextContent.slice(0, deleteFrom) + first.nextContent.slice(boundary);
+    const nextForced = adjustForcedBoundaries(first.nextForced, deleteFrom, boundary, 0);
+    const pages = computeEditorPages(nextContent, { forcedBoundaries: nextForced });
+    const pageIndex = editorPageForGlobalOffset(pages, deleteFrom, "backward");
+    expect(pageIndex).toBe(0);
+    expect(globalToEditorPageLocal(pages[pageIndex], deleteFrom)).toBe(pages[pageIndex].length);
+  });
+
+  it("restores the canonical manuscript through undo after crossing the boundary", () => {
+    const content = flatText(70_000);
+    const result = backspaceFromPage2Start(content);
+    const history = pushEdit(createUndoHistory(), {
+      rangeStart: result.deleteFrom,
+      removedText: result.removedText,
+      insertedText: "",
+    });
+    const restored = undo(history, result.nextContent);
+    expect(restored?.canonicalText).toBe(content);
   });
 });

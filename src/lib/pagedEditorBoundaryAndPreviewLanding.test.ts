@@ -47,7 +47,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §E/§F: Backspace/De
     );
     expect(backward).toContain("isLowSurrogate(prevCode)");
     expect(backward).toContain("isHighSurrogate(content.charCodeAt(globalCaret - 2))");
-    expect(backward).toContain("switchToPageForOffset(deleteFrom, newPages)");
+    expect(backward).toContain('switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward" })');
     expect(backward).toContain("reportCaret(deleteFrom)");
 
     const forward = editor.slice(
@@ -67,6 +67,12 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §E/§F: Backspace/De
     );
     expect(backward).toMatch(/pushEdit\(undoHistoryRef\.current, \{ rangeStart: deleteFrom, removedText, insertedText: "" \}\)/);
   });
+
+  it("preserves backward intent for both the first cross-boundary Backspace and repeated native Backspaces", () => {
+    expect(editor).toContain('const navigationAffinity = pending?.inputType === "deleteContentBackward" ? "backward" : "forward"');
+    expect(editor).toContain("editorPageForGlobalOffset(nextPages, globalCaret, navigationAffinity)");
+    expect(editor).toContain("{ affinity: navigationAffinity }");
+  });
 });
 
 describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic caret-scroll on Preview/Writing-Check jumps", () => {
@@ -83,7 +89,9 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic ca
       editor.indexOf("const handleCompositionEnd ="),
       editor.indexOf("const moveSelectionToGlobal =")
     );
-    expect(compositionEnd).toMatch(/switchToPageForOffset\(pendingJump\.end, computeEditorPages\(contentRef\.current\), pendingJump, \{ scrollHint: "upper" \}\)/);
+    expect(compositionEnd).toMatch(
+      /switchToPageForOffset\(\s*pendingJump\.end,\s*computeEditorPages\(contentRef\.current, \{ forcedBoundaries \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/
+    );
   });
 
   it("switchToPageForOffset applies the scroll hint on both the same-page and cross-page paths", () => {
@@ -144,9 +152,8 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H/§I: remaining-ch
     expect(docBlock).toMatch(/NEVER the source of\s*\n\s*\/\/ truth for pagination|NEVER the source of truth for pagination/);
   });
 
-  it("renders the progress span on its own row (basis-full) so it never bloats the navigator into a tall toolbar on narrow widths", () => {
+  it("keeps the waiting status on its own row while allowing ordinary progress to share a compact mobile row", () => {
     expect(editor).toMatch(/data-editor-page-progress=""/);
-    expect(editor).toMatch(/className="basis-full[^"]*"/);
+    expect(editor).toContain('isWaitingForBoundary ? "basis-full" : "sm:basis-full"');
   });
 });
-

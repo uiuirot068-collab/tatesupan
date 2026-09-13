@@ -142,18 +142,12 @@ export interface ComputeEditorPagesOptions extends ChooseEditorPageBoundaryOptio
   /** Target code units per page. Default `EDITOR_PAGE_TARGET_SIZE` (50,000). */
   targetSize?: number;
   /**
-   * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E: global manuscript
-   * offsets where a page MUST end, chosen once by an explicit "今すぐ区切る"
-   * action (typically via `chooseSafeEditorPageBoundary` itself with
-   * `minTrailingSize: 0`, to force a split during the ordinary
-   * minTrailingSize "keep waiting" window) -- bypasses the normal
-   * search/minTrailing gating entirely for whichever page it falls in.
-   * Any earlier page's own boundary is picked normally first; a forced
-   * offset only ever overrides the SMALLEST forced offset still ahead of
-   * the current page's `start`, so this stays a pure function of
-   * `(content, forcedBoundaries)` -- no separate persisted "which page did
-   * I split" state is needed, and the existing "STABILITY" guarantee (an
-   * edit strictly after a page's own `end` can't move it) still holds.
+   * Session-only global manuscript offsets where an Editor Page MUST end.
+   * 012B records the exact valid caret selected by "ここで区切る"; no
+   * paragraph-boundary search is performed for a manual split. Each offset
+   * only divides the ordinary automatic page that contains it, so a split
+   * in Page 2+ never replaces an earlier automatic boundary. Invalid
+   * endpoints and surrogate-pair interiors are ignored defensively.
    */
   forcedBoundaries?: readonly number[];
 }
@@ -174,7 +168,7 @@ export function computeEditorPages(content: string, options: ComputeEditorPagesO
   const forced =
     options.forcedBoundaries && options.forcedBoundaries.length > 0
       ? Array.from(new Set(options.forcedBoundaries))
-          .filter((b) => b > 0 && b < length)
+          .filter((b) => b > 0 && b < length && !splitsSurrogatePair(content, b))
           .sort((a, b) => a - b)
       : null;
 
@@ -182,8 +176,12 @@ export function computeEditorPages(content: string, options: ComputeEditorPagesO
   let start = 0;
   let index = 0;
   while (start < length) {
-    const forcedEnd = forced?.find((b) => b > start);
-    const end = forcedEnd !== undefined ? forcedEnd : chooseSafeEditorPageBoundary(content, start, targetSize, options);
+    const automaticEnd = chooseSafeEditorPageBoundary(content, start, targetSize, options);
+    // A forced boundary only divides the automatic page that actually
+    // contains it. A later forced boundary must not swallow an earlier
+    // automatic boundary (important when the user splits inside Page 2+).
+    const forcedEnd = forced?.find((b) => b > start && b <= automaticEnd);
+    const end = forcedEnd ?? automaticEnd;
     pages.push({ index, start, end, length: end - start });
     start = end;
     index += 1;
@@ -218,12 +216,33 @@ export function adjustForcedBoundaries(
 
 /**
  * The index into `pages` containing `globalOffset`. Matches
- * `tategaki.ts`'s `findPageIndexForCharIndex` semantics: an offset exactly
- * at a boundary belongs to the page it opens (not the one it closes), and
- * the last page absorbs any offset beyond the manuscript's end.
+ * `tategaki.ts`'s `findPageIndexForCharIndex` semantics: with the default
+ * `"forward"` affinity, an offset exactly at a boundary belongs to the page
+ * it OPENS (not the one it closes), and the last page absorbs any offset
+ * beyond the manuscript's end. This is the convention every OTHER caller in
+ * the app relies on (Preview/Writing-Check jumps, forward typing,
+ * undo/redo) and is unchanged here.
+ *
+ * TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B §G/§H: `"backward"`
+ * affinity is the one narrow, EXPLICIT exception -- a boundary-exact offset
+ * instead belongs to the page it CLOSES. This exists only for landing
+ * Backspace-across-a-page-boundary at the END of the previous page (its
+ * natural, "as if one continuous textarea" result) instead of the START of
+ * the next one, and must never become the default: every other caller
+ * (forward typing/navigation) keeps calling this with no third argument.
  */
-export function editorPageForGlobalOffset(pages: readonly EditorPage[], globalOffset: number): number {
+export function editorPageForGlobalOffset(
+  pages: readonly EditorPage[],
+  globalOffset: number,
+  affinity: "forward" | "backward" = "forward"
+): number {
   if (pages.length === 0) return 0;
+  if (affinity === "backward") {
+    for (let i = pages.length - 1; i >= 0; i--) {
+      if (globalOffset > pages[i].start || i === 0) return i;
+    }
+    return 0;
+  }
   for (let i = 0; i < pages.length; i++) {
     if (globalOffset < pages[i].end || i === pages.length - 1) return i;
   }

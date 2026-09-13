@@ -55,7 +55,6 @@ import {
 } from "react";
 import {
   adjustForcedBoundaries,
-  chooseSafeEditorPageBoundary,
   computeEditorPages,
   editorPageForGlobalOffset,
   editorPageLocalToGlobal,
@@ -273,13 +272,24 @@ function PagedEditorInner(
   const lastOwnContentRef = useRef(content);
   const pageTextRef = useRef("");
 
-  // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E: global-offset overrides
-  // from an explicit "今すぐ区切る" action (see `forceSplitActivePage` and
-  // `computeEditorPages`'s own doc) -- kept in sync with edits via
-  // `adjustForcedBoundaries` inside `commitCanonical` below. Session-only by
-  // design (§F): never persisted, so a reload simply falls back to ordinary
-  // automatic pagination, same as before this action ever existed.
+  // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D/§E, extended by
+  // TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B §B: global-offset
+  // overrides from an explicit "ここで区切る" action (see
+  // `forceSplitAtCaret` and `computeEditorPages`'s own doc) -- kept in sync
+  // with edits via `adjustForcedBoundaries` inside `commitCanonical` below.
+  // Session-only by design (§F): never persisted, so a reload simply falls
+  // back to ordinary automatic pagination, same as before this action ever
+  // existed.
   const [forcedBoundaries, setForcedBoundaries] = useState<number[]>([]);
+
+  // TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B §C: the textarea's own
+  // live selection, in GLOBAL (canonical) offsets, purely so
+  // `canForceSplitAtCaret` below can be evaluated at render time (React
+  // can't read the DOM directly during render). Kept fresh by `handleSelect`
+  // (native selection changes -- click/drag/keyup/arrow keys) and by
+  // `reportCaret` (every programmatic caret placement elsewhere already
+  // calls it with a single collapsed offset).
+  const [globalCaretRange, setGlobalCaretRange] = useState(() => ({ start: content.length, end: content.length }));
 
   const [currentPageIndex, setCurrentPageIndex] = useState(() => {
     const pages = computeEditorPages(content);
@@ -305,7 +315,10 @@ function PagedEditorInner(
     pageTextRef.current = pageText;
   });
 
-  const reportCaret = (globalCaret: number) => onCursorIndexChange?.(globalCaret);
+  const reportCaret = (globalCaret: number) => {
+    setGlobalCaretRange({ start: globalCaret, end: globalCaret });
+    onCursorIndexChange?.(globalCaret);
+  };
 
   // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: a selection to apply once
   // the textarea's DOM `value` actually reflects the page we just switched
@@ -330,14 +343,17 @@ function PagedEditorInner(
    * scrolls the target near the upper portion of the textarea instead of
    * relying on `setSelectionRange`'s own minimal-scroll-into-view, which a
    * forward jump can otherwise leave flush against the bottom edge.
+   * `affinity: "backward"` (TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B
+   * §G/§H) is the sole exception to the app-wide forward boundary
+   * convention -- see `editorPageForGlobalOffset`'s own doc.
    */
   const switchToPageForOffset = (
     globalOffset: number,
     latestPages: EditorPage[],
     selectLocal?: { start: number; end: number },
-    options?: { scrollHint?: "upper" }
+    options?: { scrollHint?: "upper"; affinity?: "forward" | "backward" }
   ) => {
-    const targetIndex = editorPageForGlobalOffset(latestPages, globalOffset);
+    const targetIndex = editorPageForGlobalOffset(latestPages, globalOffset, options?.affinity ?? "forward");
     const targetPage = latestPages[targetIndex];
     const localStart = selectLocal
       ? globalToEditorPageLocal(targetPage, selectLocal.start)
@@ -392,19 +408,29 @@ function PagedEditorInner(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
-  const commitCanonical = (nextCanonical: string) => {
+  const commitCanonical = (
+    nextCanonical: string,
+    knownEdit?: { editStart: number; editEnd: number; insertedLength: number }
+  ): number[] => {
     // §E: only worth the O(n) prefix/suffix diff when a forced boundary
     // actually exists -- the overwhelming common case (nobody has clicked
-    // "今すぐ区切る" this session) stays a single array-length check.
+    // "ここで区切る" this session) stays a single array-length check.
+    let nextForcedBoundaries = forcedBoundaries;
     if (forcedBoundaries.length > 0 && nextCanonical !== content) {
-      const { editStart, editEnd, insertedLength } = commonPrefixSuffixDiff(content, nextCanonical);
+      // Prefer the operation's already-known canonical range. A full-text
+      // prefix/suffix diff is only a fallback: repeated text cannot reveal
+      // which identical code unit was deleted, while beforeinput and
+      // toolbar edits know that position exactly.
+      const { editStart, editEnd, insertedLength } = knownEdit ?? commonPrefixSuffixDiff(content, nextCanonical);
       const adjusted = adjustForcedBoundaries(forcedBoundaries, editStart, editEnd, insertedLength);
+      nextForcedBoundaries = adjusted;
       if (adjusted.length !== forcedBoundaries.length || adjusted.some((b, i) => b !== forcedBoundaries[i])) {
         setForcedBoundaries(adjusted);
       }
     }
     lastOwnContentRef.current = nextCanonical;
     onContentChange(nextCanonical);
+    return nextForcedBoundaries;
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -413,21 +439,30 @@ function PagedEditorInner(
 
     const pending = pendingBeforeInputRef.current;
     pendingBeforeInputRef.current = null;
-    if (!isComposingRef.current) {
-      const rawEdit = pending
+    const rawEdit = !isComposingRef.current
+      ? pending
         ? computeRawEditFromBeforeInput(pending, nextPageText, currentPage.start)
         : computeRawEditFromBeforeInput(
             { beforeText: pageTextRef.current, selectionStart: 0, selectionEnd: 0, inputType: "" },
             nextPageText,
             currentPage.start
-          );
-      if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
-    }
+          )
+      : null;
+    if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
 
     const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
     const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
 
-    commitCanonical(nextCanonical);
+    const nextForcedBoundaries = commitCanonical(
+      nextCanonical,
+      rawEdit
+        ? {
+            editStart: rawEdit.rangeStart,
+            editEnd: rawEdit.rangeStart + rawEdit.removedText.length,
+            insertedLength: rawEdit.insertedText.length,
+          }
+        : undefined
+    );
     reportCaret(globalCaret);
     onNativeChangeCommitted?.(el);
 
@@ -438,10 +473,11 @@ function PagedEditorInner(
     // the caret never silently drifts onto a page the user isn't looking
     // at. Almost always a no-op switch (see the module doc: an edit can
     // only ever move ITS OWN page's `end`, never an earlier page).
-    const nextPages = computeEditorPages(nextCanonical);
-    const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
+    const nextPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    const navigationAffinity = pending?.inputType === "deleteContentBackward" ? "backward" : "forward";
+    const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret, navigationAffinity);
     if (targetIndex !== safePageIndex) {
-      switchToPageForOffset(globalCaret, nextPages);
+      switchToPageForOffset(globalCaret, nextPages, undefined, { affinity: navigationAffinity });
     }
   };
 
@@ -450,8 +486,12 @@ function PagedEditorInner(
     const removedText = content;
     setAllSelected(false);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: 0, removedText, insertedText: typed, atomic: true });
-    commitCanonical(typed);
-    const newPages = computeEditorPages(typed);
+    const nextForcedBoundaries = commitCanonical(typed, {
+      editStart: 0,
+      editEnd: content.length,
+      insertedLength: typed.length,
+    });
+    const newPages = computeEditorPages(typed, { forcedBoundaries: nextForcedBoundaries });
     switchToPageForOffset(typed.length, newPages);
     reportCaret(typed.length);
   };
@@ -478,9 +518,23 @@ function PagedEditorInner(
     const removedText = content.slice(deleteFrom, globalCaret);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: deleteFrom, removedText, insertedText: "" });
     const nextCanonical = content.slice(0, deleteFrom) + content.slice(globalCaret);
-    commitCanonical(nextCanonical);
-    const newPages = computeEditorPages(nextCanonical);
-    switchToPageForOffset(deleteFrom, newPages);
+    let nextForcedBoundaries = commitCanonical(nextCanonical, {
+      editStart: deleteFrom,
+      editEnd: globalCaret,
+      insertedLength: 0,
+    });
+    // Preserve the boundary that the deletion just crossed. Automatic
+    // paragraph/hard-cut pagination may otherwise choose a different end
+    // after its final character is removed, making the canonical caret no
+    // longer equal to the previous page's end. Treating the adjusted end as
+    // a session-only forced boundary keeps the textarea continuous for this
+    // Backspace and for immediately repeated Backspaces.
+    if (deleteFrom > 0 && !nextForcedBoundaries.includes(deleteFrom)) {
+      nextForcedBoundaries = [...nextForcedBoundaries, deleteFrom].sort((a, b) => a - b);
+      setForcedBoundaries(nextForcedBoundaries);
+    }
+    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward" });
     reportCaret(deleteFrom);
     return true;
   };
@@ -503,8 +557,12 @@ function PagedEditorInner(
     const removedText = content.slice(globalCaret, deleteTo);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: globalCaret, removedText, insertedText: "" });
     const nextCanonical = content.slice(0, globalCaret) + content.slice(deleteTo);
-    commitCanonical(nextCanonical);
-    const newPages = computeEditorPages(nextCanonical);
+    const nextForcedBoundaries = commitCanonical(nextCanonical, {
+      editStart: globalCaret,
+      editEnd: deleteTo,
+      insertedLength: 0,
+    });
+    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
     switchToPageForOffset(globalCaret, newPages);
     reportCaret(globalCaret);
     return true;
@@ -607,11 +665,28 @@ function PagedEditorInner(
 
   const runHistory = (command: "undo" | "redo") => {
     if (isComposingRef.current) return;
-    const result = command === "undo" ? undoHistory(undoHistoryRef.current, content) : redoHistory(undoHistoryRef.current, content);
+    const history = undoHistoryRef.current;
+    const operation =
+      command === "undo"
+        ? history.undoStack[history.undoStack.length - 1]
+        : history.redoStack[history.redoStack.length - 1];
+    const result = command === "undo" ? undoHistory(history, content) : redoHistory(history, content);
     if (!result) return;
     undoHistoryRef.current = result.history;
-    commitCanonical(result.canonicalText);
-    const newPages = computeEditorPages(result.canonicalText);
+    const nextForcedBoundaries = commitCanonical(
+      result.canonicalText,
+      operation
+        ? {
+            editStart: operation.rangeStart,
+            editEnd:
+              operation.rangeStart +
+              (command === "undo" ? operation.insertedText.length : operation.removedText.length),
+            insertedLength:
+              command === "undo" ? operation.removedText.length : operation.insertedText.length,
+          }
+        : undefined
+    );
+    const newPages = computeEditorPages(result.canonicalText, { forcedBoundaries: nextForcedBoundaries });
     switchToPageForOffset(result.selectionEnd, newPages, { start: result.selectionStart, end: result.selectionEnd });
     reportCaret(result.selectionEnd);
   };
@@ -666,7 +741,15 @@ function PagedEditorInner(
     } else {
       setAllSelected(false);
     }
-    reportCaret(editorPageLocalToGlobal(currentPage, el.selectionStart));
+    // §C: the ONE place a genuinely non-collapsed selection can appear (a
+    // user drag-select) -- captures the true range, unlike `reportCaret`
+    // (used everywhere else, always with a single already-collapsed
+    // offset), so `canForceSplitAtCaret` can correctly disable while text
+    // is selected.
+    const globalStart = editorPageLocalToGlobal(currentPage, el.selectionStart);
+    const globalEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
+    setGlobalCaretRange({ start: globalStart, end: globalEnd });
+    onCursorIndexChange?.(globalStart);
   };
 
   const handleBlur = () => {
@@ -699,7 +782,16 @@ function PagedEditorInner(
       if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
       const nextCanonical = content.slice(0, currentPage.start) + finalPageText + content.slice(currentPage.end);
       const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
-      commitCanonical(nextCanonical);
+      const nextForcedBoundaries = commitCanonical(
+        nextCanonical,
+        rawEdit
+          ? {
+              editStart: rawEdit.rangeStart,
+              editEnd: rawEdit.rangeStart + rawEdit.removedText.length,
+              insertedLength: rawEdit.insertedText.length,
+            }
+          : undefined
+      );
       reportCaret(globalCaret);
 
       // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §B: an IME composition can
@@ -714,7 +806,7 @@ function PagedEditorInner(
       // slice then made the browser clamp the stale caret to that
       // truncated length, landing it at this page's end instead of near
       // the start of the (correct) next page.
-      const nextPages = computeEditorPages(nextCanonical);
+      const nextPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
       const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
       if (targetIndex !== safePageIndex) {
         switchToPageForOffset(globalCaret, nextPages);
@@ -724,7 +816,12 @@ function PagedEditorInner(
     const pendingJump = pendingJumpRef.current;
     pendingJumpRef.current = null;
     if (pendingJump?.kind === "global") {
-      switchToPageForOffset(pendingJump.end, computeEditorPages(contentRef.current), pendingJump, { scrollHint: "upper" });
+      switchToPageForOffset(
+        pendingJump.end,
+        computeEditorPages(contentRef.current, { forcedBoundaries }),
+        pendingJump,
+        { scrollHint: "upper" }
+      );
     } else if (pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current) {
       reanchorForExternalContent(contentRef.current);
     }
@@ -753,8 +850,12 @@ function PagedEditorInner(
     const nextCanonical = content.slice(0, start) + text + content.slice(end);
     const caretOffset = options?.caretOffsetInInsertedText ?? text.length;
     const globalCaret = start + caretOffset;
-    commitCanonical(nextCanonical);
-    const newPages = computeEditorPages(nextCanonical);
+    const nextForcedBoundaries = commitCanonical(nextCanonical, {
+      editStart: start,
+      editEnd: end,
+      insertedLength: text.length,
+    });
+    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
     switchToPageForOffset(globalCaret, newPages);
     reportCaret(globalCaret);
   };
@@ -783,32 +884,56 @@ function PagedEditorInner(
   // TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §A: the active last page has
   // reached target and is now in the confirmed "not even searching for a
   // paragraph break yet" dead zone up to the hard maximum -- see
-  // `chooseSafeEditorPageBoundary`'s own doc and `forceSplitActivePage`.
+  // `chooseSafeEditorPageBoundary`'s own doc.
   const isWaitingForBoundary = isLastPage && currentPage.length >= EDITOR_PAGE_TARGET_SIZE;
 
   /**
-   * TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §C/§D: "今すぐ区切る" -- forces an
-   * immediate split of the active (waiting) LAST Editor Page. Reuses the
-   * ordinary boundary chooser with `minTrailingSize: 0` so it actually
-   * SEARCHES for a paragraph break instead of the confirmed dead zone
-   * between target and the hard maximum, where the ordinary automatic path
-   * does not search at all (see `chooseSafeEditorPageBoundary`'s own doc).
-   * UI-only navigation, never a manuscript edit -- `content` itself is
-   * never touched, so this is NOT an undo step (§J) and the canonical
-   * manuscript stays byte-identical before/after.
+   * TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B: "ここで区切る"
+   * creates a boundary at the exact collapsed canonical caret. It is a
+   * normal editor action on every page, independent of the automatic
+   * waiting state. The endpoint/duplicate/selection checks prevent empty or
+   * ambiguous pages; a caret inside a surrogate pair is rejected rather
+   * than moved, preserving both exact placement and Unicode integrity.
    */
-  const forceSplitActivePage = () => {
-    if (isComposingRef.current || !isWaitingForBoundary) return;
-    const forcedOffset = chooseSafeEditorPageBoundary(content, currentPage.start, EDITOR_PAGE_TARGET_SIZE, {
-      minTrailingSize: 0,
-    });
-    if (forcedOffset <= currentPage.start || forcedOffset >= content.length) return; // nothing left to split off
-    const nextForced = [...forcedBoundaries, forcedOffset];
+  const manualSplitOffset = globalCaretRange.start;
+  const manualSplitWouldBreakSurrogatePair =
+    manualSplitOffset > 0 &&
+    manualSplitOffset < content.length &&
+    isHighSurrogate(content.charCodeAt(manualSplitOffset - 1)) &&
+    isLowSurrogate(content.charCodeAt(manualSplitOffset));
+  const canForceSplitAtCaret =
+    !isFullManuscriptSelected &&
+    globalCaretRange.start === globalCaretRange.end &&
+    manualSplitOffset > currentPage.start &&
+    manualSplitOffset < currentPage.end &&
+    manualSplitOffset > 0 &&
+    manualSplitOffset < content.length &&
+    !forcedBoundaries.includes(manualSplitOffset) &&
+    !manualSplitWouldBreakSurrogatePair;
+
+  const forceSplitAtCaret = () => {
+    const el = textareaRef.current;
+    if (!el || isComposingRef.current || allSelectedRef.current) return;
+    const selectionStart = editorPageLocalToGlobal(currentPage, el.selectionStart);
+    const selectionEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
+    if (selectionStart !== selectionEnd) return;
+    const forcedOffset = selectionStart;
+    if (
+      forcedOffset <= currentPage.start ||
+      forcedOffset >= currentPage.end ||
+      forcedOffset <= 0 ||
+      forcedOffset >= content.length ||
+      forcedBoundaries.includes(forcedOffset) ||
+      (isHighSurrogate(content.charCodeAt(forcedOffset - 1)) &&
+        isLowSurrogate(content.charCodeAt(forcedOffset)))
+    ) {
+      return;
+    }
+    const nextForced = [...forcedBoundaries, forcedOffset].sort((a, b) => a - b);
     setForcedBoundaries(nextForced);
     const newPages = computeEditorPages(content, { forcedBoundaries: nextForced });
-    const globalCaret = editorPageLocalToGlobal(currentPage, textareaRef.current?.selectionStart ?? currentPage.length);
-    switchToPageForOffset(globalCaret, newPages);
-    reportCaret(globalCaret);
+    switchToPageForOffset(forcedOffset, newPages);
+    reportCaret(forcedOffset);
   };
 
   useImperativeHandle(
@@ -841,8 +966,13 @@ function PagedEditorInner(
       ? `次の編集ページまで あと約${roundForDisplay(EDITOR_PAGE_TARGET_SIZE - currentPage.length).toLocaleString("ja-JP")}字`
       : `区切り待ち・最大あと約${roundForDisplay(Math.max(0, EDITOR_PAGE_HARD_MAXIMUM_SIZE - currentPage.length)).toLocaleString("ja-JP")}字`
     : `この編集ページ：約${roundForDisplay(currentPage.length).toLocaleString("ja-JP")}字`;
+  const compactProgressLabel = isLastPage
+    ? currentPage.length < EDITOR_PAGE_TARGET_SIZE
+      ? `あと約${roundForDisplay(EDITOR_PAGE_TARGET_SIZE - currentPage.length).toLocaleString("ja-JP")}字`
+      : progressLabel
+    : `約${roundForDisplay(currentPage.length).toLocaleString("ja-JP")}字`;
   const progressTitle = isWaitingForBoundary
-    ? "段落の区切りで編集ページが切り替わります。「今すぐ区切る」でこの場で区切ることもできます（原稿本文や印刷ページには影響しません）。最大約5.5万字で自動的に切り替わります。"
+    ? "段落の区切りで編集ページが切り替わります。最大約5.5万字で自動的に切り替わります。"
     : "最大約5.5万字で自動的に切り替わります";
 
   const showWritingCheck = Boolean(writingCheck?.enabled && writingCheck.analysisText === content);
@@ -863,7 +993,7 @@ function PagedEditorInner(
     <div className="absolute inset-0 flex flex-col">
       <div
         data-editor-page-navigator=""
-        className="flex flex-none flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-ink/10 bg-ink/[0.02] px-2 py-1 text-xs text-ink/70"
+        className="flex flex-none flex-wrap items-center justify-center gap-x-1 gap-y-1 border-b border-ink/10 bg-ink/[0.02] px-1 py-1 text-[11px] text-ink/70 sm:gap-x-3 sm:px-2 sm:text-xs"
       >
         <button
           type="button"
@@ -898,7 +1028,7 @@ function PagedEditorInner(
           aria-pressed={isFullManuscriptSelected}
           data-editor-select-all=""
           onClick={isFullManuscriptSelected ? deselectEntireManuscript : selectEntireManuscript}
-          className={`whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium ${
+          className={`whitespace-nowrap rounded-full border px-1.5 py-1 text-[11px] font-medium sm:px-2 ${
             isFullManuscriptSelected
               ? "border-accent bg-accent/10 text-ink"
               : "border-ink/20 text-ink/70 hover:bg-ink/5"
@@ -906,21 +1036,31 @@ function PagedEditorInner(
         >
           {isFullManuscriptSelected ? "全文選択中　解除" : "全文を選択"}
         </button>
-        {/* TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §H/§I: `basis-full`
-            always drops this onto its own row (both desktop and the narrow
-            widths in §I) rather than only when the flex-wrap row happens to
-            run out of space, matching the compact two-row mobile layout the
-            task asks for without a separate responsive branch. */}
-        {/* TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §B/§C: gold (not red/error --
-            this is guidance, never a failure) actionable waiting state,
-            reusing the same amber badge convention as `WorkSessionTracker`'s
-            own paused-state pill. `flex-wrap` keeps the badge and the
-            "今すぐ区切る" button from forcing horizontal overflow at narrow
-            widths (§H) -- they simply wrap onto their own line. */}
+        <button
+          type="button"
+          data-editor-force-split=""
+          disabled={!canForceSplitAtCaret}
+          onClick={forceSplitAtCaret}
+          title="現在のカーソル位置で編集ページを区切ります。原稿や印刷ページには影響しません。"
+          className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent sm:px-2"
+        >
+          ここで区切る
+        </button>
+        {/* The amber waiting status always owns a separate row. Ordinary
+            progress may share the second wrapped row below 640px so the new
+            neutral split action does not collapse the 320px editor into a
+            three-row navigator; desktop keeps the established own row. */}
+        {/* TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §B: gold (not red/error --
+            this is guidance, never a failure) waiting status, reusing the
+            same amber badge convention as `WorkSessionTracker`'s own
+            paused-state pill. Manual splitting remains the neutral action
+            above and is deliberately not duplicated in this row. */}
         <span
           data-editor-page-progress=""
           title={progressTitle}
-          className="basis-full flex flex-wrap items-center justify-center gap-1.5 whitespace-nowrap text-center text-[10px]"
+          className={`flex flex-wrap items-center justify-center gap-1.5 whitespace-nowrap text-center text-[10px] ${
+            isWaitingForBoundary ? "basis-full" : "sm:basis-full"
+          }`}
         >
           <span
             className={
@@ -930,19 +1070,9 @@ function PagedEditorInner(
             }
           >
             {isWaitingForBoundary && <span aria-hidden="true">●</span>}
-            {progressLabel}
+            <span className="min-[375px]:hidden">{compactProgressLabel}</span>
+            <span className="hidden min-[375px]:inline">{progressLabel}</span>
           </span>
-          {isWaitingForBoundary && (
-            <button
-              type="button"
-              data-editor-force-split=""
-              onClick={forceSplitActivePage}
-              title="原稿本文や印刷ページには影響しません"
-              className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 hover:bg-amber-200"
-            >
-              今すぐ区切る
-            </button>
-          )}
         </span>
       </div>
 

@@ -124,9 +124,9 @@ export const DEMO_STEPS: DemoStep[] = [
     // never a direct page-click, which isn't implemented.
     title: "長い原稿は「編集ページ」で軽やかに",
     body:
-      "長い原稿でも快適に編集できるよう、エディターは約5万字前後（段落の区切りに合わせて多少前後します）ごとに「編集ページ」が切り替わります。原稿そのものはひとつにつながったままなので、保存や書き出しには影響しません。次の編集ページまでの目安も表示され、「区切り待ち」のときは「今すぐ区切る」でその場で区切ることもできます（原稿や印刷ページには影響しません）。プレビューから「編集位置へ移動」を選ぶと、そのページの文章がある編集位置へ戻れます。",
+      "長い原稿は約5万字前後ごとに編集ページが切り替わり、段落の区切りによって少し前後します。「区切り待ち」は自動切り替えが近い目安です。「ここで区切る」なら、好きなカーソル位置で編集ページだけを分けられます。原稿はひとつにつながったままで、プレビュー・PDF・JPGのページ分けには影響しません。",
     // TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: spotlight just the
-    // ←編集ページN/M→ 全文を選択 nav row (PagedEditor.tsx's own
+    // ←編集ページN/M→ 全文を選択 ここで区切る nav row (PagedEditor.tsx's own
     // `data-editor-page-navigator` hook), not the whole editor textarea --
     // that row is a thin strip near the top of the pane, so a below-target
     // popover placement no longer has to fight the full-height editor rect
