@@ -52,6 +52,16 @@ export interface DemoStep {
    */
   target?: string;
   /**
+   * Raw CSS selector overriding `target` for steps that need to spotlight a
+   * SPECIFIC control inside a larger `data-demo-target` surface (e.g. just
+   * the 編集ページ nav row inside the editor pane, not the whole textarea).
+   * Takes precedence over `target` for both scrolling/spotlighting and
+   * popover placement; `target` may still be set alongside it for other
+   * per-step logic (e.g. `stepBody`'s cloud-save branch) without affecting
+   * which element is actually targeted.
+   */
+  targetSelector?: string;
+  /**
    * On phones the desktop target may not exist. This copy is shown instead of
    * (not in addition to) `body` when the layout is narrow AND `target` isn't
    * on screen — device-appropriate wording, never a fabricated control.
@@ -115,7 +125,15 @@ export const DEMO_STEPS: DemoStep[] = [
     title: "長い原稿は「編集ページ」で軽やかに",
     body:
       "長い原稿でも快適に編集できるよう、エディターは約5万字前後ごとに「編集ページ」が切り替わります。原稿そのものはひとつにつながったままなので、保存や書き出しには影響しません。プレビューから「編集位置へ移動」を選ぶと、そのページの文章がある編集位置へ戻れます。",
-    target: "editor",
+    // TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: spotlight just the
+    // ←編集ページN/M→ 全文を選択 nav row (PagedEditor.tsx's own
+    // `data-editor-page-navigator` hook), not the whole editor textarea --
+    // that row is a thin strip near the top of the pane, so a below-target
+    // popover placement no longer has to fight the full-height editor rect
+    // for room. Absent entirely on the (default) non-paged editor surface,
+    // in which case this step falls back to the ordinary floating placement
+    // like any other targetless step.
+    targetSelector: "[data-editor-page-navigator]",
   },
   {
     title: "作業タイムを記録しよう",
