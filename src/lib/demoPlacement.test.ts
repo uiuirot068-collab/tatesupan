@@ -79,11 +79,9 @@ describe("responsive demo card placement", () => {
       data.indexOf('title: "長い原稿は「編集ページ」で軽やかに"'),
       data.indexOf('title: "作業タイムを記録しよう"')
     );
-    expect(step).toContain("約5万字前後");
-    expect(step).toContain("段落の区切りによって少し前後");
-    expect(step).toContain("区切り待ち");
     expect(step).toContain("ここで区切る");
-    expect(step).toContain("好きなカーソル位置");
+    expect(step).toContain("前のページとつなぐ");
+    expect(step).toContain("約5万字前後");
     expect(step).toContain("原稿はひとつにつながったまま");
     expect(step).toContain("プレビュー・PDF・JPGのページ分けには影響しません");
     expect(step).toContain('targetSelector: "[data-editor-page-navigator]"');

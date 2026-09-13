@@ -936,6 +936,38 @@ function PagedEditorInner(
     reportCaret(forcedOffset);
   };
 
+  /**
+   * TSP-EDITOR-MANUAL-SPLIT-MERGE-012C: "前のページとつなぐ" removes ONLY the
+   * manual forced boundary immediately before the current Editor Page --
+   * i.e. the one exactly at `currentPage.start`. This does not "force"
+   * anything back into one page: it hands the surrounding text back to
+   * ordinary automatic ~50k pagination (§C/§D of the task), which may
+   * re-merge it into one page, split it again at a different natural
+   * offset, or (rarely) recreate a boundary at the same offset if that's
+   * genuinely where automatic pagination would have split anyway. Never
+   * touches canonical content -- no commitCanonical/onContentChange/pushEdit
+   * call here, exactly like `forceSplitAtCaret` above, so this is layout
+   * housekeeping and never a manuscript undo step (§G).
+   */
+  const precedingBoundaryIsManual = safePageIndex > 0 && forcedBoundaries.includes(currentPage.start);
+  const canMergeWithPreviousPage =
+    precedingBoundaryIsManual && !isFullManuscriptSelected && globalCaretRange.start === globalCaretRange.end;
+
+  const mergeWithPreviousPage = () => {
+    const el = textareaRef.current;
+    if (!el || isComposingRef.current || allSelectedRef.current) return;
+    const selectionStart = editorPageLocalToGlobal(currentPage, el.selectionStart);
+    const selectionEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
+    if (selectionStart !== selectionEnd) return;
+    const boundaryToRemove = currentPage.start;
+    if (safePageIndex === 0 || !forcedBoundaries.includes(boundaryToRemove)) return;
+    const nextForced = forcedBoundaries.filter((b) => b !== boundaryToRemove);
+    setForcedBoundaries(nextForced);
+    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced });
+    switchToPageForOffset(selectionStart, newPages);
+    reportCaret(selectionStart);
+  };
+
   useImperativeHandle(
     ref,
     (): PagedEditorHandle => ({
@@ -1046,6 +1078,25 @@ function PagedEditorInner(
         >
           ここで区切る
         </button>
+        {/* TSP-EDITOR-MANUAL-SPLIT-MERGE-012C: only rendered when the
+            boundary immediately before the CURRENT page is a manually
+            forced one (never for Editor Page 1, an automatic-only
+            boundary, or one this page's own end -- see
+            `precedingBoundaryIsManual`). Neutral secondary styling, same as
+            "ここで区切る" -- this is reversible layout housekeeping, never a
+            destructive manuscript operation. */}
+        {precedingBoundaryIsManual && (
+          <button
+            type="button"
+            data-editor-merge-with-previous=""
+            disabled={!canMergeWithPreviousPage}
+            onClick={mergeWithPreviousPage}
+            title="この手動区切りを解除して、前の編集ページとつなぎます。原稿本文には影響しません。"
+            className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent sm:px-2"
+          >
+            前のページとつなぐ
+          </button>
+        )}
         {/* The amber waiting status always owns a separate row. Ordinary
             progress may share the second wrapped row below 640px so the new
             neutral split action does not collapse the 320px editor into a
