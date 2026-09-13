@@ -138,6 +138,22 @@ export function chooseSafeEditorPageBoundary(
   return snapToSafeEditorPageBoundary(text, idealEnd, 1);
 }
 
+/**
+ * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: a SESSION-ONLY "keep joined"
+ * preference from "前のページとつなぐ" across an ORIGINALLY AUTOMATIC
+ * boundary (one with no `forcedBoundaries` entry to simply remove -- see
+ * `PagedEditor.tsx`'s `mergeWithPreviousPage`). `[start, end)` means "the
+ * page beginning at `start` must span at least to `end`, with no interior
+ * boundary" -- this is the opposite of a forced boundary (which REQUIRES a
+ * split at an offset); a joined range FORBIDS one anywhere inside it.
+ */
+export interface JoinedEditorPageRange {
+  /** Inclusive UTF-16 code-unit offset where the joined region begins (an existing page's own `start` at the moment of the join). */
+  start: number;
+  /** Exclusive UTF-16 code-unit offset where the joined region ends (the later page's own `end` at that same moment). */
+  end: number;
+}
+
 export interface ComputeEditorPagesOptions extends ChooseEditorPageBoundaryOptions {
   /** Target code units per page. Default `EDITOR_PAGE_TARGET_SIZE` (50,000). */
   targetSize?: number;
@@ -150,6 +166,17 @@ export interface ComputeEditorPagesOptions extends ChooseEditorPageBoundaryOptio
    * endpoints and surrogate-pair interiors are ignored defensively.
    */
   forcedBoundaries?: readonly number[];
+  /**
+   * 012D join preferences -- see `JoinedEditorPageRange`'s own doc.
+   * Enforced only while `end - start` stays within
+   * `joinedRangeHardMaximum`; a range that grows past it (further typing)
+   * is safely ignored for that pass rather than ever exceeding the limit,
+   * and an explicit `forcedBoundaries` entry strictly inside a range always
+   * wins ("the user's latest explicit layout action wins").
+   */
+  joinedRanges?: readonly JoinedEditorPageRange[];
+  /** Hard cap for a joined range to remain enforced. Default `EDITOR_PAGE_HARD_MAXIMUM_SIZE`. */
+  joinedRangeHardMaximum?: number;
 }
 
 /**
@@ -172,6 +199,12 @@ export function computeEditorPages(content: string, options: ComputeEditorPagesO
           .sort((a, b) => a - b)
       : null;
 
+  const joinedRangeHardMaximum = options.joinedRangeHardMaximum ?? EDITOR_PAGE_HARD_MAXIMUM_SIZE;
+  const joined =
+    options.joinedRanges && options.joinedRanges.length > 0
+      ? options.joinedRanges.filter((r) => r.start >= 0 && r.end > r.start && r.end <= length)
+      : null;
+
   const pages: EditorPage[] = [];
   let start = 0;
   let index = 0;
@@ -181,7 +214,19 @@ export function computeEditorPages(content: string, options: ComputeEditorPagesO
     // contains it. A later forced boundary must not swallow an earlier
     // automatic boundary (important when the user splits inside Page 2+).
     const forcedEnd = forced?.find((b) => b > start && b <= automaticEnd);
-    const end = forcedEnd ?? automaticEnd;
+    let end = forcedEnd ?? automaticEnd;
+
+    // A join preference beginning exactly at this page's own start extends
+    // it to at least the joined range's own end (skipping any
+    // automatic/forced boundary strictly inside) -- UNLESS an explicit
+    // forced boundary sits inside the range (that always wins) or the
+    // range itself has grown past the hard maximum (safely ignored here).
+    const joinRange = joined?.find((r) => r.start === start);
+    if (joinRange && joinRange.end - start <= joinedRangeHardMaximum) {
+      const forcedInsideRange = forced?.find((b) => b > start && b < joinRange.end);
+      end = forcedInsideRange ?? Math.max(end, joinRange.end);
+    }
+
     pages.push({ index, start, end, length: end - start });
     start = end;
     index += 1;
@@ -210,6 +255,37 @@ export function adjustForcedBoundaries(
     if (b <= editStart) next.push(b);
     else if (b >= editEnd) next.push(b + delta);
     // else: b fell inside the edited range -- drop it.
+  }
+  return next;
+}
+
+/**
+ * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: the `JoinedEditorPageRange` analogue
+ * of `adjustForcedBoundaries` above -- same per-endpoint rule (kept if at
+ * or before `editStart`, shifted by the length delta if at or after
+ * `editEnd`, otherwise the edit fell across it), applied independently to
+ * each range's `start` and `end`. A range is dropped if either endpoint
+ * fell strictly INSIDE the edited span (what it described no longer
+ * exists) or degenerates to `end <= start` afterward.
+ */
+export function adjustJoinedRanges(
+  ranges: readonly JoinedEditorPageRange[],
+  editStart: number,
+  editEnd: number,
+  insertedLength: number
+): JoinedEditorPageRange[] {
+  const delta = insertedLength - (editEnd - editStart);
+  const adjustPoint = (p: number): number | null => {
+    if (p <= editStart) return p;
+    if (p >= editEnd) return p + delta;
+    return null;
+  };
+  const next: JoinedEditorPageRange[] = [];
+  for (const range of ranges) {
+    const start = adjustPoint(range.start);
+    const end = adjustPoint(range.end);
+    if (start === null || end === null || end <= start) continue;
+    next.push({ start, end });
   }
   return next;
 }

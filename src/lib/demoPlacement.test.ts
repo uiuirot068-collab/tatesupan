@@ -81,9 +81,13 @@ describe("responsive demo card placement", () => {
     );
     expect(step).toContain("ここで区切る");
     expect(step).toContain("前のページとつなぐ");
-    expect(step).toContain("約5万字前後");
-    expect(step).toContain("原稿はひとつにつながったまま");
-    expect(step).toContain("プレビュー・PDF・JPGのページ分けには影響しません");
+    // TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: no manual/automatic boundary
+    // terminology -- just "編集ページは作業用の区切り" (an editing aid) and
+    // that the manuscript/publication output is unaffected.
+    expect(step).not.toMatch(/自動区切り|手動区切り/);
+    expect(step).toContain("編集ページは作業用の区切り");
+    expect(step).toContain("原稿そのもの");
+    expect(step).toContain("プレビュー・PDF・JPGのページには影響しません");
     expect(step).toContain('targetSelector: "[data-editor-page-navigator]"');
   });
 

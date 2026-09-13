@@ -50,7 +50,7 @@ describe("TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: page-switch selection 
       editor.indexOf("const handleCompositionEnd ="),
       editor.indexOf("const moveSelectionToGlobal =")
     );
-    expect(compositionEnd).toContain("computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries })");
+    expect(compositionEnd).toContain("computeEditorPages(nextCanonical, nextState)");
     expect(compositionEnd).toContain("editorPageForGlobalOffset(nextPages, globalCaret)");
     expect(compositionEnd).toContain("switchToPageForOffset(globalCaret, nextPages)");
   });

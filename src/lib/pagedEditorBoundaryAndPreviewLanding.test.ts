@@ -90,7 +90,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic ca
       editor.indexOf("const moveSelectionToGlobal =")
     );
     expect(compositionEnd).toMatch(
-      /switchToPageForOffset\(\s*pendingJump\.end,\s*computeEditorPages\(contentRef\.current, \{ forcedBoundaries \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/
+      /switchToPageForOffset\(\s*pendingJump\.end,\s*computeEditorPages\(contentRef\.current, \{ forcedBoundaries, joinedRanges \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/
     );
   });
 

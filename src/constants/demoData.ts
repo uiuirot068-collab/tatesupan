@@ -124,7 +124,7 @@ export const DEMO_STEPS: DemoStep[] = [
     // never a direct page-click, which isn't implemented.
     title: "長い原稿は「編集ページ」で軽やかに",
     body:
-      "「ここで区切る」で好きな位置に編集ページの区切りを追加できます。手動で区切ったページでは「前のページとつなぐ」で解除でき、解除後は原稿の長さに応じて自動的に約5万字前後で編集ページが分かれます。原稿はひとつにつながったままで、プレビュー・PDF・JPGのページ分けには影響しません。",
+      "長い原稿は、快適に編集できるよう適度な長さで編集ページに分かれます。「ここで区切る」で好きな位置に分けたり、「前のページとつなぐ」で戻したりできます。編集ページは作業用の区切りなので、原稿そのものやプレビュー・PDF・JPGのページには影響しません。",
     // TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: spotlight just the
     // ←編集ページN/M→ 全文を選択 ここで区切る nav row (PagedEditor.tsx's own
     // `data-editor-page-navigator` hook), not the whole editor textarea --

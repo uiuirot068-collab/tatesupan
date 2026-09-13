@@ -55,6 +55,7 @@ import {
 } from "react";
 import {
   adjustForcedBoundaries,
+  adjustJoinedRanges,
   computeEditorPages,
   editorPageForGlobalOffset,
   editorPageLocalToGlobal,
@@ -62,6 +63,7 @@ import {
   EDITOR_PAGE_HARD_MAXIMUM_SIZE,
   EDITOR_PAGE_TARGET_SIZE,
   type EditorPage,
+  type JoinedEditorPageRange,
 } from "@/lib/editorPagination/paginationModel";
 import {
   computeRawEditFromBeforeInput,
@@ -282,6 +284,14 @@ function PagedEditorInner(
   // existed.
   const [forcedBoundaries, setForcedBoundaries] = useState<number[]>([]);
 
+  // TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: "前のページとつなぐ" across an
+  // ORIGINALLY AUTOMATIC boundary (no `forcedBoundaries` entry to simply
+  // remove) instead records a join preference here -- see
+  // `JoinedEditorPageRange`'s own doc. Session-only, exactly like
+  // `forcedBoundaries`, and kept in sync with edits the same way (via
+  // `adjustJoinedRanges` inside `commitCanonical`).
+  const [joinedRanges, setJoinedRanges] = useState<JoinedEditorPageRange[]>([]);
+
   // TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B §C: the textarea's own
   // live selection, in GLOBAL (canonical) offsets, purely so
   // `canForceSplitAtCaret` below can be evaluated at render time (React
@@ -303,8 +313,8 @@ function PagedEditorInner(
   >(null);
 
   const pages = useMemo(
-    () => computeEditorPages(content, { forcedBoundaries }),
-    [content, forcedBoundaries]
+    () => computeEditorPages(content, { forcedBoundaries, joinedRanges }),
+    [content, forcedBoundaries, joinedRanges]
   );
   const pageCount = pages.length;
 
@@ -411,26 +421,40 @@ function PagedEditorInner(
   const commitCanonical = (
     nextCanonical: string,
     knownEdit?: { editStart: number; editEnd: number; insertedLength: number }
-  ): number[] => {
-    // §E: only worth the O(n) prefix/suffix diff when a forced boundary
-    // actually exists -- the overwhelming common case (nobody has clicked
-    // "ここで区切る" this session) stays a single array-length check.
+  ): { forcedBoundaries: number[]; joinedRanges: JoinedEditorPageRange[] } => {
+    // §E: only worth the O(n) diff when a forced boundary or join
+    // preference actually exists -- the overwhelming common case (nobody
+    // has clicked "ここで区切る"/"前のページとつなぐ" this session) stays a
+    // single pair of length checks.
     let nextForcedBoundaries = forcedBoundaries;
-    if (forcedBoundaries.length > 0 && nextCanonical !== content) {
+    let nextJoinedRanges = joinedRanges;
+    if ((forcedBoundaries.length > 0 || joinedRanges.length > 0) && nextCanonical !== content) {
       // Prefer the operation's already-known canonical range. A full-text
       // prefix/suffix diff is only a fallback: repeated text cannot reveal
       // which identical code unit was deleted, while beforeinput and
       // toolbar edits know that position exactly.
       const { editStart, editEnd, insertedLength } = knownEdit ?? commonPrefixSuffixDiff(content, nextCanonical);
-      const adjusted = adjustForcedBoundaries(forcedBoundaries, editStart, editEnd, insertedLength);
-      nextForcedBoundaries = adjusted;
-      if (adjusted.length !== forcedBoundaries.length || adjusted.some((b, i) => b !== forcedBoundaries[i])) {
-        setForcedBoundaries(adjusted);
+      if (forcedBoundaries.length > 0) {
+        const adjusted = adjustForcedBoundaries(forcedBoundaries, editStart, editEnd, insertedLength);
+        nextForcedBoundaries = adjusted;
+        if (adjusted.length !== forcedBoundaries.length || adjusted.some((b, i) => b !== forcedBoundaries[i])) {
+          setForcedBoundaries(adjusted);
+        }
+      }
+      if (joinedRanges.length > 0) {
+        const adjustedJoined = adjustJoinedRanges(joinedRanges, editStart, editEnd, insertedLength);
+        nextJoinedRanges = adjustedJoined;
+        if (
+          adjustedJoined.length !== joinedRanges.length ||
+          adjustedJoined.some((r, i) => r.start !== joinedRanges[i].start || r.end !== joinedRanges[i].end)
+        ) {
+          setJoinedRanges(adjustedJoined);
+        }
       }
     }
     lastOwnContentRef.current = nextCanonical;
     onContentChange(nextCanonical);
-    return nextForcedBoundaries;
+    return { forcedBoundaries: nextForcedBoundaries, joinedRanges: nextJoinedRanges };
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -453,7 +477,7 @@ function PagedEditorInner(
     const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
     const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
 
-    const nextForcedBoundaries = commitCanonical(
+    const nextState = commitCanonical(
       nextCanonical,
       rawEdit
         ? {
@@ -473,7 +497,7 @@ function PagedEditorInner(
     // the caret never silently drifts onto a page the user isn't looking
     // at. Almost always a no-op switch (see the module doc: an edit can
     // only ever move ITS OWN page's `end`, never an earlier page).
-    const nextPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    const nextPages = computeEditorPages(nextCanonical, nextState);
     const navigationAffinity = pending?.inputType === "deleteContentBackward" ? "backward" : "forward";
     const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret, navigationAffinity);
     if (targetIndex !== safePageIndex) {
@@ -486,12 +510,12 @@ function PagedEditorInner(
     const removedText = content;
     setAllSelected(false);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: 0, removedText, insertedText: typed, atomic: true });
-    const nextForcedBoundaries = commitCanonical(typed, {
+    const nextState = commitCanonical(typed, {
       editStart: 0,
       editEnd: content.length,
       insertedLength: typed.length,
     });
-    const newPages = computeEditorPages(typed, { forcedBoundaries: nextForcedBoundaries });
+    const newPages = computeEditorPages(typed, nextState);
     switchToPageForOffset(typed.length, newPages);
     reportCaret(typed.length);
   };
@@ -518,7 +542,7 @@ function PagedEditorInner(
     const removedText = content.slice(deleteFrom, globalCaret);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: deleteFrom, removedText, insertedText: "" });
     const nextCanonical = content.slice(0, deleteFrom) + content.slice(globalCaret);
-    let nextForcedBoundaries = commitCanonical(nextCanonical, {
+    const nextState = commitCanonical(nextCanonical, {
       editStart: deleteFrom,
       editEnd: globalCaret,
       insertedLength: 0,
@@ -529,11 +553,11 @@ function PagedEditorInner(
     // longer equal to the previous page's end. Treating the adjusted end as
     // a session-only forced boundary keeps the textarea continuous for this
     // Backspace and for immediately repeated Backspaces.
-    if (deleteFrom > 0 && !nextForcedBoundaries.includes(deleteFrom)) {
-      nextForcedBoundaries = [...nextForcedBoundaries, deleteFrom].sort((a, b) => a - b);
-      setForcedBoundaries(nextForcedBoundaries);
+    if (deleteFrom > 0 && !nextState.forcedBoundaries.includes(deleteFrom)) {
+      nextState.forcedBoundaries = [...nextState.forcedBoundaries, deleteFrom].sort((a, b) => a - b);
+      setForcedBoundaries(nextState.forcedBoundaries);
     }
-    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    const newPages = computeEditorPages(nextCanonical, nextState);
     switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward" });
     reportCaret(deleteFrom);
     return true;
@@ -557,12 +581,12 @@ function PagedEditorInner(
     const removedText = content.slice(globalCaret, deleteTo);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: globalCaret, removedText, insertedText: "" });
     const nextCanonical = content.slice(0, globalCaret) + content.slice(deleteTo);
-    const nextForcedBoundaries = commitCanonical(nextCanonical, {
+    const nextState = commitCanonical(nextCanonical, {
       editStart: globalCaret,
       editEnd: deleteTo,
       insertedLength: 0,
     });
-    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    const newPages = computeEditorPages(nextCanonical, nextState);
     switchToPageForOffset(globalCaret, newPages);
     reportCaret(globalCaret);
     return true;
@@ -673,7 +697,7 @@ function PagedEditorInner(
     const result = command === "undo" ? undoHistory(history, content) : redoHistory(history, content);
     if (!result) return;
     undoHistoryRef.current = result.history;
-    const nextForcedBoundaries = commitCanonical(
+    const nextState = commitCanonical(
       result.canonicalText,
       operation
         ? {
@@ -686,7 +710,7 @@ function PagedEditorInner(
           }
         : undefined
     );
-    const newPages = computeEditorPages(result.canonicalText, { forcedBoundaries: nextForcedBoundaries });
+    const newPages = computeEditorPages(result.canonicalText, nextState);
     switchToPageForOffset(result.selectionEnd, newPages, { start: result.selectionStart, end: result.selectionEnd });
     reportCaret(result.selectionEnd);
   };
@@ -782,7 +806,7 @@ function PagedEditorInner(
       if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
       const nextCanonical = content.slice(0, currentPage.start) + finalPageText + content.slice(currentPage.end);
       const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
-      const nextForcedBoundaries = commitCanonical(
+      const nextState = commitCanonical(
         nextCanonical,
         rawEdit
           ? {
@@ -806,7 +830,7 @@ function PagedEditorInner(
       // slice then made the browser clamp the stale caret to that
       // truncated length, landing it at this page's end instead of near
       // the start of the (correct) next page.
-      const nextPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+      const nextPages = computeEditorPages(nextCanonical, nextState);
       const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
       if (targetIndex !== safePageIndex) {
         switchToPageForOffset(globalCaret, nextPages);
@@ -818,7 +842,7 @@ function PagedEditorInner(
     if (pendingJump?.kind === "global") {
       switchToPageForOffset(
         pendingJump.end,
-        computeEditorPages(contentRef.current, { forcedBoundaries }),
+        computeEditorPages(contentRef.current, { forcedBoundaries, joinedRanges }),
         pendingJump,
         { scrollHint: "upper" }
       );
@@ -850,12 +874,12 @@ function PagedEditorInner(
     const nextCanonical = content.slice(0, start) + text + content.slice(end);
     const caretOffset = options?.caretOffsetInInsertedText ?? text.length;
     const globalCaret = start + caretOffset;
-    const nextForcedBoundaries = commitCanonical(nextCanonical, {
+    const nextState = commitCanonical(nextCanonical, {
       editStart: start,
       editEnd: end,
       insertedLength: text.length,
     });
-    const newPages = computeEditorPages(nextCanonical, { forcedBoundaries: nextForcedBoundaries });
+    const newPages = computeEditorPages(nextCanonical, nextState);
     switchToPageForOffset(globalCaret, newPages);
     reportCaret(globalCaret);
   };
@@ -931,39 +955,74 @@ function PagedEditorInner(
     }
     const nextForced = [...forcedBoundaries, forcedOffset].sort((a, b) => a - b);
     setForcedBoundaries(nextForced);
-    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced });
+    // TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D "EXPLICIT SPLIT MUST WIN": trim any
+    // join preference that would otherwise claim this brand-new boundary as
+    // interior -- `computeEditorPages` already defensively prefers an
+    // interior forced boundary over a join range on its own (see its own
+    // doc), but the STORED preference must also stop covering this span so
+    // it cannot resurface after a later edit.
+    const nextJoined = joinedRanges.filter((r) => !(r.start < forcedOffset && r.end > forcedOffset));
+    if (nextJoined.length !== joinedRanges.length) setJoinedRanges(nextJoined);
+    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced, joinedRanges: nextJoined });
     switchToPageForOffset(forcedOffset, newPages);
     reportCaret(forcedOffset);
   };
 
   /**
-   * TSP-EDITOR-MANUAL-SPLIT-MERGE-012C: "前のページとつなぐ" removes ONLY the
-   * manual forced boundary immediately before the current Editor Page --
-   * i.e. the one exactly at `currentPage.start`. This does not "force"
-   * anything back into one page: it hands the surrounding text back to
-   * ordinary automatic ~50k pagination (§C/§D of the task), which may
-   * re-merge it into one page, split it again at a different natural
-   * offset, or (rarely) recreate a boundary at the same offset if that's
-   * genuinely where automatic pagination would have split anyway. Never
-   * touches canonical content -- no commitCanonical/onContentChange/pushEdit
+   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: "前のページとつなぐ" is now shown for
+   * EVERY page after Page 1, regardless of whether the boundary immediately
+   * before it originated from "ここで区切る" (a `forcedBoundaries` entry) or
+   * from ordinary automatic ~50k pagination -- the user is never expected to
+   * know which. It is only DISABLED, never hidden, when joining would
+   * exceed the Editor Page hard maximum or while a non-collapsed/
+   * full-manuscript selection is active.
+   *
+   * Joining across a forced boundary simply removes that boundary (012C
+   * behavior, unchanged). Joining across an automatic boundary instead
+   * records a `joinedRanges` preference spanning the combined region so
+   * automatic pagination does not immediately recreate a split anywhere
+   * inside it (see `computeEditorPages`'s own doc) -- while still never
+   * touching canonical content: no commitCanonical/onContentChange/pushEdit
    * call here, exactly like `forceSplitAtCaret` above, so this is layout
    * housekeeping and never a manuscript undo step (§G).
    */
-  const precedingBoundaryIsManual = safePageIndex > 0 && forcedBoundaries.includes(currentPage.start);
-  const canMergeWithPreviousPage =
-    precedingBoundaryIsManual && !isFullManuscriptSelected && globalCaretRange.start === globalCaretRange.end;
+  const previousPage = safePageIndex > 0 ? pages[safePageIndex - 1] : null;
+  const combinedLengthWithPreviousPage = previousPage ? currentPage.end - previousPage.start : 0;
+  const mergeExceedsHardMaximum = previousPage !== null && combinedLengthWithPreviousPage > EDITOR_PAGE_HARD_MAXIMUM_SIZE;
+  const mergeBlockedBySelection = isFullManuscriptSelected || globalCaretRange.start !== globalCaretRange.end;
+  const canMergeWithPreviousPage = previousPage !== null && !mergeExceedsHardMaximum && !mergeBlockedBySelection;
+  const mergeWithPreviousPageTitle = !previousPage
+    ? ""
+    : mergeExceedsHardMaximum
+      ? "この2ページをつなぐと編集ページの文字数上限を超えるため、つなげません。"
+      : mergeBlockedBySelection
+        ? "選択を解除すると、前の編集ページとつなげます。"
+        : "前の編集ページとつなぎます。原稿や印刷ページには影響しません。";
 
   const mergeWithPreviousPage = () => {
     const el = textareaRef.current;
     if (!el || isComposingRef.current || allSelectedRef.current) return;
+    if (safePageIndex === 0) return;
     const selectionStart = editorPageLocalToGlobal(currentPage, el.selectionStart);
     const selectionEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
     if (selectionStart !== selectionEnd) return;
-    const boundaryToRemove = currentPage.start;
-    if (safePageIndex === 0 || !forcedBoundaries.includes(boundaryToRemove)) return;
-    const nextForced = forcedBoundaries.filter((b) => b !== boundaryToRemove);
-    setForcedBoundaries(nextForced);
-    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced });
+    const previous = pages[safePageIndex - 1];
+    const combinedLength = currentPage.end - previous.start;
+    if (combinedLength > EDITOR_PAGE_HARD_MAXIMUM_SIZE) return;
+
+    const boundaryOffset = currentPage.start;
+    const nextForced = forcedBoundaries.includes(boundaryOffset)
+      ? forcedBoundaries.filter((b) => b !== boundaryOffset)
+      : forcedBoundaries;
+    if (nextForced !== forcedBoundaries) setForcedBoundaries(nextForced);
+
+    const nextJoined = [
+      ...joinedRanges.filter((r) => r.start !== previous.start),
+      { start: previous.start, end: currentPage.end },
+    ].sort((a, b) => a.start - b.start);
+    setJoinedRanges(nextJoined);
+
+    const newPages = computeEditorPages(content, { forcedBoundaries: nextForced, joinedRanges: nextJoined });
     switchToPageForOffset(selectionStart, newPages);
     reportCaret(selectionStart);
   };
@@ -1078,20 +1137,21 @@ function PagedEditorInner(
         >
           ここで区切る
         </button>
-        {/* TSP-EDITOR-MANUAL-SPLIT-MERGE-012C: only rendered when the
-            boundary immediately before the CURRENT page is a manually
-            forced one (never for Editor Page 1, an automatic-only
-            boundary, or one this page's own end -- see
-            `precedingBoundaryIsManual`). Neutral secondary styling, same as
-            "ここで区切る" -- this is reversible layout housekeeping, never a
-            destructive manuscript operation. */}
-        {precedingBoundaryIsManual && (
+        {/* TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: shown for every page after
+            Page 1 -- never gated on whether the preceding boundary was
+            manual or automatic (see `previousPage`'s own doc). Disabled
+            (never hidden) when joining would exceed the Editor Page hard
+            maximum or a non-collapsed/full-manuscript selection is active,
+            so the user can see the action exists and why it's currently
+            unavailable. Neutral secondary styling, same as "ここで区切る"
+            -- reversible layout housekeeping, never destructive. */}
+        {previousPage && (
           <button
             type="button"
             data-editor-merge-with-previous=""
             disabled={!canMergeWithPreviousPage}
             onClick={mergeWithPreviousPage}
-            title="この手動区切りを解除して、前の編集ページとつなぎます。原稿本文には影響しません。"
+            title={mergeWithPreviousPageTitle}
             className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent sm:px-2"
           >
             前のページとつなぐ
