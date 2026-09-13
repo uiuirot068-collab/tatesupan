@@ -85,6 +85,7 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
+import { perfMark, perfSpan } from "@/lib/perfDebug";
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
@@ -491,21 +492,31 @@ function PreviewPane({
   // for the V2 canonical preview pipeline in useV2PreviewAdapter) guarantees
   // the browser gets a paint opportunity before this recompute ever starts,
   // and keeps resetting while the user keeps typing so it never runs mid-burst.
+  perfMark("PreviewPane:render", { contentLength: content.length });
   const PREVIEW_CONTENT_DEBOUNCE_MS = 180;
   const [deferredContent, setDeferredContent] = useState(content);
   useEffect(() => {
-    const timer = window.setTimeout(() => setDeferredContent(content), PREVIEW_CONTENT_DEBOUNCE_MS);
+    perfMark("PreviewPane:contentDebounce:scheduled", { contentLength: content.length });
+    const timer = window.setTimeout(() => {
+      perfMark("PreviewPane:contentDebounce:fired", { contentLength: content.length });
+      setDeferredContent(content);
+    }, PREVIEW_CONTENT_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [content]);
 
   const pages = useMemo(() => {
+    const endTokenize = perfSpan("PreviewPane:tokenizeTategaki", { contentLength: deferredContent.length });
     const tokens = tokenizeTategaki(deferredContent);
-    return paginateTokens(tokens, {
+    endTokenize({ tokenCount: tokens.length });
+    const endPaginate = perfSpan("PreviewPane:paginateTokens", { tokenCount: tokens.length });
+    const result = paginateTokens(tokens, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
       columnCount: settings.columnCount,
       linesPerColumn: layout.linesPerColumn,
     });
+    endPaginate({ pageCount: result.length });
+    return result;
   }, [
     deferredContent,
     layout.charsPerLine,
@@ -514,14 +525,15 @@ function PreviewPane({
     settings.columnCount,
   ]);
 
-  const pageSourceRanges = useMemo(
-    () =>
-      computePageSourceRanges(deferredContent, {
-        charsPerLine: layout.charsPerLine,
-        linesPerPage: layout.linesPerPage,
-      }),
-    [deferredContent, layout.charsPerLine, layout.linesPerPage]
-  );
+  const pageSourceRanges = useMemo(() => {
+    const end = perfSpan("PreviewPane:computePageSourceRanges", { contentLength: deferredContent.length });
+    const result = computePageSourceRanges(deferredContent, {
+      charsPerLine: layout.charsPerLine,
+      linesPerPage: layout.linesPerPage,
+    });
+    end({ rangeCount: result.length });
+    return result;
+  }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
@@ -796,12 +808,36 @@ function PreviewPane({
   // capture, so it never affects the exported pixel size.
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
-  useEffect(() => {
+  // TSP-PREVIEW-SYNC-STABILITY-011 §E: `useLayoutEffect` (not `useEffect`) so
+  // the FIRST measurement happens synchronously before the browser paints
+  // this mount's first frame. With a plain `useEffect`, `containerWidth`/
+  // `containerHeight` stay `null` through that first paint, `baseAutoFitScale`
+  // (below) falls back to `1`, and pages render at the WRONG scale for one
+  // frame before the ResizeObserver's own first callback (itself async)
+  // corrects it a moment later -- a real, on-every-mount "wrong scale then
+  // right scale" snap, worse the further `1` is from the pane's actual fitted
+  // scale (i.e. most visible on a narrow pane, matching the human report).
+  // `container.clientWidth/clientHeight` already reflect this render's real
+  // layout by the time a layout effect runs (layout has just completed, pre-
+  // paint), so reading them here directly -- not waiting for the observer --
+  // gets the correct scale into the very first painted frame.
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    // TSP-PREVIEW-SYNC-STABILITY-011 §E: a narrow pane can take several
+    // ResizeObserver callbacks to settle on its final size (flex-basis
+    // resolution, webfont-driven reflow, etc.) -- each DIFFERENT intermediate
+    // width/height recomputes presentationScale below, which visibly snaps
+    // the whole `transform: scale(...)` content to a new size. Skipping a
+    // callback that reports the SAME size as last time (no-op filtering, per
+    // the task's own recommended pattern) can't fix genuinely different
+    // intermediate measurements, but removes the spurious extra renders/
+    // snaps a naive observer produces when nothing has actually changed.
     const update = () => {
-      setContainerWidth(container.clientWidth);
-      setContainerHeight(container.clientHeight);
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      setContainerWidth((current) => (current === width ? current : width));
+      setContainerHeight((current) => (current === height ? current : height));
     };
     update();
     const observer = new ResizeObserver(update);
@@ -902,11 +938,20 @@ function PreviewPane({
     width: number;
     height: number;
   } | null>(null);
-  useEffect(() => {
+  // §E: same "measure synchronously before first paint" reasoning as
+  // containerWidth/containerHeight above -- `naturalContentSize` staying
+  // `null` through the first paint left the `m-auto` wrapper's width/height
+  // unset (auto) for one frame instead of its correct scaled footprint.
+  useLayoutEffect(() => {
     const content = scaleContentRef.current;
     if (!content) return;
+    // §E: same no-op filtering as containerWidth/containerHeight above.
     const update = () => {
-      setNaturalContentSize({ width: content.offsetWidth, height: content.offsetHeight });
+      const width = content.offsetWidth;
+      const height = content.offsetHeight;
+      setNaturalContentSize((current) =>
+        current && current.width === width && current.height === height ? current : { width, height }
+      );
     };
     update();
     const observer = new ResizeObserver(update);
@@ -1625,7 +1670,15 @@ function PreviewPane({
   };
 
   useEffect(() => {
+    perfMark("PreviewPane:cursorFollowEffect:fired", { activePageIndex });
     if (activePageIndex == null) return;
+    // §E: never auto-scroll against a pane that hasn't been measured yet --
+    // `scrollIntoView` against a not-yet-sized/laid-out scroll container can
+    // land at a bogus position that a moment later's real measurement then
+    // has to visibly correct. Deliberately NOT a dependency below: this only
+    // guards against firing too early, it must never itself cause an extra
+    // re-run/re-scroll when the pane is later resized.
+    if (containerWidth == null || containerHeight == null) return;
     const el = pageElementsRef.current.get(activePageIndex);
     if (!el) return;
 
@@ -1640,7 +1693,9 @@ function PreviewPane({
     // remaining cost is the one-time layout of scrolling a large
     // unvirtualized tree, not the animation). The cursor still follows the
     // caret to the right page -- it just no longer animates there.
+    const endScroll = perfSpan("PreviewPane:scrollIntoView", { activePageIndex });
     el.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
+    endScroll();
 
     if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     autoScrollTimeoutRef.current = setTimeout(() => {
@@ -1650,6 +1705,9 @@ function PreviewPane({
     return () => {
       if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     };
+    // containerWidth/containerHeight are read only as an "is the pane
+    // measured yet" guard, not a reason to re-run/re-scroll on resize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePageIndex]);
 
   const handlePreviewScroll = () => {

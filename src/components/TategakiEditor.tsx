@@ -53,6 +53,9 @@ import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
+import { perfMark, perfSpan } from "@/lib/perfDebug";
+import PerfDebugPanel from "./PerfDebugPanel";
+import { resolveRendererRolloutMode } from "@/lib/v2Rollout";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -68,6 +71,7 @@ export default function TategakiEditor({
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
 }) {
+  perfMark("TategakiEditor:render");
   const router = useRouter();
   const { user } = useAuth();
   const [docId, setDocId] = useState<number | null>(
@@ -95,7 +99,11 @@ export default function TategakiEditor({
   const PREVIEW_PROP_DEBOUNCE_MS = 180;
   const [previewContent, setPreviewContent] = useState(content);
   useEffect(() => {
-    const timer = window.setTimeout(() => setPreviewContent(content), PREVIEW_PROP_DEBOUNCE_MS);
+    perfMark("TategakiEditor:previewContentDebounce:scheduled", { contentLength: content.length });
+    const timer = window.setTimeout(() => {
+      perfMark("TategakiEditor:previewContentDebounce:fired", { contentLength: content.length });
+      setPreviewContent(content);
+    }, PREVIEW_PROP_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [content]);
   const [plotNote, setPlotNote] = useState("");
@@ -197,11 +205,31 @@ export default function TategakiEditor({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  // TSP-PREVIEW-SYNC-STABILITY-011: navigation-origin guard for the
+  // PREVIEW_TO_EDITOR transaction. `navigateEditorToGlobalOffset` below moves
+  // the Editor caret as a SIDE EFFECT of landing at the Preview-requested
+  // offset; that caret change must not echo back into ANOTHER (unrelated-
+  // looking) Preview auto-scroll away from the page the user just navigated
+  // FROM -- Preview is already showing the right place, having just
+  // initiated this jump itself. Storing the exact expected post-jump global
+  // offset (rather than a plain boolean) keeps this self-correcting: it only
+  // ever suppresses the ONE cursorIndex value this specific transaction
+  // produces, so a same-offset no-op jump can never wrongly swallow a LATER,
+  // unrelated caret move, and ordinary typing/caret movement (which never
+  // sets this ref) is completely unaffected and keeps driving Preview follow
+  // exactly as before.
+  const suppressPreviewFollowForRef = useRef<number | null>(null);
   // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: lets a Preview
   // page click drive the Editor to that page's source location, regardless
   // of which editor surface (FULL textarea or PagedEditor) is mounted.
   const editorPaneRef = useRef<EditorPaneHandle>(null);
   const navigateEditorToGlobalOffset = useCallback((start: number, end: number) => {
+    // `end` is always a valid offset into the CURRENT canonical manuscript
+    // here (callers derive it from `pageSourceRanges`/issue offsets computed
+    // against that same manuscript) -- no clamping needed, and reading
+    // `content` directly would make this callback's identity change on every
+    // keystroke, defeating PreviewPane's memo (see its own prop's doc).
+    suppressPreviewFollowForRef.current = end;
     setMobileView("editor");
     editorPaneRef.current?.navigateToGlobalOffset(start, end);
   }, []);
@@ -212,7 +240,20 @@ export default function TategakiEditor({
   // reconcile the whole page-list subtree even with `previewContent` stable.
   const [previewCursorIndex, setPreviewCursorIndex] = useState(cursorIndex);
   useEffect(() => {
-    const timer = window.setTimeout(() => setPreviewCursorIndex(cursorIndex), PREVIEW_PROP_DEBOUNCE_MS);
+    perfMark("TategakiEditor:cursorIndexDebounce:scheduled", { cursorIndex });
+    const timer = window.setTimeout(() => {
+      perfMark("TategakiEditor:cursorIndexDebounce:fired", { cursorIndex });
+      // PREVIEW_TO_EDITOR transaction completing: this is the caret echo the
+      // jump itself produced -- consume the guard and skip re-driving
+      // Preview's own cursor-follow with it (see suppressPreviewFollowForRef
+      // above). Any OTHER cursorIndex value (ordinary caret movement,
+      // Editor Page switch, Writing Check jump) is unaffected.
+      if (suppressPreviewFollowForRef.current !== null && suppressPreviewFollowForRef.current === cursorIndex) {
+        suppressPreviewFollowForRef.current = null;
+        return;
+      }
+      setPreviewCursorIndex(cursorIndex);
+    }, PREVIEW_PROP_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [cursorIndex]);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
@@ -508,13 +549,15 @@ export default function TategakiEditor({
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     const targetDocId = docId;
+    perfMark("TategakiEditor:autosaveDebounce:scheduled", { contentLength: content.length });
     saveTimeoutRef.current = setTimeout(() => {
       // Re-check immediately before writing in case the user switched
       // documents again during the debounce window.
       if (loadedDocIdRef.current !== targetDocId) return;
+      const end = perfSpan("TategakiEditor:saveDocument", { contentLength: content.length });
       saveDocument(targetDocId, title, content, settings, plotNote)
-        .then(() => setSaveStatus("saved"))
-        .catch(() => setSaveStatus("error"));
+        .then(() => { end({ ok: true }); setSaveStatus("saved"); })
+        .catch(() => { end({ ok: false }); setSaveStatus("error"); });
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
@@ -910,6 +953,13 @@ export default function TategakiEditor({
           {toast}
         </div>
       )}
+
+      <PerfDebugPanel
+        contentLength={content.length}
+        renderer={resolveRendererRolloutMode()}
+        pageCount={bodyPageCount}
+        cursorIndex={cursorIndex}
+      />
 
       {demoMode && (
         <DemoTour
