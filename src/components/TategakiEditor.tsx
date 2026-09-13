@@ -434,6 +434,14 @@ export default function TategakiEditor({
     }
   };
 
+  const handlePreviewPdfExportSuccess = () => {
+    if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
+  };
+
+  const handleTogglePreviewCollapse = () => {
+    setIsPreviewCollapsed((prev) => !prev);
+  };
+
   useEffect(() => {
     if (!hasLoadedRef.current || docId === null) return;
     // Guard against saving while a document switch is mid-flight: state may
@@ -763,13 +771,11 @@ export default function TategakiEditor({
             onImageLayerChange={handleImageLayerChange}
             cursorIndex={cursorIndex}
             onBodyPageCountChange={setBodyPageCount}
-            onPdfExportSuccess={() => {
-              if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
-            }}
+            onPdfExportSuccess={handlePreviewPdfExportSuccess}
             // On a phone showing the プレビュー workspace the preview is always
             // full — the collapse rail is a desktop-only affordance.
             isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
-            onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
+            onToggleCollapse={handleTogglePreviewCollapse}
             selected={selectedPages}
             onSelectedChange={setSelectedPages}
           />

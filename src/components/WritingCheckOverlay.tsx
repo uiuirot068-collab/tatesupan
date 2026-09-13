@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   buildWritingSegments,
   mergeIssueRanges,
@@ -31,7 +31,7 @@ interface WritingCheckOverlayProps {
  * renderer or an export — see PreviewPane / exportImage / exportPdf, which
  * only ever read the document string.
  */
-export default function WritingCheckOverlay({
+function WritingCheckOverlay({
   textareaRef,
   text,
   issues,
@@ -75,15 +75,16 @@ export default function WritingCheckOverlay({
   // re-sync on every render so the mirror can't sit a frame behind after an
   // edit that shifted the scroll position.
   useEffect(() => {
+    if (issues.length === 0) return;
     const textarea = textareaRef.current;
     const backdrop = backdropRef.current;
     if (!textarea || !backdrop) return;
     backdrop.scrollTop = textarea.scrollTop;
     backdrop.scrollLeft = textarea.scrollLeft;
-  });
+  }, [issues, text, textareaRef]);
 
   const segments = useMemo(
-    () => buildWritingSegments(text, mergeIssueRanges(issues)),
+    () => issues.length === 0 ? [] : buildWritingSegments(text, mergeIssueRanges(issues)),
     [text, issues]
   );
 
@@ -113,3 +114,5 @@ export default function WritingCheckOverlay({
     </div>
   );
 }
+
+export default memo(WritingCheckOverlay);

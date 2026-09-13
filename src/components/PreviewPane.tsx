@@ -443,7 +443,7 @@ interface PreviewPaneProps {
   onSelectedChange: (next: Set<number>) => void;
 }
 
-export default function PreviewPane({
+function PreviewPane({
   content,
   title = "",
   settings,
@@ -2511,3 +2511,5 @@ export default function PreviewPane({
     </div>
   );
 }
+
+export default memo(PreviewPane);

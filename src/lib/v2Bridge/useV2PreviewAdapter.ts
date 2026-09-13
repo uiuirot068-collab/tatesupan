@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PX_PER_MM, type PageSettings } from "../pageLayout";
-import { loadV2BrowserMeasurementProvider } from "./browserMeasurementProvider";
-import { composeV2Document, type V2BridgeResult } from "./composeV2Document";
-import { prepareImageResolver } from "./imageResolverAdapter";
-import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
-import {
-  buildColophonPaintPages,
-  buildPaintDocument,
-  type PaintDocument,
-  type PreviewRenderContext,
-} from "../../../typesetting-v2/renderer/preview/paintModel";
+import { startTransition, useEffect, useState } from "react";
+import type { PageSettings } from "../pageLayout";
+import type { V2BridgeResult } from "./composeV2Document";
+import type { PaintDocument } from "../../../typesetting-v2/renderer/preview/paintModel";
+
+export {
+  buildV2PreviewDocument,
+  PAGE_CARD_PREVIEW_SCALE_MULTIPLIER,
+} from "./buildV2PreviewDocument";
 
 export interface V2PreviewAdapterState {
   bridge: V2BridgeResult | null;
@@ -26,54 +23,6 @@ const DISABLED_STATE: V2PreviewAdapterState = {
   error: null,
   loading: false,
 };
-
-/**
- * `PreviewRenderer` converts canonical millimeters at standard CSS density
- * (96dpi), while the established editor `PageCard` paper surface uses the
- * product's preview-only `PX_PER_MM`. Match that host coordinate system here
- * so the canonical content frame and the paper margins share one scale.
- */
-export const PAGE_CARD_PREVIEW_SCALE_MULTIPLIER = PX_PER_MM / (96 / 25.4);
-
-export function buildV2PreviewDocument(
-  bridge: V2BridgeResult,
-  images: Record<string, string>
-): PaintDocument {
-  const context: PreviewRenderContext = {
-    scaleMultiplier: PAGE_CARD_PREVIEW_SCALE_MULTIPLIER,
-    linePitchTicks: bridge.layoutSettings.linePitchTicks,
-    lineExtentTicks: bridge.layoutSettings.lineExtentTicks,
-    columnExtentTicks: bridge.layoutSettings.columnExtentTicks,
-    columnsPerPage: bridge.layoutSettings.columnsPerPage,
-    nominalCellTicks: mmToTicks((bridge.layoutSettings.bodyFontSizePt * 25.4) / 72),
-    measurementIdentity: bridge.document.version.measurementIdentity,
-    paintFontIdentity: bridge.document.version.measurementIdentity,
-    bodyFontSizeTick: mmToTicks((bridge.layoutSettings.bodyFontSizePt * 25.4) / 72),
-    imageResolver: (id) => images[id] ? { kind: "RESOLVED", url: images[id] } : { kind: "PLACEHOLDER" },
-  };
-  const body = buildPaintDocument(
-    "editor-v2",
-    "Canonical Preview",
-    bridge.document,
-    bridge.units,
-    bridge.source,
-    context
-  );
-  if (!bridge.document.colophon || !bridge.colophonUnits || bridge.colophonSource === undefined) return body;
-
-  const colophonPages = buildColophonPaintPages(
-    bridge.document.colophon,
-    bridge.colophonUnits,
-    bridge.colophonSource,
-    context
-  );
-  body.pages = bridge.document.pageSequence.map((page) =>
-    page.kind === "body" ? body.pages[page.index] : colophonPages[page.index]
-  );
-  body.totalPageCount = body.pages.length;
-  body.renderedPageCount = body.pages.length;
-  return body;
-}
 
 /** Async browser bridge; it never falls back to fake measurements. */
 export function useV2PreviewAdapter(
@@ -92,31 +41,39 @@ export function useV2PreviewAdapter(
       return;
     }
     let cancelled = false;
+    let worker: Worker | null = null;
     const timer = window.setTimeout(() => {
-      void Promise.all([
-        loadV2BrowserMeasurementProvider(),
-        prepareImageResolver(input.images),
-      ]).then(([measurement, imageResolver]) => {
-        const bridge = composeV2Document({
-          title: input.title.trim() || "TateSpun",
-          content: input.content,
-          settings: input.settings,
-          measurement,
-          imageResolver,
-        });
-        if (!cancelled) {
-          setState({ bridge, preview: buildV2PreviewDocument(bridge, input.images), error: null, loading: false });
+      worker = new Worker(new URL("../../workers/v2Preview.worker.ts", import.meta.url), { type: "module" });
+      worker.onmessage = (event: MessageEvent<{
+        type: "complete" | "error";
+        bridge?: V2BridgeResult;
+        preview?: PaintDocument;
+        message?: string;
+      }>) => {
+        if (cancelled) return;
+        if (event.data.type === "complete" && event.data.bridge && event.data.preview) {
+          startTransition(() => {
+            setState({ bridge: event.data.bridge!, preview: event.data.preview!, error: null, loading: false });
+          });
+        } else {
+          setState({ bridge: null, preview: null, error: `V2 HOLD: ${event.data.message ?? "Preview worker failed"}`, loading: false });
         }
-      }).catch((cause: unknown) => {
+        worker?.terminate();
+        worker = null;
+      };
+      worker.onerror = (event) => {
         if (!cancelled) {
-          const detail = cause instanceof Error ? cause.message : String(cause);
-          setState({ bridge: null, preview: null, error: `V2 HOLD: ${detail}`, loading: false });
+          setState({ bridge: null, preview: null, error: `V2 HOLD: ${event.message || "Preview worker failed"}`, loading: false });
         }
-      });
+        worker?.terminate();
+        worker = null;
+      };
+      worker.postMessage({ type: "compose", input });
     }, 180);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      worker?.terminate();
     };
   }, [enabled, input.content, input.images, input.settings, input.title]);
 

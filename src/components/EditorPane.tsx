@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
@@ -116,6 +116,8 @@ export default function EditorPane({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
   const [mobileWritingActive, setMobileWritingActive] = useState(false);
+  const deferredContent = useDeferredValue(content);
+  const visualLength = useMemo(() => countVisualLength(deferredContent), [deferredContent]);
 
   // Parent-driven changes (load/switch, structural UI, Preview operations)
   // become the next input baseline without themselves becoming activity.
@@ -211,7 +213,11 @@ export default function EditorPane({
   }, [content, writingCheckEnabled, recheckNonce, writingCheckConfig]);
 
   const analysisCurrent = analysis.text === content;
-  const writingIssuesForContent = analysisCurrent ? filterIgnored(analysis.issues, ignoredIds) : [];
+  const writingIssuesForAnalysis = useMemo(
+    () => filterIgnored(analysis.issues, ignoredIds),
+    [analysis.issues, ignoredIds]
+  );
+  const writingIssuesForContent = analysisCurrent ? writingIssuesForAnalysis : [];
 
   const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
     const el = textareaRef.current;
@@ -418,11 +424,13 @@ export default function EditorPane({
           textarea itself owns vertical scrolling. */}
       <div className="relative min-h-0 flex-1">
         {writingCheckEnabled && (
-          <WritingCheckOverlay
-            textareaRef={textareaRef}
-            text={content}
-            issues={writingIssuesForContent}
-          />
+          <div className={`pointer-events-none absolute inset-0 ${analysisCurrent ? "visible" : "invisible"}`}>
+            <WritingCheckOverlay
+              textareaRef={textareaRef}
+              text={analysis.text}
+              issues={writingIssuesForAnalysis}
+            />
+          </div>
         )}
         <textarea
           ref={textareaRef}
@@ -481,7 +489,7 @@ export default function EditorPane({
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
-        text={content}
+        text={analysisCurrent ? analysis.text : ""}
         issues={writingIssuesForContent}
         onSelectIssue={handleSelectWritingIssue}
         onFixIssue={handleFixIssue}
@@ -528,7 +536,7 @@ export default function EditorPane({
             title="現在の原稿文字数"
             className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
           >
-            現在の原稿文字数 {countVisualLength(content)}文字
+            現在の原稿文字数 {visualLength}文字
           </span>
         </div>
       </div>

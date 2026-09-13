@@ -102,19 +102,40 @@ export function measureBeforeInputCommit(
     return ZERO_DELTA;
   }
 
-  const selectedCodePoints = codePointLength(selectedText(snapshot));
-  const beforeLength = codePointLength(snapshot.beforeText);
-  const afterLength = codePointLength(afterText);
+  const selected = selectedText(snapshot);
+  const selectedCodePoints = codePointLength(selected);
+  const selectedCodeUnits = snapshot.selectionEnd - snapshot.selectionStart;
 
   if (snapshot.inputType.startsWith("insert")) {
-    const insertedCodePoints = afterLength - (beforeLength - selectedCodePoints);
-    if (insertedCodePoints >= 0) {
-      return activityDelta(selectedCodePoints, insertedCodePoints);
+    // beforeinput gives the exact UTF-16 replacement range. Count only the
+    // inserted operand instead of materialising code-point arrays for both
+    // entire manuscripts on every keystroke.
+    const insertedCodeUnits =
+      afterText.length - (snapshot.beforeText.length - selectedCodeUnits);
+    if (insertedCodeUnits >= 0) {
+      const inserted = afterText.slice(
+        snapshot.selectionStart,
+        snapshot.selectionStart + insertedCodeUnits
+      );
+      return activityDelta(selectedCodePoints, codePointLength(inserted));
     }
   }
 
   if (snapshot.inputType.startsWith("delete")) {
     if (selectedCodePoints > 0) return activityDelta(selectedCodePoints, 0);
+    const deletedCodeUnits = snapshot.beforeText.length - afterText.length;
+    if (deletedCodeUnits > 0) {
+      const deleted = snapshot.inputType.includes("Backward")
+        ? snapshot.beforeText.slice(
+            Math.max(0, snapshot.selectionStart - deletedCodeUnits),
+            snapshot.selectionStart
+          )
+        : snapshot.beforeText.slice(
+            snapshot.selectionStart,
+            snapshot.selectionStart + deletedCodeUnits
+          );
+      return activityDelta(codePointLength(deleted), 0);
+    }
     return measureContiguousMutation(snapshot.beforeText, afterText);
   }
 
@@ -185,10 +206,9 @@ export function applyTextInputChange(
   }
 
   const pending = state.pendingBeforeInput;
-  const delta =
-    pending && pending.beforeText === state.lastText
-      ? measureBeforeInputCommit(pending, afterText)
-      : measureContiguousMutation(state.lastText, afterText);
+  const delta = pending
+    ? measureBeforeInputCommit(pending, afterText)
+    : measureContiguousMutation(state.lastText, afterText);
   return {
     state: { lastText: afterText, pendingBeforeInput: null, composition: null },
     delta,
