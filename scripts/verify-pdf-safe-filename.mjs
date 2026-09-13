@@ -113,8 +113,8 @@ check(
   /disabled=\{[\s\S]{0,200}pdfFilenameStem\.length === 0/.test(previewCode),
 );
 check(
-  "5b. Cancel button's disabled expression is untouched by the stem (still just isExporting)",
-  /onClick=\{\(\) => setIsPdfModalOpen\(false\)\}\s*\n\s*disabled=\{isExporting\}/.test(preview),
+  "5b. Cancel button has no disabled/isExporting guard (dialog unmounts entirely while exporting — see 8d)",
+  !/onClick=\{\(\) => setIsPdfModalOpen\(false\)\}\s*\n\s*disabled=/.test(preview),
 );
 
 /* ---------------- 6. actual download filename, both engine paths ---------------- */

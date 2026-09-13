@@ -2578,135 +2578,137 @@ function PreviewPane({
         </div>
       </div>
 
-      {isPdfModalOpen && (
-        <div
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !isExporting && setIsPdfModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl border border-ink/10 bg-base p-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-3 text-sm font-bold text-ink">PDF出力</h2>
-            <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
-              TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
-            </p>
-            <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
-            <div className="mb-3 flex flex-col gap-2">
-              {(
-                [
-                  { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
-                  { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
-                ] as { value: "all" | "selected"; label: string }[]
-              ).map((option) => (
-                <label
-                  key={option.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
-                >
-                  <input
-                    type="radio"
-                    name="pdf-export-scope"
-                    value={option.value}
-                    checked={pdfScope === option.value}
-                    onChange={() => setPdfScope(option.value)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">{option.label}</span>
-                </label>
-              ))}
-            </div>
-            {showColophon && (
-              pdfScope === "selected" ? (
-                <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
-                  <input
-                    type="checkbox"
-                    checked={pdfIncludeColophon}
-                    onChange={(e) => setPdfIncludeColophon(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">奥付ページを含める（選択ページの後ろに追加）</span>
-                </label>
-              ) : (
-                <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
-                  奥付ページは最後に含まれます。
-                </p>
-              )
-            )}
-            <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
-            <div className="flex flex-col gap-2">
-              {(
-                [
-                  { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
-                  { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
-                  { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
-                ] as { value: PdfExportMode; label: string }[]
-              ).map((option) => (
-                <label
-                  key={option.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
-                >
-                  <input
-                    type="radio"
-                    name="pdf-export-mode"
-                    value={option.value}
-                    checked={pdfMode === option.value}
-                    onChange={() => setPdfMode(option.value)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">{option.label}</span>
-                </label>
-              ))}
-            </div>
-            {pdfScope === "selected" && selected.size === 0 && (
-              <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
-            )}
-            <p className="mb-1 mt-3 text-xs font-medium text-ink/70">
-              <label htmlFor="pdf-filename-stem">保存ファイル名</label>
-            </p>
-            <div className="flex items-center gap-1.5">
-              <input
-                id="pdf-filename-stem"
-                type="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                value={pdfFilenameStem}
-                onChange={(e) => setPdfFilenameStem(sanitizePdfFilenameStem(e.target.value))}
-                aria-describedby="pdf-filename-stem-help"
-                className="w-full min-w-0 rounded border border-ink/20 bg-base px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
-              />
-              <span className="shrink-0 text-sm text-ink/60">.pdf</span>
-            </div>
-            <p id="pdf-filename-stem-help" className="mt-1 text-xs text-ink/60">
-              入稿用ファイル名は英数字がおすすめです。印刷所の指定もご確認ください。
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
+      {/* TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: application-level
+          modal (portaled via ViewportModal, not a child of this pane's own
+          narrow/clipped subtree) so Preview's width never constrains PDF
+          setup. Unmounted for the isExporting duration -- ExportProgressModal
+          (and, on Escape, the cancel-confirmation ViewportModal below) is the
+          active modal surface during export; this also means the setup
+          dialog's own Escape-to-close listener is simply absent while
+          exporting, so it can never race the isExporting Escape/pause-cancel
+          listener registered above. */}
+      {isPdfModalOpen && !isExporting && (
+        <ViewportModal
+          title="PDF出力"
+          titleId="pdf-export-setup-title"
+          closeLabel="PDF出力を閉じる"
+          onClose={() => setIsPdfModalOpen(false)}
+          panelClassName="max-w-sm"
+          overlayProps={{ "data-pdf-export-setup-modal": "" } as HTMLAttributes<HTMLDivElement>}
+          footer={(
+            <>
               <button
                 type="button"
                 onClick={() => setIsPdfModalOpen(false)}
-                disabled={isExporting}
-                className="rounded border border-ink/20 px-3 py-1.5 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-ink/20 px-3 py-1.5 text-xs hover:bg-ink/5"
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={
-                  isExporting ||
-                  (pdfScope === "selected" && selected.size === 0) ||
-                  pdfFilenameStem.length === 0
-                }
+                disabled={(pdfScope === "selected" && selected.size === 0) || pdfFilenameStem.length === 0}
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isExporting && exportProgress
-                  ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
-                  : "ダウンロード"}
+                ダウンロード
               </button>
-            </div>
+            </>
+          )}
+        >
+          <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
+            TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
+          </p>
+          <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
+          <div className="mb-3 flex flex-col gap-2">
+            {(
+              [
+                { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
+                { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
+              ] as { value: "all" | "selected"; label: string }[]
+            ).map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+              >
+                <input
+                  type="radio"
+                  name="pdf-export-scope"
+                  value={option.value}
+                  checked={pdfScope === option.value}
+                  onChange={() => setPdfScope(option.value)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">{option.label}</span>
+              </label>
+            ))}
           </div>
-        </div>
+          {showColophon && (
+            pdfScope === "selected" ? (
+              <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
+                <input
+                  type="checkbox"
+                  checked={pdfIncludeColophon}
+                  onChange={(e) => setPdfIncludeColophon(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">奥付ページを含める（選択ページの後ろに追加）</span>
+              </label>
+            ) : (
+              <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
+                奥付ページは最後に含まれます。
+              </p>
+            )
+          )}
+          <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
+          <div className="flex flex-col gap-2">
+            {(
+              [
+                { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
+                { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
+                { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
+              ] as { value: PdfExportMode; label: string }[]
+            ).map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+              >
+                <input
+                  type="radio"
+                  name="pdf-export-mode"
+                  value={option.value}
+                  checked={pdfMode === option.value}
+                  onChange={() => setPdfMode(option.value)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">{option.label}</span>
+              </label>
+            ))}
+          </div>
+          {pdfScope === "selected" && selected.size === 0 && (
+            <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
+          )}
+          <p className="mb-1 mt-3 text-xs font-medium text-ink/70">
+            <label htmlFor="pdf-filename-stem">保存ファイル名</label>
+          </p>
+          <div className="flex items-center gap-1.5">
+            <input
+              id="pdf-filename-stem"
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={pdfFilenameStem}
+              onChange={(e) => setPdfFilenameStem(sanitizePdfFilenameStem(e.target.value))}
+              aria-describedby="pdf-filename-stem-help"
+              className="w-full min-w-0 rounded border border-ink/20 bg-base px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
+            />
+            <span className="shrink-0 text-sm text-ink/60">.pdf</span>
+          </div>
+          <p id="pdf-filename-stem-help" className="mt-1 text-xs text-ink/60">
+            入稿用ファイル名は英数字がおすすめです。印刷所の指定もご確認ください。
+          </p>
+        </ViewportModal>
       )}
 
       {pdfChecklistAttempt && (

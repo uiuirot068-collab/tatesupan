@@ -61,6 +61,16 @@ type SaveStatus = "loading" | "saved" | "saving" | "error";
 
 const AUTOSAVE_DELAY_MS = 1500;
 
+/**
+ * TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: the post-export
+ * 「PDFを書き出しました」reminder is superseded by the pre-export safe
+ * filename field now in the PDF setup modal. Disabled via this one flag
+ * rather than deleted -- PdfExportNoticeModal, useShowPdfFilenameNotice, and
+ * the isPdfNoticeOpen state below are kept intact for possible future reuse,
+ * and the existing `今後も表示する` localStorage preference is left as-is.
+ */
+const PDF_POST_EXPORT_NOTICE_ENABLED = false;
+
 export default function TategakiEditor({
   documentId,
   cloudProjectId,
@@ -530,7 +540,7 @@ export default function TategakiEditor({
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handlePreviewPdfExportSuccess = useCallback(() => {
-    if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
+    if (PDF_POST_EXPORT_NOTICE_ENABLED && showPdfFilenameNotice) setIsPdfNoticeOpen(true);
   }, [showPdfFilenameNotice]);
 
   const handleTogglePreviewCollapse = useCallback(() => {
