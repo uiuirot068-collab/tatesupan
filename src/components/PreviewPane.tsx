@@ -50,9 +50,11 @@ import {
 } from "@/utils/exportCapture";
 import { withBasePath } from "@/lib/basePath";
 import {
+  buildDefaultPdfFilenameStem,
   buildPageJpgFileName,
-  buildPdfFileName,
+  buildPdfFileNameFromStem,
   buildZipFileName,
+  sanitizePdfFilenameStem,
 } from "@/utils/exportFilename";
 import type { ImageRecord } from "@/lib/db";
 import {
@@ -1567,15 +1569,22 @@ function PreviewPane({
   // 推測しない（PDFは共有・確認用途にも使われるため、ユーザーの選択を尊重する）。
   // 全ページPDFは従来どおり奥付ONなら常に含める。
   const [pdfIncludeColophon, setPdfIncludeColophon] = useState(false);
+  // 保存ファイル名（stemのみ、`.pdf`は付与しない）。新しいダイアログ
+  // セッションを開くたびに今日の日付でリセットする——同一モーダルを
+  // 開いたままの対象/出力ラジオ変更ではリセットしない（TSP-PDF-SAFE-FILENAME-014 I）。
+  const [pdfFilenameStem, setPdfFilenameStem] = useState(() => buildDefaultPdfFilenameStem());
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
+    setPdfFilenameStem(buildDefaultPdfFilenameStem());
     setIsPdfModalOpen(true);
   };
 
   const performDownloadPdf = async () => {
     if (exportBlockedByUnresolvedImages()) return;
     if (layout.paper.isPx) return;
+    if (pdfFilenameStem.length === 0) return; // ボタン側でも無効化するが、二重の安全網。
+    const pdfFileName = buildPdfFileNameFromStem(pdfFilenameStem);
     const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
     if (pdfScope === "selected" && indices.length === 0) {
       alert("書き出すページを選択してください。");
@@ -1627,7 +1636,7 @@ function PreviewPane({
         const bytes = await handle.result;
         signal.removeEventListener("abort", cancelWorker);
         await waitForExportPermission(signal);
-        downloadBytes(bytes, buildPdfFileName(title, pdfMode, pdfScope), "application/pdf");
+        downloadBytes(bytes, pdfFileName, "application/pdf");
         setIsPdfModalOpen(false);
         onPdfExportSuccess?.();
       } catch (error: unknown) {
@@ -1669,7 +1678,7 @@ function PreviewPane({
         mode: pdfMode,
         paperSizeName: layout.paper.label,
         bleed: BLEED_MM,
-        fileName: buildPdfFileName(title, pdfMode, pdfScope),
+        fileName: pdfFileName,
         scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
         signal,
@@ -2651,6 +2660,27 @@ function PreviewPane({
             {pdfScope === "selected" && selected.size === 0 && (
               <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
             )}
+            <p className="mb-1 mt-3 text-xs font-medium text-ink/70">
+              <label htmlFor="pdf-filename-stem">保存ファイル名</label>
+            </p>
+            <div className="flex items-center gap-1.5">
+              <input
+                id="pdf-filename-stem"
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={pdfFilenameStem}
+                onChange={(e) => setPdfFilenameStem(sanitizePdfFilenameStem(e.target.value))}
+                aria-describedby="pdf-filename-stem-help"
+                className="w-full min-w-0 rounded border border-ink/20 bg-base px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="shrink-0 text-sm text-ink/60">.pdf</span>
+            </div>
+            <p id="pdf-filename-stem-help" className="mt-1 text-xs text-ink/60">
+              入稿用ファイル名は英数字がおすすめです。印刷所の指定もご確認ください。
+            </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
@@ -2663,7 +2693,11 @@ function PreviewPane({
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={isExporting || (pdfScope === "selected" && selected.size === 0)}
+                disabled={
+                  isExporting ||
+                  (pdfScope === "selected" && selected.size === 0) ||
+                  pdfFilenameStem.length === 0
+                }
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isExporting && exportProgress
