@@ -1553,7 +1553,17 @@ function PreviewPane({
     if (!el) return;
 
     isAutoScrollingRef.current = true;
-    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    // TSP-EDITOR-END-OF-DOCUMENT-LATENCY-003: a real-browser CPU profile
+    // isolated this call as the actual cause of the end-of-document input
+    // stall -- `behavior: "smooth"` on a manuscript-length scroll (top to
+    // the final page, ~523 pages of unvirtualized DOM in LEGACY rendering)
+    // keeps the main thread busy animating for several seconds, blocking
+    // whatever the user types next. Disabling scrollIntoView outright made
+    // the stall disappear entirely; forcing `instant` cut it by ~85% (the
+    // remaining cost is the one-time layout of scrolling a large
+    // unvirtualized tree, not the animation). The cursor still follows the
+    // caret to the right page -- it just no longer animates there.
+    el.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
 
     if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     autoScrollTimeoutRef.current = setTimeout(() => {
