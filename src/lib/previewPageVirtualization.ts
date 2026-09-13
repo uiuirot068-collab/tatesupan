@@ -34,3 +34,63 @@ export function findPreviewSpreadIndex(
   const spreadIndex = spreadGroups.findIndex((group) => group.includes(presentationIndex));
   return spreadIndex >= 0 ? spreadIndex : null;
 }
+
+export interface PreviewSpreadLayout {
+  spreadIndex: number;
+  top: number;
+  height: number;
+}
+
+export interface PreviewZoomAnchor {
+  spreadIndex: number;
+  offsetRatio: number;
+}
+
+/**
+ * Resolve a viewport point against untransformed spread layout. Points in the
+ * flex gap between spreads attach to the nearest spread edge.
+ */
+export function findPreviewZoomAnchor(
+  spreads: readonly PreviewSpreadLayout[],
+  logicalViewportY: number
+): PreviewZoomAnchor | null {
+  let nearest: PreviewSpreadLayout | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const spread of spreads) {
+    if (spread.height <= 0) continue;
+    const bottom = spread.top + spread.height;
+    if (spread.top <= logicalViewportY && logicalViewportY <= bottom) {
+      return {
+        spreadIndex: spread.spreadIndex,
+        offsetRatio: (logicalViewportY - spread.top) / spread.height,
+      };
+    }
+
+    const distance = logicalViewportY < spread.top
+      ? spread.top - logicalViewportY
+      : logicalViewportY - bottom;
+    if (distance < nearestDistance) {
+      nearest = spread;
+      nearestDistance = distance;
+    }
+  }
+
+  if (!nearest) return null;
+  return {
+    spreadIndex: nearest.spreadIndex,
+    offsetRatio: logicalViewportY < nearest.top ? 0 : 1,
+  };
+}
+
+/** Convert an untransformed spread anchor to the scroll container's CSS-pixel space. */
+export function previewZoomScrollTop(
+  anchor: PreviewZoomAnchor,
+  spread: PreviewSpreadLayout,
+  wrapperLayoutTop: number,
+  presentationScale: number,
+  clientHeight: number
+): number {
+  const logicalAnchorY = spread.top + spread.height * anchor.offsetRatio;
+  return wrapperLayoutTop + logicalAnchorY * presentationScale - clientHeight / 2;
+}

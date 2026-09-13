@@ -3,7 +3,9 @@ import {
   PREVIEW_INITIAL_SPREAD_COUNT,
   PREVIEW_VIRTUALIZATION_MIN_SPREADS,
   findPreviewSpreadIndex,
+  findPreviewZoomAnchor,
   initialPreviewSpreadIndices,
+  previewZoomScrollTop,
   shouldVirtualizePreview,
 } from "./previewPageVirtualization";
 
@@ -27,5 +29,53 @@ describe("preview page virtualization", () => {
     expect(findPreviewSpreadIndex(spreads, 2)).toBe(1);
     expect(findPreviewSpreadIndex(spreads, 5)).toBe(3);
     expect(findPreviewSpreadIndex(spreads, 99)).toBeNull();
+  });
+
+  it("captures and restores zoom anchors entirely in untransformed layout space", () => {
+    const spreads = [
+      { spreadIndex: 0, top: 0, height: 404 },
+      { spreadIndex: 1, top: 428, height: 404 },
+      { spreadIndex: 2, top: 856, height: 404 },
+    ];
+    const wrapperLayoutTop = 24;
+    const clientHeight = 921;
+    const oldScale = 1.10823;
+    const oldScrollTop = 700;
+    const logicalViewportY =
+      (oldScrollTop + clientHeight / 2 - wrapperLayoutTop) / oldScale;
+    const anchor = findPreviewZoomAnchor(spreads, logicalViewportY);
+
+    expect(anchor).not.toBeNull();
+    expect(anchor?.spreadIndex).toBe(2);
+
+    const zoomedScrollTop = previewZoomScrollTop(
+      anchor!,
+      spreads[2],
+      wrapperLayoutTop,
+      oldScale * 2,
+      clientHeight
+    );
+    const restoredScrollTop = previewZoomScrollTop(
+      anchor!,
+      spreads[2],
+      wrapperLayoutTop,
+      oldScale,
+      clientHeight
+    );
+
+    expect(zoomedScrollTop).toBeCloseTo(1836.5, 5);
+    expect(restoredScrollTop).toBeCloseTo(oldScrollTop, 5);
+  });
+
+  it("anchors a viewport point in a spread gap to the nearest spread edge", () => {
+    const anchor = findPreviewZoomAnchor(
+      [
+        { spreadIndex: 3, top: 100, height: 40 },
+        { spreadIndex: 4, top: 160, height: 40 },
+      ],
+      151
+    );
+
+    expect(anchor).toEqual({ spreadIndex: 4, offsetRatio: 0 });
   });
 });

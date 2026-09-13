@@ -3,6 +3,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -100,8 +101,11 @@ import {
 import {
   PREVIEW_VIRTUALIZATION_OVERSCAN_PX,
   findPreviewSpreadIndex,
+  findPreviewZoomAnchor,
   initialPreviewSpreadIndices,
+  previewZoomScrollTop,
   shouldVirtualizePreview,
+  type PreviewSpreadLayout,
 } from "@/lib/previewPageVirtualization";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
@@ -694,9 +698,18 @@ export default function PreviewPane({
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
 
-  const zoomOut = () => setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
-  const zoomIn = () => setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
-  const zoomReset = () => setZoomScale(1.0);
+  const zoomOut = () => {
+    captureZoomAnchor();
+    setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
+  };
+  const zoomIn = () => {
+    captureZoomAnchor();
+    setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
+  };
+  const zoomReset = () => {
+    captureZoomAnchor();
+    setZoomScale(1.0);
+  };
 
   useShortcuts([
     { key: "+", handler: zoomIn },
@@ -705,6 +718,34 @@ export default function PreviewPane({
   ]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Zoom position is represented only in untransformed spread layout:
+  // spread index + fractional offset. The known presentation scale converts
+  // between layout coordinates and the scroll container's CSS-pixel space.
+  const zoomAnchorRef = useRef<{
+    spreadIndex: number;
+    offsetRatio: number;
+  } | null>(null);
+
+  const getLayoutTop = useCallback((element: HTMLElement): number => {
+    let top = 0;
+    let current: HTMLElement | null = element;
+    while (current) {
+      top += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+    return top;
+  }, []);
+
+  const getSpreadLayouts = useCallback((wrapper: HTMLElement): PreviewSpreadLayout[] => {
+    const wrapperTop = getLayoutTop(wrapper);
+    return [...spreadElementsRef.current.entries()].map(([spreadIndex, element]) => ({
+      spreadIndex,
+      top: getLayoutTop(element) - wrapperTop,
+      height: element.offsetHeight,
+    }));
+  }, [getLayoutTop]);
+
   const isPanningRef = useRef(false);
   const panPointerIdRef = useRef<number | null>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
@@ -869,6 +910,24 @@ export default function PreviewPane({
   const presentationScale = effectiveZoom * effectiveFitScale;
   const chromeScale = effectiveFitScale > 0 ? chromeReferenceFitScale / effectiveFitScale : 1;
 
+  const captureZoomAnchor = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const wrapper = scaleContentRef.current;
+    if (!container || !wrapper || presentationScale <= 0) {
+      zoomAnchorRef.current = null;
+      return;
+    }
+    const wrapperLayoutTop = getLayoutTop(wrapper) - getLayoutTop(container);
+    const logicalViewportY =
+      (container.scrollTop + container.clientHeight / 2 - wrapperLayoutTop) /
+      presentationScale;
+    // Anchor at viewport center, not top — that's what the user is visually focused on.
+    zoomAnchorRef.current = findPreviewZoomAnchor(
+      getSpreadLayouts(wrapper),
+      logicalViewportY
+    );
+  }, [getLayoutTop, getSpreadLayouts, presentationScale]);
+
   // Export用fontEmbedCSSのバックグラウンド先読み: exportCapture.tsの
   // キャッシュ済みPromiseを、ユーザーが実際にexportボタンを押すより前に
   // 一度だけ起動しておく（初回export時に約26秒かかっていたGoogle Fonts
@@ -960,6 +1019,34 @@ export default function PreviewPane({
     spreadElementsRef.current.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
   }, [spreadGeometryKey, spreadGroups, virtualizePreview]);
+
+  // Restore before paint from final React layout. offsetTop/offsetHeight are
+  // untransformed layout values; presentationScale explicitly converts the
+  // logical anchor to the scroll container's CSS-pixel coordinate space.
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    if (!anchor) return;
+    const container = scrollContainerRef.current;
+    const wrapper = scaleContentRef.current;
+    const spreadElement = spreadElementsRef.current.get(anchor.spreadIndex);
+    if (container && wrapper && spreadElement) {
+      const wrapperLayoutTop = getLayoutTop(wrapper) - getLayoutTop(container);
+      const wrapperTop = getLayoutTop(wrapper);
+      const spread: PreviewSpreadLayout = {
+        spreadIndex: anchor.spreadIndex,
+        top: getLayoutTop(spreadElement) - wrapperTop,
+        height: spreadElement.offsetHeight,
+      };
+      container.scrollTop = previewZoomScrollTop(
+        anchor,
+        spread,
+        wrapperLayoutTop,
+        presentationScale,
+        container.clientHeight
+      );
+    }
+    zoomAnchorRef.current = null;
+  }, [getLayoutTop, presentationScale]);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(
@@ -2092,7 +2179,6 @@ export default function PreviewPane({
             // can never reach (min is 0), which clipped the right/bottom
             // edges when zoomed in.
             transformOrigin: "top left",
-            transition: "transform 0.1s ease-out",
           }}
         >
         {spreadGroups.map((group, spreadIndex) => {
