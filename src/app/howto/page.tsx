@@ -62,6 +62,11 @@ const FALLBACK_LOGS: UpdateLogEntry[] = [
 ];
 
 const asset = (file: string) => withBasePath(`/howto/assets/${file}`);
+// TSP-RC-HOWTO-FINALIZE-003: self-hosted β guide video + poster, produced to
+// the spec recorded in roadmap §18 (H.264/AAC, faststart, ~960px wide,
+// <25 MiB) -- verified present and valid before wiring this in.
+const HOWTO_GUIDE_VIDEO_SRC = withBasePath("/howto/media/tatespun-beta-guide.mp4");
+const HOWTO_GUIDE_VIDEO_POSTER = withBasePath("/howto/media/tatespun-beta-guide-poster.webp");
 
 export default function HowToPage() {
   const [fiveOpen, setFiveOpen] = useState(false);
@@ -244,6 +249,26 @@ export default function HowToPage() {
             <p data-copy-id="TEXT_INTRO_BODY_03"><a href="#body-notation">3. ルビ・縦中横・改ページの本文記法</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウント＋一時停止</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_05"><a href="#varied-use">5. 「ここで書かなくてもいい」原稿持ち込み運用</a></p>
+          </div>
+
+          {/* TSP-RC-HOWTO-FINALIZE-003: self-hosted from public/howto/media/
+              -- no YouTube/external embed. Native <video>, no autoplay, no
+              forced mute, no loop; controls + poster + preload="metadata"
+              keep initial page weight low. */}
+          <div className="guide-video-block">
+            <p className="guide-video-intro" data-copy-id="TEXT_GUIDE_VIDEO_INTRO">
+              β版公開前に制作したTateSpunの案内動画です。現在とは一部、画面や表記が異なる場合があります。
+            </p>
+            <video
+              className="guide-video"
+              controls
+              playsInline
+              preload="metadata"
+              poster={HOWTO_GUIDE_VIDEO_POSTER}
+            >
+              <source src={HOWTO_GUIDE_VIDEO_SRC} type="video/mp4" />
+              この環境では動画を再生できません。
+            </video>
           </div>
         </section>
 
