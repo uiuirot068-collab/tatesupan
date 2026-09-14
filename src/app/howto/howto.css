@@ -107,7 +107,9 @@
    never causes horizontal overflow at any viewport. */
 .howto-page .guide-video-block { grid-column: 1 / -1; margin-top: 24px; }
 .howto-page .guide-video-intro { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
-.howto-page .guide-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 960 / 708; background: #000; border: 1px solid var(--line); }
+/* TSP-RC-HOWTO-VIDEO-REPLACE-004: matches the replacement video's native
+   1980x1020 (was 960x708 for the prior source). */
+.howto-page .guide-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 1980 / 1020; background: #000; border: 1px solid var(--line); }
 
 .howto-page .chapter { padding-bottom: 94px; scroll-margin-top: 125px; }
 .howto-page .chapter > h2 { width: 74%; margin: 0 auto 8px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
