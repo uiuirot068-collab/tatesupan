@@ -209,22 +209,19 @@ export default function HowToPage() {
             <img className="guide-cat" src={asset(HOWTO_IMAGES.guideCat.file)} alt={HOWTO_IMAGES.guideCat.alt} />
             <div><span>HOW TO</span><b>TateSpun</b></div>
           </a>
-          {/* TSP-RC-HOWTO-RESPONSIVE-VIDEO-001: fixed 2-row header at every
-              width (PC and mobile alike) -- guide-logo above is row 1, this
-              is row 2. A single nowrap flex row with clamp()'d font-size and
-              explicit "｜" separators (matching Header.tsx's existing
-              convention) replaces the old 4-column grid, whose per-item
-              `<br />` breaks plus no word-break control let narrow widths
-              wrap Japanese text character-by-character and blow the header
-              out vertically. Anchor href targets (#five-features/#tips/#faq)
-              and the body's anchor ids are unchanged. */}
+          {/* TSP-RC-HOWTO-HEADER-CORRECTION-002: original wording/structure
+              restored (TSP-RC-HOWTO-RESPONSIVE-VIDEO-001's shortened labels
+              and forced-2-row-at-every-width layout were rejected by Human
+              QA). The `<br />` per item is the original design, unchanged at
+              every width; `.guide-links a/button` now carries
+              `word-break: keep-all` (howto.css) so a narrow container wraps
+              at the `<br />`/word boundary only, never mid-character -- that
+              missing rule, not the label text or the <br/> itself, was the
+              actual root cause of the character-by-character collapse. */}
           <div className="guide-links">
-            <a href="#five-features" data-copy-id="TEXT_NAV_01">5つの機能</a>
-            <span aria-hidden="true" className="guide-links-sep">｜</span>
-            <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技 10選β版</a>
-            <span aria-hidden="true" className="guide-links-sep">｜</span>
-            <a href="#faq" data-copy-id="TEXT_NAV_03">FAQ 困ったとき</a>
-            <span aria-hidden="true" className="guide-links-sep">｜</span>
+            <a href="#five-features" data-copy-id="TEXT_NAV_01">まずは知ってほしい<br />５つの機能</a>
+            <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技<br />10選β版</a>
+            <a href="#faq" data-copy-id="TEXT_NAV_03">FAQ<br /><span>困ったとき</span></a>
             <button
               type="button"
               className="help-cta"
