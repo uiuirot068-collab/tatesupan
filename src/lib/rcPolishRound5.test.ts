@@ -45,7 +45,7 @@ describe("Round 5 compact mobile Editor controls", () => {
   const mobileNav = source("src/components/MobileEditorNav.tsx");
   const actionRow = pane.slice(
     pane.indexOf('data-editor-action-row=""'),
-    pane.indexOf('<div className={focusMode ? "max-md:hidden" : ""}')
+    pane.indexOf('<div className={focusMode ? "hidden" : ""}')
   );
   const secondaryRow = pane.slice(
     pane.indexOf('data-editor-secondary-row=""'),
@@ -65,14 +65,16 @@ describe("Round 5 compact mobile Editor controls", () => {
   });
 
   it("keeps core actions outside the mobile Focus-hidden secondary wrapper", () => {
-    const focusHidden = pane.indexOf('focusMode ? "max-md:hidden" : ""', pane.indexOf('data-editor-action-row=""'));
+    const focusHidden = pane.indexOf('focusMode ? "hidden" : ""', pane.indexOf('data-editor-action-row=""'));
     expect(pane.indexOf('data-editor-action-row=""')).toBeLessThan(focusHidden);
     expect(actionRow).not.toContain("max-md:hidden");
     expect(actionRow).toContain('data-editor-action="undo"');
     expect(actionRow).toContain('data-editor-action="redo"');
     expect(actionRow).toContain('data-editor-action="page-break"');
     expect(actionRow).toContain('data-editor-action="replace"');
+    expect(actionRow).toContain('data-editor-action="memo"');
     expect(actionRow).toContain('data-editor-action="report"');
+    expect(actionRow).toContain('data-editor-action="exit-focus"');
     expect(pane).toMatch(/data-writing-check-surface=""[\s\S]*?max-md:hidden/);
     expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]*?max-md:hidden/);
   });

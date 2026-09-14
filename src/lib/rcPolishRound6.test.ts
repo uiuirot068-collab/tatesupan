@@ -73,13 +73,22 @@ describe("Final zero-work Home polish", () => {
     expect(onboarding).toContain("min-[720px]:justify-self-end");
   });
 
-  it("keeps the Demo CTA in one compact text flow instead of a second column", () => {
+  it("keeps the Demo CTA in one compact text flow, now width-constrained by the two-column HOW TO onboarding grid", () => {
+    // TSP-HOWTO-BETA-016: the Demo card's own `max-w-md` was dropped when it
+    // moved into this `sm:grid-cols-2` wrapper alongside the new HOW TO
+    // card (Human QA PASS) -- the grid column now supplies the width
+    // constraint the card used to set on itself.
+    const twoColumnWrapper = onboarding.slice(
+      onboarding.indexOf('data-home-onboarding-actions'),
+      onboarding.indexOf('data-home-demo-card=""')
+    );
     const card = onboarding.slice(
       onboarding.indexOf('data-home-demo-card=""'),
       onboarding.indexOf("</Link>", onboarding.indexOf('data-home-demo-card=""'))
     );
+    expect(twoColumnWrapper).toContain("sm:grid-cols-2");
     expect(card).toContain('data-home-demo-cta=""');
-    expect(card).toContain("block max-w-md");
+    expect(card).toContain("block rounded-xl");
     expect(card).toContain("text-sm font-semibold");
     expect(card).not.toContain("grid-cols-[1fr_auto]");
   });
@@ -89,7 +98,7 @@ describe("Round 6 mobile toolbar", () => {
   const pane = source("src/components/EditorPane.tsx");
   const row = pane.slice(
     pane.indexOf('data-editor-action-row=""'),
-    pane.indexOf('<div className={focusMode ? "max-md:hidden" : ""}')
+    pane.indexOf('<div className={focusMode ? "hidden" : ""}')
   );
 
   it.each([320, 375, 390, 430])("uses compact content-width tracks without overflow at %ipx", () => {
@@ -102,7 +111,10 @@ describe("Round 6 mobile toolbar", () => {
 
   it("shortens the row while widening Undo and Redo", () => {
     expect(row.match(/min-h-9 min-w-11/g)).toHaveLength(2);
-    expect(row.match(/min-h-9/g)).toHaveLength(5);
+    // 5 always-visible actions plus the focus-mode-only Memo and exit-focus
+    // entries (the latter `hidden` below `md`, but still carrying the class
+    // in this source-text count).
+    expect(row.match(/min-h-9/g)).toHaveLength(7);
     expect(row).not.toContain("min-h-10");
   });
 });

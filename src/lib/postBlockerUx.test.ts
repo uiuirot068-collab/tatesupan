@@ -71,11 +71,11 @@ describe("Desktop Focus Mode visibility contract", () => {
 
   it("keeps the established mobile suppression and Preview collapse behavior", () => {
     const secondaryWrapper = pane.slice(
-      pane.lastIndexOf('<div className={focusMode ? "max-md:hidden" : ""}', pane.indexOf('data-editor-secondary="settings"')),
+      pane.lastIndexOf('<div className={focusMode ? "hidden" : ""}', pane.indexOf('data-editor-secondary="settings"')),
       pane.indexOf('data-editor-secondary="settings"')
     );
 
-    expect(secondaryWrapper).toContain('focusMode ? "max-md:hidden" : ""');
+    expect(secondaryWrapper).toContain('focusMode ? "hidden" : ""');
     expect(editor).toContain("setIsPreviewCollapsed(true);");
     expect(editor).toContain("setIsPreviewCollapsed(preFocusPreviewCollapsedRef.current);");
     expect(editor).toContain("focusMode={focusMode}");

@@ -49,9 +49,9 @@ describe("RC Editor information architecture", () => {
   const shell = readSource("src/components/TategakiEditor.tsx");
   const preview = readSource("src/components/PreviewPaneNew.tsx");
 
-  it("keeps the five approved visible manuscript actions", () => {
+  it("keeps the five approved visible manuscript actions, plus the focus-mode-only Memo and exit-focus entries", () => {
     expect(Array.from(editor.matchAll(/data-editor-action="([^"]+)"/g), (match) => match[1]))
-      .toEqual(["undo", "redo", "page-break", "replace", "report"]);
+      .toEqual(["undo", "redo", "page-break", "replace", "memo", "report", "exit-focus"]);
   });
 
   it("exposes exactly Settings, Options, Memo, and Help as secondary navigation", () => {
@@ -77,12 +77,43 @@ describe("RC Editor information architecture", () => {
     expect(shell).toContain("gap-2 overflow-hidden");
     expect(shell).not.toContain("h-[calc(100dvh-9rem)]");
     expect(editor).toContain('className="relative min-h-0 flex-1"');
-    expect(editor).toContain("resize-none overflow-y-auto overflow-x-hidden");
+    // Exact substring match, not a weakened one: this locks in the same
+    // resize-none/overflow-y-auto/overflow-x-hidden intent as before, but
+    // written to account for the `probeMode === "nowrap"` diagnostic-only
+    // ternary (b9ea7de) that already sits between overflow-y-auto and
+    // overflow-x-hidden in the actual template literal.
+    expect(editor).toContain(
+      'resize-none overflow-y-auto ${probeMode === "nowrap" ? "overflow-x-auto whitespace-pre" : "overflow-x-hidden"}'
+    );
     expect(settings).toContain("min-h-0 flex-1 overflow-y-auto");
     expect(options).toContain("min-h-0 flex-1 gap-3 overflow-y-auto");
     expect(shell).toContain('data-editor-header-slot=""');
-    expect(shell).toContain('focusMode ? "hidden md:block md:flex-none" : "flex-none"');
+    expect(shell).toContain('focusMode ? "hidden" : "flex-none"');
     expect(shell).not.toContain('focusMode || demoMode ? "hidden');
+  });
+
+  it("hides the global header at every width in desktop focus mode, reusing the one Focus Mode state", () => {
+    // Previously the header slot was only hidden below `md`; on desktop it
+    // stayed visible and reserved space. It must now fully leave layout (not
+    // just be dimmed) whenever `focusMode` is on, with no independent
+    // desktop focus flag introduced.
+    expect(shell).not.toContain('focusMode ? "hidden md:block');
+    expect(shell.match(/useMobileFocusMode\(\)/g)).toHaveLength(1);
+    expect(shell).not.toMatch(/useDesktopFocusMode|isDesktopFocus/);
+  });
+
+  it("surfaces 通常に戻す beside 報告 in the Editor action row, wired to the shared exit handler, only while focus mode is on", () => {
+    const reportIndex = editor.indexOf('data-editor-action="report"');
+    const exitIndex = editor.indexOf('data-editor-action="exit-focus"');
+    expect(reportIndex).toBeGreaterThan(-1);
+    expect(exitIndex).toBeGreaterThan(reportIndex);
+    expect(editor).toContain("{focusMode && onExitFocus && (");
+    expect(editor).toContain("onClick={onExitFocus}");
+    expect(editor).toContain("通常に戻す");
+    // Hidden by default (mobile), only shown at md+ — mobile keeps its own
+    // existing MobileEditorNav exit affordance untouched.
+    expect(editor).toMatch(/className="hidden[^"]*md:inline-flex[^"]*"[\s\S]{0,40}通常に戻す/);
+    expect(shell).toContain("onExitFocus={exitFocusMode}");
   });
 
   it("keeps the requested main Settings visual order in one continuous drawer", () => {
