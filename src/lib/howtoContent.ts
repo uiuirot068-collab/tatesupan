@@ -56,3 +56,43 @@ export const EDITOR_PAGE_EXPLANATION_BODY =
 export const PDF_FILENAME_EXPLANATION =
   "PDFの書き出し時は「保存ファイル名」を指定できます。半角英数字で入力してください（日本語・記号・全角文字は使えません）。" +
   "拡張子の.pdfは自動で付きます。入稿先の印刷所によっては別途ファイル名のルールが定められている場合があるため、あわせてご確認ください。";
+
+/**
+ * TSP-RC-AFFILIATE-FOOTER-001 — HOW TO's bottom "お買い物リンク" section.
+ *
+ * No affiliate URL, tag, or operator name is hard-coded anywhere in this
+ * repo (searched before writing this). Each button is independently gated
+ * on its own config being present; the whole section is hidden if neither
+ * is. Amazon additionally requires a confirmed Associates operator name
+ * (the wording Amazon's program terms require) before its button/disclosure
+ * render at all -- a URL alone is not sufficient, since shipping the
+ * required disclosure with a guessed/wrong operator name would be a real
+ * compliance problem, not just a missing feature. Takes explicit params
+ * (not `process.env` itself) so it's a pure function callers can unit-test
+ * with synthetic config, per this task's own test requirement.
+ */
+export interface AffiliateFooterEnv {
+  amazonUrl?: string;
+  amazonAssociateOperatorName?: string;
+  rakutenUrl?: string;
+}
+
+export interface AffiliateFooterConfig {
+  showSection: boolean;
+  amazon: { url: string; operatorName: string } | null;
+  rakuten: { url: string } | null;
+}
+
+export function resolveAffiliateFooterConfig(
+  env: AffiliateFooterEnv
+): AffiliateFooterConfig {
+  const amazonUrl = (env.amazonUrl ?? "").trim();
+  const amazonOperatorName = (env.amazonAssociateOperatorName ?? "").trim();
+  const rakutenUrl = (env.rakutenUrl ?? "").trim();
+
+  const amazon =
+    amazonUrl && amazonOperatorName ? { url: amazonUrl, operatorName: amazonOperatorName } : null;
+  const rakuten = rakutenUrl ? { url: rakutenUrl } : null;
+
+  return { showSection: Boolean(amazon || rakuten), amazon, rakuten };
+}

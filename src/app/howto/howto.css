@@ -62,14 +62,33 @@
 .howto-page .hero-copy { max-width: 400px; margin: 28px auto 0; font-size: 15px; }
 .howto-page .scroll-arrow { margin-top: 32px; font-size: 32px; }
 
+/* TSP-RC-HOWTO-HEADER-CORRECTION-002: reverted to the original single-row
+   "brand + nav side by side" layout at standard/desktop width (previous
+   attempt forced flex-direction: column at EVERY width, which Human QA
+   rejected). Root cause of the original character-by-character collapse was
+   simply a missing `word-break: keep-all` on the nav items -- their
+   existing `<br />`-per-item wording/structure is unchanged and was never
+   the problem. `.guide-logo`'s `min-width` is trimmed from the original
+   210px to 150px (close to its real ~144px content width) only to give the
+   nav grid a bit more breathing room in the "desktop but not full-width"
+   zone; at genuinely wide viewports this is visually a no-op. Mobile-only
+   overrides (brand row + nav row, 2-column nav grid) are in the existing
+   `max-width: 760px` query below -- not applied at standard width. */
 .howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 110px; margin: 0 -64px; padding: 0 64px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
-.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 210px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
-.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; }
+.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 150px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
+.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
 .howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
 .howto-page .guide-logo span { font-size: 11px; }
 .howto-page .guide-logo b { font: 700 17px Georgia, serif; }
 .howto-page .guide-links { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; flex: 1; max-width: 560px; }
-.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; padding: 10px 9px; border: 0; background: none; text-decoration: none; font: inherit; font-size: 13px; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; }
+/* The missing rule: without it, a nav item's Japanese text wrapped
+   character-by-character the moment its 1fr column got narrower than the
+   text itself. keep-all only allows breaking at an existing `<br />`/word
+   boundary, never mid-character; overflow-wrap: normal keeps that the ONLY
+   way a line can end (no last-resort mid-word break either). min-width: 0
+   lets a grid column actually shrink to that boundary instead of forcing
+   the row to overflow. */
+.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; min-width: 0; padding: 10px 9px; border: 0; background: none; text-decoration: none; font: inherit; font-size: 13px; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; word-break: keep-all; overflow-wrap: normal; }
 .howto-page .guide-links a:hover, .howto-page .guide-links button:hover { background: #faf6ee; }
 .howto-page .guide-links a span { font-size: 12px; color: var(--muted); }
 .howto-page .guide-links button.help-cta { font-weight: 700; color: var(--gold-dark); }
@@ -81,6 +100,16 @@
 .howto-page .intro-copy p { margin: 0 0 9px; font-size: 14px; }
 .howto-page .intro-copy a { text-decoration: none; }
 .howto-page .intro-copy a:hover { text-decoration: underline; }
+
+/* TSP-RC-HOWTO-FINALIZE-003: spans both .intro grid columns (title + copy)
+   full-width instead of being squeezed into the 29% title column; the video
+   itself is intrinsically responsive (max-width: 100%, height: auto) so it
+   never causes horizontal overflow at any viewport. */
+.howto-page .guide-video-block { grid-column: 1 / -1; margin-top: 24px; }
+.howto-page .guide-video-intro { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+/* TSP-RC-HOWTO-VIDEO-REPLACE-004: matches the replacement video's native
+   1980x1020 (was 960x708 for the prior source). */
+.howto-page .guide-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 1980 / 1020; background: #000; border: 1px solid var(--line); }
 
 .howto-page .chapter { padding-bottom: 94px; scroll-margin-top: 125px; }
 .howto-page .chapter > h2 { width: 74%; margin: 0 auto 8px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
@@ -137,6 +166,19 @@
 .howto-page .log-body { margin-top: 2px; color: #aaa197; }
 .howto-page .more-logs { width: 100%; margin-top: 18px; padding: 10px; border: 1px solid #5e564d; background: transparent; color: white; cursor: pointer; }
 
+/* TSP-RC-AFFILIATE-FOOTER-001: a modest bordered card, matching .contact-
+   block's existing visual language -- not banner/intrusive-ad styling.
+   .affiliate-actions wraps so Amazon/Rakuten (equal weight, same class)
+   stack cleanly at any width down to 320px with no horizontal overflow. */
+.howto-page .affiliate-footer { max-width: 680px; margin: 40px auto 60px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.howto-page .affiliate-footer h2 { margin: 0 0 8px; font-size: 18px; }
+.howto-page .affiliate-lead { margin: 0 0 16px; font-size: 14px; }
+.howto-page .affiliate-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.howto-page .affiliate-button { display: inline-block; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--sub); font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
+.howto-page .affiliate-button:hover, .howto-page .affiliate-button:focus-visible { background: var(--gold); color: #fff; border-color: var(--gold); }
+.howto-page .affiliate-button:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 2px; }
+.howto-page .affiliate-disclosure { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
 .howto-page.show-copy-ids [data-copy-id] { position: relative; outline: 1px dashed rgba(86,113,150,.26); outline-offset: 3px; }
 .howto-page.show-copy-ids [data-copy-id]::before { content: "【" attr(data-copy-id) "】"; display: block; width: max-content; max-width: 100%; margin: 0 0 4px; padding: 2px 5px; border-radius: 3px; background: #eef4fb; color: #3e658d; font: 10px/1.4 Consolas, monospace; letter-spacing: 0; white-space: normal; word-break: break-all; }
 
@@ -145,10 +187,21 @@
   .howto-page .hero { grid-template-columns: 1fr; min-height: auto; padding: 55px 0; }
   .howto-page .hero-left { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 36px; }
   .howto-page .hero-right { padding-top: 36px; }
-  .howto-page .guide-header { margin: 0 -22px; padding: 9px 22px; min-height: 90px; }
-  .howto-page .guide-logo { min-width: auto; }
+  /* TSP-RC-HOWTO-HEADER-CORRECTION-002: mobile/narrow ONLY -- switch to a
+     brand row + nav row stack (row 1 = .guide-logo, row 2 = .guide-links;
+     the header has exactly these two children) so the nav grid gets the
+     FULL header width instead of squeezing beside the logo, and drop the
+     nav grid from 4 columns to 2 so each item's own column is roughly
+     double the width. Combined with the base rule's word-break: keep-all,
+     each item's original two `<br />`-separated lines comfortably fit
+     without any further character-level wrapping at 320px and up --
+     verified this stays within the original font-size/padding (11px /
+     7px 5px), no additional shrinking needed. This 2-row structure is
+     scoped to this query only; standard/desktop width (above) keeps the
+     original single-row side-by-side layout. */
+  .howto-page .guide-header { flex-direction: column; align-items: stretch; gap: 6px; margin: 0 -22px; padding: 9px 22px; min-height: 0; }
   .howto-page .guide-cat { width: 36px; height: 36px; }
-  .howto-page .guide-links { gap: 4px; }
+  .howto-page .guide-links { grid-template-columns: repeat(2,1fr); max-width: none; gap: 4px; }
   .howto-page .guide-links a, .howto-page .guide-links button { font-size: 11px; padding: 7px 5px; }
   .howto-page .intro { grid-template-columns: 1fr; gap: 22px; }
   .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 22px; }

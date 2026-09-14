@@ -11,6 +11,7 @@ import {
   EDITOR_PAGE_EXPLANATION_TITLE,
   EDITOR_PAGE_EXPLANATION_BODY,
   PDF_FILENAME_EXPLANATION,
+  resolveAffiliateFooterConfig,
 } from "@/lib/howtoContent";
 import "./howto.css";
 
@@ -62,6 +63,20 @@ const FALLBACK_LOGS: UpdateLogEntry[] = [
 ];
 
 const asset = (file: string) => withBasePath(`/howto/assets/${file}`);
+// TSP-RC-HOWTO-FINALIZE-003: self-hosted β guide video + poster, produced to
+// the spec recorded in roadmap §18 (H.264/AAC, faststart, ~960px wide,
+// <25 MiB) -- verified present and valid before wiring this in.
+const HOWTO_GUIDE_VIDEO_SRC = withBasePath("/howto/media/tatespun-beta-guide.mp4");
+const HOWTO_GUIDE_VIDEO_POSTER = withBasePath("/howto/media/tatespun-beta-guide-poster.webp");
+// TSP-RC-AFFILIATE-FOOTER-001: no config anywhere in this repo/env today --
+// see resolveAffiliateFooterConfig's own doc. Resolved once at module scope
+// since these are build-time NEXT_PUBLIC_ values, same pattern as every
+// other NEXT_PUBLIC_* flag in this codebase (e.g. BETA_FEEDBACK_ENABLED).
+const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
+  amazonUrl: process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_URL,
+  amazonAssociateOperatorName: process.env.NEXT_PUBLIC_AMAZON_ASSOCIATE_OPERATOR_NAME,
+  rakutenUrl: process.env.NEXT_PUBLIC_RAKUTEN_AFFILIATE_URL,
+});
 
 export default function HowToPage() {
   const [fiveOpen, setFiveOpen] = useState(false);
@@ -209,6 +224,15 @@ export default function HowToPage() {
             <img className="guide-cat" src={asset(HOWTO_IMAGES.guideCat.file)} alt={HOWTO_IMAGES.guideCat.alt} />
             <div><span>HOW TO</span><b>TateSpun</b></div>
           </a>
+          {/* TSP-RC-HOWTO-HEADER-CORRECTION-002: original wording/structure
+              restored (TSP-RC-HOWTO-RESPONSIVE-VIDEO-001's shortened labels
+              and forced-2-row-at-every-width layout were rejected by Human
+              QA). The `<br />` per item is the original design, unchanged at
+              every width; `.guide-links a/button` now carries
+              `word-break: keep-all` (howto.css) so a narrow container wraps
+              at the `<br />`/word boundary only, never mid-character -- that
+              missing rule, not the label text or the <br/> itself, was the
+              actual root cause of the character-by-character collapse. */}
           <div className="guide-links">
             <a href="#five-features" data-copy-id="TEXT_NAV_01">まずは知ってほしい<br />５つの機能</a>
             <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技<br />10選β版</a>
@@ -235,6 +259,26 @@ export default function HowToPage() {
             <p data-copy-id="TEXT_INTRO_BODY_03"><a href="#body-notation">3. ルビ・縦中横・改ページの本文記法</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウント＋一時停止</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_05"><a href="#varied-use">5. 「ここで書かなくてもいい」原稿持ち込み運用</a></p>
+          </div>
+
+          {/* TSP-RC-HOWTO-FINALIZE-003: self-hosted from public/howto/media/
+              -- no YouTube/external embed. Native <video>, no autoplay, no
+              forced mute, no loop; controls + poster + preload="metadata"
+              keep initial page weight low. */}
+          <div className="guide-video-block">
+            <p className="guide-video-intro" data-copy-id="TEXT_GUIDE_VIDEO_INTRO">
+              β版公開前に制作したTateSpunの案内動画です。現在とは一部、画面や表記が異なる場合があります。
+            </p>
+            <video
+              className="guide-video"
+              controls
+              playsInline
+              preload="metadata"
+              poster={HOWTO_GUIDE_VIDEO_POSTER}
+            >
+              <source src={HOWTO_GUIDE_VIDEO_SRC} type="video/mp4" />
+              この環境では動画を再生できません。
+            </video>
           </div>
         </section>
 
@@ -658,6 +702,53 @@ export default function HowToPage() {
             </button>
           )}
         </section>
+
+        {/* TSP-RC-AFFILIATE-FOOTER-001: hidden entirely unless at least one
+            of Amazon/Rakuten has real config (resolveAffiliateFooterConfig).
+            No support/donation-style call to action -- plain "buy via this
+            link" wording only, per Amazon/Rakuten program compliance. */}
+        {AFFILIATE_FOOTER.showSection && (
+          <section className="affiliate-footer" id="shopping-links">
+            <h2 data-copy-id="TEXT_AFFILIATE_TITLE">お買い物リンク</h2>
+            <p className="affiliate-lead" data-copy-id="TEXT_AFFILIATE_LEAD">
+              TateSpunでは、Amazon・楽天市場のお買い物リンクをご案内しています。
+            </p>
+            <div className="affiliate-actions">
+              {AFFILIATE_FOOTER.amazon && (
+                <a
+                  className="affiliate-button"
+                  data-affiliate-cta="amazon"
+                  href={AFFILIATE_FOOTER.amazon.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Amazonでお買い物（外部サイトが新しいタブで開きます）"
+                >
+                  Amazonでお買い物
+                </a>
+              )}
+              {AFFILIATE_FOOTER.rakuten && (
+                <a
+                  className="affiliate-button"
+                  data-affiliate-cta="rakuten"
+                  href={AFFILIATE_FOOTER.rakuten.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="楽天市場でお買い物（外部サイトが新しいタブで開きます）"
+                >
+                  楽天市場でお買い物
+                </a>
+              )}
+            </div>
+            <p className="affiliate-disclosure" data-copy-id="TEXT_AFFILIATE_DISCLOSURE_GENERAL">
+              このページにはアフィリエイトリンクが含まれます。リンク経由の購入により、運営者が紹介料を受け取る場合があります。
+            </p>
+            {AFFILIATE_FOOTER.amazon && (
+              <p className="affiliate-disclosure" data-copy-id="TEXT_AFFILIATE_DISCLOSURE_AMAZON">
+                Amazonのアソシエイトとして、{AFFILIATE_FOOTER.amazon.operatorName}は適格販売により収入を得ています。
+              </p>
+            )}
+          </section>
+        )}
       </main>
 
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}

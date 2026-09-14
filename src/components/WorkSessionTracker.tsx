@@ -243,12 +243,18 @@ export default function WorkSessionTracker({
   onPause,
   onResume,
   onEnd,
+  compact = false,
 }: {
   state: WorkSessionState;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onEnd: () => CompletedWorkSession | null;
+  /** TSP-RC-LATIN-AND-MOBILE-COMPACT-001: collapsed mobile footer bar. Hides
+   *  the status badge, written-count, elapsed-time, and 作業記録 button --
+   *  everything else (state, start/pause/resume/end handlers, modals) is
+   *  identical to the full view; no new work-session logic is introduced. */
+  compact?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [panel, setPanel] = useState<"pause" | "result" | "history" | null>(null);
@@ -306,25 +312,30 @@ export default function WorkSessionTracker({
       className="relative flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
       data-work-session-tracker
       data-work-session-status={state.active?.status ?? "idle"}
+      data-work-session-compact={compact ? "" : undefined}
       data-demo-target="work-session"
     >
       {state.active ? (
         <>
-          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${state.active.status === "paused" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-            {state.active.status === "paused" ? "一時停止中" : "作業中"}
-          </span>
-          <span
-            className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-ink"
-            data-work-session-written-count={state.active.writtenCharacterCount}
-          >
-            今回書いた文字数 {state.active.writtenCharacterCount.toLocaleString("ja-JP")}文字
-          </span>
-          <span className="whitespace-nowrap text-[11px] tabular-nums text-ink/60" data-work-session-elapsed>
-            経過時間 {formatElapsed(activeWorkDurationMs(
-              state.active,
-              state.active.status === "paused" ? state.active.pausedAt ?? now : now
-            ))}
-          </span>
+          {!compact && (
+            <>
+              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${state.active.status === "paused" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                {state.active.status === "paused" ? "一時停止中" : "作業中"}
+              </span>
+              <span
+                className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-ink"
+                data-work-session-written-count={state.active.writtenCharacterCount}
+              >
+                今回書いた文字数 {state.active.writtenCharacterCount.toLocaleString("ja-JP")}文字
+              </span>
+              <span className="whitespace-nowrap text-[11px] tabular-nums text-ink/60" data-work-session-elapsed>
+                経過時間 {formatElapsed(activeWorkDurationMs(
+                  state.active,
+                  state.active.status === "paused" ? state.active.pausedAt ?? now : now
+                ))}
+              </span>
+            </>
+          )}
           <span className="flex shrink-0 items-center gap-1">
             {state.active.status === "paused" ? (
               <button
@@ -333,7 +344,7 @@ export default function WorkSessionTracker({
                 onClick={resume}
                 className="whitespace-nowrap rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-base hover:opacity-90"
               >
-                作業を再開
+                {compact ? "再開" : "作業を再開"}
               </button>
             ) : (
               <button
@@ -351,7 +362,7 @@ export default function WorkSessionTracker({
               onClick={end}
               className="whitespace-nowrap rounded-full border border-ink/25 px-2 py-0.5 text-[11px] font-semibold text-ink hover:bg-ink/5"
             >
-              作業終了
+              {compact ? "終了" : "作業終了"}
             </button>
           </span>
         </>
@@ -362,19 +373,21 @@ export default function WorkSessionTracker({
           onClick={start}
           className="whitespace-nowrap rounded-full bg-ink px-3 py-0.5 text-[11px] font-semibold text-base hover:opacity-90"
         >
-          作業スタート
+          {compact ? "作業開始" : "作業スタート"}
         </button>
       )}
 
-      <button
-        type="button"
-        data-work-session-action="history"
-        aria-expanded={panel === "history"}
-        onClick={() => setPanel((current) => current === "history" ? null : "history")}
-        className="whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-ink/60 hover:bg-ink/5"
-      >
-        作業記録{state.history.length > 0 ? ` ${state.history.length}` : ""}
-      </button>
+      {!compact && (
+        <button
+          type="button"
+          data-work-session-action="history"
+          aria-expanded={panel === "history"}
+          onClick={() => setPanel((current) => current === "history" ? null : "history")}
+          className="whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-ink/60 hover:bg-ink/5"
+        >
+          作業記録{state.history.length > 0 ? ` ${state.history.length}` : ""}
+        </button>
+      )}
 
       {panel === "pause" && (
         <WorkSessionPauseModal

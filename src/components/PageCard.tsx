@@ -1,8 +1,6 @@
 import {
   Fragment,
   memo,
-  useEffect,
-  useReducer,
   useRef,
   useState,
   type CSSProperties,
@@ -54,91 +52,26 @@ const YAKUMONO_VPAL_TEST = /[、。，．「」『』（）〈〉《》【】〔
 const YAKUMONO_HANG_START_TEST = /[、。，．」』）〉》】〕］｝｠”’]/u;
 // hang against the column end (visually the bottom of the cell)
 const YAKUMONO_HANG_END_TEST = /[「『（〈《【〔［｛｟“‘]/u;
-// A lone printable-ASCII character (no ASCII neighbour) stays upright on its
-// own canonical slot — the Japanese-vertical convention for single letters /
-// symbols (正立). It gets an inner horizontal-metrics box so it sits off the
-// vertical font's uneven per-glyph baselines. Multi-character ASCII is handled
-// as a sideways run instead (see ASCII_RUN_* / LatinRun below).
+// TSP-RC-LATIN-CELL-PARITY-002: ordinary printable ASCII — Latin letters,
+// digits, punctuation — occupies exactly one canonical slot per grapheme,
+// upright, matching Publication's `verticalGraphemeCommands` model exactly
+// (typesetting-v2/renderer/publication/pdfGenerator.ts: `perCharHeightMm =
+// totalHeightMm / graphemes.length`, one cell per character, no run
+// grouping). Preview previously grouped 2+ such characters into one
+// shaped/kerned sideways run reserving `ceil(measuredAdvanceEm)` canonical
+// slots (TSP-LOOP-003); real proportional advances rarely land on a whole
+// slot boundary, so short runs like "PC"/"ID"/"SNS" routinely reserved one
+// more slot than their ink filled, reading as an unwanted gap before the
+// next character regardless of how that leftover space was distributed
+// within the run's own box (tried and rejected: centering it). Matching
+// Publication's one-cell-per-character model removes the leftover space at
+// its source instead of redistributing it. This ONLY affects ordinary
+// ASCII; TCY (`[tate]...[/tate]`, automatic 2-digit), Ruby, and the
+// dash/ellipsis protected runs each have their own separate, untouched
+// code paths below.
 const ASCII_VERTICAL_GLYPH_TEST = /^[\x21-\x7e]$/;
 // TSP-LOOP-029: same U+3000 cell tategaki.ts reserves in the pagination budget.
 const INDENT_SPACE = AUTO_INDENT_CHAR;
-
-// TSP-LOOP-003 mixed-script run model. A maximal stretch of 2+ printable-ASCII
-// characters (spaces allowed inside, at least one non-space) is set as ONE
-// sideways run under `text-orientation: mixed` — real horizontal advances and
-// kerning, the way 欧文 is set in vertical Japanese text — instead of one
-// upright glyph per full-width canonical slot (which read as letter-spaced and
-// baseline-ragged). The run still consumes a WHOLE number of canonical slots,
-// taken from the real font's measured horizontal advance rounded up and capped
-// at the run's character count. That cap is the pre-existing pagination weight
-// (`tokenLength` = value.length), which is therefore always >= what the run
-// actually renders — so `lib/tategaki.ts` pagination is untouched, never
-// overflows, and every Japanese slot before and after the run stays exactly on
-// the FixedSlot grid.
-const ASCII_RUN_MEMBER = /[\x20-\x7e]/;
-const ASCII_RUN_HAS_LETTERFORM = /[\x21-\x7e]/;
-
-const latinRunEmCache = new Map<string, number>();
-let sharedMeasureCtx: CanvasRenderingContext2D | null | undefined;
-
-/** Horizontal advance of `text` in em units, for the given font. */
-function latinRunAdvanceEm(text: string, fontSizePx: number, fontFamily: string): number {
-  const key = JSON.stringify([fontSizePx, fontFamily, text]);
-  const cached = latinRunEmCache.get(key);
-  if (cached !== undefined) return cached;
-  let em: number;
-  if (typeof document === "undefined") {
-    // SSR/SSG: the canonical grid still renders; the client refines this on mount.
-    em = text.length * 0.5;
-  } else {
-    if (sharedMeasureCtx === undefined) {
-      sharedMeasureCtx = document.createElement("canvas").getContext("2d");
-    }
-    if (sharedMeasureCtx) {
-      sharedMeasureCtx.font = `${fontSizePx}px ${fontFamily}`;
-      em = sharedMeasureCtx.measureText(text).width / fontSizePx;
-    } else {
-      em = text.length * 0.5;
-    }
-  }
-  latinRunEmCache.set(key, em);
-  return em;
-}
-
-/** Whole canonical slots a Latin run occupies: ceil(advance), >= 1, and never
- *  more than its character count (= the unchanged pagination weight). */
-function latinRunSlotCount(text: string, fontSizePx: number, fontFamily: string): number {
-  const chars = Array.from(text).length;
-  const em = latinRunAdvanceEm(text, fontSizePx, fontFamily);
-  return Math.min(chars, Math.max(1, Math.ceil(em - 0.02)));
-}
-
-// Latin-run advances first measure against whatever font is resolved at mount;
-// once the real web font finishes loading the measurements can shift, so the
-// cache is dropped and every mounted FixedSlotLine re-measures exactly once.
-const latinRunFontListeners = new Set<() => void>();
-let latinRunFontHookInstalled = false;
-
-function useLatinRunFontSync(): void {
-  const [, bump] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => {
-    latinRunFontListeners.add(bump);
-    if (
-      !latinRunFontHookInstalled &&
-      typeof document !== "undefined" &&
-      typeof document.fonts?.ready?.then === "function"
-    ) {
-      latinRunFontHookInstalled = true;
-      document.fonts.ready.then(() => {
-        latinRunEmCache.clear();
-        latinRunFontListeners.forEach((fn) => fn());
-      });
-    }
-    return () => {
-      latinRunFontListeners.delete(bump);
-    };
-  }, [bump]);
-}
 
 // 縦書きの行末で分断されると読みにくくなる、2文字以上連続するダッシュ
 // （――）・三点リーダー（……）等を検出して改行させないためのパターン。
@@ -165,8 +98,8 @@ const ELLIPSIS_CHAR_TEST = /[…‥]/;
 //
 // Fix: render this class through a nested wrapper with an explicit
 // `text-orientation: mixed` (+ `-webkit-`), the standards-defined way to get
-// the vertical form on every engine — the same override `[data-latin-run]`
-// already uses in this component. `font-feature-settings: normal` +
+// the vertical form on every engine — the same override the dash/ellipsis
+// `[data-protected-run-wrapper]` below already uses. `font-feature-settings: normal` +
 // `font-variant-east-asian: normal` clear the fixed-slot body's `"vpal" 0, …`
 // list. The manuscript source text is never rewritten to a presentation form.
 // (ー／〜／～ are the same UTR#50 class; the Playwright-WebKit audit shows they
@@ -1721,19 +1654,6 @@ interface ProtectedRun {
 }
 
 /**
- * A contiguous printable-ASCII run set sideways (text-orientation: mixed) as a
- * single object. `slotCount` is the whole number of canonical slots it occupies
- * (<= its character count — see ASCII_RUN_* notes); the following slot resumes
- * at `startSlot + slotCount`, on the grid.
- */
-interface LatinRun {
-  key: string;
-  text: string;
-  startSlot: number;
-  slotCount: number;
-}
-
-/**
  * rubyのrt（読み）1個分。base文字は通常文字と全く同じ LineSlot として
  * `slots` 側に積まれる（rt表示のためにbaseの描画方法を一切変えない）ため、
  * ここではrtの位置決めに必要な情報（対応するbase slot範囲とrt文字列）だけを持つ。
@@ -1782,16 +1702,18 @@ interface TcyCell {
  * 黙って切っている（lineStyle/fullLineStyleのheight+overflow:hidden参照）ため、
  * ここでも同じ範囲(0..charsPerLine-1)だけを残し、同じ見え方を再現する。
  */
-function buildLineSlots(
+/** Exported for TSP-RC-LATIN-CELL-PARITY-002's regression test only — the
+ *  slot model this produces (one canonical cell per ordinary ASCII
+ *  character, no run grouping) is otherwise purely an internal
+ *  FixedSlotLine implementation detail. */
+export function buildLineSlots(
   line: FlowToken[],
   flatIndexBase: number,
   paragraphStarts: boolean[],
-  charsPerLine: number,
-  resolveRunSlotCount: (text: string) => number
+  charsPerLine: number
 ): {
   slots: LineSlot[];
   protectedRuns: ProtectedRun[];
-  latinRuns: LatinRun[];
   rubyAnnotations: RubyAnnotation[];
   tcyCells: TcyCell[];
   /** TSP-LOOP-029 issue A: slotIndex(es) of a hanging 。/、 (+ optional closing bracket, R3). */
@@ -1799,7 +1721,6 @@ function buildLineSlots(
 } {
   const slots: LineSlot[] = [];
   const protectedRuns: ProtectedRun[] = [];
-  const latinRuns: LatinRun[] = [];
   const rubyAnnotations: RubyAnnotation[] = [];
   const tcyCells: TcyCell[] = [];
   let slotCursor = 0;
@@ -1834,23 +1755,6 @@ function buildLineSlots(
               key: `${flatIndex}-${protectedKind}-${charIndex}`,
               kind: protectedKind,
               text: chars.slice(charIndex, runEnd).join(""),
-              startSlot: slotCursor,
-              slotCount,
-            });
-            slotCursor += slotCount;
-            charIndex = runEnd;
-            continue;
-          }
-        }
-        if (ASCII_RUN_MEMBER.test(ch)) {
-          let runEnd = charIndex + 1;
-          while (runEnd < chars.length && ASCII_RUN_MEMBER.test(chars[runEnd])) runEnd += 1;
-          const runText = chars.slice(charIndex, runEnd).join("");
-          if (runEnd - charIndex >= 2 && ASCII_RUN_HAS_LETTERFORM.test(runText)) {
-            const slotCount = Math.min(runEnd - charIndex, resolveRunSlotCount(runText));
-            latinRuns.push({
-              key: `${flatIndex}-latin-${charIndex}`,
-              text: runText,
               startSlot: slotCursor,
               slotCount,
             });
@@ -1932,7 +1836,6 @@ function buildLineSlots(
       (slot) => slot.slotIndex < charsPerLine || hangingSlotSet.has(slot),
     ),
     protectedRuns: protectedRuns.filter((run) => run.startSlot < charsPerLine),
-    latinRuns: latinRuns.filter((run) => run.startSlot < charsPerLine),
     rubyAnnotations: rubyAnnotations.filter((ann) => ann.startSlot < charsPerLine),
     tcyCells: tcyCells.filter((cell) => cell.slotIndex < charsPerLine),
     hangingSlotIndices: hangingSlots.map((s) => s.slotIndex),
@@ -2113,15 +2016,8 @@ function FixedSlotLine({
   fontFamily: string;
   fontFeatureSettings: string;
 }) {
-  useLatinRunFontSync();
-  const { slots, protectedRuns, latinRuns, rubyAnnotations, tcyCells, hangingSlotIndices } =
-    buildLineSlots(
-      line,
-      flatIndexBase,
-      paragraphStarts,
-      charsPerLine,
-      (text) => latinRunSlotCount(text, fontSizePx, fontFamily)
-    );
+  const { slots, protectedRuns, rubyAnnotations, tcyCells, hangingSlotIndices } =
+    buildLineSlots(line, flatIndexBase, paragraphStarts, charsPerLine);
 
   // TSP-LOOP-029: the canonical slot pitch `textAreaHeightPx / charsPerLine`
   // is a non-integer CSS px value (e.g. 6.9949px at the 文庫 default). The live
@@ -2228,9 +2124,9 @@ function FixedSlotLine({
             // ACROSS the column on Apple devices (real-device HUMAN QA:
             // iPhone 15 Safari + Chrome, iPad mini 7 Safari FAIL; Pixel PASS).
             // Overriding to `text-orientation: mixed` is the standards-defined
-            // way to get the vertical form on every engine (same as
-            // `[data-latin-run]`). The SOURCE text is never substituted to a
-            // presentation-form codepoint.
+            // way to get the vertical form on every engine (same as the
+            // dash/ellipsis `[data-protected-run-wrapper]` below). The SOURCE
+            // text is never substituted to a presentation-form codepoint.
             <span
               data-vertical-leader=""
               style={{
@@ -2275,7 +2171,7 @@ function FixedSlotLine({
         //    stays column-centred on WebKit where a single `mixed` span for the
         //    whole run drifts a font's rotated ellipsis off the column axis.
         // `overflow: hidden` keeps any sub-pixel ink overshoot inside the
-        // reserved slots, like `[data-latin-run]`.
+        // reserved slots.
         <span
           key={run.key}
           data-protected-run-wrapper={run.kind}
@@ -2328,39 +2224,6 @@ function FixedSlotLine({
           ) : (
             <span data-protected-run-glyph={run.kind}>{run.text}</span>
           )}
-        </span>
-      ))}
-      {latinRuns.map((run) => (
-        <span
-          key={run.key}
-          data-latin-run=""
-          data-run-start-slot={run.startSlot}
-          data-run-slot-count={run.slotCount}
-          style={{
-            position: "absolute",
-            top: slotTop(run.startSlot),
-            left: 0,
-            width: baseGlyphLaneWidthPx,
-            height: slotSpanPx(run.startSlot, run.slotCount),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            writingMode: "vertical-rl",
-            WebkitWritingMode: "vertical-rl",
-            textOrientation: "mixed",
-            WebkitTextOrientation: "mixed",
-            // real 欧文 metrics: horizontal advances + kerning, not one
-            // full-width upright cell per character.
-            fontVariantEastAsian: "normal",
-            lineHeight: 1,
-            whiteSpace: "pre",
-            // the measured slot reservation rounds the advance UP, so any
-            // residual sub-pixel overshoot stays inside the run's own box
-            // instead of nudging the next canonical slot.
-            overflow: "hidden",
-          }}
-        >
-          {run.text}
         </span>
       ))}
       {tcyCells.map((cell) => (
