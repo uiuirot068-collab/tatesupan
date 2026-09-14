@@ -102,8 +102,10 @@ describe("Round 6 mobile toolbar", () => {
 
   it("shortens the row while widening Undo and Redo", () => {
     expect(row.match(/min-h-9 min-w-11/g)).toHaveLength(2);
-    // 5 always-visible actions plus the focus-mode-only Memo entry.
-    expect(row.match(/min-h-9/g)).toHaveLength(6);
+    // 5 always-visible actions plus the focus-mode-only Memo and exit-focus
+    // entries (the latter `hidden` below `md`, but still carrying the class
+    // in this source-text count).
+    expect(row.match(/min-h-9/g)).toHaveLength(7);
     expect(row).not.toContain("min-h-10");
   });
 });

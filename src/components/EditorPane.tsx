@@ -91,6 +91,14 @@ interface EditorPaneProps {
    * without changing their underlying state.
    */
   focusMode?: boolean;
+  /**
+   * Exits desktop focus mode, restoring the global header. Reuses the same
+   * `exitFocusMode` handler as the header's own toggle and MobileEditorNav —
+   * this is not a second focus-mode state. Only rendered (as `通常に戻す`
+   * beside 報告) at `md+` while `focusMode` is on, since the header — and its
+   * own toggle — is hidden there; mobile keeps its existing exit affordance.
+   */
+  onExitFocus?: () => void;
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
 }
 
@@ -130,6 +138,7 @@ function EditorPaneInner(
     onOpenHelp,
     onCursorIndexChange,
     focusMode = false,
+    onExitFocus,
   }: EditorPaneProps,
   ref: React.Ref<EditorPaneHandle>
 ) {
@@ -526,6 +535,18 @@ function EditorPaneInner(
               className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1"
             >
               報告
+            </button>
+          )}
+          {focusMode && onExitFocus && (
+            <button
+              type="button"
+              data-editor-action="exit-focus"
+              data-focus-mode-toggle=""
+              onClick={onExitFocus}
+              title="集中モードを終了して通常表示に戻します"
+              className="hidden min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs font-medium text-ink/70 hover:bg-ink/5 md:inline-flex md:min-h-0 md:px-3 md:py-1"
+            >
+              通常に戻す
             </button>
           )}
         </div>

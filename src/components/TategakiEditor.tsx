@@ -739,13 +739,15 @@ export default function TategakiEditor({
           if (file) void importTxt(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
         }}
       />
-      {/* Focus mode collapses the full header on narrow viewports only; at md+
-          the wrapper is `display:contents`, so the header lays out exactly as
-          before on desktop / tablet-wide. TSP-LOOP-022: on a phone the Header
-          keeps only identity + account / theme / 保存作品一覧 — its 一覧 link,
-          save button and ？ (all duplicated by the sticky MobileEditorNav) are
-          `md+` only, so the phone header stops being a tall wrapped block. */}
-      <div data-editor-header-slot="" className={focusMode ? "hidden md:block md:flex-none" : "flex-none"}>
+      {/* Focus mode collapses the full header at every viewport width, so the
+          vertical space it occupied is reclaimed by the manuscript/preview
+          workspace. `hidden` (display:none) removes it from layout and tab
+          order without unmounting it, so its state and Focus-mode toggle are
+          intact the instant focus mode exits and the header returns. Desktop
+          exit uses `onExitFocus` surfaced beside 報告 in EditorPane's action
+          row instead; on a phone MobileEditorNav (rendered outside this slot)
+          already owns enter/exit, unaffected by this change. */}
+      <div data-editor-header-slot="" className={focusMode ? "hidden" : "flex-none"}>
         <Header
           onSave={isSampleDocument ? undefined : handleSave}
           onSelectProject={isSampleDocument ? undefined : handleSelectProject}
@@ -836,6 +838,7 @@ export default function TategakiEditor({
             onOpenHelp={() => { setActiveDrawer(null); setIsHelpOpen(true); }}
             onCursorIndexChange={setCursorIndex}
             focusMode={focusMode}
+            onExitFocus={exitFocusMode}
           />
         </section>
 

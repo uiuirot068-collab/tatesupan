@@ -74,6 +74,7 @@ describe("Round 5 compact mobile Editor controls", () => {
     expect(actionRow).toContain('data-editor-action="replace"');
     expect(actionRow).toContain('data-editor-action="memo"');
     expect(actionRow).toContain('data-editor-action="report"');
+    expect(actionRow).toContain('data-editor-action="exit-focus"');
     expect(pane).toMatch(/data-writing-check-surface=""[\s\S]*?max-md:hidden/);
     expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]*?max-md:hidden/);
   });

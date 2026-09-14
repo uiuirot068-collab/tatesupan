@@ -82,8 +82,8 @@ describe("Report action responsive contract", () => {
       expect(row).toContain("max-w-full");
       expect(row).not.toMatch(/\sflex-wrap(?:\s|\")/);
       // 3 always-visible nowrap actions (page-break, replace, report) plus
-      // the focus-mode-only Memo entry.
-      expect(row.match(/whitespace-nowrap/g)).toHaveLength(4);
+      // the focus-mode-only Memo and exit-focus entries.
+      expect(row.match(/whitespace-nowrap/g)).toHaveLength(5);
       expect(row).toContain('data-editor-action="report"');
     }
   );
