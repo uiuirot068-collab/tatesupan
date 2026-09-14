@@ -15,6 +15,7 @@ import {
   HOWTO_ROUTE,
   EDITOR_PAGE_EXPLANATION_BODY,
   PDF_FILENAME_EXPLANATION,
+  resolveAffiliateFooterConfig,
 } from "./howtoContent";
 
 const repoRoot = path.resolve(__dirname, "../..");
@@ -259,5 +260,108 @@ describe("accessibility basics (req #12)", () => {
     for (const tag of imgTags) {
       expect(tag).toMatch(/\balt=/);
     }
+  });
+});
+
+describe("resolveAffiliateFooterConfig (TSP-RC-AFFILIATE-FOOTER-001)", () => {
+  it("shows nothing when no config is present", () => {
+    const config = resolveAffiliateFooterConfig({});
+    expect(config).toEqual({ showSection: false, amazon: null, rakuten: null });
+  });
+
+  it("keeps Amazon hidden when only the URL is set (operator name required too)", () => {
+    const config = resolveAffiliateFooterConfig({
+      amazonUrl: "https://www.amazon.co.jp/example?tag=test-tag-22",
+    });
+    expect(config.amazon).toBeNull();
+    expect(config.showSection).toBe(false);
+  });
+
+  it("keeps Amazon hidden when only the operator name is set (URL required too)", () => {
+    const config = resolveAffiliateFooterConfig({
+      amazonAssociateOperatorName: "テスト運営者",
+    });
+    expect(config.amazon).toBeNull();
+    expect(config.showSection).toBe(false);
+  });
+
+  it("shows Amazon with the exact, unmodified URL and operator name once both are set", () => {
+    const config = resolveAffiliateFooterConfig({
+      amazonUrl: "https://www.amazon.co.jp/example?tag=test-tag-22",
+      amazonAssociateOperatorName: "テスト運営者",
+    });
+    expect(config.amazon).toEqual({
+      url: "https://www.amazon.co.jp/example?tag=test-tag-22",
+      operatorName: "テスト運営者",
+    });
+    expect(config.showSection).toBe(true);
+  });
+
+  it("shows Rakuten with the exact, unmodified URL from a URL alone", () => {
+    const config = resolveAffiliateFooterConfig({
+      rakutenUrl: "https://hb.afl.rakuten.co.jp/example/test-id",
+    });
+    expect(config.rakuten).toEqual({ url: "https://hb.afl.rakuten.co.jp/example/test-id" });
+    expect(config.showSection).toBe(true);
+    expect(config.amazon).toBeNull();
+  });
+
+  it("never fabricates a URL, tag, or fallback link when config is absent", () => {
+    expect(resolveAffiliateFooterConfig({ amazonUrl: "" }).amazon).toBeNull();
+    expect(resolveAffiliateFooterConfig({ rakutenUrl: "   " }).rakuten).toBeNull();
+  });
+});
+
+describe("HOW TO affiliate footer source (TSP-RC-AFFILIATE-FOOTER-001)", () => {
+  it("gates the whole section on resolveAffiliateFooterConfig, not an always-on render", () => {
+    expect(howtoPageSrc).toContain("resolveAffiliateFooterConfig");
+    expect(howtoPageSrc).toMatch(/AFFILIATE_FOOTER\.showSection\s*&&/);
+  });
+
+  it("carries the required exact UI copy", () => {
+    expect(howtoPageSrc).toContain("お買い物リンク");
+    expect(howtoPageSrc).toContain(
+      "TateSpunでは、Amazon・楽天市場のお買い物リンクをご案内しています。"
+    );
+    expect(howtoPageSrc).toContain("Amazonでお買い物");
+    expect(howtoPageSrc).toContain("楽天市場でお買い物");
+    expect(howtoPageSrc).toContain(
+      "このページにはアフィリエイトリンクが含まれます。リンク経由の購入により、運営者が紹介料を受け取る場合があります。"
+    );
+    expect(howtoPageSrc).toContain("は適格販売により収入を得ています。");
+  });
+
+  it("never contains prohibited support/donation-style call-to-action wording", () => {
+    const affiliateSectionStart = howtoPageSrc.indexOf('id="shopping-links"');
+    expect(affiliateSectionStart).toBeGreaterThan(-1);
+    const affiliateSectionEnd = howtoPageSrc.indexOf("</section>", affiliateSectionStart);
+    const affiliateSection = howtoPageSrc.slice(affiliateSectionStart, affiliateSectionEnd);
+    for (const forbidden of ["応援して", "支援して", "寄付", "ここから買ってください"]) {
+      expect(affiliateSection).not.toContain(forbidden);
+    }
+  });
+
+  it("Rakuten's button label names 楽天市場 explicitly (link destination must be unambiguous)", () => {
+    expect(howtoPageSrc).toMatch(/data-affiliate-cta="rakuten"[\s\S]{0,200}楽天市場/);
+  });
+
+  it("both affiliate buttons open externally via the project's existing convention", () => {
+    const buttonBlock = howtoPageSrc.slice(
+      howtoPageSrc.indexOf('className="affiliate-actions"'),
+      howtoPageSrc.indexOf('className="affiliate-disclosure"')
+    );
+    const links = buttonBlock.match(/<a\b[^>]*data-affiliate-cta[^>]*>/g) ?? [];
+    expect(links.length).toBe(2);
+    for (const link of links) {
+      expect(link).toContain('target="_blank"');
+      expect(link).toContain('rel="noopener noreferrer"');
+      expect(link).toMatch(/aria-label="/);
+    }
+  });
+
+  it("does not hard-code any Amazon/Rakuten URL, tag, or ID in source", () => {
+    expect(howtoPageSrc).not.toMatch(/amazon\.co\.jp\/(?!\.\.\.)/);
+    expect(howtoPageSrc).not.toMatch(/rakuten\.co\.jp\/(?!\.\.\.)/);
+    expect(howtoPageSrc).not.toMatch(/tag=[A-Za-z0-9_-]{3,}/);
   });
 });

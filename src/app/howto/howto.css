@@ -166,6 +166,19 @@
 .howto-page .log-body { margin-top: 2px; color: #aaa197; }
 .howto-page .more-logs { width: 100%; margin-top: 18px; padding: 10px; border: 1px solid #5e564d; background: transparent; color: white; cursor: pointer; }
 
+/* TSP-RC-AFFILIATE-FOOTER-001: a modest bordered card, matching .contact-
+   block's existing visual language -- not banner/intrusive-ad styling.
+   .affiliate-actions wraps so Amazon/Rakuten (equal weight, same class)
+   stack cleanly at any width down to 320px with no horizontal overflow. */
+.howto-page .affiliate-footer { max-width: 680px; margin: 40px auto 60px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.howto-page .affiliate-footer h2 { margin: 0 0 8px; font-size: 18px; }
+.howto-page .affiliate-lead { margin: 0 0 16px; font-size: 14px; }
+.howto-page .affiliate-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.howto-page .affiliate-button { display: inline-block; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--sub); font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
+.howto-page .affiliate-button:hover, .howto-page .affiliate-button:focus-visible { background: var(--gold); color: #fff; border-color: var(--gold); }
+.howto-page .affiliate-button:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 2px; }
+.howto-page .affiliate-disclosure { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
 .howto-page.show-copy-ids [data-copy-id] { position: relative; outline: 1px dashed rgba(86,113,150,.26); outline-offset: 3px; }
 .howto-page.show-copy-ids [data-copy-id]::before { content: "【" attr(data-copy-id) "】"; display: block; width: max-content; max-width: 100%; margin: 0 0 4px; padding: 2px 5px; border-radius: 3px; background: #eef4fb; color: #3e658d; font: 10px/1.4 Consolas, monospace; letter-spacing: 0; white-space: normal; word-break: break-all; }
 
