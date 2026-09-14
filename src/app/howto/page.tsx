@@ -621,7 +621,7 @@ export default function HowToPage() {
                   data-howto-feedback-cta=""
                   onClick={() => setFeedbackOpen(true)}
                 >
-                  報告する
+                  報告
                 </button>
               )}
             </div>

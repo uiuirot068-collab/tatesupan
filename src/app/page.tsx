@@ -192,10 +192,17 @@ export default function Home() {
               <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
             </ol>
             {onboarding && (
-              <div data-home-onboarding-actions="" className="mt-5 grid max-w-xl gap-3">
+              <div data-home-onboarding-actions="" className="mt-5 grid max-w-2xl gap-3">
                 <button type="button" onClick={handleCreate} disabled={creating} className="w-fit rounded-full bg-ink px-7 py-3 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">＋ 新しい作品を作成する</button>
-                <Link data-home-demo-card="" href="/editor?demo=1" className="group block max-w-md rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-2 inline-flex rounded-full border border-ink/25 px-4 py-1.5 text-sm font-semibold text-ink transition-colors group-hover:bg-ink/5 dark:border-[#4A5668] dark:text-[#D4DBE7] dark:group-hover:bg-[#1D2430]">デモを始める ▶</span></Link>
-                <Link data-home-howto-link="" href="/howto" className="w-fit text-xs font-medium text-ink/60 underline decoration-ink/30 underline-offset-2 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]">はじめての方はHOW TOもご覧ください →</Link>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Link data-home-demo-card="" href="/editor?demo=1" className="group block rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-2 inline-flex rounded-full border border-ink/25 px-4 py-1.5 text-sm font-semibold text-ink transition-colors group-hover:bg-ink/5 dark:border-[#4A5668] dark:text-[#D4DBE7] dark:group-hover:bg-[#1D2430]">デモを始める ▶</span></Link>
+                  {/* TSP-HOWTO-BETA-016B: a first-time user needs two equally
+                      obvious paths — try the demo, or read HOW TO — not a
+                      demo block plus a small text link. Same visual family
+                      as the Demo card above, not a 4th quick-action card
+                      (that grid is restored to its original 3 cards). */}
+                  <Link data-home-howto-card="" href="/howto" className="group block rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><strong className="block text-sm">TateSpunの使い方を見る</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">原稿を持ち込んで、本の形を確認し、書き出すまでの流れを画像つきで紹介します。</span><span data-home-howto-cta="" className="mt-2 inline-flex rounded-full border border-ink/25 px-4 py-1.5 text-sm font-semibold text-ink transition-colors group-hover:bg-ink/5 dark:border-[#4A5668] dark:text-[#D4DBE7] dark:group-hover:bg-[#1D2430]">HOW TOを見る →</span></Link>
+                </div>
               </div>
             )}
             {!onboarding && <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>}
@@ -226,6 +233,7 @@ export default function Home() {
                 <button type="button" onClick={handleCreate} disabled={creating} className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-base disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品を作成する</button>
                 <Link href="/editor?demo=1" className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink dark:border-[#3A4658] dark:text-[#D4DBE7]">おためしデモ</Link>
                 <button type="button" onClick={() => setIsCombineModalOpen(true)} disabled={!documents || documents.length < 2} className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5 disabled:opacity-40 dark:border-[#3A4658] dark:text-[#D4DBE7]">総集編を編成する</button>
+                <Link data-home-howto-top-action="" href="/howto" className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5 dark:border-[#3A4658] dark:text-[#D4DBE7]">TateSpun How to →</Link>
               </div>
             </div>
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -375,7 +383,7 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="mx-auto grid max-w-[880px] grid-cols-2 gap-[10px] sm:grid-cols-4">
+          <div className="mx-auto grid max-w-[760px] grid-cols-1 gap-[10px] sm:grid-cols-3">
             <button
               type="button"
               onClick={handleCreate}
@@ -386,21 +394,6 @@ export default function Home() {
               <strong className="text-lg">新しい本を書く</strong>
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">新しい作品を作成する</small>
             </button>
-
-            {/* TSP-HOWTO-BETA-016A: the primary, unmissable Home entry into
-                the first-time-user guide. Present in both zero-work and
-                returning-user Home (this grid is outside the isNonEmptyVisual
-                branch), distinct from 「使い方を見る」below (which opens the
-                detailed-reference HelpModal, not this page). */}
-            <Link
-              href="/howto"
-              data-home-howto-card=""
-              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
-            >
-              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">▶</span>
-              <strong className="text-lg">HOW TO</strong>
-              <small className="text-sm text-ink/55 dark:text-[#939DAF]">はじめての方の使い方ガイド</small>
-            </Link>
 
             <button
               type="button"
@@ -421,8 +414,8 @@ export default function Home() {
               className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
             >
               <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">?</span>
-              <strong className="text-lg">ヘルプ</strong>
-              <small className="text-sm text-ink/55 dark:text-[#939DAF]">機能の詳しい説明を調べる</small>
+              <strong className="text-lg">使い方を見る</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">本棚・エディタ・書き出し</small>
             </button>
           </div>
 

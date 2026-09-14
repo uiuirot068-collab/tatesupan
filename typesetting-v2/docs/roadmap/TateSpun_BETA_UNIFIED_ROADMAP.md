@@ -309,6 +309,17 @@ First Human QA pass on `/howto` found four issues, all fixed and committed (`f12
 - Automated status: `src/lib/howtoContent.test.ts` grew to 74 assertions (regression guards for all four issues above) — PASS. ESLint, TypeScript, and `npm run build:basepath` — PASS, re-verified after the fix.
 - **Human QA still pending** — this was a correction round, not a full visual pass. The original visual/mobile check remains outstanding.
 
+### TSP-HOWTO-BETA-016B — final Home/support navigation polish
+
+**Status: IMPLEMENTED / FINAL HUMAN QA PENDING.** Human QA confirmed round 016A's fixes and asked for three remaining product refinements to Home discoverability and HOW TO's support actions. All three implemented; everything else (Hero, scrolling, 17 content images, menu icon, top-anchor, Editor Page/PDF copy, Help behavior, renderer/Editor/PDF/Preview) was left untouched per the correction's explicit non-goals.
+
+- **HOW TO Report action**: `困ったとき` now shows `[ヘルプを見る] [報告]` — the Report button reuses the exact same `BetaFeedbackModal` component, `onClose`-only prop shape, and `BETA_FEEDBACK_ENABLED` gate as the Editor's own `報告` button (`src/components/TategakiEditor.tsx` → `EditorPane.tsx`'s `onOpenBetaFeedback`). No second feedback implementation; label changed from `報告する` to `報告` to match the Editor's exact wording.
+- **Zero-work Home**: replaced the small underlined HOW TO text link with a bounded `TateSpunの使い方を見る` block in the same visual family as the existing `3分でわかる TateSpun おためしデモ` card (same border/padding/CTA-pill styling), placed directly beside the Demo card inside the onboarding actions area — not a 4th quick-action card. A brand-new user now sees two equally obvious paths (Demo, HOW TO) without leaving the Hero area.
+- **Returning-user (non-empty) Home**: added a compact `TateSpun How to →` link beside `総集編を編成する` in the top action row (`data-home-returning-actions`).
+- **`本棚からできること` restored to its original 3 cards**: `新しい本を書く` / `本をまとめる` / `使い方を見る` (the `使い方を見る` card's label/subtitle, which round 016A had temporarily changed to `ヘルプ` to disambiguate from the since-removed 4th HOW TO card, is restored verbatim). The 4th `HOW TO` card added in round 016A was removed — HOW TO discoverability on non-empty Home is now handled entirely by the compact top-action link above, not a bookshelf card.
+- Automated status: `src/lib/howtoContent.test.ts` grew to 80 assertions (new coverage: Report button parity with the Editor's flag/component, zero-work block placement relative to the Demo card, top-action placement relative to `総集編を編成する`, and the restored 3-card grid content) — PASS. ESLint, TypeScript, and `npm run build:basepath` — PASS, re-verified after the fix. The zero-work/returning-user bookshelf area is client-rendered only (waits on IndexedDB via `useLiveQuery`, same as the pre-existing Demo card), so it does not appear in the static-exported HTML — verified at the source/JSX level via the tests above instead of a raw HTML fetch.
+- **Human QA still pending** — this was navigation/support polish, not a full visual pass. The original visual/mobile check (and this round's own visual confirmation) remain outstanding before HOW TO can be marked Human PASS.
+
 Preserved, unmodified by this change:
 
 - β renderer = **LEGACY**; Editor surface = **WINDOWED**.
