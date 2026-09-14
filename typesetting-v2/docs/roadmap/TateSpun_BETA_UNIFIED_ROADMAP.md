@@ -298,6 +298,17 @@ Implementation prompts are authored/reviewed by ChatGPT. No agent may treat this
 - Automated status: `npx vitest run --config src/lib/vitest.config.ts` (new `src/lib/howtoContent.test.ts`, 65 assertions covering image existence, forbidden-term leakage, Editor Page/PDF-filename copy, routing safety, Help/Feedback wiring, and a11y basics) — PASS. ESLint on all new/changed files — PASS (0 errors). `next build`'s internal TypeScript check — PASS. `npm run build:basepath` with `NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED` / `NEXT_PUBLIC_TATESPUN_RENDERER=LEGACY` — PASS.
 - **Human QA still pending**: visual/mobile check across the required breakpoints, image/text correspondence, and overall look-and-feel have not been confirmed by a human. Do not mark HOW TO Human PASS until that happens.
 
+### TSP-HOWTO-BETA-016A — first Human QA correction round
+
+First Human QA pass on `/howto` found four issues, all fixed and committed (`f121668 fix(howto): connect home navigation and correct guide assets`):
+
+- **Scroll lock**: `/howto` inherited the app-shell's global `body { overflow: hidden }` (meant for the Editor route) and could not scroll past the first viewport. Fixed the same way `/` (`[data-bookshelf-page]`) and `/guide` (`[data-guide-page]`) already opt out — added `[data-howto-page]` to the existing `:has()` selector list in `globals.css`, and the attribute to the page's root element. Editor's scroll behavior is untouched.
+- **Home discoverability**: the existing `使い方を見る` quick-action card opened `HelpModal`, not `/howto`, and the only HOW TO links (onboarding panel, footer) were easy to miss. Added a distinct, prominent `HOW TO` card to Home's always-rendered "本棚からできること" quick-actions grid (covers zero-work and returning-user Home in one place) and relabelled the existing card `ヘルプ` to disambiguate it from HOW TO.
+- **Hero vs. menu-icon asset mix-up**: the Hero was already correct (`hero-guide-illust.png`, the cat+PC+「？」illustration matching the Human reference), but the small sticky-nav icon wrongly reused that same file — the original source assets had `hero-guide-illust.png` and `guide-cat.png` as byte-identical files. The distinct cropped cat-face icon (previously discarded during the first pass as an "obsolete" duplicate, filename `guide-cat.png.png`) is now used for the nav icon, copied in as `guide-cat-icon.png`.
+- **Dead-end nav brand + buried Help**: clicking「HOW TO TateSpun」in the sticky nav did nothing; fixed by adding a `#howto-top` anchor on the Hero and linking the brand to it. Help previously required scrolling to the very bottom of the page to find; added a clearly labelled (non-icon) `ヘルプを見る` / `ヘルプ` trigger to both the first-viewport hero nav and the persistent sticky nav, reusing the same `HelpModal`.
+- Automated status: `src/lib/howtoContent.test.ts` grew to 74 assertions (regression guards for all four issues above) — PASS. ESLint, TypeScript, and `npm run build:basepath` — PASS, re-verified after the fix.
+- **Human QA still pending** — this was a correction round, not a full visual pass. The original visual/mobile check remains outstanding.
+
 Preserved, unmodified by this change:
 
 - β renderer = **LEGACY**; Editor surface = **WINDOWED**.
