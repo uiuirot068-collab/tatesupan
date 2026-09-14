@@ -10,21 +10,24 @@ describe("Report action restoration", () => {
   const options = source("src/components/EditorOptionsDrawer.tsx");
   const row = pane.slice(
     pane.indexOf('data-editor-action-row=""'),
-    pane.indexOf('<div className={focusMode ? "max-md:hidden" : ""}')
+    pane.indexOf('<div className={focusMode ? "hidden" : ""}')
   );
   const report = row.slice(
     row.indexOf('data-editor-action="report"'),
     row.indexOf("</button>", row.indexOf('data-editor-action="report"'))
   );
 
-  it("restores Report immediately after Replace in the primary action row", () => {
+  it("keeps Report as the last primary action, directly after Replace and the focus-mode-only Memo entry", () => {
     const replaceIndex = row.indexOf('data-editor-action="replace"');
+    const memoIndex = row.indexOf('data-editor-action="memo"');
     const reportIndex = row.indexOf('data-editor-action="report"');
     const replaceEnd = row.indexOf("</button>", replaceIndex);
+    const memoEnd = row.indexOf("</button>", memoIndex);
     expect(replaceIndex).toBeGreaterThanOrEqual(0);
-    expect(reportIndex).toBeGreaterThan(replaceIndex);
-    expect(replaceEnd).toBeGreaterThan(replaceIndex);
-    expect(row.slice(replaceEnd, reportIndex)).not.toContain('data-editor-action="');
+    expect(memoIndex).toBeGreaterThan(replaceEnd);
+    expect(reportIndex).toBeGreaterThan(memoEnd);
+    expect(row.slice(replaceEnd, memoIndex)).not.toContain('data-editor-action="');
+    expect(row.slice(memoEnd, reportIndex)).not.toContain('data-editor-action="');
     expect(report).toContain("報告");
   });
 
@@ -59,7 +62,7 @@ describe("Report action responsive contract", () => {
   const pane = source("src/components/EditorPane.tsx");
   const row = pane.slice(
     pane.indexOf('data-editor-action-row=""'),
-    pane.indexOf('<div className={focusMode ? "max-md:hidden" : ""}')
+    pane.indexOf('<div className={focusMode ? "hidden" : ""}')
   );
 
   it.each([320, 375, 390, 430])(
@@ -78,7 +81,9 @@ describe("Report action responsive contract", () => {
       expect(row).toContain("gap-0.5");
       expect(row).toContain("max-w-full");
       expect(row).not.toMatch(/\sflex-wrap(?:\s|\")/);
-      expect(row.match(/whitespace-nowrap/g)).toHaveLength(3);
+      // 3 always-visible nowrap actions (page-break, replace, report) plus
+      // the focus-mode-only Memo entry.
+      expect(row.match(/whitespace-nowrap/g)).toHaveLength(4);
       expect(row).toContain('data-editor-action="report"');
     }
   );

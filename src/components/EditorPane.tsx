@@ -461,7 +461,7 @@ function EditorPaneInner(
           data-demo-target="title"
           className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className="grid min-w-0 max-w-full grid-cols-[44px_44px_max-content_max-content_max-content] items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
+        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2`}>
           <button
             type="button"
             data-editor-action="undo"
@@ -505,6 +505,18 @@ function EditorPaneInner(
           >
             置換
           </button>
+          {focusMode && (
+            <button
+              type="button"
+              data-editor-action="memo"
+              aria-expanded={memoOpen}
+              onClick={onToggleMemo}
+              title="メモを開く/閉じる"
+              className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
+            >
+              📝メモ
+            </button>
+          )}
           {onOpenBetaFeedback && (
             <button
               type="button"
@@ -517,22 +529,22 @@ function EditorPaneInner(
             </button>
           )}
         </div>
-        <div className={focusMode ? "max-md:hidden" : ""}>
+        <div className={focusMode ? "hidden" : ""}>
           <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-2 md:grid-cols-4 md:gap-1">
             <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定</button>
             <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className={`min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション</button>
             <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
             <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ</button>
           </nav>
-          <InlineMemoAccordion
-            key={memoStorageKey}
-            open={memoOpen}
-            storageKey={memoStorageKey}
-            confirmedMemo={confirmedMemo}
-            onConfirm={onConfirmMemo}
-            onClose={onCloseMemo}
-          />
         </div>
+        <InlineMemoAccordion
+          key={memoStorageKey}
+          open={memoOpen}
+          storageKey={memoStorageKey}
+          confirmedMemo={confirmedMemo}
+          onConfirm={onConfirmMemo}
+          onClose={onCloseMemo}
+        />
       </div>
 
       {/* The textarea stays the sole input surface. WritingCheckOverlay is a

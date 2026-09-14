@@ -89,7 +89,7 @@ describe("Round 6 mobile toolbar", () => {
   const pane = source("src/components/EditorPane.tsx");
   const row = pane.slice(
     pane.indexOf('data-editor-action-row=""'),
-    pane.indexOf('<div className={focusMode ? "max-md:hidden" : ""}')
+    pane.indexOf('<div className={focusMode ? "hidden" : ""}')
   );
 
   it.each([320, 375, 390, 430])("uses compact content-width tracks without overflow at %ipx", () => {
@@ -102,7 +102,8 @@ describe("Round 6 mobile toolbar", () => {
 
   it("shortens the row while widening Undo and Redo", () => {
     expect(row.match(/min-h-9 min-w-11/g)).toHaveLength(2);
-    expect(row.match(/min-h-9/g)).toHaveLength(5);
+    // 5 always-visible actions plus the focus-mode-only Memo entry.
+    expect(row.match(/min-h-9/g)).toHaveLength(6);
     expect(row).not.toContain("min-h-10");
   });
 });

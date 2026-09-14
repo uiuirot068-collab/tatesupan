@@ -49,9 +49,9 @@ describe("RC Editor information architecture", () => {
   const shell = readSource("src/components/TategakiEditor.tsx");
   const preview = readSource("src/components/PreviewPaneNew.tsx");
 
-  it("keeps the five approved visible manuscript actions", () => {
+  it("keeps the five approved visible manuscript actions, plus the focus-mode-only Memo entry", () => {
     expect(Array.from(editor.matchAll(/data-editor-action="([^"]+)"/g), (match) => match[1]))
-      .toEqual(["undo", "redo", "page-break", "replace", "report"]);
+      .toEqual(["undo", "redo", "page-break", "replace", "memo", "report"]);
   });
 
   it("exposes exactly Settings, Options, Memo, and Help as secondary navigation", () => {
