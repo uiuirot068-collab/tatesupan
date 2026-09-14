@@ -516,3 +516,15 @@ Next step once a valid source is available: re-run the encode (target ≤20 MiB,
 - **Positioning:** an "everyday shopping supports the operator" surface, not an ebook/product sales link — i.e., general-purpose affiliate links to Amazon/Rakuten's own storefronts, not a TateSpun-authored storefront or book-sales flow.
 - **Placement:** footer / bottom-of-page, non-intrusive, by default.
 - **Do not** let this become an ad placement that interferes with the writing/export UX — it is explicitly out of the manuscript-to-book critical path.
+
+## 20. TSP-RC-AFFILIATE-FOOTER-001 — HOW TO Amazon/Rakuten pilot: IMPLEMENTED / BLOCKED ON HUMAN INPUT (2026-09-15)
+
+**HOW TO reconfirmed CLOSED / Human PASS** through the header fix (`bd13eb4`) and guide-video work (`c4901ea`, `426e58c`); this entry adds a new, independently-gated bottom section and does not reopen or modify any of that.
+
+**Affiliate footer: IMPLEMENTED (mechanism) / BLOCKED ON HUMAN INPUT (activation).** `/howto`'s bottom "お買い物リンク" section (`resolveAffiliateFooterConfig` in `src/lib/howtoContent.ts`) is config-gated and renders nothing today — neither button, nor any disclosure — because no config exists:
+
+- **Existing Amazon/Rakuten affiliate config found in repo/env/docs: NONE.** Searched `.env.local`, `.env.example`, and the full `src/`/`docs/` tree for any Amazon/Rakuten URL, tag, or generated link snippet before writing any code — zero hits outside this roadmap's own §19 planning note.
+- **Formal operator-name conflict found — do not guess.** Amazon's Associates disclosure needs the confirmed legal/registered operator name. `src/app/terms/page.tsx`, `src/app/privacy/page.tsx`, and `src/components/legal/LegalArticle.tsx` all consistently say **`caload`**; `/howto`'s own greeting section instead says **`caroad`** (matching the `caroad_main*.png` brand-asset filenames, not necessarily the legal name). This is a real, unresolved discrepancy, not a typo I'm confident enough to silently pick a side on — Amazon's button/disclosure stay hidden until a human confirms which is correct.
+- **Rakuten site-registration/compliance evidence: NONE found.** No generated Rakuten link snippet, no program-registration record anywhere in the repo. Rakuten's button stays hidden purely on absent URL config; no separate blocker beyond that was identified, but registration status itself was never confirmed either way.
+- **Mechanism:** `NEXT_PUBLIC_AMAZON_AFFILIATE_URL` + `NEXT_PUBLIC_AMAZON_ASSOCIATE_OPERATOR_NAME` (both required for Amazon to render) and `NEXT_PUBLIC_RAKUTEN_AFFILIATE_URL` (alone sufficient for Rakuten) — documented (commented out, no values) in `.env.example`. Each URL is used byte-for-byte verbatim if set; nothing is templated, guessed, or shortened. No secrets required (public affiliate URLs only).
+- **Human input required before either button can go live:** (1) confirm `caload` vs `caroad` as the correct Amazon Associates disclosure name; (2) the real Amazon Associates affiliate URL; (3) confirmation Rakuten's affiliate program is actually registered, plus the real Rakuten affiliate URL/snippet. None of these were fabricated or guessed.
