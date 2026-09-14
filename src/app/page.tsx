@@ -195,6 +195,7 @@ export default function Home() {
               <div data-home-onboarding-actions="" className="mt-5 grid max-w-xl gap-3">
                 <button type="button" onClick={handleCreate} disabled={creating} className="w-fit rounded-full bg-ink px-7 py-3 text-sm font-semibold text-base shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">＋ 新しい作品を作成する</button>
                 <Link data-home-demo-card="" href="/editor?demo=1" className="group block max-w-md rounded-xl border border-ink/20 bg-white/60 px-4 py-3 text-ink hover:bg-white dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-2 inline-flex rounded-full border border-ink/25 px-4 py-1.5 text-sm font-semibold text-ink transition-colors group-hover:bg-ink/5 dark:border-[#4A5668] dark:text-[#D4DBE7] dark:group-hover:bg-[#1D2430]">デモを始める ▶</span></Link>
+                <Link data-home-howto-link="" href="/howto" className="w-fit text-xs font-medium text-ink/60 underline decoration-ink/30 underline-offset-2 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]">はじめての方はHOW TOもご覧ください →</Link>
               </div>
             )}
             {!onboarding && <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>}
@@ -526,6 +527,12 @@ export default function Home() {
             className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-start"
             aria-label="フッター"
           >
+            <Link
+              href="/howto"
+              className="text-sm text-ink/60 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+            >
+              HOW TO
+            </Link>
             <Link
               href="/terms"
               className="text-sm text-ink/60 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
