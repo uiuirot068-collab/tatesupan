@@ -65,13 +65,14 @@ describe("TSP-PREVIEW-SYNC-STABILITY-011 §D: Preview page selection must never 
   });
 
   it("the cursor-follow effect keys off activePageIndex (derived from the cursorIndex PROP) only, never off `selected`", () => {
+    const anchor = 'if (activePageIndex == null) return;';
     const effect = preview.slice(
-      preview.indexOf('perfMark("PreviewPane:cursorFollowEffect:fired"'),
-      preview.indexOf('perfMark("PreviewPane:cursorFollowEffect:fired"') + 30
+      preview.indexOf(anchor),
+      preview.indexOf(anchor) + 30
     );
     expect(effect).toBeTruthy();
     const depsMatch = preview
-      .slice(preview.indexOf('perfMark("PreviewPane:cursorFollowEffect:fired"'))
+      .slice(preview.indexOf(anchor))
       .match(/\}, \[([^\]]*)\]\);/);
     expect(depsMatch?.[1].trim()).toBe("activePageIndex");
   });
