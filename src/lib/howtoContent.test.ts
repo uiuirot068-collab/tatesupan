@@ -132,23 +132,79 @@ describe("Help is discoverable without scrolling to the bottom (QA correction 01
   });
 });
 
-describe("Home HOW TO entry is distinct from the Help entry (QA correction 016A)", () => {
-  it("Home has a dedicated HOW TO quick-action card", () => {
-    expect(homePageSrc).toContain("data-home-howto-card");
-    expect(homePageSrc).toContain('href="/howto"');
+describe("HOW TO 困ったとき Report action (QA correction 016B)", () => {
+  it("shows a text-labelled (non-icon-only) Report trigger", () => {
+    expect(howtoPageSrc).toContain('data-howto-feedback-cta=""');
+    expect(howtoPageSrc).toMatch(/data-howto-feedback-cta=""[\s\S]{0,80}>\s*報告\s*</);
   });
 
-  it("the quick-actions grid (incl. the HOW TO card) is not gated to zero-work Home only", () => {
-    const gridStart = homePageSrc.indexOf("data-home-howto-card");
-    const onboardingGateStart = homePageSrc.indexOf("{onboarding && (");
-    const onboardingGateEnd = homePageSrc.indexOf(
-      ")}",
-      homePageSrc.indexOf("data-home-onboarding-actions")
+  it("the Report trigger follows the same BETA_FEEDBACK_ENABLED policy as the Editor's 報告 button", () => {
+    // Same gate as src/components/TategakiEditor.tsx's
+    // `{BETA_FEEDBACK_ENABLED && isBetaFeedbackOpen && (<BetaFeedbackModal .../>)}`
+    // — no HOW TO-only bypass.
+    expect(howtoPageSrc).toMatch(
+      /\{BETA_FEEDBACK_ENABLED\s*&&\s*\([\s\S]{0,300}data-howto-feedback-cta/
     );
-    // The HOW TO card must sit outside the onboarding-only conditional block,
-    // so it also renders for the returning-user (non-empty bookshelf) Home.
+    expect(howtoPageSrc).toMatch(
+      /\{BETA_FEEDBACK_ENABLED\s*&&\s*feedbackOpen\s*&&\s*\(\s*<BetaFeedbackModal/
+    );
+  });
+
+  it("does not introduce a second feedback implementation", () => {
+    const betaFeedbackImports = howtoPageSrc.match(/import BetaFeedbackModal/g) ?? [];
+    expect(betaFeedbackImports.length).toBe(1);
+  });
+});
+
+describe("Zero-work Home: HOW TO onboarding block (QA correction 016B)", () => {
+  it("is a bounded block in the same visual family as the Demo card, not a quick-action card", () => {
+    expect(homePageSrc).toContain("data-home-howto-card");
+    expect(homePageSrc).toContain("data-home-demo-card");
+    // Not the (removed) 4th quick-action-grid card from round 016A.
+    expect(homePageSrc).not.toMatch(
+      /sm:grid-cols-4[\s\S]{0,600}data-home-howto-card/
+    );
+  });
+
+  it("sits inside the onboarding (zero-work) block, alongside the Demo card", () => {
+    const onboardingBlockStart = homePageSrc.indexOf("data-home-onboarding-actions");
+    const demoIdx = homePageSrc.indexOf("data-home-demo-card");
+    const howtoIdx = homePageSrc.indexOf("data-home-howto-card");
+    expect(onboardingBlockStart).toBeGreaterThan(-1);
+    expect(demoIdx).toBeGreaterThan(onboardingBlockStart);
+    expect(howtoIdx).toBeGreaterThan(demoIdx);
+  });
+
+  it("links to /howto", () => {
+    const howtoCardSlice = homePageSrc.slice(
+      homePageSrc.indexOf("data-home-howto-card"),
+      homePageSrc.indexOf("data-home-howto-card") + 400
+    );
+    expect(howtoCardSlice).toContain('href="/howto"');
+  });
+});
+
+describe("Non-empty (returning-user) Home: compact top HOW TO action (QA correction 016B)", () => {
+  it('offers "TateSpun How to →" beside 総集編を編成する', () => {
+    const actionsStart = homePageSrc.indexOf("data-home-returning-actions");
+    expect(actionsStart).toBeGreaterThan(-1);
+    const actionsSlice = homePageSrc.slice(actionsStart, actionsStart + 1200);
+    expect(actionsSlice).toContain("総集編を編成する");
+    expect(actionsSlice).toContain("TateSpun How to →");
+    expect(actionsSlice).toContain('href="/howto"');
+  });
+});
+
+describe("本棚からできること restored to 3 cards (QA correction 016B)", () => {
+  it("the quick-actions grid has exactly the original 3 cards, no HOW TO card", () => {
+    const gridStart = homePageSrc.indexOf("本棚からできること");
     expect(gridStart).toBeGreaterThan(-1);
-    expect(gridStart > onboardingGateEnd || onboardingGateStart === -1).toBe(true);
+    const gridSlice = homePageSrc.slice(gridStart, gridStart + 3000);
+    expect(gridSlice).toContain("新しい本を書く");
+    expect(gridSlice).toContain("本をまとめる");
+    expect(gridSlice).toContain("使い方を見る");
+    expect(gridSlice).not.toContain("data-home-howto-card");
+    expect(gridSlice).not.toMatch(/>\s*HOW TO\s*<\/strong>/);
   });
 });
 
