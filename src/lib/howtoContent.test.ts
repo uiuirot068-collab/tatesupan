@@ -85,6 +85,73 @@ describe("no deferred/experimental feature leakage in visible howto copy (req #9
   });
 });
 
+describe("Hero vs. menu-icon asset identity (QA correction 016A)", () => {
+  // Regression guard: the original source assets had `hero-guide-illust.png`
+  // and `guide-cat.png` as byte-identical files (a prep mistake) — the Hero
+  // showed correctly, but the small sticky-nav icon wrongly reused the full
+  // Hero illustration instead of the intended cropped cat-face icon.
+  it("Hero uses the cat+PC+question-mark illustration", () => {
+    expect(HOWTO_IMAGES.hero.file).toBe("hero-guide-illust.png");
+  });
+
+  it("the small nav/menu icon is a distinct asset from the Hero", () => {
+    expect(HOWTO_IMAGES.guideCat.file).toBe("guide-cat-icon.png");
+    expect(HOWTO_IMAGES.guideCat.file).not.toBe(HOWTO_IMAGES.hero.file);
+  });
+
+  it("Hero and menu-icon files are not byte-identical", () => {
+    const heroBytes = readFileSync(path.join(assetsDir, HOWTO_IMAGES.hero.file));
+    const iconBytes = readFileSync(path.join(assetsDir, HOWTO_IMAGES.guideCat.file));
+    expect(heroBytes.equals(iconBytes)).toBe(false);
+  });
+});
+
+describe("scrolling + top-anchor wiring (QA correction 016A)", () => {
+  it("opts out of the app-shell scroll lock, same convention as / and /guide", () => {
+    expect(howtoPageSrc).toContain("data-howto-page");
+    const globalsCss = readFileSync(
+      path.join(repoRoot, "src/app/globals.css"),
+      "utf8"
+    );
+    expect(globalsCss).toContain("[data-howto-page]");
+  });
+
+  it("has a stable #howto-top Hero anchor, and the sticky brand links back to it", () => {
+    expect(howtoPageSrc).toContain('id="howto-top"');
+    expect(howtoPageSrc).toContain('href="#howto-top"');
+  });
+});
+
+describe("Help is discoverable without scrolling to the bottom (QA correction 016A)", () => {
+  it("offers a labelled (non-icon-only) Help trigger in the first-viewport hero nav", () => {
+    expect(howtoPageSrc).toContain("ヘルプを見る");
+  });
+
+  it("offers a labelled Help trigger in the persistent sticky nav", () => {
+    expect(howtoPageSrc).toContain("data-howto-help-cta=\"sticky-nav\"");
+  });
+});
+
+describe("Home HOW TO entry is distinct from the Help entry (QA correction 016A)", () => {
+  it("Home has a dedicated HOW TO quick-action card", () => {
+    expect(homePageSrc).toContain("data-home-howto-card");
+    expect(homePageSrc).toContain('href="/howto"');
+  });
+
+  it("the quick-actions grid (incl. the HOW TO card) is not gated to zero-work Home only", () => {
+    const gridStart = homePageSrc.indexOf("data-home-howto-card");
+    const onboardingGateStart = homePageSrc.indexOf("{onboarding && (");
+    const onboardingGateEnd = homePageSrc.indexOf(
+      ")}",
+      homePageSrc.indexOf("data-home-onboarding-actions")
+    );
+    // The HOW TO card must sit outside the onboarding-only conditional block,
+    // so it also renders for the returning-user (non-empty bookshelf) Home.
+    expect(gridStart).toBeGreaterThan(-1);
+    expect(gridStart > onboardingGateEnd || onboardingGateStart === -1).toBe(true);
+  });
+});
+
 describe("routing safety — no doubled basePath (req #4)", () => {
   it("howto page never hardcodes /tatespun/howto or /tatespun/tatespun", () => {
     expect(howtoPageSrc).not.toContain("/tatespun/howto");

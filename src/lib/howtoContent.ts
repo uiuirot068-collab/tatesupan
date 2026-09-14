@@ -18,8 +18,8 @@ export interface HowtoImage {
 }
 
 export const HOWTO_IMAGES = {
-  hero: { file: "hero-guide-illust.png", alt: "TateSpunの案内イラスト" },
-  guideCat: { file: "guide-cat.png", alt: "TateSpun案内猫" },
+  hero: { file: "hero-guide-illust.png", alt: "パソコンでTateSpunを開く案内猫と、頭上の「？」マーク" },
+  guideCat: { file: "guide-cat-icon.png", alt: "TateSpun案内猫のアイコン" },
   myCheck: { file: "feature-01-my-check.png", alt: "完成前マイチェックリストとPDF書き出し前チェックの画面" },
   writingCheck: { file: "feature-02-writing-check.png", alt: "文章チェックβの表示例" },
   bodyNotation: { file: "feature-03-body-notation.png", alt: "ルビ・縦中横・改ページの本文記法の入力例" },

@@ -104,10 +104,14 @@ export default function HowToPage() {
   const visibleLogs = sortedLogs.slice(0, visibleLogCount);
 
   return (
-    <div className={`howto-page${showLabels ? " show-copy-ids" : ""}`} lang="ja">
+    <div
+      className={`howto-page${showLabels ? " show-copy-ids" : ""}`}
+      data-howto-page=""
+      lang="ja"
+    >
       <h1 className="sr-only">HOW TO TateSpun｜タテスパン使い方ガイド</h1>
       <main className="manual">
-        <section className="hero">
+        <section className="hero" id="howto-top">
           <div className="hero-left">
             <div className="hero-brand">
               <span className="howto-label">HOW TO</span>
@@ -122,6 +126,14 @@ export default function HowToPage() {
               </Link>
             </div>
             <nav className="hero-index" aria-label="ページ案内">
+              <button
+                type="button"
+                className="hero-simple-link"
+                data-howto-help-cta="hero-nav"
+                onClick={() => setHelpOpen(true)}
+              >
+                ヘルプを見る
+              </button>
               <div className="hero-menu-block">
                 <div className="hero-menu-row">
                   <button
@@ -193,14 +205,22 @@ export default function HowToPage() {
         </section>
 
         <header className="guide-header">
-          <div className="guide-logo">
+          <a className="guide-logo" href="#howto-top" aria-label="HOW TO TateSpun のトップへ戻る">
             <img className="guide-cat" src={asset(HOWTO_IMAGES.guideCat.file)} alt={HOWTO_IMAGES.guideCat.alt} />
             <div><span>HOW TO</span><b>TateSpun</b></div>
-          </div>
+          </a>
           <div className="guide-links">
             <a href="#five-features" data-copy-id="TEXT_NAV_01">まずは知ってほしい<br />５つの機能</a>
             <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技<br />10選β版</a>
             <a href="#faq" data-copy-id="TEXT_NAV_03">FAQ<br /><span>困ったとき</span></a>
+            <button
+              type="button"
+              className="help-cta"
+              data-howto-help-cta="sticky-nav"
+              onClick={() => setHelpOpen(true)}
+            >
+              ヘルプ
+            </button>
           </div>
         </header>
 
