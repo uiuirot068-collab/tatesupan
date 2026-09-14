@@ -62,16 +62,22 @@
 .howto-page .hero-copy { max-width: 400px; margin: 28px auto 0; font-size: 15px; }
 .howto-page .scroll-arrow { margin-top: 32px; font-size: 32px; }
 
-.howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 110px; margin: 0 -64px; padding: 0 64px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
-.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 210px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
-.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; }
+/* TSP-RC-HOWTO-RESPONSIVE-VIDEO-001: fixed "brand row + nav row" = 2 rows,
+   PC and mobile alike -- column flex with exactly these two children, never
+   more. Row 2 (.guide-links) is a single nowrap flex row: word-break:
+   keep-all + overflow-wrap: normal stop mid-word character wrapping, and
+   clamp() shrinks its font before anything wraps. Padding/gap are the first
+   things trimmed at narrow widths (below), font-size clamp is the second. */
+.howto-page .guide-header { position: sticky; top: 0; z-index: 50; margin: 0 -64px; padding: 10px 64px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
+.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
+.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
 .howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
 .howto-page .guide-logo span { font-size: 11px; }
 .howto-page .guide-logo b { font: 700 17px Georgia, serif; }
-.howto-page .guide-links { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; flex: 1; max-width: 560px; }
-.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; padding: 10px 9px; border: 0; background: none; text-decoration: none; font: inherit; font-size: 13px; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; }
+.howto-page .guide-links { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: clamp(1px, 1vw, 10px); max-width: 100%; overflow: hidden; }
+.howto-page .guide-links a, .howto-page .guide-links button { flex: 0 1 auto; min-width: 0; padding: 6px 1px; border: 0; background: none; text-decoration: none; font: inherit; font-size: clamp(10.5px, 2.8vw, 13px); line-height: 1.3; color: inherit; text-align: left; cursor: pointer; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
 .howto-page .guide-links a:hover, .howto-page .guide-links button:hover { background: #faf6ee; }
-.howto-page .guide-links a span { font-size: 12px; color: var(--muted); }
+.howto-page .guide-links-sep { flex: 0 0 auto; font-size: clamp(10.5px, 2.8vw, 13px); color: var(--line); }
 .howto-page .guide-links button.help-cta { font-weight: 700; color: var(--gold-dark); }
 
 .howto-page .intro { display: grid; grid-template-columns: 29% 71%; gap: 38px; padding: 70px 0 105px; }
@@ -145,11 +151,13 @@
   .howto-page .hero { grid-template-columns: 1fr; min-height: auto; padding: 55px 0; }
   .howto-page .hero-left { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 36px; }
   .howto-page .hero-right { padding-top: 36px; }
-  .howto-page .guide-header { margin: 0 -22px; padding: 9px 22px; min-height: 90px; }
-  .howto-page .guide-logo { min-width: auto; }
+  /* TSP-RC-HOWTO-RESPONSIVE-VIDEO-001: horizontal padding trimmed first
+     (22px -> 10px each side) to reclaim width for row 2 before font-size
+     clamp takes over; .guide-links itself is unchanged here -- its base
+     rule already clamp()s font-size and uses a near-zero gap at this width. */
+  .howto-page .guide-header { margin: 0 -22px; padding: 8px 10px; }
   .howto-page .guide-cat { width: 36px; height: 36px; }
-  .howto-page .guide-links { gap: 4px; }
-  .howto-page .guide-links a, .howto-page .guide-links button { font-size: 11px; padding: 7px 5px; }
+  .howto-page .guide-links a, .howto-page .guide-links button { padding: 5px 1px; }
   .howto-page .intro { grid-template-columns: 1fr; gap: 22px; }
   .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 22px; }
   .howto-page .chapter > h2 { width: 100%; }
