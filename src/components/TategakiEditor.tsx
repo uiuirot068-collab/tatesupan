@@ -53,9 +53,6 @@ import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
-import { perfMark, perfSpan } from "@/lib/perfDebug";
-import PerfDebugPanel from "./PerfDebugPanel";
-import { resolveRendererRolloutMode } from "@/lib/v2Rollout";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -81,7 +78,6 @@ export default function TategakiEditor({
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
 }) {
-  perfMark("TategakiEditor:render");
   const router = useRouter();
   const { user } = useAuth();
   const [docId, setDocId] = useState<number | null>(
@@ -109,9 +105,7 @@ export default function TategakiEditor({
   const PREVIEW_PROP_DEBOUNCE_MS = 180;
   const [previewContent, setPreviewContent] = useState(content);
   useEffect(() => {
-    perfMark("TategakiEditor:previewContentDebounce:scheduled", { contentLength: content.length });
     const timer = window.setTimeout(() => {
-      perfMark("TategakiEditor:previewContentDebounce:fired", { contentLength: content.length });
       setPreviewContent(content);
     }, PREVIEW_PROP_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -250,9 +244,7 @@ export default function TategakiEditor({
   // reconcile the whole page-list subtree even with `previewContent` stable.
   const [previewCursorIndex, setPreviewCursorIndex] = useState(cursorIndex);
   useEffect(() => {
-    perfMark("TategakiEditor:cursorIndexDebounce:scheduled", { cursorIndex });
     const timer = window.setTimeout(() => {
-      perfMark("TategakiEditor:cursorIndexDebounce:fired", { cursorIndex });
       // PREVIEW_TO_EDITOR transaction completing: this is the caret echo the
       // jump itself produced -- consume the guard and skip re-driving
       // Preview's own cursor-follow with it (see suppressPreviewFollowForRef
@@ -559,15 +551,13 @@ export default function TategakiEditor({
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     const targetDocId = docId;
-    perfMark("TategakiEditor:autosaveDebounce:scheduled", { contentLength: content.length });
     saveTimeoutRef.current = setTimeout(() => {
       // Re-check immediately before writing in case the user switched
       // documents again during the debounce window.
       if (loadedDocIdRef.current !== targetDocId) return;
-      const end = perfSpan("TategakiEditor:saveDocument", { contentLength: content.length });
       saveDocument(targetDocId, title, content, settings, plotNote)
-        .then(() => { end({ ok: true }); setSaveStatus("saved"); })
-        .catch(() => { end({ ok: false }); setSaveStatus("error"); });
+        .then(() => { setSaveStatus("saved"); })
+        .catch(() => { setSaveStatus("error"); });
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
@@ -963,13 +953,6 @@ export default function TategakiEditor({
           {toast}
         </div>
       )}
-
-      <PerfDebugPanel
-        contentLength={content.length}
-        renderer={resolveRendererRolloutMode()}
-        pageCount={bodyPageCount}
-        cursorIndex={cursorIndex}
-      />
 
       {demoMode && (
         <DemoTour

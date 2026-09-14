@@ -87,7 +87,6 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
-import { perfMark, perfSpan } from "@/lib/perfDebug";
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
@@ -494,30 +493,23 @@ function PreviewPane({
   // for the V2 canonical preview pipeline in useV2PreviewAdapter) guarantees
   // the browser gets a paint opportunity before this recompute ever starts,
   // and keeps resetting while the user keeps typing so it never runs mid-burst.
-  perfMark("PreviewPane:render", { contentLength: content.length });
   const PREVIEW_CONTENT_DEBOUNCE_MS = 180;
   const [deferredContent, setDeferredContent] = useState(content);
   useEffect(() => {
-    perfMark("PreviewPane:contentDebounce:scheduled", { contentLength: content.length });
     const timer = window.setTimeout(() => {
-      perfMark("PreviewPane:contentDebounce:fired", { contentLength: content.length });
       setDeferredContent(content);
     }, PREVIEW_CONTENT_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [content]);
 
   const pages = useMemo(() => {
-    const endTokenize = perfSpan("PreviewPane:tokenizeTategaki", { contentLength: deferredContent.length });
     const tokens = tokenizeTategaki(deferredContent);
-    endTokenize({ tokenCount: tokens.length });
-    const endPaginate = perfSpan("PreviewPane:paginateTokens", { tokenCount: tokens.length });
     const result = paginateTokens(tokens, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
       columnCount: settings.columnCount,
       linesPerColumn: layout.linesPerColumn,
     });
-    endPaginate({ pageCount: result.length });
     return result;
   }, [
     deferredContent,
@@ -528,12 +520,10 @@ function PreviewPane({
   ]);
 
   const pageSourceRanges = useMemo(() => {
-    const end = perfSpan("PreviewPane:computePageSourceRanges", { contentLength: deferredContent.length });
     const result = computePageSourceRanges(deferredContent, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
     });
-    end({ rangeCount: result.length });
     return result;
   }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
 
@@ -1719,7 +1709,6 @@ function PreviewPane({
   };
 
   useEffect(() => {
-    perfMark("PreviewPane:cursorFollowEffect:fired", { activePageIndex });
     if (activePageIndex == null) return;
     // §E: never auto-scroll against a pane that hasn't been measured yet --
     // `scrollIntoView` against a not-yet-sized/laid-out scroll container can
@@ -1742,9 +1731,7 @@ function PreviewPane({
     // remaining cost is the one-time layout of scrolling a large
     // unvirtualized tree, not the animation). The cursor still follows the
     // caret to the right page -- it just no longer animates there.
-    const endScroll = perfSpan("PreviewPane:scrollIntoView", { activePageIndex });
     el.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
-    endScroll();
 
     if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     autoScrollTimeoutRef.current = setTimeout(() => {
