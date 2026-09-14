@@ -375,7 +375,7 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="mx-auto grid max-w-[760px] grid-cols-1 gap-[10px] sm:grid-cols-3">
+          <div className="mx-auto grid max-w-[880px] grid-cols-2 gap-[10px] sm:grid-cols-4">
             <button
               type="button"
               onClick={handleCreate}
@@ -386,6 +386,21 @@ export default function Home() {
               <strong className="text-lg">新しい本を書く</strong>
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">新しい作品を作成する</small>
             </button>
+
+            {/* TSP-HOWTO-BETA-016A: the primary, unmissable Home entry into
+                the first-time-user guide. Present in both zero-work and
+                returning-user Home (this grid is outside the isNonEmptyVisual
+                branch), distinct from 「使い方を見る」below (which opens the
+                detailed-reference HelpModal, not this page). */}
+            <Link
+              href="/howto"
+              data-home-howto-card=""
+              className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+            >
+              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">▶</span>
+              <strong className="text-lg">HOW TO</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">はじめての方の使い方ガイド</small>
+            </Link>
 
             <button
               type="button"
@@ -406,8 +421,8 @@ export default function Home() {
               className="grid min-h-[120px] content-center place-items-center gap-2 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
             >
               <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">?</span>
-              <strong className="text-lg">使い方を見る</strong>
-              <small className="text-sm text-ink/55 dark:text-[#939DAF]">本棚・エディタ・書き出し</small>
+              <strong className="text-lg">ヘルプ</strong>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">機能の詳しい説明を調べる</small>
             </button>
           </div>
 

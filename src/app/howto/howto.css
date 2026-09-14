@@ -63,15 +63,16 @@
 .howto-page .scroll-arrow { margin-top: 32px; font-size: 32px; }
 
 .howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 110px; margin: 0 -64px; padding: 0 64px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
-.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 210px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
 .howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; }
 .howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
 .howto-page .guide-logo span { font-size: 11px; }
 .howto-page .guide-logo b { font: 700 17px Georgia, serif; }
-.howto-page .guide-links { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; flex: 1; max-width: 560px; }
-.howto-page .guide-links a { display: block; padding: 10px 9px; text-decoration: none; font-size: 13px; line-height: 1.45; }
-.howto-page .guide-links a:hover { background: #faf6ee; }
+.howto-page .guide-links { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; flex: 1; max-width: 560px; }
+.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; padding: 10px 9px; border: 0; background: none; text-decoration: none; font: inherit; font-size: 13px; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; }
+.howto-page .guide-links a:hover, .howto-page .guide-links button:hover { background: #faf6ee; }
 .howto-page .guide-links a span { font-size: 12px; color: var(--muted); }
+.howto-page .guide-links button.help-cta { font-weight: 700; color: var(--gold-dark); }
 
 .howto-page .intro { display: grid; grid-template-columns: 29% 71%; gap: 38px; padding: 70px 0 105px; }
 .howto-page .intro-title { display: flex; align-items: flex-start; gap: 12px; }
@@ -148,7 +149,7 @@
   .howto-page .guide-logo { min-width: auto; }
   .howto-page .guide-cat { width: 36px; height: 36px; }
   .howto-page .guide-links { gap: 4px; }
-  .howto-page .guide-links a { font-size: 11px; padding: 7px 5px; }
+  .howto-page .guide-links a, .howto-page .guide-links button { font-size: 11px; padding: 7px 5px; }
   .howto-page .intro { grid-template-columns: 1fr; gap: 22px; }
   .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 22px; }
   .howto-page .chapter > h2 { width: 100%; }
