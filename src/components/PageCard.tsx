@@ -2330,39 +2330,62 @@ function FixedSlotLine({
           )}
         </span>
       ))}
-      {latinRuns.map((run) => (
-        <span
-          key={run.key}
-          data-latin-run=""
-          data-run-start-slot={run.startSlot}
-          data-run-slot-count={run.slotCount}
-          style={{
-            position: "absolute",
-            top: slotTop(run.startSlot),
-            left: 0,
-            width: baseGlyphLaneWidthPx,
-            height: slotSpanPx(run.startSlot, run.slotCount),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            writingMode: "vertical-rl",
-            WebkitWritingMode: "vertical-rl",
-            textOrientation: "mixed",
-            WebkitTextOrientation: "mixed",
-            // real 欧文 metrics: horizontal advances + kerning, not one
-            // full-width upright cell per character.
-            fontVariantEastAsian: "normal",
-            lineHeight: 1,
-            whiteSpace: "pre",
-            // the measured slot reservation rounds the advance UP, so any
-            // residual sub-pixel overshoot stays inside the run's own box
-            // instead of nudging the next canonical slot.
-            overflow: "hidden",
-          }}
-        >
-          {run.text}
-        </span>
-      ))}
+      {latinRuns.map((run) => {
+        // latinRunSlotCount() reserves whole canonical slots (ceil of the
+        // measured advance) so the FOLLOWING character stays on the integer
+        // slot grid -- required, not negotiable here (ruby/TCY/hanging-
+        // punctuation and every other token on this line key off that same
+        // integer grid). But this font's real Latin advances are
+        // proportional, not monospaced to the CJK em: a short run like
+        // "PC"/"ID"/"SNS" typically only fills 60-90% of its last reserved
+        // slot. Anchoring the (correctly-kerned, single-text-node) run to
+        // the top of that reservation put 100% of the leftover space AFTER
+        // the run, reading as an unwanted ~1-character gap before the next
+        // (often Japanese) character -- reported as `PCの` / `IDの` / `SNSの`.
+        // Fix: size this box to the run's own true measured advance and
+        // center it within its still-unchanged slot reservation, splitting
+        // the same pre-existing slack evenly before and after the run
+        // instead of dumping all of it on one side. The reservation itself,
+        // slotCursor, and every other token's position are untouched.
+        const reservedPx = slotSpanPx(run.startSlot, run.slotCount);
+        const trueAdvancePx = Math.round(
+          latinRunAdvanceEm(run.text, fontSizePx, fontFamily) * fontSizePx
+        );
+        const slackPx = Math.max(0, reservedPx - trueAdvancePx);
+        return (
+          <span
+            key={run.key}
+            data-latin-run=""
+            data-run-start-slot={run.startSlot}
+            data-run-slot-count={run.slotCount}
+            style={{
+              position: "absolute",
+              top: slotTop(run.startSlot) + Math.round(slackPx / 2),
+              left: 0,
+              width: baseGlyphLaneWidthPx,
+              height: trueAdvancePx,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              writingMode: "vertical-rl",
+              WebkitWritingMode: "vertical-rl",
+              textOrientation: "mixed",
+              WebkitTextOrientation: "mixed",
+              // real 欧文 metrics: horizontal advances + kerning, not one
+              // full-width upright cell per character.
+              fontVariantEastAsian: "normal",
+              lineHeight: 1,
+              whiteSpace: "pre",
+              // residual sub-pixel overshoot (trueAdvancePx rounds a
+              // continuous value to a whole px) stays inside the run's own
+              // box instead of nudging a neighbour.
+              overflow: "hidden",
+            }}
+          >
+            {run.text}
+          </span>
+        );
+      })}
       {tcyCells.map((cell) => (
         <FixedSlotTcy
           key={cell.key}
