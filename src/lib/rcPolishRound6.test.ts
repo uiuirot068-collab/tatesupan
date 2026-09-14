@@ -73,13 +73,22 @@ describe("Final zero-work Home polish", () => {
     expect(onboarding).toContain("min-[720px]:justify-self-end");
   });
 
-  it("keeps the Demo CTA in one compact text flow instead of a second column", () => {
+  it("keeps the Demo CTA in one compact text flow, now width-constrained by the two-column HOW TO onboarding grid", () => {
+    // TSP-HOWTO-BETA-016: the Demo card's own `max-w-md` was dropped when it
+    // moved into this `sm:grid-cols-2` wrapper alongside the new HOW TO
+    // card (Human QA PASS) -- the grid column now supplies the width
+    // constraint the card used to set on itself.
+    const twoColumnWrapper = onboarding.slice(
+      onboarding.indexOf('data-home-onboarding-actions'),
+      onboarding.indexOf('data-home-demo-card=""')
+    );
     const card = onboarding.slice(
       onboarding.indexOf('data-home-demo-card=""'),
       onboarding.indexOf("</Link>", onboarding.indexOf('data-home-demo-card=""'))
     );
+    expect(twoColumnWrapper).toContain("sm:grid-cols-2");
     expect(card).toContain('data-home-demo-cta=""');
-    expect(card).toContain("block max-w-md");
+    expect(card).toContain("block rounded-xl");
     expect(card).toContain("text-sm font-semibold");
     expect(card).not.toContain("grid-cols-[1fr_auto]");
   });

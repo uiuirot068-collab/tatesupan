@@ -77,7 +77,14 @@ describe("RC Editor information architecture", () => {
     expect(shell).toContain("gap-2 overflow-hidden");
     expect(shell).not.toContain("h-[calc(100dvh-9rem)]");
     expect(editor).toContain('className="relative min-h-0 flex-1"');
-    expect(editor).toContain("resize-none overflow-y-auto overflow-x-hidden");
+    // Exact substring match, not a weakened one: this locks in the same
+    // resize-none/overflow-y-auto/overflow-x-hidden intent as before, but
+    // written to account for the `probeMode === "nowrap"` diagnostic-only
+    // ternary (b9ea7de) that already sits between overflow-y-auto and
+    // overflow-x-hidden in the actual template literal.
+    expect(editor).toContain(
+      'resize-none overflow-y-auto ${probeMode === "nowrap" ? "overflow-x-auto whitespace-pre" : "overflow-x-hidden"}'
+    );
     expect(settings).toContain("min-h-0 flex-1 overflow-y-auto");
     expect(options).toContain("min-h-0 flex-1 gap-3 overflow-y-auto");
     expect(shell).toContain('data-editor-header-slot=""');
