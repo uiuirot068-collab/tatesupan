@@ -59,6 +59,7 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
+import { rubyLaneGeometry } from "../rubyLane";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -341,7 +342,17 @@ function verticalGraphemeCommands(
     // `yPlacementEmFor` for the generic/ordinary branch is removed.
     const gposOffsetMm = 0;
     const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
-    const outlineGlyphId = outlineContext?.resolveOutlineGlyphId(ch);
+    // CSS Preview inherits `text-orientation: upright` from PageCard, so
+    // ordinary printable ASCII occupies one upright vertical cell per
+    // grapheme. Shippori's `vert` GSUB also exposes alternates for Latin,
+    // but those outlines are sideways and therefore do not represent that
+    // product contract. Keep ordinary ASCII on the unrotated text path.
+    // TCY never reaches this function (it has its own one-command path), so
+    // automatic two-digit and explicit [tate] behavior remain independent.
+    const useUprightAsciiText = /^[\x20-\x7e]$/.test(ch);
+    const outlineGlyphId = useUprightAsciiText
+      ? undefined
+      : outlineContext?.resolveOutlineGlyphId(ch);
     if (outlineGlyphId !== undefined && outlineContext) {
       return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
     }
@@ -443,7 +454,14 @@ function unitCommands(
   // caller that never supplied `pageGeometry` to `buildPaintPlan`), in
   // which case the IMAGE branch falls back to the prior `lineWidthMm`-based
   // sizing unchanged.
-  imageBoxMm?: { widthMm: number; centerXMm: number }
+  imageBoxMm?: {
+    contentLeftMm: number;
+    contentTopMm: number;
+    contentWidthMm: number;
+    contentHeightMm: number;
+    paperWidthMm: number;
+    paperHeightMm: number;
+  }
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -485,21 +503,12 @@ function unitCommands(
     if (unit.rubyAnnotation?.status === "PLACED") {
       const ann = unit.rubyAnnotation;
       const annotationFontSizePt = perCharFontSizePt * RUBY_ANNOTATION_FONT_RATIO;
-      // Positioned to the physical right of the base run's own column —
-      // the vector-paint equivalent of Preview's `left: 100%` CSS (see
-      // this module's own RUBY_ANNOTATION_FONT_RATIO comment). BUG FIXED
-      // (Human Visual QA HOLD, catastrophic overlap): the clearance MUST be
-      // sized relative to the ANNOTATION's own font/glyph width, never the
-      // base run's own `lineWidthMm` — the two are unrelated scales, and
-      // using the base line's width as the clearance reference produced a
-      // gap far too small for the annotation's own (similarly-sized)
-      // glyphs, so the annotation visibly overlapped back into the base
-      // run's column. The annotation is now centered within its own
-      // em-sized column, placed just past the base run's right edge with a
-      // small proportional gap.
-      const annotationEmWidthMm = annotationFontSizePt * (25.4 / 72);
-      const annotationGapMm = annotationEmWidthMm * 0.25;
-      const annotationX = x + lineWidthMm + annotationGapMm + annotationEmWidthMm / 2;
+      // The shared paint metric starts from the unchanged body center and
+      // uses the Human-selected fraction of the runtime line pitch. It
+      // changes neither Core's reading-direction geometry nor
+      // the body position, and Preview consumes the identical lane contract.
+      const annotationX =
+        xCenter + rubyLaneGeometry(bodyEmMm, lineWidthMm).annotationCenterFromParentCenter;
       commands.push(...verticalGraphemeCommands(ann.text, annotationX, y + ann.offsetMm, ann.extentMm, annotationFontSizePt, baselineRatio, outlineContext, gposContext, yakumonoContext));
     }
     return commands;
@@ -574,17 +583,55 @@ function unitCommands(
     // prior `lineWidthMm`/`xCenter` behavior only when no real page
     // geometry was supplied at all (preserves every pre-existing
     // geometry-less caller byte-for-byte).
-    const boxWidthMm = imageBoxMm?.widthMm ?? lineWidthMm;
-    const boxCenterXMm = imageBoxMm?.centerXMm ?? xCenter;
+    const boxWidthMm = imageBoxMm?.contentWidthMm ?? lineWidthMm;
+    const boxHeightMm = imageBoxMm?.contentHeightMm ?? unit.heightMm;
+    const boxLeftMm = imageBoxMm?.contentLeftMm ?? x;
+    const boxTopMm = imageBoxMm?.contentTopMm ?? y;
     const naturalWidthMm = unit.imageIntrinsicWidthMm ?? boxWidthMm;
     const naturalHeightMm = unit.heightMm;
-    const scale = naturalWidthMm > boxWidthMm ? boxWidthMm / naturalWidthMm : 1;
+    const placement = unit.imagePlacement ?? "CENTER";
+    if (placement === "FULL" && unit.imageFullPageCover && imageBoxMm) {
+      // Match the established editor contract: cover the physical page while
+      // preserving the marker box's aspect ratio. Any overflow is clipped by
+      // the PDF/JPG page surface; no raster-pixel remeasurement is involved.
+      const scale = Math.max(
+        imageBoxMm.paperWidthMm / naturalWidthMm,
+        imageBoxMm.paperHeightMm / naturalHeightMm
+      );
+      const widthMm = naturalWidthMm * scale;
+      const heightMm = naturalHeightMm * scale;
+      const imageX = (imageBoxMm.paperWidthMm - widthMm) / 2;
+      const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
+      const resolution = unit.imageResolution;
+      return resolution && resolution.kind === "RESOLVED"
+        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        : [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
+    }
+    if (placement === "FULL") {
+      // Preserve the renderer's pre-existing generic Core-fixture behavior:
+      // FULL isolates flow but only the Editor bridge's explicit UI contract
+      // opts into covering the physical page.
+      const scale = naturalWidthMm > boxWidthMm ? boxWidthMm / naturalWidthMm : 1;
+      const widthMm = naturalWidthMm * scale;
+      const heightMm = naturalHeightMm * scale;
+      const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
+      const resolution = unit.imageResolution;
+      return resolution && resolution.kind === "RESOLVED"
+        ? [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        : [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
+    }
+    const scale = Math.min(1, boxWidthMm / naturalWidthMm, boxHeightMm / naturalHeightMm);
     const widthMm = naturalWidthMm * scale;
     const heightMm = naturalHeightMm * scale;
-    const imageX = boxCenterXMm - widthMm / 2;
+    const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
+    const imageY = placement === "TOP"
+      ? boxTopMm
+      : placement === "BOTTOM"
+        ? boxTopMm + boxHeightMm - heightMm
+        : boxTopMm + (boxHeightMm - heightMm) / 2;
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
-      return [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
+      return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
     }
     // PLACEHOLDER (no resolver wired) or an unresolved failure kind that
     // reached paint time without going through `generatePublicationPdf`'s
@@ -592,7 +639,7 @@ function unitCommands(
     // as every typography test in this file does) — the same vector-rect
     // placeholder as before, now sized to the real aspect-correct box
     // instead of the full column width.
-    return [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
+    return [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
   }
 
   // Any other kind without real paint text yet: unchanged vector-rectangle
@@ -645,8 +692,14 @@ function buildBodyPaintPage(
     // doc) — undefined when no real page geometry was supplied, so
     // geometry-less callers keep their prior `lineWidthMm`-based behavior.
     const contentAreaWidthMm = pageGeometry ? contentRightEdgeMm - pageGeometry.marginLeftMm : undefined;
-    const contentAreaCenterXMm = pageGeometry && contentAreaWidthMm !== undefined ? pageGeometry.marginLeftMm + contentAreaWidthMm / 2 : undefined;
-    const imageBoxMm = contentAreaWidthMm !== undefined && contentAreaCenterXMm !== undefined ? { widthMm: contentAreaWidthMm, centerXMm: contentAreaCenterXMm } : undefined;
+    const imageBoxMm = pageGeometry && contentAreaWidthMm !== undefined ? {
+      contentLeftMm: pageGeometry.marginLeftMm,
+      contentTopMm: pageGeometry.marginTopMm,
+      contentWidthMm: contentAreaWidthMm,
+      contentHeightMm: pageGeometry.paperHeightMm - pageGeometry.marginTopMm - pageGeometry.marginBottomMm,
+      paperWidthMm: pageGeometry.paperWidthMm,
+      paperHeightMm: pageGeometry.paperHeightMm,
+    } : undefined;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {

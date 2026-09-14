@@ -44,6 +44,53 @@ describe("responsive demo card placement", () => {
     expect(oversized.left).toBeGreaterThanOrEqual(12);
   });
 
+  it("TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: places STEP 8's card below the thin 編集ページ nav row instead of overlapping it, at every required mobile width", () => {
+    // The nav row sits just under the title, near the very top of the
+    // editor pane -- unlike the old full-textarea target (which left no
+    // room on either side), this thin strip always has room below it.
+    const navRow: DemoRect = { top: 96, bottom: 132, left: 12, right: 320, width: 308, height: 36 };
+    for (const width of [320, 375, 390, 430]) {
+      const viewportAtWidth = { width, height: 844 };
+      // Mirrors DemoTour's real CSS (`w-[calc(100vw-1.5rem)] max-w-md`) --
+      // at these mobile widths the viewport-relative width always wins.
+      const cardAtWidth = { width: width - 24, height: card.height };
+      const placement = computeDemoCardPlacement(navRow, cardAtWidth, viewportAtWidth);
+      expect(placement.side).toBe("below");
+      expect(placement.top).toBeGreaterThanOrEqual(navRow.bottom);
+      // Card stays fully inside the viewport horizontally.
+      expect(placement.left).toBeGreaterThanOrEqual(0);
+      expect(placement.left + cardAtWidth.width).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it("targets the 編集ページ nav row via a raw selector, not the whole editor surface", () => {
+    const data = readFileSync(join(__dirname, "..", "constants", "demoData.ts"), "utf8");
+    const tour = readFileSync(join(__dirname, "..", "components", "DemoTour.tsx"), "utf8");
+
+    expect(data).toMatch(/title: "長い原稿は「編集ページ」で軽やかに"[\s\S]{0,1200}targetSelector: "\[data-editor-page-navigator\]"/);
+    // STEP 8 must NOT keep spotlighting the generic whole-editor target.
+    expect(data).not.toMatch(/title: "長い原稿は「編集ページ」で軽やかに"[\s\S]{0,1200}target: "editor"/);
+    expect(tour).toContain("step.targetSelector ?? (step.target");
+  });
+
+  it("STEP 8 explains arbitrary editor-only splits without implying publication pagination changes", () => {
+    const data = readFileSync(join(__dirname, "..", "constants", "demoData.ts"), "utf8");
+    const step = data.slice(
+      data.indexOf('title: "長い原稿は「編集ページ」で軽やかに"'),
+      data.indexOf('title: "作業タイムを記録しよう"')
+    );
+    expect(step).toContain("ここで区切る");
+    expect(step).toContain("前のページとつなぐ");
+    // TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: no manual/automatic boundary
+    // terminology -- just "編集ページは作業用の区切り" (an editing aid) and
+    // that the manuscript/publication output is unaffected.
+    expect(step).not.toMatch(/自動区切り|手動区切り/);
+    expect(step).toContain("編集ページは作業用の区切り");
+    expect(step).toContain("原稿そのもの");
+    expect(step).toContain("プレビュー・PDF・JPGのページには影響しません");
+    expect(step).toContain('targetSelector: "[data-editor-page-navigator]"');
+  });
+
   it("is used by the real tour while its navigation controls stay fixed", () => {
     const tour = readFileSync(join(__dirname, "..", "components", "DemoTour.tsx"), "utf8");
     expect(tour).toContain("computeDemoCardPlacement(");
@@ -58,7 +105,8 @@ describe("responsive demo card placement", () => {
     const tracker = readFileSync(join(__dirname, "..", "components", "WorkSessionTracker.tsx"), "utf8");
     const guide = readFileSync(join(__dirname, "..", "app", "guide", "page.tsx"), "utf8");
 
-    expect(data.match(/^    title: "/gm)).toHaveLength(11);
+    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G added one step (編集ページ).
+    expect(data.match(/^    title: "/gm)).toHaveLength(12);
     expect(data).not.toMatch(/\bn:\s*\d+,/);
     expect(data).toContain('title: "オプションも使えます"');
     expect(data).toContain('title: "集中モードで本文を広く"');

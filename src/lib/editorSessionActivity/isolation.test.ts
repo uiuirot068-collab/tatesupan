@@ -35,7 +35,7 @@ describe("11-B architectural and persistence isolation", () => {
     expect(counter).toContain("今回書いた文字数");
     expect(counter).toContain("現在の原稿文字数とは別の値です");
     expect(editor).toContain('title="現在の原稿文字数"');
-    expect(editor).toContain("countVisualLength(content)");
+    expect(editor).toContain("countVisualLength(deferredContent)");
   });
 
   it("keeps Ruby/TCY help compact with accessible hover, focus, and touch disclosure", () => {
@@ -45,7 +45,7 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain("<EditorSyntaxHelp />");
     expect(help).toContain("data-editor-footer-help");
     expect(editor).toContain("data-editor-footer-controls");
-    expect(editor).toContain("現在の原稿文字数 {countVisualLength(content)}文字");
+    expect(editor).toContain("現在の原稿文字数 {visualLength}文字");
     expect(help).toContain("truncate whitespace-nowrap");
     expect(help).toContain("title={EDITOR_SYNTAX_HELP}");
     expect(help).toContain("aria-label={EDITOR_SYNTAX_HELP}");

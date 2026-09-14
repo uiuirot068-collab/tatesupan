@@ -41,11 +41,17 @@ export default function DemoTour({
   const cardRef = useRef<HTMLElement>(null);
   const [placement, setPlacement] = useState<DemoCardPlacement | null>(null);
 
+  // `targetSelector` lets a step spotlight one specific control inside a
+  // larger `data-demo-target` surface (see demoData.ts's own doc); it always
+  // takes precedence over the ordinary `data-demo-target="${step.target}"`
+  // lookup when present.
+  const targetQuery = step.targetSelector ?? (step.target ? `[data-demo-target="${step.target}"]` : null);
+
   const updatePlacement = useCallback(() => {
     const card = cardRef.current;
     if (!card) return;
-    const targets = step.target
-      ? Array.from(document.querySelectorAll<HTMLElement>(`[data-demo-target="${step.target}"]`))
+    const targets = targetQuery
+      ? Array.from(document.querySelectorAll<HTMLElement>(targetQuery))
       : [];
     const target = targets.find((node) => node.offsetParent !== null) ?? null;
     const targetRect = target?.getBoundingClientRect() ?? null;
@@ -56,16 +62,16 @@ export default function DemoTour({
       { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight },
       step.target === "export" ? "lower-safe" : "auto"
     ));
-  }, [step.target]);
+  }, [targetQuery, step.target]);
 
   useEffect(() => {
-    if (!step.target) return;
+    if (!targetQuery) return;
     let el: HTMLElement | null = null;
     const id = window.setTimeout(() => {
       // Prefer a currently-visible match (the same hook is on the desktop
       // Header control AND the mobile control for some steps).
       const all = Array.from(
-        document.querySelectorAll<HTMLElement>(`[data-demo-target="${step.target}"]`)
+        document.querySelectorAll<HTMLElement>(targetQuery)
       );
       el = all.find((n) => n.offsetParent !== null) ?? all[0] ?? null;
       if (!el || el.offsetParent === null) return;
@@ -80,7 +86,7 @@ export default function DemoTour({
         .querySelectorAll(".tsp-demo-spotlight")
         .forEach((n) => n.classList.remove("tsp-demo-spotlight"));
     };
-  }, [step.target, stepNumber, updatePlacement]);
+  }, [targetQuery, stepNumber, updatePlacement]);
 
   useLayoutEffect(() => {
     const frame = window.requestAnimationFrame(updatePlacement);

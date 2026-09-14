@@ -21,6 +21,7 @@ import type { PaintColumn, PaintDocument, PaintLine, PaintPage, PaintPlacedUnit 
 // Core's own unscaled measurement, is exactly the inconsistency this
 // decision resolves).
 import { DEFAULT_RUBY_SCALE } from "../../core";
+import { rubyLaneGeometry } from "../rubyLane";
 
 export type PreviewMode = "normal" | "debug";
 
@@ -34,7 +35,7 @@ const PREVIEW_RENDERER_RULES = `
   .hold-banner { background: #fee; border: 1px solid #c0392b; padding: 8px; font-size: 12px; }
   .font-warning { background: #ffe9c2; border: 1px solid #cc8b00; padding: 6px; font-size: 11px; margin-bottom: 6px; }
   .page-row { display: flex; flex-wrap: wrap; gap: 24px; }
-  .page { position: relative; background: #fff; writing-mode: vertical-rl; border: 1px solid #ccc; }
+  .page { position: relative; background: #fff; writing-mode: vertical-rl; text-orientation: upright; font-family: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif; border: 1px solid #ccc; }
   .page.horizontal { writing-mode: horizontal-tb; }
   .column { position: absolute; top: 0; }
   .line { position: absolute; top: 0; }
@@ -66,7 +67,7 @@ const PREVIEW_RENDERER_RULES = `
      clip -- CSS overflow only ever clips a box's own descendants, never
      its siblings, and moving the clip one level down is the minimal way
      to keep glyph-ink clipping while un-clipping the annotation. */
-  .unit-ink { display: block; width: 100%; height: 100%; overflow: hidden; }
+  .unit-ink { position: absolute; left: calc(50% - 0.5em); display: block; width: 1em; height: 100%; overflow: hidden; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   /* P3-O03-TCY-VISUAL: text-combine-upright is the standard CSS mechanism
      for tategaki 縦中横 (Phase 2's own P2-L06B evidence already identified
@@ -81,6 +82,7 @@ const PREVIEW_RENDERER_RULES = `
      writing-mode:vertical-rl so it still occupies the correct canonical
      GeometryTick-derived position along the line). */
   .tcy { text-combine-upright: all; }
+  .unit.semantic-dash { text-orientation: mixed; }
   /* P3-O04-DASH-VISUAL history (full detail: qa/evidence/P3_O04_DASH_VISUAL.md):
      Phase 2's own frozen P2-L06 evidence measured a real, non-hypothetical
      optical problem for dash/ellipsis runs (glyph ink left-shifted within
@@ -89,21 +91,12 @@ const PREVIEW_RENDERER_RULES = `
      BOTH REJECTED by Human Visual QA -- the solid bar read as a page
      rule/border, not prose punctuation; the opacity variant read as pale/
      blurred. Human confirmed the native font glyph's own stroke weight is
-     the right visual direction, but the SHARED-TEXT-NODE rendering left a
-     visible seam between the run's two "―" characters.
-
-     P3-O04-DASH-SEAM-HOLD: DASH runs (only) are now split into one paint
-     node PER GRAPHEME (unit.dashGlyphs, computed in paintModel.ts's
-     dashGlyphsFor from the run's own already-canonical heightPx --
-     never a Core change, never a re-tokenization, the SemanticRunUnit
-     stays exactly one atom throughout). Each glyph node uses REAL font
-     glyph ink (no color:transparent, no painted bar, no opacity trick) --
-     .dash-glyph below only positions each grapheme; it paints nothing
-     of its own. Consecutive glyph nodes overlap by a small, em-relative
-     amount (paintModel.ts's own dashOverlapEm) to visually close the
-     seam, while the FIRST glyph's own top and the LAST glyph's own
-     bottom still span the full canonical run extent exactly -- the
-     painted run is never shortened.
+     the right visual direction. Current Human QA found that separate DOM
+     shaping contexts preserve each glyph's ink side bearings even when
+     their layout slots overlap, leaving a visible seam. DASH therefore
+     paints its unchanged U+2015 sequence as one native vertical shaping
+     run. The semantic-dash orientation override is local to this run;
+     canonical extent, source text, and ordinary character flow are unchanged.
 
      P3-O05-ELLIPSIS-AUDIT: ELLIPSIS was independently audited (not assumed
      to need the same fix) and left on the plain native-glyph path -- its
@@ -112,8 +105,6 @@ const PREVIEW_RENDERER_RULES = `
      analogue here. TWO_DOT_LEADER remains untouched/unused for the same
      reason (not yet exercised by any fixture). See
      qa/evidence/P3_O05_ELLIPSIS_VISUAL.md for the full audit record. */
-  .unit.kind-SEMANTIC_RUN.semantic-dash .unit-ink { position: relative; }
-  .dash-glyph { position: absolute; left: 0; right: 0; }
   .provisional-badge { display: none; }
   /* P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: text-align in a vertical writing
      mode (writing-mode:vertical-rl, inherited here from .unit) aligns
@@ -139,7 +130,7 @@ const PREVIEW_RENDERER_RULES = `
      DEFAULT_RUBY_SCALE, the SAME single authoritative constant Core's own
      ruby-reading-extent measurement now uses -- no longer an independently
      -hardcoded 0.55 (Publication paint uses the identical constant). */
-  .ruby-annotation { position: absolute; left: 100%; margin-left: 2px; font-size: ${DEFAULT_RUBY_SCALE}em; white-space: nowrap; color: #444; text-align: start; }
+  .ruby-annotation { position: absolute; font-size: ${DEFAULT_RUBY_SCALE}em; white-space: nowrap; color: #444; text-align: start; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -181,12 +172,13 @@ function DebugBadge({ text }: { text: string }) {
   return <span className="debug-info">{text}</span>;
 }
 
-function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; mode: PreviewMode }) {
+function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode }) {
+  const rubyLane = rubyLaneGeometry(fontSizePx, linePitchPx);
   const debugText =
     `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
     (unit.semanticRunKind
       ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${
-          unit.semanticRunKind === "DASH" ? `native-glyph, ${unit.dashGlyphs?.length ?? 0} paint node(s), seam overlap` : "native-glyph"
+          unit.semanticRunKind === "DASH" ? "one native vertical shaping run" : "native-glyph"
         }`
       : "");
   // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: debug-only, human-readable trace of
@@ -225,17 +217,6 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
           // is completely untouched; this wrapper only affects how the
           // text renders WITHIN that already-fixed box.
           <span className="tcy">{unit.text}</span>
-        ) : unit.dashGlyphs ? (
-          // P3-O04-DASH-SEAM-HOLD: one real-glyph-ink paint node per
-          // grapheme, positioned by paintModel.ts's own deterministic,
-          // em-relative overlap computation — never recalculated here,
-          // never re-deriving the split itself (the grapheme list and its
-          // positions are read back exactly as computed).
-          unit.dashGlyphs.map((g, gi) => (
-            <span key={gi} className="dash-glyph" style={{ top: g.topPx, height: g.heightPx }}>
-              {g.text}
-            </span>
-          ))
         ) : (
           unit.text
         )}
@@ -251,7 +232,17 @@ function UnitBox({ unit, fontSizePx, mode }: { unit: PaintPlacedUnit; fontSizePx
       {unit.rubyAnnotation?.status === "PLACED" && (
         <span
           className="ruby-annotation"
-          style={{ top: unit.rubyAnnotation.offsetPx, height: unit.rubyAnnotation.extentPx }}
+          style={{
+            top: unit.rubyAnnotation.offsetPx,
+            // The line box is column pitch, not the base ink box. The shared
+            // lane metric starts from the unchanged body center and places
+            // Ruby at the Human-selected fraction of the runtime line pitch.
+            // Publication consumes the same metric; Core's reading-direction
+            // offset/extent and the body coordinate remain unchanged.
+            left: `calc(50% + ${rubyLane.annotationStartFromParentCenter}px)`,
+            width: rubyLane.annotationWidth,
+            height: unit.rubyAnnotation.extentPx,
+          }}
           title={mode === "debug" ? rubyDebugText : undefined}
         >
           {unit.rubyAnnotation.text}
@@ -269,7 +260,7 @@ function LineView({ line, fontSizePx, pageHeightPx, mode }: { line: PaintLine; f
       {mode === "debug" && <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />}
       {mode === "debug" && line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
       {line.units.map((unit) => (
-        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} mode={mode} />
+        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} />
       ))}
     </div>
   );
@@ -286,7 +277,7 @@ function ColumnView({ column, fontSizePx, pageHeightPx, mode }: { column: PaintC
   );
 }
 
-export function PreviewPage({ page, fontSizePx, mode }: { page: PaintPage; fontSizePx: number; mode: PreviewMode }) {
+export function PreviewPage({ page, fontSizePx, mode, paintImages = true }: { page: PaintPage; fontSizePx: number; mode: PreviewMode; paintImages?: boolean }) {
   const rootClass = ["page", page.orientation === "horizontal" ? "horizontal" : "", mode === "debug" ? "debug" : ""].filter(Boolean).join(" ");
   return (
     <div className={rootClass} style={{ width: page.widthPx, height: page.heightPx }}>
@@ -298,7 +289,13 @@ export function PreviewPage({ page, fontSizePx, mode }: { page: PaintPage; fontS
       )}
       {mode === "debug" && page.manualBreakBefore && <div className="page-break-marker" />}
       {page.columns.map((column) => (
-        <ColumnView key={column.id} column={column} fontSizePx={fontSizePx} pageHeightPx={page.heightPx} mode={mode} />
+        <ColumnView
+          key={column.id}
+          column={paintImages ? column : { ...column, lines: column.lines.map((line) => ({ ...line, units: line.units.filter((unit) => unit.kind !== "IMAGE") })) }}
+          fontSizePx={fontSizePx}
+          pageHeightPx={page.heightPx}
+          mode={mode}
+        />
       ))}
     </div>
   );

@@ -28,7 +28,7 @@ import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type Clo
 import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
-import EditorPane from "./EditorPane";
+import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
@@ -53,10 +53,23 @@ import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
+import { perfMark, perfSpan } from "@/lib/perfDebug";
+import PerfDebugPanel from "./PerfDebugPanel";
+import { resolveRendererRolloutMode } from "@/lib/v2Rollout";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
 const AUTOSAVE_DELAY_MS = 1500;
+
+/**
+ * TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: the post-export
+ * 「PDFを書き出しました」reminder is superseded by the pre-export safe
+ * filename field now in the PDF setup modal. Disabled via this one flag
+ * rather than deleted -- PdfExportNoticeModal, useShowPdfFilenameNotice, and
+ * the isPdfNoticeOpen state below are kept intact for possible future reuse,
+ * and the existing `今後も表示する` localStorage preference is left as-is.
+ */
+const PDF_POST_EXPORT_NOTICE_ENABLED = false;
 
 export default function TategakiEditor({
   documentId,
@@ -68,16 +81,9 @@ export default function TategakiEditor({
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
 }) {
+  perfMark("TategakiEditor:render");
   const router = useRouter();
   const { user } = useAuth();
-  const {
-    workSession,
-    recordActivity,
-    startWorkSession,
-    pauseWorkSession,
-    resumeWorkSession,
-    endWorkSession,
-  } = useEditorSessionActivity();
   const [docId, setDocId] = useState<number | null>(
     demoMode
       ? DEMO_PROJECT.id
@@ -87,6 +93,29 @@ export default function TategakiEditor({
   );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: PreviewPane is wrapped in React.memo,
+  // but a *live* `content` prop changes every keystroke, so memo can never
+  // bail and React still has to reconcile the entire (in LEGACY/non-V2
+  // rendering, unvirtualized) page-list subtree on every keystroke -- real
+  // CPU profiling on a 260k-char manuscript showed this costing ~300ms per
+  // keystroke even after PreviewPane's own internal content debounce, purely
+  // from React re-visiting hundreds of PageCard fibers to confirm nothing
+  // changed. Feeding PreviewPane a debounced snapshot instead lets memo
+  // actually skip that whole subtree during a typing burst; PreviewPane's
+  // own internal debounce (for pagination) still governs how fresh the
+  // rendered pages are, unchanged from before. PDF/JPG export already
+  // captures whatever is currently rendered (html2canvas-style DOM capture),
+  // so this doesn't add any new staleness window beyond what already existed.
+  const PREVIEW_PROP_DEBOUNCE_MS = 180;
+  const [previewContent, setPreviewContent] = useState(content);
+  useEffect(() => {
+    perfMark("TategakiEditor:previewContentDebounce:scheduled", { contentLength: content.length });
+    const timer = window.setTimeout(() => {
+      perfMark("TategakiEditor:previewContentDebounce:fired", { contentLength: content.length });
+      setPreviewContent(content);
+    }, PREVIEW_PROP_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
   const [plotNote, setPlotNote] = useState("");
   // The 使い方ガイド (SAMPLE_PROJECT) and the おためしデモ both run the real
   // editor with a document that lives only in memory — every persistence path
@@ -186,10 +215,75 @@ export default function TategakiEditor({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [editorWidthPercent, setEditorWidthPercent] = useState<number>(50);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
+  // TSP-PREVIEW-SYNC-STABILITY-011: navigation-origin guard for the
+  // PREVIEW_TO_EDITOR transaction. `navigateEditorToGlobalOffset` below moves
+  // the Editor caret as a SIDE EFFECT of landing at the Preview-requested
+  // offset; that caret change must not echo back into ANOTHER (unrelated-
+  // looking) Preview auto-scroll away from the page the user just navigated
+  // FROM -- Preview is already showing the right place, having just
+  // initiated this jump itself. Storing the exact expected post-jump global
+  // offset (rather than a plain boolean) keeps this self-correcting: it only
+  // ever suppresses the ONE cursorIndex value this specific transaction
+  // produces, so a same-offset no-op jump can never wrongly swallow a LATER,
+  // unrelated caret move, and ordinary typing/caret movement (which never
+  // sets this ref) is completely unaffected and keeps driving Preview follow
+  // exactly as before.
+  const suppressPreviewFollowForRef = useRef<number | null>(null);
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: lets a Preview
+  // page click drive the Editor to that page's source location, regardless
+  // of which editor surface (FULL textarea or PagedEditor) is mounted.
+  const editorPaneRef = useRef<EditorPaneHandle>(null);
+  const navigateEditorToGlobalOffset = useCallback((start: number, end: number) => {
+    // `end` is always a valid offset into the CURRENT canonical manuscript
+    // here (callers derive it from `pageSourceRanges`/issue offsets computed
+    // against that same manuscript) -- no clamping needed, and reading
+    // `content` directly would make this callback's identity change on every
+    // keystroke, defeating PreviewPane's memo (see its own prop's doc).
+    suppressPreviewFollowForRef.current = end;
+    setMobileView("editor");
+    editorPaneRef.current?.navigateToGlobalOffset(start, end);
+  }, []);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: cursorIndex advances on every
+  // keystroke same as content, so it must be debounced the same way before
+  // reaching PreviewPane -- otherwise React.memo's prop comparison would
+  // still see a change every keystroke (via this prop alone) and re-render/
+  // reconcile the whole page-list subtree even with `previewContent` stable.
+  const [previewCursorIndex, setPreviewCursorIndex] = useState(cursorIndex);
+  useEffect(() => {
+    perfMark("TategakiEditor:cursorIndexDebounce:scheduled", { cursorIndex });
+    const timer = window.setTimeout(() => {
+      perfMark("TategakiEditor:cursorIndexDebounce:fired", { cursorIndex });
+      // PREVIEW_TO_EDITOR transaction completing: this is the caret echo the
+      // jump itself produced -- consume the guard and skip re-driving
+      // Preview's own cursor-follow with it (see suppressPreviewFollowForRef
+      // above). Any OTHER cursorIndex value (ordinary caret movement,
+      // Editor Page switch, Writing Check jump) is unaffected.
+      if (suppressPreviewFollowForRef.current !== null && suppressPreviewFollowForRef.current === cursorIndex) {
+        suppressPreviewFollowForRef.current = null;
+        return;
+      }
+      setPreviewCursorIndex(cursorIndex);
+    }, PREVIEW_PROP_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [cursorIndex]);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const workSessionScope = useMemo(() => {
+    if (demoMode) return `demo:${DEMO_PROJECT.id}`;
+    const projectId = cloudProjectId ?? currentProjectId;
+    if (projectId) return `cloud:${projectId}`;
+    return docId === null ? null : `local:${docId}`;
+  }, [cloudProjectId, currentProjectId, demoMode, docId]);
+  const {
+    workSession,
+    recordActivity,
+    startWorkSession,
+    pauseWorkSession,
+    resumeWorkSession,
+    endWorkSession,
+  } = useEditorSessionActivity(workSessionScope);
   // TSP-LOOP-007: クラウド作品を開いた際、本文が参照するのに復元できなかった
   // 挿絵（missing = manifest にあるが Storage 取得不可 / unmanifested = 未同期）。
   // 非 null かつ配列が空でなければエディタ／エクスポートに警告を出す。
@@ -397,13 +491,28 @@ export default function TategakiEditor({
     document.body.style.userSelect = "none";
   };
 
-  const handleImageAdd = (record: ImageRecord) => {
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: these 5 callbacks are PreviewPane
+  // props, and PreviewPane is wrapped in React.memo specifically so a
+  // typing burst (which only changes `previewContent`/`previewCursorIndex`
+  // on a debounce, not every keystroke) can skip reconciling its large
+  // page-list subtree. A plain function declaration is a NEW reference on
+  // every TategakiEditor render, which defeats that memo on its own --
+  // this codebase's `react-hooks/preserve-manual-memoization` ESLint rule
+  // assumes the React Compiler auto-memoizes these instead, but the
+  // compiler is not actually enabled (no `experimental.reactCompiler` in
+  // next.config.ts), so nothing does. useCallback with the real reactive
+  // dependencies (excluding the always-stable useState setters, per the
+  // ordinary react-hooks/exhaustive-deps convention) is correct for the
+  // runtime that actually ships; the lint rule is suppressed accordingly.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageAdd = useCallback((record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
     if (isSampleDocument) return;
     saveImage(record).catch(() => setSaveStatus("error"));
-  };
+  }, [isSampleDocument]);
 
-  const handleImageDelete = (id: string) => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageDelete = useCallback((id: string) => {
     setImages((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -411,12 +520,13 @@ export default function TategakiEditor({
     });
     if (isSampleDocument) return;
     deleteImage(id).catch(() => setSaveStatus("error"));
-  };
+  }, [isSampleDocument]);
 
   // Persists a front/back stacking swap for a small group of images (see
   // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,
   // so pagination/tokenLength are unaffected.
-  const handleImageLayerChange = (updates: { id: string; layerOrder: number }[]) => {
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handleImageLayerChange = useCallback((updates: { id: string; layerOrder: number }[]) => {
     setImageLayerOrder((prev) => {
       const next = { ...prev };
       for (const update of updates) next[update.id] = update.layerOrder;
@@ -426,7 +536,16 @@ export default function TategakiEditor({
     for (const update of updates) {
       updateImageLayerOrder(update.id, update.layerOrder).catch(() => setSaveStatus("error"));
     }
-  };
+  }, [isSampleDocument]);
+
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const handlePreviewPdfExportSuccess = useCallback(() => {
+    if (PDF_POST_EXPORT_NOTICE_ENABLED && showPdfFilenameNotice) setIsPdfNoticeOpen(true);
+  }, [showPdfFilenameNotice]);
+
+  const handleTogglePreviewCollapse = useCallback(() => {
+    setIsPreviewCollapsed((prev) => !prev);
+  }, []);
 
   useEffect(() => {
     if (!hasLoadedRef.current || docId === null) return;
@@ -440,13 +559,15 @@ export default function TategakiEditor({
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     const targetDocId = docId;
+    perfMark("TategakiEditor:autosaveDebounce:scheduled", { contentLength: content.length });
     saveTimeoutRef.current = setTimeout(() => {
       // Re-check immediately before writing in case the user switched
       // documents again during the debounce window.
       if (loadedDocIdRef.current !== targetDocId) return;
+      const end = perfSpan("TategakiEditor:saveDocument", { contentLength: content.length });
       saveDocument(targetDocId, title, content, settings, plotNote)
-        .then(() => setSaveStatus("saved"))
-        .catch(() => setSaveStatus("error"));
+        .then(() => { end({ ok: true }); setSaveStatus("saved"); })
+        .catch(() => { end({ ok: false }); setSaveStatus("error"); });
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
@@ -604,6 +725,7 @@ export default function TategakiEditor({
     <div
       data-editor-shell
       data-demo-mode={demoMode ? "" : undefined}
+      data-editor-save-status={saveStatus}
       className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
       <input
@@ -690,6 +812,7 @@ export default function TategakiEditor({
           className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
+            ref={editorPaneRef}
             title={title}
             onTitleChange={setTitle}
             content={content}
@@ -741,7 +864,7 @@ export default function TategakiEditor({
           } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : "max-md:hidden"}`}
         >
           <PreviewPane
-            content={content}
+            content={previewContent}
             title={title}
             settings={settings}
             layout={layout}
@@ -754,15 +877,14 @@ export default function TategakiEditor({
             onImageAdd={handleImageAdd}
             onImageDelete={handleImageDelete}
             onImageLayerChange={handleImageLayerChange}
-            cursorIndex={cursorIndex}
+            cursorIndex={previewCursorIndex}
+            onNavigateToSource={navigateEditorToGlobalOffset}
             onBodyPageCountChange={setBodyPageCount}
-            onPdfExportSuccess={() => {
-              if (showPdfFilenameNotice) setIsPdfNoticeOpen(true);
-            }}
+            onPdfExportSuccess={handlePreviewPdfExportSuccess}
             // On a phone showing the プレビュー workspace the preview is always
             // full — the collapse rail is a desktop-only affordance.
             isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
-            onToggleCollapse={() => setIsPreviewCollapsed((prev) => !prev)}
+            onToggleCollapse={handleTogglePreviewCollapse}
             selected={selectedPages}
             onSelectedChange={setSelectedPages}
           />
@@ -841,6 +963,13 @@ export default function TategakiEditor({
           {toast}
         </div>
       )}
+
+      <PerfDebugPanel
+        contentLength={content.length}
+        renderer={resolveRendererRolloutMode()}
+        pageCount={bodyPageCount}
+        cursorIndex={cursorIndex}
+      />
 
       {demoMode && (
         <DemoTour

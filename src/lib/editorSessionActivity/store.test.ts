@@ -3,6 +3,7 @@ import {
   createWorkSessionStore,
   WORK_SESSION_HISTORY_LIMIT,
   WORK_SESSION_STORAGE_KEY,
+  workSessionStorageKey,
 } from "./store";
 
 class FakeLocalStorage {
@@ -191,5 +192,102 @@ describe("11-B newly written character counting", () => {
     const storage = new FakeLocalStorage();
     storage.setItem(WORK_SESSION_STORAGE_KEY, "not-json");
     expect(createWorkSessionStore(() => storage).read()).toEqual({ active: null, history: [] });
+  });
+});
+
+describe("work-session document isolation", () => {
+  function scopedStore(storage: FakeLocalStorage, scope: string, id: string) {
+    return createWorkSessionStore(
+      () => storage,
+      () => id,
+      workSessionStorageKey(scope),
+    );
+  }
+
+  it("reloads A from A's key while a new B starts empty with zero duration", () => {
+    const storage = new FakeLocalStorage();
+    const a = scopedStore(storage, "local:101", "a-session");
+    a.start(1_000);
+    a.record({ insertedCodePoints: 8, deletedCodePoints: 0 });
+    a.end(4_000);
+
+    expect(scopedStore(storage, "local:101", "unused").read().history).toEqual([{
+      id: "a-session",
+      startedAt: 1_000,
+      endedAt: 4_000,
+      durationMs: 3_000,
+      writtenCharacterCount: 8,
+    }]);
+    const bState = scopedStore(storage, "local:202", "b-session").read();
+    expect(bState).toEqual({ active: null, history: [] });
+    expect(bState.history.reduce((sum, session) => sum + session.durationMs, 0)).toBe(0);
+  });
+
+  it("returning to A preserves A, and deleting A cannot erase B or hydrate new C", () => {
+    const storage = new FakeLocalStorage();
+    const a = scopedStore(storage, "local:301", "a-session");
+    const b = scopedStore(storage, "local:302", "b-session");
+    a.start(1_000);
+    a.end(2_000);
+    b.start(3_000);
+    b.end(5_000);
+
+    expect(scopedStore(storage, "local:301", "unused").read().history).toHaveLength(1);
+    // Document deletion intentionally does not clear shared/global storage;
+    // the deleted id simply stops being selected. New unique identities have
+    // their own empty namespace, while surviving B remains untouched.
+    expect(scopedStore(storage, "local:303", "c-session").read()).toEqual({
+      active: null,
+      history: [],
+    });
+    expect(scopedStore(storage, "local:302", "unused").read().history[0]).toMatchObject({
+      id: "b-session",
+      durationMs: 2_000,
+    });
+  });
+
+  it("a new document after the most-recent document is deleted never reads the legacy global key", () => {
+    const storage = new FakeLocalStorage();
+    storage.setItem(WORK_SESSION_STORAGE_KEY, JSON.stringify({
+      active: null,
+      history: [{
+        id: "deleted-global-session",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 1,
+        writtenCharacterCount: 1,
+      }],
+    }));
+
+    expect(scopedStore(storage, "local:latest-new", "new-session").read()).toEqual({
+      active: null,
+      history: [],
+    });
+  });
+
+  it("initializes only a newly-created document namespace when an orphaned id is reused", () => {
+    const storage = new FakeLocalStorage();
+    const orphaned = scopedStore(storage, "local:reused", "old-session");
+    const surviving = scopedStore(storage, "local:surviving", "surviving-session");
+    orphaned.start(1_000);
+    orphaned.end(2_000);
+    surviving.start(3_000);
+    surviving.end(5_000);
+    storage.setItem(WORK_SESSION_STORAGE_KEY, JSON.stringify({
+      active: null,
+      history: [{
+        id: "legacy-session",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 1,
+        writtenCharacterCount: 1,
+      }],
+    }));
+
+    orphaned.initializeEmpty();
+
+    expect(orphaned.read()).toEqual({ active: null, history: [] });
+    expect(surviving.read().history).toHaveLength(1);
+    expect(JSON.parse(storage.getItem(WORK_SESSION_STORAGE_KEY) as string).history).toHaveLength(1);
   });
 });

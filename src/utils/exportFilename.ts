@@ -1,14 +1,5 @@
-import type { PdfExportMode } from './exportPdf';
-
 /** 作品タイトルが空/未設定のときのファイル名フォールバック。既存UI（ProjectListModal等）の「無題の作品」慣例と揃えた表記。 */
 const FALLBACK_TITLE = '無題のドキュメント';
-
-/** PDF出力モードごとの、G-1で例示されたファイル名サフィックス。 */
-const PDF_MODE_SUFFIX: Record<PdfExportMode, string> = {
-  trim: '仕上がり',
-  bleed: '断ち落とし',
-  full: '入稿用',
-};
 
 /** OSで使用不能な文字（\ / : * ? " < > |）にマッチする文字クラス。 */
 const FORBIDDEN_FILENAME_CHARS = new RegExp('[\\\\/:*?"<>|]', 'g');
@@ -39,12 +30,31 @@ export function buildZipFileName(title: string): string {
   return `${sanitizeFilename(title)}_jpg.zip`;
 }
 
-export function buildPdfFileName(
-  title: string,
-  mode: PdfExportMode,
-  scope: 'all' | 'selected'
-): string {
-  const suffix = PDF_MODE_SUFFIX[mode];
-  const scopeSuffix = scope === 'selected' ? '_選択' : '';
-  return `${sanitizeFilename(title)}_${suffix}${scopeSuffix}.pdf`;
+/** PDF書き出しファイル名の入力欄が受け付ける文字（半角英数字のみ）にマッチする文字クラス。 */
+const PDF_FILENAME_ALLOWED_CHARS = /[^A-Za-z0-9]/g;
+
+/**
+ * PDF保存ファイル名欄の入力/貼り付けをサニタイズする。全角英数字・記号・
+ * 空白・日本語などASCII英数字以外は全て除去する（入稿用ファイル名は
+ * 半角英数字のみが安全という前提のβ仕様）。
+ */
+export function sanitizePdfFilenameStem(input: string): string {
+  return input.replace(PDF_FILENAME_ALLOWED_CHARS, '');
+}
+
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/** PDF保存ファイル名欄の初期値: `TateSpunYYYYMMDD`（ローカル日付）。 */
+export function buildDefaultPdfFilenameStem(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = padDatePart(now.getMonth() + 1);
+  const day = padDatePart(now.getDate());
+  return `TateSpun${year}${month}${day}`;
+}
+
+/** サニタイズ済みstemに`.pdf`拡張子を付与する。二重拡張子を作らない。 */
+export function buildPdfFileNameFromStem(stem: string): string {
+  return `${stem}.pdf`;
 }

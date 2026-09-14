@@ -9,7 +9,12 @@ import type { MeasurementFacts } from "../measurement/facts";
 import type { LogicalUnit } from "../units";
 import type { TraceRecorder } from "../trace";
 import type { CanonicalColumn } from "../layout/schema";
-import { composeLine, type CompositionSettings, type LineCompositionHold } from "./line";
+import {
+  composeLine,
+  type CompositionSettings,
+  type LineCompositionHold,
+  type PreparedLineComposition,
+} from "./line";
 
 export interface ColumnCompositionSettings extends CompositionSettings {
   lineExtentTicks: GeometryTick; // one line's own extent budget (passed through to composeLine)
@@ -85,7 +90,8 @@ export function composeColumn(
   measurement: MeasurementFacts,
   settings: ColumnCompositionSettings,
   isParagraphStart: boolean,
-  trace?: TraceRecorder
+  trace?: TraceRecorder,
+  prepared?: PreparedLineComposition
 ): ColumnCompositionResult {
   const lines: CanonicalColumn["lines"] = [];
   let remaining = units;
@@ -95,7 +101,16 @@ export function composeColumn(
   let currentIsParagraphStart = isParagraphStart;
 
   while (remaining.length > 0 && usedColumnTick + settings.linePitchTicks <= settings.columnExtentTicks) {
-    const lineResult = composeLine(remaining, ruleSet, measurement, settings, settings.lineExtentTicks, currentIsParagraphStart, trace);
+    const lineResult = composeLine(
+      remaining,
+      ruleSet,
+      measurement,
+      settings,
+      settings.lineExtentTicks,
+      currentIsParagraphStart,
+      trace,
+      prepared
+    );
     if (lineResult.hold) {
       hold = lineResult.hold;
       break;

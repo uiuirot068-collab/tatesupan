@@ -63,12 +63,32 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
   const colophonEnabled = input.settings.colophon.enabled;
   const colophonComposition = colophonEnabled ? buildV2UnitsFromManuscript("colophon", buildV2ColophonText(input.settings.colophon)) : undefined;
 
+  // Core deliberately asks MeasurementFacts for an image's intrinsic box.
+  // The Editor marker already carries that authoritative, persisted box in
+  // millimetres and manuscriptAdapter has converted it to ticks on ImageUnit.
+  // Keep the provider identity/font measurements intact, but answer image
+  // measurements from those real units. Without this bridge, the Shippori
+  // provider's deterministic fixture fallback derives a tiny box from refId,
+  // discarding the IMG marker's real width/height before either renderer sees
+  // it. Existing non-Editor Core callers retain their provider-owned policy.
+  const editorImageMeasurements = new Map(
+    units
+      .filter((unit): unit is Extract<LogicalUnit, { kind: "IMAGE" }> => unit.kind === "IMAGE")
+      .map((unit) => [unit.refId, { width: unit.intrinsicWidth, height: unit.intrinsicHeight }])
+  );
+  const measurement: MeasurementFacts = editorImageMeasurements.size === 0
+    ? input.measurement
+    : {
+        ...input.measurement,
+        imageIntrinsicTick: (refId) => editorImageMeasurements.get(refId) ?? input.measurement.imageIntrinsicTick(refId),
+      };
+
   const document = composeCanonicalDocument({
     bodyUnits: units,
     colophonUnits: colophonComposition?.units,
     colophonBlockId: colophonEnabled ? "colophon" : undefined,
     ruleSet: DEFAULT_RULE_SET_V2,
-    measurement: input.measurement,
+    measurement,
     settings: layoutSettings,
     folioSettings,
     headerSettings,
@@ -85,6 +105,9 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
     measurementIdentity: document.version.measurementIdentity,
     paintFontIdentity: document.version.measurementIdentity,
     imageResolver: input.imageResolver,
+    // The current Editor UI labels FULL as 「全面（ページを覆う）」 and its
+    // established Preview painter uses object-fit:cover over the paper.
+    fullImageCoversPage: true,
     // Typography Parity Round 4 (2026-09-09): `linePitchTicks` above is now
     // genuinely the column-to-column pitch (Round 3's own fix), no longer
     // interchangeable with the body font's own em size -- glyph paint scale

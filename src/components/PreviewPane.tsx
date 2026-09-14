@@ -1,16 +1,19 @@
 import {
   memo,
   useCallback,
-  useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   type HTMLAttributes,
+  type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import {
@@ -47,9 +50,11 @@ import {
 } from "@/utils/exportCapture";
 import { withBasePath } from "@/lib/basePath";
 import {
+  buildDefaultPdfFilenameStem,
   buildPageJpgFileName,
-  buildPdfFileName,
+  buildPdfFileNameFromStem,
   buildZipFileName,
+  sanitizePdfFilenameStem,
 } from "@/utils/exportFilename";
 import type { ImageRecord } from "@/lib/db";
 import {
@@ -82,6 +87,7 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
+import { perfMark, perfSpan } from "@/lib/perfDebug";
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
@@ -95,6 +101,15 @@ import {
   pdfExportChecklistAttemptProgress,
   type PdfExportChecklistAttempt,
 } from "../../typesetting-v2/tools/human-e2e-editor/checklistModel";
+import {
+  PREVIEW_VIRTUALIZATION_OVERSCAN_PX,
+  findPreviewSpreadIndex,
+  findPreviewZoomAnchor,
+  initialPreviewSpreadIndices,
+  previewZoomScrollTop,
+  shouldVirtualizePreview,
+  type PreviewSpreadLayout,
+} from "@/lib/previewPageVirtualization";
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
@@ -221,6 +236,8 @@ interface PageSlotProps {
   onMovePageForward?: () => void;
   canMovePageBackward?: boolean;
   canMovePageForward?: boolean;
+  /** TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: "編集位置へ移動" in the ⋮ menu. */
+  onNavigateToSource?: () => void;
 }
 
 const PageSlot = memo(function PageSlot({
@@ -264,6 +281,7 @@ const PageSlot = memo(function PageSlot({
   onMovePageForward,
   canMovePageBackward,
   canMovePageForward,
+  onNavigateToSource,
 }: PageSlotProps) {
   return (
     <div ref={registerRef} className="relative flex shrink-0">
@@ -320,7 +338,77 @@ const PageSlot = memo(function PageSlot({
         onMovePageForward={onMovePageForward}
         canMovePageBackward={canMovePageBackward}
         canMovePageForward={canMovePageForward}
+        onNavigateToSource={onNavigateToSource}
       />
+    </div>
+  );
+});
+
+interface PreviewSpreadProps {
+  spreadIndex: number;
+  mounted: boolean;
+  registerRef: (el: HTMLDivElement | null) => void;
+  estimatedHeight: number;
+  placeholderWidth: number;
+  onMeasuredHeight?: (height: number) => void;
+  style: CSSProperties;
+  children: ReactNode;
+}
+
+/**
+ * A spread keeps a lightweight, size-stable place in the scroll layout while
+ * its expensive page trees are outside the viewport. Once a spread has been
+ * painted we retain its measured height, so revisiting it cannot move the
+ * scrollbar even when its editor chrome is taller than the paper itself.
+ */
+const PreviewSpread = memo(function PreviewSpread({
+  spreadIndex,
+  mounted,
+  registerRef,
+  estimatedHeight,
+  placeholderWidth,
+  onMeasuredHeight,
+  style,
+  children,
+}: PreviewSpreadProps) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  const setElement = useCallback((element: HTMLDivElement | null) => {
+    elementRef.current = element;
+    registerRef(element);
+  }, [registerRef]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!mounted || !element) return;
+    const updateHeight = () => {
+      const nextHeight = element.offsetHeight;
+      if (nextHeight > 0) {
+        setMeasuredHeight((current) => current === nextHeight ? current : nextHeight);
+        onMeasuredHeight?.(nextHeight);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mounted, onMeasuredHeight]);
+
+  const placeholderHeight = measuredHeight ?? estimatedHeight;
+  return (
+    <div
+      ref={setElement}
+      data-preview-spread={spreadIndex}
+      data-preview-spread-mounted={mounted ? "true" : "false"}
+      className="flex flex-row items-stretch"
+      style={mounted ? style : {
+        ...style,
+        width: style.width ?? placeholderWidth,
+        height: placeholderHeight,
+        minHeight: placeholderHeight,
+      }}
+    >
+      {mounted ? children : null}
     </div>
   );
 });
@@ -345,6 +433,15 @@ interface PreviewPaneProps {
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
+  /**
+   * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: fired with a
+   * `[start, end)` canonical source range when the user asks to jump from a
+   * Preview page to its source text in the Editor (the page's own ⋮ menu --
+   * see `PageCard.tsx`'s `onNavigateToSource`). v1 precision is the page's
+   * own source-range START (`computePageSourceRanges`), not an exact
+   * clicked-token offset -- see this task's final report.
+   */
+  onNavigateToSource?: (start: number, end: number) => void;
   /** 本文の総ページ数（pagination 結果）が変わったら通知する——奥付編集ポップアップの
    *  「本文の何ページ後」入力の上限目安・範囲外警告に使う。 */
   onBodyPageCountChange?: (count: number) => void;
@@ -362,7 +459,7 @@ interface PreviewPaneProps {
   onSelectedChange: (next: Set<number>) => void;
 }
 
-export default function PreviewPane({
+function PreviewPane({
   content,
   title = "",
   settings,
@@ -377,6 +474,7 @@ export default function PreviewPane({
   onImageDelete,
   onImageLayerChange,
   cursorIndex,
+  onNavigateToSource,
   onBodyPageCountChange,
   onPdfExportSuccess,
   isCollapsed = false,
@@ -384,20 +482,43 @@ export default function PreviewPane({
   selected,
   onSelectedChange: setSelected,
 }: PreviewPaneProps) {
-  // Deferring the (expensive, O(content length)) pagination recompute keeps
-  // keystrokes in the editor responsive on large manuscripts: React renders
-  // this at low priority and lets input updates interrupt it, instead of
-  // recomputing every page's layout synchronously on every keystroke.
-  const deferredContent = useDeferredValue(content);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
+  // recompute's React scheduler priority -- it cannot interrupt a single
+  // monolithic O(content length) call like tokenizeTategaki/paginateTokens
+  // mid-execution, since React can only yield BETWEEN fiber work units, not
+  // inside one. Real-browser CPU profiling on a 260k-char manuscript showed
+  // the "deferred" low-priority render for this pipeline still completing
+  // inside the SAME task as the keystroke's own commit, blocking the
+  // browser's paint of the just-typed character for ~300ms. A real
+  // `setTimeout` macrotask boundary (the same debounce pattern already used
+  // for the V2 canonical preview pipeline in useV2PreviewAdapter) guarantees
+  // the browser gets a paint opportunity before this recompute ever starts,
+  // and keeps resetting while the user keeps typing so it never runs mid-burst.
+  perfMark("PreviewPane:render", { contentLength: content.length });
+  const PREVIEW_CONTENT_DEBOUNCE_MS = 180;
+  const [deferredContent, setDeferredContent] = useState(content);
+  useEffect(() => {
+    perfMark("PreviewPane:contentDebounce:scheduled", { contentLength: content.length });
+    const timer = window.setTimeout(() => {
+      perfMark("PreviewPane:contentDebounce:fired", { contentLength: content.length });
+      setDeferredContent(content);
+    }, PREVIEW_CONTENT_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
 
   const pages = useMemo(() => {
+    const endTokenize = perfSpan("PreviewPane:tokenizeTategaki", { contentLength: deferredContent.length });
     const tokens = tokenizeTategaki(deferredContent);
-    return paginateTokens(tokens, {
+    endTokenize({ tokenCount: tokens.length });
+    const endPaginate = perfSpan("PreviewPane:paginateTokens", { tokenCount: tokens.length });
+    const result = paginateTokens(tokens, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
       columnCount: settings.columnCount,
       linesPerColumn: layout.linesPerColumn,
     });
+    endPaginate({ pageCount: result.length });
+    return result;
   }, [
     deferredContent,
     layout.charsPerLine,
@@ -406,14 +527,15 @@ export default function PreviewPane({
     settings.columnCount,
   ]);
 
-  const pageSourceRanges = useMemo(
-    () =>
-      computePageSourceRanges(deferredContent, {
-        charsPerLine: layout.charsPerLine,
-        linesPerPage: layout.linesPerPage,
-      }),
-    [deferredContent, layout.charsPerLine, layout.linesPerPage]
-  );
+  const pageSourceRanges = useMemo(() => {
+    const end = perfSpan("PreviewPane:computePageSourceRanges", { contentLength: deferredContent.length });
+    const result = computePageSourceRanges(deferredContent, {
+      charsPerLine: layout.charsPerLine,
+      linesPerPage: layout.linesPerPage,
+    });
+    end({ rangeCount: result.length });
+    return result;
+  }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
@@ -428,7 +550,7 @@ export default function PreviewPane({
   // token→原文復元ロジックをそのまま再利用した軽量な文字列化（深い
   // JSON.stringify等は行わない）で、ページ内容（ruby/tcy/画像markerを
   // 含む）が実質同一かどうかの比較に十分な信号になる。`pages`自体と同じ
-  // cadence（useDeferredValue経由）でしか再計算されないため、1文字入力
+  // cadence（debounce経由）でしか再計算されないため、1文字入力
   // ごとに毎回計算されるわけではない。
   const pageSignatures = useMemo(
     () => pages.map((page) => detokenizeTategaki(page.tokens)),
@@ -482,6 +604,14 @@ export default function PreviewPane({
     () => computeSpreadGroups(presentationSequence.length),
     [presentationSequence.length]
   );
+  const [visibleSpreadIndices, setVisibleSpreadIndices] = useState<Set<number>>(() =>
+    initialPreviewSpreadIndices(spreadGroups.length)
+  );
+  const spreadElementsRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const registerSpreadElement = (index: number) => (element: HTMLDivElement | null) => {
+    if (element) spreadElementsRef.current.set(index, element);
+    else spreadElementsRef.current.delete(index);
+  };
 
   // Web閲覧用 (isPx) authors its canonical DOM size directly in *screen*
   // pixels (768×1024) rather than the small mm-based magnitude every other
@@ -520,9 +650,28 @@ export default function PreviewPane({
   // room below a still-single-page manuscript (see the spacer below) — never
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
+  const spreadGeometryKey = `${spreadWidthPx}:${canonicalPageHeightPx}`;
+  const [defaultSpreadMeasurement, setDefaultSpreadMeasurement] = useState<{
+    geometryKey: string;
+    height: number;
+  } | null>(null);
+  const establishDefaultSpreadHeight = useCallback((height: number) => {
+    setDefaultSpreadMeasurement((current) =>
+      current?.geometryKey === spreadGeometryKey
+        ? current
+        : { geometryKey: spreadGeometryKey, height }
+    );
+  }, [spreadGeometryKey]);
+  const defaultSpreadHeight = defaultSpreadMeasurement?.geometryKey === spreadGeometryKey
+    ? defaultSpreadMeasurement.height
+    : canonicalPageHeightPx;
 
   const internalV2Beta = isV2BetaRendererEnabled();
   const useV2Engine = internalV2Beta;
+  // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: renderer-agnostic now -- see the
+  // doc comment on `shouldVirtualizePreview` itself for why the previous
+  // V2-only gate was removed.
+  const virtualizePreview = shouldVirtualizePreview(spreadGroups.length);
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
@@ -593,9 +742,18 @@ export default function PreviewPane({
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
 
-  const zoomOut = () => setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
-  const zoomIn = () => setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
-  const zoomReset = () => setZoomScale(1.0);
+  const zoomOut = () => {
+    captureZoomAnchor();
+    setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
+  };
+  const zoomIn = () => {
+    captureZoomAnchor();
+    setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
+  };
+  const zoomReset = () => {
+    captureZoomAnchor();
+    setZoomScale(1.0);
+  };
 
   useShortcuts([
     { key: "+", handler: zoomIn },
@@ -604,6 +762,34 @@ export default function PreviewPane({
   ]);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Zoom position is represented only in untransformed spread layout:
+  // spread index + fractional offset. The known presentation scale converts
+  // between layout coordinates and the scroll container's CSS-pixel space.
+  const zoomAnchorRef = useRef<{
+    spreadIndex: number;
+    offsetRatio: number;
+  } | null>(null);
+
+  const getLayoutTop = useCallback((element: HTMLElement): number => {
+    let top = 0;
+    let current: HTMLElement | null = element;
+    while (current) {
+      top += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+    return top;
+  }, []);
+
+  const getSpreadLayouts = useCallback((wrapper: HTMLElement): PreviewSpreadLayout[] => {
+    const wrapperTop = getLayoutTop(wrapper);
+    return [...spreadElementsRef.current.entries()].map(([spreadIndex, element]) => ({
+      spreadIndex,
+      top: getLayoutTop(element) - wrapperTop,
+      height: element.offsetHeight,
+    }));
+  }, [getLayoutTop]);
+
   const isPanningRef = useRef(false);
   const panPointerIdRef = useRef<number | null>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
@@ -624,12 +810,36 @@ export default function PreviewPane({
   // capture, so it never affects the exported pixel size.
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
-  useEffect(() => {
+  // TSP-PREVIEW-SYNC-STABILITY-011 §E: `useLayoutEffect` (not `useEffect`) so
+  // the FIRST measurement happens synchronously before the browser paints
+  // this mount's first frame. With a plain `useEffect`, `containerWidth`/
+  // `containerHeight` stay `null` through that first paint, `baseAutoFitScale`
+  // (below) falls back to `1`, and pages render at the WRONG scale for one
+  // frame before the ResizeObserver's own first callback (itself async)
+  // corrects it a moment later -- a real, on-every-mount "wrong scale then
+  // right scale" snap, worse the further `1` is from the pane's actual fitted
+  // scale (i.e. most visible on a narrow pane, matching the human report).
+  // `container.clientWidth/clientHeight` already reflect this render's real
+  // layout by the time a layout effect runs (layout has just completed, pre-
+  // paint), so reading them here directly -- not waiting for the observer --
+  // gets the correct scale into the very first painted frame.
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    // TSP-PREVIEW-SYNC-STABILITY-011 §E: a narrow pane can take several
+    // ResizeObserver callbacks to settle on its final size (flex-basis
+    // resolution, webfont-driven reflow, etc.) -- each DIFFERENT intermediate
+    // width/height recomputes presentationScale below, which visibly snaps
+    // the whole `transform: scale(...)` content to a new size. Skipping a
+    // callback that reports the SAME size as last time (no-op filtering, per
+    // the task's own recommended pattern) can't fix genuinely different
+    // intermediate measurements, but removes the spurious extra renders/
+    // snaps a naive observer produces when nothing has actually changed.
     const update = () => {
-      setContainerWidth(container.clientWidth);
-      setContainerHeight(container.clientHeight);
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      setContainerWidth((current) => (current === width ? current : width));
+      setContainerHeight((current) => (current === height ? current : height));
     };
     update();
     const observer = new ResizeObserver(update);
@@ -730,11 +940,20 @@ export default function PreviewPane({
     width: number;
     height: number;
   } | null>(null);
-  useEffect(() => {
+  // §E: same "measure synchronously before first paint" reasoning as
+  // containerWidth/containerHeight above -- `naturalContentSize` staying
+  // `null` through the first paint left the `m-auto` wrapper's width/height
+  // unset (auto) for one frame instead of its correct scaled footprint.
+  useLayoutEffect(() => {
     const content = scaleContentRef.current;
     if (!content) return;
+    // §E: same no-op filtering as containerWidth/containerHeight above.
     const update = () => {
-      setNaturalContentSize({ width: content.offsetWidth, height: content.offsetHeight });
+      const width = content.offsetWidth;
+      const height = content.offsetHeight;
+      setNaturalContentSize((current) =>
+        current && current.width === width && current.height === height ? current : { width, height }
+      );
     };
     update();
     const observer = new ResizeObserver(update);
@@ -767,6 +986,24 @@ export default function PreviewPane({
   const effectiveZoom = narrowFitScale != null ? Math.max(zoomScale, 1) : zoomScale;
   const presentationScale = effectiveZoom * effectiveFitScale;
   const chromeScale = effectiveFitScale > 0 ? chromeReferenceFitScale / effectiveFitScale : 1;
+
+  const captureZoomAnchor = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const wrapper = scaleContentRef.current;
+    if (!container || !wrapper || presentationScale <= 0) {
+      zoomAnchorRef.current = null;
+      return;
+    }
+    const wrapperLayoutTop = getLayoutTop(wrapper) - getLayoutTop(container);
+    const logicalViewportY =
+      (container.scrollTop + container.clientHeight / 2 - wrapperLayoutTop) /
+      presentationScale;
+    // Anchor at viewport center, not top — that's what the user is visually focused on.
+    zoomAnchorRef.current = findPreviewZoomAnchor(
+      getSpreadLayouts(wrapper),
+      logicalViewportY
+    );
+  }, [getLayoutTop, getSpreadLayouts, presentationScale]);
 
   // Export用fontEmbedCSSのバックグラウンド先読み: exportCapture.tsの
   // キャッシュ済みPromiseを、ユーザーが実際にexportボタンを押すより前に
@@ -808,10 +1045,132 @@ export default function PreviewPane({
     pageElementsRef.current.set(index, el);
   };
 
+  // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: LEGACY's raster JPG/PDF export
+  // captures real DOM elements (html2canvas-style) via `pageElementsRef`/
+  // `colophonElementRef` below -- every page it needs must actually be
+  // mounted, unlike ordinary scrolling/typing which should only ever mount
+  // what's on screen. This is a THIRD override on top of the normal
+  // visible/active-page sets, populated immediately before an export run
+  // and cleared again in that export's `finally` block.
+  const [exportMountSpreadIndices, setExportMountSpreadIndices] = useState<Set<number>>(() => new Set());
+  const spreadIndexForBodyIndex = (bodyIndex: number): number | null => {
+    const presentationIndex = presentationSequence.findIndex(
+      (item) => item.kind === "body" && item.bodyIndex === bodyIndex
+    );
+    return findPreviewSpreadIndex(spreadGroups, presentationIndex);
+  };
+  const colophonSpreadIndex = (): number | null => {
+    const presentationIndex = presentationSequence.findIndex((item) => item.kind === "colophon");
+    return findPreviewSpreadIndex(spreadGroups, presentationIndex);
+  };
+  /**
+   * Synchronously (via `flushSync`) forces the spreads containing
+   * `bodyIndices` -- and the colophon spread, if requested -- to mount, so
+   * `pageElementsRef`/`colophonElementRef` are guaranteed populated the
+   * instant this returns. `PageSlot`/the colophon wrapper are plain
+   * synchronous components (no lazy/async mount of their own), so a single
+   * forced commit is sufficient. No-op when the preview isn't windowed at
+   * all (every page is already mounted). Pair with `releaseExportMount()`
+   * in a `finally` block.
+   */
+  const ensureExportMount = (bodyIndices: number[], includeColophon: boolean) => {
+    if (!virtualizePreview) return;
+    const needed = new Set<number>();
+    for (const bodyIndex of bodyIndices) {
+      const spreadIndex = spreadIndexForBodyIndex(bodyIndex);
+      if (spreadIndex != null) needed.add(spreadIndex);
+    }
+    if (includeColophon) {
+      const spreadIndex = colophonSpreadIndex();
+      if (spreadIndex != null) needed.add(spreadIndex);
+    }
+    if (needed.size === 0) return;
+    flushSync(() => setExportMountSpreadIndices(needed));
+  };
+  const releaseExportMount = () => {
+    if (!virtualizePreview) return;
+    setExportMountSpreadIndices((current) => (current.size === 0 ? current : new Set()));
+  };
+
   const activePageIndex = useMemo(
     () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
     [cursorIndex, pageSourceRanges]
   );
+  const activePresentationIndex = useMemo(
+    () => activePageIndex == null
+      ? -1
+      : presentationSequence.findIndex(
+          (item) => item.kind === "body" && item.bodyIndex === activePageIndex
+        ),
+    [activePageIndex, presentationSequence]
+  );
+  const activeSpreadIndex = useMemo(
+    () => findPreviewSpreadIndex(spreadGroups, activePresentationIndex),
+    [activePresentationIndex, spreadGroups]
+  );
+
+  useEffect(() => {
+    if (!virtualizePreview) return;
+    const root = scrollContainerRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") {
+      setVisibleSpreadIndices(new Set(spreadGroups.map((_, index) => index)));
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      setVisibleSpreadIndices((current) => {
+        const next = new Set(current);
+        let changed = false;
+        for (const entry of entries) {
+          const spreadIndex = Number((entry.target as HTMLElement).dataset.previewSpread);
+          if (!Number.isInteger(spreadIndex)) continue;
+          if (entry.isIntersecting) {
+            if (!next.has(spreadIndex)) {
+              next.add(spreadIndex);
+              changed = true;
+            }
+          } else if (next.delete(spreadIndex)) {
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, {
+      root,
+      rootMargin: `${PREVIEW_VIRTUALIZATION_OVERSCAN_PX}px 0px`,
+    });
+
+    spreadElementsRef.current.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [spreadGeometryKey, spreadGroups, virtualizePreview]);
+
+  // Restore before paint from final React layout. offsetTop/offsetHeight are
+  // untransformed layout values; presentationScale explicitly converts the
+  // logical anchor to the scroll container's CSS-pixel coordinate space.
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    if (!anchor) return;
+    const container = scrollContainerRef.current;
+    const wrapper = scaleContentRef.current;
+    const spreadElement = spreadElementsRef.current.get(anchor.spreadIndex);
+    if (container && wrapper && spreadElement) {
+      const wrapperLayoutTop = getLayoutTop(wrapper) - getLayoutTop(container);
+      const wrapperTop = getLayoutTop(wrapper);
+      const spread: PreviewSpreadLayout = {
+        spreadIndex: anchor.spreadIndex,
+        top: getLayoutTop(spreadElement) - wrapperTop,
+        height: spreadElement.offsetHeight,
+      };
+      container.scrollTop = previewZoomScrollTop(
+        anchor,
+        spread,
+        wrapperLayoutTop,
+        presentationScale,
+        container.clientHeight
+      );
+    }
+    zoomAnchorRef.current = null;
+  }, [getLayoutTop, presentationScale]);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(
@@ -819,6 +1178,46 @@ export default function PreviewPane({
   );
   const [exportLabel, setExportLabel] = useState("");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  // TSP-ANNOUNCEMENT-VIDEO-PREVIEW-BLOCKERS-013: the menu panel used to be
+  // `position:absolute` under the button, which the Preview pane's own
+  // `overflow-hidden` root (needed for its rounded-corner frame) clips once
+  // the pane is narrow enough that the menu's fixed width no longer fits
+  // between the button and the pane's right edge. `position:fixed` with a
+  // JS-measured anchor escapes that clipping ancestor entirely (fixed
+  // positioning is relative to the viewport, never clipped by an ancestor's
+  // overflow, as long as no ancestor sets transform/filter/will-change --
+  // none does here) while keeping the exact same look at normal widths.
+  const exportMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previewRootRef = useRef<HTMLDivElement | null>(null);
+  const [exportMenuPos, setExportMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const EXPORT_MENU_WIDTH_PX = 192; // w-48
+  const EXPORT_MENU_VIEWPORT_MARGIN_PX = 8;
+  useLayoutEffect(() => {
+    // Closed: leave any stale position in state -- the JSX below only reads
+    // exportMenuPos while isExportMenuOpen is true, and the next open
+    // recomputes it fresh, so there's nothing to synchronize here.
+    if (!isExportMenuOpen) return;
+    const updatePosition = () => {
+      const button = exportMenuButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const fitsRight = rect.left + EXPORT_MENU_WIDTH_PX + EXPORT_MENU_VIEWPORT_MARGIN_PX <= window.innerWidth;
+      const left = fitsRight
+        ? rect.left
+        : Math.max(EXPORT_MENU_VIEWPORT_MARGIN_PX, rect.right - EXPORT_MENU_WIDTH_PX);
+      setExportMenuPos({ top: rect.bottom + 4, left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    // The Preview pane can narrow from a divider drag, which resizes this
+    // pane's own root element without firing a window resize event.
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (previewRootRef.current) resizeObserver.observe(previewRootRef.current);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      resizeObserver.disconnect();
+    };
+  }, [isExportMenuOpen]);
   const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
   const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
@@ -1039,8 +1438,9 @@ export default function PreviewPane({
       await exportV2JpgPages([physicalIndex], [index + 1], false);
       return;
     }
+    ensureExportMount([index], false);
     const el = pageElementsRef.current.get(index);
-    if (!el) return;
+    if (!el) { releaseExportMount(); return; }
     const signal = beginExport("画像");
     try {
       await exportPageToJpg(
@@ -1056,6 +1456,7 @@ export default function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1069,8 +1470,9 @@ export default function PreviewPane({
       await exportV2JpgPages([physicalIndex], [colophonPhysicalPageNumber], false);
       return;
     }
+    ensureExportMount([], true);
     const el = colophonElementRef.current;
-    if (!el) return;
+    if (!el) { releaseExportMount(); return; }
     const signal = beginExport("画像");
     try {
       await exportPageToJpg(
@@ -1086,6 +1488,7 @@ export default function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1100,8 +1503,10 @@ export default function PreviewPane({
       );
       return;
     }
-    const items = buildSelectedPageItems(getJpgScopeIndices());
-    if (items.length === 0) return;
+    const scopeIndices = getJpgScopeIndices();
+    ensureExportMount(scopeIndices, false);
+    const items = buildSelectedPageItems(scopeIndices);
+    if (items.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("画像", items.length);
     try {
       await exportPagesAsIndividualJpgs(
@@ -1117,6 +1522,7 @@ export default function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1131,8 +1537,10 @@ export default function PreviewPane({
       );
       return;
     }
-    const items = buildSelectedPageItems(getJpgScopeIndices());
-    if (items.length === 0) return;
+    const scopeIndices = getJpgScopeIndices();
+    ensureExportMount(scopeIndices, false);
+    const items = buildSelectedPageItems(scopeIndices);
+    if (items.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("画像", items.length);
     try {
       await exportPagesToZip(
@@ -1149,6 +1557,7 @@ export default function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1160,15 +1569,22 @@ export default function PreviewPane({
   // 推測しない（PDFは共有・確認用途にも使われるため、ユーザーの選択を尊重する）。
   // 全ページPDFは従来どおり奥付ONなら常に含める。
   const [pdfIncludeColophon, setPdfIncludeColophon] = useState(false);
+  // 保存ファイル名（stemのみ、`.pdf`は付与しない）。新しいダイアログ
+  // セッションを開くたびに今日の日付でリセットする——同一モーダルを
+  // 開いたままの対象/出力ラジオ変更ではリセットしない（TSP-PDF-SAFE-FILENAME-014 I）。
+  const [pdfFilenameStem, setPdfFilenameStem] = useState(() => buildDefaultPdfFilenameStem());
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
+    setPdfFilenameStem(buildDefaultPdfFilenameStem());
     setIsPdfModalOpen(true);
   };
 
   const performDownloadPdf = async () => {
     if (exportBlockedByUnresolvedImages()) return;
     if (layout.paper.isPx) return;
+    if (pdfFilenameStem.length === 0) return; // ボタン側でも無効化するが、二重の安全網。
+    const pdfFileName = buildPdfFileNameFromStem(pdfFilenameStem);
     const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
     if (pdfScope === "selected" && indices.length === 0) {
       alert("書き出すページを選択してください。");
@@ -1220,7 +1636,7 @@ export default function PreviewPane({
         const bytes = await handle.result;
         signal.removeEventListener("abort", cancelWorker);
         await waitForExportPermission(signal);
-        downloadBytes(bytes, buildPdfFileName(title, pdfMode, pdfScope), "application/pdf");
+        downloadBytes(bytes, pdfFileName, "application/pdf");
         setIsPdfModalOpen(false);
         onPdfExportSuccess?.();
       } catch (error: unknown) {
@@ -1234,6 +1650,7 @@ export default function PreviewPane({
     }
     // 並び順は Presentation Sequence 上の相対順序を維持する——奥付を単純に
     // 末尾 append しない。奥付は「本文 precedingBodyPages ページ」の直後。
+    ensureExportMount(indices, includeColophonInPdf);
     const elements: HTMLElement[] = [];
     let colophonPlaced = false;
     for (const bodyIdx of indices) {
@@ -1252,7 +1669,7 @@ export default function PreviewPane({
     if (includeColophonInPdf && !colophonPlaced && colophonElementRef.current) {
       elements.push(colophonElementRef.current);
     }
-    if (elements.length === 0) return;
+    if (elements.length === 0) { releaseExportMount(); return; }
     const signal = beginExport("PDF", elements.length);
     try {
       // PDFは正式仕様で常に印刷用紙preset・600dpi固定（Web閲覧用はUI側で
@@ -1261,7 +1678,7 @@ export default function PreviewPane({
         mode: pdfMode,
         paperSizeName: layout.paper.label,
         bleed: BLEED_MM,
-        fileName: buildPdfFileName(title, pdfMode, pdfScope),
+        fileName: pdfFileName,
         scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
         signal,
@@ -1280,6 +1697,7 @@ export default function PreviewPane({
       }
     } finally {
       finishExport(signal);
+      releaseExportMount();
     }
   };
 
@@ -1301,12 +1719,32 @@ export default function PreviewPane({
   };
 
   useEffect(() => {
+    perfMark("PreviewPane:cursorFollowEffect:fired", { activePageIndex });
     if (activePageIndex == null) return;
+    // §E: never auto-scroll against a pane that hasn't been measured yet --
+    // `scrollIntoView` against a not-yet-sized/laid-out scroll container can
+    // land at a bogus position that a moment later's real measurement then
+    // has to visibly correct. Deliberately NOT a dependency below: this only
+    // guards against firing too early, it must never itself cause an extra
+    // re-run/re-scroll when the pane is later resized.
+    if (containerWidth == null || containerHeight == null) return;
     const el = pageElementsRef.current.get(activePageIndex);
     if (!el) return;
 
     isAutoScrollingRef.current = true;
-    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    // TSP-EDITOR-END-OF-DOCUMENT-LATENCY-003: a real-browser CPU profile
+    // isolated this call as the actual cause of the end-of-document input
+    // stall -- `behavior: "smooth"` on a manuscript-length scroll (top to
+    // the final page, ~523 pages of unvirtualized DOM in LEGACY rendering)
+    // keeps the main thread busy animating for several seconds, blocking
+    // whatever the user types next. Disabling scrollIntoView outright made
+    // the stall disappear entirely; forcing `instant` cut it by ~85% (the
+    // remaining cost is the one-time layout of scrolling a large
+    // unvirtualized tree, not the animation). The cursor still follows the
+    // caret to the right page -- it just no longer animates there.
+    const endScroll = perfSpan("PreviewPane:scrollIntoView", { activePageIndex });
+    el.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
+    endScroll();
 
     if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     autoScrollTimeoutRef.current = setTimeout(() => {
@@ -1316,6 +1754,9 @@ export default function PreviewPane({
     return () => {
       if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     };
+    // containerWidth/containerHeight are read only as an "is the pane
+    // measured yet" guard, not a reason to re-run/re-scroll on resize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePageIndex]);
 
   const handlePreviewScroll = () => {
@@ -1641,6 +2082,7 @@ export default function PreviewPane({
   // 他のindexed callbackと同じuseStableIndexedCallbackで包み、page index
   // ごとに参照を安定させる（登録先Map・attach/detachの意味は変更なし）。
   const stableRegisterPageElement = useStableIndexedCallback(registerPageElement);
+  const stableRegisterSpreadElement = useStableIndexedCallback(registerSpreadElement);
 
   // [TateSpun perf] 上記の各handlerは毎render新規に作られるcurry関数の
   // ままにしておき（挙動の重複実装を避けるため本体は書き換えない）、
@@ -1670,6 +2112,15 @@ export default function PreviewPane({
   const movePageForward = (bodyIndex: number) => () => movePageBy(bodyIndex, 1);
   const stableMovePageBackward = useStableIndexedCallback(movePageBackward);
   const stableMovePageForward = useStableIndexedCallback(movePageForward);
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: "編集位置へ移動"
+  // in the ⋮ menu. v1 precision: the page's own source-range START (see the
+  // `onNavigateToSource` prop's own doc) -- not an exact clicked-token offset.
+  const navigateToSource = (bodyIndex: number) => () => {
+    const range = pageSourceRanges[bodyIndex];
+    if (!range || !onNavigateToSource) return;
+    onNavigateToSource(range.start, range.start);
+  };
+  const stableNavigateToSource = useStableIndexedCallback(navigateToSource);
 
   if (isCollapsed) {
     // Right-edge affordance for the collapsed preview — shared by the normal
@@ -1695,7 +2146,7 @@ export default function PreviewPane({
   }
 
   return (
-    <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+    <div ref={previewRootRef} className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
       {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
@@ -1768,6 +2219,7 @@ export default function PreviewPane({
           )}
           <span className="relative flex flex-shrink-0 items-center gap-1.5">
             <button
+              ref={exportMenuButtonRef}
               type="button"
               data-demo-target="export"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
@@ -1778,14 +2230,22 @@ export default function PreviewPane({
                 ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
                 : "書き出し ▾"}
             </button>
-            {isExportMenuOpen && (
+            {isExportMenuOpen && exportMenuPos && (
               <>
                 {/* 背景クリックでメニューを閉じるための透明オーバーレイ。既存のPDFモーダルと同じパターン。 */}
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setIsExportMenuOpen(false)}
                 />
-                <div className="absolute left-0 top-full z-50 mt-1 flex w-48 flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
+                {/* TSP-ANNOUNCEMENT-VIDEO-PREVIEW-BLOCKERS-013: `fixed` +
+                    JS-measured top/left (see the effect above) instead of
+                    `absolute left-0 top-full` -- escapes this pane's own
+                    `overflow-hidden` frame so the menu is never cropped when
+                    the pane is narrow, and flips to right-aligned-under-the-
+                    button when there isn't room to the right of it. */}
+                <div
+                  style={{ position: "fixed", top: exportMenuPos.top, left: exportMenuPos.left, width: EXPORT_MENU_WIDTH_PX }}
+                  className="z-50 flex flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
                   <button
                     type="button"
                     onClick={() => {
@@ -1907,6 +2367,7 @@ export default function PreviewPane({
 
       <div
         ref={scrollContainerRef}
+        data-preview-scroll-container="true"
         // TSP-LOOP-020 — this is the ONE scroll/pan surface for the preview
         // (the outer section and the pane root no longer nest their own
         // scrollers on a phone). `overscroll-contain` keeps a swipe that
@@ -1932,6 +2393,7 @@ export default function PreviewPane({
         <div
           ref={scaleContentRef}
           data-export-scale-root="true"
+          data-preview-total-pages={pages.length}
           className="flex w-max h-max flex-col gap-6"
           style={{
             transform: `scale(${presentationScale})`,
@@ -1941,7 +2403,6 @@ export default function PreviewPane({
             // can never reach (min is 0), which clipped the right/bottom
             // edges when zoomed in.
             transformOrigin: "top left",
-            transition: "transform 0.1s ease-out",
           }}
         >
         {spreadGroups.map((group, spreadIndex) => {
@@ -1956,9 +2417,20 @@ export default function PreviewPane({
           // the even/verso page reads on the right (right-to-left reading
           // visits the right page first, i.e. the lower page number).
           const displayGroup = isSingle ? group : [group[1], group[0]];
+          const mountSpread =
+            !virtualizePreview ||
+            visibleSpreadIndices.has(spreadIndex) ||
+            activeSpreadIndex === spreadIndex ||
+            exportMountSpreadIndices.has(spreadIndex);
           return (
-            <div
-              key={spreadIndex}
+            <PreviewSpread
+              key={`${spreadGeometryKey}:${spreadIndex}`}
+              spreadIndex={spreadIndex}
+              mounted={mountSpread}
+              registerRef={stableRegisterSpreadElement(spreadIndex)}
+              estimatedHeight={defaultSpreadHeight}
+              placeholderWidth={spreadWidthPx}
+              onMeasuredHeight={spreadIndex === 0 ? establishDefaultSpreadHeight : undefined}
               // `items-stretch` (the flexbox default, made explicit here)
               // makes both per-page wrapper columns in a spread exactly as
               // tall as the taller one — whichever page has the 挿絵
@@ -1980,7 +2452,6 @@ export default function PreviewPane({
               // so stretching is a no-op there — its height already *is*
               // the row's height, and its own `margin-top:auto` resolves
               // to 0 (no leftover space to absorb).
-              className="flex flex-row items-stretch"
               style={{
                 gap: SPREAD_GAP_PX,
                 // A lone page always reserves the full 2-up spread width and
@@ -2081,12 +2552,15 @@ export default function PreviewPane({
                     onMovePageForward={
                       canReorder ? stableMovePageForward(bodyIndex) : undefined
                     }
+                    onNavigateToSource={
+                      onNavigateToSource ? stableNavigateToSource(bodyIndex) : undefined
+                    }
                     canMovePageBackward={canReorder && bodyIndex > 0}
                     canMovePageForward={canReorder && bodyIndex < pages.length - 1}
                   />
                 );
               })}
-            </div>
+            </PreviewSpread>
           );
         })}
         {/* A manuscript that's still just page 1 would otherwise have the
@@ -2104,110 +2578,137 @@ export default function PreviewPane({
         </div>
       </div>
 
-      {isPdfModalOpen && (
-        <div
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !isExporting && setIsPdfModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl border border-ink/10 bg-base p-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-3 text-sm font-bold text-ink">PDF出力</h2>
-            <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
-              TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
-            </p>
-            <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
-            <div className="mb-3 flex flex-col gap-2">
-              {(
-                [
-                  { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
-                  { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
-                ] as { value: "all" | "selected"; label: string }[]
-              ).map((option) => (
-                <label
-                  key={option.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
-                >
-                  <input
-                    type="radio"
-                    name="pdf-export-scope"
-                    value={option.value}
-                    checked={pdfScope === option.value}
-                    onChange={() => setPdfScope(option.value)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">{option.label}</span>
-                </label>
-              ))}
-            </div>
-            {showColophon && (
-              pdfScope === "selected" ? (
-                <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
-                  <input
-                    type="checkbox"
-                    checked={pdfIncludeColophon}
-                    onChange={(e) => setPdfIncludeColophon(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">奥付ページを含める（選択ページの後ろに追加）</span>
-                </label>
-              ) : (
-                <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
-                  奥付ページは最後に含まれます。
-                </p>
-              )
-            )}
-            <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
-            <div className="flex flex-col gap-2">
-              {(
-                [
-                  { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
-                  { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
-                  { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
-                ] as { value: PdfExportMode; label: string }[]
-              ).map((option) => (
-                <label
-                  key={option.value}
-                  className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
-                >
-                  <input
-                    type="radio"
-                    name="pdf-export-mode"
-                    value={option.value}
-                    checked={pdfMode === option.value}
-                    onChange={() => setPdfMode(option.value)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-ink">{option.label}</span>
-                </label>
-              ))}
-            </div>
-            {pdfScope === "selected" && selected.size === 0 && (
-              <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
+      {/* TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: application-level
+          modal (portaled via ViewportModal, not a child of this pane's own
+          narrow/clipped subtree) so Preview's width never constrains PDF
+          setup. Unmounted for the isExporting duration -- ExportProgressModal
+          (and, on Escape, the cancel-confirmation ViewportModal below) is the
+          active modal surface during export; this also means the setup
+          dialog's own Escape-to-close listener is simply absent while
+          exporting, so it can never race the isExporting Escape/pause-cancel
+          listener registered above. */}
+      {isPdfModalOpen && !isExporting && (
+        <ViewportModal
+          title="PDF出力"
+          titleId="pdf-export-setup-title"
+          closeLabel="PDF出力を閉じる"
+          onClose={() => setIsPdfModalOpen(false)}
+          panelClassName="max-w-sm"
+          overlayProps={{ "data-pdf-export-setup-modal": "" } as HTMLAttributes<HTMLDivElement>}
+          footer={(
+            <>
               <button
                 type="button"
                 onClick={() => setIsPdfModalOpen(false)}
-                disabled={isExporting}
-                className="rounded border border-ink/20 px-3 py-1.5 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded border border-ink/20 px-3 py-1.5 text-xs hover:bg-ink/5"
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={isExporting || (pdfScope === "selected" && selected.size === 0)}
+                disabled={(pdfScope === "selected" && selected.size === 0) || pdfFilenameStem.length === 0}
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isExporting && exportProgress
-                  ? `書き出し中 (${exportProgress.current}/${exportProgress.total})...`
-                  : "ダウンロード"}
+                ダウンロード
               </button>
-            </div>
+            </>
+          )}
+        >
+          <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
+            TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
+          </p>
+          <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
+          <div className="mb-3 flex flex-col gap-2">
+            {(
+              [
+                { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
+                { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
+              ] as { value: "all" | "selected"; label: string }[]
+            ).map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+              >
+                <input
+                  type="radio"
+                  name="pdf-export-scope"
+                  value={option.value}
+                  checked={pdfScope === option.value}
+                  onChange={() => setPdfScope(option.value)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">{option.label}</span>
+              </label>
+            ))}
           </div>
-        </div>
+          {showColophon && (
+            pdfScope === "selected" ? (
+              <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
+                <input
+                  type="checkbox"
+                  checked={pdfIncludeColophon}
+                  onChange={(e) => setPdfIncludeColophon(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">奥付ページを含める（選択ページの後ろに追加）</span>
+              </label>
+            ) : (
+              <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
+                奥付ページは最後に含まれます。
+              </p>
+            )
+          )}
+          <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
+          <div className="flex flex-col gap-2">
+            {(
+              [
+                { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
+                { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
+                { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
+              ] as { value: PdfExportMode; label: string }[]
+            ).map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
+              >
+                <input
+                  type="radio"
+                  name="pdf-export-mode"
+                  value={option.value}
+                  checked={pdfMode === option.value}
+                  onChange={() => setPdfMode(option.value)}
+                  className="mt-0.5"
+                />
+                <span className="text-ink">{option.label}</span>
+              </label>
+            ))}
+          </div>
+          {pdfScope === "selected" && selected.size === 0 && (
+            <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
+          )}
+          <p className="mb-1 mt-3 text-xs font-medium text-ink/70">
+            <label htmlFor="pdf-filename-stem">保存ファイル名</label>
+          </p>
+          <div className="flex items-center gap-1.5">
+            <input
+              id="pdf-filename-stem"
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={pdfFilenameStem}
+              onChange={(e) => setPdfFilenameStem(sanitizePdfFilenameStem(e.target.value))}
+              aria-describedby="pdf-filename-stem-help"
+              className="w-full min-w-0 rounded border border-ink/20 bg-base px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
+            />
+            <span className="shrink-0 text-sm text-ink/60">.pdf</span>
+          </div>
+          <p id="pdf-filename-stem-help" className="mt-1 text-xs text-ink/60">
+            入稿用ファイル名は英数字がおすすめです。印刷所の指定もご確認ください。
+          </p>
+        </ViewportModal>
       )}
 
       {pdfChecklistAttempt && (
@@ -2265,3 +2766,5 @@ export default function PreviewPane({
     </div>
   );
 }
+
+export default memo(PreviewPane);

@@ -81,8 +81,15 @@ check(
   !!modal && /initialKeepShowing/.test(modal) && /useState\(initialKeepShowing\)/.test(modal),
 );
 check(
-  "4c. the notice only opens when the preference is ON",
-  !!editor && /if \(showPdfFilenameNotice\) setIsPdfNoticeOpen\(true\)/.test(editorCode),
+  // TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: the notice is now
+  // dormant behind PDF_POST_EXPORT_NOTICE_ENABLED (safe-filename guidance
+  // moved into the pre-export PDF setup modal) — updated, not regressed;
+  // the ON/OFF preference check still gates it whenever it's re-enabled.
+  "4c. the notice only opens when the preference is ON (currently also gated off entirely by PDF_POST_EXPORT_NOTICE_ENABLED)",
+  !!editor &&
+    /if \(PDF_POST_EXPORT_NOTICE_ENABLED && showPdfFilenameNotice\) setIsPdfNoticeOpen\(true\)/.test(
+      editorCode,
+    ),
 );
 
 /* ---------------- 5. preference is browser-local ---------------- */

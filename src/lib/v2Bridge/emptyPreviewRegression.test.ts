@@ -71,7 +71,8 @@ describe("empty manuscript Preview regression", () => {
     const previewPane = source("src/components/PreviewPane.tsx");
     const pageCard = source("src/components/PageCard.tsx");
 
-    expect(adapter).toContain("setState({ bridge: null, preview: null, error: `V2 HOLD: ${detail}`, loading: false })");
+    expect(adapter).toContain('error: `V2 HOLD: ${event.data.message ?? "Preview worker failed"}`');
+    expect(adapter).toContain('error: `V2 HOLD: ${event.message || "Preview worker failed"}`');
     expect(previewPane).toContain("useV2Engine && v2Adapter.error");
     expect(previewPane).toContain('<div role="alert"');
     expect(previewPane).toContain("{v2Adapter.error} フォント資産を確認してから再読み込みしてください。");

@@ -3,10 +3,10 @@
 // Core-owned and already PASS (untouched by this task) — these tests cover
 // only the Renderer's own paint boundary. Current strategy (after two
 // geometric-bar attempts were rejected by Human Visual QA, see
-// qa/evidence/P3_O04_DASH_VISUAL.md §§15-18): real font glyph ink, split
-// into one paint node per grapheme (paintModel.ts's `dashGlyphsFor`) with a
-// small em-relative overlap to close the seam a shared text node would
-// otherwise leave — without moving anything else, re-tokenizing, changing
+// qa/evidence/P3_O04_DASH_VISUAL.md §§15-18): the unchanged U+2015 sequence
+// paints as one native vertical shaping run, avoiding the separate ink-box
+// side bearings that produced a visible seam — without moving anything else,
+// re-tokenizing, changing
 // canonical occupancy, or touching ELLIPSIS (P3-O05, still OPEN).
 
 import { describe, expect, it } from "vitest";
@@ -110,15 +110,19 @@ describe("P3-O04 — Dash Visual", () => {
     expect(html).toContain("runKind=DASH");
     expect(html).toContain("runBoxTop=");
     expect(html).toContain("runBoxHeight=");
-    expect(html).toContain("paintStrategy=native-glyph, 2 paint node(s), seam overlap");
+    expect(html).toContain("paintStrategy=one native vertical shaping run");
   });
 
   it("10. visual scaling is proportional — the dash run's own topPx/heightPx scale exactly with the visual scale multiplier, canonical text/span unchanged", () => {
     const fx = ALL_FIXTURES.find((f) => f.id === "dash-ellipsis")!;
     const { model: at1x } = composeAndPaint(fx.bodyUnits, fx.source, fx.capacity, 1);
+    const { model: at2_5x } = composeAndPaint(fx.bodyUnits, fx.source, fx.capacity, 2.5);
     const { model: at4x } = composeAndPaint(fx.bodyUnits, fx.source, fx.capacity, 4);
     const dash1 = findDashUnit(at1x);
+    const dash2_5 = findDashUnit(at2_5x);
     const dash4 = findDashUnit(at4x);
+    expect(dash2_5.topPx / dash1.topPx).toBeCloseTo(2.5, 6);
+    expect(dash2_5.heightPx / dash1.heightPx).toBeCloseTo(2.5, 6);
     expect(dash4.topPx / dash1.topPx).toBeCloseTo(4, 6);
     expect(dash4.heightPx / dash1.heightPx).toBeCloseTo(4, 6);
     expect(dash4.text).toBe(dash1.text);
@@ -257,8 +261,11 @@ describe("P3-O04 — Dash Visual", () => {
     expect(html).not.toContain("::after");
     expect(html).not.toContain("opacity:");
     expect(html).not.toContain("color: transparent");
-    // Real glyph ink is present as actual DOM text content.
-    expect(html).toMatch(/<span class="dash-glyph"[^>]*>―<\/span>/);
+    expect(html).toMatch(/\.unit\.semantic-dash\s*\{[^}]*text-orientation: mixed/);
+    // The logical U+2015 sequence remains one native shaping run; separate
+    // spans would create separate ink boxes and reintroduce the seam.
+    expect(html).toMatch(/<div class="unit kind-SEMANTIC_RUN semantic-dash"[^>]*><span class="unit-ink">[^<]+<span class="provisional-badge">/);
+    expect(html).not.toContain('class="dash-glyph"');
   });
 
   it("does not mutate CanonicalDocument (no re-layout) — a snapshot taken before painting equals a snapshot taken after", () => {

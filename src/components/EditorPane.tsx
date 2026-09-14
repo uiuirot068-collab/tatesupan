@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
+import { ensureLongtaskObserver, getEditorProbeMode, isPerfDebugEnabled, perfMark, perfSpan } from "@/lib/perfDebug";
+import DiagnosticShadowEditor from "./DiagnosticShadowEditor";
+import WindowedEditorProbe from "./WindowedEditorProbe";
+import PagedEditor, { type PagedEditorHandle } from "./PagedEditor";
+import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
+import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
@@ -88,55 +94,120 @@ interface EditorPaneProps {
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
 }
 
-export default function EditorPane({
-  title,
-  onTitleChange,
-  content,
-  onContentChange,
-  workSession,
-  onRecordActivity,
-  onStartWorkSession,
-  onPauseWorkSession,
-  onResumeWorkSession,
-  onEndWorkSession,
-  onOpenSearchReplace,
-  onOpenBetaFeedback,
-  onOpenOptions,
-  onToggleMemo,
-  memoOpen,
-  memoStorageKey,
-  confirmedMemo,
-  onConfirmMemo,
-  onCloseMemo,
-  onOpenSettingsDrawer,
-  onOpenHelp,
-  onCursorIndexChange,
-  focusMode = false,
-}: EditorPaneProps) {
+export interface EditorPaneHandle {
+  /**
+   * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: navigates the
+   * editor to canonical offset range `[start, end)` -- e.g. a Preview page
+   * click. Routes to the paged editor's own page switch when it's mounted,
+   * or a plain `setSelectionRange` on the legacy full-document textarea
+   * otherwise. Never mutates `content`.
+   */
+  navigateToGlobalOffset(start: number, end: number): void;
+}
+
+function EditorPaneInner(
+  {
+    title,
+    onTitleChange,
+    content,
+    onContentChange,
+    workSession,
+    onRecordActivity,
+    onStartWorkSession,
+    onPauseWorkSession,
+    onResumeWorkSession,
+    onEndWorkSession,
+    onOpenSearchReplace,
+    onOpenBetaFeedback,
+    onOpenOptions,
+    onToggleMemo,
+    memoOpen,
+    memoStorageKey,
+    confirmedMemo,
+    onConfirmMemo,
+    onCloseMemo,
+    onOpenSettingsDrawer,
+    onOpenHelp,
+    onCursorIndexChange,
+    focusMode = false,
+  }: EditorPaneProps,
+  ref: React.Ref<EditorPaneHandle>
+) {
+  perfMark("EditorPane:render", { contentLength: content.length });
+  ensureLongtaskObserver();
+  // TSP-LONG-DOCUMENT-EDITOR-SURFACE-FORENSIC-005: the paint-probe rAF chain
+  // below was being rescheduled on every keystroke with no coalescing, so a
+  // fast typing burst queued many overlapping rAF1->rAF2 chains -- adding
+  // real (if small) rAF callback pressure of its own and muddying the
+  // report's picture of where time actually goes. At most one chain may be
+  // outstanding at a time now.
+  const paintProbePendingRef = useRef(false);
+  // TSP-EDITOR-NATIVE-SURFACE-AB-006: which diagnostic-only editor surface
+  // variant to render (`?perfDebug=1&editorProbe=<mode>`). Always "normal"
+  // outside perfDebug, so this can never affect normal product behavior.
+  const probeMode = isPerfDebugEnabled() ? getEditorProbeMode() : "normal";
+  const logNativeEvent = (
+    type: string,
+    el: HTMLTextAreaElement,
+    extra?: Record<string, string | number | boolean | null>
+  ) => {
+    perfMark(`EditorPane:native:${type}`, {
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      isComposing: isComposingRef.current,
+      contentLength: el.value.length,
+      ...extra,
+    });
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: internal rollout gate,
+  // off by default (see editorSurfaceRollout.ts) -- independent of the
+  // perfDebug-only `probeMode === "windowed"` diagnostic probe above. When
+  // enabled, <PagedEditor> (one ~50k-char 編集ページ mounted at a time)
+  // replaces the plain full-document textarea; every other feature below
+  // (undo/redo, page-break insertion, writing-check jump) is routed through
+  // `pagedEditorRef`'s imperative handle instead of `textareaRef` so the
+  // SAME call sites serve both editor surfaces.
+  const isWindowed = isWindowedEditorEnabled();
+  const pagedEditorRef = useRef<PagedEditorHandle>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
-  const [mobileWritingActive, setMobileWritingActive] = useState(false);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
+  // recompute's scheduler priority -- it cannot interrupt `countVisualLength`
+  // (which re-tokenizes the WHOLE manuscript) mid-call, so on a 260k-char
+  // document the "deferred" low-priority render still ran inside the same
+  // task as the keystroke's own commit, blocking the browser's paint of the
+  // just-typed character. A real `setTimeout` macrotask boundary (matching
+  // PreviewPane's own content debounce) guarantees a paint opportunity first.
+  const VISUAL_LENGTH_DEBOUNCE_MS = 180;
+  const [deferredContent, setDeferredContent] = useState(content);
+  useEffect(() => {
+    perfMark("EditorPane:visualLengthDebounce:scheduled", { contentLength: content.length });
+    const timer = window.setTimeout(() => {
+      perfMark("EditorPane:visualLengthDebounce:fired", { contentLength: content.length });
+      setDeferredContent(content);
+    }, VISUAL_LENGTH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [content]);
+  const visualLength = useMemo(() => {
+    const end = perfSpan("EditorPane:countVisualLength", { contentLength: deferredContent.length });
+    const result = countVisualLength(deferredContent);
+    end();
+    return result;
+  }, [deferredContent]);
 
   // Parent-driven changes (load/switch, structural UI, Preview operations)
   // become the next input baseline without themselves becoming activity.
   useEffect(() => {
-    inputActivityStateRef.current = syncTextInputActivityState(
-      inputActivityStateRef.current,
-      content
-    );
+    const before = inputActivityStateRef.current;
+    const after = syncTextInputActivityState(before, content);
+    perfMark("EditorPane:syncEffect:fired", {
+      contentLength: content.length,
+      hadPendingBeforeInput: before.pendingBeforeInput !== null,
+      wasMismatch: before.lastText !== content,
+      clearedPending: before.pendingBeforeInput !== null && before.lastText !== content,
+    });
+    inputActivityStateRef.current = after;
   }, [content]);
-
-  // TSP-LOOP-020: explicit "本文を書く" action (phone only). scrollIntoView is
-  // always done; focus() is only ever called from this direct user tap —
-  // never on project load / mount — so it can't trigger a Safari
-  // keyboard/viewport jump on open.
-  const goToManuscript = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.focus({ preventScroll: true });
-    setMobileWritingActive(true);
-  };
 
   // Keep the textarea's native browser history as the single source of truth.
   // Preventing toolbar focus on pointer-down preserves the current selection;
@@ -167,6 +238,19 @@ export default function EditorPane({
       ...synchronizedState,
       pendingBeforeInput: null,
     };
+  };
+
+  // Phase 6 (windowed-editor production parity): native textarea history does
+  // not survive a window shift (assigning `.value` to a DIFFERENT string
+  // clears the browser's own undo stack -- see WindowedEditor.tsx's module
+  // doc), so the toolbar buttons must route to the windowed editor's own
+  // application-level undo/redo instead of `execCommand` while it's mounted.
+  const runHistory = (command: "undo" | "redo") => {
+    if (isWindowed) {
+      pagedEditorRef.current?.runHistory(command);
+      return;
+    }
+    runNativeHistory(command);
   };
 
   // ---- TSP-LOOP-004 → 文章チェック β 2.0 (local, deterministic, no network) ----
@@ -205,23 +289,61 @@ export default function EditorPane({
   useEffect(() => {
     if (!writingCheckEnabled || isComposingRef.current) return;
     const timer = setTimeout(() => {
-      setAnalysis({ text: content, issues: runWritingCheck(content, writingCheckConfig) });
+      const end = perfSpan("EditorPane:runWritingCheck", { contentLength: content.length });
+      const issues = runWritingCheck(content, writingCheckConfig);
+      end({ issueCount: issues.length });
+      setAnalysis({ text: content, issues });
     }, WRITING_CHECK_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [content, writingCheckEnabled, recheckNonce, writingCheckConfig]);
 
   const analysisCurrent = analysis.text === content;
-  const writingIssuesForContent = analysisCurrent ? filterIgnored(analysis.issues, ignoredIds) : [];
+  const writingIssuesForAnalysis = useMemo(
+    () => filterIgnored(analysis.issues, ignoredIds),
+    [analysis.issues, ignoredIds]
+  );
+  const writingIssuesForContent = analysisCurrent ? writingIssuesForAnalysis : [];
 
-  const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
+  const reportCursorIndex = () => {
+    const el = textareaRef.current;
+    if (!el || !onCursorIndexChange) return;
+    perfMark("EditorPane:cursorIndex", { index: el.selectionStart });
+    perfMark("EditorPane:native:select", {
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      isComposing: isComposingRef.current,
+      contentLength: el.value.length,
+    });
+    onCursorIndexChange(el.selectionStart);
+  };
+
+  /**
+   * Shared navigation entry point for both a Writing Check issue click
+   * (Phase 8) and a Preview page click (Phase 6) -- never mutates `content`.
+   * Routes to the paged editor's own page switch when it's mounted, or a
+   * plain `setSelectionRange` on the legacy full-document textarea otherwise.
+   */
+  const navigateToGlobalOffset = (start: number, end: number) => {
+    if (isWindowed) {
+      const s = Math.min(start, content.length);
+      const e = Math.min(end, content.length);
+      pagedEditorRef.current?.moveSelectionToGlobal(s, e);
+      return;
+    }
     const el = textareaRef.current;
     if (!el) return;
     el.focus();
-    const start = Math.min(issue.start, el.value.length);
-    const end = Math.min(issue.end, el.value.length);
-    el.setSelectionRange(start, end);
+    const s = Math.min(start, el.value.length);
+    const e = Math.min(end, el.value.length);
+    el.setSelectionRange(s, e);
     reportCursorIndex();
   };
+
+  const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
+    navigateToGlobalOffset(issue.start, issue.end);
+  };
+
+  useImperativeHandle(ref, (): EditorPaneHandle => ({ navigateToGlobalOffset }), [navigateToGlobalOffset]);
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
   const applyAutomatedTextChange = (next: string) => {
@@ -240,6 +362,15 @@ export default function EditorPane({
       return;
     }
     applyAutomatedTextChange(result.text);
+    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §E: see writingCheckPostFixNavigation.ts's
+    // own doc -- the current default (RETURN_TO_PREVIOUS) resolves to `null`
+    // here, so this is a no-op and today's Human-QA-approved behavior is
+    // unchanged; flipping the policy constant is the only future change needed.
+    const postFixTarget = resolvePostFixCaretTarget(WRITING_CHECK_POST_FIX_NAVIGATION, {
+      start: issue.start,
+      replacementLength: issue.suggestedReplacement?.text.length ?? 0,
+    });
+    if (postFixTarget != null) navigateToGlobalOffset(postFixTarget, postFixTarget);
   };
 
   const handleIgnoreIssue = (issue: WritingDiagnostic) => {
@@ -262,13 +393,14 @@ export default function EditorPane({
     setUndoState(null);
   };
 
-  const reportCursorIndex = () => {
-    const el = textareaRef.current;
-    if (!el || !onCursorIndexChange) return;
-    onCursorIndexChange(el.selectionStart);
-  };
-
   const captureTextareaInput = (el: HTMLTextAreaElement, inputType: string) => {
+    perfMark("EditorPane:beforeinput", {
+      inputType,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      isComposing: isComposingRef.current,
+      contentLength: el.value.length,
+    });
     inputActivityStateRef.current = captureBeforeInput(inputActivityStateRef.current, {
       beforeText: el.value,
       selectionStart: el.selectionStart,
@@ -278,9 +410,10 @@ export default function EditorPane({
   };
 
   const insertPageBreak = () => {
-    const el = textareaRef.current;
-    const start = el?.selectionStart ?? content.length;
-    const end = el?.selectionEnd ?? content.length;
+    const selection = isWindowed
+      ? pagedEditorRef.current?.getSelectionGlobal() ?? { start: content.length, end: content.length }
+      : { start: textareaRef.current?.selectionStart ?? content.length, end: textareaRef.current?.selectionEnd ?? content.length };
+    const { start, end } = selection;
     const before = content.slice(0, start);
     const after = content.slice(end);
     // A break inserted mid-line (the common case: cursor between two
@@ -288,11 +421,22 @@ export default function EditorPane({
     // marker would render as literal text instead of a real page break —
     // see `insertPageBreakMarker`'s doc.
     const marker = insertPageBreakMarker(before, after);
+    const caretOffsetInMarker = marker.indexOf(PAGE_BREAK_MARKER) + PAGE_BREAK_MARKER.length;
+
+    if (isWindowed) {
+      // Dedicated structural page-break UI is explicitly outside 11-B.
+      // WindowedEditor's own undo model records this as one atomic,
+      // undoable edit (Phase 6: "page-break insertion is undoable").
+      pagedEditorRef.current?.replaceRangeGlobal(start, end, marker, { caretOffsetInInsertedText: caretOffsetInMarker });
+      return;
+    }
+
+    const el = textareaRef.current;
     const next = before + marker + after;
     // Dedicated structural page-break UI is explicitly outside 11-B.
     inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
     onContentChange(next);
-    const caret = start + marker.indexOf(PAGE_BREAK_MARKER) + PAGE_BREAK_MARKER.length;
+    const caret = start + caretOffsetInMarker;
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(caret, caret);
@@ -324,7 +468,7 @@ export default function EditorPane({
             data-editor-history-action="undo"
             aria-label="元に戻す"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => runNativeHistory("undo")}
+            onClick={() => runHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
             className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
@@ -337,7 +481,7 @@ export default function EditorPane({
             data-editor-history-action="redo"
             aria-label="やり直す"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => runNativeHistory("redo")}
+            onClick={() => runHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
             className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
           >
@@ -391,25 +535,6 @@ export default function EditorPane({
         </div>
       </div>
 
-      {/* TSP-LOOP-020: phone-only manuscript identity. After opening a saved
-          work the user must immediately see "this is where I continue
-          writing". `md:hidden` — desktop never shows this tutorial line. */}
-      {!mobileWritingActive && !focusMode && <div data-mobile-write-action="" className="flex flex-none items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2 md:hidden">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink">✏️ 本文を書く</p>
-          <p className="text-[11px] leading-snug text-ink/55">
-            ここに原稿を入力すると、縦書きプレビューに反映されます。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={goToManuscript}
-          className="shrink-0 whitespace-nowrap rounded-full border border-ink/20 px-3 py-1 text-xs font-medium text-ink/70 hover:bg-ink/5"
-        >
-          本文を書く
-        </button>
-      </div>}
-
       {/* The textarea stays the sole input surface. WritingCheckOverlay is a
           read-only, pointer-events-none mirror rendered behind it (only the
           red wavy underline is visible); it shares the textarea's wrapping
@@ -417,17 +542,93 @@ export default function EditorPane({
           Phone and desktop both assign remaining pane height here; the
           textarea itself owns vertical scrolling. */}
       <div className="relative min-h-0 flex-1">
-        {writingCheckEnabled && (
-          <WritingCheckOverlay
-            textareaRef={textareaRef}
-            text={content}
-            issues={writingIssuesForContent}
+        {probeMode === "uncontrolled-shadow" ? (
+          <DiagnosticShadowEditor initialContent={content} />
+        ) : probeMode === "windowed" ? (
+          <WindowedEditorProbe initialContent={content} />
+        ) : isWindowed ? (
+          // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: production
+          // long-document editor surface, gated by
+          // `resolveEditorSurfaceRolloutMode()` (off by default). Mounts
+          // exactly ONE ~50k-char 編集ページ at a time; the writing-check
+          // list, jump, fix, ignore, bulk-fix AND the inline red-wavy
+          // underline (via `writingCheck`, mapped to page-local coordinates
+          // inside PagedEditor) all work here.
+          <PagedEditor
+            ref={pagedEditorRef}
+            content={content}
+            onContentChange={(next) => {
+              // Mirrors the legacy textarea's own undoState-clearing rule
+              // below, compared against canonical text (not a page-local
+              // slice) -- see PagedEditor.tsx's module doc.
+              if (undoState && next !== undoState.after) setUndoState(null);
+              onContentChange(next);
+            }}
+            onCursorIndexChange={onCursorIndexChange}
+            onNativeKeyDown={(el) => logNativeEvent("keydown", el)}
+            onNativeBeforeInput={(el, inputType) => captureTextareaInput(el, inputType)}
+            onNativeCompositionStart={(el) => {
+              logNativeEvent("compositionstart", el);
+              // See the matching disable in the legacy textarea's own handler below.
+              // eslint-disable-next-line react-hooks/immutability
+              isComposingRef.current = true;
+              inputActivityStateRef.current = startComposition(
+                inputActivityStateRef.current,
+                el.value,
+                el.selectionStart,
+                el.selectionEnd
+              );
+            }}
+            onNativeCompositionEnd={(el) => {
+              logNativeEvent("compositionend", el);
+              // eslint-disable-next-line react-hooks/immutability
+              isComposingRef.current = false;
+              const transition = finishComposition(inputActivityStateRef.current, el.value);
+              inputActivityStateRef.current = transition.state;
+              onRecordActivity(transition.delta);
+              setRecheckNonce((value) => value + 1);
+            }}
+            onNativeChangeCommitted={(el) => {
+              logNativeEvent("input", el, { nextLength: el.value.length });
+              const endActivitySpan = perfSpan("EditorPane:applyTextInputChange");
+              const transition = applyTextInputChange(inputActivityStateRef.current, el.value);
+              endActivitySpan();
+              inputActivityStateRef.current = transition.state;
+              onRecordActivity(transition.delta);
+            }}
+            writingCheck={
+              writingCheckEnabled
+                ? { enabled: true, analysisText: analysis.text, issues: writingIssuesForAnalysis }
+                : undefined
+            }
+            placeholder={DEFAULT_INITIAL_TEXT}
           />
+        ) : (
+        <>
+        {writingCheckEnabled && (
+          <div className={`pointer-events-none absolute inset-0 ${analysisCurrent ? "visible" : "invisible"}`}>
+            <WritingCheckOverlay
+              textareaRef={textareaRef}
+              text={analysis.text}
+              issues={writingIssuesForAnalysis}
+            />
+          </div>
         )}
         <textarea
           ref={textareaRef}
           data-demo-target="editor"
+          data-editor-probe-mode={probeMode}
           value={content}
+          // TSP-EDITOR-NATIVE-SURFACE-AB-006: `wrap="off"` only in the
+          // diagnostic-only "nowrap" probe -- normal product behavior keeps
+          // the browser default (soft-wrap).
+          wrap={probeMode === "nowrap" ? "off" : undefined}
+          // TSP-EDITOR-NATIVE-SURFACE-AB-006: autoCorrect/autoCapitalize off
+          // only in the diagnostic-only "no-spellcheck" probe -- spellCheck
+          // itself is already off in normal product behavior (see below).
+          autoCorrect={probeMode === "no-spellcheck" ? "off" : undefined}
+          autoCapitalize={probeMode === "no-spellcheck" ? "off" : undefined}
+          onKeyDown={(event) => logNativeEvent("keydown", event.currentTarget)}
           onBeforeInput={(event) => {
             const nativeEvent = event.nativeEvent as InputEvent;
             captureTextareaInput(event.currentTarget, nativeEvent.inputType ?? "");
@@ -437,23 +638,49 @@ export default function EditorPane({
           onPaste={(event) => captureTextareaInput(event.currentTarget, "insertFromPaste")}
           onCut={(event) => captureTextareaInput(event.currentTarget, "deleteByCut")}
           onChange={(e) => {
+            logNativeEvent("input", e.currentTarget, { nextLength: e.target.value.length });
             const next = e.target.value;
+            perfMark("EditorPane:onChange:start", { nextLength: next.length });
             // Any edit that isn't exactly the automated fix's own output
             // ends the one-step undo window (see `undoState`'s own doc).
             if (undoState && next !== undoState.after) setUndoState(null);
+            const endActivitySpan = perfSpan("EditorPane:applyTextInputChange");
             const transition = applyTextInputChange(inputActivityStateRef.current, next);
+            endActivitySpan();
             inputActivityStateRef.current = transition.state;
             onRecordActivity(transition.delta);
+            perfMark("EditorPane:onContentChange:call");
             onContentChange(next);
+            perfMark("EditorPane:onChange:end");
+            // Two chained rAFs approximate "first paint after this commit":
+            // the first fires once the browser is ready to paint the frame
+            // that includes this commit, the second confirms a full frame
+            // has actually elapsed (not just been scheduled). Coalesced: a
+            // fast typing burst shares one outstanding chain instead of
+            // queueing a new one per keystroke.
+            if (!paintProbePendingRef.current) {
+              paintProbePendingRef.current = true;
+              requestAnimationFrame(() => {
+                perfMark("EditorPane:paint:rAF1");
+                requestAnimationFrame(() => {
+                  perfMark("EditorPane:paint:rAF2");
+                  paintProbePendingRef.current = false;
+                });
+              });
+            }
             requestAnimationFrame(reportCursorIndex);
           }}
           onSelect={reportCursorIndex}
           onClick={reportCursorIndex}
           onKeyUp={reportCursorIndex}
-          onFocus={() => setMobileWritingActive(true)}
           onCompositionStart={(event) => {
-            isComposingRef.current = true;
             const el = event.currentTarget;
+            logNativeEvent("compositionstart", el);
+            // Ordinary ref flag, unrelated to the writing-check effect's own
+            // read of isComposingRef; the rule's effect-adjacency heuristic
+            // doesn't apply since React Compiler isn't enabled (AGENTS.md).
+            // eslint-disable-next-line react-hooks/immutability
+            isComposingRef.current = true;
             inputActivityStateRef.current = startComposition(
               inputActivityStateRef.current,
               el.value,
@@ -461,7 +688,11 @@ export default function EditorPane({
               el.selectionEnd
             );
           }}
+          onCompositionUpdate={(event) => logNativeEvent("compositionupdate", event.currentTarget)}
           onCompositionEnd={(event) => {
+            logNativeEvent("compositionend", event.currentTarget);
+            // See the matching disable in onCompositionStart above.
+            // eslint-disable-next-line react-hooks/immutability
             isComposingRef.current = false;
             const transition = finishComposition(
               inputActivityStateRef.current,
@@ -473,15 +704,17 @@ export default function EditorPane({
           }}
           placeholder={DEFAULT_INITIAL_TEXT}
           spellCheck={false}
-          className="absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"
+          className={`absolute inset-0 h-full w-full resize-none overflow-y-auto ${probeMode === "nowrap" ? "overflow-x-auto whitespace-pre" : "overflow-x-hidden"} bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40`}
         />
+        </>
+        )}
       </div>
 
       <div data-writing-check-surface="" className={focusMode ? "max-md:hidden md:hidden" : ""}>
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
-        text={content}
+        text={analysisCurrent ? analysis.text : ""}
         issues={writingIssuesForContent}
         onSelectIssue={handleSelectWritingIssue}
         onFixIssue={handleFixIssue}
@@ -528,10 +761,13 @@ export default function EditorPane({
             title="現在の原稿文字数"
             className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
           >
-            現在の原稿文字数 {countVisualLength(content)}文字
+            現在の原稿文字数 {visualLength}文字
           </span>
         </div>
       </div>
     </div>
   );
 }
+
+const EditorPane = forwardRef(EditorPaneInner);
+export default EditorPane;
