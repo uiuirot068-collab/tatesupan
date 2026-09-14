@@ -1,0 +1,160 @@
+/*
+ * TSP-HOWTO-BETA-016 — styling for /howto, adapted from the approved
+ * docs/howto (Draft v3.4) static mockup. Every rule is scoped under
+ * `.howto-page` (the route's single wrapper element) instead of `:root` /
+ * `body`, so nothing here leaks into the rest of the app when this route's
+ * JS chunk stays loaded during client-side navigation.
+ */
+
+.howto-page {
+  --bg: #f3eee4;
+  --paper: #fffdf8;
+  --text: #25211d;
+  --muted: #7b7369;
+  --line: #ddd5c9;
+  --gold: #c89542;
+  --gold-dark: #a8742c;
+  --sub: #e8e2d8;
+  --slot: #f6f1e9;
+  --dark: #28241f;
+  --max: 960px;
+
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.85;
+  letter-spacing: .015em;
+}
+.howto-page * { box-sizing: border-box; }
+.howto-page a { color: inherit; }
+
+.howto-page .manual { width: min(var(--max), calc(100% - 36px)); margin: 0 auto 80px; background: var(--paper); padding: 0 64px 0; box-shadow: 0 12px 44px rgba(70,57,39,.08); }
+.howto-page .hero { min-height: 720px; display: grid; grid-template-columns: 36% 64%; gap: 38px; align-items: center; border-bottom: 1px solid var(--line); }
+.howto-page .hero-left { align-self: stretch; display: flex; flex-direction: column; justify-content: center; padding-right: 30px; border-right: 1px solid var(--line); }
+.howto-page .hero-brand .howto-label { display: block; font: 800 23px/1 Georgia, serif; letter-spacing: .04em; }
+.howto-page .hero-brand strong { display: block; margin-top: 5px; font: 800 34px/1 Georgia, serif; }
+.howto-page .hero-pills { display: grid; gap: 10px; margin: 30px 0 34px; }
+.howto-page .pill { width: max-content; padding: 7px 18px; border-radius: 999px; color: #fff; text-decoration: none; font-size: 13px; font-weight: 700; }
+.howto-page .pill.dark { background: #111; }
+.howto-page .pill.gold { background: var(--gold); }
+.howto-page .hero-index { display: grid; gap: 0; }
+.howto-page .hero-menu-block { border-top: 1px solid var(--line); padding: 10px 0; }
+.howto-page .hero-menu-block:nth-child(2) { border-bottom: 1px solid var(--line); }
+.howto-page .hero-menu-row { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 10px; align-items: start; }
+.howto-page .accordion-toggle { width: 26px; height: 32px; padding: 7px 4px; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.howto-page .accordion-toggle:hover { background: #f3ede4; }
+.howto-page .hamburger { width: 18px; display: grid; gap: 4px; }
+.howto-page .hamburger i { display: block; width: 18px; height: 1px; background: currentColor; }
+.howto-page .hero-menu-title { display: block; text-decoration: none; font-size: 15px; font-weight: 700; line-height: 1.5; word-break: keep-all; }
+.howto-page .hero-menu-title:hover { text-decoration: underline; }
+.howto-page .hero-submenu { margin: 10px 0 4px 37px; padding-left: 22px; }
+.howto-page .hero-submenu[hidden] { display: none; }
+.howto-page .hero-submenu li { margin: 5px 0; font-size: 14px; line-height: 1.5; }
+.howto-page .hero-submenu a { text-decoration: none; }
+.howto-page .hero-submenu a:hover { text-decoration: underline; }
+.howto-page .hero-simple-link { display: block; padding: 9px 0 9px 37px; text-decoration: none; font-size: 15px; font-weight: 700; color: var(--text); background: none; }
+.howto-page .hero-simple-link:hover { text-decoration: underline; }
+.howto-page .hero-right { text-align: center; }
+.howto-page .hero-visual { display: flex; justify-content: center; align-items: center; min-height: 360px; padding: 20px; border: 1px solid var(--line); background: #fff9ee; }
+.howto-page .hero-visual img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+.howto-page .hero-copy { max-width: 400px; margin: 28px auto 0; font-size: 15px; }
+.howto-page .scroll-arrow { margin-top: 32px; font-size: 32px; }
+
+.howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 110px; margin: 0 -64px; padding: 0 64px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
+.howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; }
+.howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
+.howto-page .guide-logo span { font-size: 11px; }
+.howto-page .guide-logo b { font: 700 17px Georgia, serif; }
+.howto-page .guide-links { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; flex: 1; max-width: 560px; }
+.howto-page .guide-links a { display: block; padding: 10px 9px; text-decoration: none; font-size: 13px; line-height: 1.45; }
+.howto-page .guide-links a:hover { background: #faf6ee; }
+.howto-page .guide-links a span { font-size: 12px; color: var(--muted); }
+
+.howto-page .intro { display: grid; grid-template-columns: 29% 71%; gap: 38px; padding: 70px 0 105px; }
+.howto-page .intro-title { display: flex; align-items: flex-start; gap: 12px; }
+.howto-page .intro-title > span { width: 4px; min-height: 48px; background: #222; }
+.howto-page .intro-title b { font-size: 16px; }
+.howto-page .intro-copy p { margin: 0 0 9px; font-size: 14px; }
+.howto-page .intro-copy a { text-decoration: none; }
+.howto-page .intro-copy a:hover { text-decoration: underline; }
+
+.howto-page .chapter { padding-bottom: 94px; scroll-margin-top: 125px; }
+.howto-page .chapter > h2 { width: 74%; margin: 0 auto 8px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
+.howto-page .subhead { width: 55%; margin: 0 auto 40px; padding: 4px 12px; text-align: center; border-radius: 999px; background: var(--sub); font-size: 12px; color: #4d4841; }
+.howto-page .chapter-grid { display: grid; grid-template-columns: 43% 57%; gap: 36px; align-items: start; }
+.howto-page .chapter-copy { display: grid; gap: 22px; }
+.howto-page .copy-block { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.howto-page .copy-block:last-child { border-bottom: 0; }
+.howto-page .chapter-copy h3 { margin: 0 0 10px; font-size: 16px; }
+.howto-page .copy-body { font-size: 14px; }
+.howto-page .copy-body p { margin: 0 0 11px; }
+.howto-page .copy-body ul { margin: 8px 0 0; padding-left: 1.5em; }
+.howto-page .copy-body code { padding: 2px 5px; background: #eee8dd; font-family: Consolas, monospace; }
+
+.howto-page .image-frame { padding: 20px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--slot); min-height: 200px; }
+.howto-page .image-frame img { display: block; max-width: 100%; height: auto; }
+
+.howto-page .tips-index { padding: 0 0 94px; scroll-margin-top: 125px; }
+.howto-page .tips-index > h2 { width: 74%; margin: 0 auto 24px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; }
+.howto-page .tips-index ol { columns: 2; gap: 40px; max-width: 680px; margin: 0 auto; padding-left: 2em; }
+.howto-page .tips-index li { margin: 8px 0; font-size: 14px; break-inside: avoid; }
+.howto-page .tips-index a { text-decoration: none; }
+.howto-page .tips-index a:hover { text-decoration: underline; }
+
+.howto-page .faq { padding: 20px 0 70px; text-align: center; scroll-margin-top: 125px; }
+.howto-page .faq > h2 { margin: 0 0 18px; font: 800 36px/1.2 "Yu Gothic", sans-serif; }
+.howto-page .faq-item { max-width: 720px; margin: 0 auto; text-align: left; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 24px 0; }
+.howto-page .faq-q { margin: 0 0 16px; font-size: 21px; font-weight: 700; }
+.howto-page .faq-text { font-size: 14px; }
+.howto-page .faq-text p { margin: 0 0 12px; }
+
+.howto-page .greeting { padding: 30px 0 60px; max-width: 680px; margin: 0 auto; }
+.howto-page .greeting h2 { font-size: 22px; margin: 0 0 18px; }
+.howto-page .greeting p { font-size: 14px; margin: 0 0 12px; }
+.howto-page .contact-block { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+.howto-page .contact-block h3 { font-size: 15px; margin: 0 0 10px; }
+.howto-page .contact-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.howto-page .contact-actions button { padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; }
+.howto-page .contact-actions button:hover { background: var(--sub); }
+.howto-page .contact-actions button.primary { background: var(--gold); border-color: var(--gold); color: #fff; }
+.howto-page .contact-actions button.primary:hover { background: var(--gold-dark); }
+
+.howto-page .devlog { margin: 0 -64px; padding: 60px 64px 70px; background: var(--dark); color: #f6f0e7; scroll-margin-top: 110px; }
+.howto-page .devlog-heading { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: end; margin-bottom: 30px; }
+.howto-page .devlog-heading span { font-size: 11px; letter-spacing: .15em; color: #bfb7ac; }
+.howto-page .devlog-heading h2 { margin: 4px 0 0; font-size: 22px; }
+.howto-page .devlog-heading p { font-size: 13px; color: #bdb5aa; }
+.howto-page .log-list { display: grid; }
+.howto-page .log-row { display: grid; grid-template-columns: 95px 92px 1fr; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid #4c463f; font-size: 13px; }
+.howto-page .log-row:last-child { border-bottom: 1px solid #4c463f; }
+.howto-page .log-date { color: #bdb5ab; }
+.howto-page .log-type { width: max-content; padding: 5px 10px; border-radius: 4px; background: #eeeae4; color: #625c55; font-size: 11px; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .04em; }
+.howto-page .log-title { font-weight: 700; }
+.howto-page .log-body { margin-top: 2px; color: #aaa197; }
+.howto-page .more-logs { width: 100%; margin-top: 18px; padding: 10px; border: 1px solid #5e564d; background: transparent; color: white; cursor: pointer; }
+
+.howto-page.show-copy-ids [data-copy-id] { position: relative; outline: 1px dashed rgba(86,113,150,.26); outline-offset: 3px; }
+.howto-page.show-copy-ids [data-copy-id]::before { content: "【" attr(data-copy-id) "】"; display: block; width: max-content; max-width: 100%; margin: 0 0 4px; padding: 2px 5px; border-radius: 3px; background: #eef4fb; color: #3e658d; font: 10px/1.4 Consolas, monospace; letter-spacing: 0; white-space: normal; word-break: break-all; }
+
+@media (max-width: 760px) {
+  .howto-page .manual { width: 100%; margin: 0; padding: 0 22px; }
+  .howto-page .hero { grid-template-columns: 1fr; min-height: auto; padding: 55px 0; }
+  .howto-page .hero-left { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 36px; }
+  .howto-page .hero-right { padding-top: 36px; }
+  .howto-page .guide-header { margin: 0 -22px; padding: 9px 22px; min-height: 90px; }
+  .howto-page .guide-logo { min-width: auto; }
+  .howto-page .guide-cat { width: 36px; height: 36px; }
+  .howto-page .guide-links { gap: 4px; }
+  .howto-page .guide-links a { font-size: 11px; padding: 7px 5px; }
+  .howto-page .intro { grid-template-columns: 1fr; gap: 22px; }
+  .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 22px; }
+  .howto-page .chapter > h2 { width: 100%; }
+  .howto-page .subhead { width: 90%; }
+  .howto-page .tips-index ol { columns: 1; }
+  .howto-page .devlog { margin: 0 -22px; padding: 48px 22px 58px; }
+  .howto-page .devlog-heading { grid-template-columns: 1fr; }
+  .howto-page .log-row { grid-template-columns: 1fr; gap: 5px; }
+}

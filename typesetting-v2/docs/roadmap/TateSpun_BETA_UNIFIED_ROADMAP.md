@@ -286,3 +286,22 @@ Current evidence remains in:
 - `typesetting-v2/docs/roadmap/archive/` for historical roadmap snapshots
 
 Implementation prompts are authored/reviewed by ChatGPT. No agent may treat this roadmap as authorization to push, deploy, or start Production integration.
+
+## 15. HOW TO onboarding page — TSP-HOWTO-BETA-016
+
+- **Status: IMPLEMENTED / AUTOMATED PASS / HUMAN QA PENDING** (B — BETA REQUIRED). First-time-user end-to-end guide (原稿を持ち込む → 編集する → 本の形を確認する → 必要な設定をする → 入稿前チェック → PDF/JPGを書き出す), distinct from `HelpModal`'s detailed feature reference.
+- Route: `/howto` (`src/app/howto/page.tsx`). Builds to `out/tatespun/howto.html` under `build:basepath`, matching the existing `/guide` route's static-export/basePath pattern exactly — same trailing-slash/refresh behavior, no new build-config change. Verified locally against a production-parity `build:basepath` output: `/tatespun/howto/`, `/tatespun/howto` (no slash), and a repeat request (refresh) all resolve; no `/tatespun/tatespun/` doubling anywhere in the emitted HTML.
+- Content is adapted from the approved `docs/howto` (Draft v3.4) mockup found as untracked WIP in the pre-checkpoint development worktree (`docs/howto/README.md`, `IMAGE_FILE_MAP.md`, `TEXT_MAP.md`, `public/howto/index.html`); copy and visual language preserved (own scoped stylesheet, `src/app/howto/howto.css`, no global CSS/Tailwind changes). Two explanations the draft had not yet covered were added: Editor Pages split/join (「ここで区切る」／「前のページとつなぐ」, no internal implementation terminology) inside the manuscript-bring-in chapter, and the shipped PDF safe-filename field（「保存ファイル名」、半角英数字、`.pdf` 自動付与）inside the export chapter.
+- Images: all 17 prepared screenshots wired to real `<img>` tags (the v3.4 draft had left `IMAGE FILE` text placeholders). Filenames with an accidental duplicated `.png.png` extension were normalized to `.png` on copy-in; the one true duplicate (`guide-cat.png.png`) was dropped in favor of the already-referenced `guide-cat.png`.
+- Help/Feedback: reuses the app's existing `HelpModal` and `BetaFeedbackModal` components directly, same pattern as `/guide` — no forked logic. `BetaFeedbackModal` stays behind the existing `NEXT_PUBLIC_BETA_FEEDBACK_ENABLED` flag.
+- Discoverability: a small HOW TO link was added to the empty-bookshelf onboarding panel (first-time users) and to the persistent footer nav (returning users) on `/` (`src/app/page.tsx`). Header and Editor were not touched.
+- Automated status: `npx vitest run --config src/lib/vitest.config.ts` (new `src/lib/howtoContent.test.ts`, 65 assertions covering image existence, forbidden-term leakage, Editor Page/PDF-filename copy, routing safety, Help/Feedback wiring, and a11y basics) — PASS. ESLint on all new/changed files — PASS (0 errors). `next build`'s internal TypeScript check — PASS. `npm run build:basepath` with `NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED` / `NEXT_PUBLIC_TATESPUN_RENDERER=LEGACY` — PASS.
+- **Human QA still pending**: visual/mobile check across the required breakpoints, image/text correspondence, and overall look-and-feel have not been confirmed by a human. Do not mark HOW TO Human PASS until that happens.
+
+Preserved, unmodified by this change:
+
+- β renderer = **LEGACY**; Editor surface = **WINDOWED**.
+- V2 Renderer Migration = **POST-BETA / HOLD** (§7).
+- Preview continuous-dash fidelity = **POST-BETA polish**.
+- PDF filename field / export global modal = **CLOSED** — this page only documents the already-shipped behavior; no export logic was touched.
+- Production checkpoint deploy `6a849fa` = **CLOSED** — this work was built on a clean worktree/branch (`feature/tatespun-howto-beta`) off `origin/master` at that checkpoint and does not modify it.
