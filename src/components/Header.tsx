@@ -138,11 +138,68 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         </div>
       )}
 
+      {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: a single compact one-line row
+          for the editor header below md — the brand-text-bearing block and
+          the controls block further down each become md+-only, and this
+          replaces them on mobile: cat logo, β badge, theme toggle, saved
+          works list, logout/login. Desktop is unaffected (md:hidden here).
+          Home's header already has its own separate mobile block above and
+          isn't touched. */}
+      {!isHome && (
+        <div className="flex w-full items-center justify-between gap-1.5 md:hidden">
+          <div className="flex min-w-0 shrink items-center gap-1.5">
+            <img
+              src={logoSrc}
+              alt="TateSpun"
+              width={24}
+              height={24}
+              className="h-6 w-6 shrink-0 object-contain"
+            />
+            <span
+              title="現在β版です。テスト運用期間中のため、機能や表示が変更される場合があります。"
+              className="shrink-0 whitespace-nowrap rounded-full border border-[#c5a059]/40 bg-[#c5a059]/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#b38f48]"
+            >
+              β版
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <ThemeToggle />
+            {onSelectProject && (
+              <button
+                type="button"
+                onClick={() => setIsProjectModalOpen(true)}
+                className="shrink-0 whitespace-nowrap rounded-full bg-[#c5a059] px-2 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-[#b38f48]"
+              >
+                保存作品一覧
+              </button>
+            )}
+            {user ? (
+              <button
+                onClick={() => signOut()}
+                className="shrink-0 whitespace-nowrap rounded border border-gray-300 px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+              >
+                ログアウト
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthModalNotice(null);
+                  setIsAuthModalOpen(true);
+                }}
+                className="shrink-0 whitespace-nowrap rounded bg-[#c5a059] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#b38f48]"
+              >
+                ログイン
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         className={
           isHome
             ? 'hidden min-w-0 items-center gap-3 gap-y-2 min-[780px]:flex min-[780px]:w-auto min-[780px]:flex-nowrap min-[780px]:justify-start'
-            : 'flex w-full min-w-0 flex-wrap items-center gap-3 gap-y-2 sm:w-auto'
+            : 'hidden min-w-0 items-center gap-3 gap-y-2 md:flex md:w-auto'
         }
       >
         {!isHome && !isWorksListRoute && (
@@ -189,7 +246,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         )}
       </div>
       <div
-        className={isHome ? 'hidden' : 'flex w-full flex-wrap items-center gap-4 gap-y-2 sm:w-auto'}
+        className={isHome ? 'hidden' : 'hidden w-full flex-wrap items-center gap-4 gap-y-2 md:flex md:w-auto'}
       >
         <div className="flex items-center gap-2">
           {isHome && (

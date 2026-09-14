@@ -8,6 +8,7 @@ import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
+import { useEditorFooterCollapsed } from "@/hooks/useEditorFooterCollapsed";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
 import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
@@ -264,6 +265,9 @@ function EditorPaneInner(
 
   // ---- TSP-LOOP-004 → 文章チェック β 2.0 (local, deterministic, no network) ----
   const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
+  // TSP-RC-LATIN-AND-MOBILE-COMPACT-001: collapse/expand for the 文章
+  // チェックβ + 作業カウンター footer area (mobile input-area space).
+  const [footerCollapsed, setFooterCollapsed] = useEditorFooterCollapsed();
   const isComposingRef = useRef(false);
   const [recheckNonce, setRecheckNonce] = useState(0);
   const { presetId, ruleOverrides, selectPreset, setRuleEnabled } = useWritingCheckRuleConfig();
@@ -551,11 +555,15 @@ function EditorPaneInner(
           )}
         </div>
         <div className={focusMode ? "hidden" : ""}>
-          <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-2 md:grid-cols-4 md:gap-1">
-            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定</button>
-            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className={`min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション</button>
-            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
-            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className={`min-h-10 whitespace-nowrap rounded px-1 py-1.5 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ</button>
+          {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only padding trim
+              (pt-2->pt-1, py-1.5->py-1) to reclaim a few px of manuscript
+              height; min-h-10 keeps the tap target unchanged, and every
+              md: value is unchanged so desktop is pixel-identical. */}
+          <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-1 md:gap-1 md:grid-cols-4 md:pt-2">
+            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className={`min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定</button>
+            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className={`min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション</button>
+            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
+            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className={`min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ</button>
           </nav>
         </div>
         <InlineMemoAccordion
@@ -743,7 +751,55 @@ function EditorPaneInner(
         )}
       </div>
 
-      <div data-writing-check-surface="" className={focusMode ? "max-md:hidden md:hidden" : ""}>
+      {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only, one-line collapsed
+          form of the 文章チェックβ + 作業カウンター area below, reusing the
+          exact same state/handlers (no new counter logic). Desktop (md+)
+          always shows the full form regardless of this preference. */}
+      {footerCollapsed && !focusMode && (
+        <div
+          data-editor-footer-collapsed=""
+          className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/70 md:hidden"
+        >
+          <label className="flex shrink-0 cursor-pointer select-none items-center gap-1">
+            <input
+              type="checkbox"
+              checked={writingCheckEnabled}
+              onChange={(event) => setWritingCheckEnabled(event.target.checked)}
+              className="h-3 w-3 shrink-0 accent-[#dc2626]"
+            />
+            <span className="whitespace-nowrap font-medium">チェックβ</span>
+          </label>
+          <span aria-hidden="true" className="shrink-0 text-ink/25">｜</span>
+          <WorkSessionTracker
+            state={workSession}
+            onStart={onStartWorkSession}
+            onPause={onPauseWorkSession}
+            onResume={resumeWorkSession}
+            onEnd={onEndWorkSession}
+            compact
+          />
+          <span aria-hidden="true" className="shrink-0 text-ink/25">｜</span>
+          <span className="min-w-0 shrink truncate whitespace-nowrap tabular-nums text-ink/70">
+            現在{visualLength.toLocaleString("ja-JP")}字
+          </span>
+          <button
+            type="button"
+            data-editor-footer-collapse-toggle="expand"
+            onClick={() => setFooterCollapsed(false)}
+            aria-expanded={false}
+            aria-label="文章チェックβ・作業カウンターを展開"
+            title="展開"
+            className="ml-auto shrink-0 rounded px-1 py-0.5 text-ink/50 hover:bg-ink/5"
+          >
+            ▲
+          </button>
+        </div>
+      )}
+
+      <div
+        data-writing-check-surface=""
+        className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed ? "max-md:hidden" : ""}
+      >
       <WritingCheckBar
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
@@ -777,7 +833,10 @@ function EditorPaneInner(
 
       {/* Compact syntax help never creates a second line; touch/keyboard users
           can open its full text without permanently growing the footer. */}
-      <div data-editor-status-surfaces="" className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : ""}`}>
+      <div
+        data-editor-status-surfaces=""
+        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed ? "max-md:hidden" : ""}`}
+      >
         <div data-ruby-tcy-status=""><EditorSyntaxHelp /></div>
         <div
           data-editor-footer-controls
@@ -790,11 +849,27 @@ function EditorPaneInner(
             onResume={resumeWorkSession}
             onEnd={onEndWorkSession}
           />
-          <span
-            title="現在の原稿文字数"
-            className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
-          >
-            現在の原稿文字数 {visualLength}文字
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span
+              title="現在の原稿文字数"
+              className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
+            >
+              現在の原稿文字数 {visualLength}文字
+            </span>
+            {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only collapse
+                toggle for the compact one-line form above. Desktop always
+                shows the full form, so this control has no desktop role. */}
+            <button
+              type="button"
+              data-editor-footer-collapse-toggle="collapse"
+              onClick={() => setFooterCollapsed(true)}
+              aria-expanded={true}
+              aria-label="文章チェックβ・作業カウンターを折りたたむ"
+              title="折りたたむ"
+              className="shrink-0 rounded px-1 py-0.5 text-ink/50 hover:bg-ink/5 md:hidden"
+            >
+              ▼
+            </button>
           </span>
         </div>
       </div>

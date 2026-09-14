@@ -62,8 +62,14 @@ describe("Desktop Focus Mode visibility contract", () => {
       pane.indexOf("</div>\n    </div>\n  );")
     );
 
-    expect(writingSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ""');
-    expect(statusSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ""');
+    // TSP-RC-LATIN-AND-MOBILE-COMPACT-001: these two surfaces now also fold
+    // in an independent, orthogonal `footerCollapsed` (mobile compact-bar)
+    // condition on the FALSE branch, so this checks the focusMode contract's
+    // TRUE branch (the actual invariant under test) as a prefix rather than
+    // the whole ternary as an exact string -- focusMode still unconditionally
+    // wins and still fully hides at every width when true, unchanged.
+    expect(writingSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ');
+    expect(statusSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ');
     expect(statusSurface).toContain('data-ruby-tcy-status=""');
     expect(statusSurface).toContain("<WorkSessionTracker");
     expect(statusSurface).toContain('title="現在の原稿文字数"');
