@@ -95,8 +95,14 @@ export default function ViewportDebugPanel() {
   useEffect(() => {
     const update = () => {
       setSnapshot(measure());
+      // TSP-FQ04-SHELL-VISIBLE-HEIGHT-FIX-006: the shell no longer sets
+      // `--tsp-visible-vh` at all -- it was the confirmed-broken indirection
+      // this diagnostic exists to catch (see useMobileKeyboardViewport.ts).
+      // This now reads the shell's own raw inline `style.height` (what React
+      // actually wrote), which should track `hook visibleHeight` below
+      // directly and immediately.
       const shell = document.querySelector<HTMLElement>("[data-editor-shell]");
-      setCssVar(shell ? getComputedStyle(shell).getPropertyValue("--tsp-visible-vh").trim() || "(unset)" : null);
+      setCssVar(shell ? shell.style.height || "(unset)" : null);
     };
 
     update();
@@ -145,7 +151,7 @@ export default function ViewportDebugPanel() {
       <div className="mt-1 border-t border-lime-400/40 pt-1">isNarrow (mobile gate): {String(isNarrow)}</div>
       <div>keyboardActive: {String(keyboardActive)}</div>
       <div>hook visibleHeight: {fmt(visibleHeight)}</div>
-      <div>--tsp-visible-vh (computed): {cssVar ?? "—"}</div>
+      <div>shell inline style.height: {cssVar ?? "—"}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">shell computed height: {snapshot.shellComputedHeight ?? "—"}</div>
       <div>shell rect top/bottom/height: {fmt(snapshot.shellRectTop)} / {fmt(snapshot.shellRectBottom)} / {fmt(snapshot.shellRectHeight)}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">textarea rect top/bottom/height: {fmt(snapshot.textareaRectTop)} / {fmt(snapshot.textareaRectBottom)} / {fmt(snapshot.textareaRectHeight)}</div>

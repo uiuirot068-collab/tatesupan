@@ -12,7 +12,11 @@
  * inspection and by Human QA on desktop widths.
  */
 import { describe, expect, it } from "vitest";
-import { INACTIVE_KEYBOARD_VIEWPORT, subscribeToKeyboardViewport } from "./useMobileKeyboardViewport";
+import {
+  INACTIVE_KEYBOARD_VIEWPORT,
+  mobileShellHeightStyle,
+  subscribeToKeyboardViewport,
+} from "./useMobileKeyboardViewport";
 
 class FakeVisualViewport {
   height: number;
@@ -131,5 +135,33 @@ describe("subscribeToKeyboardViewport", () => {
 
     vv.resizeTo(300); // no listener left -- must not notify again
     expect(notified).toHaveLength(1);
+  });
+});
+
+// TSP-FQ04-SHELL-VISIBLE-HEIGHT-FIX-006: `mobileShellHeightStyle` is the
+// entire fix -- a plain `height` inline style computed straight from the
+// hook's own `visibleHeight`, replacing the `--tsp-visible-vh` custom-
+// property/external-stylesheet `var()` indirection that Production proved
+// unreliable. Pure and DOM-free, same reasoning as `subscribeToKeyboardViewport`
+// above: this repo's hook suites run under `environment: "node"` (no jsdom),
+// so React/DOM propagation itself is verified by Human QA against the real
+// diagnostic panel, not simulated here.
+describe("mobileShellHeightStyle", () => {
+  it("propagates the hook's visibleHeight straight into an inline height (keyboard open, shrunk)", () => {
+    expect(mobileShellHeightStyle(434.7)).toEqual({ height: "434.7px" });
+  });
+
+  it("still returns a height when the keyboard is closed (visibleHeight is the full visual viewport, not null)", () => {
+    expect(mobileShellHeightStyle(801.5238)).toEqual({ height: "801.5238px" });
+  });
+
+  it("restores the desktop/unsupported-browser fallback (no inline height) when visibleHeight is null", () => {
+    expect(mobileShellHeightStyle(null)).toEqual({ height: undefined });
+  });
+
+  it("treats 0 as a real (if degenerate) height, not the null fallback", () => {
+    // Guards against a `visibleHeight ? ... : undefined` truthiness bug --
+    // this must use `!= null`, since 0 is a legitimate (if unusual) height.
+    expect(mobileShellHeightStyle(0)).toEqual({ height: "0px" });
   });
 });
