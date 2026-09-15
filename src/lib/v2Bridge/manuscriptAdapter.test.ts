@@ -39,6 +39,23 @@ describe("manuscriptAdapter -- real tategaki.ts notation -> v2 LogicalUnit[]", (
     }
   });
 
+  it("keeps full/half-width colons as ordinary text and makes explicit 12:30 one TCY unit", () => {
+    const { units } = buildV2UnitsFromManuscript(
+      "body",
+      "全角：半角:時刻[tate]12:30[/tate]",
+    );
+    const ordinaryText = units
+      .filter((unit) => unit.kind === "TEXT")
+      .map((unit) => unit.text)
+      .join("");
+    const explicitTime = units.find(
+      (unit) => unit.kind === "TCY" && unit.displayText === "12:30",
+    );
+
+    expect(ordinaryText).toContain("全角：半角:時刻");
+    expect(explicitTime).toMatchObject({ kind: "TCY", logicalCells: 1 });
+  });
+
   it("maps an image marker to a real IMAGE unit with mm->tick converted intrinsic size and uppercased placement", () => {
     const { units } = buildV2UnitsFromManuscript("body", "前【IMG:photo1:50:30:top】後");
     const image = units.find((u) => u.kind === "IMAGE");

@@ -7,6 +7,7 @@ import {
   type PaintCommand,
   type PublicationFontResource,
 } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { verticalPaintGraphemeFor } from "../../../typesetting-v2/renderer/publication/verticalGlyphMap";
 import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
 import { composeV2Document } from "./composeV2Document";
 
@@ -96,6 +97,32 @@ describe("three-blocker ordinary Latin orientation parity", () => {
     expect(explicitTcy).toMatchObject({ text: "Mole", angle: 0, baseline: "middle" });
     expect(explicitTcy?.maxWidthMm).toBeGreaterThan(0);
     expect(commands.filter((command) => command.text === "2" || command.text === "0")).toHaveLength(0);
+  });
+
+  it("keeps both colon widths ordinary and paints explicit [tate]12:30 as one horizontal TCY command", () => {
+    const bridge = compose("全角：半角:時刻[tate]12:30[/tate]");
+    const plan = buildPublicationPaintPlan(
+      bridge.model,
+      fontResource(),
+      bridge.pageGeometry,
+      "Colon/TCY contract fixture",
+    );
+    const commands = textCommands(plan.flatMap((page) => page.commands));
+    const halfWidthColon = commands.find((command) => command.text === ":");
+    const explicitTime = commands.find((command) => command.text === "12:30");
+
+    // Full-width punctuation may use the font's own outline command, which
+    // intentionally carries no source `text` property. Its paint-time mapping
+    // still preserves ： unchanged and upright rather than turning it into TCY.
+    expect(verticalPaintGraphemeFor("：")).toBe("：");
+    expect(halfWidthColon).toMatchObject({ text: ":", align: "center" });
+    expect(halfWidthColon?.angle).toBeUndefined();
+    expect(explicitTime).toMatchObject({
+      text: "12:30",
+      angle: 0,
+      baseline: "middle",
+    });
+    expect(explicitTime?.maxWidthMm).toBeGreaterThan(0);
   });
 
   it("does not alter canonical units, Japanese context, or publication geometry", () => {

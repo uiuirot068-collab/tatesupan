@@ -21,4 +21,33 @@ describe("checkPunctuation (R2-punct)", () => {
   it("does NOT flag intentional fiction-style repetition (！！, ！？, ……, ――)", () => {
     expect(checkPunctuation("すごい！！　そうなの？！　……そうか。　――だがしかし。")).toEqual([]);
   });
+
+  it.each([
+    "本当？次へ",
+    "本当！次へ",
+    "本当！？次へ",
+    "本当?!次へ",
+    "本当！！次へ",
+  ])("flags a missing separator after a question/exclamation run: %s", (text) => {
+    expect(checkPunctuation(text)).toEqual([
+      expect.objectContaining({
+        ruleId: "R2-punct",
+        category: "punctuation",
+        severity: "REVIEW",
+        fixClass: "NOTICE_ONLY",
+        message: "疑問符・感嘆符の後に空白がありません",
+      }),
+    ]);
+  });
+
+  it.each([
+    "「本当？」",
+    "『本当！』",
+    "本当？\n次へ",
+    "本当？　次へ",
+    "本当? 次へ",
+    "本当？",
+  ])("does not flag a closing mark, line boundary, existing space, or end-of-text: %s", (text) => {
+    expect(checkPunctuation(text)).toEqual([]);
+  });
 });
