@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: read-only, observability-only
 // panel for hunting the Production-only FQ-04 keyboard-viewport failure.
@@ -14,17 +14,21 @@ import { useEffect, useState } from "react";
 //
 // TSP-FQ04-VIEWPORT-STATE-DIVERGENCE-008: this panel used to call
 // `useMobileKeyboardViewport()`/`useIsNarrowViewport()` independently -- a
-// SEPARATE hook instance from TategakiEditor's own, with its own
-// subscription to `window.visualViewport`. Production evidence showed that
-// independent instance reading a correct, fresh `visibleHeight` while the
-// shell's actual rendered inline height (driven by TategakiEditor's OWN
-// hook instance) stayed on the pre-keyboard value -- i.e. the two instances
-// were observed to disagree, and the panel's own copy could never prove
-// what TategakiEditor itself actually used to render. It now receives
-// TategakiEditor's real, same-render values as props instead (labeled
-// `parent hook ...` below) so this can no longer happen by construction:
-// there is exactly one `useMobileKeyboardViewport` call for the whole
-// Editor page, and this panel only displays it.
+// SEPARATE hook instance from TategakiEditor's own. It now receives
+// TategakiEditor's real, same-render values as props instead (`parent hook
+// ...` below), so there is exactly one `useMobileKeyboardViewport` call
+// for the whole Editor page.
+//
+// TSP-FQ04-DOM-INSTANCE-DIAGNOSTIC-010: a single hook CALL SITE does not
+// prove a single runtime TategakiEditor DOM INSTANCE -- this panel used
+// `document.querySelector('[data-editor-shell]')` (and the same for the
+// textarea), a GLOBAL lookup that would silently measure a different
+// mounted/hidden instance if one ever existed. It now measures its OWN
+// ancestor shell via `panelRef.current.closest('[data-editor-shell]')`
+// (this panel is always rendered inside the shell it should be reading),
+// and additionally surfaces the old global-selector result plus raw
+// document-wide counts side by side, so a real multi-instance situation
+// would be directly visible instead of silently mis-measured.
 interface Snapshot {
   innerWidth: number | null;
   innerHeight: number | null;
@@ -33,10 +37,17 @@ interface Snapshot {
   vvOffsetTop: number | null;
   vvScale: number | null;
   documentClientHeight: number | null;
-  shellComputedHeight: string | null;
-  shellRectTop: number | null;
-  shellRectBottom: number | null;
-  shellRectHeight: number | null;
+  shellCount: number;
+  textareaCount: number;
+  ownShellInstanceId: string | null;
+  ownShellStyleHeight: string | null;
+  ownShellComputedHeight: string | null;
+  ownShellRectTop: number | null;
+  ownShellRectBottom: number | null;
+  ownShellRectHeight: number | null;
+  globalShellInstanceId: string | null;
+  globalShellStyleHeight: string | null;
+  globalShellComputedHeight: string | null;
   textareaRectTop: number | null;
   textareaRectBottom: number | null;
   textareaRectHeight: number | null;
@@ -52,10 +63,17 @@ const EMPTY_SNAPSHOT: Snapshot = {
   vvOffsetTop: null,
   vvScale: null,
   documentClientHeight: null,
-  shellComputedHeight: null,
-  shellRectTop: null,
-  shellRectBottom: null,
-  shellRectHeight: null,
+  shellCount: 0,
+  textareaCount: 0,
+  ownShellInstanceId: null,
+  ownShellStyleHeight: null,
+  ownShellComputedHeight: null,
+  ownShellRectTop: null,
+  ownShellRectBottom: null,
+  ownShellRectHeight: null,
+  globalShellInstanceId: null,
+  globalShellStyleHeight: null,
+  globalShellComputedHeight: null,
   textareaRectTop: null,
   textareaRectBottom: null,
   textareaRectHeight: null,
@@ -63,13 +81,20 @@ const EMPTY_SNAPSHOT: Snapshot = {
   activeElementType: null,
 };
 
-function measure(): Snapshot {
+function measure(panelEl: HTMLElement | null): Snapshot {
   const vv = window.visualViewport;
-  const shell = document.querySelector<HTMLElement>("[data-editor-shell]");
-  const textarea = document.querySelector<HTMLElement>('[data-demo-target="editor"]');
-  const shellRect = shell?.getBoundingClientRect();
-  const textareaRect = textarea?.getBoundingClientRect();
   const active = document.activeElement;
+
+  // The panel is always rendered inside the exact shell it should describe
+  // -- this is the authoritative measurement.
+  const ownShell = panelEl?.closest<HTMLElement>("[data-editor-shell]") ?? null;
+  const ownShellRect = ownShell?.getBoundingClientRect();
+  const textarea = ownShell?.querySelector<HTMLElement>('[data-demo-target="editor"]') ?? null;
+  const textareaRect = textarea?.getBoundingClientRect();
+
+  // Kept only for comparison against the scoped reading above -- this is
+  // the OLD, unscoped lookup this diagnostic loop exists to double-check.
+  const globalShell = document.querySelector<HTMLElement>("[data-editor-shell]");
 
   return {
     innerWidth: window.innerWidth,
@@ -79,10 +104,17 @@ function measure(): Snapshot {
     vvOffsetTop: vv?.offsetTop ?? null,
     vvScale: vv?.scale ?? null,
     documentClientHeight: document.documentElement.clientHeight,
-    shellComputedHeight: shell ? getComputedStyle(shell).height : null,
-    shellRectTop: shellRect?.top ?? null,
-    shellRectBottom: shellRect?.bottom ?? null,
-    shellRectHeight: shellRect?.height ?? null,
+    shellCount: document.querySelectorAll("[data-editor-shell]").length,
+    textareaCount: document.querySelectorAll('[data-demo-target="editor"]').length,
+    ownShellInstanceId: ownShell?.getAttribute("data-shell-instance-id") ?? null,
+    ownShellStyleHeight: ownShell ? ownShell.style.height || "(unset)" : null,
+    ownShellComputedHeight: ownShell ? getComputedStyle(ownShell).height : null,
+    ownShellRectTop: ownShellRect?.top ?? null,
+    ownShellRectBottom: ownShellRect?.bottom ?? null,
+    ownShellRectHeight: ownShellRect?.height ?? null,
+    globalShellInstanceId: globalShell?.getAttribute("data-shell-instance-id") ?? null,
+    globalShellStyleHeight: globalShell ? globalShell.style.height || "(unset)" : null,
+    globalShellComputedHeight: globalShell ? getComputedStyle(globalShell).height : null,
     textareaRectTop: textareaRect?.top ?? null,
     textareaRectBottom: textareaRect?.bottom ?? null,
     textareaRectHeight: textareaRect?.height ?? null,
@@ -102,25 +134,25 @@ interface ViewportDebugPanelProps {
   keyboardActive: boolean;
   /** TategakiEditor's own `useMobileKeyboardViewport().visibleHeight` -- the exact value passed to `mobileShellHeightStyle` for the shell you see below. */
   visibleHeight: number | null;
+  /** The exact `mobileShellHeightStyle(visibleHeight).height` TategakiEditor applied to its shell this render -- same object, not a re-derived copy. */
+  expectedShellHeight: string;
+  /** TategakiEditor's `useId()`-derived, runtime-only shell identifier -- compare against "own"/"global" measured IDs below to detect a real multi-instance situation. */
+  shellInstanceId: string;
 }
 
-export default function ViewportDebugPanel({ isNarrow, keyboardActive, visibleHeight }: ViewportDebugPanelProps) {
+export default function ViewportDebugPanel({
+  isNarrow,
+  keyboardActive,
+  visibleHeight,
+  expectedShellHeight,
+  shellInstanceId,
+}: ViewportDebugPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
-  const [cssVar, setCssVar] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const update = () => {
-      setSnapshot(measure());
-      // TSP-FQ04-SHELL-VISIBLE-HEIGHT-FIX-006: the shell no longer sets
-      // `--tsp-visible-vh` at all -- it was the confirmed-broken indirection
-      // this diagnostic exists to catch (see useMobileKeyboardViewport.ts).
-      // This now reads the shell's own raw inline `style.height` (what React
-      // actually wrote), which should track `hook visibleHeight` below
-      // directly and immediately.
-      const shell = document.querySelector<HTMLElement>("[data-editor-shell]");
-      setCssVar(shell ? shell.style.height || "(unset)" : null);
-    };
+    const update = () => setSnapshot(measure(panelRef.current));
 
     update();
 
@@ -142,8 +174,12 @@ export default function ViewportDebugPanel({ isNarrow, keyboardActive, visibleHe
 
   if (dismissed) return null;
 
+  const shellMismatch =
+    snapshot.shellCount > 1 || snapshot.ownShellInstanceId !== snapshot.globalShellInstanceId;
+
   return (
     <div
+      ref={panelRef}
       data-viewport-debug-panel=""
       style={{ position: "fixed", top: 0, left: 0, zIndex: 2147483647 }}
       className="max-w-[92vw] overflow-auto border border-lime-400 bg-black/90 p-2 font-mono text-[10px] leading-tight text-lime-300 shadow-lg"
@@ -168,10 +204,23 @@ export default function ViewportDebugPanel({ isNarrow, keyboardActive, visibleHe
       <div className="mt-1 border-t border-lime-400/40 pt-1">parent hook isNarrow: {String(isNarrow)}</div>
       <div>parent hook keyboardActive: {String(keyboardActive)}</div>
       <div>parent hook visibleHeight: {fmt(visibleHeight)}</div>
-      <div>shell inline style.height: {cssVar ?? "—"}</div>
-      <div className="mt-1 border-t border-lime-400/40 pt-1">shell computed height: {snapshot.shellComputedHeight ?? "—"}</div>
-      <div>shell rect top/bottom/height: {fmt(snapshot.shellRectTop)} / {fmt(snapshot.shellRectBottom)} / {fmt(snapshot.shellRectHeight)}</div>
-      <div className="mt-1 border-t border-lime-400/40 pt-1">textarea rect top/bottom/height: {fmt(snapshot.textareaRectTop)} / {fmt(snapshot.textareaRectBottom)} / {fmt(snapshot.textareaRectHeight)}</div>
+      <div>expected shell style (same render): {expectedShellHeight}</div>
+      <div
+        className={`mt-1 border-t pt-1 ${shellMismatch ? "border-red-500 text-red-400" : "border-lime-400/40"}`}
+      >
+        [data-editor-shell] count in document: {snapshot.shellCount}
+        {shellMismatch ? " ⚠ MULTIPLE/MISMATCHED" : ""}
+      </div>
+      <div>textarea count in document: {snapshot.textareaCount}</div>
+      <div>parent shellInstanceId (this render): {shellInstanceId}</div>
+      <div>own-shell (closest) instanceId: {snapshot.ownShellInstanceId ?? "—"}</div>
+      <div>global-selector instanceId: {snapshot.globalShellInstanceId ?? "—"}</div>
+      <div className="mt-1 border-t border-lime-400/40 pt-1">own-shell inline style.height: {snapshot.ownShellStyleHeight ?? "—"}</div>
+      <div>own-shell computed height: {snapshot.ownShellComputedHeight ?? "—"}</div>
+      <div>own-shell rect top/bottom/height: {fmt(snapshot.ownShellRectTop)} / {fmt(snapshot.ownShellRectBottom)} / {fmt(snapshot.ownShellRectHeight)}</div>
+      <div className="mt-1 border-t border-lime-400/40 pt-1">global-selector shell inline style.height: {snapshot.globalShellStyleHeight ?? "—"}</div>
+      <div>global-selector shell computed height: {snapshot.globalShellComputedHeight ?? "—"}</div>
+      <div className="mt-1 border-t border-lime-400/40 pt-1">own-shell textarea rect top/bottom/height: {fmt(snapshot.textareaRectTop)} / {fmt(snapshot.textareaRectBottom)} / {fmt(snapshot.textareaRectHeight)}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">activeElement: {snapshot.activeElementTag ?? "—"}{snapshot.activeElementType ? ` (${snapshot.activeElementType})` : ""}</div>
     </div>
   );
