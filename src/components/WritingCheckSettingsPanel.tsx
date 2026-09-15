@@ -16,7 +16,7 @@ import {
 // beyond each diagnostic's own `message` (see writingCheckEngine/rules/*).
 const RULE_LABELS: Record<WritingRuleId, string> = {
   "R1-bracket": "括弧の対応（「」『』（）［］【】）",
-  "R2-punct": "句読点の重複（。。／、、）",
+  "R2-punct": "句読点の重複／！？後の空白",
   "R9-ellipsis": "三点リーダーの形（… ・・・ ...）",
   "R10-dash": "ダッシュの形（― —）",
   "R3-tcy": "縦中横の記法（[tate]…[/tate]）",

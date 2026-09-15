@@ -22,6 +22,7 @@ import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
+import { useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
@@ -145,6 +146,11 @@ export default function TategakiEditor({
   //              (`editorWidthPercent`) is never written by focus mode, so
   //              exiting restores it exactly.
   const [focusMode, setFocusMode] = useMobileFocusMode();
+  // TSP-FRIEND-QA-MOBILE-VISUAL-VIEWPORT-001: mobile-only (see the hook's
+  // own doc) visible-viewport tracking so the shell height below follows the
+  // real visible area instead of the pre-keyboard `100dvh`, and secondary
+  // Editor chrome can step aside temporarily while the keyboard is open.
+  const { visibleHeight, keyboardActive } = useMobileKeyboardViewport();
   // Whether Preview was collapsed *before* focus mode tucked it, so exiting
   // focus mode puts it back exactly as the user left it (not force-open).
   const preFocusPreviewCollapsedRef = useRef<boolean | null>(null);
@@ -716,6 +722,15 @@ export default function TategakiEditor({
       data-editor-shell
       data-demo-mode={demoMode ? "" : undefined}
       data-editor-save-status={saveStatus}
+      data-keyboard-active={keyboardActive ? "" : undefined}
+      // `--tsp-visible-vh` is consumed only by the mobile-scoped override in
+      // globals.css; unset (desktop, unsupported browsers) it falls back to
+      // the existing `100dvh` utility below untouched.
+      style={
+        {
+          "--tsp-visible-vh": visibleHeight != null ? `${visibleHeight}px` : undefined,
+        } as React.CSSProperties
+      }
       className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
       <input
@@ -829,6 +844,7 @@ export default function TategakiEditor({
             onCursorIndexChange={setCursorIndex}
             focusMode={focusMode}
             onExitFocus={exitFocusMode}
+            keyboardActive={keyboardActive}
           />
         </section>
 

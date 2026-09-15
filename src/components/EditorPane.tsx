@@ -101,6 +101,20 @@ interface EditorPaneProps {
    */
   onExitFocus?: () => void;
   /** Demo-only narrow viewport shell: let the manuscript fill remaining height and scroll internally. */
+  /**
+   * TSP-FRIEND-QA-MOBILE-VISUAL-VIEWPORT-001: true while the mobile
+   * on-screen keyboard appears open (see `useMobileKeyboardViewport`).
+   * Temporarily folds away the bottom footer chrome (syntax help,
+   * writing-check bar, work counter -- both the expanded and one-line
+   * collapsed forms) to free height for the textarea -- never persisted,
+   * and clears automatically the moment the keyboard closes. The
+   * settings/options/memo/help row, the title, the undo/redo/page-break/
+   * replace/report action row, and the textarea itself are unaffected
+   * (kept reachable, per the existing `focusMode`-only contract those
+   * controls already have). Always false outside mobile scope, so desktop
+   * is unchanged.
+   */
+  keyboardActive?: boolean;
 }
 
 export interface EditorPaneHandle {
@@ -140,6 +154,7 @@ function EditorPaneInner(
     onCursorIndexChange,
     focusMode = false,
     onExitFocus,
+    keyboardActive = false,
   }: EditorPaneProps,
   ref: React.Ref<EditorPaneHandle>
 ) {
@@ -755,7 +770,7 @@ function EditorPaneInner(
           form of the 文章チェックβ + 作業カウンター area below, reusing the
           exact same state/handlers (no new counter logic). Desktop (md+)
           always shows the full form regardless of this preference. */}
-      {footerCollapsed && !focusMode && (
+      {footerCollapsed && !focusMode && !keyboardActive && (
         <div
           data-editor-footer-collapsed=""
           className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/70 md:hidden"
@@ -798,7 +813,7 @@ function EditorPaneInner(
 
       <div
         data-writing-check-surface=""
-        className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed ? "max-md:hidden" : ""}
+        className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}
       >
       <WritingCheckBar
         enabled={writingCheckEnabled}
@@ -835,7 +850,7 @@ function EditorPaneInner(
           can open its full text without permanently growing the footer. */}
       <div
         data-editor-status-surfaces=""
-        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed ? "max-md:hidden" : ""}`}
+        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}`}
       >
         <div data-ruby-tcy-status=""><EditorSyntaxHelp /></div>
         <div

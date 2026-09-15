@@ -528,3 +528,47 @@ Next step once a valid source is available: re-run the encode (target ≤20 MiB,
 - **Rakuten site-registration/compliance evidence: NONE found.** No generated Rakuten link snippet, no program-registration record anywhere in the repo. Rakuten's button stays hidden purely on absent URL config; no separate blocker beyond that was identified, but registration status itself was never confirmed either way.
 - **Mechanism:** `NEXT_PUBLIC_AMAZON_AFFILIATE_URL` + `NEXT_PUBLIC_AMAZON_ASSOCIATE_OPERATOR_NAME` (both required for Amazon to render) and `NEXT_PUBLIC_RAKUTEN_AFFILIATE_URL` (alone sufficient for Rakuten) — documented (commented out, no values) in `.env.example`. Each URL is used byte-for-byte verbatim if set; nothing is templated, guessed, or shortened. No secrets required (public affiliate URLs only).
 - **Human input required before either button can go live:** (1) confirm `caload` vs `caroad` as the correct Amazon Associates disclosure name; (2) the real Amazon Associates affiliate URL; (3) confirmation Rakuten's affiliate program is actually registered, plus the real Rakuten affiliate URL/snippet. None of these were fabricated or guessed.
+
+## 21. TSP-FRIEND-QA-MOBILE-VISUAL-VIEWPORT-001 — Friend QA consolidation branch, FQ-04 mobile keyboard fix (2026-09-15)
+
+**Built on a clean worktree/branch off Production `master` (`351b3a7`)** — `patch/friend-qa-mobile-2026-09-15` — not on top of this document's own `design/tatespun-typesetting-v2` history. Consolidates two already-approved-but-undeployed commits (cherry-picked, not merged) plus a new local fix:
+
+- `5f79879` FANBOX/OFUSE support links.
+- `98969c2` FQ-01 Guide refresh, FQ-02 colon/TCY guidance, FQ-03 `!`/`?`-then-space Writing Check spacing.
+- New local commit: FQ-04 mobile keyboard viewport fix (below).
+
+Explicitly **excluded** from this branch: `4894ed3` and `6ed0a54` (stale roadmap-only commits from the same line of work — their prose is superseded by this entry, not imported) and `47d66df` (the held Supabase auth-cascade-delete migration). `47d66df` sits in `98969c2`'s own commit ancestry on `design/tatespun-typesetting-v2` (it was authored in between), but a cherry-pick only replays a commit's own diff — verified the resulting branch has **zero** `.sql`/`supabase`/`migration`/`auth` paths in its diff against `351b3a7`, and `47d66df` is confirmed **not** an ancestor of this branch's `HEAD`.
+
+**FQ status — release sync (2026-09-15, TSP-FRIEND-QA-PATCH-RELEASE-001):**
+
+- **FQ-01 (Guide refresh):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/friendQaGuide.test.ts` PASS.
+- **FQ-02 (colon / 縦中横 guidance):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/v2Bridge/latinOrientationParity.test.ts`, `manuscriptAdapter.test.ts` PASS.
+- **FQ-03 (`!`/`?` + space Writing Check spacing):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/writingCheckEngine/rules/punctuation.test.ts` PASS, including the three named quick-regression cases (`本当？次へ` → REVIEW; `「本当？」` → no REVIEW; `本当？　次へ` → no REVIEW).
+- **FQ-04 (mobile keyboard shrinks normal-mode textarea):** **HUMAN PASS.** Confirmed: keyboard open/close, practical editor height, multi-line typing, caret movement, textarea scroll, Focus Mode ON/OFF, Settings/Options/Memo recovery, orientation recovery where tested. See root cause/fix below (unchanged from initial implementation).
+- **FANBOX/OFUSE:** **HUMAN PASS** / release candidate.
+- **FRIEND QA:** ACTIVE.
+- **PUBLIC BETA:** NOT YET.
+- **Amazon/Rakuten affiliate footer:** POST-BETA (reconfirms §19/§20 — unchanged, still blocked on human input per §20).
+- **Legacy manuscript-loss investigation:** OPEN, separate track (reconfirms §16's framing — not touched here).
+
+### FQ-04 — root cause and fix
+
+**Root cause:** `src/components/TategakiEditor.tsx`'s editor-shell root (`[data-editor-shell]`) is pinned to `h-[100dvh]` on mobile (mirrored by a `globals.css` rule locking `html`/`body` to `100dvh` on the same route). `100dvh` does not reliably shrink to the actually-visible area when the on-screen keyboard opens (behavior is inconsistent across iOS Safari/Android Chrome/etc.) — normal-mode Friend QA reported the manuscript textarea becoming impractically small once the keyboard was up, with no existing `visualViewport`/keyboard-aware handling anywhere in the Editor (confirmed by inspection: zero prior `visualViewport` usage in `src/`).
+
+**Fix — new `useMobileKeyboardViewport` hook** (`src/hooks/useMobileKeyboardViewport.ts`), mobile-only (same `(max-width: 767px)` gate as the existing `useIsNarrowViewport`):
+
+- Tracks `window.visualViewport.height`, exposed to `TategakiEditor` as a `--tsp-visible-vh` CSS custom property (inline style on the shell) plus a `keyboardActive` heuristic.
+- A new mobile-only `globals.css` rule sizes `[data-editor-shell]` from `var(--tsp-visible-vh, 100dvh)` — falls back to the untouched `100dvh` when the property is unset. Desktop (`md:h-screen`) is a separate Tailwind class, never touched.
+- While `keyboardActive`, `EditorPane` temporarily folds away the bottom footer chrome (syntax help, writing-check bar, work counter — both its expanded and one-line-collapsed forms) to free height for the textarea. This is pure derived state — never persisted, clears the instant `keyboardActive` goes false again.
+- Deliberately **left unchanged**: the settings/options/memo/help row and the primary action row (undo/redo/page-break/replace/report) — several existing regression tests (`postBlockerUx.test.ts`, `rcPolishRound5.test.ts`, `rcPolishRound6.test.ts`, `reportRestoration.test.ts`) pin an exact literal string on that row's wrapper as a slicing anchor; reworking it to also hide on `keyboardActive` broke 11 of those tests on first attempt, so the row was left exactly as-is and only the footer chrome (confirmed compatible with those same tests' prefix-only assertions) was made to fold away instead.
+- Focus Mode is untouched: `keyboardActive` and `focusMode` are independent booleans that both gate the same footer elements (either hides them), so entering/exiting Focus Mode behaves exactly as before regardless of keyboard state.
+
+**Automated QA:** new `src/hooks/useMobileKeyboardViewport.test.ts` (7 tests) covers the pure, DOM-injectable `subscribeToKeyboardViewport` core — unavailable-API fallback, initial read, keyboard-sized shrink detection, sub-threshold browser-chrome change (not flagged as keyboard), restore-on-close, a resize sequence resembling rotation, and listener cleanup on unsubscribe — against a stub window-like object, matching this repo's existing convention of DOM-less hook/component tests (`environment: "node"` in every `vitest.config.ts` under `src/hooks`, `src/components`, etc. — no jsdom, hooks are never rendered). The `useIsNarrowViewport` mobile gate itself (a three-line early return) is exercised by code inspection and Human QA on desktop widths, not by an automated hook-render test, consistent with the rest of this hooks directory (`useMobileFocusMode`, `useEditorFooterCollapsed`, etc. also have no render-level tests).
+
+Full suite re-run on this branch after the fix: `src/hooks` (18/18), `src/components` (19/19), `src/lib` (339/339, includes FQ-01/02/03 above), `src/lib/v2Bridge` (71/71 + 1 pre-existing skip). TypeScript (`tsc --noEmit`) and ESLint on every changed file are clean, modulo two items confirmed **pre-existing on the unmodified base branch** (verified via a temporary stash-and-recheck, not left in the committed diff): `src/app/layout.tsx`'s `LayoutProps` TS error (missing generated Next.js route types — needs a build/dev run to generate, unrelated to this change) and two `react-hooks/set-state-in-effect` errors in `TategakiEditor.tsx`'s existing document-load/autosave effects (lines ~366/550, untouched by this fix).
+
+`npm run build` (production) was not completed in this environment: its `prebuild` script (`scripts/verify-supabase-project.mjs`) fails on missing `NEXT_PUBLIC_SUPABASE_URL` — an environment/credentials gap, not a code issue. `npm run dev` (Turbopack) starts and serves cleanly; used for the Local Human QA URL below.
+
+**Human QA: PASS** (2026-09-15) — see the FQ-04 status line above for the confirmed scenario list.
+
+**NEXT:** Production release of `patch/friend-qa-mobile-2026-09-15` (this section, TSP-FRIEND-QA-PATCH-RELEASE-001) — real build gate, push, master merge, deploy, and Production smoke test.
