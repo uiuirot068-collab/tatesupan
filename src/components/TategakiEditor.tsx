@@ -31,6 +31,7 @@ import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import PreviewPane from "./PreviewPane";
+import ViewportDebugPanel from "./ViewportDebugPanel";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
@@ -73,11 +74,18 @@ export default function TategakiEditor({
   documentId,
   cloudProjectId,
   demoMode = false,
+  viewportDebugEnabled = false,
 }: {
   documentId?: number;
   cloudProjectId?: string;
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
+  /**
+   * TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: mounts the read-only
+   * `ViewportDebugPanel` (`?viewportDebug=1` only, see `EditorPageContent`).
+   * Never true for an ordinary user; no behavior/layout side effects when false.
+   */
+  viewportDebugEnabled?: boolean;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -733,6 +741,10 @@ export default function TategakiEditor({
       }
       className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
+      {/* TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: `?viewportDebug=1` only
+          -- `position: fixed`, so its own presence cannot perturb this
+          shell's own flex layout or measured height. */}
+      {viewportDebugEnabled && <ViewportDebugPanel />}
       <input
         ref={txtInputRef}
         type="file"
