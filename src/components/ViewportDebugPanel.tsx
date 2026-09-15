@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
-import { useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 
 // TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: read-only, observability-only
 // panel for hunting the Production-only FQ-04 keyboard-viewport failure.
@@ -13,6 +11,20 @@ import { useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 // only already-public runtime geometry, no manuscript content or user
 // identifiers. `position: fixed` so its own presence cannot perturb the
 // very layout it's measuring.
+//
+// TSP-FQ04-VIEWPORT-STATE-DIVERGENCE-008: this panel used to call
+// `useMobileKeyboardViewport()`/`useIsNarrowViewport()` independently -- a
+// SEPARATE hook instance from TategakiEditor's own, with its own
+// subscription to `window.visualViewport`. Production evidence showed that
+// independent instance reading a correct, fresh `visibleHeight` while the
+// shell's actual rendered inline height (driven by TategakiEditor's OWN
+// hook instance) stayed on the pre-keyboard value -- i.e. the two instances
+// were observed to disagree, and the panel's own copy could never prove
+// what TategakiEditor itself actually used to render. It now receives
+// TategakiEditor's real, same-render values as props instead (labeled
+// `parent hook ...` below) so this can no longer happen by construction:
+// there is exactly one `useMobileKeyboardViewport` call for the whole
+// Editor page, and this panel only displays it.
 interface Snapshot {
   innerWidth: number | null;
   innerHeight: number | null;
@@ -83,11 +95,16 @@ function fmt(n: number | null, digits = 1): string {
   return n == null ? "—" : n.toFixed(digits);
 }
 
-export default function ViewportDebugPanel() {
-  // Same production hooks the real Editor uses -- shows exactly what the
-  // app itself is computing, not a re-derived approximation.
-  const isNarrow = useIsNarrowViewport();
-  const { visibleHeight, keyboardActive } = useMobileKeyboardViewport();
+interface ViewportDebugPanelProps {
+  /** TategakiEditor's own `useIsNarrowViewport()` value, from the same render. */
+  isNarrow: boolean;
+  /** TategakiEditor's own `useMobileKeyboardViewport().keyboardActive`, from the same render. */
+  keyboardActive: boolean;
+  /** TategakiEditor's own `useMobileKeyboardViewport().visibleHeight` -- the exact value passed to `mobileShellHeightStyle` for the shell you see below. */
+  visibleHeight: number | null;
+}
+
+export default function ViewportDebugPanel({ isNarrow, keyboardActive, visibleHeight }: ViewportDebugPanelProps) {
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
   const [cssVar, setCssVar] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -148,9 +165,9 @@ export default function ViewportDebugPanel() {
       <div>vv.offsetTop: {fmt(snapshot.vvOffsetTop)}</div>
       <div>vv.scale: {fmt(snapshot.vvScale, 2)}</div>
       <div>documentElement.clientHeight: {fmt(snapshot.documentClientHeight, 0)}</div>
-      <div className="mt-1 border-t border-lime-400/40 pt-1">isNarrow (mobile gate): {String(isNarrow)}</div>
-      <div>keyboardActive: {String(keyboardActive)}</div>
-      <div>hook visibleHeight: {fmt(visibleHeight)}</div>
+      <div className="mt-1 border-t border-lime-400/40 pt-1">parent hook isNarrow: {String(isNarrow)}</div>
+      <div>parent hook keyboardActive: {String(keyboardActive)}</div>
+      <div>parent hook visibleHeight: {fmt(visibleHeight)}</div>
       <div>shell inline style.height: {cssVar ?? "—"}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">shell computed height: {snapshot.shellComputedHeight ?? "—"}</div>
       <div>shell rect top/bottom/height: {fmt(snapshot.shellRectTop)} / {fmt(snapshot.shellRectBottom)} / {fmt(snapshot.shellRectHeight)}</div>

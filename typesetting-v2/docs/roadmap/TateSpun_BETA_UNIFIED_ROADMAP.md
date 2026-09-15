@@ -610,4 +610,51 @@ Untouched, as required: `visualViewport` shrink threshold, `keyboardActive` dete
 
 **Release record (TSP-FQ04-SHELL-HEIGHT-FIX-DEPLOY-007, 2026-09-15):** a real end-to-end `npm run build:basepath` PASS was obtained (Supabase verification, cutover audit, TypeScript, static export, basePath rewrite all PASS) by re-running the build in a temporary worktree outside this Dropbox-synced folder tree (`D:/tsp-fq04-shell-height-build-2026-09-15`, removed after verification) — the in-place worktree hit the same known Dropbox `EBUSY`/`EPERM` rename lock §21 already documents; source was not altered to work around it. Branch pushed to `origin/fix/tsp-fq04-shell-height-2026-09-15`; merged into `master` with an explicit merge commit `2fafcf3` (`merge: fix mobile keyboard editor height`) from an isolated temporary worktree, `origin/master` re-verified unchanged at `de4b7b9` immediately before both pushes. Cloudflare Pages auto-deployed the `master` push; Production smoke (this session) confirmed: the deployed `/editor` bundle contains `style:{height:null!=Y?...}` (the direct inline fix) with zero remaining occurrences of `tsp-visible-vh`; the `?viewportDebug=1` diagnostic panel's mount gate is still present and intact; FANBOX/OFUSE and HOW TO remain unaffected.
 
-**NEXT (single action):** Human repeats the exact same real-device `?viewportDebug=1` Production diagnostic that found this bug (keyboard closed, then keyboard open, on the real project that failed before) and reports whether `hook visibleHeight` and `shell inline style.height` now match (both ≈435 while the keyboard is open) instead of the shell staying pinned at ≈801.5. Do not mark FQ-04 CLOSED/PASS until that Human result comes back positive.
+**NEXT (single action):** ~~Human repeats the exact same real-device diagnostic...~~ **superseded — see §23. That re-check happened, and found a new divergence; do not re-run the old comparison, use §23's improved diagnostic instead.**
+
+## 23. TSP-FQ04-VIEWPORT-STATE-DIVERGENCE-008 — new state-divergence evidence; §22's root cause superseded (2026-09-15)
+
+**FQ-04 status: PRODUCTION HUMAN FAIL / OPEN** (unchanged classification from §21/§22 — this section does not close anything, it narrows what's still wrong).
+
+**New Production evidence (real device, keyboard OPEN), via §22's own diagnostic panel:**
+
+| Field | Value |
+| --- | --- |
+| `innerHeight` | 801 |
+| `visualViewport.height` | 434.7 |
+| `isNarrow` (panel's own instance) | true |
+| `keyboardActive` (panel's own instance) | true |
+| hook `visibleHeight` (panel's own instance) | 434.7 |
+| shell inline `style.height` (actual DOM) | 801.524px |
+| shell computed height | 801.524px |
+
+**§22's root cause claim is superseded / incomplete.** §22 concluded the failure was the `--tsp-visible-vh` CSS custom-property indirection not propagating, and replaced it with a direct inline `height` style (`mobileShellHeightStyle`) — that fix **is** deployed and **is** the only place the shell's height is set (confirmed again by source read this session). But the evidence above shows the shell's *actual rendered inline style* still pinned at the pre-keyboard value (801.5) at the same moment the diagnostic panel's own reading was already correct (434.7) — i.e. no CSS is involved at all this time (the panel reads the raw `style.height` attribute, not a computed/cascaded value), yet the two numbers still disagree. §22's fix was necessary but evidently not sufficient to explain everything observed.
+
+**Source-level investigation (this session, `origin/master` @ `269e3ab`):**
+
+- **Hook instance count on the Editor page: two, independently subscribed.** `TategakiEditor` calls `useMobileKeyboardViewport()` once (line ~161) and passes its `visibleHeight` straight into `mobileShellHeightStyle` for the shell's `style` prop. `ViewportDebugPanel` — a child of `TategakiEditor`, mounted only under `?viewportDebug=1` — called `useMobileKeyboardViewport()` (and `useIsNarrowViewport()`) **again, independently**, with its own `useState`/`useEffect`/`visualViewport.addEventListener("resize", ...)` subscription, entirely separate from the parent's.
+- **No bug found in the hook itself or in `TategakiEditor`'s usage of it:** `subscribeToKeyboardViewport`'s state init, resize handler, dependency array (`[isNarrow]`), narrow gating, and masked return (`isNarrow ? state : INACTIVE`) are all correct by inspection, and match the existing passing unit tests exactly. No variable shadowing, no stale closure, no duplicate `[data-editor-shell]` render site, no memoization wrapper around `TategakiEditor` or its hook call.
+- **State-flow diagram (as of this session, before the fix below):**
+  ```
+  window.visualViewport
+    ├─→ TategakiEditor's OWN useMobileKeyboardViewport() instance
+    │     → its own useState → its own visibleHeight
+    │     → mobileShellHeightStyle(visibleHeight) → shell style.height   [observed: 801.5, stale]
+    └─→ ViewportDebugPanel's OWN, SEPARATE useMobileKeyboardViewport() instance
+          → its own useState → its own visibleHeight                     [observed: 434.7, fresh]
+          → displayed directly in the panel
+  ```
+  **First point of divergence:** the fork itself — two independent hook instances subscribing to the same browser event target, each with its own React state. Because they are separate instances, there is no code-level guarantee they ever hold the same value at the same moment; the evidence shows they didn't. *Why* the parent's instance specifically stayed stale (a missed/lost event, a delayed commit, or something else) is **not yet proven** — only that the fork is real and is the reason the panel could ever show a value TategakiEditor itself wasn't using.
+- **Root cause: NOT YET fully confirmed.** The two-instance fork is confirmed as a real, structural fact (not a guess), and is sufficient to explain how the panel could disagree with the shell. Whether the parent instance's own resize listener specifically missed the event, fired late, or was delayed by a slow re-render of the (large, expensive) `TategakiEditor` subtree remains unconfirmed — no runtime access from this environment, and no proof either way was found in source alone.
+
+**Fix policy applied:** per this loop's own instruction, no product-behavior fix was implemented without deterministic proof. What *is* fully justified by source inspection alone, with zero ambiguity, is removing the redundant second hook instance: **`ViewportDebugPanel` no longer calls `useMobileKeyboardViewport()`/`useIsNarrowViewport()` itself.** It now receives `isNarrow`, `keyboardActive`, and `visibleHeight` as props from `TategakiEditor`'s own single instance, labeled `parent hook ...` in the display. This is observational-only: it does not change `mobileShellHeightStyle`, the hook's detection/threshold logic, Focus Mode, or any rendered layout — it only guarantees that from now on there is **exactly one** `useMobileKeyboardViewport` call for the whole Editor page, so the diagnostic can never again show a value the shell itself didn't use. No new viewport hook, no polling, no hardcoded keyboard height, no Focus Mode change, no body resize, no manuscript/DB/Auth/Supabase change, `47d66df` untouched.
+
+**Files changed:** `src/components/TategakiEditor.tsx` (adds one `useIsNarrowViewport()` call, purely to hand down as a prop; passes `isNarrow`/`keyboardActive`/`visibleHeight` to the panel), `src/components/ViewportDebugPanel.tsx` (drops its own two hook calls, accepts them as props instead, relabels the three display lines `parent hook ...`).
+
+**Tests/build:** `src/hooks` 11/11 PASS (unchanged — hook logic itself was not touched), `src/components` 19/19 PASS. TypeScript and ESLint on both changed files clean (same two pre-existing, unrelated `TategakiEditor.tsx` findings §21/§22 already document, confirmed outside this diff). `npm run build:basepath` — full PASS this time (Supabase verification, cutover audit, TypeScript, static export, basePath rewrite), no Dropbox lock this run.
+
+**Not done in this loop (by instruction/policy):** no push, no merge, no deploy — this is diagnostic instrumentation only, staged locally pending review.
+
+**Preserved, unchanged:** FRIEND QA = ACTIVE, PUBLIC BETA = NOT YET, 72h cloud-image audit gap = OPEN, legacy manuscript-loss investigation = OPEN. No old local docs commits (`6f6d153`, `b4da3ba`) touched or pushed.
+
+**NEXT (single action):** get this diagnostic-instrumentation commit reviewed and, once approved, pushed/merged/deployed — then Human repeats the same real-device Production check one more time. With only one hook instance now possible, the improved panel's `parent hook visibleHeight` and `shell inline style.height` reading **must** agree by construction (same render, same value) — if the shell is STILL wrong at that point, the panel will show `parent hook visibleHeight` *also* wrong (e.g. still ≈801 while the keyboard is open), which would newly prove the problem is upstream of the diagnostic entirely (the parent's own resize listener not firing/updating), not a display-layer artifact — the single most useful piece of evidence still missing.

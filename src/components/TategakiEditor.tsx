@@ -22,6 +22,7 @@ import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { mobileShellHeightStyle, useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
@@ -159,6 +160,12 @@ export default function TategakiEditor({
   // real visible area instead of the pre-keyboard `100dvh`, and secondary
   // Editor chrome can step aside temporarily while the keyboard is open.
   const { visibleHeight, keyboardActive } = useMobileKeyboardViewport();
+  // TSP-FQ04-VIEWPORT-STATE-DIVERGENCE-008: only ever read to hand this
+  // page's ONE `useMobileKeyboardViewport` instance's own inputs/outputs
+  // down to `ViewportDebugPanel` (`?viewportDebug=1`) as props, so that
+  // diagnostic can no longer disagree with what this render actually used
+  // for `mobileShellHeightStyle` below -- see the panel's own doc.
+  const isNarrowViewport = useIsNarrowViewport();
   // Whether Preview was collapsed *before* focus mode tucked it, so exiting
   // focus mode puts it back exactly as the user left it (not force-open).
   const preFocusPreviewCollapsedRef = useRef<boolean | null>(null);
@@ -744,7 +751,13 @@ export default function TategakiEditor({
       {/* TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: `?viewportDebug=1` only
           -- `position: fixed`, so its own presence cannot perturb this
           shell's own flex layout or measured height. */}
-      {viewportDebugEnabled && <ViewportDebugPanel />}
+      {viewportDebugEnabled && (
+        <ViewportDebugPanel
+          isNarrow={isNarrowViewport}
+          keyboardActive={keyboardActive}
+          visibleHeight={visibleHeight}
+        />
+      )}
       <input
         ref={txtInputRef}
         type="file"
