@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocument,
   deleteImage,
@@ -22,7 +22,6 @@ import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
-import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { mobileShellHeightStyle, useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
@@ -32,7 +31,6 @@ import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import PreviewPane from "./PreviewPane";
-import ViewportDebugPanel from "./ViewportDebugPanel";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
@@ -75,18 +73,11 @@ export default function TategakiEditor({
   documentId,
   cloudProjectId,
   demoMode = false,
-  viewportDebugEnabled = false,
 }: {
   documentId?: number;
   cloudProjectId?: string;
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
-  /**
-   * TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: mounts the read-only
-   * `ViewportDebugPanel` (`?viewportDebug=1` only, see `EditorPageContent`).
-   * Never true for an ordinary user; no behavior/layout side effects when false.
-   */
-  viewportDebugEnabled?: boolean;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -160,20 +151,6 @@ export default function TategakiEditor({
   // real visible area instead of the pre-keyboard `100dvh`, and secondary
   // Editor chrome can step aside temporarily while the keyboard is open.
   const { visibleHeight, keyboardActive } = useMobileKeyboardViewport();
-  // TSP-FQ04-VIEWPORT-STATE-DIVERGENCE-008: only ever read to hand this
-  // page's ONE `useMobileKeyboardViewport` instance's own inputs/outputs
-  // down to `ViewportDebugPanel` (`?viewportDebug=1`) as props, so that
-  // diagnostic can no longer disagree with what this render actually used
-  // for `mobileShellHeightStyle` below -- see the panel's own doc.
-  const isNarrowViewport = useIsNarrowViewport();
-  // TSP-FQ04-DOM-INSTANCE-DIAGNOSTIC-010: a runtime-only, non-persistent
-  // per-mount identifier (React's own `useId`, never written anywhere but
-  // this DOM attribute) so `ViewportDebugPanel` can prove -- rather than
-  // assume -- that the shell it measures is the ONE this component
-  // actually rendered, and expose the raw shell/textarea counts in the
-  // document so an unexpected extra instance would be directly visible
-  // instead of silently mis-measured.
-  const shellInstanceId = useId();
   // Whether Preview was collapsed *before* focus mode tucked it, so exiting
   // focus mode puts it back exactly as the user left it (not force-open).
   const preFocusPreviewCollapsedRef = useRef<boolean | null>(null);
@@ -737,19 +714,12 @@ export default function TategakiEditor({
     setContent(nextContent);
   };
 
-  // TSP-FQ04-DOM-INSTANCE-DIAGNOSTIC-010: computed ONCE and reused for both
-  // the shell's actual `style` and the diagnostic's `expectedShellHeight`
-  // prop below, so the two can never drift apart by transcription -- they
-  // are literally the same object from the same render.
-  const mobileShellStyle = mobileShellHeightStyle(visibleHeight);
-
   return (
     // Round 2: the route shell owns one dynamic viewport on narrow screens.
     // Each active manuscript/preview/drawer surface scrolls internally; no
     // global body lock is introduced, so other routes retain normal scrolling.
     <div
       data-editor-shell
-      data-shell-instance-id={shellInstanceId}
       data-demo-mode={demoMode ? "" : undefined}
       data-editor-save-status={saveStatus}
       data-keyboard-active={keyboardActive ? "" : undefined}
@@ -760,21 +730,9 @@ export default function TategakiEditor({
       // confirmed-broken boundary (see useMobileKeyboardViewport.ts). Unset
       // (desktop, unsupported browsers) it falls back to those classes
       // untouched.
-      style={mobileShellStyle}
+      style={mobileShellHeightStyle(visibleHeight)}
       className="box-border flex h-[100dvh] min-h-0 w-full flex-col gap-2 overflow-hidden bg-canvas px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:h-screen md:min-h-[100dvh] md:w-screen md:gap-6 md:pl-8 md:pr-10 md:pt-6 md:pb-10"
     >
-      {/* TSP-FQ04-PRODUCTION-RUNTIME-DIAGNOSTIC-004: `?viewportDebug=1` only
-          -- `position: fixed`, so its own presence cannot perturb this
-          shell's own flex layout or measured height. */}
-      {viewportDebugEnabled && (
-        <ViewportDebugPanel
-          isNarrow={isNarrowViewport}
-          keyboardActive={keyboardActive}
-          visibleHeight={visibleHeight}
-          expectedShellHeight={mobileShellStyle.height ?? "(unset)"}
-          shellInstanceId={shellInstanceId}
-        />
-      )}
       <input
         ref={txtInputRef}
         type="file"

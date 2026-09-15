@@ -19,7 +19,7 @@
  * this repo's existing convention (see demoPlacement.test.ts's own
  * cross-file assertions) rather than rendering any component.
  */
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
@@ -100,5 +100,52 @@ describe("keyboard-active compact layout (CSS-only, mobile-only)", () => {
     expect(editor).not.toMatch(/data-keyboard-active=\{keyboardActive \? "true" : "false"\}/);
     expect(css).not.toContain('[data-keyboard-active="true"]');
     expect(css).not.toContain('[data-keyboard-active="false"]');
+  });
+});
+
+/**
+ * TSP-FQ04-DIAGNOSTIC-CLEANUP-016: once FQ-04's compact-layout fix received
+ * a Production real-device Human PASS, the temporary `?viewportDebug=1`
+ * instrumentation (ViewportDebugPanel, its MutationObserver, the
+ * shell-instance-id/expectedShellHeight diagnostic props) is no longer
+ * needed and was removed entirely. This guards against it quietly coming
+ * back: `/editor?viewportDebug=1` must now behave exactly like ordinary
+ * `/editor` -- no query-param branch left to react to it, no panel left to
+ * mount. The actual FQ-04 production behavior it was built to diagnose
+ * (`useMobileKeyboardViewport`, `mobileShellHeightStyle`, `data-keyboard-active`,
+ * the compact-layout CSS above) is asserted as unchanged throughout this
+ * same file's other tests.
+ */
+describe("viewportDebug diagnostic instrumentation fully removed", () => {
+  const page = readFileSync(join(__dirname, "..", "app", "editor", "page.tsx"), "utf8");
+
+  it("no longer parses or forwards the viewportDebug query param anywhere", () => {
+    expect(page).not.toContain("viewportDebug");
+    expect(editor).not.toContain("viewportDebug");
+  });
+
+  it("no longer imports or mounts ViewportDebugPanel", () => {
+    expect(editor).not.toContain("ViewportDebugPanel");
+  });
+
+  it("the ViewportDebugPanel component file itself no longer exists", () => {
+    expect(existsSync(join(__dirname, "..", "components", "ViewportDebugPanel.tsx"))).toBe(false);
+  });
+
+  it("no diagnostic-only shell instance id or expected-height props remain", () => {
+    expect(editor).not.toContain("shellInstanceId");
+    expect(editor).not.toContain("data-shell-instance-id");
+    expect(editor).not.toContain("expectedShellHeight");
+    expect(editor).not.toContain("useId");
+    // useIsNarrowViewport was only ever read in TategakiEditor to hand down
+    // to the now-removed diagnostic panel -- confirm that dead import/call
+    // is gone too, not just the panel that consumed it.
+    expect(editor).not.toContain("useIsNarrowViewport");
+  });
+
+  it("preserves the actual Human-passed FQ-04 production behavior the diagnostics were built to verify", () => {
+    expect(editor).toContain("useMobileKeyboardViewport()");
+    expect(editor).toContain("mobileShellHeightStyle(visibleHeight)");
+    expect(editor).toContain('data-keyboard-active={keyboardActive ? "" : undefined}');
   });
 });
