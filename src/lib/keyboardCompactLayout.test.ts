@@ -87,4 +87,18 @@ describe("keyboard-active compact layout (CSS-only, mobile-only)", () => {
     expect(pane).toContain('footerCollapsed && !focusMode && !keyboardActive');
     expect(pane).toContain('footerCollapsed || keyboardActive ? "max-md:hidden" : ""');
   });
+
+  it("writes data-keyboard-active as a genuinely absent attribute when inactive, not a \"false\" value -- so the plain [data-keyboard-active] presence selector can never match the inactive state", () => {
+    // React omits an attribute entirely when its JSX value is `undefined`
+    // (never rendering `data-keyboard-active="false"` or `="undefined"`),
+    // so a bare `[data-keyboard-active]` CSS presence-selector is already
+    // exactly correct here -- there is no falsy attribute VALUE it could
+    // ever accidentally match. A value-based selector like
+    // `[data-keyboard-active="true"]` would be wrong instead: the active
+    // value is `""` (empty string), not the string "true".
+    expect(editor).toContain('data-keyboard-active={keyboardActive ? "" : undefined}');
+    expect(editor).not.toMatch(/data-keyboard-active=\{keyboardActive \? "true" : "false"\}/);
+    expect(css).not.toContain('[data-keyboard-active="true"]');
+    expect(css).not.toContain('[data-keyboard-active="false"]');
+  });
 });
