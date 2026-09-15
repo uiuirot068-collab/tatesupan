@@ -13,6 +13,15 @@ import {
   PDF_FILENAME_EXPLANATION,
   resolveAffiliateFooterConfig,
 } from "@/lib/howtoContent";
+import {
+  SUPPORT_FANBOX_URL,
+  SUPPORT_OFUSE_URL,
+  SUPPORT_HEADING,
+  SUPPORT_BODY,
+  SUPPORT_FANBOX_LABEL,
+  SUPPORT_OFUSE_LABEL,
+  SUPPORT_NOTE,
+} from "@/lib/supportLinks";
 import "./howto.css";
 
 /**
@@ -670,6 +679,32 @@ export default function HowToPage() {
               )}
             </div>
           </div>
+        </section>
+
+        <section className="support-footer" id="support-tatespun" aria-labelledby="support-tatespun-title">
+          <h2 id="support-tatespun-title" data-copy-id="TEXT_SUPPORT_TITLE">{SUPPORT_HEADING}</h2>
+          <p className="support-lead" data-copy-id="TEXT_SUPPORT_LEAD">{SUPPORT_BODY}</p>
+          <div className="support-actions">
+            <a
+              className="support-button"
+              data-support-cta="fanbox"
+              href={SUPPORT_FANBOX_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {SUPPORT_FANBOX_LABEL}
+            </a>
+            <a
+              className="support-button"
+              data-support-cta="ofuse"
+              href={SUPPORT_OFUSE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {SUPPORT_OFUSE_LABEL}
+            </a>
+          </div>
+          <p className="support-note" data-copy-id="TEXT_SUPPORT_NOTE">{SUPPORT_NOTE}</p>
         </section>
 
         <section className="devlog" id="devlog">

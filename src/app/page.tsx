@@ -20,6 +20,15 @@ import { useAuth } from "@/components/AuthProvider";
 import { withBasePath } from "@/lib/basePath";
 import { LOCAL_ONLY_NOTICE_SESSION_KEY } from "@/lib/localOnlyNotice";
 import { INQUIRY_FORM_URL } from "@/components/legal/LegalArticle";
+import {
+  SUPPORT_FANBOX_URL,
+  SUPPORT_OFUSE_URL,
+  SUPPORT_HEADING,
+  SUPPORT_BODY,
+  SUPPORT_FANBOX_LABEL,
+  SUPPORT_OFUSE_LABEL,
+  SUPPORT_NOTE,
+} from "@/lib/supportLinks";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
 import {
@@ -524,6 +533,38 @@ export default function Home() {
             </div>
           </div>
         </section>}
+
+        <section
+          data-support-links=""
+          className="border-t border-[rgba(31,42,68,0.14)] px-[18px] py-[42px] text-center sm:px-[clamp(24px,6vw,72px)] dark:border-[#2A3240]"
+          aria-labelledby="support-links-title"
+        >
+          <h2 id="support-links-title" className="font-serif text-xl font-medium text-ink dark:text-[#D4DBE7]">
+            {SUPPORT_HEADING}
+          </h2>
+          <p className="mx-auto mt-2.5 max-w-xl text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+            {SUPPORT_BODY}
+          </p>
+          <div className="mt-5 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
+            <a
+              href={SUPPORT_FANBOX_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full max-w-[280px] rounded-full border border-ink/20 px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 sm:w-auto dark:border-[#3A4658] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
+            >
+              {SUPPORT_FANBOX_LABEL}
+            </a>
+            <a
+              href={SUPPORT_OFUSE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full max-w-[280px] rounded-full border border-ink/20 px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 sm:w-auto dark:border-[#3A4658] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
+            >
+              {SUPPORT_OFUSE_LABEL}
+            </a>
+          </div>
+          <p className="mt-3 text-xs text-ink/50 dark:text-[#939DAF]">{SUPPORT_NOTE}</p>
+        </section>
 
         <footer className="flex flex-col items-center gap-3 border-t border-[rgba(31,42,68,0.14)] px-[clamp(20px,5vw,58px)] pt-[25px] pb-10 text-center dark:border-[#2A3240] sm:flex-row sm:flex-wrap sm:items-center sm:text-left">
           <div className="flex items-baseline gap-1.5">
