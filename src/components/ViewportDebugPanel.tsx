@@ -29,6 +29,25 @@ import { useEffect, useRef, useState } from "react";
 // and additionally surfaces the old global-selector result plus raw
 // document-wide counts side by side, so a real multi-instance situation
 // would be directly visible instead of silently mis-measured.
+//
+// TSP-FQ04-INLINE-HEIGHT-MUTATION-FORENSIC-012: Production evidence showed
+// `expectedShellHeight` (a prop, always fresh from TategakiEditor's latest
+// committed render) reading ~435 while `snapshot.ownShellStyleHeight` (this
+// panel's OWN state, only updated by ITS OWN `visualViewport`/`window`
+// listeners) stayed ~801 -- a same-render-looking contradiction. Source
+// trace found a plausible non-product explanation: this panel is a CHILD
+// of TategakiEditor, and React fires child effects before parent effects
+// on mount, so this panel's `visualViewport` "resize" listener is
+// registered (and therefore invoked) BEFORE TategakiEditor's own hook's
+// listener for the very same dispatched event -- meaning this panel's own
+// `measure()` could read the shell's DOM *before* TategakiEditor's own
+// listener for that same event has committed its update, one full event
+// late. A `MutationObserver` on the shell's `style` attribute sidesteps
+// that ordering entirely (it fires as a reaction to the actual DOM
+// mutation, not to a competing listener on the same source event), so it
+// is added here purely to test that hypothesis and to keep `ownShell*`
+// state accurate going forward -- it does not change what TategakiEditor
+// itself renders.
 interface Snapshot {
   innerWidth: number | null;
   innerHeight: number | null;
@@ -127,6 +146,18 @@ function fmt(n: number | null, digits = 1): string {
   return n == null ? "—" : n.toFixed(digits);
 }
 
+interface StyleMutationEvent {
+  t: number;
+  prevStyle: string | null;
+  nextStyle: string | null;
+  visibleHeightAtObservation: number | null;
+  expectedShellHeightAtObservation: string;
+  vvHeightAtObservation: number | null;
+  keyboardActiveAtObservation: boolean;
+}
+
+const MUTATION_LOG_LIMIT = 10;
+
 interface ViewportDebugPanelProps {
   /** TategakiEditor's own `useIsNarrowViewport()` value, from the same render. */
   isNarrow: boolean;
@@ -149,7 +180,18 @@ export default function ViewportDebugPanel({
 }: ViewportDebugPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
+  const [mutationLog, setMutationLog] = useState<StyleMutationEvent[]>([]);
   const [dismissed, setDismissed] = useState(false);
+
+  // Always-current props for the MutationObserver callback below, whose own
+  // effect only runs once on mount -- without this it would close over the
+  // FIRST render's props forever. Written in a no-deps effect (after every
+  // commit), never in the render body -- writing a ref during render is
+  // unsafe.
+  const latestPropsRef = useRef({ visibleHeight, expectedShellHeight, keyboardActive });
+  useEffect(() => {
+    latestPropsRef.current = { visibleHeight, expectedShellHeight, keyboardActive };
+  });
 
   useEffect(() => {
     const update = () => setSnapshot(measure(panelRef.current));
@@ -170,6 +212,45 @@ export default function ViewportDebugPanel({
       window.removeEventListener("focusin", update);
       window.removeEventListener("focusout", update);
     };
+  }, []);
+
+  // TSP-FQ04-INLINE-HEIGHT-MUTATION-FORENSIC-012: observes ONLY this
+  // panel's own shell's `style` attribute -- a MutationObserver callback
+  // fires as a direct reaction to the DOM mutation itself, independent of
+  // any other listener's registration order on `visualViewport`/`window`,
+  // so it both (a) tests whether the shell ever receives more than one
+  // write per keyboard transition, and (b) keeps `ownShell*` state above
+  // accurate even if this panel's own event-driven `measure()` above is
+  // one event late. Bounded 10-entry buffer; no network/storage; cleaned
+  // up on unmount.
+  useEffect(() => {
+    const shell = panelRef.current?.closest<HTMLElement>("[data-editor-shell]");
+    if (!shell) return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type !== "attributes" || mutation.attributeName !== "style") continue;
+        const entry: StyleMutationEvent = {
+          t: performance.now(),
+          prevStyle: mutation.oldValue,
+          nextStyle: shell.getAttribute("style"),
+          visibleHeightAtObservation: latestPropsRef.current.visibleHeight,
+          expectedShellHeightAtObservation: latestPropsRef.current.expectedShellHeight,
+          vvHeightAtObservation: window.visualViewport?.height ?? null,
+          keyboardActiveAtObservation: latestPropsRef.current.keyboardActive,
+        };
+        setMutationLog((log) => [...log.slice(-(MUTATION_LOG_LIMIT - 1)), entry]);
+      }
+      // A MutationObserver callback fires after the mutation already
+      // happened, unrelated to this panel's own visualViewport/window
+      // listeners -- re-measuring here keeps the displayed own-shell state
+      // accurate immediately, rather than waiting for this panel's own
+      // next resize/scroll/focus event.
+      setSnapshot(measure(panelRef.current));
+    });
+
+    observer.observe(shell, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
+    return () => observer.disconnect();
   }, []);
 
   if (dismissed) return null;
@@ -222,6 +303,20 @@ export default function ViewportDebugPanel({
       <div>global-selector shell computed height: {snapshot.globalShellComputedHeight ?? "—"}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">own-shell textarea rect top/bottom/height: {fmt(snapshot.textareaRectTop)} / {fmt(snapshot.textareaRectBottom)} / {fmt(snapshot.textareaRectHeight)}</div>
       <div className="mt-1 border-t border-lime-400/40 pt-1">activeElement: {snapshot.activeElementTag ?? "—"}{snapshot.activeElementType ? ` (${snapshot.activeElementType})` : ""}</div>
+      <div className="mt-1 border-t border-lime-400/40 pt-1 font-bold">style mutations (last {MUTATION_LOG_LIMIT}):</div>
+      {mutationLog.length === 0 ? (
+        <div>(none observed yet)</div>
+      ) : (
+        mutationLog
+          .slice()
+          .reverse()
+          .map((m, i) => (
+            <div key={`${m.t}-${i}`} className="border-t border-lime-400/10 pt-0.5">
+              t={m.t.toFixed(0)}ms: {m.prevStyle ?? "(none)"} → {m.nextStyle ?? "(none)"}
+              {" "}[vh={fmt(m.visibleHeightAtObservation)} exp={m.expectedShellHeightAtObservation} vv={fmt(m.vvHeightAtObservation)} kb={String(m.keyboardActiveAtObservation)}]
+            </div>
+          ))
+      )}
     </div>
   );
 }
