@@ -27,6 +27,27 @@ export const INACTIVE_KEYBOARD_VIEWPORT: MobileKeyboardViewport = {
   keyboardActive: false,
 };
 
+// TSP-FQ04-SHELL-VISIBLE-HEIGHT-FIX-006: the Editor shell used to receive
+// `visibleHeight` only indirectly -- as a `--tsp-visible-vh` CSS custom
+// property set via inline style, consumed by a separate `var(--tsp-visible-vh,
+// 100dvh)` rule in globals.css under a `@media` block. Production diagnostics
+// proved that indirection unreliable on at least one real device: the hook's
+// own React state updated correctly (`visibleHeight` read back as the fresh,
+// shrunk value), but the shell's rendered height and the custom property's
+// own `getComputedStyle` value both stayed pinned to the pre-keyboard number.
+// No competing rule, duplicate selector, `!important`, `@property`
+// registration, or CSS transition was found on `--tsp-visible-vh` anywhere in
+// the codebase (grepped) -- this hook's own inline style is the only place
+// that ever sets it -- so the indirection layer itself (JS state -> inline
+// custom property -> external stylesheet `var()` lookup) is the broken
+// boundary, not a cascade fight or a stale hook value. This helper replaces
+// that indirection with a plain `height` inline style: the single highest-
+// specificity, zero-indirection mechanism available, so there is no separate
+// stylesheet rule left to trace or for a future change to silently break.
+export function mobileShellHeightStyle(visibleHeight: number | null): { height?: string } {
+  return { height: visibleHeight != null ? `${visibleHeight}px` : undefined };
+}
+
 interface VisualViewportLike {
   height: number;
   addEventListener(type: "resize", listener: () => void): void;

@@ -121,16 +121,13 @@ body:has([data-howto-page]) {
     overscroll-behavior: none;
   }
 
-  /* TSP-FRIEND-QA-MOBILE-VISUAL-VIEWPORT-001: `--tsp-visible-vh` (set by
-     useMobileKeyboardViewport via TategakiEditor's inline style) tracks the
-     real visible viewport, which shrinks reliably with the on-screen
-     keyboard where `100dvh` does not. Falls back to the existing `100dvh`
-     when the custom property is unset (desktop is untouched -- this rule is
-     itself mobile-only, and TategakiEditor only ever sets the property for
-     narrow viewports). */
-  [data-editor-shell] {
-    height: var(--tsp-visible-vh, 100dvh);
-  }
+  /* TSP-FQ04-SHELL-VISIBLE-HEIGHT-FIX-006: the `[data-editor-shell] { height:
+     var(--tsp-visible-vh, 100dvh) }` override that used to live here is
+     removed -- that custom-property indirection was the confirmed-broken
+     boundary in Production (see useMobileKeyboardViewport.ts's
+     `mobileShellHeightStyle`). TategakiEditor now sets the shell's `height`
+     directly as a plain inline style, which always wins over the `h-[100dvh]`/
+     `md:h-screen` utility classes with no separate rule needed here. */
 }
 
 body {
