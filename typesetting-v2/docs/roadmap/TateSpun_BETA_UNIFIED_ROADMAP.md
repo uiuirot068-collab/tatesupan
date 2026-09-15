@@ -539,13 +539,13 @@ Next step once a valid source is available: re-run the encode (target ≤20 MiB,
 
 Explicitly **excluded** from this branch: `4894ed3` and `6ed0a54` (stale roadmap-only commits from the same line of work — their prose is superseded by this entry, not imported) and `47d66df` (the held Supabase auth-cascade-delete migration). `47d66df` sits in `98969c2`'s own commit ancestry on `design/tatespun-typesetting-v2` (it was authored in between), but a cherry-pick only replays a commit's own diff — verified the resulting branch has **zero** `.sql`/`supabase`/`migration`/`auth` paths in its diff against `351b3a7`, and `47d66df` is confirmed **not** an ancestor of this branch's `HEAD`.
 
-**FQ status (this branch, actual — do not import prior roadmap prose):**
+**FQ status — release sync (2026-09-15, TSP-FRIEND-QA-PATCH-RELEASE-001):**
 
-- **FQ-01 (Guide refresh):** IMPLEMENTED. Automated: `src/lib/friendQaGuide.test.ts` PASS. Human QA: PENDING (not yet run on this consolidated branch).
-- **FQ-02 (colon / 縦中横 guidance):** IMPLEMENTED. Automated: `src/lib/v2Bridge/latinOrientationParity.test.ts`, `manuscriptAdapter.test.ts` PASS. Human QA: PENDING.
-- **FQ-03 (`!`/`?` + space Writing Check spacing):** IMPLEMENTED. Automated: `src/lib/writingCheckEngine/rules/punctuation.test.ts` PASS, including the three named quick-regression cases (`本当？次へ` → REVIEW; `「本当？」` → no REVIEW; `本当？　次へ` → no REVIEW). Human QA: PENDING.
-- **FQ-04 (mobile keyboard shrinks normal-mode textarea):** IMPLEMENTED. See below. Human QA: **REQUIRED**.
-- **FANBOX/OFUSE:** IMPLEMENTED / Human PASS / **NOT PRODUCTION** (per prior sign-off; unchanged by this branch).
+- **FQ-01 (Guide refresh):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/friendQaGuide.test.ts` PASS.
+- **FQ-02 (colon / 縦中横 guidance):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/v2Bridge/latinOrientationParity.test.ts`, `manuscriptAdapter.test.ts` PASS.
+- **FQ-03 (`!`/`?` + space Writing Check spacing):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/writingCheckEngine/rules/punctuation.test.ts` PASS, including the three named quick-regression cases (`本当？次へ` → REVIEW; `「本当？」` → no REVIEW; `本当？　次へ` → no REVIEW).
+- **FQ-04 (mobile keyboard shrinks normal-mode textarea):** **HUMAN PASS.** Confirmed: keyboard open/close, practical editor height, multi-line typing, caret movement, textarea scroll, Focus Mode ON/OFF, Settings/Options/Memo recovery, orientation recovery where tested. See root cause/fix below (unchanged from initial implementation).
+- **FANBOX/OFUSE:** **HUMAN PASS** / release candidate.
 - **FRIEND QA:** ACTIVE.
 - **PUBLIC BETA:** NOT YET.
 - **Amazon/Rakuten affiliate footer:** POST-BETA (reconfirms §19/§20 — unchanged, still blocked on human input per §20).
@@ -569,6 +569,6 @@ Full suite re-run on this branch after the fix: `src/hooks` (18/18), `src/compon
 
 `npm run build` (production) was not completed in this environment: its `prebuild` script (`scripts/verify-supabase-project.mjs`) fails on missing `NEXT_PUBLIC_SUPABASE_URL` — an environment/credentials gap, not a code issue. `npm run dev` (Turbopack) starts and serves cleanly; used for the Local Human QA URL below.
 
-**Human QA required before this can be marked CLOSED** — see the checklist this task's own instructions specify (widths 320/375/390/430; normal mode keyboard open/closed/typing/caret/scroll; Focus Mode ON/OFF; portrait↔landscape; Settings/Options/Memo/Report/Help open→close leaving no stale shrunken height).
+**Human QA: PASS** (2026-09-15) — see the FQ-04 status line above for the confirmed scenario list.
 
-**NEXT:** Human QA on FQ-04 (this section) across the specified widths/scenarios, then re-run this section's FQ-01/02/03 Human QA (currently PENDING on this consolidated branch) before any deploy of `patch/friend-qa-mobile-2026-09-15` is considered.
+**NEXT:** Production release of `patch/friend-qa-mobile-2026-09-15` (this section, TSP-FRIEND-QA-PATCH-RELEASE-001) — real build gate, push, master merge, deploy, and Production smoke test.
