@@ -128,6 +128,43 @@ body:has([data-howto-page]) {
      `mobileShellHeightStyle`). TategakiEditor now sets the shell's `height`
      directly as a plain inline style, which always wins over the `h-[100dvh]`/
      `md:h-screen` utility classes with no separate rule needed here. */
+
+  /* TSP-FQ04-KEYBOARD-COMPACT-LAYOUT-014: viewport propagation itself is
+     confirmed correct (see useMobileKeyboardViewport.ts/roadmap §26) -- the
+     shell already sizes to the real visible area. The remaining problem is
+     that, within that now-correct (and much shorter) height, normal-mode
+     chrome above the manuscript textarea still claims the same fixed space
+     it does with a full-height keyboard-closed shell, leaving the textarea
+     an impractically thin sliver.
+     Presentation-only, CSS-only, mobile-only compaction: while the keyboard
+     is open (`[data-keyboard-active]`, driven by the existing
+     `useMobileKeyboardViewport` heuristic -- no new state, nothing
+     persisted) this hides three purely-secondary chrome blocks so the
+     textarea reclaims their space:
+       - `[data-editor-header-slot]` -- the global branding Header. Its own
+         escape/save/focus-toggle affordances are already duplicated by
+         MobileEditorNav (kept visible, below this block, unaffected), so
+         nothing reachable is lost; only branding chrome disappears.
+       - `[data-editor-secondary-row]` -- the ▶設定/▶オプション/▶メモ/▶ヘルプ
+         row. Not needed mid-keystroke; each opens its own drawer/modal
+         requiring the keyboard to close first anyway.
+       - `[data-demo-target="title"]` -- the document title input. Title
+         editing isn't part of active body-text typing.
+     `display: none` only -- these components' own React state (open
+     drawers, footer-collapsed preference, etc.) is completely untouched,
+     so closing the keyboard (this attribute simply disappearing) restores
+     the exact prior DOM with no stale/lost state. Undo/redo, page-break,
+     replace, 報告, and the textarea's own writing-check/status footer
+     (already keyboard-compacted separately, see EditorPane.tsx's own
+     `keyboardActive` prop) are deliberately left alone. Focus Mode already
+     hides `data-editor-header-slot`/`data-editor-secondary-row` on its own
+     terms (unaffected class-based `hidden`); these rules simply also apply
+     while typing in normal mode, which is the whole point of this fix. */
+  [data-editor-shell][data-keyboard-active] [data-editor-header-slot],
+  [data-editor-shell][data-keyboard-active] [data-editor-secondary-row],
+  [data-editor-shell][data-keyboard-active] [data-demo-target="title"] {
+    display: none;
+  }
 }
 
 body {
