@@ -539,17 +539,21 @@ Next step once a valid source is available: re-run the encode (target ≤20 MiB,
 
 Explicitly **excluded** from this branch: `4894ed3` and `6ed0a54` (stale roadmap-only commits from the same line of work — their prose is superseded by this entry, not imported) and `47d66df` (the held Supabase auth-cascade-delete migration). `47d66df` sits in `98969c2`'s own commit ancestry on `design/tatespun-typesetting-v2` (it was authored in between), but a cherry-pick only replays a commit's own diff — verified the resulting branch has **zero** `.sql`/`supabase`/`migration`/`auth` paths in its diff against `351b3a7`, and `47d66df` is confirmed **not** an ancestor of this branch's `HEAD`.
 
-**FQ status — release sync (2026-09-15, TSP-FRIEND-QA-PATCH-RELEASE-001):**
+**PRODUCTION RELEASED 2026-09-15 (TSP-FRIEND-QA-PATCH-RELEASE-001).** Merge commit `5844ff6` (`merge: release friend QA fixes 2026-09-15`) onto `master`, deployed via the existing Cloudflare Pages Git-integration path (auto-build/deploy on push to `master` — no in-repo Cloudflare config exists, confirmed by §17). Production Human PASS: `https://spuntales.net/tatespun/`.
 
-- **FQ-01 (Guide refresh):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/friendQaGuide.test.ts` PASS.
-- **FQ-02 (colon / 縦中横 guidance):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/v2Bridge/latinOrientationParity.test.ts`, `manuscriptAdapter.test.ts` PASS.
-- **FQ-03 (`!`/`?` + space Writing Check spacing):** IMPLEMENTED / friend-QA release candidate. Automated: `src/lib/writingCheckEngine/rules/punctuation.test.ts` PASS, including the three named quick-regression cases (`本当？次へ` → REVIEW; `「本当？」` → no REVIEW; `本当？　次へ` → no REVIEW).
-- **FQ-04 (mobile keyboard shrinks normal-mode textarea):** **HUMAN PASS.** Confirmed: keyboard open/close, practical editor height, multi-line typing, caret movement, textarea scroll, Focus Mode ON/OFF, Settings/Options/Memo recovery, orientation recovery where tested. See root cause/fix below (unchanged from initial implementation).
-- **FANBOX/OFUSE:** **HUMAN PASS** / release candidate.
+**FQ status — Production (2026-09-15):**
+
+- **FQ-01 (Guide refresh):** IMPLEMENTED / **PRODUCTION PASS**. Automated: `src/lib/friendQaGuide.test.ts` PASS. Live guide content (colon/縦中横 sections) confirmed present at `https://spuntales.net/tatespun/docs/help.md`.
+- **FQ-02 (colon / 縦中横 guidance):** IMPLEMENTED / **PRODUCTION PASS**. Automated: `src/lib/v2Bridge/latinOrientationParity.test.ts`, `manuscriptAdapter.test.ts` PASS.
+- **FQ-03 (`!`/`?` + space Writing Check spacing):** IMPLEMENTED / **PRODUCTION PASS** (shipped; behavior itself is client-side and was verified via the automated suite against the exact deployed source, not re-exercised in a live browser this session — no browser automation tool available). Automated: `src/lib/writingCheckEngine/rules/punctuation.test.ts` PASS, including the three named quick-regression cases (`本当？次へ` → REVIEW; `「本当？」` → no REVIEW; `本当？　次へ` → no REVIEW).
+- **FQ-04 (mobile keyboard shrinks normal-mode textarea):** **PRODUCTION PASS / prior local Human PASS.** Local Human QA (2026-09-15) confirmed: keyboard open/close, practical editor height, multi-line typing, caret movement, textarea scroll, Focus Mode ON/OFF, Settings/Options/Memo recovery, orientation recovery where tested. Production bundle confirmed to contain the fix (`--tsp-visible-vh` present in the deployed `/editor` chunk); **not independently re-tested against a real device keyboard in Production** by this session — do not claim that beyond the prior local Human PASS.
+- **FANBOX/OFUSE:** **PRODUCTION PASS.** Exact URLs (`https://www.fanbox.cc/@caroad`, `https://ofuse.me/caroad`) confirmed live on both `https://spuntales.net/tatespun/` and `.../howto/`.
 - **FRIEND QA:** ACTIVE.
 - **PUBLIC BETA:** NOT YET.
-- **Amazon/Rakuten affiliate footer:** POST-BETA (reconfirms §19/§20 — unchanged, still blocked on human input per §20).
+- **Amazon/Rakuten affiliate footer:** POST-BETA (reconfirms §19/§20 — unchanged, still blocked on human input; confirmed hidden/absent from the deployed `/howto` HTML).
 - **Legacy manuscript-loss investigation:** OPEN, separate track (reconfirms §16's framing — not touched here).
+
+**Data safety:** no SQL/migration file in the release diff; `47d66df` confirmed not an ancestor of the merge commit or of `master`'s new tip; no Supabase/Auth/DB mutation performed or deployed.
 
 ### FQ-04 — root cause and fix
 
@@ -567,8 +571,10 @@ Explicitly **excluded** from this branch: `4894ed3` and `6ed0a54` (stale roadmap
 
 Full suite re-run on this branch after the fix: `src/hooks` (18/18), `src/components` (19/19), `src/lib` (339/339, includes FQ-01/02/03 above), `src/lib/v2Bridge` (71/71 + 1 pre-existing skip). TypeScript (`tsc --noEmit`) and ESLint on every changed file are clean, modulo two items confirmed **pre-existing on the unmodified base branch** (verified via a temporary stash-and-recheck, not left in the committed diff): `src/app/layout.tsx`'s `LayoutProps` TS error (missing generated Next.js route types — needs a build/dev run to generate, unrelated to this change) and two `react-hooks/set-state-in-effect` errors in `TategakiEditor.tsx`'s existing document-load/autosave effects (lines ~366/550, untouched by this fix).
 
-`npm run build` (production) was not completed in this environment: its `prebuild` script (`scripts/verify-supabase-project.mjs`) fails on missing `NEXT_PUBLIC_SUPABASE_URL` — an environment/credentials gap, not a code issue. `npm run dev` (Turbopack) starts and serves cleanly; used for the Local Human QA URL below.
+At initial implementation, `npm run build` failed its `prebuild` Supabase check for lack of `NEXT_PUBLIC_SUPABASE_URL` in this fresh worktree. At release time, an already-authorized local `.env.local` (reused byte-for-byte from the `tatespun-release-friend-beta-2026-09-15` worktree, matching this same production lineage — never printed or committed) was copied in, and `npm run build:basepath` then ran the real gate end to end: Supabase project-ref verification PASS, cutover audit PASS (backend ref unchanged, no cross-database mutation), TypeScript PASS, static export PASS (10 prerendered routes), `/tatespun` basePath rewrite PASS.
 
 **Human QA: PASS** (2026-09-15) — see the FQ-04 status line above for the confirmed scenario list.
 
-**NEXT:** Production release of `patch/friend-qa-mobile-2026-09-15` (this section, TSP-FRIEND-QA-PATCH-RELEASE-001) — real build gate, push, master merge, deploy, and Production smoke test.
+**Release record (TSP-FRIEND-QA-PATCH-RELEASE-001, 2026-09-15):** branch pushed to `origin/patch/friend-qa-mobile-2026-09-15` (remote HEAD confirmed matching local); merged into `master` with an explicit merge commit `5844ff6` from an isolated temporary worktree (local `master` was already checked out elsewhere, so a disposable tracking branch was used and pushed to `master` via refspec rather than disturbing that other checkout); `origin/master` re-verified unchanged at the recorded rollback point (`351b3a7`) immediately before both the branch push and the master push. Cloudflare Pages picked up the `master` push automatically; Production smoke (below) confirmed the new content live within the same session.
+
+**NEXT:** Continue Friend QA observation on this shipped patch (FQ-01–04, FANBOX/OFUSE) for any new reports. This release does not resolve or reopen §17's still-outstanding formal-Beta-Release RC checklist (4 items: `/demo` walkthrough, Settings drawer order, Memo draft-protection round trip, Cloudflare dashboard rollback confirmation) — that checklist remains the single actual gate standing between Friend QA and Public Beta authorization.
