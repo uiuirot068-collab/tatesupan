@@ -583,6 +583,9 @@ export function paragraphNeedsAutoIndent(firstChar: string): boolean {
   return (
     firstChar.length > 0 &&
     !AUTO_INDENT_EXEMPT_OPENERS.includes(firstChar) &&
+    // A literal ASCII space already occupies the paragraph's first grid cell.
+    // Preserve it in source/slots, but do not prepend another indent cell.
+    firstChar !== " " &&
     firstChar !== AUTO_INDENT_CHAR
   );
 }
