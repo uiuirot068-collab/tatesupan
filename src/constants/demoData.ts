@@ -27,20 +27,23 @@ export function isEphemeralDocId(id: number | null | undefined): boolean {
 
 /**
  * Deterministic demo manuscript. Short, original wording (no long copyrighted
- * passage). The 【改ページ】 guarantees a 2nd body page exists for the export
- * step even if the user skips every optional action.
+ * passage). Paragraphs deliberately carry no pre-seeded leading whitespace:
+ * the shared renderer supplies the same automatic indent as a normal new
+ * project, while any space the user types remains ordinary manuscript text.
+ * The 【改ページ】 guarantees a 2nd body page exists for the export step even
+ * if the user skips every optional action.
  */
 export const DEMO_SEED_CONTENT = `これはおためしデモです。実際のエディターを触りながら、TateSpunの基本操作を順番に試せます。
 
-　ここに文章を入力すると、右側のプレビュー（スマートフォンでは「プレビュー」画面）の縦書きページに、その場で反映されます。ためしに「吾輩は猫である」と入力してみましょう。
+ここに文章を入力すると、右側のプレビュー（スマートフォンでは「プレビュー」画面）の縦書きページに、その場で反映されます。ためしに「吾輩は猫である」と入力してみましょう。
 
-　ルビは ｜漢字《かんじ》 のように、縦中横は 12月25日 のような半角2桁で自動になります。
+ルビは ｜漢字《かんじ》 のように、縦中横は 12月25日 のような半角2桁で自動になります。
 
 【改ページ】
 
-　行のあたまに【改ページ】だけを書くと、そこから新しいページが始まります。章の始まりや場面の切り替えに使います。
+行のあたまに【改ページ】だけを書くと、そこから新しいページが始まります。章の始まりや場面の切り替えに使います。
 
-　このデモで入力・変更した内容は保存されません。本棚にも残らないので、気軽に試してください。`;
+このデモで入力・変更した内容は保存されません。本棚にも残らないので、気軽に試してください。`;
 
 export interface DemoStep {
   title: string;
