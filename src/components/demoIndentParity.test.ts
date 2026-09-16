@@ -21,6 +21,10 @@ function renderedSlotTexts(source: string): string[] {
   ).slots.map((slot) => slot.text);
 }
 
+function leadingIndentSlotCount(slots: string[]): number {
+  return slots.findIndex((slot) => slot !== " " && slot !== AUTO_INDENT_CHAR);
+}
+
 function demoBodyParagraphs(): string[] {
   return DEMO_SEED_CONTENT.split("\n").filter(
     (line) => line.length > 0 && line !== "【改ページ】",
@@ -50,7 +54,7 @@ describe("FQ-07 Demo ↔ New Project paragraph-indent parity", () => {
 
   it.each([
     ["no explicit leading space", "先頭", [AUTO_INDENT_CHAR, "先", "頭"]],
-    ["ASCII half-width leading space", " 本文", [AUTO_INDENT_CHAR, " ", "本", "文"]],
+    ["ASCII half-width leading space", " 本文", [" ", "本", "文"]],
     ["U+3000 full-width leading space", `${AUTO_INDENT_CHAR}本文`, [AUTO_INDENT_CHAR, "本", "文"]],
     ["ASCII alphanumeric paragraph start", "ABC", [AUTO_INDENT_CHAR, "A", "B", "C"]],
     ["ordinary Japanese paragraph", "本文", [AUTO_INDENT_CHAR, "本", "文"]],
@@ -58,6 +62,18 @@ describe("FQ-07 Demo ↔ New Project paragraph-indent parity", () => {
     ["opening double corner bracket", "『本文", ["『", "本", "文"]],
   ])("uses the shared New Project contract for %s", (_label, source, expectedSlots) => {
     expect(renderedSlotTexts(source)).toEqual(expectedSlots);
+  });
+
+  it.each([
+    ["no explicit leading space", "本文", 1],
+    ["ASCII half-width leading space", " 本文", 1],
+    ["U+3000 full-width leading space", `${AUTO_INDENT_CHAR}本文`, 1],
+    ["ASCII alphanumeric paragraph start", "ABC本文", 1],
+    ["ordinary Japanese paragraph", "これは本文", 1],
+    ["opening corner bracket", "「本文", 0],
+    ["opening double corner bracket", "『本文", 0],
+  ])("places %s at the expected effective Preview indent", (_label, source, expectedCells) => {
+    expect(leadingIndentSlotCount(renderedSlotTexts(source))).toBe(expectedCells);
   });
 
   it("does not destructively normalize user source while evaluating indent", () => {
@@ -79,7 +95,7 @@ describe("FQ-07 Demo ↔ New Project paragraph-indent parity", () => {
   it("documents the unchanged shared auto-indent decisions", () => {
     expect(paragraphNeedsAutoIndent("本")).toBe(true);
     expect(paragraphNeedsAutoIndent("A")).toBe(true);
-    expect(paragraphNeedsAutoIndent(" ")).toBe(true);
+    expect(paragraphNeedsAutoIndent(" ")).toBe(false);
     expect(paragraphNeedsAutoIndent(AUTO_INDENT_CHAR)).toBe(false);
     expect(paragraphNeedsAutoIndent("「")).toBe(false);
     expect(paragraphNeedsAutoIndent("『")).toBe(false);

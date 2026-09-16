@@ -68,14 +68,13 @@ describe("SAMPLE_PROJECT Polano excerpt — FQ-05 (full-width auto-indent space)
     }
   });
 
-  it("paragraphNeedsAutoIndent treats the U+3000 lead as already-indented (no double indent), unlike a half-width space", () => {
+  it("paragraphNeedsAutoIndent does not stack auto-indent on a leading full- or half-width space", () => {
     for (const paragraph of polanoParagraphs()) {
       expect(paragraph[0]).toBe(AUTO_INDENT_CHAR);
       expect(paragraphNeedsAutoIndent(paragraph[0])).toBe(false);
     }
-    // Confirms the bug this guards against: a half-width space is NOT
-    // recognized as already-indented, so the renderer would add its own
-    // indent on top of it (the double-indent that FQ-05 fixed).
-    expect(paragraphNeedsAutoIndent(" ")).toBe(true);
+    // A literal U+0020 also occupies the first Preview grid cell and must not
+    // receive another automatic cell. The source character remains intact.
+    expect(paragraphNeedsAutoIndent(" ")).toBe(false);
   });
 });

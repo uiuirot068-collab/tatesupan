@@ -60,6 +60,15 @@ describe("Human Product Decision A — 一字下げ auto-indent", () => {
     expect(result.line.indentTick).toBeUndefined();
   });
 
+  it("does not double-indent or consume source when the manuscript starts with an ASCII space", () => {
+    const unit = text(" あいうえお", 0);
+    const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6, true);
+    expect(result.line.placedUnits).toHaveLength(6);
+    expect(result.line.indentTick).toBeUndefined();
+    expect(result.line.placedUnits[0].sourceSpan).toEqual(span(0, 1));
+    expect(result.consumedThroughOffset).toBe(6);
+  });
+
   it("Natural Pitch residual accounting reflects the indent-reduced budget, never stretching (INV-004)", () => {
     const unit = text("あい", 0); // 2 cells, well under the 5-cell line extent
     const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 5, true);

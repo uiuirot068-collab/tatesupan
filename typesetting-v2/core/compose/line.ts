@@ -101,6 +101,9 @@ function needsAutoIndent(firstChar: string | undefined): boolean {
     firstChar !== undefined &&
     firstChar.length > 0 &&
     !AUTO_INDENT_EXEMPT_OPENERS.includes(firstChar) &&
+    // The manuscript's ASCII space is a real first-cell unit; retaining it
+    // and adding an automatic indent would create a two-cell indent.
+    firstChar !== " " &&
     firstChar !== AUTO_INDENT_CHAR
   );
 }
