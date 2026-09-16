@@ -11,6 +11,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e:editor-session": "node tests/e2e/editorSessionActivity.e2e.mjs",
+    "test:e2e:editor-input-integrity": "node tests/e2e/editorInputIntegrity.e2e.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
