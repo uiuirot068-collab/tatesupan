@@ -854,6 +854,20 @@ No other candidates were found in the excerpt (okurigana forms like `生れ付�
 
 **Preserved, unchanged:** FQ-04 = CLOSED / Production Human PASS; FQ-05 = CLOSED / Production PASS; FQ-06 = CLOSED / Production PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; 72h cloud-image audit = OPEN; legacy manuscript-loss investigation = OPEN.
 
-**FQ-07 status: IMPLEMENTED / BLOCKED — Human QA required.**
+**FQ-07 status: ~~IMPLEMENTED / BLOCKED — Human QA required~~ → PRODUCTION PASS / CLOSED — see §31.**
 
-**NEXT (single action):** run local Human QA at `http://127.0.0.1:3020/editor?demo=1`, a newly-created project, and `http://127.0.0.1:3020/editor?id=-1` using identical no-space, U+0020, U+3000, ASCII, Japanese, `「`, and `『` inputs. Confirm U+0020 is exactly one cell, source whitespace survives editing, and FQ-05/FQ-06 remain visually correct before any Public Beta gate work. **PUSH: NO. DEPLOY: NO. DB MUTATION: NO.**
+**NEXT:** superseded by the completed Human QA and Production release record in §31.
+
+## 31. TSP-FQ07-RELEASE-FINALIZE-023 — Production PASS / CLOSED (2026-09-17)
+
+**FQ-07 status: PRODUCTION PASS / CLOSED. Human QA: PASS.** The approved FQ-07 tree was merged as `6b835ac` (`Merge FQ-07: demo indent parity and half-width space fixes`). Cloudflare Pages Git integration reported `Deployed successfully` for that exact SHA with deployment ID `31dfdc34-a53a-42ed-95ff-e7f58c87de34`; no manual deploy, environment change, DB/Auth/Supabase operation, or user-data mutation was performed.
+
+**Production/live verification:** HOME `/tatespun/`, Editor `/tatespun/editor/`, Demo `/tatespun/editor/?demo=1`, Guide `/tatespun/guide/`, and HOW TO `/tatespun/howto/` all returned HTTP 200. The five Production HTML responses and all 23 referenced JS/CSS assets were byte-identical to the Cloudflare deployment URL for `31dfdc34`, tying the custom domain directly to the successful `6b835ac` deployment.
+
+**FQ-07 live bundle:** the Demo seed paragraphs begin with their real first characters and the old pre-seeded U+3000 form is absent; the shared compiled indent predicate contains both exact exemptions (`" " !== firstChar` and `"　" !== firstChar`). Therefore no-space remains one automatic cell, U+0020 remains one literal source cell without an automatic prefix, and U+3000 remains one literal source cell without an automatic prefix. Source preservation was not changed. Focused verification on a clean `6b835ac` checkout passed: Current Demo/New/Guide contract 18/18, V2 paragraph semantics 16/16, and FQ-05/FQ-06 constants 7/7.
+
+**Regression smoke:** FQ-04's mobile-only keyboard compact CSS (`data-keyboard-active` with the approved header/title/secondary-row selectors) remains in the live stylesheet. FQ-05's four U+3000-leading Guide paragraphs and FQ-06's canonical `｜俸給《ほうきゅう》` / `｜拵《こしら》え` ruby remain in the live bundle. `viewportDebug`, `ViewportDebugPanel`, and `data-shell-instance-id` remain absent. FANBOX and OFUSE destinations remain present and unchanged.
+
+**Release state after close:** FQ-04 = CLOSED / Production Human PASS; FQ-05 = PRODUCTION PASS / CLOSED; FQ-06 = PRODUCTION PASS / CLOSED; FQ-07 = PRODUCTION PASS / CLOSED; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; 72h cloud-image audit = OPEN; legacy manuscript-loss investigation = OPEN.
+
+**NEXT (single action): FRIEND QA継続.** Public Beta work is not started or authorized by this closeout. **DB MUTATION: NO.**
