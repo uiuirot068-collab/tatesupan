@@ -76,6 +76,7 @@ import {
   type BeforeInputEditSnapshot,
   type UndoHistory,
 } from "@/lib/windowedEditor/undoModel";
+import { resolveTextareaDeletion } from "@/lib/editorInputIntegrity";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import type { WritingDiagnostic } from "@/lib/writingCheckEngine";
 
@@ -110,6 +111,11 @@ export interface PagedEditorProps {
   onNativeCompositionEnd?: (el: HTMLTextAreaElement) => void;
   /** Fired after every committed (non-composition-internal) text change, page-local el. */
   onNativeChangeCommitted?: (el: HTMLTextAreaElement) => void;
+  /** Fired only when a native deletion contradicted its beforeinput range and was repaired. */
+  onNativeIntegrityRepair?: (
+    el: HTMLTextAreaElement,
+    detail: { inputType: string; beforeLength: number; rejectedLength: number; repairedLength: number }
+  ) => void;
   writingCheck?: PagedEditorWritingCheckProps;
   placeholder?: string;
   className?: string;
@@ -234,6 +240,7 @@ function PagedEditorInner(
     onNativeCompositionStart,
     onNativeCompositionEnd,
     onNativeChangeCommitted,
+    onNativeIntegrityRepair,
     writingCheck,
     placeholder,
     className,
@@ -460,10 +467,28 @@ function PagedEditorInner(
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
-    const nextPageText = el.value;
+    let nextPageText = el.value;
 
     const pending = pendingBeforeInputRef.current;
     pendingBeforeInputRef.current = null;
+    if (!isComposingRef.current && pending) {
+      const rejectedLength = nextPageText.length;
+      const resolution = resolveTextareaDeletion(pending, nextPageText);
+      if (resolution.repaired) {
+        nextPageText = resolution.text;
+        // React's next controlled commit echoes this repaired value. Restore
+        // the caret immediately as well so a queued key-repeat/IME event sees
+        // the repaired transaction boundary, never the corrupted DOM range.
+        el.value = nextPageText;
+        el.setSelectionRange(resolution.selectionStart, resolution.selectionEnd);
+        onNativeIntegrityRepair?.(el, {
+          inputType: pending.inputType,
+          beforeLength: pending.beforeText.length,
+          rejectedLength,
+          repairedLength: nextPageText.length,
+        });
+      }
+    }
     const rawEdit = !isComposingRef.current
       ? pending
         ? computeRawEditFromBeforeInput(pending, nextPageText, currentPage.start)
@@ -739,6 +764,10 @@ function PagedEditorInner(
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
+    // A no-op beforeinput (Backspace at document start, Delete at its end)
+    // has no matching input event to consume its snapshot. The next physical
+    // key always starts a new transaction.
+    pendingBeforeInputRef.current = null;
     const isMod = event.ctrlKey || event.metaKey;
     if (isMod && !event.nativeEvent.isComposing) {
       const key = event.key.toLowerCase();
@@ -778,6 +807,7 @@ function PagedEditorInner(
   };
 
   const handleBlur = () => {
+    pendingBeforeInputRef.current = null;
     undoHistoryRef.current = flushBatch(undoHistoryRef.current);
   };
 

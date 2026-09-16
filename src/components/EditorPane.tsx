@@ -7,6 +7,7 @@ import PagedEditor, { type PagedEditorHandle } from "./PagedEditor";
 import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
+import { resolveTextareaDeletion, type TextareaDeletionSnapshot } from "@/lib/editorInputIntegrity";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import { useEditorFooterCollapsed } from "@/hooks/useEditorFooterCollapsed";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
@@ -196,6 +197,7 @@ function EditorPaneInner(
   const isWindowed = isWindowedEditorEnabled();
   const pagedEditorRef = useRef<PagedEditorHandle>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
+  const deletionSnapshotRef = useRef<TextareaDeletionSnapshot | null>(null);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
   // recompute's scheduler priority -- it cannot interrupt `countVisualLength`
   // (which re-tokenizes the WHOLE manuscript) mid-call, so on a 260k-char
@@ -241,6 +243,7 @@ function EditorPaneInner(
   const runNativeHistory = (command: "undo" | "redo") => {
     const el = textareaRef.current;
     if (!el) return;
+    deletionSnapshotRef.current = null;
     el.focus({ preventScroll: true });
     // Chrome's command-driven Redo can emit `input` without `beforeinput`.
     // Seed the existing input-state path with the native history inputType so
@@ -435,7 +438,26 @@ function EditorPaneInner(
       selectionEnd: el.selectionEnd,
       inputType,
     });
+    deletionSnapshotRef.current = {
+      beforeText: el.value,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      inputType,
+    };
   };
+
+  // React's onBeforeInput prop does not reliably expose InputEvent.inputType
+  // for textarea edits. Read the native event directly, matching PagedEditor,
+  // so the FULL rollback surface enforces the same deletion contract.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const listener = (event: Event) => {
+      captureTextareaInput(el, (event as InputEvent).inputType ?? "");
+    };
+    el.addEventListener("beforeinput", listener);
+    return () => el.removeEventListener("beforeinput", listener);
+  });
 
   const insertPageBreak = () => {
     const selection = isWindowed
@@ -652,6 +674,14 @@ function EditorPaneInner(
               inputActivityStateRef.current = transition.state;
               onRecordActivity(transition.delta);
             }}
+            onNativeIntegrityRepair={(el, detail) => {
+              perfMark("EditorPane:inputIntegrityRepair", detail);
+              // Consume the parent's matching beforeinput snapshot without
+              // counting the rejected DOM mutation. The repaired value is the
+              // only transaction that reaches activity/source state.
+              const transition = applyTextInputChange(inputActivityStateRef.current, el.value);
+              inputActivityStateRef.current = transition.state;
+            }}
             writingCheck={
               writingCheckEnabled
                 ? { enabled: true, analysisText: analysis.text, issues: writingIssuesForAnalysis }
@@ -684,18 +714,37 @@ function EditorPaneInner(
           // itself is already off in normal product behavior (see below).
           autoCorrect={probeMode === "no-spellcheck" ? "off" : undefined}
           autoCapitalize={probeMode === "no-spellcheck" ? "off" : undefined}
-          onKeyDown={(event) => logNativeEvent("keydown", event.currentTarget)}
-          onBeforeInput={(event) => {
-            const nativeEvent = event.nativeEvent as InputEvent;
-            captureTextareaInput(event.currentTarget, nativeEvent.inputType ?? "");
+          onKeyDown={(event) => {
+            // A beforeinput with no following input (for example Backspace at
+            // offset 0) must never describe the next physical key.
+            deletionSnapshotRef.current = null;
+            logNativeEvent("keydown", event.currentTarget);
           }}
           // Explicit fallbacks preserve selection-aware Cut/Paste accounting
           // in browsers that do not expose InputEvent.inputType reliably.
           onPaste={(event) => captureTextareaInput(event.currentTarget, "insertFromPaste")}
           onCut={(event) => captureTextareaInput(event.currentTarget, "deleteByCut")}
           onChange={(e) => {
-            logNativeEvent("input", e.currentTarget, { nextLength: e.target.value.length });
-            const next = e.target.value;
+            const el = e.currentTarget;
+            const snapshot = deletionSnapshotRef.current;
+            deletionSnapshotRef.current = null;
+            let next = e.target.value;
+            if (!isComposingRef.current && snapshot) {
+              const rejectedLength = next.length;
+              const resolution = resolveTextareaDeletion(snapshot, next);
+              if (resolution.repaired) {
+                next = resolution.text;
+                el.value = next;
+                el.setSelectionRange(resolution.selectionStart, resolution.selectionEnd);
+                perfMark("EditorPane:inputIntegrityRepair", {
+                  inputType: snapshot.inputType,
+                  beforeLength: snapshot.beforeText.length,
+                  rejectedLength,
+                  repairedLength: next.length,
+                });
+              }
+            }
+            logNativeEvent("input", el, { nextLength: next.length });
             perfMark("EditorPane:onChange:start", { nextLength: next.length });
             // Any edit that isn't exactly the automated fix's own output
             // ends the one-step undo window (see `undoState`'s own doc).
@@ -729,6 +778,9 @@ function EditorPaneInner(
           onSelect={reportCursorIndex}
           onClick={reportCursorIndex}
           onKeyUp={reportCursorIndex}
+          onBlur={() => {
+            deletionSnapshotRef.current = null;
+          }}
           onCompositionStart={(event) => {
             const el = event.currentTarget;
             logNativeEvent("compositionstart", el);
@@ -737,6 +789,7 @@ function EditorPaneInner(
             // doesn't apply since React Compiler isn't enabled (AGENTS.md).
             // eslint-disable-next-line react-hooks/immutability
             isComposingRef.current = true;
+            deletionSnapshotRef.current = null;
             inputActivityStateRef.current = startComposition(
               inputActivityStateRef.current,
               el.value,
