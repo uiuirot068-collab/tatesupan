@@ -18,9 +18,9 @@
 //
 // DISCLOSED SIMPLIFICATION (JPG Export scope audit): legacy's "crop to
 // TrimGuide" step removes a bleed margin that exists in legacy's own DOM
-// capture. v2's `PublicationPageGeometry` has no bleed/trim field at all
-// (bleed/trim was explicitly out of scope for the whole P3-O08 final-page
-// sequence, never implemented for Publication PDF either) -- so for v2,
+// capture. v2's canonical `PublicationPageGeometry` has no bleed/trim field
+// because PDF output geometry is applied later without changing typesetting;
+// the JPG contract still consumes the canonical page directly -- so for v2,
 // the canonical page raster's own full extent already equals what legacy
 // would call the "trim rect." The crop step therefore degrades to a real,
 // disclosed no-op (`toPrintCanvas` starts directly from the full base

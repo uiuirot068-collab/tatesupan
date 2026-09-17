@@ -2,12 +2,12 @@
 
 import {
   renderPaintPlanToPdfAsync,
-  type PaintPlan,
-  type PublicationFontResource,
 } from "../../typesetting-v2/renderer/publication/pdfGenerator";
-
-type StartMessage = { type: "start"; plan: PaintPlan; font: PublicationFontResource };
-type ControlMessage = { type: "pause" } | { type: "resume" } | { type: "cancel" };
+import type {
+  V2PdfWorkerControlMessage,
+  V2PdfWorkerStartMessage,
+} from "../lib/v2PdfWorkerContract";
+import { publicationPdfRenderOptionsFromMessage } from "../lib/v2PdfWorkerContract";
 
 let paused = false;
 let cancelled = false;
@@ -25,7 +25,7 @@ async function waitForPermission(): Promise<void> {
   if (cancelled) throw new DOMException("Export cancelled", "AbortError");
 }
 
-self.onmessage = (event: MessageEvent<StartMessage | ControlMessage>) => {
+self.onmessage = (event: MessageEvent<V2PdfWorkerStartMessage | V2PdfWorkerControlMessage>) => {
   const message = event.data;
   if (message.type === "pause") {
     paused = true;
@@ -46,6 +46,7 @@ self.onmessage = (event: MessageEvent<StartMessage | ControlMessage>) => {
   paused = false;
   cancelled = false;
   void renderPaintPlanToPdfAsync(message.plan, message.font, {
+    ...publicationPdfRenderOptionsFromMessage(message),
     beforePage: waitForPermission,
     onProgress: (current, total) => self.postMessage({ type: "progress", current, total }),
   })

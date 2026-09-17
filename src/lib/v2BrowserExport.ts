@@ -1,5 +1,7 @@
 import type { PaintPlan, PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
+import type { PublicationPdfMode } from "../../typesetting-v2/renderer/publication/pdfOutputGeometry";
 import { withBasePath } from "./basePath";
+import { createV2PdfWorkerStartMessage } from "./v2PdfWorkerContract";
 
 export const V2_PUBLICATION_FONT_PATH = "/fonts/ShipporiMincho-Regular.ttf";
 
@@ -60,6 +62,7 @@ export interface WorkerPdfHandle {
 export function startV2PdfWorker(
   plan: PaintPlan,
   font: PublicationFontResource,
+  mode: PublicationPdfMode,
   onProgress: (progress: WorkerPdfProgress) => void
 ): WorkerPdfHandle {
   const worker = new Worker(new URL("../workers/v2Pdf.worker.ts", import.meta.url), { type: "module" });
@@ -92,7 +95,7 @@ export function startV2PdfWorker(
       reject(new Error(event.message || "PDF worker failed"));
     };
   });
-  worker.postMessage({ type: "start", plan, font });
+  worker.postMessage(createV2PdfWorkerStartMessage(plan, font, mode));
   return {
     result,
     pause: () => worker.postMessage({ type: "pause" }),

@@ -60,6 +60,11 @@ import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 import { rubyLaneGeometry } from "../rubyLane";
+import {
+  resolvePublicationPdfPageOutput,
+  type PublicationPdfMode,
+  type PublicationPdfPageOutput,
+} from "./pdfOutputGeometry";
 
 export interface PublicationFontResource {
   /** Arbitrary VFS filename jsPDF registers the font under (e.g. "ShipporiMincho-Regular.ttf"). */
@@ -1174,10 +1179,80 @@ function buildColophonPaintPage(
   return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }
 
+export interface PublicationPdfRenderOptions {
+  /** Defaults to the historical V2 behavior: canonical finished/trim size. */
+  mode?: PublicationPdfMode;
+}
+
+function paintPageCommands(
+  pdf: jsPDF,
+  page: PaintPagePlan,
+  output: PublicationPdfPageOutput,
+): void {
+  const offsetX = output.contentOffsetXMm;
+  const offsetY = output.contentOffsetYMm;
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.05);
+  pdf.setFillColor(0, 0, 0);
+  for (const cmd of page.commands) {
+    if (cmd.op === "rect") {
+      pdf.rect(cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      continue;
+    }
+    if (cmd.op === "image") {
+      pdf.addImage(cmd.bytes, cmd.format, cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      continue;
+    }
+    if (cmd.op === "glyphOutline") {
+      for (const outlineCmd of cmd.commands) {
+        if (outlineCmd.type === "M") pdf.moveTo(outlineCmd.x + offsetX, outlineCmd.y + offsetY);
+        else if (outlineCmd.type === "L") pdf.lineTo(outlineCmd.x + offsetX, outlineCmd.y + offsetY);
+        else if (outlineCmd.type === "C") pdf.curveTo(
+          outlineCmd.x1 + offsetX,
+          outlineCmd.y1 + offsetY,
+          outlineCmd.x2 + offsetX,
+          outlineCmd.y2 + offsetY,
+          outlineCmd.x + offsetX,
+          outlineCmd.y + offsetY,
+        );
+        else pdf.close();
+      }
+      pdf.fill();
+      continue;
+    }
+    pdf.setFontSize(cmd.fontSizePt);
+    if (cmd.maxWidthMm !== undefined) {
+      const widthMm = pdf.getTextWidth(cmd.text);
+      if (widthMm > cmd.maxWidthMm) {
+        pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
+      }
+    }
+    pdf.text(cmd.text, cmd.xMm + offsetX, cmd.yMm + offsetY, {
+      align: cmd.align,
+      ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
+      ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
+    });
+  }
+
+  if (output.cropMarks.length > 0) {
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    for (const mark of output.cropMarks) {
+      pdf.line(mark.x1Mm, mark.y1Mm, mark.x2Mm, mark.y2Mm);
+    }
+  }
+}
+
 // Thin, mechanical executor: walks a PaintPlan and calls jsPDF's own
 // primitives. Contains no typography decisions of its own — everything
 // about WHAT to paint and WHERE was already decided by `buildPaintPlan`.
-export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: PublicationFontResource): PublicationPdfResult {
+// PDF output mode changes only the containing sheet and paint origin; the
+// canonical page commands and their dimensions remain untouched.
+export function renderPaintPlanToPdf(
+  plan: PaintPlan,
+  fontResource?: PublicationFontResource,
+  options: PublicationPdfRenderOptions = {},
+): PublicationPdfResult {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1] });
   if (fontResource) {
     pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
@@ -1189,70 +1264,11 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
   // placeholder is deleted, so the emitted document contains exactly
   // `plan.length` pages, never one extra.
   plan.forEach((page, i) => {
-    pdf.addPage([page.widthMm, page.heightMm], "portrait");
+    const output = resolvePublicationPdfPageOutput(page.widthMm, page.heightMm, options.mode ?? "trim");
+    pdf.addPage([output.widthMm, output.heightMm], "portrait");
     pdf.setPage(i + 2); // page 1 is the throwaway placeholder
     if (fontResource) pdf.setFont(fontResource.fontName);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.05);
-    pdf.setFillColor(0, 0, 0);
-    for (const cmd of page.commands) {
-      if (cmd.op === "rect") {
-        pdf.rect(cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
-        continue;
-      }
-      if (cmd.op === "image") {
-        // Human Visual QA HOLD round 30: jsPDF's own real `addImage` —
-        // for "JPEG" this embeds the already-DCT-encoded bytes directly
-        // (no recompression); for "PNG" jsPDF's own internal decoder
-        // extracts pixel data and, when the source has one, a real
-        // alpha channel (embedded as a PDF SMask) — neither path is
-        // reimplemented here, this executor only calls jsPDF's own API
-        // with the already-decided real bytes/box, exactly like every
-        // other command in this switch makes no typography/decode
-        // decision of its own. jsPDF accepts Uint8Array in browsers and
-        // Node, so the canonical bytes cross this boundary unchanged.
-        pdf.addImage(cmd.bytes, cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
-        continue;
-      }
-      if (cmd.op === "glyphOutline") {
-        // Round 7: a real vector glyph outline (already fully
-        // translated/scaled into mm page-coordinate space by
-        // `buildPaintPlan`/`VerticalOutlineContext` — this executor makes
-        // no typography decisions, it only walks the already-decided
-        // command stream). One glyph's outline may have MULTIPLE contours
-        // (e.g. ゅ has 4) — each starts with its own "M" and ends with its
-        // own "Z" (mapped to jsPDF's own `close()`, the PDF "h" operator);
-        // ALL contours are accumulated into ONE current path before a
-        // SINGLE `fill()` call, so the PDF's native nonzero-winding-rule
-        // fill correctly renders inner "holes" (e.g. an enclosed
-        // counter-shape) exactly as PDF's own multi-subpath model intends.
-        for (const outlineCmd of cmd.commands) {
-          if (outlineCmd.type === "M") pdf.moveTo(outlineCmd.x, outlineCmd.y);
-          else if (outlineCmd.type === "L") pdf.lineTo(outlineCmd.x, outlineCmd.y);
-          else if (outlineCmd.type === "C") pdf.curveTo(outlineCmd.x1, outlineCmd.y1, outlineCmd.x2, outlineCmd.y2, outlineCmd.x, outlineCmd.y);
-          else pdf.close();
-        }
-        pdf.fill();
-        continue;
-      }
-      pdf.setFontSize(cmd.fontSizePt);
-      // TCY's own single measure-then-scale fit pass happens here, against
-      // the REAL registered font (buildPaintPlan itself stays jsPDF-free,
-      // so this is the one place font-metric-dependent sizing happens) —
-      // never changes canonical coordinates, only this one text run's own
-      // paint-time font size.
-      if (cmd.maxWidthMm !== undefined) {
-        const widthMm = pdf.getTextWidth(cmd.text);
-        if (widthMm > cmd.maxWidthMm) {
-          pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
-        }
-      }
-      pdf.text(cmd.text, cmd.xMm, cmd.yMm, {
-        align: cmd.align,
-        ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
-        ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
-      });
-    }
+    paintPageCommands(pdf, page, output);
   });
   pdf.deletePage(1);
 
@@ -1260,7 +1276,7 @@ export function renderPaintPlanToPdf(plan: PaintPlan, fontResource?: Publication
   return { bytes: new Uint8Array(arrayBuffer), pageCount: plan.length };
 }
 
-export interface AsyncPdfRenderOptions {
+export interface AsyncPdfRenderOptions extends PublicationPdfRenderOptions {
   beforePage?: (pageNumber: number, pageCount: number) => Promise<void>;
   onProgress?: (completedPages: number, pageCount: number) => void;
 }
@@ -1283,38 +1299,11 @@ export async function renderPaintPlanToPdfAsync(
   for (let index = 0; index < plan.length; index += 1) {
     await options.beforePage?.(index + 1, plan.length);
     const page = plan[index];
-    pdf.addPage([page.widthMm, page.heightMm], "portrait");
+    const output = resolvePublicationPdfPageOutput(page.widthMm, page.heightMm, options.mode ?? "trim");
+    pdf.addPage([output.widthMm, output.heightMm], "portrait");
     pdf.setPage(index + 2);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.05);
-    pdf.setFillColor(0, 0, 0);
-    for (const cmd of page.commands) {
-      if (cmd.op === "rect") {
-        pdf.rect(cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
-      } else if (cmd.op === "image") {
-        pdf.addImage(cmd.bytes, cmd.format, cmd.xMm, cmd.yMm, cmd.widthMm, cmd.heightMm);
-      } else if (cmd.op === "glyphOutline") {
-        for (const outlineCmd of cmd.commands) {
-          if (outlineCmd.type === "M") pdf.moveTo(outlineCmd.x, outlineCmd.y);
-          else if (outlineCmd.type === "L") pdf.lineTo(outlineCmd.x, outlineCmd.y);
-          else if (outlineCmd.type === "C") pdf.curveTo(outlineCmd.x1, outlineCmd.y1, outlineCmd.x2, outlineCmd.y2, outlineCmd.x, outlineCmd.y);
-          else pdf.close();
-        }
-        pdf.fill();
-      } else {
-        pdf.setFontSize(cmd.fontSizePt);
-        if (cmd.maxWidthMm !== undefined) {
-          const widthMm = pdf.getTextWidth(cmd.text);
-          if (widthMm > cmd.maxWidthMm) pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
-        }
-        pdf.text(cmd.text, cmd.xMm, cmd.yMm, {
-          align: cmd.align,
-          ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
-          ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
-        });
-      }
-    }
+    paintPageCommands(pdf, page, output);
     options.onProgress?.(index + 1, plan.length);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
