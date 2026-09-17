@@ -72,6 +72,8 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import ExportProgressModal from "./ExportProgressModal";
 import PdfExportChecklistGate from "./PdfExportChecklistGate";
+import PdfModeOption, { PDF_MODE_OPTIONS } from "./PdfModeOption";
+import { toggleHelp } from "./pdfModeHelp";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
@@ -1554,6 +1556,7 @@ function PreviewPane({
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [pdfChecklistAttempt, setPdfChecklistAttempt] = useState<PdfExportChecklistAttempt | null>(null);
   const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
+  const [openPdfModeHelp, setOpenPdfModeHelp] = useState<PdfExportMode | null>(null);
   const [pdfScope, setPdfScope] = useState<"all" | "selected">("all");
   // 選択ページPDFで奥付を含めるか。default OFF——「奥付ONなら常にappend」とは
   // 推測しない（PDFは共有・確認用途にも使われるため、ユーザーの選択を尊重する）。
@@ -1567,8 +1570,15 @@ function PreviewPane({
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
     setPdfFilenameStem(buildDefaultPdfFilenameStem());
+    setOpenPdfModeHelp(null);
     setIsPdfModalOpen(true);
   };
+
+  const handlePdfModalEscape = useCallback(() => {
+    if (openPdfModeHelp === null) return false;
+    setOpenPdfModeHelp(null);
+    return true;
+  }, [openPdfModeHelp]);
 
   const performDownloadPdf = async () => {
     if (exportBlockedByUnresolvedImages()) return;
@@ -2580,6 +2590,7 @@ function PreviewPane({
           titleId="pdf-export-setup-title"
           closeLabel="PDF出力を閉じる"
           onClose={() => setIsPdfModalOpen(false)}
+          onEscape={handlePdfModalEscape}
           panelClassName="max-w-sm"
           overlayProps={{ "data-pdf-export-setup-modal": "" } as HTMLAttributes<HTMLDivElement>}
           footer={(
@@ -2648,29 +2659,24 @@ function PreviewPane({
           )}
           <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
           <div className="flex flex-col gap-2">
-            {(
-              [
-                { value: "trim", label: "仕上がりサイズ（塗り足し内側）" },
-                { value: "bleed", label: "断ち落としサイズ（塗り足し3mm込み・トンボなし）" },
-                { value: "full", label: "入稿用フルサイズ（トンボ＋塗り足し3mm付き）" },
-              ] as { value: PdfExportMode; label: string }[]
-            ).map((option) => (
-              <label
+            {PDF_MODE_OPTIONS.map((option) => (
+              <PdfModeOption
                 key={option.value}
-                className="flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5"
-              >
-                <input
-                  type="radio"
-                  name="pdf-export-mode"
-                  value={option.value}
-                  checked={pdfMode === option.value}
-                  onChange={() => setPdfMode(option.value)}
-                  className="mt-0.5"
-                />
-                <span className="text-ink">{option.label}</span>
-              </label>
+                option={option}
+                checked={pdfMode === option.value}
+                helpOpen={openPdfModeHelp === option.value}
+                onChange={() => setPdfMode(option.value)}
+                onToggleHelp={() => setOpenPdfModeHelp((current) => toggleHelp(current, option.value))}
+                onCloseHelp={() => setOpenPdfModeHelp(null)}
+              />
             ))}
           </div>
+          <p
+            data-pdf-fixed-bleed-note=""
+            className="mt-2 rounded bg-ink/[0.04] px-3 py-2 text-[11px] leading-relaxed text-ink/60"
+          >
+            ※塗り足し幅は3mm固定です。出力形式ごとに塗り足し・トンボの含まれ方は決まっており、個別に変更する設定はありません。
+          </p>
           {pdfScope === "selected" && selected.size === 0 && (
             <p className="mt-2 text-xs text-red-600">書き出すページを選択してください。</p>
           )}

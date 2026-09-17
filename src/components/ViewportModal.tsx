@@ -21,6 +21,7 @@ interface ViewportModalProps {
   titleId: string;
   closeLabel: string;
   onClose: () => void;
+  onEscape?: () => boolean;
   children: ReactNode;
   footer?: ReactNode;
   showCloseButton?: boolean;
@@ -43,6 +44,7 @@ export default function ViewportModal({
   titleId,
   closeLabel,
   onClose,
+  onEscape,
   children,
   footer,
   showCloseButton = true,
@@ -54,6 +56,13 @@ export default function ViewportModal({
   const idRef = useRef(Symbol("tatespun-viewport-modal"));
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  const onEscapeRef = useRef(onEscape);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onEscapeRef.current = onEscape;
+  }, [onClose, onEscape]);
 
   useEffect(() => {
     const id = idRef.current;
@@ -72,7 +81,8 @@ export default function ViewportModal({
       if (event.key !== "Escape" || modalStack.at(-1) !== id) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      onClose();
+      if (onEscapeRef.current?.()) return;
+      onCloseRef.current();
     };
     document.addEventListener("keydown", closeTopModalOnEscape, true);
 
@@ -81,7 +91,7 @@ export default function ViewportModal({
       removeFromModalStack(id);
       if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
-  }, [onClose]);
+  }, []);
 
   if (typeof document === "undefined") return null;
 
