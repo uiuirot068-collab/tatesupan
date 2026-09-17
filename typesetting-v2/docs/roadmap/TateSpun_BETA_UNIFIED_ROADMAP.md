@@ -1,6 +1,6 @@
 # TateSpun β Unified Roadmap
 
-- Updated: 2026-09-17
+- Updated: 2026-09-18
 - Decision-prep baseline HEAD: `12d8c312727c2b414f811ccb40398b274fe39454` (historical decision baseline retained)
 - Long-document Editor implementation checkpoint: `ca69e6f` (`fix(editor): rebalance joined pages and reveal caret`) — split/join UX Human PASS
 - Announcement Preview checkpoint: `78f7aee` (`fix(preview): keep export menu visible at narrow widths`) — Human PASS
@@ -919,3 +919,21 @@ No other candidates were found in the excerpt (okurigana forms like `生れ付�
 **Release state after close:** FQ-04–FQ-08 = CLOSED; **FQ-09 = PRODUCTION PASS / CLOSED**; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; Soft Beta target = **2026-09-21 12:00 JST**; 72h audit = OPEN; legacy manuscript-loss investigation = OPEN; UX v3 Loop 1 = **UNBLOCKED / READY TO RESUME**. The held migration commit `47d66df` remains unmerged. **DB/Auth/Supabase/migration/env mutation: NO.**
 
 **NEXT:** Resume UX v3 Loop 1 — PDF choice explanations + fixed 3mm note.
+
+## 35. TSP-UX-V3-LOOP1-RELEASE-RECOVERY-014-KILO — Production PASS / CLOSED (2026-09-18)
+
+**UX v3 Loop 1 status: PRODUCTION PASS / CLOSED. SYSTEM QA: PASS. HUMAN QA: PASS.** The human-tested commit `d7f53c1b28b14348570c0fd8009be8755191fc6e` was verified as Loop 1 only and integrated without rebuilding the dirty UX worktree. The clean release branch `release/tsp-ux-v3-loop1-pdf-help-027` is `89e6e545bd6f227fe38b530af1b3c4c86631209a`; the explicit merge is `576617c4e60873531cbdb737cc817afaf2acdf8c` (`merge: release TateSpun UX v3 Loop 1 PDF help`) and is the current `origin/master`.
+
+**Release diff:** exactly five files: `src/components/PdfModeOption.test.tsx`, `src/components/PdfModeOption.tsx`, `src/components/PreviewPane.tsx`, `src/components/ViewportModal.tsx`, and `src/components/pdfModeHelp.ts`. The diff contains the three PDF choices, accessible `?` help, click/tap/native Enter/Space activation, outside-click and Escape closing, the finished-size caution, and the fixed 3mm note. It contains no `OddPageExportWarning` files, Loop 2 warning state/copy/rule, Loop 3 mobile shared export, QA binary artifacts, PDF geometry/export implementation changes, or DB/Auth/Supabase/env/migration changes. `47d66df` remains unmerged.
+
+**Release gates:** `PdfModeOption` 10/10 PASS; FQ-09 V2 PDF geometry 15/15 PASS; PDF/export checklist 9/9 PASS; TypeScript PASS; changed-file ESLint PASS; `npm run build:basepath` PASS with the Supabase cutover gate explicitly DRY RUN / READ ONLY and backend ref unchanged. The three choices remain `trim`, `bleed`, and `full`; default `trim`, pdfMode propagation, FQ-09 geometry, PDF route, JPG route, and the FQ-08 guard remain unchanged.
+
+**Cloudflare Pages:** the Cloudflare GitHub App check for exact commit `576617c` completed successfully with deployment ID `85911c05-13a0-474e-81e4-4352316b4714`, preview URL `https://85911c05.tatespun.pages.dev`, and status `Deployed successfully`. The custom domain `https://spuntales.net/tatespun/` returned HTTP 200 and its HOME HTML was byte-identical to the deployment preview during the smoke check (SHA-256 `AEA254F0CF81CD903BEEBFBD08764D03FBC9643D27DECD35870FFA208AE48217`).
+
+**Production smoke:** HOME `/tatespun/`, Editor `/tatespun/editor`, Demo `/tatespun/editor?demo=1`, Guide `/tatespun/guide`, and canonical HOW TO `/tatespun/howto` returned HTTP 200. The deployed bundle/source contains all three PDF choices, the canonical help copy, the finished-size caution, the fixed 3mm note, `data-pdf-fixed-bleed-note`, independent tooltip controls, and no Loop 2 odd-page product UI. No interactive browser was available, so interaction claims are source/markup evidence rather than a fabricated live interaction PASS; local Human QA remains the interaction authority.
+
+**FQ-09 regression:** A5 remains trim `148 × 210 mm`, bleed `154 × 216 mm`, and full `184 × 246 mm`; no geometry/export implementation changed. PDF and JPG routes remain alive, and the FQ-08 deletion/IME guard remains present.
+
+**Preserved roadmap state:** FQ-04–FQ-09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; 72h audit = OPEN; legacy manuscript-loss investigation = OPEN; UX v3 Loop 2 = HUMAN_GATE / NOT RELEASED; UX v3 Loop 3 = NOT STARTED. DB/Auth/Supabase/env/migration mutation: NO.
+
+**NEXT:** Human QA / continuation of existing Loop 2 after primary-agent tokens recover. **STOP**
