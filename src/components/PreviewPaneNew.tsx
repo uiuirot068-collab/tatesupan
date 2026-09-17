@@ -163,7 +163,7 @@ export default function PreviewPaneNew({
     try {
       const { font, plan } = await requirePlan();
       signal = beginExport("PDF", plan.length);
-      const handle = startV2PdfWorker(plan, font, ({ current, total }) => setProgress({ label: "PDF", current, total }));
+      const handle = startV2PdfWorker(plan, font, "trim", ({ current, total }) => setProgress({ label: "PDF", current, total }));
       pdfHandleRef.current = handle;
       const abort = () => handle.cancel();
       signal.addEventListener("abort", abort, { once: true });

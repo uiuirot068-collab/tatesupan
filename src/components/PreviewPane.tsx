@@ -1617,7 +1617,7 @@ function PreviewPane({
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
         }
         signal = beginExport("PDF", exportPlan.length);
-        const handle = startV2PdfWorker(exportPlan, font, ({ current, total }) => {
+        const handle = startV2PdfWorker(exportPlan, font, pdfMode, ({ current, total }) => {
           setExportProgress({ current, total });
         });
         v2PdfHandleRef.current = handle;
