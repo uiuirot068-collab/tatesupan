@@ -15,6 +15,7 @@ import {
 import { CombineModal } from "@/components/CombineModal";
 import HelpModal from "@/components/HelpModal";
 import { Header } from "@/components/Header";
+import { UpdateHistoryAccordion } from "@/components/UpdateHistoryAccordion";
 import { Bookshelf } from "@/components/bookshelf/Bookshelf";
 import { useAuth } from "@/components/AuthProvider";
 import { withBasePath } from "@/lib/basePath";
@@ -535,6 +536,34 @@ export default function Home() {
         </section>}
 
         <section
+          data-product-policy=""
+          className="border-t border-[rgba(31,42,68,0.14)] bg-ink/[0.018] px-[18px] py-[42px] sm:px-[clamp(24px,6vw,72px)] dark:border-[#2A3240] dark:bg-[#11151D]"
+          aria-labelledby="tatespun-product-policy-title"
+        >
+          <div className="mx-auto max-w-3xl">
+            <p className="text-xs font-bold tracking-[0.16em] text-accent dark:text-[#C6AF63]">DEVELOPMENT POLICY</p>
+            <h2 id="tatespun-product-policy-title" className="mt-2 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">
+              TateSpunは、使いながら育てています。
+            </h2>
+            <div className="mt-4 space-y-3 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+              <p>
+                TateSpunは、私自身が小説を書くためにも使っているエディターです。
+                なので「書いていて、これが欲しい」と思った機能は、これからも追加していきます。
+              </p>
+              <p>
+                β版の公開期間中にも、いくつか機能追加や改善を予定しています。追加・変更した内容は随時お知らせします。
+              </p>
+              <p>
+                中には、使う人によっては必要のない機能もあると思います。そこはご容赦ください。できるだけ必要な機能だけを選んで使えるようにして、機能が増えてもごちゃごちゃしない、書きやすい環境に整えていきたいと思っています。
+              </p>
+              <p>
+                もし機能が増えたことで使いづらくなったところがあれば、どうぞ遠慮なく教えてください。使いながら、整えながら、TateSpunを育てていきます。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section
           data-support-links=""
           className="border-t border-[rgba(31,42,68,0.14)] px-[18px] py-[42px] text-center sm:px-[clamp(24px,6vw,72px)] dark:border-[#2A3240]"
           aria-labelledby="support-links-title"
@@ -565,6 +594,8 @@ export default function Home() {
           </div>
           <p className="mt-3 text-xs text-ink/50 dark:text-[#939DAF]">{SUPPORT_NOTE}</p>
         </section>
+
+        <UpdateHistoryAccordion />
 
         <footer className="flex flex-col items-center gap-3 border-t border-[rgba(31,42,68,0.14)] px-[clamp(20px,5vw,58px)] pt-[25px] pb-10 text-center dark:border-[#2A3240] sm:flex-row sm:flex-wrap sm:items-center sm:text-left">
           <div className="flex items-baseline gap-1.5">

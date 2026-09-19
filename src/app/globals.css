@@ -242,3 +242,13 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
   color: #d4dbe7;
   box-shadow: inset 0 0 0 1px #3a4658;
 }
+
+
+/* TSP-CMDPACK-A-HOME-HISTORY: visually hide the conventional scrollbar
+   while preserving native wheel/trackpad/touch/keyboard scrolling. */
+.tsp-update-history-scroll {
+  scrollbar-width: none;
+}
+.tsp-update-history-scroll::-webkit-scrollbar {
+  display: none;
+}

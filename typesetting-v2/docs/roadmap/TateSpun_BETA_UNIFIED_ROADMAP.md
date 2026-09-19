@@ -937,3 +937,419 @@ No other candidates were found in the excerpt (okurigana forms like `生れ付�
 **Preserved roadmap state:** FQ-04–FQ-09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; 72h audit = OPEN; legacy manuscript-loss investigation = OPEN; UX v3 Loop 2 = HUMAN_GATE / NOT RELEASED; UX v3 Loop 3 = NOT STARTED. DB/Auth/Supabase/env/migration mutation: NO.
 
 **NEXT:** Human QA / continuation of existing Loop 2 after primary-agent tokens recover. **STOP**
+
+## 36. TSP-WRITING-TOOLS-AND-PRODUCT-POLICY-016-KILO — Roadmap-only registration (2026-09-18)
+
+**Scope:** register two future writing-support features, the developer-used / owner-driven Product Policy, and a future top-page canonical draft in this roadmap only. **PRODUCT CODE CHANGE: NO. TOP PAGE IMPLEMENTATION: NO. PUSH: NO. DEPLOY: NO.** This registration does not change the existing UX v3 priority or authorize implementation.
+
+### Writing-support feature 1 — 描写語・修飾表現チェックβ
+
+- **Status:** `PLANNED / NOT STARTED`
+- **Purpose:** 文章中の「性質・状態・様子を説明している表現」に、書き手自身が気づけるようにする。文章の正誤判定ではなく、表現を選択し直すための気づきの補助とする。
+- **Candidate targets:** 形容詞、形容動詞的表現、連体修飾、連用修飾、および対象の性質・状態・様子を説明しているその他の表現候補。
+- **Product intent:** 「美しい花」と書くこと自体を禁止しない。単に「美しい」と説明するのか、情景・行動・感覚・比喩などを通して自分自身の言葉で見せるのかを、書き手自身が考えるきっかけを作る。
+- **UI direction:** 文章チェックβ内の追加機能。default OFF。ON時のみ黄色系マーカーを表示し、マーカー選択時に理由を表示する。
+- **Candidate labels:** `形容表現候補`、`連体修飾候補`、`連用修飾候補`。
+- **Candidate guidance:** `この表現では性質・状態を説明しています。必要であればそのまま残してください。情景や動作として描く余地がないか確認するためのチェックです。`
+- **Guardrail:** 黄色マーカーは `削除すべき表現` ではなく `見直し候補 / 気づきの補助` として扱う。書き手を一方的に修正させない。
+- **Research gate:** 実装前に独立Loopで、広義の修飾表現に対する日本語解析方式、精度、false positive、browser/local処理の可否、performanceを調査する。単純な品詞判定だけで実装可能と仮定しない。
+
+### Writing-support feature 2 — 音読β / リズム確認
+
+- **Status:** `PLANNED / NOT STARTED`
+- **Purpose:** 文章を実際に耳で聞き、リズム・テンポ・文の長短・読点・反復・文章全体のグルーヴ感を確認する。本人が声を出して音読しづらい環境でも、文章の「鳴り」を確認できるようにする。
+- **Initial direction:** ブラウザ内読み上げを第一候補として、独立Loopで調査・実装する。
+- **Operations:** 選択範囲を読む、現在の段落を読む、全文を読む。
+- **Candidate controls:** 再生、一時停止、停止、読み上げ速度、利用可能な音声選択。
+- **Purpose boundary:** 高品質な朗読作品の生成ではなく、文章リズムの校正・確認を主目的とする。
+- **Privacy:** TateSpunの既存方針を維持する。可能ならlocal/device speechを優先する。外部音声サービスへ原稿本文を送る場合は、明示的な説明・ユーザー操作・同意なしに行わない。
+
+### Future research — VOICEVOX
+
+- **Status:** `FUTURE RESEARCH / NOT COMMITTED TO IMPLEMENTATION`
+- **Candidate scope:** local VOICEVOX ENGINE連携、AudioQuery等のJSON export/import、読み、アクセント、話速、抑揚等の調整によるリズム確認。
+- **Boundary:** VOICEVOX対応は初期 `音読β` の必須条件ではない。`音読β` をVOICEVOX待ちにしない。
+
+### Addendum A — Review Hub / 見直し
+
+- **Status:** `PLANNED / NOT IMPLEMENTED`
+- **Canonical UX direction:** top menuの `設定・オプション・メモ・ヘルプ` の4項目は維持し、新しい上部メニュー項目は追加しない。エディターフッターには常時 `▶ 見直し` を配置する構想とし、押下時にはフッターから上方向へReview Hubを展開する。
+- **Consolidation target:** 既存の `文章チェックβ`、既存の `文字数カウント`、新規の `描写語・修飾表現チェックβ`、新規の `音読β / リズム確認`、および将来の文章確認・推敲補助機能をReview Hubへ統合する構想。
+- **Role:** Review Hubは「機能追加によってEditor UIを肥大化させないための収納・整理レイヤー」として扱う。新しい常時表示メニューや機能の無秩序な追加を許可するものではない。
+
+### Addendum B — Footer pinning
+
+- **Status:** `PLANNED / NOT IMPLEMENTED`
+- Review Hub内のツールから、任意の最大2件だけをエディターフッターに常時表示できるようにする構想。
+- **Semantic rule:** `フッターに表示すること` と `機能が利用可能 / ONであること` は別とする。ピン留めされていないツールも、Review Hubを開けば通常通り利用可能。
+- footer pin / display settingをfeature enable/disableとして実装しない。UI wordingは誤解を避けるため、`フッターに表示` またはpin/favorite相当とする。
+- 最大表示数は2 tools。各ツールにはcompact footer representationを用意する。
+- **Representation examples:** 文章チェックは `文章チェック 3件`、描写・修飾は `描写・修飾 18件`、音読はcompact playback/action、文字数は `12,843字`。
+
+### Addendum C — Browser-level persistence
+
+- **Status:** `PLANNED / NOT IMPLEMENTED`
+- ユーザーが選択したfooter 2 toolsは作品単位ではなくブラウザ単位で保存する。
+- **Required behavior:** 新規作品でも維持、別作品へ移動しても維持、原稿削除で消えない、manuscript/cloud dataとは分離、Supabase不要、login不要。別browser/deviceでは別設定でよい。
+- browser/local preferenceとして保存する。Implementation mechanismは実装Loopで決定するが、local browser storageを第一候補とする。
+
+### Addendum D — 描写語・修飾表現 A/B/C
+
+- **Status:** `PLANNED / NOT STARTED`（既存の `描写語・修飾表現チェックβ` のcontract addendum）
+- A/B/Cは品質評価・良し悪しではなく、検出範囲 / 候補強度の分類とする。
+- **A:** 直接的な形容・状態・評価・様子の説明を中心に拾う。最も絞った見直し候補。
+- **B:** 描写性を持つ連体・連用修飾まで広げる。すでに情景描写として機能している可能性もあるため、削除推奨ではない。
+- **C:** 時間・場所・用途・識別情報なども含む広義の連体 / 連用修飾まで確認する。文章構造を広く観察したいユーザー向け。
+- **User choices:** `A`、`A+B`、`A+B+C`。
+- **Defaults:** feature defaultはOFF。有効化時のdefaultはA only。
+- **Marker:** 原則同じ黄色系。A/B/CでEditorを多色化せず、詳細表示でcategory / reasonを示す。
+- **Guardrail:** A/B/Cは「悪い文章ランキング」ではない。
+
+### Addendum E — Analysis philosophy
+
+- **Status:** `PLANNED / NOT STARTED`（既存の `描写語・修飾表現チェックβ` のanalysis contract）
+- **Initial implementation policy:** generative AIを必須にしない。manuscriptを外部AI/APIへ送らない。browser/local Japanese analysisを優先する。known sample sentence matchingだけで実装せず、未知の文章にも構造・品詞・修飾関係から反応する設計を目指す。
+- Human作成のA/B/C/対象外データは `specification corpus + regression corpus` として扱う。単なる辞書 / whitelistではない。
+- **Pre-implementation research:** 独立Loopで日本語解析方式、false positive、performance、browser bundle size、privacyを調査する。
+
+### Addendum F — 音読β minimum contract
+
+- **Status:** `PLANNED / NOT STARTED`（既存の `音読β / リズム確認` のminimum contract）
+- **Initial target:** 選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、読み上げ速度。
+- Available voice selectionは実装調査結果に応じて含める。
+- **Primary implementation research:** browser speech synthesis / local-device speech。
+- **VOICEVOX:** future optional research only。
+- **Purpose boundary:** 高品質朗読生成ではなく、文章のリズム・テンポ・句読点・反復・グルーヴ感の確認。
+
+### Addendum G — QA corpus
+
+- **Status:** `PLANNED / NOT STARTED`
+- Human側で今後、次のcorpusを準備する。
+- **描写語・修飾表現用:** A / B / C / 対象外 / 迷うの判定付き文章群。ChatGPT初期サンプルにHuman実原稿を追加して育てる。
+- **音読β用:** 約1000字の標準QA小説。
+- **Required coverage:** `。`、`、`、`！`、`？`、`……`、`――`、会話文、数字、時刻、英字、長い一文、短い文の連続。
+- Actual corpus本文そのものはcanonical roadmapを肥大化させないためroadmapへ全文転記しない。`QA corpus to be stored separately before implementation` と記録する。
+
+### Product Policy — developer-used / owner-driven features
+
+TateSpunは、開発者自身が実際に小説執筆へ使用するためのプロダクトでもある。
+
+そのため、開発者自身が実使用の中で `書く・確認する・本にするために欲しい / 必要` と判断した機能については、一般的な文章エディターに必須ではない機能であっても、Roadmapへ追加できる。
+
+既存の方針である「β期間中は原則として新機能追加を抑制する」は削除しない。以下の例外ルールを正式に追加する。
+
+> β期間中は原則として新機能追加を抑制する。ただし、TateSpunの中核目的である「書く・確認する・本にする」を直接強化し、Product Owner自身が実使用上必要と判断した機能については、既存の安定化Loopを阻害しない形でRoadmapへ追加し、独立したSystem QA / Human Gateを経て実装可能とする。
+
+これは「思いついた機能を無制限に画面へ積み上げる」という意味ではない。機能追加と同時に、情報設計、機能の整理、optional / default OFF、progressive disclosure、設定への退避、見つけやすさ、初見ユーザーへの負荷、mobile / desktop双方のUI密度を継続的に確認する。Product Ownerが欲しい機能を追加できることと、ユーザーが使いやすいことを両立する。機能追加によって使いづらくなった場合は、ユーザーからの指摘・Human QAを受けてUI/IAを再整理する。
+
+### Future top-page copy — canonical draft
+
+- **Status:** `BETA PUBLICATION REQUIREMENT / NOT IMPLEMENTED`
+- **Scope:** β公開時にTateSpunトップページへ掲載するcanonical draft copyとして保存する。今回のHome componentおよびproduct codeへの追加は行わない。UX v3 Home検討時または独立Copy/UI Loopで実装し、β公開時にはliveとする。
+- **Relationship to current copy:** 既存のFrozen top-page copyを置き換えたり、今回のRoadmap登録だけでトップページへ反映したりしない。β公開時の掲載内容として、開発者が実使用中に欲しい機能を追加すること、機能が増える環境を整えること、改善・変更を随時お知らせすることを明示する。
+
+> TateSpunは、私自身が小説を書くためにも使っているエディターです。
+>
+> なので「書いていて、これが欲しい」と思った機能は、これからも追加していきます。
+>
+> 中には、使う人によっては必要のない機能もあると思います。そこはご容赦ください。できるだけ必要な機能だけを選んで使えるようにして、機能が増えてもごちゃごちゃしない、書きやすい環境に整えていきたいと思っています。
+>
+> もし機能が増えたことで使いづらくなったところがあれば、どうぞ遠慮なく教えてください。使いながら、整えながら、TateSpunを育てていきます。
+>
+> β版の公開期間中にも、いくつか機能追加や改善を予定しています。追加・変更した内容は随時お知らせします。
+
+### Priority and preservation
+
+- 実装順・時期はまだ固定しない。
+- UX v3 Loop 1: `CLOSED / PRODUCTION PASS` — unchanged.
+- UX v3 Loop 2: `HUMAN_GATE / NOT DEPLOYED` — unchanged; this entry does not delay or replace the existing Human Gate.
+- UX v3 Loop 3: `NOT STARTED` — unchanged.
+- FQ-04〜09: `CLOSED` — unchanged.
+- FRIEND QA: `ACTIVE` — unchanged.
+- PUBLIC BETA: `NOT YET` — unchanged.
+- 72h cloud-image audit: `OPEN` — unchanged.
+- legacy manuscript-loss investigation: `OPEN` — unchanged.
+- held migration `47d66df`: `UNMERGED` — unchanged.
+- DB/Auth/Supabase/env/migration changes: **NO**.
+
+**NEXT:** Return to existing UX v3 Loop 2 Human Gate. The new writing features remain Roadmap-only until their own implementation loops begin. **STOP**
+
+## 37. TateSpun Release Stage Matrix — β公開前 → β公開期間中 → 完成版v1.0 (2026-09-18)
+
+**Scope and authority:** This section is the canonical stage roadmap for TateSpun. It assigns the writing-support, Review Hub, update-history, and bouten decisions to the stage where they belong; it does not authorize implementation or change the current UX v3 gate state. §36 remains the detailed product contract for the writing tools and Product Owner Driven Feature Policy. This section adds the release-stage, feedback, operational, and acceptance rules needed to carry those contracts forward.
+
+**Governing principle:** TateSpun evolves in three different modes. β公開前は安全な原稿持ち込み・確認・持ち帰り導線を確立する段階、β公開期間中は実使用とfeedbackで必要な機能を追加・検証する段階、v1.0はβで役に立ったものを正式化・高精度化し、不要な実験を整理する段階とする。機能を段階に割り当てることは、Safety・essential export・essential mobile usability・正式に合意したPublic Beta Gateを軽視するためのものではない。
+
+### Stage matrix
+
+| Stage | Intent / goal | Decision | Out of scope / change condition |
+| --- | --- | --- | --- |
+| **β公開前** | **壊れない・迷いすぎない・原稿を持ち込んで書き出して帰れる** | Safety、必須のexport journey、必須のmobile usability、Public Beta Gateを先に閉じる。欲しいauthoring機能すべてが未完成でも、それだけを理由にβ公開を無期限に遅らせない。 | β期間中の実験機能の完成、v1.0相当の高精度化、歴史的全機能の復元は対象外。Safety問題が未解決の場合はHumanの明示的なknown-limitation判断が必要。 |
+| **β公開期間中** | **実際に書きながら、Product Owner自身が必要と感じた機能を追加・検証し、利用者feedbackで整理する** | βはfrozen feature setではない。既存のProduct Owner Driven Feature Policyに従い、安定化Loopを迂回しない独立Loopで機能を追加・検証できる。Review Hub、optional/default-OFF、progressive disclosure、feedback、update historyでUIの整理を保つ。 | 機能追加を理由に既存の安定化・Safety・Human Gateを省略しない。beta experimentがv1.0に残ると仮定しない。 |
+| **v1.0 / 完成版** | **βで実際に役立った機能を整理・正式化・高精度化し、一般ユーザー向け製品として完成度を上げる** | βのusage/feedback/resultに基づき、機能を正式化、精度・performance・IAを改善し、不要な実験は簡素化・廃止できる。 | βで人気が出なかった機能を無理に残さない。β中に未実装だった機能を自動的にv1.0へ移さない。 |
+
+**Human feedback and plan-change rule:** 各段階のacceptanceは、自動テストだけでなく、実際の執筆・原稿持ち込み・Preview・export・mobile操作・feedbackで確認する。β公開前とβ期間中の境界は「β公開日」だけでなく、Safety・5-minute UX Gate・7-day unattended Gate・Human decisionが揃ったかで判断する。material release change、major manuscript-loss/export-safety issue、またはgate失敗があれば、該当stageのsoak/acceptanceを再開する。
+
+### Phase A — β公開前
+
+### A1. UX v3 Loop 2 — 奇数ページ警告
+
+- **Intent:** 奇数ページ原稿を扱う書き手が、PDF出力の可否と白ページが必要になる可能性があることを混同しないようにする。browser confirmに依存せず、TateSpunのUIで文脈を説明する。
+- **Decision / stage:** 現在のstatus `HUMAN_GATE / NOT DEPLOYED`を維持し、**β公開前必須**として扱う。PDF自体は奇数ページでも出力可能であることと、印刷所・本仕様によって白ページが必要になる可能性があることを分離して説明する。
+- **Detailed contract:** 警告UIには `このままPDFを書き出す` と `戻って確認する` を用意する。前者はユーザーの明示的な継続操作としてPDF出力へ進む。後者は編集画面へ戻り、ページ構成・印刷所仕様・白ページ対応を確認できる。警告は「奇数ページだから出力できない」という誤解を生まない。
+- **Guardrails:** browser confirmへ置き換えない。PDF生成・ページ数・既存のexport contractを無断に変更しない。警告の文言はHuman QAで、出力可否と白ページ要件が区別できることを確認する。
+- **Acceptance / Human feedback:** 奇数ページ原稿で両actionを実操作し、PDFが意図通り出力されること、戻った場合に編集を継続できること、white-page要件が印刷所依存であることが理解できることを確認する。
+
+### A2. UX v3 Loop 3 — Mobile Shared Export
+
+- **Intent:** mobileで本文編集中でもPreview編集中でも、書き出し導線を見つけられるようにする。Previewを強制的に経由させない。
+- **Decision / stage:** 現在のstatus `NOT STARTED`を維持し、**β公開前必須**として扱う。本文/プレビューの双方からexportへ到達できる共有導線を設計する。
+- **Detailed contract:** mobile Editorの本文表示中とPreview表示中の双方で、書き出し操作を発見・実行できる。Preview未訪問でもPDF/JPG exportを開始できる。既存のFQ-04 keyboard-active viewport/shell behaviorを保持し、keyboard表示時のeditor visible areaを回帰させない。
+- **Guardrails:** Preview訪問を必須のstate transitionにしない。mobile keyboard compact CSS、Focus Mode、既存のexport selection/output contractを変更しない。
+- **Acceptance / Human feedback:** 実deviceで本文→export、Preview→export、keyboard表示中・非表示中の両導線をHuman確認し、FQ-04のkeyboard open/close recoveryに回帰がないことを確認する。
+
+### A3. 5-minute UX Gate
+
+- **Intent:** TateSpunの最初の使用流れが、説明を読まなくても実務として成立するかを確認する。
+- **Decision / stage:** Formal Public Betaの**β公開前Human Gate**。automated QAだけでは代替しない。
+- **Detailed contract:** 30秒でTateSpunが何をするプロダクトか分かる。2分以内にmanuscriptを持ち込み、Previewを表示できる。5分以内にPDFまたはJPGをexportできる。各時間枠は、書き手が迷わず次の操作を選べることを意味し、単に画面が表示されるだけでは不十分。
+- **Guardrails:** gate失敗をautomated passで上書きしない。Demo・通常新規project・実ファイル持ち込みの差異を隠さない。
+- **Acceptance / Human feedback:** 初見ユーザーのHuman observationで、各時間枠・操作成功・迷い・説明の必要性を記録する。失敗した導線はβ公開前に修正または明示的なHuman decisionへ回す。
+
+### A4. 7-day unattended Gate
+
+- **Intent:** 短期のhand testでは検出されにくいautosave、persistence、browser state、cloud state、長時間放置時の不整合を検出する。
+- **Decision / stage:** Formal Public Betaの**β公開前gate**。Frozen RCで実施する。
+- **Detailed contract:** soak中はproduct deploy、manual DB/storage repair、manual data rescueを行わない。Day0 / Day1 / Day3 / Day7にobservationし、autosave/reload、manuscript/settings/Memo/checklist/work-session、export stateを記録する。
+- **Guardrails:** material release change、RC差し替え、data repair、manual rescueが発生したらsoakを再開する。観察結果を「問題未発見」で曖昧にしない。
+- **Acceptance / Human feedback:** 各observation dayの結果と異常・再現条件・影響範囲をHumanが確認し、major manuscript-loss/export-safety issueがないこと、または既知β制限として明示的に承認されたことを記録する。
+
+### A5. Safety OPEN items
+
+- **Intent:** β公開前にSafetyの未解決事項をroadmapから消さず、公開判断を透明にする。
+- **Decision / stage:** **β公開前Human decision items**。少なくとも `legacy manuscript-loss investigation = OPEN` と `72h cloud-image elapsed audit = OPEN` を維持する。
+- **Detailed contract:** Formal Public Beta前に、major manuscript-loss/export-safety issueをCLOSEDにする。CLOSEDにできない場合は、影響、回避方法、観測方法、既知β制限としての許容範囲をHumanが明示的に承認する。
+- **Guardrails:** OPEN項目を「βだから問題ない」と黙示的に扱わない。Safety判断をfeature priorityや公開日だけで上書きしない。
+- **Acceptance / Human feedback:** OPEN項目それぞれについて、CLOSED証拠またはHuman-approved known beta limitationの記録を残す。
+
+### A6. Top Page Product Policy Copy
+
+- **Intent:** β公開時の利用者へ、TateSpunが開発者自身の実執筆にも使われるプロダクトであり、β期間中に機能追加・改善が続くことを最初に伝える。
+- **Decision / stage:** `BETA PUBLICATION REQUIREMENT / NOT IMPLEMENTED`。**β公開時にlive必須**。§36のcanonical draftを維持し、次の一文を追加する。
+- **Canonical addition:** `β版の公開期間中にも、いくつか機能追加や改善を予定しています。追加・変更した内容は随時お知らせします。`
+- **Detailed contract:** copyは、開発者がTateSpunを実際に小説執筆へ使っていること、実使用中に欲しい機能を追加し得ること、利用者によって不要な機能があること、機能が増えても整理された書きやすい環境を目指すこと、使いづらさの指摘を歓迎すること、β中の追加・変更を随時知らせることを伝える。
+- **Guardrails:** 今回のdocs taskでHome/product codeへ入れない。β公開前にCopy/UI Loopで実装し、既存のFrozen top-page copyを無断で置き換えない。
+- **Acceptance / Human feedback:** β公開時のHomeでcanonical copyが表示され、機能追加方針と変更通知の約束が初見ユーザーに理解できることをHuman確認する。
+
+### A7. TateSpun Update History infrastructure
+
+- **Status:** `BETA PUBLICATION REQUIREMENT / NOT IMPLEMENTED`
+- **Intent:** SpunTales全体の履歴とは別に、TateSpunの更新・デバッグ・機能追加を利用者へ直接伝える独立した情報源を作る。
+- **Decision / stage:** **β公開前必須**。実装pathと mechanismはrepo inspection後のImplementation Loopで決定するが、TateSpun専用JSONとUIを必須contractとする。
+- **Detailed contract:** UIは既存のsupport/donation sectionのnear/belowに配置する構想。Collapsed defaultは一行の `▼ 更新・デバッグ・機能追加のお知らせ履歴`。開くとcard/boxed accordionとなり、visible viewportに約5 update rowsを表示する。rowは `YY/MM/DD｜見出し（太字）｜更新内容の詳細文章`。内部categoryはfeature/fix/improvement/notice等でよいが、visual color-codingは必須ではない。
+- **Scope boundary:** historyは現在のpublic/development release periodから始め、過去の全履歴を復元する義務はない。β公開前のinfrastructure statusは `NOT IMPLEMENTED` のままとし、実装後にA7のacceptanceを記録する。
+- **Acceptance / Human feedback:** JSONが消費可能で、UIがcollapsed/open state、約5行表示、keyboard operationを含めてHuman確認できること。即時運用ルールは次節のEを参照する。
+
+### Phase B — β公開期間中
+
+### B1. Review Hub / 見直し
+
+- **Intent:** すでに密度の高いEditor UIを、機能追加のたびに肥大化させない。文章確認・推敲補助を一つの整理された収納レイヤーへ集約する。
+- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のearly target。Review Hubは別機能ではなく、機能の収納・整理・発見可能性を扱うIA layerとして扱う。
+- **Detailed contract:** top toolbarの `設定・オプション・メモ・ヘルプ` の4項目を維持し、Review Hubを第五の常時top-menu itemにしない。Editor footerに常時 `▶ 見直し` を置き、押下時にfooterから上方向へpanelを展開する。既存の `文章チェックβ`、`文字数カウント`、`描写語・修飾表現チェックβ`、`音読β`、将来の文章確認・推敲補助機能を統合対象とする。
+- **Guardrails:** Review Hubを「機能を無制限に増やす許可」と解釈しない。optional/default-OFF、progressive disclosure、mobile/desktopのUI密度、初見ユーザーの負荷を各実装で確認する。
+- **Acceptance / Human feedback:** Production導入後、Hubの開閉、目的のツールへの到達、footerとの関係、mobile densityをHuman確認し、C3のfeedback questionsで継続的なusage evidenceを集める。
+
+### B2. Footer 2-tool customization
+
+- **Intent:** よく使う確認ツールだけをcompactに手元へ残しつつ、Review Hub内の全機能へのアクセスを失わない。
+- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のReview Hub contract。
+- **Detailed contract:** Review Hub内の任意の最大2 toolsをEditor footerへ常時表示できる。各toolにcompact representationを用意する（例: `文章チェック 3件`、`描写・修飾 18件`、音読のcompact playback/action、`12,843字`）。
+- **Semantic guardrail:** `フッターに表示すること` は `機能が利用可能 / ONであること` と別。pinされていないtoolもReview Hubを開けば通常通り利用可能。footer pin/display settingをfeature enable/disableとして実装しない。UI wordingは `フッターに表示` またはpin/favorite相当とし、誤解を避ける。
+- **Persistence:** 選択はmanuscript単位ではなくbrowser/device local preferenceとし、新規作品、別作品への移動、原稿削除/再作成をまたいで維持する。manuscript/cloud dataと分離し、Supabase/loginを必須にしない。別browser/deviceで別設定でもよい。
+- **Acceptance / Human feedback:** 2枠の選択・入替・Hubからの未pin tool利用・browser persistenceをHuman確認し、C3の回答から2枠が妥当か検証する。
+
+### B3. Review Hub feedback/report instrumentation
+
+- **Intent:** v1.0のfooter count/layoutを、永久に「2枠が正しい」と仮定するのではなく、実際の利用 evidenceで判断する。
+- **Decision / stage:** Review Hub + 2-slot footerがProductionに到達した後に有効化する**beta-period feedback contract**。feature access前に質問しない。
+- **Detailed contract:** 既存のuser report/review areaへ次の2問を追加する。Q1 `見直しのフッター表示は最大2枠で足りていますか？` choices: `足りている`、`もう1枠ほしい`、`もっとほしい`、`常時表示は不要`。Q2 `「見直し」の中で、よく使っているものを選んでください`。maximum 2 selections。initial choices: `文章チェックβ`、`描写語・修飾表現チェックβ`、`音読β`、`文字数カウント`。
+- **Guardrails:** 質問文で2枠を正解へ誘導しない。未導入ユーザーへ導入済み機能の質問を表示しない。回答を機能の存廃へ機械的に直結させず、usage・Human observation・UI densityと合わせて判断する。
+- **Acceptance / release rule:** Review Hub Production Releaseは、対応するreport/review questionsが追加され、回答収集の動作が確認されるまでfully completeとしない。
+
+### B4. 音読β / リズム確認
+
+- **Intent:** 声を出して音読しづらい環境でも、文章の「鳴り」を実際に耳で確認できるようにする。高品質なaudiobook生成ではなく、校正・確認を目的とする。
+- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中に導入するcandidate。minimum targetは、選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、speed。
+- **Detailed contract:** rhythm、pacing、punctuation、repetition、grooveの確認を主目的とする。primary research directionはbrowser/device speech synthesis。local/device behaviorを優先し、manuscript textを外部speech serviceへ黙示的に送らない。available voice selectionは調査結果に応じて含める。
+- **Guardrails:** VOICEVOXはseparate future optional researchであり、音読βをVOICEVOX待ちにしない。高品質朗読作品生成、external audio production、cloud voice dependencyを初期contractへ入れない。
+- **Acceptance / Human feedback:** 実browser/deviceで範囲・段落・全文、再生/一時停止/停止/speedをHuman確認し、原稿のprivacy boundaryとリズム確認としての実用性を記録する。
+
+### B5. 描写語・修飾表現チェックβ
+
+- **Intent:** 性質・状態・様子を説明する表現を、削除命令ではなく書き手自身の気づきとして提示する。
+- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のcandidate。feature defaultはOFF。有効化時のdefaultはA only。
+- **Detailed contract:** detection modesは `A`、`A+B`、`A+B+C`。Aは直接的な形容・状態・評価・様子の説明を中心とした最も絞った候補。Bは描写性を持つ連体・連用修飾まで広げ、情景描写として既に機能している可能性を含む。Cは時間・場所・用途・識別情報などを含む広義の連体/連用修飾を確認する。A/B/Cは品質評価・良し悪し・悪い文章ランキングではなく、検出範囲/候補強度の分類。
+- **Marker / explanation:** 原則同じ黄色系。EditorをA/B/Cで多色化しない。詳細表示でcategory/reasonを示し、必要なら残せることと情景・動作・感覚・比喩での再検討を案内する。
+- **Analysis policy:** generative AIを必須にしない。manuscriptを外部AI/APIへ送らない。browser/local Japanese analysisを優先し、known sample matchingだけでなく、未知の文章の構造・品詞・修飾関係から反応する設計を目指す。Human作成のA/B/C/対象外/迷う例は `specification corpus + regression corpus` として扱う。
+- **Acceptance / Human feedback:** 実原稿でfalse positive、検出漏れ、performance、説明の分かりやすさ、long-manuscript behaviorをHuman確認する。β結果次第でv1.0で簡素化・廃止もあり得る。
+
+### B6. 傍点（圏点）
+
+- **Intent:** 選択した本文範囲に強調点を付け、意味上の強調を縦組みの見た目に反映する。
+- **Decision / stage:** `BETA CANDIDATE / PLANNED / NOT A RELEASE BLOCKER`。categoryは `AUTHORING / TYPOGRAPHY / TEXT DECORATION`。Review Hub toolではなくmanuscript formattingとして扱う。
+- **Detailed contract:** 初期βは標準のblack-dot style一つ。多くのemphasis styleを最初から作らない。傍点とrubyはsemantically distinctで、ruby dataを流用して傍点を偽装しない。Editorで選択範囲へ適用し、Preview/JPG/PDFまで同じ意味・見た目を保持する。
+- **Required investigation:** ruby + 傍点 coexistence、overlap、range editing、boundary edits、delete/backspace、Undo/Redo、save/reload、TCY、punctuation、page break。CSS `text-emphasis`は調査候補だが、CSS-only renderingだけでは不十分で、export parityを証明できない場合は採用しない。
+- **Guardrails:** 既存のrenderer/typesetting/ruby/TCY/page-break contractsを破壊しない。初期scopeを超えるゴマ点・白丸・多スタイルはv1.0候補へ回す。
+- **Acceptance / Human feedback:** Editor/Preview/JPG/PDFのparity、選択・境界編集・削除・Undo/Redo・reloadをHuman確認する。β feedbackで意味上の強調として役立つか、誤操作や視覚的混乱がないかを評価する。parityが証明できなければβ導入を延期する。
+
+### B7. Update History during beta
+
+- **Intent:** Top Pageの「追加・変更した内容は随時お知らせします」という約束を、運用上の実際の更新記録へ変える。
+- **Decision / stage:** β公開期間中も継続。user-visible/user-impacting changeが発生するProduction releaseごとに、TateSpun専用update-history JSONを更新する。
+- **Detailed contract:** 新feature、user interaction/UI change、behavior bug fix、export behavior change、significant usability improvement、important notice/known-issue resolutionを記録対象とする。docs-only、user-visible effectのないinternal refactor、test-only、CI/tooling-only、comments/formattingは通常除外する。
+- **Guardrails:** historyを「後で追加する」状態でuser-visible Production changeを閉じない。即時release ruleは次節Eを参照する。
+- **Acceptance / Human feedback:** release resultにupdate-history entryの要否判定、追加/更新、表示/消費可能性のverificationを含める。
+
+### Phase C — v1.0 / COMPLETED PRODUCT
+
+### C1. Review Hub finalization
+
+- **Intent:** βで集めた実際のusage/feedbackに基づき、Review Hubとfooterを一般ユーザー向けの安定したIAへ確定する。
+- **Decision / stage:** v1.0 completion target。β公開前blockerではない。
+- **Detailed contract:** 2 slotsが妥当か、3以上が必要か、どのtoolsがよくpinされるか、一部のtoolsを別場所へ移すべきか、mobile density、grouping/categories、discoverabilityをbeta evidenceで判断する。
+- **Guardrails:** β開始時に2 slotsを永久contractとして固定しない。feedbackが2枠不支持でも、UI全体の密度・目的・操作頻度をHuman reviewする。
+- **Acceptance / Human feedback:** pin usage、Hub usage、report answers、Human observationを統合し、v1.0のslot count/layout/IAを決定した記録を残す。
+
+### C2. 描写語・修飾チェック formalization
+
+- **Intent:** βで有用と確認された場合、実用精度と説明品質をv1.0相当へ引き上げる。
+- **Decision / stage:** v1.0 target。βでunhelpfulならsimplify/removeできる。
+- **Detailed contract:** A/B/C precision向上、false positive低減、performance改善、long-manuscript test、explanation改善、必要なanalysis engine再検討を行う。corpusは継続的にversioningし、回帰結果を記録する。
+- **Guardrails:** βの候補表示をv1.0で「正誤判定」へ変えない。精度が証明できない範囲を過剰に自動修正しない。
+- **Acceptance / Human feedback:** 実原稿・corpus・performance・Human reviewで、detect/reason/operationの品質を評価する。
+
+### C3. 音読 formalization
+
+- **Intent:** β evidenceが目的の有効性を示した場合に、リズム確認として安定した完成機能へ整える。
+- **Decision / stage:** v1.0 target。browser speechで目的が満たされる場合は、追加の音声基盤を必須にしない。
+- **Detailed contract:** voice selection、current-reading highlight、paragraph navigation、long-text stability、improved playback stateを候補とする。各項目はβ usage/feedbackとprivacy/performance調査後に採用可否を決定する。
+- **Guardrails:** 高品質audiobook生成や外部音声service依存をv1.0の暗黙前提にしない。
+- **Acceptance / Human feedback:** 長文・複数段落・操作再開・device/browser差をHuman確認する。
+
+### C4. VOICEVOX
+
+- **Intent:** 必要に応じて、読み・accent・speed・intonation等を細かく扱えるlocal voice optionを検討する。
+- **Decision / stage:** `FUTURE / NEED-BASED`。v1.0保証ではない。
+- **Detailed contract:** local VOICEVOX ENGINE、AudioQuery、reading/accent/speed/intonation controlsを候補とする。browser speechでrhythm-check goalが十分なら未実装のまま終了し得る。
+- **Guardrails:** 音読βをVOICEVOX待ちにしない。external serviceへの原稿送信は明示的な説明・操作・同意なしで行わない。
+- **Acceptance / Human feedback:** βの音読利用結果とlocal/device speechの不足から、必要度・privacy・maintenanceをHuman decisionする。
+
+### C5. 傍点 extension
+
+- **Intent:** 初期black-dot styleで十分な場合は拡張せず、必要が確認された場合だけtypography optionを広げる。
+- **Decision / stage:** v1.0/future target。β blockerではない。
+- **Detailed contract:** ゴマ点、白丸、other emphasis marks、ruby+傍点 guaranteesの強化、advanced typography tuningを候補とする。
+- **Guardrails:** 初期βのone-style contractをv1.0前に無断で拡大しない。各styleのEditor/Preview/JPG/PDF parityと既存typography contractを個別に証明する。
+- **Acceptance / Human feedback:** 利用目的、視認性、他装飾との衝突、export結果をHuman確認する。
+
+### C6. Advanced print/submission assistance
+
+- **Intent:** βの「持ち込んで・確認して・持ち帰る」を、v1.0で印刷所・再版・複数冊の運用へ拡張する。
+- **Decision / stage:** v1.0/future value。β公開前blockerにしない。
+- **Detailed contract:** preflight checks、page/blank-page/spread checks、folio/colophon/image checks、filename checks、printer-oriented output presets、PDF+JPG+related files bundle、manuscript snapshot、reprint restore、anthology/reprint compilation、reusable book settingsを候補として保持する。
+- **Guardrails:** 全体を一つのβ blockerへまとめない。各項目は独立したSafety/UX/implementation decisionを経て段階配分する。
+- **Acceptance / Human feedback:** 実印刷所・実再版・実運用のHuman evidenceがある項目から個別に正式化する。
+
+### E. Immediate update-history operation rule — starts NOW
+
+**Rule:** 現在のdevelopment stageから即時に適用する。Formal Public Betaを待たない。`Any Production deployment containing a user-visible/user-impacting change must update the TateSpun update-history JSON.`
+
+**Intent:** user-visible changeと利用者への説明を切り離し、β公開前の現在のreleaseからTateSpun独自のchange communicationを運用開始する。historyは公開時のpromiseだけでなく、各Production releaseのclosed conditionの一部とする。
+
+**Detailed contract:** 要否対象は、new feature、changed user interaction、利用者が気づくUI change、behaviorに影響するbug fix、export behavior change、significant usability improvement、important notice/known issue resolution。通常除外するのは、docs-only commit、user-visible effectゼロのinternal refactor、test-only work、CI/tooling-only work、comments/formatting。
+
+**Required release contract:** user-impacting Production releaseをCLOSEDとする前に、(1) update-history entryが必要か判定し、(2) 必要ならentryを追加/更新し、(3) entryがvalidでvisible/consumableかverifyし、(4) update-history verificationをrelease resultへ記録する。
+
+**Infra missing condition:** 次のuser-impacting Production deployを準備する時点でhistory JSON/UIが未存在なら、historyをoptional扱い停止する。そのrelease planは、A. minimum update-history JSON/UI infrastructureを先に確立する、またはB. infrastructureをreleaseへ同梱し、CLOSED宣言前にvalidity/visibilityをverifyする。`history will be added later` でuser-visible changeを黙示的にdeployしない。
+
+**Guardrails:** docs task itself does not create or deploy the infrastructure. This rule does not turn every internal commit into a public entry. It does turn every relevant user-impacting Production release into an explicit history decision.
+
+**Acceptance:** release resultにentryの有無、path、title/date/detail、UI表示/消費確認、例外理由（該当する場合）が記録される。
+
+### F. Update-history JSON/data contract
+
+**Intent:** シンプルで公開可能なchange logを維持し、analytics databaseや過度なschemaへ膨らませない。
+
+**Decision:** exact filename/pathはimplementation前のrepo inspectionで決定する。TateSpun専用historyとして、general SpunTales historyと分離する。
+
+**Minimum semantic fields:** `date`、`title`、`detail`。Optional field: `type`（例: `feature`、`fix`、`improvement`、`notice`）。Concept example:
+
+```json
+{
+  "date": "26/09/21",
+  "title": "音読βを追加しました",
+  "detail": "選択範囲・段落・全文の読み上げに対応しました。",
+  "type": "feature"
+}
+```
+
+**Guardrails:** date/title/detailの公開意味を壊す過度なmetadataを必須にしない。manuscript text、user data、analytics identifierをhistoryへ混入させない。JSONはpublic change logであり、analytics databaseではない。
+
+**Acceptance:** implementation Loopでpath/schemaを確定し、date/title/detailがUIとrelease resultの両方で消費できることを確認する。
+
+### G. Update-history UI contract
+
+**Intent:** トップページから更新内容を発見できるようにしつつ、常時表示領域を奪わない。
+
+**Detailed contract:** collapsed stateはsingle-line accordion triggerで、canonical labelは `▼ 更新・デバッグ・機能追加のお知らせ履歴`。expanded stateはcard/box presentationとし、visible viewportに約5 entriesを表示、内部でvertical scrollする。visual scrollbarは避けられる場合、conventional barを表示しない。
+
+**Interaction contract:** visibleな `▲` / `▼` controlsを用意する。ただし、▲▼をscrollの唯一の方法にしない。mouse wheel、trackpad、touch swipe、keyboard scrollingをnatural inputとして保持する。controlsはkeyboard-operableでidentifiableにする。
+
+**Guardrails:** visually cleanだがkeyboardやassistive technologyから操作できないcustom scroll trapを作らない。accordionの開閉state、entry focus、internal scrollのkeyboard accessをHuman確認する。
+
+**Acceptance:** collapsed一行、expanded約5行、internal scroll、▲▼、wheel/trackpad/touch/keyboard inputをProduction Human QAで確認する。
+
+### H. Product Policy relationship
+
+**Intent:** Product Owner Driven Feature Policyと、利用者にとって理解可能なUIを両立させるstage policyを明示する。
+
+**Decision:** TateSpunは開発者自身の実執筆に使うため、β期間中に実使用上の必要からfeatureを追加し得る。しかし、feature freedomはUI accumulation without structureを意味しない。
+
+**Detailed contract:** Review Hub、optional/default-OFF tools、progressive disclosure、feedback questions、update historyは、`developer-driven evolution` と `user comprehensibility` を両立させるための構造として扱う。新機能をRoadmapへ追加する際は、既存の安定化Loopを阻害しない独立Loop、System QA/Human Gate、IA/UI density reviewを同時に記録する。
+
+**Change condition:** β feedbackで使いづらさ、発見可能性の低下、mobile densityの問題が確認された場合は、featureの存続とは別にUI/IAを再整理する。βで不要と判断された実験はv1.0へ自動継承しない。
+
+### I. Priority / non-blocking rule
+
+**Intent:** 欲しい機能をRoadmapへ登録することと、Formal Public Beta blockerであることを分離する。
+
+**Decision:** Beta blockersはSafety、essential export journey、essential mobile usability、合意済みPublic Beta Gatesに集中させる。以下をcanonical stage dispositionとして固定する。
+
+- **音読β:** `beta-period planned / not a Public Beta blocker`。
+- **描写・修飾チェックβ:** `beta-period planned / not a Public Beta blocker`。
+- **Review Hub:** `beta-period early target / not necessarily a Public Beta blocker`。
+- **傍点:** `beta candidate / not a Public Beta blocker`。
+- **VOICEVOX:** `future research / need-based`。
+- **Advanced submission tools:** `v1.0/future / not a β blocker set`。
+- **Top Page Product Policy Copy:** `BETA PUBLICATION REQUIREMENT / NOT IMPLEMENTED`。
+- **TateSpun Update History infrastructure:** `BETA PUBLICATION REQUIREMENT / NOT IMPLEMENTED`。ただし、即時release operation ruleは**NOW active**。
+
+**Guardrails:** この節はUX v3 Loop 2/3、5-minute UX Gate、7-day unattended Gate、Safety OPEN itemsの既存priorityを下げない。新規authoring featureを「β公開前必須」へ勝手に昇格させない。
+
+### J. Preserved roadmap truth
+
+This stage registration does not reopen or rewrite unrelated canonical state. The current authoritative states remain:
+
+- UX v3 Loop 1: `CLOSED / PRODUCTION PASS` — unchanged.
+- UX v3 Loop 2: `HUMAN_GATE / NOT DEPLOYED` — unchanged; this section does not authorize deployment.
+- UX v3 Loop 3: `NOT STARTED` — unchanged.
+- FQ-04〜09: `CLOSED / PRODUCTION PASS` — unchanged.
+- FRIEND QA: `ACTIVE` — unchanged.
+- PUBLIC BETA: `NOT YET` — unchanged.
+- 72h cloud-image audit: `OPEN` — unchanged.
+- legacy manuscript-loss investigation: `OPEN` — unchanged.
+- held migration `47d66df`: `UNMERGED` — unchanged.
+- DB/Auth/Supabase/env/migration changes from this docs task: **NO**.
+
+**NEXT:** Continue the existing UX v3 Loop 2 Human Gate. Implement none of the new stage items from this docs task. Any future user-impacting Production release must obey the immediate TateSpun update-history rule in §37-E. **STOP**
