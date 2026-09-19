@@ -18,6 +18,7 @@ export default defineConfig({
       "src/lib/helpNotationActions.test.ts",
       "src/lib/paperPresets.test.ts",
       "src/lib/postBlockerUx.test.ts",
+      "src/lib/updateHistory.test.ts",
       "src/lib/previewPageVirtualization.test.ts",
       "src/lib/turnstile.test.ts",
       "src/lib/rcUiInformationArchitecture.test.ts",

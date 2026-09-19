@@ -74,6 +74,8 @@ import ExportProgressModal from "./ExportProgressModal";
 import PdfExportChecklistGate from "./PdfExportChecklistGate";
 import PdfModeOption, { PDF_MODE_OPTIONS } from "./PdfModeOption";
 import { toggleHelp } from "./pdfModeHelp";
+import OddPageExportWarning from "./OddPageExportWarning";
+import { shouldWarnOddPageExport } from "./oddPageWarningRule";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
@@ -114,6 +116,17 @@ import {
 
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
+
+/**
+ * PDF書き出しボタン押下時点で確定した、実際に書き出す対象。奇数ページ確認
+ * ダイアログを挟む間もこの値を凍結して保持し、`runPdfExport` はこれを1回
+ * だけ再開する（scope/filename/奥付込みの計算をやり直さない）。
+ */
+type PendingPdfExport = {
+  indices: number[];
+  pdfFileName: string;
+  includeColophonInPdf: boolean;
+};
 
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
@@ -1566,11 +1579,21 @@ function PreviewPane({
   // セッションを開くたびに今日の日付でリセットする——同一モーダルを
   // 開いたままの対象/出力ラジオ変更ではリセットしない（TSP-PDF-SAFE-FILENAME-014 I）。
   const [pdfFilenameStem, setPdfFilenameStem] = useState(() => buildDefaultPdfFilenameStem());
+  // 奇数ページ書き出し確認 (TSP-UX-V3-LOOP2-ODD-PAGE-012): window.confirm を
+  // やめ、「?」helpと同じ ViewportModal パターンで警告する。indices /
+  // pdfFileName / includeColophonInPdf はボタン押下時点の値を凍結して保持し
+  // ——「このままPDFを書き出す」は必ずこの同じ pending を1回だけ再開する
+  // （リトライで再計算せず、二重生成にもならない）。
+  const [oddPageWarning, setOddPageWarning] = useState<{
+    totalPages: number;
+    pending: PendingPdfExport;
+  } | null>(null);
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
     setPdfFilenameStem(buildDefaultPdfFilenameStem());
     setOpenPdfModeHelp(null);
+    setOddPageWarning(null);
     setIsPdfModalOpen(true);
   };
 
@@ -1579,6 +1602,17 @@ function PreviewPane({
     setOpenPdfModeHelp(null);
     return true;
   }, [openPdfModeHelp]);
+
+  const handleOddPageWarningReturn = () => {
+    setOddPageWarning(null);
+  };
+
+  const handleOddPageWarningContinue = () => {
+    if (!oddPageWarning) return;
+    const { pending } = oddPageWarning;
+    setOddPageWarning(null);
+    void runPdfExport(pending);
+  };
 
   const performDownloadPdf = async () => {
     if (exportBlockedByUnresolvedImages()) return;
@@ -1590,24 +1624,25 @@ function PreviewPane({
       alert("書き出すページを選択してください。");
       return;
     }
-    if (pdfScope === "all") {
-      // この警告は本全体（製本対象）の総ページ数の奇数/偶数を指す——選択ページ
-      // だけを出力する場合は本全体の製本可否とは無関係になるため出さない。
-      // 奥付ページ（ON のとき）も物理的な1枚なので総数へ含める。
-      const totalPages = pages.length + (showColophon ? 1 : 0);
-      if (totalPages % 2 !== 0) {
-        const isConfirmed = window.confirm(
-          `最終ページが奇数（全 ${totalPages} ページ）ですが大丈夫ですか？\n※冊子印刷では白ページの挿入が必要になる場合があります。`
-        );
-        if (!isConfirmed) {
-          return; // 処理中断
-        }
-      }
-    }
     // 全ページPDF: 奥付 ON なら含める。
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
       showColophon && (pdfScope === "all" || pdfIncludeColophon);
+    const pending: PendingPdfExport = { indices, pdfFileName, includeColophonInPdf };
+    const oddPageCheck = shouldWarnOddPageExport({
+      scope: pdfScope,
+      bodyPageCount: pages.length,
+      includeColophon: includeColophonInPdf,
+    });
+    if (oddPageCheck) {
+      setOddPageWarning({ totalPages: oddPageCheck.totalPages, pending });
+      return; // PDF未生成のままユーザーの選択を待つ（runPdfExportがpendingを再開する）
+    }
+    await runPdfExport(pending);
+  };
+
+  const runPdfExport = async (pending: PendingPdfExport) => {
+    const { indices, pdfFileName, includeColophonInPdf } = pending;
     if (useV2Engine) {
       let signal: AbortSignal | null = null;
       try {
@@ -2710,6 +2745,14 @@ function PreviewPane({
           onAttemptChange={setPdfChecklistAttempt}
           onCancel={() => setPdfChecklistAttempt(null)}
           onConfirm={confirmPdfChecklistAndDownload}
+        />
+      )}
+
+      {oddPageWarning && (
+        <OddPageExportWarning
+          totalPages={oddPageWarning.totalPages}
+          onReturn={handleOddPageWarningReturn}
+          onContinue={handleOddPageWarningContinue}
         />
       )}
 
