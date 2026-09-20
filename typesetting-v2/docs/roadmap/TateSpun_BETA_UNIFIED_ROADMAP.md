@@ -1105,7 +1105,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### A2. UX v3 Loop 3 — Mobile Shared Export
 
 - **Intent:** mobileで本文編集中でもPreview編集中でも、書き出し導線を見つけられるようにする。Previewを強制的に経由させない。
-- **Status (updated 2026-09-20): `IMPLEMENTED / SYSTEM QA PASS / HUMAN_GATE — NOT DEPLOYED`.** feature branch `claude/tsp-resume-after-loop2` の Loop 3 checkpoint。実装・System QA の証跡は §39。Human QA（実 device での 本文→export / Preview→export / keyboard 表示中・非表示中、FQ-04 の keyboard open/close recovery）は未実施で、**Human QA が済むまで PRODUCTION PASS / CLOSED とは扱わない**。
+- **Status (updated 2026-09-20): `IMPLEMENTED / SYSTEM QA PASS / HUMAN QA PASS / RELEASE READY — NOT DEPLOYED`.** feature branch `claude/tsp-resume-after-loop2` の Loop 3 checkpoint（`bcde1d4`）。Human QA は PASS（desktop Chrome DevTools のデバイス表示で実施。項目は §39）。**Physical smartphone のソフトウェアキーボードを開いた状態で「書き出し ▾」が残ることの人間による観察 = NOT TESTED**（DevTools では物理ソフトウェアキーボードを再現できないため）。代わりに **Automated real-browser keyboard/compact regression = PASS**（390px 実ブラウザで keyboard-compact レイアウト中も書き出しへ到達でき、nav 高さの回帰なし）。この未観察項目は release blocker ではないと Human が判断した。まだ production に出ていないため PRODUCTION PASS / CLOSED とは扱わない。
 - **Decision / stage (履歴: 2026-09-18 時点は `NOT STARTED`):** **β公開前必須**として扱う。本文/プレビューの双方からexportへ到達できる共有導線を設計する。
 - **Detailed contract:** mobile Editorの本文表示中とPreview表示中の双方で、書き出し操作を発見・実行できる。Preview未訪問でもPDF/JPG exportを開始できる。既存のFQ-04 keyboard-active viewport/shell behaviorを保持し、keyboard表示時のeditor visible areaを回帰させない。
 - **Guardrails:** Preview訪問を必須のstate transitionにしない。mobile keyboard compact CSS、Focus Mode、既存のexport selection/output contractを変更しない。
@@ -1425,7 +1425,7 @@ FQ-04〜09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET
 
 ## 39. UX v3 Loop 3 — Mobile Shared Export: implementation checkpoint (2026-09-20)
 
-**Status: `IMPLEMENTED / SYSTEM QA PASS / HUMAN_GATE — NOT DEPLOYED`.** Branch `claude/tsp-resume-after-loop2` (base = production `2fcb77a` + the §38 closeout commit). **PRODUCTION PASS / CLOSED is NOT claimed:** Human QA is required (A2 acceptance), and there is no push, deploy or master merge. DB/Auth/Supabase/env/migration mutation: **NO**. Held migration `47d66df`: **UNMERGED**.
+**Status (updated after Human QA): `IMPLEMENTED / SYSTEM QA PASS / HUMAN QA PASS / RELEASE READY — NOT DEPLOYED`.** Branch `claude/tsp-resume-after-loop2` (base = production `2fcb77a` + the §38 closeout commit). **PRODUCTION PASS / CLOSED is NOT claimed:** it has not been released yet. (Checkpoint status at commit `bcde1d4` was `HUMAN_GATE`.) DB/Auth/Supabase/env/migration mutation: **NO**. Held migration `47d66df`: **UNMERGED**.
 
 ### Root cause / previous limitation
 
@@ -1453,10 +1453,17 @@ The export UI (書き出し ▾, PDF setup, odd-page warning, progress) lives in
 - Regressions: `production-odd-page` E2E PASS (dev and static build); `editorInputIntegrity` PASS. `editorSessionActivity` FAILS at an early "現在の原稿文字数" snapshot both here and on the untouched `2fcb77a` baseline (pre-existing, unrelated; out of scope).
 - Test side effects: the full `preIntegrationUx` run rewrites the tracked QA artifact `typesetting-v2/qa/publication/p3-o08/typography-parity-final-human-recheck-v2.pdf`; it was restored and is not part of the checkpoint.
 
+### Human QA — PASS (2026-09-20, desktop Chrome DevTools device emulation)
+
+Confirmed by the Human: 390px Editor view exports without switching to the Preview; the phone export sheet; PDF setup; odd-page warning; Return / Continue; **exactly one PDF** generated; JPG is a normal full image (not tiny/corrupt); Focus Mode; the Preview's own existing export; the desktop existing export; 320px nav and modal operation; the Home Update History shows the Loop 3 and Loop 2 entries.
+
+- **Physical smartphone, software keyboard open: NOT TESTED.** "The 書き出し ▾ entry remains while the on-screen keyboard is open" was not observed by a human because DevTools emulation cannot reproduce a physical software keyboard.
+- **Automated real-browser keyboard/compact regression: PASS.** At 390×844 in a real browser with the FQ-04 `data-keyboard-active` compact layout engaged, the export entry stays reachable, the compact layout is maintained, and the nav height does not regress (82px). The Human judged the un-observed item **not a release blocker**; FQ-04's keyboard open/close recovery therefore rests on this automated evidence plus FQ-04's own prior Production Human PASS (§27), and remains a candidate for opportunistic real-device observation.
+
 ### Open items / observations (not changed here)
 
-- **Human QA (A2 acceptance) is pending:** real-device 本文→export and Preview→export, keyboard open/closed, and FQ-04 open/close recovery.
+- **Human QA (A2 acceptance): PASS** (see above). Still un-observed by a human: physical-smartphone software-keyboard-open (NOT TESTED; automated keyboard/compact regression PASS).
 - Pre-existing V2 latent race (unrelated to this loop): exporting JPG within ~100ms of switching the Preview to visible can alert "V2 JPG export could not resolve the selected canonical pages." (apparently the page plan rebuilding when the Preview becomes visible; a 1.5s settle in the E2E removes it). Not reachable at human interaction speed; recorded for awareness.
 - At 320×568 the manuscript area is only ~37px tall in the Demo **before and after** this change (measured identical); FQ-04's keyboard-compact rule addresses typing, and Loop 3 adds no vertical space.
 
-**NEXT:** Human QA for Loop 3 (checklist in the checkpoint report). Do not push, deploy or merge until it passes. **STOP**
+**NEXT:** Production release of Loop 3 (explicit release worktree from `origin/master`, no local master), then production smoke and the closeout section. **STOP**
