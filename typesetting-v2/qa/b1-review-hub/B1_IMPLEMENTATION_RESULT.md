@@ -1,6 +1,6 @@
 # B1 Review Hub / 見直し — implementation result (2026-09-21)
 
-**Status: `HUMAN_GATE` — IMPLEMENTED LOCALLY, NOT RELEASED, NOT FIX.** Nothing here is Production PASS. FIX requires the Human QA in `B1_HUMAN_QA_TEMPLATE.md`. No deploy, push or merge was done; A4 soak (Frozen RC `9b3c228` / `d58a371b`, `origin/master` `6dc820e`) is untouched.
+**Status (updated 2026-09-21, after Human QA): `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`.** Human QA: all B1 functions PASS; one responsive observation at ~770px was investigated (§8) — part of it was a B1 regression and is fixed, the rest is a pre-existing header-density item recorded separately (`OBSERVATION_770PX_HEADER_DENSITY.md`). Not pushed, not deployed, not merged, not Production PASS. The original checkpoint text below is kept as written; where §8 changes a fact, §8 wins. A4 soak (Frozen RC `9b3c228` / `d58a371b`, `origin/master` `6dc820e`) is untouched.
 
 | | |
 |---|---|
@@ -31,7 +31,7 @@ New: `src/lib/reviewHub.ts` (pure model + tool registry), `src/lib/writingCheckS
 
 ## 3. Exact user-visible behaviour
 
-1. Every normal Editor state shows a small `▶ 見直し` button at the footer: in the right cluster of the status row (left of the character-count pill) and, on a phone with the one-line footer, just before `▲`. **The top toolbar is still exactly 設定・オプション・メモ・ヘルプ.**
+1. Every normal Editor state shows a small `▶ 見直し` button at the footer: on desktop at the right end of the one-line 入力記法 hint row above the counters (moved there by the §8 FIX; it originally sat left of the character-count pill) and, on a phone with the one-line footer, just before `▲`. **The top toolbar is still exactly 設定・オプション・メモ・ヘルプ.**
 2. Tapping it opens a compact panel **upward from the footer** (arrow turns up, `aria-expanded=true`). Heading `見直し`, a `✕`, then two tools:
    - **文章チェックβ** — `文章チェックβを使う` checkbox (same on/off as the footer's checkbox); when on: the candidate summary in the bar's wording (`事故確認 N件 ／ 確認推奨 M件` / `確認候補なし`), `確認候補を見る` (only when there are candidates → opens the bar's existing result list) and `⚙ 設定` (opens the existing settings dialog).
    - **文字数カウント** — `現在の原稿文字数 12,843文字`, the same value as the footer pill (updates live).
@@ -77,7 +77,37 @@ The E2E asserts (real DOM/computed style/real input): top toolbar = 4 items, no 
 - **D4** Other already-shipped tools that *might* belong in the Hub — **not added**: 作業カウンター (`WorkSessionTracker`), 完成前マイチェックリスト (Options drawer), 検索・置換 (action row), the 入力記法 help line. Which, if any, move in B1?
 - **D5** Copy: `文章チェックβを使う`, `確認候補を見る`, `現在の原稿文字数`; the tool one-liners; the explanatory lead sentence was deliberately dropped for density.
 - **D6** 文章チェックβ stays **default ON** (existing behaviour). B1 does not change it; the roadmap's "optional/default-OFF where appropriate" is not applied to an already-shipped default.
-- **D7** Trigger position: status row right cluster (left of the count pill) / one-line footer before `▲`.
+- **D7** Trigger position: desktop = right end of the 入力記法 hint row (after the §8 FIX; originally left of the count pill, which wrapped the controls row at 768–~905px) / one-line footer before `▲`.
 
 ## 7. Soak compliance
 No product deploy, no push, no master merge, no Update History change, no DB/Auth/Supabase/env/migration change (the local dev server used a dummy `NEXT_PUBLIC_SUPABASE_URL`, never a real project), `47d66df` untouched, Frozen RC / release worktrees untouched.
+
+## 8. FIX pass — the ~770px header-density observation (2026-09-21)
+
+**Human QA feedback:** all B1 functions PASS; one observation — around 770px the large Editor header feels dominant and compresses the Editor/Preview workspace (Review Hub not clipped, top toolbar correct).
+
+**Question:** pre-existing on base `6dc820e`, or introduced/worsened by B1? Method: the same probe (real DOM rects via CDP, disposable Chrome profile, `mobile:false` ≥ 768px, no persisted state) against base `6dc820e` (its own worktree, dev server :3102) and B1 (dev server :3001), same viewports.
+
+### Result: **SPLIT — the header is PRE-EXISTING; a footer line at 768–~905px was a B1 REGRESSION**
+
+| @770×720 | base `6dc820e` | B1 `505a337` (before fix) | B1 after fix |
+|---|---|---|---|
+| App-shell header | 146px | 146px | 146px |
+| Editor pane header | 166px | 166px | 166px |
+| Footer block (writing-check bar + status rows) | 125.5px | **152.1px (+26.6)** | 125.5px |
+| Manuscript textarea | 152.5px | **125.9px (−26.6, −17%)** | 152.5px |
+| Footer controls row | 1 line (19px) | **2 lines (45px)** | 1 line (19px) |
+
+- Header/pane-header heights are identical on base and B1 → that "dominant header" is **pre-existing**, recorded separately in `OBSERVATION_770PX_HEADER_DENSITY.md`. B1 did not touch it and no header change was made.
+- **Cause of the B1 part:** in the 768–900px split the Editor column is ~335–400px wide, so the footer controls row (作業カウンター 152px + gap 12 + `現在の原稿文字数 N文字` pill 135px = 299px) had 303px at 770px — it fit by 4px. B1 added the 66px `▶ 見直し` trigger to that row (371px needed) so it wrapped: one extra footer line, taken from the manuscript. Affected range: ~768 to ~905px wide; ≥ 1000px only +1.9px (trigger 21px vs pill 19px), which the fix also removes.
+- Sweep after the fix (base vs B1, textarea / footer block): 768 152.5/125.5 = 152.5/125.5; 770×900 332.5 = 332.5; 770×600 32.5 = 32.5; 800 205.9/112.2 vs 205.9/112.1; 850 same; 900 239.9/112.2 vs 239.9/112.1; 1000 same; 1280 279.9/112.2 vs 279.9/112.1. No horizontal scroll at any width.
+
+### Smallest B1-only correction
+Only the **desktop** (md+) trigger moved: from the right cluster of the controls row to the row above it — the existing one-line, already-truncating 入力記法 hint row (`EditorPane.tsx`: `<div class="flex min-w-0 items-center gap-2">` around the untouched `data-ruby-tcy-status` hint + trigger, right-aligned). The hint keeps `min-w-0 flex-1` so it alone gives up width (its full text stays in its `title`/dialog). `ReviewHubTrigger` gained an optional `flush` prop (`py-px`) so the button fits the ~20px hint row without growing it. The controls row is byte-for-byte its pre-B1 content again. The mobile one-line footer trigger, the panel, behaviour, focus handling, the pill text/`title` (pinned by existing tests) and the top toolbar are unchanged. No header/toolbar/shell change; no new dependency; no storage.
+
+**Visible delta for the Human (not a behaviour change):** on desktop the `▶ 見直し` button is now at the right end of the hint line above the counters instead of immediately left of the character pill. This is decision **D7**; please glance at it once. If preferred, the alternative that keeps the old position is to shorten the pill, which would touch a pinned existing element and is deliberately not done here.
+
+### Tests
+- `reviewHub.test.tsx` **37/37** (+1: the trigger must be in the hint row, not the controls row; `flush` trims vertical padding only). `src/components` **121/121**, `src/hooks` **22/22**, `src/lib` **372 pass + 1 known baseline failure** (`exportCancellation` "topmost Escape", pre-existing, identical on base). `tsc --noEmit` exit 0; ESLint 0 errors (the same 1 pre-existing warning).
+- Real-browser `reviewHub.e2e.mjs` extended with **770×720 and 900×720** (full phase-1 contract) and a new assertion for desktop widths: controls row ≤ 26px (one line; the regression measured 45px), trigger above the controls row, trigger no taller than the hint row. **PASS**: 320, 375, 390, 430, 770, 900, 768×1024, 1280; collapsed one-line footer 320/375/390/430; 集中モード 1280 + 390.
+- Existing `mobileSharedExport.e2e.mjs` PASS (9 downloads). Existing `editorSessionActivity.e2e.mjs` **fails identically on base `6dc820e` and on B1** under this local setup (`notStrictEqual` on the counter text, "現在の原稿文字数 0文字" both sides) — pre-existing/environmental, not caused by B1 or this fix, not investigated further here.

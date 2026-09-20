@@ -400,6 +400,20 @@ describe("B1 narrow-footer overflow contract (source; pixel proof is the real-br
     expect(pane.match(/text-ink\/25 max-\[359px\]:hidden">｜/g)).toHaveLength(2);
   });
 
+  it("the desktop trigger shares the syntax-hint row, NOT the controls row (770px density: no extra footer line)", () => {
+    // Controls row = 作業カウンター + 現在の原稿文字数 only. A third item there wrapped in the ~335px split-screen Editor column.
+    const controlsRow = paneBetween("data-editor-footer-controls", "<ReviewHubPanel");
+    expect(controlsRow).not.toContain("<ReviewHubTrigger");
+    const hintRow = paneBetween('data-editor-status-surfaces=""', "data-editor-footer-controls");
+    expect(hintRow).toContain("<ReviewHubTrigger");
+    expect(hintRow).toContain("<EditorSyntaxHelp />");
+    expect(hintRow).toContain("flush");
+    // the hint keeps the shrinking role (min-w-0 flex-1) so the trigger never forces the row wider
+    expect(hintRow).toContain('data-ruby-tcy-status="" className="min-w-0 flex-1"');
+    // "flush" trims only vertical padding so the ~20px hint row does not grow
+    expect(hubView).toContain('flush ? "py-px" : "py-0.5"');
+  });
+
   it("the expanded footer row still wraps instead of overflowing", () => {
     expect(paneBetween('data-editor-footer-controls', "<WorkSessionTracker")).toContain("flex-wrap");
     expect(paneBetween('data-editor-footer=""', "{/* TSP-RC-LATIN")).toContain("min-w-0");

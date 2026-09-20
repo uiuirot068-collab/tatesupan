@@ -27,10 +27,12 @@ interface ReviewHubTriggerProps {
   onToggle: () => void;
   /** One-line mobile footer: tighter padding, never allowed to shrink. */
   compact?: boolean;
+  /** Desktop status row: shares a ~20px line with the syntax hint, so it takes only a hairline of vertical padding. */
+  flush?: boolean;
 }
 
 /** The persistent footer control. A real button; the panel it controls opens upward. */
-export function ReviewHubTrigger({ open, onToggle, compact = false }: ReviewHubTriggerProps) {
+export function ReviewHubTrigger({ open, onToggle, compact = false, flush = false }: ReviewHubTriggerProps) {
   return (
     <button
       type="button"
@@ -40,7 +42,7 @@ export function ReviewHubTrigger({ open, onToggle, compact = false }: ReviewHubT
       onClick={onToggle}
       className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-ink/20 ${
         compact ? "gap-0 px-1" : "gap-1 px-2"
-      } py-0.5 text-[11px] font-semibold text-ink/70 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+      } ${flush ? "py-px" : "py-0.5"} text-[11px] font-semibold text-ink/70 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
     >
       <span aria-hidden="true" className={`inline-block transition-transform ${open ? "-rotate-90" : ""}`}>
         ▶

@@ -973,7 +973,7 @@ No other candidates were found in the excerpt (okurigana forms like `生れ付�
 
 ### Addendum A — Review Hub / 見直し
 
-- **Status:** ~~`PLANNED / NOT IMPLEMENTED`~~ → first slice (B1) `HUMAN_GATE / IMPLEMENTED — NOT RELEASED` on a local branch (2026-09-21, see B1); the future-tool items below (`描写語・修飾表現チェックβ`, `音読β`) remain `PLANNED / NOT IMPLEMENTED` and are not exposed.
+- **Status:** ~~`PLANNED / NOT IMPLEMENTED`~~ → first slice (B1) `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED` on a local branch (2026-09-21, see B1); the future-tool items below (`描写語・修飾表現チェックβ`, `音読β`) remain `PLANNED / NOT IMPLEMENTED` and are not exposed.
 - **Canonical UX direction:** top menuの `設定・オプション・メモ・ヘルプ` の4項目は維持し、新しい上部メニュー項目は追加しない。エディターフッターには常時 `▶ 見直し` を配置する構想とし、押下時にはフッターから上方向へReview Hubを展開する。
 - **Consolidation target:** 既存の `文章チェックβ`、既存の `文字数カウント`、新規の `描写語・修飾表現チェックβ`、新規の `音読β / リズム確認`、および将来の文章確認・推敲補助機能をReview Hubへ統合する構想。
 - **Role:** Review Hubは「機能追加によってEditor UIを肥大化させないための収納・整理レイヤー」として扱う。新しい常時表示メニューや機能の無秩序な追加を許可するものではない。
@@ -1162,7 +1162,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B1. Review Hub / 見直し
 
 - **Intent:** すでに密度の高いEditor UIを、機能追加のたびに肥大化させない。文章確認・推敲補助を一つの整理された収納レイヤーへ集約する。
-- **Status (updated 2026-09-21): `HUMAN_GATE / IMPLEMENTED — NOT RELEASED, NOT FIX`.** Implemented on the local branch `feat/tsp-b1-review-hub-20260921` (base `6dc820e`); not pushed, not deployed, not merged; Update History not changed; Production PASS not claimed. Scope of this B1: `▶ 見直し` in the Editor footer opening an upward panel with only the tools that already exist (`文章チェックβ`, `文字数カウント`), reusing their existing state/actions; top toolbar unchanged; no B2–B6 behaviour. Automated evidence and open Human decisions: `typesetting-v2/qa/b1-review-hub/` (`B1_IMPLEMENTATION_RESULT.md`, `B1_HUMAN_QA_TEMPLATE.md`, `B1_RELEASE_NOTES_DRAFT.md`). FIX requires the returned Human QA.
+- **Status (updated 2026-09-21, after Human QA): `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`.** Human QA: all B1 functions PASS. One ~770px observation was investigated: the header density is pre-existing (recorded separately in `typesetting-v2/qa/b1-review-hub/OBSERVATION_770PX_HEADER_DENSITY.md`, not part of B1), but a footer line B1 added at 768–~905px was a B1 regression and is fixed (trigger moved to the hint row; `B1_IMPLEMENTATION_RESULT.md` §8). Not pushed / deployed / merged; Production PASS not claimed. Earlier checkpoint text follows: implemented on the local branch `feat/tsp-b1-review-hub-20260921` (base `6dc820e`); not pushed, not deployed, not merged; Update History not changed; Production PASS not claimed. Scope of this B1: `▶ 見直し` in the Editor footer opening an upward panel with only the tools that already exist (`文章チェックβ`, `文字数カウント`), reusing their existing state/actions; top toolbar unchanged; no B2–B6 behaviour. Automated evidence and open Human decisions: `typesetting-v2/qa/b1-review-hub/` (`B1_IMPLEMENTATION_RESULT.md`, `B1_HUMAN_QA_TEMPLATE.md`, `B1_RELEASE_NOTES_DRAFT.md`). The Human QA has been returned (PASS).
 - **Decision / stage:** ~~`PLANNED / NOT STARTED`~~ (see Status above)。β公開期間中のearly target。Review Hubは別機能ではなく、機能の収納・整理・発見可能性を扱うIA layerとして扱う。
 - **Detailed contract:** top toolbarの `設定・オプション・メモ・ヘルプ` の4項目を維持し、Review Hubを第五の常時top-menu itemにしない。Editor footerに常時 `▶ 見直し` を置き、押下時にfooterから上方向へpanelを展開する。既存の `文章チェックβ`、`文字数カウント`、`描写語・修飾表現チェックβ`、`音読β`、将来の文章確認・推敲補助機能を統合対象とする。
 - **Guardrails:** Review Hubを「機能を無制限に増やす許可」と解釈しない。optional/default-OFF、progressive disclosure、mobile/desktopのUI密度、初見ユーザーの負荷を各実装で確認する。

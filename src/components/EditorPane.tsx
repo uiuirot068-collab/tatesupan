@@ -951,7 +951,15 @@ function EditorPaneInner(
         data-editor-status-surfaces=""
         className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}`}
       >
-        <div data-ruby-tcy-status=""><EditorSyntaxHelp /></div>
+        {/* TSP-B1: the Review Hub trigger shares this already one-line, truncating row rather than the
+            controls row below. In the ~335px Editor column of a 768-900px split screen the controls row
+            (作業カウンター + 現在の原稿文字数) has no spare width, so a third item there wrapped and cost the
+            manuscript a full extra line. Here it only narrows the hint, which already truncates (its full
+            text stays in the title / dialog). */}
+        <div className="flex min-w-0 items-center gap-2">
+          <div data-ruby-tcy-status="" className="min-w-0 flex-1"><EditorSyntaxHelp /></div>
+          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />
+        </div>
         <div
           data-editor-footer-controls
           className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5"
@@ -964,7 +972,6 @@ function EditorPaneInner(
             onEnd={onEndWorkSession}
           />
           <span className="flex shrink-0 items-center gap-1.5">
-            <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} />
             <span
               title="現在の原稿文字数"
               className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"

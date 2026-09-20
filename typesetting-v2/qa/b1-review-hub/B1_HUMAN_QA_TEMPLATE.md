@@ -10,7 +10,7 @@ Fill in `PASS` / `FAIL (what you saw)` / `n/a`.
 | # | Do | Expect | Result |
 |---|---|---|---|
 | A1 | Look at the top row | Still exactly **設定・オプション・メモ・ヘルプ** — no 見直し there | |
-| A2 | Look at the bottom of the Editor | A small `▶ 見直し` button next to the character count | |
+| A2 | Look at the bottom of the Editor | A small `▶ 見直し` button at the right end of the one-line 入力記法 hint row, just above the work counter / character count (after the 770px FIX; it was originally beside the character-count pill) | |
 | A3 | Click it | A small panel opens **upward** from the footer; the arrow turns up; heading 見直し; two tools: 文章チェックβ, 文字数カウント. The manuscript text does not jump | |
 | A4 | Compare 文字数カウント with the footer pill; type a few characters | Same number; follows what you type | |
 | A5 | Toggle 文章チェックβを使う | The footer's own 文章チェックβ checkbox flips with it, and back | |
@@ -44,7 +44,7 @@ Fill in `PASS` / `FAIL (what you saw)` / `n/a`.
 - **D4** Other existing tools that might belong in 見直し (none were added): ☐ 作業カウンター ☐ 完成前マイチェックリスト ☐ 検索・置換 ☐ 入力記法 help ☐ none for B1
 - **D5** Wording (`文章チェックβを使う` / `確認候補を見る` / `現在の原稿文字数`, the two one-line descriptions): ☐ OK ☐ change: ______
 - **D6** 文章チェックβ stays default ON: ☐ OK ☐ change
-- **D7** Trigger position (right of the status row / before ▲ on the one-line footer): ☐ OK ☐ change: ______
+- **D7** Trigger position (desktop: right end of the 入力記法 hint row above the counters, moved by the 770px FIX / one-line footer: before ▲): ☐ OK ☐ change: ______
 - Is the panel modest enough — an organiser, not a dashboard? ☐ yes ☐ no: ______
 - Anything confusing to a first-time user? ______
 
@@ -54,3 +54,15 @@ B1 Review Hub: PASS | PASS with changes (list) | FAIL        Human / date: _____
 Blocking issues (repro, device, browser): ____________________
 ```
 PASS here means "ready to be scheduled into a release train"; it is **not** a release, and Production PASS is a separate step after deploy. The roadmap stays `HUMAN_GATE` until this is returned.
+
+---
+## Returned result (recorded 2026-09-21)
+```
+B1 Review Hub Human QA: PASS — all B1 functions PASS (reported by the human tester).
+Only observation: ~770px, the large Editor header feels dominant and compresses the Editor/Preview workspace.
+  Review Hub not clipped; top toolbar correct; all other checks PASS.
+Follow-up (see B1_IMPLEMENTATION_RESULT.md §8): part B1-induced (footer wrapped at 768–~905px) -> FIXED inside B1;
+  the header itself is PRE-EXISTING -> recorded separately (OBSERVATION_770PX_HEADER_DENSITY.md), not changed.
+Post-QA visual delta to eyeball once (D7): desktop ▶ 見直し now sits at the right end of the 入力記法 hint row, not beside the character pill.
+```
+Not a release and not Production PASS; the roadmap keeps B1 as `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`.

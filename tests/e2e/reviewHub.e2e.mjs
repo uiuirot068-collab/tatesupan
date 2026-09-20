@@ -35,6 +35,12 @@ const PHONES = [
   { name: "390x844", width: 390, height: 844 },
   { name: "430x932", width: 430, height: 932 },
 ];
+// Split-screen desktop widths where the Editor column is only ~335-400px wide. B1 FIX: at these widths the
+// footer's 作業カウンター + 現在の原稿文字数 row has no spare width, so the trigger must not join it.
+const NARROW_DESKTOPS = [
+  { name: "770x720", width: 770, height: 720 },
+  { name: "900x720", width: 900, height: 720 },
+];
 const DESKTOPS = [
   { name: "768x1024", width: 768, height: 1024 },
   { name: "1280x720", width: 1280, height: 720 },
@@ -199,6 +205,17 @@ async function expandedFooterPhase(v) {
   assert.ok(insideViewport(trig), `${tag}: trigger fully on-screen ${JSON.stringify(trig)}`);
   const overflowX = await cdp.evaluate(`({ doc: document.documentElement.scrollWidth - innerWidth, footer: (() => { const f = document.querySelector('[data-editor-footer]'); return f.scrollWidth - f.clientWidth; })() })`);
   assert.ok(overflowX.doc <= 1 && overflowX.footer <= 1, `${tag}: no horizontal overflow with the trigger ${JSON.stringify(overflowX)}`);
+
+  // B1 FIX (770px density): on desktop the footer controls row must stay ONE line -- the trigger sits on the
+  // syntax-hint row above it -- so opening the Hub's footer never costs the manuscript a line of height.
+  if (v.width >= 768) {
+    const rows = await cdp.evaluate(`(() => { const c = document.querySelector('[data-editor-footer-controls]'); const t = ${TRIGGERS}[0];
+      const cr = c.getBoundingClientRect(), tr = t.getBoundingClientRect(); return { controlsH: cr.height, controlsTop: cr.top, triggerBottom: tr.bottom, triggerH: tr.height,
+        hintH: document.querySelector('[data-editor-footer-help]').getBoundingClientRect().height }; })()`);
+    assert.ok(rows.controlsH <= 26, `${tag}: the footer controls row must stay on one line (height ${rows.controlsH}px; a wrapped row is ~45px)`);
+    assert.ok(rows.triggerBottom <= rows.controlsTop + 0.5, `${tag}: the desktop trigger sits on the syntax-hint row, above the controls row`);
+    assert.ok(rows.triggerH <= rows.hintH + 0.5, `${tag}: the trigger must not make the hint row taller (trigger ${rows.triggerH}px, hint ${rows.hintH}px)`);
+  }
 
   const storageBefore = await storageKeys();
   const editorBefore = await rect('[data-demo-target="editor"]');
@@ -389,7 +406,7 @@ async function focusModePhase(v, enterSelector, exitSelector = enterSelector) {
 // --- run ------------------------------------------------------------------------
 try {
   log("phase 1: expanded footer, every viewport");
-  for (const v of [...PHONES, ...DESKTOPS]) await expandedFooterPhase(v);
+  for (const v of [...PHONES, ...NARROW_DESKTOPS, ...DESKTOPS]) await expandedFooterPhase(v);
 
   log("phase 2: mobile one-line footer");
   for (const v of PHONES) await collapsedFooterPhase(v);
@@ -400,7 +417,7 @@ try {
 
   assert.deepEqual(dialogs, [], `unexpected native dialog(s): ${JSON.stringify(dialogs)}`);
   assert.deepEqual(pageErrors, [], `uncaught page error(s): ${JSON.stringify(pageErrors)}`);
-  log(`${NAME}: PASS (${[...PHONES, ...DESKTOPS].map((v) => v.name).join(", ")}; collapsed ${PHONES.map((v) => v.name).join(", ")}; focus mode 1280 + 390)`);
+  log(`${NAME}: PASS (${[...PHONES, ...NARROW_DESKTOPS, ...DESKTOPS].map((v) => v.name).join(", ")}; collapsed ${PHONES.map((v) => v.name).join(", ")}; focus mode 1280 + 390)`);
 } catch (error) {
   process.exitCode = 1;
   console.error(`${NAME}: FAIL -- ${error instanceof Error ? error.message : error}`);
