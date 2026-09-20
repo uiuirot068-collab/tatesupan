@@ -1,7 +1,7 @@
 # TateSpun β Unified Roadmap
 
 - Updated: 2026-09-20
-- **Latest production checkpoint (2026-09-20): `2fcb77a` (`merge: release TateSpun Pack A + UX v3 Loop 2`) — Pack A + UX v3 Loop 2 = PRODUCTION PASS / CLOSED (see §38). Soft β target date superseded: β start is now conditional on Loop 3 production release + A4 Day7 PASS (§38).**
+- **Latest production checkpoint (2026-09-20): `9b3c228` (`merge: release TateSpun UX v3 Loop 3 mobile shared export`) — UX v3 Loop 3 = PRODUCTION PASS / CLOSED (see §40). A4 7-day unattended gate = DAY0 STARTED (2026-09-20). PUBLIC BETA = NOT YET: β start requires A4 Day7 PASS (earliest 2026-09-27) plus the A3/A5 gates. Previous checkpoint `2fcb77a` (Pack A + UX v3 Loop 2, §38). The fixed soft β target date remains withdrawn (§38).**
 - Decision-prep baseline HEAD: `12d8c312727c2b414f811ccb40398b274fe39454` (historical decision baseline retained)
 - Long-document Editor implementation checkpoint: `ca69e6f` (`fix(editor): rebalance joined pages and reveal caret`) — split/join UX Human PASS
 - Announcement Preview checkpoint: `78f7aee` (`fix(preview): keep export menu visible at narrow widths`) — Human PASS
@@ -1064,7 +1064,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 - 実装順・時期はまだ固定しない。
 - UX v3 Loop 1: `CLOSED / PRODUCTION PASS` — unchanged.
 - UX v3 Loop 2: **`PRODUCTION PASS / CLOSED`** (2026-09-20, `2fcb77a`; see §38). *(Registered as `HUMAN_GATE / NOT DEPLOYED` when this section was written on 2026-09-18; that entry did not delay or replace the Human Gate, and the gate has since passed.)*
-- UX v3 Loop 3: `NOT STARTED` — **now the next implementable β公開前 item** (§38).
+- UX v3 Loop 3: **`PRODUCTION PASS / CLOSED`** (2026-09-20, `9b3c228`; see §40). *(Was `NOT STARTED` when this section was written.)*
 - FQ-04〜09: `CLOSED` — unchanged.
 - FRIEND QA: `ACTIVE` — unchanged.
 - PUBLIC BETA: `NOT YET` — unchanged.
@@ -1105,7 +1105,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### A2. UX v3 Loop 3 — Mobile Shared Export
 
 - **Intent:** mobileで本文編集中でもPreview編集中でも、書き出し導線を見つけられるようにする。Previewを強制的に経由させない。
-- **Status (updated 2026-09-20): `IMPLEMENTED / SYSTEM QA PASS / HUMAN QA PASS / RELEASE READY — NOT DEPLOYED`.** feature branch `claude/tsp-resume-after-loop2` の Loop 3 checkpoint（`bcde1d4`）。Human QA は PASS（desktop Chrome DevTools のデバイス表示で実施。項目は §39）。**Physical smartphone のソフトウェアキーボードを開いた状態で「書き出し ▾」が残ることの人間による観察 = NOT TESTED**（DevTools では物理ソフトウェアキーボードを再現できないため）。代わりに **Automated real-browser keyboard/compact regression = PASS**（390px 実ブラウザで keyboard-compact レイアウト中も書き出しへ到達でき、nav 高さの回帰なし）。この未観察項目は release blocker ではないと Human が判断した。まだ production に出ていないため PRODUCTION PASS / CLOSED とは扱わない。
+- **Status (updated 2026-09-20): `PRODUCTION PASS / CLOSED`** — production merge `9b3c228`, Cloudflare deployment `d58a371b-59a7-4e00-a7fe-418bdb22768e`. Human QA PASS; production browser smoke PASS (390px Editor view → 書き出し ▾ → sheet → PDF setup, JPG 1135×1600, Preview never visited). **Physical-smartphone software-keyboard-open observation: NOT TESTED; automated real-browser keyboard/compact regression: PASS** (Human judged it not a blocker). Evidence: §39 / §40. Update History (Loop 2 + Loop 3) is live in production.
 - **Decision / stage (履歴: 2026-09-18 時点は `NOT STARTED`):** **β公開前必須**として扱う。本文/プレビューの双方からexportへ到達できる共有導線を設計する。
 - **Detailed contract:** mobile Editorの本文表示中とPreview表示中の双方で、書き出し操作を発見・実行できる。Preview未訪問でもPDF/JPG exportを開始できる。既存のFQ-04 keyboard-active viewport/shell behaviorを保持し、keyboard表示時のeditor visible areaを回帰させない。
 - **Guardrails:** Preview訪問を必須のstate transitionにしない。mobile keyboard compact CSS、Focus Mode、既存のexport selection/output contractを変更しない。
@@ -1121,6 +1121,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 
 ### A4. 7-day unattended Gate
 
+- **Status (updated 2026-09-20): `DAY0 STARTED`.** Day0 = 2026-09-20 (Loop 3 production release day); Frozen RC = production merge `9b3c228` / deployment `d58a371b`; Day1 = 2026-09-21, Day3 = 2026-09-23, **Day7 = 2026-09-27 (earliest possible Day7 PASS)**。Day7 PASS までβ開始条件は満たされない。**PUBLIC BETA = NOT YET。** 詳細は §40。
 - **Timeline (updated 2026-09-20):** Day0 は **UX v3 Loop 3 の production release** 後の Frozen RC から数える。したがって最短でも **Loop 3 release日 + 7日** より前に Day7 PASS は成立しない。旧 soft β target `2026-09-21 12:00 JST` はこのGateと両立しないため**廃止**した（§38）。
 - **Intent:** 短期のhand testでは検出されにくいautosave、persistence、browser state、cloud state、長時間放置時の不整合を検出する。
 - **Decision / stage:** Formal Public Betaの**β公開前gate**。Frozen RCで実施する。
@@ -1349,7 +1350,7 @@ This stage registration does not reopen or rewrite unrelated canonical state. Th
 
 - UX v3 Loop 1: `CLOSED / PRODUCTION PASS` — unchanged.
 - UX v3 Loop 2: **`PRODUCTION PASS / CLOSED`** (updated 2026-09-20, §38). *(As written on 2026-09-18: `HUMAN_GATE / NOT DEPLOYED`; this section did not authorize deployment — the deployment was separately authorized and completed.)*
-- UX v3 Loop 3: `NOT STARTED` — unchanged; now the next implementable β公開前 item.
+- UX v3 Loop 3: **`PRODUCTION PASS / CLOSED`** (updated 2026-09-20, §40). A4 = `DAY0 STARTED`; PUBLIC BETA = `NOT YET`.
 - FQ-04〜09: `CLOSED / PRODUCTION PASS` — unchanged.
 - FRIEND QA: `ACTIVE` — unchanged.
 - PUBLIC BETA: `NOT YET` — unchanged. **Start condition (updated 2026-09-20, §38): Loop 3 production release + A4 Day7 PASS** (plus the A3 5-minute UX Gate and A5 Safety OPEN items, unchanged). The fixed soft target `2026-09-21 12:00 JST` is withdrawn.
@@ -1406,7 +1407,7 @@ The externally authored post-deploy harness failed several times (wrong history-
 ### Update History (§37-E / A7)
 
 - **Infrastructure:** `IMPLEMENTED / PRODUCTION PASS` (A7).
-- **§37-E decision for this release (updated: the two entries were added on the feature branch in the Loop 3 checkpoint — see §39; still NOT in production until the Loop 3 release):** an entry **is required** for the Loop 2 user-visible change; at the time of this closeout it was **not yet added**. By explicit Human decision on 2026-09-20 there will be **no standalone history-only production release**. The Loop 3 production release will add **two** entries — UX v3 Loop 2 and UX v3 Loop 3. The Loop 2 wording must make clear to users that the PDF-export confirmation changed from a browser `window.confirm` to an explanatory odd-page warning modal. The current JSON has one entry (`26/09/18`, PDF size choices). Until then the §37-E close condition for Loop 2 is carried by the Loop 3 release rather than closed here.
+- **§37-E decision for this release (updated: the two entries were added in the Loop 3 checkpoint and are now **live in production** — see §39 / §40):** an entry **is required** for the Loop 2 user-visible change; at the time of this closeout it was **not yet added**. By explicit Human decision on 2026-09-20 there will be **no standalone history-only production release**. The Loop 3 production release will add **two** entries — UX v3 Loop 2 and UX v3 Loop 3. The Loop 2 wording must make clear to users that the PDF-export confirmation changed from a browser `window.confirm` to an explanatory odd-page warning modal. The current JSON has one entry (`26/09/18`, PDF size choices). Until then the §37-E close condition for Loop 2 is carried by the Loop 3 release rather than closed here.
 
 ### Roadmap-state changes recorded by this closeout
 
@@ -1425,7 +1426,7 @@ FQ-04〜09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET
 
 ## 39. UX v3 Loop 3 — Mobile Shared Export: implementation checkpoint (2026-09-20)
 
-**Status (updated after Human QA): `IMPLEMENTED / SYSTEM QA PASS / HUMAN QA PASS / RELEASE READY — NOT DEPLOYED`.** Branch `claude/tsp-resume-after-loop2` (base = production `2fcb77a` + the §38 closeout commit). **PRODUCTION PASS / CLOSED is NOT claimed:** it has not been released yet. (Checkpoint status at commit `bcde1d4` was `HUMAN_GATE`.) DB/Auth/Supabase/env/migration mutation: **NO**. Held migration `47d66df`: **UNMERGED**.
+**Status (final, updated after the production release): `PRODUCTION PASS / CLOSED` — see §40. (Earlier states: `HUMAN_GATE` at checkpoint `bcde1d4`; `HUMAN QA PASS / RELEASE READY — NOT DEPLOYED` before release.)** Branch `claude/tsp-resume-after-loop2` (base = production `2fcb77a` + the §38 closeout commit). **PRODUCTION PASS / CLOSED is NOT claimed:** it has not been released yet. (Checkpoint status at commit `bcde1d4` was `HUMAN_GATE`.) DB/Auth/Supabase/env/migration mutation: **NO**. Held migration `47d66df`: **UNMERGED**.
 
 ### Root cause / previous limitation
 
@@ -1466,4 +1467,54 @@ Confirmed by the Human: 390px Editor view exports without switching to the Previ
 - Pre-existing V2 latent race (unrelated to this loop): exporting JPG within ~100ms of switching the Preview to visible can alert "V2 JPG export could not resolve the selected canonical pages." (apparently the page plan rebuilding when the Preview becomes visible; a 1.5s settle in the E2E removes it). Not reachable at human interaction speed; recorded for awareness.
 - At 320×568 the manuscript area is only ~37px tall in the Demo **before and after** this change (measured identical); FQ-04's keyboard-compact rule addresses typing, and Loop 3 adds no vertical space.
 
-**NEXT:** Production release of Loop 3 (explicit release worktree from `origin/master`, no local master), then production smoke and the closeout section. **STOP**
+**NEXT:** *(Superseded — released; see §40.)* **STOP**
+
+## 40. UX v3 Loop 3 Production Closeout + A4 Day0 (2026-09-20)
+
+**UX v3 Loop 3 status: PRODUCTION PASS / CLOSED. SYSTEM QA: PASS. HUMAN QA: PASS. PRODUCTION BROWSER SMOKE: PASS.** **A4 7-day unattended gate: DAY0 STARTED. PUBLIC BETA: NOT YET.** Loop 3 (Mobile Shared Export, A2) is released together with the §38-era closeout/test infrastructure, the Loop 3 Human QA record, and the two Update History entries (UX v3 Loop 2 + UX v3 Loop 3).
+
+### Release identifiers
+
+| Item | Value |
+| --- | --- |
+| Production base before release | `2fcb77ad1596c1a74b543e2834ee311cfbea7b82` (§38) |
+| Loop 3 feature checkpoint | `bcde1d42ce2ee4e8e1d2fc463470b7af8a1b3560` (`feat(ux-v3): add mobile shared export access`) |
+| Pre-release docs commit (Human QA record) | `6afcaeccefa3fa5500d490c63a0673c257985286` = feature branch `claude/tsp-resume-after-loop2` HEAD, pushed to `origin` (no force) and verified equal to the local SHA |
+| Release branch | `release-master/tsp-ux-v3-loop3-20260920`, created from `origin/master` in an isolated worktree (local `master` never used) |
+| Production merge (`origin/master`) | `9b3c228108a0c56d041b219e465d27138add2219` (`merge: release TateSpun UX v3 Loop 3 mobile shared export`), `--no-ff`, parents `2fcb77ad…` + `6afcaecc…` |
+| Cloudflare Pages deployment | ID `d58a371b-59a7-4e00-a7fe-418bdb22768e`, preview `https://d58a371b.tatespun.pages.dev`; check run for the exact commit `9b3c228`: completed / success / `Deployed successfully` |
+| Production | `https://spuntales.net/tatespun/` |
+
+**Release diff (vs `2fcb77a`): exactly 16 files** — Loop 3 product code (`PreviewPane.tsx`, `TategakiEditor.tsx`, `MobileEditorNav.tsx`, `exportMenuEntries.ts`, `useMobileSharedExport.ts`, `previewExportStage.ts`), `public/data/tatespun-update-history.json`, tests and explicit-run E2E infrastructure (`mobileSharedExport.test.ts`, `previewExportStage.test.ts`, `updateHistory.test.ts`, `tests/e2e/helpers/{cdp,editorSession}.mjs`, `mobileSharedExport.e2e.mjs`, `productionOddPageWarning.e2e.mjs`), `package.json` (two explicit scripts), and this roadmap. The merge tree is identical to the feature-branch tree, and the product/test/data files are identical to the Human-QA'd checkpoint `bcde1d4`. No DB/Auth/Supabase/migration/env/wrangler/QA-artifact path is in the diff.
+
+### Release gate (re-run on the feature HEAD and again on the production merge tree)
+
+`src/components` 84/84; `src/lib` 372/373; TypeScript PASS; changed-file ESLint = the 3 pre-existing `TategakiEditor.tsx` findings only (identical to `HEAD` before Loop 3, no new finding); `git diff --check` clean; `npm run build:basepath` PASS (Supabase gate: backend ref unchanged, cross-database audit skipped — read-only). **Known out-of-scope items, not release blockers and not touched:** `exportCancellation.test.ts` "topmost Escape" (1, pre-existing since before Loop 1); project-wide ESLint (82 pre-existing errors); the `editorSessionActivity` E2E failure (reproduced on the untouched `2fcb77a` baseline). No new failure was introduced by this change.
+
+**Observation (pre-existing, not a blocker):** the legacy GitHub Actions workflow `Deploy to GitHub Pages` (`build` job) fails on every push — including the previous six releases — because that workflow has no `NEXT_PUBLIC_SUPABASE_URL` and the Supabase project guard rejects it. Production is served by Cloudflare Pages, which passed for the exact commit.
+
+### Human QA — PASS (recorded before release; see §39)
+
+390px Editor view exports without switching to the Preview; mobile export sheet; PDF setup; odd-page warning; Return / Continue; exactly one PDF; JPG is a normal full image; Focus Mode; Preview-side and desktop existing exports; 320px nav/modal; Home Update History shows both entries. **Physical smartphone software-keyboard-open observation: NOT TESTED** (DevTools emulation cannot reproduce it). **Automated real-browser keyboard/compact regression: PASS** (export entry reachable, compact layout maintained, nav height unchanged at 390px). Judged not a release blocker by the Human.
+
+### Production smoke — PASS (2026-09-20, after deploy)
+
+- **HTTP 200:** HOME `/tatespun/`, Editor `/tatespun/editor`, Demo `/tatespun/editor?demo=1`, Guide `/tatespun/guide`, HOW TO `/tatespun/howto`. The HOME HTML on `spuntales.net` is byte-identical to the deployment preview `d58a371b` (production is serving this deployment).
+- **HOME (real Chrome DOM, 1280px):** `DEVELOPMENT POLICY` visible (heading 「TateSpunは、使いながら育てています。」); Support section visible; Update History opened with a real click and its rows read from the DOM: `26/09/20` UX v3 Loop 3 entry, `26/09/20` UX v3 Loop 2 entry, then `26/09/18` — order and text as shipped. **Update History production PASS (2 entries).**
+- **Loop 2 production browser E2E** (`TATESPUN_E2E_BASE_URL=https://spuntales.net/tatespun TATESPUN_E2E_ALLOW_PRODUCTION=1 npm run test:e2e:production-odd-page`, values taken from the script's own usage header): **PASS** — 1 page → warning; 戻って確認する closes only the warning and keeps PDF setup; retry → このままPDFを書き出す = exactly 1 PDF; 2 pages → no warning.
+- **Loop 3 production browser check** (390×844, real Chrome, disposable profile, Demo route only; a repo-external read-only probe, because the repo `mobileSharedExport` E2E also opens the normal `/editor` route and was therefore not pointed at production): Editor view with 本文 active; Preview `display:none`; mobile 書き出し ▾ visible (79×30) and hit-testable inside the viewport; a real pointer tap opens the export sheet inside the viewport (JPG / JPG一括 / JPG ZIP / PDF); PDF setup reachable from the Editor view; **JPG exported from the Editor view = 1135×1600, 108,793 bytes** (not the 2×2px image the pre-Loop-3 code produced) — byte-identical to the local LEGACY Preview-visible export, which also confirms Production runs the LEGACY renderer and the off-screen capture stage works there; afterwards the workspace is still 本文 and the Preview `display:none` again (never visited); no native dialogs. Only client-side actions; no sign-in, no server write.
+
+### A4 — 7-day unattended gate: DAY0 STARTED
+
+- **Day0 = 2026-09-20 (JST)** — the Loop 3 production release day (Cloudflare deploy completed ≈19:40 JST). **Frozen RC = production merge `9b3c228` / deployment `d58a371b`.**
+- Observation days (Human, per §37-A4): **Day1 = 2026-09-21, Day3 = 2026-09-23, Day7 = 2026-09-27.** Day7 = 2026-09-27 is the earliest date a Day7 PASS can exist. The Day0 observation results themselves are recorded by the Human; this entry records only the start and baseline.
+- Soak rules in force: no product deploy, no manual DB/storage repair, no manual data rescue; a material release change, RC replacement, data repair or manual rescue restarts the soak. The docs-only closeout commit that follows this section does not change the product tree (verified against `9b3c228`).
+
+### Status after this closeout
+
+- UX v3 Loop 1 / Loop 2 / **Loop 3** = CLOSED / PRODUCTION PASS. Pack A = PRODUCTION PASS.
+- **PUBLIC BETA = NOT YET.** The beta-start condition is unchanged (§38): Loop 3 production release (done) **+ A4 Day7 PASS**, with the A3 5-minute UX Gate and the A5 Safety OPEN items (72h cloud-image audit; legacy manuscript-loss investigation) still open. **A4 Day7 PASS has not happened, so the beta-start condition is NOT met.**
+- FQ-04〜09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE.
+- Held migration `47d66df`: **UNMERGED** (not an ancestor of the production merge). **DB/Auth/Supabase/env/migration mutation: NO.**
+
+**NEXT:** A4 Day1 observation (2026-09-21, Human); prepare the A3 5-minute UX Gate and the A5 decisions. No product deploy during the soak. **STOP**
