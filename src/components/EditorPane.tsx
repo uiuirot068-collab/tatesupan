@@ -13,6 +13,8 @@ import { useEditorFooterCollapsed } from "@/hooks/useEditorFooterCollapsed";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
 import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
+import { useReviewHubDisclosure } from "@/hooks/useReviewHubDisclosure";
+import { summarizeWritingIssues } from "@/lib/writingCheckSummary";
 import {
   applyTextInputChange,
   captureBeforeInput,
@@ -30,6 +32,7 @@ import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
+import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -292,6 +295,21 @@ function EditorPaneInner(
   const dictionary = useWritingCheckDictionary();
   const ngWords = useWritingCheckNgWords();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // TSP-B1 Review Hub: session-only open state that follows the footer's own
+  // focus-mode / mobile-keyboard hiding, plus a counter that asks the existing
+  // WritingCheckBar to open its result list.
+  const paneRef = useRef<HTMLDivElement>(null);
+  // (destructured on purpose: the hook also returns a ref, and React Compiler lint
+  // treats property reads on a value that carries a ref as ref access during render)
+  const {
+    open: reviewHubOpen,
+    toggle: toggleReviewHub,
+    close: closeReviewHub,
+    wrapperRef: reviewHubFooterRef,
+    onKeyDown: handleReviewHubKeyDown,
+    maxHeightPx: reviewHubMaxHeightPx,
+  } = useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef);
+  const [writingCheckResultsRequest, setWritingCheckResultsRequest] = useState(0);
   // Phase 12: occurrence-level, in-memory-only ignore state -- never
   // persisted, naturally forgotten on remount/reload (see `ignoredOccurrences.ts`).
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
@@ -501,8 +519,24 @@ function EditorPaneInner(
     onResumeWorkSession();
   };
 
+  // TSP-B1: Review Hub entries reuse the existing 文章チェックβ surfaces. The
+  // mobile one-line footer hides both the result list and the settings
+  // dialog's host, so expand it first — the same action as its own ▲ button.
+  const revealWritingCheckSurface = () => {
+    closeReviewHub();
+    if (footerCollapsed) setFooterCollapsed(false);
+  };
+  const handleReviewHubShowResults = () => {
+    revealWritingCheckSurface();
+    setWritingCheckResultsRequest((value) => value + 1);
+  };
+  const handleReviewHubOpenSettings = () => {
+    revealWritingCheckSurface();
+    setSettingsOpen(true);
+  };
+
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
+    <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 px-2 py-1.5 md:gap-2 md:px-4 md:py-3">
         <input
           value={title}
@@ -819,6 +853,16 @@ function EditorPaneInner(
         )}
       </div>
 
+      {/* TSP-B1: one relative wrapper around the whole footer stack. It is the
+          anchor the Review Hub panel opens upward from (`bottom-full`), so the
+          panel never changes the textarea's height and the three footer
+          surfaces below keep their own focus-mode / keyboard-active classes. */}
+      <div
+        ref={reviewHubFooterRef}
+        data-editor-footer=""
+        onKeyDown={handleReviewHubKeyDown}
+        className="relative flex min-w-0 flex-none flex-col"
+      >
       {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only, one-line collapsed
           form of the 文章チェックβ + 作業カウンター area below, reusing the
           exact same state/handlers (no new counter logic). Desktop (md+)
@@ -837,7 +881,7 @@ function EditorPaneInner(
             />
             <span className="whitespace-nowrap font-medium">チェックβ</span>
           </label>
-          <span aria-hidden="true" className="shrink-0 text-ink/25">｜</span>
+          <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
           <WorkSessionTracker
             state={workSession}
             onStart={onStartWorkSession}
@@ -846,10 +890,11 @@ function EditorPaneInner(
             onEnd={onEndWorkSession}
             compact
           />
-          <span aria-hidden="true" className="shrink-0 text-ink/25">｜</span>
+          <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
           <span className="min-w-0 shrink truncate whitespace-nowrap tabular-nums text-ink/70">
             現在{visualLength.toLocaleString("ja-JP")}字
           </span>
+          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
           <button
             type="button"
             data-editor-footer-collapse-toggle="expand"
@@ -880,6 +925,7 @@ function EditorPaneInner(
         onOpenSettings={() => setSettingsOpen(true)}
         undoAvailable={undoState !== null}
         onUndo={handleUndoFix}
+        resultsRequestNonce={writingCheckResultsRequest}
       />
 
       {settingsOpen && (
@@ -918,6 +964,7 @@ function EditorPaneInner(
             onEnd={onEndWorkSession}
           />
           <span className="flex shrink-0 items-center gap-1.5">
+            <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} />
             <span
               title="現在の原稿文字数"
               className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
@@ -940,6 +987,25 @@ function EditorPaneInner(
             </button>
           </span>
         </div>
+      </div>
+
+      <ReviewHubPanel
+        open={reviewHubOpen}
+        onClose={closeReviewHub}
+        maxHeightPx={reviewHubMaxHeightPx}
+        sections={{
+          "writing-check": (
+            <WritingCheckReviewSection
+              enabled={writingCheckEnabled}
+              onToggle={setWritingCheckEnabled}
+              summary={summarizeWritingIssues(writingIssuesForContent)}
+              onShowResults={handleReviewHubShowResults}
+              onOpenSettings={handleReviewHubOpenSettings}
+            />
+          ),
+          "character-count": <CharacterCountReviewSection count={visualLength} />,
+        }}
+      />
       </div>
     </div>
   );

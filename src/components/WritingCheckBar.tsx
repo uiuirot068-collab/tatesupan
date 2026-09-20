@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { issueContext, type WritingDiagnostic } from "@/lib/writingCheckEngine";
+import { summarizeWritingIssues } from "@/lib/writingCheckSummary";
 
 interface WritingCheckBarProps {
   enabled: boolean;
@@ -16,6 +17,12 @@ interface WritingCheckBarProps {
   onOpenSettings: () => void;
   undoAvailable: boolean;
   onUndo: () => void;
+  /**
+   * TSP-B1: bump this counter to open the result list from outside (the Review
+   * Hub's 「確認候補を見る」). Purely a request — the list still only opens when
+   * the check is on and has candidates, exactly as before.
+   */
+  resultsRequestNonce?: number;
 }
 
 /**
@@ -44,13 +51,21 @@ export default function WritingCheckBar({
   onOpenSettings,
   undoAvailable,
   onUndo,
+  resultsRequestNonce,
 }: WritingCheckBarProps) {
   const [open, setOpen] = useState(false);
+  // Adjust-state-during-render: a changed request counter opens the list once.
+  const [handledResultsRequest, setHandledResultsRequest] = useState(resultsRequestNonce);
+  if (resultsRequestNonce !== handledResultsRequest) {
+    setHandledResultsRequest(resultsRequestNonce);
+    if (resultsRequestNonce !== undefined) setOpen(true);
+  }
   const rootRef = useRef<HTMLDivElement>(null);
-  const redCount = useMemo(() => issues.filter((i) => i.severity === "HIGH_CONFIDENCE").length, [issues]);
-  const yellowCount = issues.length - redCount;
+  const summary = useMemo(() => summarizeWritingIssues(issues), [issues]);
+  const redCount = summary.red;
+  const yellowCount = summary.yellow;
   const bulkFixCount = useMemo(() => issues.filter((i) => i.fixClass === "SAFE_AUTO_FIX" && i.suggestedReplacement).length, [issues]);
-  const count = issues.length;
+  const count = summary.total;
   const isOpen = open && enabled && count > 0;
 
   useEffect(() => {
