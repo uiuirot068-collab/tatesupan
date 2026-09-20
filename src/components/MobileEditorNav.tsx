@@ -35,6 +35,15 @@ interface MobileEditorNavProps {
   /** Cloud-save handler. Omitted for the sample document. */
   onSave?: () => void;
   isSaving?: boolean;
+  /**
+   * TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: opens the SAME 書き出し menu the
+   * Preview owns (as a ViewportModal sheet), so exporting never requires
+   * switching to プレビュー. Omit to render no button. Hidden in 集中モード so
+   * that mode's phone chrome stays exactly as it was.
+   */
+  onOpenExport?: () => void;
+  /** An export is running -- the button is disabled (mirrors Preview's own 書き出し). */
+  exportBusy?: boolean;
 }
 
 /**
@@ -63,6 +72,8 @@ export default function MobileEditorNav({
   saveStatus,
   onSave,
   isSaving,
+  onOpenExport,
+  exportBusy,
 }: MobileEditorNavProps) {
   const tab = (active: boolean) =>
     `flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors ${
@@ -109,6 +120,26 @@ export default function MobileEditorNav({
             プレビュー
           </button>
         </div>
+        {/* TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: same 書き出し ▾ as the
+            Preview header, reachable from BOTH workspaces. It lives in this
+            first row on purpose: measured against the real layout, the second
+            row (save status + クラウド保存 + 集中モード) has no room for a
+            third button and wrapping it would add ~22px to this sticky bar --
+            including while the keyboard is open (FQ-04). Here it fits at
+            every phone width with the nav height unchanged. Not rendered in
+            集中モード so that mode's phone chrome stays exactly as it was. */}
+        {onOpenExport && !focusMode && (
+          <button
+            type="button"
+            data-mobile-export-trigger=""
+            aria-haspopup="dialog"
+            onClick={onOpenExport}
+            disabled={exportBusy}
+            className="shrink-0 whitespace-nowrap rounded-md border border-ink/15 px-2 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            書き出し ▾
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-xs">

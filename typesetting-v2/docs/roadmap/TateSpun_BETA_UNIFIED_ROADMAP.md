@@ -1105,7 +1105,8 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### A2. UX v3 Loop 3 — Mobile Shared Export
 
 - **Intent:** mobileで本文編集中でもPreview編集中でも、書き出し導線を見つけられるようにする。Previewを強制的に経由させない。
-- **Decision / stage:** 現在のstatus `NOT STARTED`を維持し、**β公開前必須**として扱う。本文/プレビューの双方からexportへ到達できる共有導線を設計する。
+- **Status (updated 2026-09-20): `IMPLEMENTED / SYSTEM QA PASS / HUMAN_GATE — NOT DEPLOYED`.** feature branch `claude/tsp-resume-after-loop2` の Loop 3 checkpoint。実装・System QA の証跡は §39。Human QA（実 device での 本文→export / Preview→export / keyboard 表示中・非表示中、FQ-04 の keyboard open/close recovery）は未実施で、**Human QA が済むまで PRODUCTION PASS / CLOSED とは扱わない**。
+- **Decision / stage (履歴: 2026-09-18 時点は `NOT STARTED`):** **β公開前必須**として扱う。本文/プレビューの双方からexportへ到達できる共有導線を設計する。
 - **Detailed contract:** mobile Editorの本文表示中とPreview表示中の双方で、書き出し操作を発見・実行できる。Preview未訪問でもPDF/JPG exportを開始できる。既存のFQ-04 keyboard-active viewport/shell behaviorを保持し、keyboard表示時のeditor visible areaを回帰させない。
 - **Guardrails:** Preview訪問を必須のstate transitionにしない。mobile keyboard compact CSS、Focus Mode、既存のexport selection/output contractを変更しない。
 - **Acceptance / Human feedback:** 実deviceで本文→export、Preview→export、keyboard表示中・非表示中の両導線をHuman確認し、FQ-04のkeyboard open/close recoveryに回帰がないことを確認する。
@@ -1405,7 +1406,7 @@ The externally authored post-deploy harness failed several times (wrong history-
 ### Update History (§37-E / A7)
 
 - **Infrastructure:** `IMPLEMENTED / PRODUCTION PASS` (A7).
-- **§37-E decision for this release:** an entry **is required** for the Loop 2 user-visible change; it is **not yet added**. By explicit Human decision on 2026-09-20 there will be **no standalone history-only production release**. The Loop 3 production release will add **two** entries — UX v3 Loop 2 and UX v3 Loop 3. The Loop 2 wording must make clear to users that the PDF-export confirmation changed from a browser `window.confirm` to an explanatory odd-page warning modal. The current JSON has one entry (`26/09/18`, PDF size choices). Until then the §37-E close condition for Loop 2 is carried by the Loop 3 release rather than closed here.
+- **§37-E decision for this release (updated: the two entries were added on the feature branch in the Loop 3 checkpoint — see §39; still NOT in production until the Loop 3 release):** an entry **is required** for the Loop 2 user-visible change; at the time of this closeout it was **not yet added**. By explicit Human decision on 2026-09-20 there will be **no standalone history-only production release**. The Loop 3 production release will add **two** entries — UX v3 Loop 2 and UX v3 Loop 3. The Loop 2 wording must make clear to users that the PDF-export confirmation changed from a browser `window.confirm` to an explanatory odd-page warning modal. The current JSON has one entry (`26/09/18`, PDF size choices). Until then the §37-E close condition for Loop 2 is carried by the Loop 3 release rather than closed here.
 
 ### Roadmap-state changes recorded by this closeout
 
@@ -1420,4 +1421,42 @@ The externally authored post-deploy harness failed several times (wrong history-
 
 FQ-04〜09 = CLOSED / PRODUCTION PASS; FRIEND QA = ACTIVE; PUBLIC BETA = NOT YET; 72h cloud-image audit = OPEN; legacy manuscript-loss investigation = OPEN; UX v3 Loop 1 = CLOSED / PRODUCTION PASS; UX v3 Loop 3 = NOT STARTED. The held migration commit `47d66df` remains **unmerged** (it exists only on `design/tatespun-typesetting-v2`). **DB/Auth/Supabase/env/migration mutation: NO.**
 
-**NEXT:** UX v3 Loop 3 — Mobile Shared Export (A2). Not started by this closeout. **STOP**
+**NEXT:** UX v3 Loop 3 — Mobile Shared Export (A2). Not started by this closeout. **STOP** *(Superseded: Loop 3 is implemented on the feature branch and waits at HUMAN_GATE — see §39.)*
+
+## 39. UX v3 Loop 3 — Mobile Shared Export: implementation checkpoint (2026-09-20)
+
+**Status: `IMPLEMENTED / SYSTEM QA PASS / HUMAN_GATE — NOT DEPLOYED`.** Branch `claude/tsp-resume-after-loop2` (base = production `2fcb77a` + the §38 closeout commit). **PRODUCTION PASS / CLOSED is NOT claimed:** Human QA is required (A2 acceptance), and there is no push, deploy or master merge. DB/Auth/Supabase/env/migration mutation: **NO**. Held migration `47d66df`: **UNMERGED**.
+
+### Root cause / previous limitation
+
+The export UI (書き出し ▾, PDF setup, odd-page warning, progress) lives inside `PreviewPane`. On a phone the Editor view keeps the Preview mounted but `display:none` (`max-md:hidden`), so a writer had to switch to プレビュー before they could export.
+
+**A second, silent trap found while designing this (measured, not assumed):** the LEGACY renderer's JPG/PDF capture (`capturePageToCanvas`) measures the *live* page-card geometry. Driving the existing JPG handler while the Preview is `display:none` "succeeds" without any error and downloads a **2×2px, 759-byte JPEG** (with the Preview displayed: 1135×1600, 108,793 bytes). The V2 renderer's export is DOM-free and was unaffected. Identical PDF sizes for the same text on production and on a local LEGACY build (27,663 bytes vs 436,838 bytes under V2_BETA) indicate (an inference — the Production flag itself was not read) that Production currently runs LEGACY, so simply exposing the existing handlers from the Editor view would have shipped corrupted exports to real users.
+
+### Design (minimal; no second export implementation)
+
+- `src/components/exportMenuEntries.ts` — the single source of the menu's data (ids, labels, order, PDF-unavailable rule). Pure data; handlers are bound to ids in exactly one place inside `PreviewPane`.
+- `PreviewPane` — the desktop dropdown now maps that list (same markup/labels/behavior), and a new `ViewportModal` sheet (title 書き出し, `data-editor-export-sheet`) maps the **same** list. Every entry runs the same handler as before (`handleExportJpg` / `…JpgBatch` / `…Zip` / `…ColophonJpg` / `handleOpenPdfModal`), so PDF setup, the Loop 2 odd-page warning (Return / Continue), the 完成前チェックリスト gate, unresolved-image block, progress, cancellation and both renderer paths are the existing ones. It also reports export begin/finish through the existing `beginExport`/`finishExport`.
+- `src/hooks/useMobileSharedExport.ts` (state only) + `src/lib/previewExportStage.ts` — while an export runs on the phone layout and the Preview is not the displayed workspace, the Preview section is given layout **off-screen** (`max-md:fixed left-[-200vw]`, viewport-sized) and returns to `display:none` when the export finishes. The user's workspace never changes; no Preview visit, and export availability is not tied to Preview visibility (the stage is applied by the export itself).
+- `MobileEditorNav` — a 書き出し ▾ button in the **first** row (next to 本文 / プレビュー), visible in both workspaces, hidden in 集中モード. Measured on the real layout: the second row has no room for a third button, and placing it there wrapped the sticky nav from 82px to 104px on every phone width in normal documents (also while the keyboard is open). In the first row the nav height is unchanged (82px) at 320/375/390/430.
+- `TategakiEditor` — ~10 lines of wiring. `globals.css` (FQ-04 keyboard-compact rule), `EditorPane`, `useMobileKeyboardViewport`, focus-mode logic and every export handler/format contract are unchanged.
+
+### Update History (§37-E)
+
+`public/data/tatespun-update-history.json` gained **two `26/09/20` entries**, newest first: UX v3 Loop 3 (スマホでプレビューへ切り替えずに書き出せる) and UX v3 Loop 2 (従来の簡単な確認から、意味と注意点を説明する奇数ページ警告画面へ). `updateHistory.test.ts` asserts every shipped entry parses (none silently dropped), same-day ordering, and the Loop 2 wording. They reach users only with the Loop 3 production release (no standalone history release, per the 2026-09-20 decision).
+
+### System QA (2026-09-20)
+
+- Unit/structure tests: `src/components` 84/84 (24 new: desktop regression, mobile accessibility, shared contract, Loop 2 rule matrix incl. colophon parity and selected-scope, modal reuse, FQ-04/集中モード guards); `src/lib` 372/373 (11 new/extended); `v2Bridge` 74/74; `editorSessionActivity` 67/67; `hooks` 22/22; `preIntegrationUx` 580 passed / 1 failed / 1 skipped. The single failure in the `src/lib` and `preIntegrationUx` runs is the **pre-existing** `exportCancellation.test.ts` "topmost Escape" mismatch (already stale before Loop 1; out of scope, not touched).
+- TypeScript PASS; changed-file ESLint: no new finding (the 3 findings in `TategakiEditor.tsx` are identical to `HEAD`); `git diff --check` clean; `npm run build:basepath` PASS (Supabase gate: backend ref unchanged, cross-database audit skipped — read-only).
+- New explicit-run real-browser E2E `npm run test:e2e:mobile-shared-export` (`tests/e2e/mobileSharedExport.e2e.mjs`, helper `tests/e2e/helpers/editorSession.mjs`; local/loopback only unless explicitly allowed): viewports **320×568, 375×667, 390×844, 430×932, 768×1024, 1280×720**. PASS on LEGACY+WINDOWED, LEGACY+FULL, **V2_BETA+WINDOWED**, and on the **static production build** (`out/tatespun`). It proves: entry visible/tappable/in-viewport with the Preview `display:none`; nav height unchanged; sheet and modals inside every phone viewport; desktop dropdown = phone sheet list; PDF odd → warning → return → continue = exactly one PDF, even = none; JPG/JPG一括/JPG ZIP valid and full-size; the phone Editor-view PDF is byte-comparable to the desktop PDF of the same text; progress overlay visible while exporting from the Editor view; FQ-04 keyboard-compact chrome, 集中モード and Preview view unchanged; `window.confirm` never used. A negative run with the off-screen stage disabled **fails** on the 2×2px JPEG, as intended.
+- Regressions: `production-odd-page` E2E PASS (dev and static build); `editorInputIntegrity` PASS. `editorSessionActivity` FAILS at an early "現在の原稿文字数" snapshot both here and on the untouched `2fcb77a` baseline (pre-existing, unrelated; out of scope).
+- Test side effects: the full `preIntegrationUx` run rewrites the tracked QA artifact `typesetting-v2/qa/publication/p3-o08/typography-parity-final-human-recheck-v2.pdf`; it was restored and is not part of the checkpoint.
+
+### Open items / observations (not changed here)
+
+- **Human QA (A2 acceptance) is pending:** real-device 本文→export and Preview→export, keyboard open/closed, and FQ-04 open/close recovery.
+- Pre-existing V2 latent race (unrelated to this loop): exporting JPG within ~100ms of switching the Preview to visible can alert "V2 JPG export could not resolve the selected canonical pages." (apparently the page plan rebuilding when the Preview becomes visible; a 1.5s settle in the E2E removes it). Not reachable at human interaction speed; recorded for awareness.
+- At 320×568 the manuscript area is only ~37px tall in the Demo **before and after** this change (measured identical); FQ-04's keyboard-compact rule addresses typing, and Loop 3 adds no vertical space.
+
+**NEXT:** Human QA for Loop 3 (checklist in the checkpoint report). Do not push, deploy or merge until it passes. **STOP**
