@@ -75,6 +75,7 @@ import PdfExportChecklistGate from "./PdfExportChecklistGate";
 import PdfModeOption, { PDF_MODE_OPTIONS } from "./PdfModeOption";
 import { toggleHelp } from "./pdfModeHelp";
 import OddPageExportWarning from "./OddPageExportWarning";
+import { describeExportMenu, PDF_UNAVAILABLE_NOTE, type ExportMenuEntryId } from "./exportMenuEntries";
 import { shouldWarnOddPageExport } from "./oddPageWarningRule";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
@@ -466,6 +467,22 @@ interface PreviewPaneProps {
    * owns the post-export filename notice.
    */
   onPdfExportSuccess?: () => void;
+  /**
+   * TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: the phone Editor view's 書き出し
+   * button (MobileEditorNav) opens THIS pane's export menu as a ViewportModal
+   * sheet, so the Preview never has to be shown first. The open flag is owned
+   * by the parent (shared with the nav button); the entries and handlers are
+   * this component's own -- the exact ones the desktop dropdown uses.
+   */
+  mobileExportOpen?: boolean;
+  onMobileExportClose?: () => void;
+  /**
+   * Fired synchronously when any export (JPG / ZIP / PDF, either renderer)
+   * begins (`true`) and finishes (`false`). The parent uses it to keep the
+   * Preview laid out off-screen while it is not the displayed phone
+   * workspace -- see `lib/previewExportStage.ts`.
+   */
+  onExportActiveChange?: (active: boolean) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
@@ -491,6 +508,9 @@ function PreviewPane({
   onNavigateToSource,
   onBodyPageCountChange,
   onPdfExportSuccess,
+  mobileExportOpen = false,
+  onMobileExportClose,
+  onExportActiveChange,
   isCollapsed = false,
   onToggleCollapse,
   selected,
@@ -1227,8 +1247,16 @@ function PreviewPane({
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
   const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
 
+  const onExportActiveChangeRef = useRef(onExportActiveChange);
+  useEffect(() => {
+    onExportActiveChangeRef.current = onExportActiveChange;
+  });
+
   const beginExport = useCallback((label: string, total = 0): AbortSignal => {
     const signal = exportCancellation.begin();
+    // Synchronous (not an effect): the parent's off-screen layout stage must be
+    // committed before any capture geometry is read.
+    onExportActiveChangeRef.current?.(true);
     setIsExportCancelConfirmOpen(false);
     setIsExporting(true);
     setExportLabel(label);
@@ -1239,6 +1267,7 @@ function PreviewPane({
   const finishExport = useCallback((signal: AbortSignal) => {
     if (!exportCancellation.finish(signal)) return;
     v2PdfHandleRef.current = null;
+    onExportActiveChangeRef.current?.(false);
     setIsExportCancelConfirmOpen(false);
     setIsExporting(false);
     setExportProgress(null);
@@ -2154,6 +2183,22 @@ function PreviewPane({
   };
   const stableNavigateToSource = useStableIndexedCallback(navigateToSource);
 
+  // TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: ONE list for both the desktop
+  // dropdown below and the phone Editor-view export sheet. `run` is always one
+  // of the handlers defined above -- the only place ids are bound to them --
+  // so there is no second export implementation.
+  const exportMenuHandlers: Record<ExportMenuEntryId, () => void | Promise<void>> = {
+    jpg: handleExportJpg,
+    "jpg-batch": handleExportJpgBatch,
+    "jpg-zip": handleExportZip,
+    "colophon-jpg": handleExportColophonJpg,
+    pdf: handleOpenPdfModal,
+  };
+  const exportMenuEntries = describeExportMenu({
+    showColophon,
+    pdfUnavailable: layout.paper.isPx,
+  }).map((entry) => ({ ...entry, run: exportMenuHandlers[entry.id] }));
+
   if (isCollapsed) {
     // Right-edge affordance for the collapsed preview — shared by the normal
     // desktop preview-collapse and TSP-LOOP-023 focus mode. One real button
@@ -2278,68 +2323,25 @@ function PreviewPane({
                 <div
                   style={{ position: "fixed", top: exportMenuPos.top, left: exportMenuPos.left, width: EXPORT_MENU_WIDTH_PX }}
                   className="z-50 flex flex-col gap-0.5 rounded-lg border border-ink/10 bg-base p-1 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsExportMenuOpen(false);
-                      handleExportJpg();
-                    }}
-                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
-                  >
-                    JPG
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsExportMenuOpen(false);
-                      handleExportJpgBatch();
-                    }}
-                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
-                  >
-                    JPG一括（個別ダウンロード）
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsExportMenuOpen(false);
-                      handleExportZip();
-                    }}
-                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
-                  >
-                    JPG ZIP
-                  </button>
-                  {showColophon && (
+                  {exportMenuEntries.map((entry) => (
                     <button
+                      key={entry.id}
                       type="button"
+                      data-export-menu-entry={entry.id}
                       onClick={() => {
                         setIsExportMenuOpen(false);
-                        handleExportColophonJpg();
+                        void entry.run();
                       }}
-                      className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                      disabled={entry.disabled}
+                      title={entry.disabledReason}
+                      className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
-                      奥付ページ（JPG）
+                      {entry.label}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsExportMenuOpen(false);
-                      handleOpenPdfModal();
-                    }}
-                    disabled={layout.paper.isPx}
-                    title={
-                      layout.paper.isPx
-                        ? "PDF書き出しは印刷用の用紙サイズで利用できます。Web閲覧用はJPGで書き出してください。"
-                        : undefined
-                    }
-                    className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                  >
-                    PDF
-                  </button>
+                  ))}
                   {layout.paper.isPx && (
                     <p className="px-2 pb-1 pt-0.5 text-[11px] leading-snug text-ink/50">
-                      PDF書き出しは印刷用の用紙サイズで利用できます。
-                      Web閲覧用はJPGで書き出してください。
+                      {PDF_UNAVAILABLE_NOTE}
                     </p>
                   )}
                 </div>
@@ -2746,6 +2748,47 @@ function PreviewPane({
           onCancel={() => setPdfChecklistAttempt(null)}
           onConfirm={confirmPdfChecklistAndDownload}
         />
+      )}
+
+      {/* TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: phone Editor-view entry to the
+          SAME export menu (MobileEditorNav 「書き出し ▾」). A ViewportModal
+          portals to document.body, so it is fully usable while this pane's own
+          section is display:none -- the Preview never has to be shown. Every
+          entry is the shared `exportMenuEntries` (same handlers as the
+          desktop dropdown), so PDF setup, the odd-page warning, the
+          完成前チェックリスト gate, progress and cancellation are all the
+          existing ones. */}
+      {mobileExportOpen && (
+        <ViewportModal
+          title="書き出し"
+          titleId="editor-export-sheet-title"
+          closeLabel="書き出しメニューを閉じる"
+          onClose={() => onMobileExportClose?.()}
+          panelClassName="max-w-sm"
+          overlayProps={{ "data-editor-export-sheet": "" } as HTMLAttributes<HTMLDivElement>}
+        >
+          <div className="flex flex-col gap-2">
+            {exportMenuEntries.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                data-export-sheet-entry={entry.id}
+                disabled={entry.disabled || isExporting || pages.length === 0}
+                title={entry.disabledReason}
+                onClick={() => {
+                  onMobileExportClose?.();
+                  void entry.run();
+                }}
+                className="min-h-11 rounded border border-ink/20 px-3 py-2.5 text-left text-sm font-medium hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                {entry.label}
+              </button>
+            ))}
+            {layout.paper.isPx && (
+              <p className="text-xs leading-snug text-ink/60">{PDF_UNAVAILABLE_NOTE}</p>
+            )}
+          </div>
+        </ViewportModal>
       )}
 
       {oddPageWarning && (

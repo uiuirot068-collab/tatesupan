@@ -21,6 +21,8 @@ import {
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { withColophonDefaults } from "@/lib/colophon";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
+import { useMobileSharedExport } from "@/hooks/useMobileSharedExport";
+import { PREVIEW_EXPORT_STAGE_CLASS } from "@/lib/previewExportStage";
 import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
 import { mobileShellHeightStyle, useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -265,6 +267,9 @@ export default function TategakiEditor({
     return () => window.clearTimeout(timer);
   }, [cursorIndex]);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
+  // TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: phone Editor-view access to the
+  // Preview's own 書き出し menu (state only -- see the hook's doc).
+  const sharedExport = useMobileSharedExport({ mobileView, isPreviewCollapsed, setIsPreviewCollapsed });
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -803,6 +808,8 @@ export default function TategakiEditor({
         saveStatus={isSampleDocument ? undefined : saveStatus}
         onSave={isSampleDocument ? undefined : handleSave}
         isSaving={isSaving}
+        onOpenExport={sharedExport.openMobileExport}
+        exportBusy={sharedExport.isExporting}
       />
 
       <main
@@ -870,7 +877,7 @@ export default function TategakiEditor({
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : "max-md:hidden"}`}
+          } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
         >
           <PreviewPane
             content={previewContent}
@@ -890,6 +897,9 @@ export default function TategakiEditor({
             onNavigateToSource={navigateEditorToGlobalOffset}
             onBodyPageCountChange={setBodyPageCount}
             onPdfExportSuccess={handlePreviewPdfExportSuccess}
+            mobileExportOpen={sharedExport.mobileExportOpen}
+            onMobileExportClose={sharedExport.closeMobileExport}
+            onExportActiveChange={sharedExport.onExportActiveChange}
             // On a phone showing the プレビュー workspace the preview is always
             // full — the collapse rail is a desktop-only affordance.
             isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
