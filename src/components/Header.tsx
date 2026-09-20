@@ -57,6 +57,13 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
   );
 }
 
+// Tablet / narrow-desktop density (editor variant only, 768-905px). In the split-screen range the
+// controls block needs ~654px but only ~630px is free, so its last button wrapped onto a second row and the
+// header grew to 146px, taking about a third of a 720px-high window. The controls below tighten their
+// horizontal padding/gap just enough to stay on one row, and the shell trims its vertical padding.
+// Nothing is hidden, renamed or reordered; from 906px up (and on phones) the header is exactly as before.
+const TABLET_COMPACT_SHELL = 'md:max-[905px]:my-1 md:max-[905px]:py-1.5 md:max-[905px]:gap-y-1';
+
 export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
   const isHome = variant === 'home';
   // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
@@ -87,7 +94,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
 
   return (
     <header
-      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : ''}`}
+      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : TABLET_COMPACT_SHELL}`}
     >
       {isHome && (
         <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">
@@ -246,7 +253,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         )}
       </div>
       <div
-        className={isHome ? 'hidden' : 'hidden w-full flex-wrap items-center gap-4 gap-y-2 md:flex md:w-auto'}
+        className={isHome ? 'hidden' : 'hidden w-full flex-wrap items-center gap-4 gap-y-2 md:flex md:w-auto md:max-[905px]:gap-x-3 md:max-[905px]:gap-y-1'}
       >
         <div className="flex items-center gap-2">
           {isHome && (
@@ -268,7 +275,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
                 : '設定を隠して本文を広く表示（プレビューは右側に格納）'
             }
             // md+ only: the phone gets this from the sticky MobileEditorNav.
-            className={`hidden shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:inline-flex ${
+            className={`hidden shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:inline-flex md:max-[905px]:px-2.5 ${
               focusMode
                 ? 'border-[#c5a059] bg-[#c5a059]/10 text-[#8a6d34] hover:bg-[#c5a059]/20'
                 : 'border-gray-300 text-gray-700 hover:bg-gray-100'
@@ -298,7 +305,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             disabled={isSaving}
             // TSP-LOOP-022: phone gets クラウド保存 from the sticky
             // MobileEditorNav — this header button is md+ only.
-            className="hidden text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0 md:inline-flex"
+            className="hidden text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 font-medium bg-[#c5a059] hover:bg-[#b38f48] text-white rounded-full shadow-sm transition-colors disabled:opacity-50 flex-none whitespace-nowrap flex-shrink-0 md:inline-flex md:max-[905px]:px-2.5"
           >
             {isSaving ? '保存中...' : 'クラウドに保存'}
           </button>
@@ -307,7 +314,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             onClick={() => setIsProjectModalOpen(true)}
-            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 rounded-full shadow-sm transition-colors"
+            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 rounded-full shadow-sm transition-colors md:max-[905px]:px-2.5"
           >
             保存作品一覧
           </button>
@@ -317,7 +324,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             <span className="hidden md:inline whitespace-nowrap flex-shrink-0 text-sm text-gray-600 ml-2">{user.email}</span>
             <button
               onClick={() => signOut()}
-              className="whitespace-nowrap flex-shrink-0 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              className="whitespace-nowrap flex-shrink-0 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 md:max-[905px]:px-2.5"
             >
               ログアウト
             </button>
@@ -328,7 +335,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
               setAuthModalNotice(null);
               setIsAuthModalOpen(true);
             }}
-            className="whitespace-nowrap flex-shrink-0 rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48]"
+            className="whitespace-nowrap flex-shrink-0 rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48] md:max-[905px]:px-3"
           >
             ログイン / 会員登録
           </button>
