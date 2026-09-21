@@ -1,0 +1,45 @@
+{
+  "measuredAt": "2026-09-21T22:47:40.704Z",
+  "method": "headless Chrome, standalone vertical-rl page (font-size 20px, line-height 1.6), same text with/without text-emphasis on one span; column left-edge pitches measured per character",
+  "results": {
+    "plain": {
+      "chars": 59,
+      "columns": 5,
+      "columnPitches": [
+        32,
+        32,
+        32,
+        32
+      ],
+      "emphasisSpanWidth": 61,
+      "scrollWidth": 360,
+      "clientWidth": 360
+    },
+    "cssTextEmphasis": {
+      "chars": 59,
+      "columns": 5,
+      "columnPitches": [
+        32,
+        32,
+        32,
+        32
+      ],
+      "emphasisSpanWidth": 61,
+      "scrollWidth": 360,
+      "clientWidth": 360
+    },
+    "cssTextEmphasisDot": {
+      "chars": 59,
+      "columns": 5,
+      "columnPitches": [
+        32,
+        32,
+        32,
+        32
+      ],
+      "emphasisSpanWidth": 61,
+      "scrollWidth": 360,
+      "clientWidth": 360
+    }
+  }
+}

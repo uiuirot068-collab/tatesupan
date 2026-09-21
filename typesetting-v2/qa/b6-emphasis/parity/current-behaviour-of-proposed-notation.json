@@ -1,0 +1,52 @@
+{
+  "note": "Current (unchanged) tokenizer + 文章チェックβ behaviour on the proposed 《《…》》 emphasis notation. Nothing was implemented; this is the baseline that a future implementation must migrate from.",
+  "results": {
+    "これは《《強調》》です。": {
+      "tokens": [
+        "text(これは《《強調》》です。)"
+      ],
+      "writingCheck": []
+    },
+    "漢字《《強調》》です。": {
+      "tokens": [
+        "text(漢字《《強調》》です。)"
+      ],
+      "writingCheck": []
+    },
+    "《《｜漢字《かんじ》》》です。": {
+      "tokens": [
+        "text(《《)",
+        "ruby(漢字/かんじ)",
+        "text(》》です。)"
+      ],
+      "writingCheck": []
+    },
+    "｜漢字《かんじ》の《《傍点》》。": {
+      "tokens": [
+        "ruby(漢字/かんじ)",
+        "text(の《《傍点》》。)"
+      ],
+      "writingCheck": []
+    },
+    "《《12》》月": {
+      "tokens": [
+        "text(《《)",
+        "tcy",
+        "text(》》月)"
+      ],
+      "writingCheck": []
+    },
+    "《《一行目\n二行目》》": {
+      "tokens": [
+        "text(《《一行目\n二行目》》)"
+      ],
+      "writingCheck": []
+    },
+    "壊れた《《記法。": {
+      "tokens": [
+        "text(壊れた《《記法。)"
+      ],
+      "writingCheck": []
+    }
+  }
+}
