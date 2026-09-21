@@ -32,3 +32,16 @@ Setup: a local or preview build with `NEXT_PUBLIC_BETA_FEEDBACK_ENABLED=true` **
 - [ ] Hub opens/closes; 文章チェックβ and 文字数カウント work; footer pin/unpin/reorder still works and persists after reload; writing-check ON/OFF is independent of the pin.
 
 Result: ☐ PASS ☐ FIX NEEDED — notes:
+
+## Final Human QA
+
+- B1 production-flag recheck: PASS
+- B2 production-flag recheck: PASS
+- B3 UI / responsive: PASS
+- B3 local feedback harness: PASS
+- Production ordinary report -> Discord: PASS
+- Production ordinary report -> Spreadsheet「気になる事」: PASS
+- Privacy sentinels: PASS (body/title not transmitted)
+
+B3 Human QA: PASS
+Human QA completed: 2026-09-21 JST

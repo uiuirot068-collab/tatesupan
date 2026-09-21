@@ -1,6 +1,6 @@
 # B3 Review Hub feedback instrumentation — Implementation result
 
-Status: **HUMAN_GATE / IMPLEMENTED — NOT RELEASED** (not pushed, not deployed, not merged; Production PASS not claimed; roadmap B3 is **not** marked FIXED)
+Status: FIXED / RELEASE-CANDIDATE READY / NOT RELEASED
 
 Base: B2 closeout `a46279abfc4dbda427a4d3466eb33b42bff95c0c` · Branch: `feat/tsp-b3-feedback-20260921`
 
@@ -104,3 +104,6 @@ Tests: `src/lib/reviewHubFeedback.test.ts` (18), `src/components/reviewHubFeedba
 * There is no link from inside the Review Hub to the 見直し tab (adding one would grow the Hub on 320–390px); the writer reaches it via 報告 → 見直し.
 * Q2 offers only the two tools that exist today (see §1).
 * On a 320×568 phone the modal's own scroll area is short (the existing Turnstile block and send row are pinned below it); the 見直し tab scrolls inside it like the other tabs. The real Turnstile widget (not present in the stubbed E2E) adds its usual height.
+
+
+Human QA: PASS (2026-09-21 JST)

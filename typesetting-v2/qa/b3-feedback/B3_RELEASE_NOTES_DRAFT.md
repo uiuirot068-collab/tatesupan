@@ -14,3 +14,6 @@
 - Sent: the two answers, the current footer tools, two per-page-load counters (Hub opens, pin changes), the writer's optional note, plus the existing 使用環境 diagnostics. Never sent: manuscript, title, file names, IDs, images.
 - Read the results by filtering the 「気になる事」 sheet for `【見直しアンケート】`.
 - Removal: revert the B3 commit (no data migration needed).
+
+Release-candidate status: READY (Human QA PASS 2026-09-21 JST)
+Publication status: NOT RELEASED
