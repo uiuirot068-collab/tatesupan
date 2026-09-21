@@ -183,3 +183,24 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(pane).toContain("descriptionActiveMark !== descriptionDismissed");
   });
 });
+
+describe("B5 markers never reach Preview / JPG / PDF (editor-only decoration)", () => {
+  it("no preview, export or typesetting-v2 module references the description-check code or its highlight class", () => {
+    const targets = [
+      "src/components/PreviewPane.tsx",
+      "src/components/PageCard.tsx",
+      "src/utils/exportCapture.ts",
+      "src/lib/v2BrowserExport.ts",
+      "src/lib/txtTransfer.ts",
+    ];
+    for (const file of targets) {
+      expect(read(file), file).not.toMatch(/descriptionCheck|DescriptionMark|tsp-description-mark/);
+    }
+  });
+
+  it("the highlight lives only in the editor overlay, and the manuscript string is never modified by the analysis", () => {
+    const hookSource = read("src/hooks/useDescriptionCheck.ts");
+    expect(hookSource).not.toMatch(/onContentChange|setContent/);
+    expect(read("src/lib/descriptionCheckManuscript.ts")).not.toMatch(/\.replace\(|onContentChange/);
+  });
+});

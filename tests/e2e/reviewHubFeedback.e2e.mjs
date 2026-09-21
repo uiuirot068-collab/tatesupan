@@ -257,7 +257,7 @@ async function surveyPhase(v) {
   })()`);
   assert.deepEqual(shape.radioLabels, ["足りている", "もう1枠ほしい", "もっとほしい", "常時表示は不要"], `${tag}: Q1 choices`);
   assert.equal(shape.radios, 4);
-  assert.deepEqual(shape.checks, ["文章チェックβ", "文字数カウント"], `${tag}: Q2 offers only the Hub's real tools`);
+  assert.deepEqual(shape.checks, ["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"], `${tag}: Q2 offers only the Hub's real tools`);
   assert.equal(shape.preselected, 0, `${tag}: nothing preselected`);
   assert.equal(shape.sendDisabled, true, `${tag}: nothing to send yet`);
   assert.equal(shape.images, 0, `${tag}: no file input`);

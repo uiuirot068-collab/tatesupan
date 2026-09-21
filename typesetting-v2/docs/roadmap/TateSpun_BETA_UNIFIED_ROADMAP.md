@@ -1214,6 +1214,10 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 - **Guardrails:** 既存のrenderer/typesetting/ruby/TCY/page-break contractsを破壊しない。初期scopeを超えるゴマ点・白丸・多スタイルはv1.0候補へ回す。
 - **Acceptance / Human feedback:** Editor/Preview/JPG/PDFのparity、選択・境界編集・削除・Undo/Redo・reloadをHuman確認する。β feedbackで意味上の強調として役立つか、誤操作や視覚的混乱がないかを評価する。parityが証明できなければβ導入を延期する。
 
+### Canonical URL cleanup (TateSpun self-credit) — 2026-09-22
+
+- **Status:** `DEFERRED / LOCATION NOT REPRODUCED / NOT A B4-B6 BLOCKER`. The Human reported two TateSpun self-credit locations showing `https://tatespun.pages.dev/`; the runtime source has **0** user-visible hits (the Web footer in `PageCard.tsx`, the share text and Auth already use `https://spuntales.net/tatespun/`; the only credit-like hit is dead data in `src/lib/constants/presets.ts:123`, `PAGE_PRESETS` has zero importers). Infra/security `pages.dev` references (beta-feedback CORS + Turnstile hostname allowlists, comments, tests) are intentionally preserved. **No change was made.** Resume when the Human names the screen/export where the two old credits were seen (asked in `qa/b4-b6-train/HUMAN_QA_B4_B6_JA.md` §6).
+
 ### B7. Update History during beta
 
 - **Intent:** Top Pageの「追加・変更した内容は随時お知らせします」という約束を、運用上の実際の更新記録へ変える。
