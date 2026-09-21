@@ -189,16 +189,17 @@ describe("B1 only exposes tools that exist today", () => {
         })
       );
     const labels = Array.from(html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g), (m) => m[1].replace(/<[^>]+>/g, "").trim());
-    expect(labels.sort()).toEqual(["⚙ 設定", "確認候補を見る", "✕"].sort());
+    // B2 adds exactly one real, wired フッターに表示 toggle per tool (data-review-hub-footer-pin-toggle); B1's controls are unchanged.
+    const pinToggles = labels.filter((label) => /フッターに表示$/.test(label));
+    expect(pinToggles).toHaveLength(REVIEW_HUB_TOOLS.length);
+    expect(labels.filter((label) => !pinToggles.includes(label)).sort()).toEqual(["⚙ 設定", "確認候補を見る", "✕"].sort());
   });
 });
 
-describe("B1 does not implement B2 (no pinning, favourites, slots or persisted preference)", () => {
-  it("has no pin / favourite / フッターに表示 controls or copy in the Hub", () => {
+describe("B1 Hub keeps no favourites/slots and persists nothing itself (B2 footer display is a separate hook)", () => {
+  it("has no favourite / slot controls or copy in the Hub", () => {
     const html = panelMarkup(true) + renderToStaticMarkup(createElement(ReviewHubTrigger, { open: true, onToggle: noop }));
-    expect(html + hubView + hubHook + hubModel).not.toMatch(
-      /フッターに表示|ピン|pin|favorite|favourite|お気に入り|slot|スロット/i
-    );
+    expect(html + hubView + hubHook + hubModel).not.toMatch(/favorite|favourite|お気に入り|slot|スロット/i);
   });
 
   it("persists nothing: session-only state, no storage access in the Hub hook/view/model", () => {
@@ -382,7 +383,7 @@ describe("B1 panel height is bounded by the space between the Editor pane's top 
   it("keeps the panel compact: no lead paragraph — heading, ✕, then one title + one summary line per tool", () => {
     const html = panelMarkup(true);
     expect(html.match(/<h2\b/g)).toHaveLength(1);
-    expect(html.match(/<p\b/g)).toHaveLength(REVIEW_HUB_TOOLS.length * 2); // title + summary per tool, nothing else
+    expect(html.match(/<p\b/g)).toHaveLength(REVIEW_HUB_TOOLS.length * 2); // title + summary per tool, nothing else (B2's note is a header-row span)
     expect(html.indexOf("</h2>")).toBeLessThan(html.indexOf("<ul"));
     expect(html.slice(html.indexOf("</h2>"), html.indexOf("<ul"))).not.toMatch(/<p\b/);
   });

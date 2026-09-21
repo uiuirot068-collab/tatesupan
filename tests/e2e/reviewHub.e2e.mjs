@@ -236,7 +236,10 @@ async function expandedFooterPhase(v) {
   assert.equal(content.heading, "見直し");
   assert.equal(content.labelled, "editor-review-hub-heading");
   assert.deepEqual(content.tools, ["writing-check", "character-count"], `${tag}: only the two implemented tools`);
-  assert.doesNotMatch(content.text, /描写|修飾|音読|リズム|傍点|フッターに表示|ピン/, `${tag}: no unreleased / B2 copy`);
+  assert.doesNotMatch(content.text, /描写|修飾|音読|リズム|傍点|ピン/, `${tag}: no unreleased tool copy`);
+  // B2 (roadmap B2 contract): the Hub carries one フッターに表示 control per tool, inline on the tool's title row, so the panel stays compact.
+  const pinToggles = await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool] [data-review-hub-footer-pin-toggle]')].map((e) => e.closest('[data-review-hub-tool]').dataset.reviewHubTool)`);
+  assert.deepEqual(pinToggles, ["writing-check", "character-count"], `${tag}: one フッターに表示 toggle per implemented tool`);
 
   // 文字数カウント == footer pill, live
   const pill = () => cdp.evaluate(`document.querySelector('[title="現在の原稿文字数"]')?.textContent ?? ''`);

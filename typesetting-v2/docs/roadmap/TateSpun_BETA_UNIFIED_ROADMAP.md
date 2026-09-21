@@ -1171,7 +1171,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B2. Footer 2-tool customization
 
 - **Intent:** よく使う確認ツールだけをcompactに手元へ残しつつ、Review Hub内の全機能へのアクセスを失わない。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のReview Hub contract。
+- **Decision / stage:** `HUMAN_GATE / IMPLEMENTED — NOT RELEASED`。最大2件のfooter表示・browser/device local preference・並び替えを実装。Production未公開。
 - **Detailed contract:** Review Hub内の任意の最大2 toolsをEditor footerへ常時表示できる。各toolにcompact representationを用意する（例: `文章チェック 3件`、`描写・修飾 18件`、音読のcompact playback/action、`12,843字`）。
 - **Semantic guardrail:** `フッターに表示すること` は `機能が利用可能 / ONであること` と別。pinされていないtoolもReview Hubを開けば通常通り利用可能。footer pin/display settingをfeature enable/disableとして実装しない。UI wordingは `フッターに表示` またはpin/favorite相当とし、誤解を避ける。
 - **Persistence:** 選択はmanuscript単位ではなくbrowser/device local preferenceとし、新規作品、別作品への移動、原稿削除/再作成をまたいで維持する。manuscript/cloud dataと分離し、Supabase/loginを必須にしない。別browser/deviceで別設定でもよい。

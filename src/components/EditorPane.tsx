@@ -33,6 +33,7 @@ import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
 import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
+import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -972,12 +973,16 @@ function EditorPaneInner(
             onEnd={onEndWorkSession}
           />
           <span className="flex shrink-0 items-center gap-1.5">
-            <span
-              title="現在の原稿文字数"
-              className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
-            >
-              現在の原稿文字数 {visualLength}文字
-            </span>
+            <ReviewHubFooterPinnedTools
+              characterCount={
+                <span
+                  title="現在の原稿文字数"
+                  className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
+                >
+                  現在の原稿文字数 {visualLength}文字
+                </span>
+              }
+            />
             {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only collapse
                 toggle for the compact one-line form above. Desktop always
                 shows the full form, so this control has no desktop role. */}

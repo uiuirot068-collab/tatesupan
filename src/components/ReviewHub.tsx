@@ -11,6 +11,7 @@ import {
   type ReviewHubToolId,
 } from "@/lib/reviewHub";
 import { describeWritingIssueSummary, type WritingIssueSummary } from "@/lib/writingCheckSummary";
+import { ReviewHubFooterPinControl, ReviewHubFooterPinNote } from "./ReviewHubFooterPinSettings";
 
 /**
  * TSP-B1 Review Hub view. Presentational only: every value and action arrives
@@ -81,6 +82,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null }: 
         <h2 id={REVIEW_HUB_HEADING_ID} className="text-sm font-bold">
           {REVIEW_HUB_HEADING}
         </h2>
+        <ReviewHubFooterPinNote />
         <button
           type="button"
           data-review-hub-close=""
@@ -94,7 +96,10 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null }: 
       <ul className="mt-1.5 divide-y divide-ink/10">
         {REVIEW_HUB_TOOLS.map((tool) => (
           <li key={tool.id} data-review-hub-tool={tool.id} className="py-2 first:pt-0 last:pb-0">
-            <p className="text-xs font-semibold">{tool.title}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold">{tool.title}</p>
+              <ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />
+            </div>
             <p className="text-[11px] text-ink/60">{tool.summary}</p>
             {sections[tool.id]}
           </li>
