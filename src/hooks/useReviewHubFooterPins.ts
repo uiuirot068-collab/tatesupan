@@ -14,6 +14,7 @@ import {
   toggleReviewHubFooterTool,
   type ReviewHubFooterToolId,
 } from "../lib/reviewHubFooterPins";
+import { recordFooterPinChange } from "../lib/reviewHubUsage";
 
 const CHANGE_EVENT = "tatespun:review-hub-footer-tools-change";
 const DEFAULT_SNAPSHOT = JSON.stringify(
@@ -91,18 +92,27 @@ export function useReviewHubFooterPins() {
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }, []);
 
-  const togglePin = useCallback(
-    (toolId: ReviewHubFooterToolId) => {
-      persist(toggleReviewHubFooterTool(pins, toolId));
+  // B3: an in-memory count of real selection changes (see reviewHubUsage.ts).
+  const commit = useCallback(
+    (next: ReviewHubFooterToolId[]) => {
+      if (next.join() !== pins.join()) recordFooterPinChange();
+      persist(next);
     },
     [pins, persist],
   );
 
+  const togglePin = useCallback(
+    (toolId: ReviewHubFooterToolId) => {
+      commit(toggleReviewHubFooterTool(pins, toolId));
+    },
+    [pins, commit],
+  );
+
   const movePin = useCallback(
     (toolId: ReviewHubFooterToolId, direction: -1 | 1) => {
-      persist(moveReviewHubFooterTool(pins, toolId, direction));
+      commit(moveReviewHubFooterTool(pins, toolId, direction));
     },
-    [pins, persist],
+    [pins, commit],
   );
 
   return {

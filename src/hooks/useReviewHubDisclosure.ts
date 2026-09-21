@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { computeReviewHubMaxHeight, isReviewHubVisible, shouldCloseReviewHubOnKey } from "@/lib/reviewHub";
+import { recordReviewHubOpen } from "@/lib/reviewHubUsage";
 
 /**
  * TSP-B1: open/closed state of the Review Hub panel. Session-only by design —
@@ -40,7 +41,10 @@ export function useReviewHubDisclosure(
   const [maxHeightPx, setMaxHeightPx] = useState<number | null>(null);
 
   const close = useCallback(() => setRequestedOpen(false), []);
-  const toggle = useCallback(() => setRequestedOpen((value) => !value), []);
+  const toggle = useCallback(() => {
+    if (!open) recordReviewHubOpen(); // B3: in-memory count only; see reviewHubUsage.ts
+    setRequestedOpen((value) => !value);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
