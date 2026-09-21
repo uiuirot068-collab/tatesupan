@@ -1,6 +1,6 @@
 # B2 Footer 2-tool customization — Human QA
 
-Status before Human QA: HUMAN_GATE / IMPLEMENTED — NOT RELEASED
+Status after Human QA: FIXED / RELEASE-CANDIDATE READY / NOT RELEASED
 
 ## Selection
 - `▶ 見直し` 内に `フッターに表示` がある。
@@ -36,4 +36,7 @@ Semantic separation: PASS / FAIL
 390px: PASS / FAIL
 B1 regression: PASS / FAIL
 
-B2 Human QA: PASS / FAIL
+B2 Human QA: PASS
+
+
+Human QA completed: 2026-09-21 JST

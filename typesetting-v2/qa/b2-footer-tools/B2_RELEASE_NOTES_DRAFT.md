@@ -11,3 +11,7 @@ DRAFT ONLY — NOT RELEASED
 ※ フッター表示は機能のON/OFFとは別です。表示していないツールも「見直し」から利用できます。
 
 Do not copy to production Update History until the B2 production release slot.
+
+
+Release-candidate status: READY (Human QA PASS 2026-09-21 JST)
+Publication status: NOT RELEASED
