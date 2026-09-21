@@ -49,6 +49,7 @@ const noop = () => {};
 const sections = {
   "writing-check": createElement("span", { "data-test-section": "wc" }, "wc"),
   "character-count": createElement("span", { "data-test-section": "cc" }, "cc"),
+  "read-aloud": createElement("span", { "data-test-section": "ra" }, "ra"),
 };
 const panelMarkup = (open: boolean) =>
   renderToStaticMarkup(createElement(ReviewHubPanel, { open, onClose: noop, sections }));
@@ -144,8 +145,10 @@ describe("B1 panel structure", () => {
     expect(Array.from(html.matchAll(/data-review-hub-tool="([^"]+)"/g), (m) => m[1])).toEqual([
       "writing-check",
       "character-count",
+      "read-aloud",
     ]);
     expect(html.indexOf("文章チェックβ")).toBeLessThan(html.indexOf("文字数カウント"));
+    expect(html.indexOf("文字数カウント")).toBeLessThan(html.indexOf("音読β"));
   });
 
   it("keeps a narrow-viewport contract: inset 8px, capped height, own scroll, fixed width only from md up", () => {
@@ -159,14 +162,14 @@ describe("B1 panel structure", () => {
   });
 });
 
-describe("B1 only exposes tools that exist today", () => {
-  it("registers exactly 文章チェックβ and 文字数カウント", () => {
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.id)).toEqual(["writing-check", "character-count"]);
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.title)).toEqual(["文章チェックβ", "文字数カウント"]);
+describe("the Hub only exposes tools that exist today", () => {
+  it("registers exactly 文章チェックβ, 文字数カウント and (B4) 音読β", () => {
+    expect(REVIEW_HUB_TOOLS.map((tool) => tool.id)).toEqual(["writing-check", "character-count", "read-aloud"]);
+    expect(REVIEW_HUB_TOOLS.map((tool) => tool.title)).toEqual(["文章チェックβ", "文字数カウント", "音読β"]);
   });
 
-  it("shows no unreleased B4/B5 tool anywhere the user can see (registry data + rendered UI + view/hook source)", () => {
-    const unreleased = /描写|修飾|音読|リズム|VOICEVOX|傍点|coming soon|近日|準備中|Coming/i;
+  it("shows no unimplemented tool (B5 描写・修飾 / B6 傍点 / VOICEVOX / placeholders) anywhere the user can see (registry data + rendered UI + view/hook source)", () => {
+    const unreleased = /描写|修飾|VOICEVOX|傍点|coming soon|近日|準備中|Coming/i;
     const visible = [
       JSON.stringify(REVIEW_HUB_TOOLS),
       panelMarkup(true),

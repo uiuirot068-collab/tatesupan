@@ -12,7 +12,7 @@
  *   3. supplying its section in `ReviewHubSections` (the `Record` type makes a
  *      missing section a compile error).
  * A tool must be registered only when it is implemented AND released. Nothing
- * unreleased (描写語・修飾表現チェックβ, 音読β, footer pinning, …) may appear
+ * unreleased (描写語・修飾表現チェックβ, …) may appear
  * here as a placeholder — see `reviewHub.test.tsx`.
  */
 
@@ -21,7 +21,7 @@ export const REVIEW_HUB_HEADING_ID = "editor-review-hub-heading";
 export const REVIEW_HUB_TRIGGER_LABEL = "見直し";
 export const REVIEW_HUB_HEADING = "見直し";
 
-export type ReviewHubToolId = "writing-check" | "character-count";
+export type ReviewHubToolId = "writing-check" | "character-count" | "read-aloud";
 
 export interface ReviewHubToolMeta {
   readonly id: ReviewHubToolId;
@@ -40,6 +40,11 @@ export const REVIEW_HUB_TOOLS: readonly ReviewHubToolMeta[] = [
     id: "character-count",
     title: "文字数カウント",
     summary: "画面下の表示と同じ、現在の原稿の文字数です。",
+  },
+  {
+    id: "read-aloud",
+    title: "音読β",
+    summary: "声に出して読む代わりに、文章のリズムを耳で確かめます。",
   },
 ];
 

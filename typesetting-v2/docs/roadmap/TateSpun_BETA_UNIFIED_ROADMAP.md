@@ -1188,7 +1188,8 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B4. 音読β / リズム確認
 
 - **Intent:** 声を出して音読しづらい環境でも、文章の「鳴り」を実際に耳で確認できるようにする。高品質なaudiobook生成ではなく、校正・確認を目的とする。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中に導入するcandidate。minimum targetは、選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、speed。
+- **Status (updated 2026-09-22): `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED`.** Implemented on local branch `feat/tsp-b4-b6-train-20260922` (base = B3 closeout `7d6e4ce`); not pushed / deployed / merged; Human QA pending; **not FIXED**. Design: Review Hub tool #3 (`音読β`), browser `SpeechSynthesis` only — on-device Japanese voice by default, an online voice only by explicit choice (with a warning), never a silent fallback; ruby read as its reading; selection / caret paragraph / full manuscript; play・pause/resume・stop・speed(0.5–2.0)・optional voice selector; footer compact control (`▶ 音読` → ⏸/■ n/N) under the B2 max-2 pin rule; no network path. Evidence, limits (device voices), Human checklist: `typesetting-v2/qa/b4-read-aloud/`. The B1 E2E "no internal scrolling" contract was relaxed to "every control reachable" (the Hub now holds 3 tools) — see `B4_IMPLEMENTATION_RESULT.md` §6.
+- **Original decision / stage:** `PLANNED / NOT STARTED`。β公開期間中に導入するcandidate。minimum targetは、選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、speed。
 - **Detailed contract:** rhythm、pacing、punctuation、repetition、grooveの確認を主目的とする。primary research directionはbrowser/device speech synthesis。local/device behaviorを優先し、manuscript textを外部speech serviceへ黙示的に送らない。available voice selectionは調査結果に応じて含める。
 - **Guardrails:** VOICEVOXはseparate future optional researchであり、音読βをVOICEVOX待ちにしない。高品質朗読作品生成、external audio production、cloud voice dependencyを初期contractへ入れない。
 - **Acceptance / Human feedback:** 実browser/deviceで範囲・段落・全文、再生/一時停止/停止/speedをHuman確認し、原稿のprivacy boundaryとリズム確認としての実用性を記録する。

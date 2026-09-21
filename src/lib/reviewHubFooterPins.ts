@@ -1,6 +1,6 @@
 export const REVIEW_HUB_FOOTER_STORAGE_KEY = "tatespun.reviewHub.footerTools.v1";
 export const REVIEW_HUB_FOOTER_MAX = 2 as const;
-export const REVIEW_HUB_FOOTER_TOOL_IDS = ["writing-check", "character-count"] as const;
+export const REVIEW_HUB_FOOTER_TOOL_IDS = ["writing-check", "character-count", "read-aloud"] as const;
 
 export type ReviewHubFooterToolId =
   (typeof REVIEW_HUB_FOOTER_TOOL_IDS)[number];
@@ -19,10 +19,10 @@ export function normalizeReviewHubFooterTools(
   const result: ReviewHubFooterToolId[] = [];
   for (const valueItem of value) {
     if (
-      (valueItem === "writing-check" || valueItem === "character-count") &&
-      !result.includes(valueItem)
+      (REVIEW_HUB_FOOTER_TOOL_IDS as readonly unknown[]).includes(valueItem) &&
+      !result.includes(valueItem as ReviewHubFooterToolId)
     ) {
-      result.push(valueItem);
+      result.push(valueItem as ReviewHubFooterToolId);
     }
     if (result.length === REVIEW_HUB_FOOTER_MAX) break;
   }

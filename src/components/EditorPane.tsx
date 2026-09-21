@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import { ensureLongtaskObserver, getEditorProbeMode, isPerfDebugEnabled, perfMark, perfSpan } from "@/lib/perfDebug";
 import DiagnosticShadowEditor from "./DiagnosticShadowEditor";
@@ -34,6 +34,8 @@ import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
 import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
+import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
+import { useReadAloud } from "@/hooks/useReadAloud";
 import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
@@ -316,6 +318,26 @@ function EditorPaneInner(
   // this (display only -- `writingCheckEnabled` is separate). With both shown, pin order = top-to-bottom order.
   const { pins: footerPins } = useReviewHubFooterPins();
   const writingCheckPinned = footerPins.includes("writing-check");
+  // TSP-B4 音読β: ONE controller for the Hub section and the footer control. It reads the selection / caret /
+  // manuscript only at the moment of a press (never automatically) and hands the text to the device speech engine only.
+  const getReadAloudSource = useCallback(() => {
+    if (isWindowed) {
+      return { content, selection: pagedEditorRef.current?.getSelectionGlobal() ?? { start: 0, end: 0 } };
+    }
+    const el = textareaRef.current;
+    return { content, selection: { start: el?.selectionStart ?? 0, end: el?.selectionEnd ?? 0 } };
+  }, [content, isWindowed]);
+  const readAloud = useReadAloud(memoStorageKey, getReadAloudSource);
+  const readAloudViewProps = {
+    state: readAloud.state,
+    onStart: readAloud.start,
+    onStartQuick: readAloud.startQuick,
+    onPause: readAloud.pause,
+    onResume: readAloud.resume,
+    onStop: readAloud.stop,
+    onRateChange: readAloud.setRate,
+    onVoiceChange: readAloud.setPreferredVoice,
+  };
   const footerToolsSwapped =
     writingCheckPinned && footerPins.includes("character-count") && footerPins.indexOf("character-count") < footerPins.indexOf("writing-check");
   // Phase 12: occurrence-level, in-memory-only ignore state -- never
@@ -906,6 +928,7 @@ function EditorPaneInner(
           <span className="min-w-0 shrink truncate whitespace-nowrap tabular-nums text-ink/70">
             現在{visualLength.toLocaleString("ja-JP")}字
           </span>
+          {footerPins.includes("read-aloud") && <ReadAloudFooterControl {...readAloudViewProps} />}
           <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
           <button
             type="button"
@@ -986,6 +1009,7 @@ function EditorPaneInner(
           />
           <span className="flex shrink-0 items-center gap-1.5">
             <ReviewHubFooterPinnedTools
+              readAloud={<ReadAloudFooterControl {...readAloudViewProps} />}
               characterCount={
                 <span
                   title="現在の原稿文字数"
@@ -1028,6 +1052,7 @@ function EditorPaneInner(
             />
           ),
           "character-count": <CharacterCountReviewSection count={visualLength} />,
+          "read-aloud": <ReadAloudReviewSection {...readAloudViewProps} />,
         }}
       />
       </div>

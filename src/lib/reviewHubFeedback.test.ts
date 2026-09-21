@@ -55,11 +55,11 @@ describe("B3 roadmap wording", () => {
     expect(REVIEW_HUB_FAVORITES_QUESTION).toContain("2つまで");
   });
 
-  it("Q2 choices are exactly the tools the Hub offers today (registry-driven): no unreleased 描写語・修飾 / 音読 choice", () => {
+  it("Q2 choices are exactly the tools the Hub offers today (registry-driven): no unimplemented 描写語・修飾 choice", () => {
     const labels = reviewHubFavoriteChoices().map((c) => c.label);
     expect(labels).toEqual(REVIEW_HUB_TOOLS.map((t) => t.title));
-    expect(labels).toEqual(["文章チェックβ", "文字数カウント"]);
-    expect(labels.join()).not.toMatch(/描写|修飾|音読|リズム|VOICEVOX|傍点/);
+    expect(labels).toEqual(["文章チェックβ", "文字数カウント", "音読β"]);
+    expect(labels.join()).not.toMatch(/描写|修飾|VOICEVOX|傍点/);
   });
 });
 
@@ -116,11 +116,11 @@ describe("B3 privacy: the answer can only ever contain allowlisted choices, coun
   it("drops unknown / duplicate / excess Q2 ids and unknown footer ids", () => {
     const { message } = buildReviewHubSurveyMessage({
       ...baseInput,
-      favorites: ["writing-check", "writing-check", "read-aloud", "character-count", "writing-check"] as never,
+      favorites: ["writing-check", "writing-check", "unknown-tool", "character-count", "writing-check"] as never,
       footerTools: ["writing-check", "secret-tool"] as never,
     });
     expect(message).toContain("Q2 見直しでよく使うもの: 文章チェックβ、文字数カウント");
-    expect(message).not.toContain("read-aloud");
+    expect(message).not.toContain("unknown-tool");
     expect(message).not.toContain("secret-tool");
     expect(message).toContain("フッターに表示中: 文章チェックβ（1/2）");
   });

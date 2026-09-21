@@ -168,7 +168,20 @@ async function assertPanelGeometry(tag, areaHeight) {
   assert.ok(p.l >= g.paneLeft - 0.5 && p.r <= g.paneRight + 0.5, `${tag}: panel must fit the Editor pane horizontally, not be clipped (panel ${Math.round(p.l)}-${Math.round(p.r)}, pane ${Math.round(g.paneLeft)}-${Math.round(g.paneRight)})`);
   assert.ok(p.b <= g.footerTop + 0.5, `${tag}: panel must sit ABOVE the footer stack (panel bottom ${p.b} <= footer top ${g.footerTop})`);
   assert.ok(p.t >= g.paneTop - 0.5, `${tag}: panel must stay inside the Editor pane, never over the global header (panel top ${p.t}, pane top ${g.paneTop})`);
-  assert.ok(g.natural - g.client <= 1, `${tag}: every control in the panel must be reachable without scrolling (content ${g.natural}px, visible ${g.client}px)`);
+  // B1 originally held two tiny tools and needed no scrolling. From B4 the Hub holds 3+ tools (音読β has real controls),
+  // so the panel may scroll INSIDE its cap (overflow-y-auto, documented in reviewHub.ts). The contract that matters is
+  // unchanged: no control is pushed out of reach -- each one can be scrolled into view and is hit-testable there.
+  if (g.natural - g.client > 1) {
+    const oy = await cdp.evaluate(`getComputedStyle(document.querySelector('${PANEL}')).overflowY`);
+    assert.ok(oy === 'auto' || oy === 'scroll', `${tag}: content taller than the panel (${g.natural} > ${g.client}) must scroll inside it (overflow-y ${oy})`);
+  }
+  const unreachable = await cdp.evaluate(`(() => { const panel = document.querySelector('${PANEL}'); const bad = [];
+    for (const c of panel.querySelectorAll('button, input, select, label')) { if (c.disabled || c.getClientRects().length === 0) continue;
+      c.scrollIntoView({ block: 'nearest' }); const r = c.getBoundingClientRect(); const pr = panel.getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2; const top = document.elementFromPoint(x, y);
+      if (!(c === top || c.contains(top) || top?.closest('label') === c.closest('label')) || r.top < pr.top - 0.5 || r.bottom > pr.bottom + 0.5) bad.push(c.outerHTML.slice(0, 90)); }
+    panel.scrollTop = 0; return bad; })()`);
+  assert.deepEqual(unreachable, [], `${tag}: every control in the panel must be reachable (scroll into view + hit-testable)`);
   if (g.natural + 8 <= areaHeight) {
     assert.ok(p.t >= g.actionRowBottom - 0.5, `${tag}: on this screen the panel fits over the manuscript, so it must not cover the title/undo/redo rows (panel top ${p.t}, row bottom ${g.actionRowBottom})`);
   } else {
@@ -235,11 +248,11 @@ async function expandedFooterPhase(v) {
   })`);
   assert.equal(content.heading, "見直し");
   assert.equal(content.labelled, "editor-review-hub-heading");
-  assert.deepEqual(content.tools, ["writing-check", "character-count"], `${tag}: only the two implemented tools`);
-  assert.doesNotMatch(content.text, /描写|修飾|音読|リズム|傍点|ピン/, `${tag}: no unreleased tool copy`);
+  assert.deepEqual(content.tools, ["writing-check", "character-count", "read-aloud"], `${tag}: only the implemented tools`);
+  assert.doesNotMatch(content.text, /描写|修飾|傍点|ピン/, `${tag}: no unreleased tool copy`);
   // B2 (roadmap B2 contract): the Hub carries one フッターに表示 control per tool, inline on the tool's title row, so the panel stays compact.
   const pinToggles = await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool] [data-review-hub-footer-pin-toggle]')].map((e) => e.closest('[data-review-hub-tool]').dataset.reviewHubTool)`);
-  assert.deepEqual(pinToggles, ["writing-check", "character-count"], `${tag}: one フッターに表示 toggle per implemented tool`);
+  assert.deepEqual(pinToggles, ["writing-check", "character-count", "read-aloud"], `${tag}: one フッターに表示 toggle per implemented tool`);
 
   // 文字数カウント == footer pill, live
   const pill = () => cdp.evaluate(`document.querySelector('[title="現在の原稿文字数"]')?.textContent ?? ''`);
@@ -303,16 +316,18 @@ async function expandedFooterPhase(v) {
     }
     const title = document.querySelector('[data-demo-target="title"]');
     const tr = title.getBoundingClientRect();
-    return { kind: 'title', x: tr.left + 12, y: tr.top + tr.height / 2 };
+    if (document.elementFromPoint(tr.left + 12, tr.top + tr.height / 2) === title) return { kind: 'title', x: tr.left + 12, y: tr.top + tr.height / 2 };
+    // B4: with 3+ Hub tools the panel can cover the whole Editor pane on a 320x568 phone; the page chrome above it is still outside.
+    return { kind: 'chrome', x: 8, y: 8 };
   })()`);
   const fieldValueLength = (kind) => cdp.evaluate(`document.querySelector('[data-demo-target="${kind}"]').value.length`);
-  const beforeLen = await fieldValueLength(pick.kind);
+  const beforeLen = pick.kind === "chrome" ? 0 : await fieldValueLength(pick.kind);
   await realClickAt(pick.x, pick.y);
   await closeHub(`${tag} (outside press on ${pick.kind})`);
   const focusedKind = await cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target')`);
-  assert.equal(focusedKind, pick.kind, `${tag}: an outside press must leave focus in the field that was pressed (${pick.kind})`);
-  await cdp.send("Input.insertText", { text: "字" });
-  assert.equal(await fieldValueLength(pick.kind), beforeLen + 1, `${tag}: typing right after closing goes into the ${pick.kind}, not into the Hub`);
+  if (pick.kind !== "chrome") assert.equal(focusedKind, pick.kind, `${tag}: an outside press must leave focus in the field that was pressed (${pick.kind})`);
+  if (pick.kind !== "chrome") await cdp.send("Input.insertText", { text: "字" });
+  if (pick.kind !== "chrome") assert.equal(await fieldValueLength(pick.kind), beforeLen + 1, `${tag}: typing right after closing goes into the ${pick.kind}, not into the Hub`);
   if (pick.kind === "title") log(`  ${tag}: manuscript fully covered by the raised panel on this short screen -- outside press verified on the title field`);
 
   // open/close writes nothing to storage (no B2 preference). The snapshot is taken right before the
@@ -480,7 +495,7 @@ async function pinSemanticsPhase(v) {
   await realClick(pinToggle("writing-check"));
   await realClick(pinToggle("character-count"));
   await cdp.waitFor(`!document.querySelector('[data-writing-check-surface] input[type=checkbox]') && !document.querySelector('[title="現在の原稿文字数"]')`, { label: `${tag}: 0 pins` });
-  assert.deepEqual(await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`), ["writing-check", "character-count"], `${tag}: Hub still lists both tools`);
+  assert.deepEqual(await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`), ["writing-check", "character-count", "read-aloud"], `${tag}: Hub still lists every tool`);
   assert.equal(await wcStored(), "on");
 
   // phone one-line footer: its チェックβ checkbox follows the pin too
