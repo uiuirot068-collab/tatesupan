@@ -55,11 +55,11 @@ describe("B3 roadmap wording", () => {
     expect(REVIEW_HUB_FAVORITES_QUESTION).toContain("2つまで");
   });
 
-  it("Q2 choices are exactly the tools the Hub offers today (registry-driven): no unimplemented 描写語・修飾 choice", () => {
+  it("Q2 choices are exactly the tools the Hub offers today (registry-driven): no unimplemented 傍点 / VOICEVOX choice", () => {
     const labels = reviewHubFavoriteChoices().map((c) => c.label);
     expect(labels).toEqual(REVIEW_HUB_TOOLS.map((t) => t.title));
-    expect(labels).toEqual(["文章チェックβ", "文字数カウント", "音読β"]);
-    expect(labels.join()).not.toMatch(/描写|修飾|VOICEVOX|傍点/);
+    expect(labels).toEqual(["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"]);
+    expect(labels.join()).not.toMatch(/VOICEVOX|傍点/);
   });
 });
 

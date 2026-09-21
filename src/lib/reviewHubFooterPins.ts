@@ -1,6 +1,6 @@
 export const REVIEW_HUB_FOOTER_STORAGE_KEY = "tatespun.reviewHub.footerTools.v1";
 export const REVIEW_HUB_FOOTER_MAX = 2 as const;
-export const REVIEW_HUB_FOOTER_TOOL_IDS = ["writing-check", "character-count", "read-aloud"] as const;
+export const REVIEW_HUB_FOOTER_TOOL_IDS = ["writing-check", "character-count", "read-aloud", "description-check"] as const;
 
 export type ReviewHubFooterToolId =
   (typeof REVIEW_HUB_FOOTER_TOOL_IDS)[number];

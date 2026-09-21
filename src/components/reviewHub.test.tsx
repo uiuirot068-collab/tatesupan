@@ -50,6 +50,7 @@ const sections = {
   "writing-check": createElement("span", { "data-test-section": "wc" }, "wc"),
   "character-count": createElement("span", { "data-test-section": "cc" }, "cc"),
   "read-aloud": createElement("span", { "data-test-section": "ra" }, "ra"),
+  "description-check": createElement("span", { "data-test-section": "dc" }, "dc"),
 };
 const panelMarkup = (open: boolean) =>
   renderToStaticMarkup(createElement(ReviewHubPanel, { open, onClose: noop, sections }));
@@ -146,9 +147,11 @@ describe("B1 panel structure", () => {
       "writing-check",
       "character-count",
       "read-aloud",
+      "description-check",
     ]);
     expect(html.indexOf("文章チェックβ")).toBeLessThan(html.indexOf("文字数カウント"));
     expect(html.indexOf("文字数カウント")).toBeLessThan(html.indexOf("音読β"));
+    expect(html.indexOf("音読β")).toBeLessThan(html.indexOf("描写語・修飾表現チェックβ"));
   });
 
   it("keeps a narrow-viewport contract: inset 8px, capped height, own scroll, fixed width only from md up", () => {
@@ -163,13 +166,13 @@ describe("B1 panel structure", () => {
 });
 
 describe("the Hub only exposes tools that exist today", () => {
-  it("registers exactly 文章チェックβ, 文字数カウント and (B4) 音読β", () => {
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.id)).toEqual(["writing-check", "character-count", "read-aloud"]);
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.title)).toEqual(["文章チェックβ", "文字数カウント", "音読β"]);
+  it("registers exactly 文章チェックβ, 文字数カウント, (B4) 音読β and (B5) 描写語・修飾表現チェックβ", () => {
+    expect(REVIEW_HUB_TOOLS.map((tool) => tool.id)).toEqual(["writing-check", "character-count", "read-aloud", "description-check"]);
+    expect(REVIEW_HUB_TOOLS.map((tool) => tool.title)).toEqual(["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"]);
   });
 
-  it("shows no unimplemented tool (B5 描写・修飾 / B6 傍点 / VOICEVOX / placeholders) anywhere the user can see (registry data + rendered UI + view/hook source)", () => {
-    const unreleased = /描写|修飾|VOICEVOX|傍点|coming soon|近日|準備中|Coming/i;
+  it("shows no unimplemented tool (B6 傍点 / VOICEVOX / placeholders) anywhere the user can see (registry data + rendered UI + view/hook source)", () => {
+    const unreleased = /VOICEVOX|傍点|coming soon|近日|準備中|Coming/i;
     const visible = [
       JSON.stringify(REVIEW_HUB_TOOLS),
       panelMarkup(true),

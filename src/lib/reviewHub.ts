@@ -21,7 +21,7 @@ export const REVIEW_HUB_HEADING_ID = "editor-review-hub-heading";
 export const REVIEW_HUB_TRIGGER_LABEL = "見直し";
 export const REVIEW_HUB_HEADING = "見直し";
 
-export type ReviewHubToolId = "writing-check" | "character-count" | "read-aloud";
+export type ReviewHubToolId = "writing-check" | "character-count" | "read-aloud" | "description-check";
 
 export interface ReviewHubToolMeta {
   readonly id: ReviewHubToolId;
@@ -45,6 +45,11 @@ export const REVIEW_HUB_TOOLS: readonly ReviewHubToolMeta[] = [
     id: "read-aloud",
     title: "音読β",
     summary: "声に出して読む代わりに、文章のリズムを耳で確かめます。",
+  },
+  {
+    id: "description-check",
+    title: "描写語・修飾表現チェックβ",
+    summary: "形容や様子の説明になっている表現を、見直しの候補として黄色でお知らせします。",
   },
 ];
 

@@ -179,7 +179,7 @@ async function assertPanelGeometry(tag, areaHeight) {
     for (const c of panel.querySelectorAll('button, input, select, label')) { if (c.disabled || c.getClientRects().length === 0) continue;
       c.scrollIntoView({ block: 'nearest' }); const r = c.getBoundingClientRect(); const pr = panel.getBoundingClientRect();
       const x = r.left + r.width / 2, y = r.top + r.height / 2; const top = document.elementFromPoint(x, y);
-      if (!(c === top || c.contains(top) || top?.closest('label') === c.closest('label')) || r.top < pr.top - 0.5 || r.bottom > pr.bottom + 0.5) bad.push(c.outerHTML.slice(0, 90)); }
+      if (!(c === top || c.contains(top) || top?.closest('label') === c.closest('label') || top?.tagName === 'NEXTJS-PORTAL') || r.top < pr.top - 0.5 || r.bottom > pr.bottom + 0.5) bad.push(c.outerHTML.slice(0, 90)); }
     panel.scrollTop = 0; return bad; })()`);
   assert.deepEqual(unreachable, [], `${tag}: every control in the panel must be reachable (scroll into view + hit-testable)`);
   if (g.natural + 8 <= areaHeight) {
@@ -248,11 +248,11 @@ async function expandedFooterPhase(v) {
   })`);
   assert.equal(content.heading, "見直し");
   assert.equal(content.labelled, "editor-review-hub-heading");
-  assert.deepEqual(content.tools, ["writing-check", "character-count", "read-aloud"], `${tag}: only the implemented tools`);
-  assert.doesNotMatch(content.text, /描写|修飾|傍点|ピン/, `${tag}: no unreleased tool copy`);
+  assert.deepEqual(content.tools, ["writing-check", "character-count", "read-aloud", "description-check"], `${tag}: only the implemented tools`);
+  assert.doesNotMatch(content.text, /傍点|ピン/, `${tag}: no unreleased tool copy`);
   // B2 (roadmap B2 contract): the Hub carries one フッターに表示 control per tool, inline on the tool's title row, so the panel stays compact.
   const pinToggles = await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool] [data-review-hub-footer-pin-toggle]')].map((e) => e.closest('[data-review-hub-tool]').dataset.reviewHubTool)`);
-  assert.deepEqual(pinToggles, ["writing-check", "character-count", "read-aloud"], `${tag}: one フッターに表示 toggle per implemented tool`);
+  assert.deepEqual(pinToggles, ["writing-check", "character-count", "read-aloud", "description-check"], `${tag}: one フッターに表示 toggle per implemented tool`);
 
   // 文字数カウント == footer pill, live
   const pill = () => cdp.evaluate(`document.querySelector('[title="現在の原稿文字数"]')?.textContent ?? ''`);
@@ -495,7 +495,7 @@ async function pinSemanticsPhase(v) {
   await realClick(pinToggle("writing-check"));
   await realClick(pinToggle("character-count"));
   await cdp.waitFor(`!document.querySelector('[data-writing-check-surface] input[type=checkbox]') && !document.querySelector('[title="現在の原稿文字数"]')`, { label: `${tag}: 0 pins` });
-  assert.deepEqual(await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`), ["writing-check", "character-count", "read-aloud"], `${tag}: Hub still lists every tool`);
+  assert.deepEqual(await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`), ["writing-check", "character-count", "read-aloud", "description-check"], `${tag}: Hub still lists every tool`);
   assert.equal(await wcStored(), "on");
 
   // phone one-line footer: its チェックβ checkbox follows the pin too

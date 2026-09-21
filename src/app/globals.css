@@ -69,6 +69,15 @@
   text-underline-offset: 0.15em;
 }
 
+/* TSP-B5 描写語・修飾表現チェックβ -- ONE yellow highlight for every category (A / B / C are told apart in the
+   detail, never by colour). A background, deliberately different from the wavy underline of 文章チェックβ. */
+.tsp-description-mark {
+  background-color: rgba(250, 204, 21, 0.4);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* NG words retain their explicit textual identity in the results and use a
    separate purple wave in the editor; this does not alter detection meaning. */
 .tsp-writing-wavy-ng {

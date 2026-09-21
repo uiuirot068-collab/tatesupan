@@ -1,0 +1,34 @@
+{
+  "20000": {
+    "actualChars": 20067,
+    "paragraphs": 299,
+    "marksAllCategories": 1833,
+    "coldMs": 39.8,
+    "warmCachedMs": 0.4,
+    "oneParagraphEditMs": 0.5,
+    "asyncYields": 1,
+    "longestSliceMs": 8.4
+  },
+  "100000": {
+    "actualChars": 100025,
+    "paragraphs": 1488,
+    "marksAllCategories": 9116,
+    "coldMs": 71.2,
+    "warmCachedMs": 1.6,
+    "oneParagraphEditMs": 1.7,
+    "asyncYields": 3,
+    "longestSliceMs": 8.1
+  },
+  "300000": {
+    "actualChars": 300020,
+    "paragraphs": 4456,
+    "marksAllCategories": 27311,
+    "coldMs": 227.2,
+    "warmCachedMs": 5,
+    "oneParagraphEditMs": 6.5,
+    "asyncYields": 10,
+    "longestSliceMs": 8.6
+  },
+  "node": "v24.18.0",
+  "sentencesInPool": 85
+}

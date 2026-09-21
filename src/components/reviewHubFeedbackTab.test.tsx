@@ -93,7 +93,7 @@ describe("B3 見直し tab: structure", () => {
 
   it("offers no unreleased tool, no image input and no file input", () => {
     const html = render();
-    expect(html + tabSource + modelSource).not.toMatch(/描写語|修飾表現|VOICEVOX|type="file"/);
+    expect(html + tabSource + modelSource).not.toMatch(/VOICEVOX|type="file"/);
   });
 
   it("is presentational: no storage, no network, no editor/manuscript access", () => {

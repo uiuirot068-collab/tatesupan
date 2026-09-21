@@ -36,6 +36,14 @@ import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingC
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
 import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
 import { useReadAloud } from "@/hooks/useReadAloud";
+import { useDescriptionCheck } from "@/hooks/useDescriptionCheck";
+import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
+import {
+  DescriptionCheckFooterPill,
+  DescriptionCheckReviewSection,
+  DescriptionMarkDetailCard,
+} from "./DescriptionCheckControls";
+import { findMarkAt, type DescriptionMark } from "@/lib/descriptionCheckManuscript";
 import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
@@ -328,6 +336,33 @@ function EditorPaneInner(
     return { content, selection: { start: el?.selectionStart ?? 0, end: el?.selectionEnd ?? 0 } };
   }, [content, isWindowed]);
   const readAloud = useReadAloud(memoStorageKey, getReadAloudSource);
+  // TSP-B5 描写語・修飾表現チェックβ: default OFF; while OFF nothing is analysed. The caret is tracked (only while ON) so the
+  // candidate under it can show its category / reason -- the "select a marker, see why" detail.
+  const descriptionCheck = useDescriptionCheck(content, () => isComposingRef.current, recheckNonce);
+  // -1 = the writer has not put a caret anywhere yet: no candidate is 'under the caret' until they do.
+  const [descriptionCaret, setDescriptionCaret] = useState(-1);
+  const [descriptionDismissed, setDescriptionDismissed] = useState<DescriptionMark | null>(null);
+  const {
+    enabled: descriptionEnabled,
+    current: descriptionCurrent,
+    marks: descriptionMarks,
+    analysisText: descriptionAnalysisText,
+  } = descriptionCheck;
+  const descriptionActiveMark = useMemo(
+    () => (descriptionEnabled && descriptionCurrent ? findMarkAt(descriptionMarks, descriptionCaret) : null),
+    [descriptionEnabled, descriptionCurrent, descriptionMarks, descriptionCaret]
+  );
+  const handleCursorIndexChange = useCallback(
+    (index: number) => {
+      if (descriptionEnabled) setDescriptionCaret(index);
+      onCursorIndexChange?.(index);
+    },
+    [descriptionEnabled, onCursorIndexChange]
+  );
+  const descriptionPagedProps = useMemo(
+    () => (descriptionEnabled ? { enabled: true, analysisText: descriptionAnalysisText, marks: descriptionMarks } : undefined),
+    [descriptionEnabled, descriptionAnalysisText, descriptionMarks]
+  );
   const readAloudViewProps = {
     state: readAloud.state,
     onStart: readAloud.start,
@@ -385,7 +420,7 @@ function EditorPaneInner(
 
   const reportCursorIndex = () => {
     const el = textareaRef.current;
-    if (!el || !onCursorIndexChange) return;
+    if (!el) return;
     perfMark("EditorPane:cursorIndex", { index: el.selectionStart });
     perfMark("EditorPane:native:select", {
       selectionStart: el.selectionStart,
@@ -393,7 +428,7 @@ function EditorPaneInner(
       isComposing: isComposingRef.current,
       contentLength: el.value.length,
     });
-    onCursorIndexChange(el.selectionStart);
+    handleCursorIndexChange(el.selectionStart);
   };
 
   /**
@@ -706,7 +741,8 @@ function EditorPaneInner(
               if (undoState && next !== undoState.after) setUndoState(null);
               onContentChange(next);
             }}
-            onCursorIndexChange={onCursorIndexChange}
+            onCursorIndexChange={handleCursorIndexChange}
+            descriptionMarks={descriptionPagedProps}
             onNativeKeyDown={(el) => logNativeEvent("keydown", el)}
             onNativeBeforeInput={(el, inputType) => captureTextareaInput(el, inputType)}
             onNativeCompositionStart={(el) => {
@@ -755,6 +791,15 @@ function EditorPaneInner(
           />
         ) : (
         <>
+        {descriptionCheck.enabled && (
+          <div className={`pointer-events-none absolute inset-0 ${descriptionCheck.current ? "visible" : "invisible"}`}>
+            <DescriptionMarkOverlay
+              textareaRef={textareaRef}
+              text={descriptionCheck.analysisText}
+              marks={descriptionCheck.marks}
+            />
+          </div>
+        )}
         {writingCheckEnabled && (
           <div className={`pointer-events-none absolute inset-0 ${analysisCurrent ? "visible" : "invisible"}`}>
             <WritingCheckOverlay
@@ -929,6 +974,14 @@ function EditorPaneInner(
             現在{visualLength.toLocaleString("ja-JP")}字
           </span>
           {footerPins.includes("read-aloud") && <ReadAloudFooterControl {...readAloudViewProps} />}
+          {footerPins.includes("description-check") && (
+            <DescriptionCheckFooterPill
+              enabled={descriptionCheck.enabled}
+              current={descriptionCheck.current}
+              count={descriptionCheck.marks.length}
+              onOpen={toggleReviewHub}
+            />
+          )}
           <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
           <button
             type="button"
@@ -1010,6 +1063,14 @@ function EditorPaneInner(
           <span className="flex shrink-0 items-center gap-1.5">
             <ReviewHubFooterPinnedTools
               readAloud={<ReadAloudFooterControl {...readAloudViewProps} />}
+              descriptionCheck={
+                <DescriptionCheckFooterPill
+                  enabled={descriptionCheck.enabled}
+                  current={descriptionCheck.current}
+                  count={descriptionCheck.marks.length}
+                  onOpen={toggleReviewHub}
+                />
+              }
               characterCount={
                 <span
                   title="現在の原稿文字数"
@@ -1037,6 +1098,9 @@ function EditorPaneInner(
         </div>
       </div>
 
+      {descriptionActiveMark && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
+        <DescriptionMarkDetailCard mark={descriptionActiveMark} onDismiss={() => setDescriptionDismissed(descriptionActiveMark)} />
+      )}
       <ReviewHubPanel
         open={reviewHubOpen}
         onClose={closeReviewHub}
@@ -1053,6 +1117,18 @@ function EditorPaneInner(
           ),
           "character-count": <CharacterCountReviewSection count={visualLength} />,
           "read-aloud": <ReadAloudReviewSection {...readAloudViewProps} />,
+          "description-check": (
+            <DescriptionCheckReviewSection
+              enabled={descriptionCheck.enabled}
+              mode={descriptionCheck.mode}
+              onToggle={descriptionCheck.setEnabled}
+              onModeChange={descriptionCheck.setMode}
+              marks={descriptionCheck.marks}
+              current={descriptionCheck.current}
+              activeMark={descriptionActiveMark}
+              onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
+            />
+          ),
         }}
       />
       </div>

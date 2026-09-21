@@ -205,7 +205,7 @@ async function coreViewport(v) {
   await openHub(tag);
   assert.deepEqual(
     await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`),
-    ["writing-check", "character-count", "read-aloud"],
+    ["writing-check", "character-count", "read-aloud", "description-check"],
     `${tag}: 音読β is the third Hub tool`
   );
   const topMenu = await cdp.evaluate(`document.querySelector('header')?.innerText ?? ''`);

@@ -16,7 +16,7 @@ import { REVIEW_HUB_TOOLS } from "./reviewHub";
  * pin order = display order, browser-local persistence. B4 creates the first
  * true 3-tool state (文章チェックβ / 文字数カウント / 音読β).
  */
-describe("B2 footer pins with three tools (B4)", () => {
+describe("B2 footer pins with three and four tools (B4 / B5)", () => {
   it("every registered Hub tool can be pinned, and the pin ids are exactly the registry ids", () => {
     expect([...REVIEW_HUB_FOOTER_TOOL_IDS]).toEqual(REVIEW_HUB_TOOLS.map((tool) => tool.id));
     expect(REVIEW_HUB_FOOTER_MAX).toBe(2);
@@ -31,6 +31,8 @@ describe("B2 footer pins with three tools (B4)", () => {
   it("max-2 is enforced on pinning: a third pin is refused and the current pair is left untouched", () => {
     const pair: ReviewHubFooterToolId[] = ["writing-check", "character-count"];
     expect(toggleReviewHubFooterTool(pair, "read-aloud")).toEqual(pair);
+    expect(toggleReviewHubFooterTool(pair, "description-check")).toEqual(pair);
+    expect(toggleReviewHubFooterTool(["read-aloud", "description-check"], "writing-check")).toEqual(["read-aloud", "description-check"]);
     expect(toggleReviewHubFooterTool(["character-count", "read-aloud"], "writing-check")).toEqual(["character-count", "read-aloud"]);
     expect(toggleReviewHubFooterTool(["writing-check", "read-aloud"], "character-count")).toEqual(["writing-check", "read-aloud"]);
   });
@@ -64,6 +66,7 @@ describe("B2 footer pins with three tools (B4)", () => {
     expect(roundTrip(["read-aloud", "character-count"])).toEqual(["read-aloud", "character-count"]);
     expect(roundTrip(["read-aloud", "read-aloud", "writing-check", "character-count"])).toEqual(["read-aloud", "writing-check"]);
     expect(roundTrip(["nonexistent", "read-aloud", 7, null])).toEqual(["read-aloud"]);
+    expect(roundTrip(["description-check", "read-aloud", "writing-check"])).toEqual(["description-check", "read-aloud"]);
     // a B2/B3-era stored value is still valid as-is
     expect(roundTrip(["character-count", "writing-check"])).toEqual(["character-count", "writing-check"]);
   });
