@@ -24,6 +24,7 @@ import {
   describeWritingIssueSummary,
   summarizeWritingIssues,
 } from "@/lib/writingCheckSummary";
+import WritingCheckBar from "./WritingCheckBar";
 
 /**
  * TSP-B1 Review Hub. This repo's vitest runs in Node with no jsdom, so
@@ -191,8 +192,10 @@ describe("B1 only exposes tools that exist today", () => {
     const labels = Array.from(html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g), (m) => m[1].replace(/<[^>]+>/g, "").trim());
     // B2 adds exactly one real, wired フッターに表示 toggle per tool (data-review-hub-footer-pin-toggle); B1's controls are unchanged.
     const pinToggles = labels.filter((label) => /フッターに表示$/.test(label));
+    const pinMoves = labels.filter((label) => /^[↑↓]$/.test(label)); // with both shown (default) each has one swap arrow
     expect(pinToggles).toHaveLength(REVIEW_HUB_TOOLS.length);
-    expect(labels.filter((label) => !pinToggles.includes(label)).sort()).toEqual(["⚙ 設定", "確認候補を見る", "✕"].sort());
+    expect(pinMoves.sort()).toEqual(["↑", "↓"]);
+    expect(labels.filter((label) => !pinToggles.includes(label) && !pinMoves.includes(label)).sort()).toEqual(["⚙ 設定", "確認候補を見る", "✕"].sort());
   });
 });
 
@@ -211,6 +214,73 @@ describe("B1 Hub keeps no favourites/slots and persists nothing itself (B2 foote
 
   it("adds no new B3 feedback/report question", () => {
     expect(hubView + hubHook + hubModel).not.toMatch(/足りている|もう1枠|BetaFeedback|報告/);
+  });
+});
+
+describe("B2: 文章チェックβ footer strip follows フッターに表示, not its ON/OFF state", () => {
+  const bar = (props: { enabled: boolean; showBar?: boolean; undoAvailable?: boolean }) =>
+    renderToStaticMarkup(
+      createElement(WritingCheckBar, {
+        enabled: props.enabled,
+        showBar: props.showBar,
+        onToggle: noop,
+        text: "",
+        issues: [],
+        onSelectIssue: noop,
+        onFixIssue: noop,
+        onIgnoreIssue: noop,
+        onBulkFix: noop,
+        onOpenSettings: noop,
+        undoAvailable: props.undoAvailable ?? false,
+        onUndo: noop,
+      })
+    );
+
+  it("pinned (the default): the B1 strip is rendered — checkbox, 確認候補なし, ⚙ 設定, note", () => {
+    const on = bar({ enabled: true });
+    expect(on).toContain('type="checkbox"');
+    expect(on).toContain("文章チェック β");
+    expect(on).toContain("⚙ 設定");
+    expect(bar({ enabled: false })).toContain('type="checkbox"'); // pinned + OFF: checkbox still there, unchecked
+  });
+
+  it("unpinned: nothing of 文章チェックβ remains in the footer, whether it is ON or OFF", () => {
+    for (const enabled of [true, false]) {
+      const html = bar({ enabled, showBar: false });
+      expect(html).not.toContain('type="checkbox"');
+      expect(html).not.toMatch(/文章チェック|チェックβ|設定|確認候補|波線/);
+      expect(html).not.toContain("<button");
+      expect(html).not.toContain("border-t"); // no empty bordered strip either
+    }
+  });
+
+  it("unpinned only hides display: a fix's one-step 元に戻す is still offered while it is available", () => {
+    expect(bar({ enabled: true, showBar: false, undoAvailable: true })).toContain("元に戻す");
+    expect(bar({ enabled: false, showBar: false, undoAvailable: true })).not.toContain("元に戻す");
+  });
+
+  it("EditorPane wires the pin to the strip and the mobile one-line checkbox, never to the ON/OFF flag", () => {
+    expect(paneBetween("<WritingCheckBar", "enabled=")).toContain("showBar={writingCheckPinned}");
+    expect(paneBetween('data-editor-footer-collapsed=""', "<WorkSessionTracker")).toContain("{writingCheckPinned && (");
+    expect(paneBetween("const writingCheckPinned", "const footerToolsSwapped")).not.toMatch(/writingCheckEnabled/);
+  });
+});
+
+describe("B2 Human QA: the Editor title action row stays ONE row at 768-905px (pixel proof: header-density E2E)", () => {
+  const row = paneBetween('data-editor-action-row=""', "{focusMode && (");
+
+  it("tightens gap/padding only in the tablet range and keeps every action", () => {
+    expect(row).toContain("md:gap-2 md:max-[905px]:gap-1"); // desktop gap unchanged, tablet tighter
+    for (const action of ["undo", "redo", "page-break", "replace"]) expect(row).toContain(`data-editor-action="${action}"`);
+    expect((row.match(/md:px-3 md:py-1 md:max-\[905px\]:px-2/g) ?? []).length).toBeGreaterThanOrEqual(2); // 改ページ挿入 / 置換
+  });
+
+  it("shows 元に戻す / やり直す as icon-only in that range, still labelled for assistive tech and tooltips", () => {
+    // the label span keeps its own `hidden md:inline`; the tablet range hides it from the button (Round 5 contract untouched)
+    expect(row.match(/md:max-\[905px\]:\[&>span:not\(\[aria-hidden\]\)\]:hidden/g)).toHaveLength(2);
+    expect(row).toContain('aria-label="元に戻す"');
+    expect(row).toContain('aria-label="やり直す"');
+    expect(row).toContain('title="元に戻す（Ctrl/Cmd+Z）"');
   });
 });
 

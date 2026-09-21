@@ -8,8 +8,8 @@ import {
 } from "../../src/lib/reviewHubFooterPins";
 
 describe("B2 review hub footer pins", () => {
-  it("preserves character count as the default footer display", () => {
-    expect(DEFAULT_REVIEW_HUB_FOOTER_TOOLS).toEqual(["character-count"]);
+  it("defaults to both tools shown, i.e. the footer exactly as it was before B2", () => {
+    expect(DEFAULT_REVIEW_HUB_FOOTER_TOOLS).toEqual(["writing-check", "character-count"]);
   });
 
   it("keeps only supported unique tools and never exceeds two", () => {
@@ -25,11 +25,12 @@ describe("B2 review hub footer pins", () => {
   });
 
   it("falls back safely when storage is structurally corrupt", () => {
-    expect(normalizeReviewHubFooterTools(null)).toEqual(["character-count"]);
-    expect(normalizeReviewHubFooterTools("broken")).toEqual(["character-count"]);
-    expect(normalizeReviewHubFooterTools({ broken: true })).toEqual([
-      "character-count",
-    ]);
+    const fallback = ["writing-check", "character-count"];
+    expect(normalizeReviewHubFooterTools(null)).toEqual(fallback);
+    expect(normalizeReviewHubFooterTools("broken")).toEqual(fallback);
+    expect(normalizeReviewHubFooterTools({ broken: true })).toEqual(fallback);
+    // an explicit empty list is a real choice (0 shown), not corruption
+    expect(normalizeReviewHubFooterTools([])).toEqual([]);
   });
 
   it("supports zero, one and two displayed tools", () => {

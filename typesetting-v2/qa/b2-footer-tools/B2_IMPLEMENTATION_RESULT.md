@@ -15,12 +15,19 @@ Implemented:
 Layout (Review Hub panel):
 - `フッターに表示` is an inline control on each tool's title row (+ one short note in the header row), not a separate settings block. A stacked block cost ~170px and pushed the panel past its cap on a 320x568 phone; the inline form adds 0px (panel height = B1: 218px at 320w, 203px at ≥375w).
 - With 2 tools shown, one arrow button per tool swaps their order.
-- Default (no saved preference) = 文字数カウント only, rendered with the unchanged B1 pill (`title="現在の原稿文字数"`, `現在の原稿文字数 N文字`).
+- Default (no saved preference) = both shown = the footer exactly as before B2.
+
+Footer display semantics (Human QA fix):
+- 文章チェックβ shown = the existing B1 footer strip (checkbox / 確認候補 / ⚙設定 / note) and, on the phone one-line footer, its `チェックβ` checkbox. Not shown = neither exists in the footer (DOM-level, not CSS-hidden). Its ON/OFF (`tatespun_writing_check`) is never touched by pinning, and stays fully usable in the Hub (toggle / 確認候補を見る / 設定). The result-list popover host stays mounted so the Hub can still open it.
+- 文字数カウント shown = the unchanged B1 `現在の原稿文字数 N文字` pill; not shown = no pill on the expanded footer.
+- With both shown, pin order = top-to-bottom order in the footer (the 文章チェックβ strip vs the status row that holds the count pill); the Hub's arrow button reads ↑/↓.
+- While a 直す/まとめて直す one-step 元に戻す window is open, that single button is still offered even if 文章チェックβ is not shown, so an automated manuscript change is never left without an undo.
+
+Title action row at 768–905px (Human QA fix): 元に戻す / やり直す / 改ページ挿入 / 置換 (/ 報告) stay on ONE row. In that range only, undo/redo are icon-only (aria-label + tooltip kept) and paddings/gap are tighter (`md:max-[905px]`); ≥906px and phones are unchanged.
 
 Known limits (for Human QA / later decision):
-- The pinned 文章チェックβ footer item is a static label (no count, not tappable). A `文章チェック 3件`-style live representation is not built.
-- The mobile one-line (collapsed) footer keeps its own fixed チェックβ checkbox + `現在N字` and does not follow the pins; pins apply to the expanded footer (desktop and mobile).
-- With both tools pinned in a ~335px split-screen column the footer controls row may wrap to a second line (opt-in only).
+- The phone one-line (collapsed) footer's `現在N字` count is fixed and does not follow the 文字数カウント pin; only its チェックβ checkbox follows the 文章チェックβ pin.
+- 文章チェックβ has no compact chip: its footer representation is the existing strip (a `文章チェック 3件`-style chip is not built).
 
 Not included:
 - B3 feedback instrumentation

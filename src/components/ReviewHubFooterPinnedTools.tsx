@@ -12,32 +12,19 @@ interface ReviewHubFooterPinnedToolsProps {
   characterCount: ReactNode;
 }
 
+/**
+ * B2: the count pill in the footer's status row, shown only while 文字数カウント
+ * is set to フッターに表示. (文章チェックβ's footer strip is shown/hidden by
+ * EditorPane from the same preference; both are display only.)
+ */
 export function ReviewHubFooterPinnedTools({ characterCount }: ReviewHubFooterPinnedToolsProps) {
-  const { pins } = useReviewHubFooterPins();
+  const { isPinned } = useReviewHubFooterPins();
 
-  if (pins.length === 0) return null;
+  if (!isPinned("character-count")) return null;
 
   return (
-    <div
-      data-review-hub-footer-pinned-tools
-      className="flex min-w-0 items-center gap-1"
-      aria-label="見直し フッター表示"
-    >
-      {pins.map((toolId) =>
-        toolId === "character-count" ? (
-          <span key={toolId} data-review-hub-footer-tool="character-count" className="contents">
-            {characterCount}
-          </span>
-        ) : (
-          <span
-            key={toolId}
-            data-review-hub-footer-tool="writing-check"
-            className="whitespace-nowrap rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700"
-          >
-            文章チェックβ
-          </span>
-        ),
-      )}
-    </div>
+    <span data-review-hub-footer-tool="character-count" className="contents">
+      {characterCount}
+    </span>
   );
 }

@@ -28,6 +28,16 @@ describe("B2 footer customization wiring", () => {
     expect(pinned).not.toContain("countVisualLength");
   });
 
+  it("makes 文章チェックβ's footer display follow the pin, separately from its ON/OFF state", () => {
+    // the strip, and the mobile one-line checkbox, are shown only while pinned...
+    expect(pane).toContain('footerPins.includes("writing-check")');
+    expect(pane).toMatch(/<WritingCheckBar\s+showBar=\{writingCheckPinned\}/);
+    expect(pane).toMatch(/\{writingCheckPinned && \(\s*<>\s*<label[\s\S]*?チェックβ[\s\S]*?<\/>\s*\)\}/);
+    // ...and the pin never reads or writes the ON/OFF flag
+    expect(pinned + settings + hook).not.toMatch(/writingCheckEnabled|setWritingCheckEnabled|useWritingCheckEnabled/);
+    expect(pane).toContain("footerToolsSwapped");
+  });
+
   it("offers only currently implemented tools", () => {
     expect(tools).toContain("文章チェックβ");
     expect(tools).toContain("文字数カウント");

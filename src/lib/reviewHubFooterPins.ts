@@ -5,7 +5,9 @@ export const REVIEW_HUB_FOOTER_TOOL_IDS = ["writing-check", "character-count"] a
 export type ReviewHubFooterToolId =
   (typeof REVIEW_HUB_FOOTER_TOOL_IDS)[number];
 
+/** Both shown = the footer exactly as it was before B2 (文章チェックβ strip above the status row, count pill in it). */
 export const DEFAULT_REVIEW_HUB_FOOTER_TOOLS: ReviewHubFooterToolId[] = [
+  "writing-check",
   "character-count",
 ];
 

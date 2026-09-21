@@ -34,6 +34,7 @@ import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
 import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
+import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -311,6 +312,12 @@ function EditorPaneInner(
     maxHeightPx: reviewHubMaxHeightPx,
   } = useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef);
   const [writingCheckResultsRequest, setWritingCheckResultsRequest] = useState(0);
+  // TSP-B2: which Review Hub tools are shown in the footer. 文章チェックβ's footer strip / one-line checkbox follow
+  // this (display only -- `writingCheckEnabled` is separate). With both shown, pin order = top-to-bottom order.
+  const { pins: footerPins } = useReviewHubFooterPins();
+  const writingCheckPinned = footerPins.includes("writing-check");
+  const footerToolsSwapped =
+    writingCheckPinned && footerPins.includes("character-count") && footerPins.indexOf("character-count") < footerPins.indexOf("writing-check");
   // Phase 12: occurrence-level, in-memory-only ignore state -- never
   // persisted, naturally forgotten on remount/reload (see `ignoredOccurrences.ts`).
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
@@ -546,7 +553,7 @@ function EditorPaneInner(
           data-demo-target="title"
           className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2`}>
+        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:max-[905px]:gap-1`}>
           <button
             type="button"
             data-editor-action="undo"
@@ -555,9 +562,9 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
-            <span aria-hidden="true" className="text-xl leading-none md:text-xs">↶</span>
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:max-[905px]:text-[16px]">↶</span>
             <span className="hidden md:inline">元に戻す</span>
           </button>
           <button
@@ -568,9 +575,9 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
-            <span aria-hidden="true" className="text-xl leading-none md:text-xs">↷</span>
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:max-[905px]:text-[16px]">↷</span>
             <span className="hidden md:inline">やり直す</span>
           </button>
           <button
@@ -578,7 +585,7 @@ function EditorPaneInner(
             data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
-            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
+            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
           >
             改ページ挿入
           </button>
@@ -586,7 +593,7 @@ function EditorPaneInner(
             type="button"
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
-            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
+            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
           >
             置換
           </button>
@@ -608,7 +615,7 @@ function EditorPaneInner(
               data-editor-action="report"
               onClick={onOpenBetaFeedback}
               title="β版フィードバック（不具合・気になる事・要望）"
-              className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1"
+              className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
             >
               報告
             </button>
@@ -873,16 +880,20 @@ function EditorPaneInner(
           data-editor-footer-collapsed=""
           className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/70 md:hidden"
         >
-          <label className="flex shrink-0 cursor-pointer select-none items-center gap-1">
-            <input
-              type="checkbox"
-              checked={writingCheckEnabled}
-              onChange={(event) => setWritingCheckEnabled(event.target.checked)}
-              className="h-3 w-3 shrink-0 accent-[#dc2626]"
-            />
-            <span className="whitespace-nowrap font-medium">チェックβ</span>
-          </label>
-          <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
+          {writingCheckPinned && (
+            <>
+              <label className="flex shrink-0 cursor-pointer select-none items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={writingCheckEnabled}
+                  onChange={(event) => setWritingCheckEnabled(event.target.checked)}
+                  className="h-3 w-3 shrink-0 accent-[#dc2626]"
+                />
+                <span className="whitespace-nowrap font-medium">チェックβ</span>
+              </label>
+              <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
+            </>
+          )}
           <WorkSessionTracker
             state={workSession}
             onStart={onStartWorkSession}
@@ -912,9 +923,10 @@ function EditorPaneInner(
 
       <div
         data-writing-check-surface=""
-        className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}
+        className={`${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-2" : "order-1"}`}
       >
       <WritingCheckBar
+        showBar={writingCheckPinned}
         enabled={writingCheckEnabled}
         onToggle={setWritingCheckEnabled}
         text={analysisCurrent ? analysis.text : ""}
@@ -950,7 +962,7 @@ function EditorPaneInner(
           can open its full text without permanently growing the footer. */}
       <div
         data-editor-status-surfaces=""
-        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}`}
+        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-1" : "order-2"}`}
       >
         {/* TSP-B1: the Review Hub trigger shares this already one-line, truncating row rather than the
             controls row below. In the ~335px Editor column of a 768-900px split screen the controls row

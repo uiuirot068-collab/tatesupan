@@ -24,7 +24,7 @@ export function ReviewHubFooterPinControl({ toolId, label }: ReviewHubFooterPinC
   const { pins, isPinned, canPin, togglePin, movePin } = useReviewHubFooterPins();
   const pinned = isPinned(toolId);
   const index = pins.indexOf(toolId);
-  // With two tools shown, a single arrow swaps them: the first can only go right, the second only left.
+  // With two tools shown, a single arrow swaps them (top-to-bottom in the footer): the first can only go down, the second only up.
   const moveDirection = index === 0 ? 1 : -1;
 
   return (
@@ -34,11 +34,11 @@ export function ReviewHubFooterPinControl({ toolId, label }: ReviewHubFooterPinC
         <button
           type="button"
           data-review-hub-footer-pin-move=""
-          aria-label={`${label}をフッターの${moveDirection === 1 ? "右" : "左"}へ`}
+          aria-label={`${label}をフッターの${moveDirection === 1 ? "下" : "上"}へ`}
           onClick={() => movePin(toolId, moveDirection)}
           className={CONTROL_BUTTON}
         >
-          {moveDirection === 1 ? "→" : "←"}
+          {moveDirection === 1 ? "↓" : "↑"}
         </button>
       ) : null}
       <button

@@ -406,6 +406,97 @@ async function focusModePhase(v, enterSelector, exitSelector = enterSelector) {
   log(`  ${tag}: Hub follows the footer's 集中モード rule and returns closed`);
 }
 
+// --- B2: フッターに表示 is real display state for 文章チェックβ, independent of its ON/OFF ---------------
+// Human QA regression: with フッターに表示 OFF the old B1 footer checkbox used to stay, making the B2 setting meaningless.
+const PINS_KEY = "tatespun.reviewHub.footerTools.v1";
+const pinToggle = (id) => `[data-review-hub-tool="${id}"] [data-review-hub-footer-pin-toggle]`;
+const footerSurface = () =>
+  cdp.evaluate(`(() => { const s = document.querySelector('[data-writing-check-surface]'); const c = document.querySelector('[data-editor-footer-collapsed]');
+    return { checkbox: !!s?.querySelector('input[type=checkbox]'), text: s?.textContent.replace(/\\s+/g, '') ?? '',
+      top: s ? s.getBoundingClientRect().top : null, statusTop: document.querySelector('[data-editor-status-surfaces]')?.getBoundingClientRect().top ?? null,
+      collapsedCheckbox: !!c?.querySelector('input[type=checkbox]'), collapsedShown: !!c && c.getClientRects().length > 0,
+      countPill: !!document.querySelector('[title="現在の原稿文字数"]') }; })()`);
+const wcStored = () => cdp.evaluate(`localStorage.getItem('${WRITING_CHECK_KEY}')`);
+const pressedState = (id) => cdp.evaluate(`document.querySelector('${pinToggle(id)}')?.getAttribute('aria-pressed')`);
+
+async function pinSemanticsPhase(v) {
+  const tag = `${v.name} footer pins`;
+  await openWith({ [COLLAPSED_KEY]: "off" }, v.width, v.height);
+
+  // default = the footer exactly as before B2 (strip + count pill), both shown
+  let f = await footerSurface();
+  assert.equal(f.checkbox, true, `${tag}: default keeps the B1 文章チェックβ footer strip`);
+  assert.equal(f.countPill, true, `${tag}: default keeps the count pill`);
+  await openHub(tag);
+  assert.equal(await pressedState("writing-check"), "true");
+  assert.equal(await pressedState("character-count"), "true");
+
+  // make sure 文章チェックβ is ON, then unpin it: the footer item goes away but ON stays ON
+  if ((await wcStored()) !== "on") await realClick("[data-review-hub-writing-check-toggle]");
+  await cdp.waitFor(`localStorage.getItem('${WRITING_CHECK_KEY}') === 'on'`, { label: `${tag}: 文章チェックβ ON` });
+  await realClick(pinToggle("writing-check"));
+  await cdp.waitFor(`!document.querySelector('[data-writing-check-surface] input[type=checkbox]')`, { label: `${tag}: unpinned -> footer strip gone` });
+  f = await footerSurface();
+  assert.doesNotMatch(f.text, /文章チェック|チェックβ|設定/, `${tag}: no 文章チェックβ control/text remains in the footer once unpinned (${f.text})`);
+  assert.equal(await wcStored(), "on", `${tag}: unpinning must not switch 文章チェックβ off`);
+  assert.equal(f.countPill, true, `${tag}: character-count behaviour unchanged`);
+  assert.equal(await pressedState("writing-check"), "false");
+  assert.equal(await panelShown(), true, `${tag}: Hub stays open`);
+
+  // ...and it stays fully usable inside the Hub (ON/OFF + candidates + settings)
+  const hubChecked = () => cdp.evaluate(`document.querySelector('[data-review-hub-writing-check-toggle]').checked`);
+  assert.equal(await hubChecked(), true, `${tag}: Hub toggle reflects ON`);
+  await realClick("[data-review-hub-writing-check-toggle]");
+  await cdp.waitFor(`localStorage.getItem('${WRITING_CHECK_KEY}') === 'off'`, { label: `${tag}: Hub can switch it OFF while unpinned` });
+  await realClick("[data-review-hub-writing-check-toggle]");
+  await cdp.waitFor(`localStorage.getItem('${WRITING_CHECK_KEY}') === 'on'`, { label: `${tag}: Hub can switch it back ON` });
+  assert.equal((await footerSurface()).checkbox, false, `${tag}: toggling ON/OFF never brings the unpinned strip back`);
+  await setText(ISSUE_TEXT);
+  await cdp.waitFor(`/件/.test(document.querySelector('[data-review-hub-writing-check-status]')?.textContent ?? '')`, { label: `${tag}: candidates counted while unpinned` });
+  await realClick("[data-review-hub-writing-check-results]");
+  await closeHub(`${tag} (results)`);
+  await cdp.waitFor(RESULT_LIST_OPEN, { label: `${tag}: result list still opens from the Hub while unpinned` });
+  await realClickAt(5, 5);
+
+  // pinned again -> the strip returns, ON/OFF untouched
+  await openHub(`${tag} (repin)`);
+  await realClick(pinToggle("writing-check"));
+  await cdp.waitFor(`!!document.querySelector('[data-writing-check-surface] input[type=checkbox]')`, { label: `${tag}: pinned -> footer strip back` });
+  assert.equal(await wcStored(), "on", `${tag}: pinning must not change ON/OFF`);
+
+  // two shown: pin order = top-to-bottom order. Re-pinning appends, so 文字数カウント is now first (its status row above the strip).
+  f = await footerSurface();
+  assert.equal(await cdp.evaluate(`localStorage.getItem('${PINS_KEY}')`), '["character-count","writing-check"]', `${tag}: re-pin appends`);
+  assert.ok(f.top > f.statusTop, `${tag}: pin order character-count, writing-check -> status row above the strip`);
+  await realClick(`[data-review-hub-tool="writing-check"] [data-review-hub-footer-pin-move]`);
+  await cdp.waitFor(`document.querySelector('[data-writing-check-surface]').getBoundingClientRect().top < document.querySelector('[data-editor-status-surfaces]').getBoundingClientRect().top`, { label: `${tag}: reorder swaps` });
+  assert.equal(await cdp.evaluate(`localStorage.getItem('${PINS_KEY}')`), '["writing-check","character-count"]', `${tag}: order persisted`);
+  await navigate();
+  f = await footerSurface();
+  assert.ok(f.top < f.statusTop && f.checkbox, `${tag}: order + pin survive a reload (strip above the status row again)`);
+
+  // 0 pins: neither footer item, Hub still lists both tools
+  await openHub(`${tag} (zero)`);
+  await realClick(pinToggle("writing-check"));
+  await realClick(pinToggle("character-count"));
+  await cdp.waitFor(`!document.querySelector('[data-writing-check-surface] input[type=checkbox]') && !document.querySelector('[title="現在の原稿文字数"]')`, { label: `${tag}: 0 pins` });
+  assert.deepEqual(await cdp.evaluate(`[...document.querySelectorAll('${PANEL} [data-review-hub-tool]')].map((e) => e.dataset.reviewHubTool)`), ["writing-check", "character-count"], `${tag}: Hub still lists both tools`);
+  assert.equal(await wcStored(), "on");
+
+  // phone one-line footer: its チェックβ checkbox follows the pin too
+  if (v.width < 768) {
+    for (const [pins, expectCheckbox] of [['["character-count"]', false], ['["writing-check"]', true]]) {
+      await openWith({ [COLLAPSED_KEY]: "on", [PINS_KEY]: pins }, v.width, v.height);
+      f = await footerSurface();
+      assert.equal(f.collapsedShown, true, `${tag}: one-line footer shown`);
+      assert.equal(f.collapsedCheckbox, expectCheckbox, `${tag}: one-line footer チェックβ checkbox ${expectCheckbox ? "shown when pinned" : "absent when unpinned"} (pins ${pins})`);
+      assert.equal((await triggerState()).count, 1, `${tag}: one-line footer keeps the ▶ 見直し trigger`);
+    }
+  }
+  await cdp.evaluate(`localStorage.removeItem('${PINS_KEY}'); localStorage.setItem('${COLLAPSED_KEY}', 'off'); true`);
+  log(`  ${tag}: default strip / unpin removes it / ON stays ON / Hub fully usable / repin / reorder / reload / 0 pins OK`);
+}
+
 // --- run ------------------------------------------------------------------------
 try {
   log("phase 1: expanded footer, every viewport");
@@ -417,6 +508,9 @@ try {
   log("phase 3: 集中モード");
   await focusModePhase(DESKTOPS[1], "[data-focus-mode-toggle]:not([data-editor-action])", '[data-editor-action="exit-focus"]');
   await focusModePhase(PHONES[2], '[data-demo-target="focus-mode"]');
+
+  log("phase 4: B2 footer pins (文章チェックβ display vs ON/OFF)");
+  for (const v of [DESKTOPS[1], PHONES[2], PHONES[0]]) await pinSemanticsPhase(v);
 
   assert.deepEqual(dialogs, [], `unexpected native dialog(s): ${JSON.stringify(dialogs)}`);
   assert.deepEqual(pageErrors, [], `uncaught page error(s): ${JSON.stringify(pageErrors)}`);

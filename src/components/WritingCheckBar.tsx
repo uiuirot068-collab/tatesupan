@@ -23,6 +23,13 @@ interface WritingCheckBarProps {
    * the check is on and has candidates, exactly as before.
    */
   resultsRequestNonce?: number;
+  /**
+   * TSP-B2: whether the footer strip (checkbox, candidate count, settings, note) is displayed. Display only —
+   * `enabled` is untouched, and the result-list popover host stays mounted so the Review Hub's 「確認候補を見る」
+   * still opens it. While a fix's one-step 元に戻す window is open that single button is kept, so an automated
+   * manuscript change is never left without an undo.
+   */
+  showBar?: boolean;
 }
 
 /**
@@ -52,6 +59,7 @@ export default function WritingCheckBar({
   undoAvailable,
   onUndo,
   resultsRequestNonce,
+  showBar = true,
 }: WritingCheckBarProps) {
   const [open, setOpen] = useState(false);
   // Adjust-state-during-render: a changed request counter opens the list once.
@@ -87,19 +95,25 @@ export default function WritingCheckBar({
   return (
     <div
       ref={rootRef}
-      className="relative flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 px-4 py-1.5 text-xs text-ink/70"
+      className={
+        showBar || (enabled && undoAvailable)
+          ? "relative flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 px-4 py-1.5 text-xs text-ink/70"
+          : "relative flex-none"
+      }
     >
-      <label className="flex cursor-pointer select-none items-center gap-1.5">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => onToggle(event.target.checked)}
-          className="h-3.5 w-3.5 accent-[#dc2626]"
-        />
-        <span className="font-medium">文章チェック β</span>
-      </label>
+      {showBar && (
+        <label className="flex cursor-pointer select-none items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => onToggle(event.target.checked)}
+            className="h-3.5 w-3.5 accent-[#dc2626]"
+          />
+          <span className="font-medium">文章チェック β</span>
+        </label>
+      )}
 
-      {enabled && (
+      {showBar && enabled && (
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -131,7 +145,7 @@ export default function WritingCheckBar({
         </button>
       )}
 
-      {enabled && (
+      {showBar && enabled && (
         <button
           type="button"
           onClick={onOpenSettings}
@@ -142,7 +156,7 @@ export default function WritingCheckBar({
         </button>
       )}
 
-      {enabled && (
+      {showBar && enabled && (
         <span className="text-[10px] text-ink/40">
           波線は編集画面のみ。本文・プレビュー・書き出しには影響しません
         </span>
