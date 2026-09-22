@@ -10,6 +10,11 @@ import { Project } from '@/types/database';
 import { withBasePath } from '@/lib/basePath';
 import ThemeToggle from './ThemeToggle';
 
+// TSP-B4-B6-TOPPAGE-001 — the Home header's "SpunTales" label links out to the
+// sibling-service portal, same tab. Not TateSpun-specific and not the
+// `withBasePath`-relative in-app routing this Header otherwise uses.
+const SPUNTALES_PORTAL_URL = 'https://spuntales.net/';
+
 type SaveStatus = 'loading' | 'saved' | 'saving' | 'error';
 
 interface HeaderProps {
@@ -99,7 +104,12 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
       {isHome && (
         <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">
           <div className="flex flex-wrap items-center justify-center gap-1">
-            <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-500">SpunTales</span>
+            <a
+              href={SPUNTALES_PORTAL_URL}
+              className="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              SpunTales
+            </a>
             <span aria-hidden="true" className="shrink-0 text-gray-300">｜</span>
             <img
               src={logoSrc}
@@ -221,7 +231,9 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         )}
         {isHome && (
           <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold text-gray-500">
-            SpunTales
+            <a href={SPUNTALES_PORTAL_URL} className="hover:text-gray-700 hover:underline">
+              SpunTales
+            </a>
             <span aria-hidden="true" className="text-gray-300">｜</span>
           </span>
         )}
