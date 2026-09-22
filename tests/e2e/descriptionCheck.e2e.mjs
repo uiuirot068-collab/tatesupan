@@ -99,15 +99,27 @@ async function tapAt(x, y) {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
-async function realClick(selector, { scroll = true } = {}) {
-  if (scroll) await cdp.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.getClientRects().length > 0); e?.scrollIntoView({ block: 'nearest' }); return true; })()`);
-  const c = await cdp.evaluate(`(() => {
+const hitTest = (selector) =>
+  cdp.evaluate(`(() => {
     const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.getClientRects().length > 0 && !x.disabled);
     if (!e) return null;
     const r = e.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; const top = document.elementFromPoint(x, y);
-    return { x, y, hit: e === top || e.contains(top) || top?.tagName === 'NEXTJS-PORTAL', top: top?.outerHTML.slice(0, 110) ?? null };
+    return { x, y, hit: e === top || e.contains(top), badge: top?.tagName === 'NEXTJS-PORTAL', top: top?.outerHTML.slice(0, 110) ?? null };
   })()`);
+async function realClick(selector, { scroll = true } = {}) {
+  if (scroll) await cdp.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.getClientRects().length > 0); e?.scrollIntoView({ block: 'nearest' }); return true; })()`);
+  let c = await hitTest(selector);
   assert.ok(c, `${selector}: no visible, enabled element`);
+  if (c.badge) {
+    // dev-only Next.js dev-tools badge (<nextjs-portal>, fixed at a viewport corner): re-centring the
+    // scroll is not reliably enough clearance at every viewport height, and the badge's own shadow DOM
+    // resists an external pointer-events override. A production build never has this badge, so a real
+    // user could always tap the target here -- dispatch the click directly on the element instead of at
+    // a screen coordinate, which is the one part of this workaround that IS dev-mode-only, not a product
+    // behaviour under test.
+    await cdp.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.getClientRects().length > 0); e?.click(); return true; })()`);
+    return;
+  }
   assert.ok(c.hit, `${selector}: covered -- a user could not tap it (${c.top})`);
   await realClickAt(c.x, c.y);
 }
@@ -318,10 +330,14 @@ async function migrationAndTouch() {
 }
 
 async function dockViewport(v) {
-  const tag = `${v.name} dock`;
+  // TSP-Review-UI (Revision 3): this rich, always-mounted daily-control card only exists on the RAIL
+  // surface now (portalled into `[data-review-rail]` beside the manuscript). Below the Rail's measured-
+  // width threshold there is no permanent card at all -- see compactDockViewport for that surface's mini
+  // pill + Bottom Sheet coverage, and reviewLayout.e2e.mjs for the surface-level mechanics shared with B4.
+  const tag = `${v.name} rail`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["writing-check", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: false, categories: CATS(true, false, false) }) }, v.width, v.height);
   await setText(TEXT);
-  const CARD = "[data-review-dock-card=description-check]";
+  const CARD = "[data-review-rail] [data-review-dock-card=description-check]";
   const cardText = () => cdp.evaluate(`document.querySelector('${CARD}')?.textContent.replace(/\\s+/g, ' ').trim() ?? ''`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: pinned = a dock card`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-check-footer]')`), false, `${tag}: no status-row pill in the expanded footer`);
@@ -372,12 +388,6 @@ async function dockViewport(v) {
   await cdp.waitFor(`!!document.querySelector('${CARD} [data-description-card-reason]')`, { label: `${tag}: 理由を見る opens the reason` });
   assert.match(await cardText(), /そのまま残してください/, `${tag}: keep-it note in the card`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-mark-detail]')`), false, `${tag}: no second floating card while the tool is pinned`);
-  if (v.width < 768) {
-    // phone: navigating blurs the editor (so the software keyboard does not hide the footer) and a ghost keeps the place visible
-    await cdp.waitFor(`document.activeElement?.getAttribute('data-demo-target') !== 'editor'`, { label: `${tag}: editor blurred after navigation on a phone` });
-    const ghost = await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`);
-    assert.ok(ghost.length > 0 && visited[nB - 1].includes(ghost), `${tag}: ghost highlight keeps the current candidate visible (${ghost})`);
-  }
   // zero categories from the card
   await realClick(`${CARD} [data-description-card-category=B]`, { scroll: false });
   await cdp.waitFor(`document.querySelectorAll('[data-description-mark]').length === 0`);
@@ -409,6 +419,29 @@ async function setCategoriesViaCard(card, want) {
   }
 }
 
+async function compactDockViewport(v) {
+  // TSP-Review-UI (Revision 3): below the Rail's threshold, pinning 描写語・修飾表現チェックβ never mounts a
+  // permanent card -- only a compact count pill in the footer status row (a tap opens the Hub, now a
+  // Bottom Sheet here). The rich card lives only on the Rail (dockViewport, 1280).
+  const tag = `${v.name} compact`;
+  await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["writing-check", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: true, categories: CATS(true, false, false) }) }, v.width, v.height);
+  await setText(TEXT);
+  await cdp.waitFor(`document.querySelectorAll('[data-description-mark]').length > 0`, { label: `${tag}: markers` });
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: pinning never mounts the Rail below its threshold`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock-card=description-check]')`), false, `${tag}: no permanent card at all`);
+  await cdp.waitFor(`!!document.querySelector('[data-description-check-footer]')`, { label: `${tag}: compact count pill appears in the footer` });
+  assert.match(await cdp.evaluate(`document.querySelector('[data-description-check-footer]').textContent`), /描写・修飾 [0-9,]+件/, `${tag}: pill shows the count`);
+  insideViewport(await rect("[data-description-check-footer]"), `${tag} pill`);
+  // the pill opens the Hub -- now a Bottom Sheet -- which still owns the full list + A/B/C settings
+  await realClick("[data-description-check-footer]", { scroll: false });
+  await cdp.waitFor(`getComputedStyle(document.querySelector('${PANEL}')).display !== 'none'`, { label: `${tag}: pill opens the Hub` });
+  assert.equal(await cdp.evaluate(`document.querySelector('${PANEL}').hasAttribute('data-review-hub-sheet')`), true, `${tag}: the Hub is the sheet variant here`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-list]')`), true, `${tag}: full candidate list still reachable inside the sheet`);
+  await closeHub();
+  await noHorizontalScroll(`${tag}`);
+  log(`  ${tag}: no permanent card / count pill opens the Hub / full list reachable from the Bottom Sheet OK`);
+}
+
 async function coexistWithHeldGhost() {
   const tag = "1280x720 B4+B5";
   await openWith(
@@ -421,17 +454,18 @@ async function coexistWithHeldGhost() {
   const phrase = "泣いている";
   const at = TEXT.indexOf(phrase);
   await cdp.evaluate(`(() => { const t = document.querySelector('[data-demo-target="editor"]'); t.focus(); t.setSelectionRange(${at}, ${at + phrase.length}); })()`);
-  await realClick("[data-review-dock-card=read-aloud] [data-read-aloud-target=selection]", { scroll: false });
-  await cdp.waitFor(`/選択範囲を保持中/.test(document.querySelector('[data-review-dock-card=read-aloud]').textContent)`, { label: `${tag}: held` });
+  await realClick("[data-review-rail] [data-review-dock-card=read-aloud] [data-read-aloud-target=selection]", { scroll: false });
+  await cdp.waitFor(`/選択範囲を保持中/.test(document.querySelector('[data-review-rail] [data-review-dock-card=read-aloud]').textContent)`, { label: `${tag}: held` });
   assert.equal(await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`), phrase, `${tag}: ghost paints the held phrase`);
   assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint on the same phrase is still there (independent layers)`);
-  assert.equal(await cdp.evaluate(`document.querySelector('[data-review-dock-card=read-aloud]') !== null && document.querySelector('[data-review-dock-card=description-check]') !== null`), true, `${tag}: both cards in the dock`);
-  // side by side on a wide column
-  const a = await rect("[data-review-dock-card=read-aloud]");
-  const b = await rect("[data-review-dock-card=description-check]");
-  assert.ok(Math.abs(a.t - b.t) < 2, `${tag}: B4 and B5 cards side by side at 1280`);
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-review-rail] [data-review-dock-card=read-aloud]') !== null && document.querySelector('[data-review-rail] [data-review-dock-card=description-check]') !== null`), true, `${tag}: both cards in the Rail`);
+  // TSP-Review-UI (Revision 3): the Rail is a narrow vertical sidebar (not a full-width dock under the
+  // manuscript), so two pinned cards always stack top-to-bottom -- never side by side, at any width.
+  const a = await rect("[data-review-rail] [data-review-dock-card=read-aloud]");
+  const b = await rect("[data-review-rail] [data-review-dock-card=description-check]");
+  assert.ok(a.b <= b.t + 1 || b.b <= a.t + 1, `${tag}: B4 and B5 cards stack vertically in the Rail (never overlap)`);
   await shot("b5-b4-coexist-1280x720");
-  log(`  ${tag}: B4 held ghost + B5 tint + both dock cards coexist OK`);
+  log(`  ${tag}: B4 held ghost + B5 tint + both Rail cards coexist OK`);
 }
 
 async function longManuscript() {
@@ -502,7 +536,8 @@ try {
     await migrationAndTouch();
   }
   if (!ONLY || ONLY === "dock") {
-    for (const v of VIEWPORTS) await dockViewport(v);
+    for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactDockViewport(v); // 390 / 770: below the Rail threshold
+    await dockViewport(VIEWPORTS[2]); // 1280: the Rail surface -- the only one with a permanent daily-control card
     await coexistWithHeldGhost();
   }
   if (!ONLY || ONLY === "long") await longManuscript();

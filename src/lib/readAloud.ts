@@ -11,6 +11,7 @@
  * sends text anywhere. The text only ever reaches `SpeechSynthesisUtterance`.
  */
 import { tokenizeTategakiWithOffsets } from "./tategaki";
+import { applyPronunciationDictionary, type PronunciationEntry } from "./readAloudPronunciation";
 
 export type ReadAloudMode = "selection" | "paragraph" | "full";
 
@@ -48,8 +49,13 @@ export function paragraphRangeAt(source: string, caret: number): ReadAloudRange 
  * Speakable text for the manuscript, optionally limited to `range` (raw source
  * offsets). A notation token the range only partially covers is included whole
  * (never a half-spoken `｜漢字《かん`), while plain text is cut exactly at the range.
+ *
+ * `pronunciation` (optional, browser-local — see `readAloudPronunciation.ts`) is applied ONLY to
+ * plain `text` runs, after the range cut. Ruby (`case "ruby"`, below) and 縦中横 always keep their
+ * own reading/value regardless of the dictionary, so an explicit ｜漢字《かんじ》 in the manuscript
+ * can never be overridden by a dictionary entry for the same characters.
  */
-export function buildSpeechText(source: string, range?: ReadAloudRange): string {
+export function buildSpeechText(source: string, range?: ReadAloudRange, pronunciation?: readonly PronunciationEntry[]): string {
   let out = "";
   for (const { token, start, end } of tokenizeTategakiWithOffsets(source)) {
     if (range && (end <= range.start || start >= range.end)) continue;
@@ -57,7 +63,8 @@ export function buildSpeechText(source: string, range?: ReadAloudRange): string 
       case "text": {
         const from = range ? Math.max(range.start, start) - start : 0;
         const to = range ? Math.min(range.end, end) - start : token.value.length;
-        out += token.value.slice(from, to);
+        const slice = token.value.slice(from, to);
+        out += pronunciation && pronunciation.length > 0 ? applyPronunciationDictionary(slice, pronunciation) : slice;
         break;
       }
       case "ruby":
@@ -134,9 +141,14 @@ export function splitSpeechChunks(text: string): string[] {
 }
 
 /** Chunks for a mode, or `[]` when there is nothing to read (the caller shows `READ_ALOUD_EMPTY_NOTICES`). */
-export function buildReadAloudChunks(mode: ReadAloudMode, source: string, selection: ReadAloudRange): string[] {
+export function buildReadAloudChunks(
+  mode: ReadAloudMode,
+  source: string,
+  selection: ReadAloudRange,
+  pronunciation?: readonly PronunciationEntry[],
+): string[] {
   const range = resolveReadAloudRange(mode, source, selection);
-  return splitSpeechChunks(buildSpeechText(source, range));
+  return splitSpeechChunks(buildSpeechText(source, range, pronunciation));
 }
 
 // ---------------------------------------------------------------- speed

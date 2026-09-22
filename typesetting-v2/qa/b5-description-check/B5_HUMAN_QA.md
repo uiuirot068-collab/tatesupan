@@ -4,7 +4,8 @@
 | Round | Verdict | Notes |
 |---|---|---|
 | 1 (2026-09-22) | **CHANGES REQUESTED** | A / A+B / A+B+C was not understandable or flexible enough; categories could not be told apart by colour; the pinned footer showed only a count pill; it was not obvious that a marker can be clicked; the Review tools felt cramped against the manuscript. |
-| 2 (this checklist, "Revision 2") | pending | Independent A / B / C checkboxes (first enable = A only, zero allowed); three tints of one yellow family + text tags; single click / tap opens the reason; pinned = Review Dock card with ON/OFF, A/B/C, count, 前へ/次へ, current candidate, 理由を見る. Easy-Japanese retry list: `../b4-b6-train/HUMAN_QA_B4_B6_JA.md` §2 and §3. |
+| 2 (2026-09-22) | Core: **PASS**. Review Dock: **CHANGES REQUESTED** | Independent A/B/C + single-click reason judged correct; the B/C tint difference was accepted as a beta limitation, not to be re-tuned this round. But the Review Dock card, permanently mounted under the manuscript, was too tall / cramped — same verdict as B4. |
+| 3 (this checklist, "Revision 3") | pending | Desktop: pinned 描写・修飾チェックβ is now a card in the **Review Rail** beside the manuscript (width only, never height). Compact/mobile: one-line mini control in the footer, full card in the Review Hub Bottom Sheet. 見直し itself has clearer spacing/hierarchy. B/C tint is unchanged (per last round's explicit note not to spend this patch on it). Easy-Japanese retry list: `../b4-b6-train/HUMAN_QA_B4_B6_JA.md` §2 and §3. |
 
 Status: IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED (not FIXED) — still carrying the BETA LIMITATION REVIEW on heuristic analysis.
 
@@ -46,6 +47,13 @@ Write a few examples you observe; add them to `B5_SPEC_REGRESSION_CORPUS.md` in 
 - [ ] Pin the tool: a card appears in the Review Dock with ON/OFF, **[A][B][C]** quick toggles, 「候補 N件」, **[← 前へ] n / N [次へ →]**, the current phrase with its A/B/C text tag, **[理由を見る]**. No need to open 見直し for daily use; the full list and explanation stay in 見直し.
 - [ ] 前へ / 次へ move through the visible candidates only (wrapping) and land on the place in the manuscript (on a phone the editor is blurred so the keyboard does not hide the footer, and a light blue ghost keeps the place visible).
 - [ ] While the card is pinned, clicking a coloured phrase shows the same information in the card (no second floating card).
+
+## E3. Revision 3 (Review Rail / compact mini bar + Bottom Sheet) — retry items
+- [ ] **Desktop (~1280 and wider)**: pin 描写語・修飾表現チェックβ. It appears as a card in a **Review Rail** beside the manuscript, not below it. The manuscript's own height is unchanged whether 0, 1 or 2 tools are pinned.
+- [ ] **~1180 (just past the Rail threshold) and ~900–1024**: no crushed editor/preview; below the Rail's threshold there is no permanently-mounted card (see the mobile item below).
+- [ ] **Mobile (390)**: a compact one-line mini control per pinned tool in the footer status row; the full card (ON/OFF, A/B/C, count, 前へ/次へ, current candidate, 理由を見る) opens from ▶ 見直し as a **Bottom Sheet** (backdrop, ~60–75% height, scrollable, clear ✕).
+- [ ] 前へ／次へ candidate navigation still works from the Rail card (desktop) and from inside the Bottom Sheet (mobile), landing on the right place with the ghost highlight visible.
+- [ ] 見直し itself reads more comfortably — clearer spacing/headings than last round. Comment if still cramped: ______
 
 ## F. Footer / Hub with four tools (B2 regression)
 - [ ] With the default two tools shown, the フッターに表示 buttons of 音読β and 描写語・修飾表現チェックβ are greyed out; unpin one and pin the other. Footer shows `描写・修飾 N件` (or `OFF` when the tool is off) and tapping it opens 見直し.

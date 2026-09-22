@@ -13,6 +13,9 @@ import {
   splitSpeechChunks,
   type ReadAloudVoiceLike,
 } from "./readAloud";
+import type { PronunciationEntry } from "./readAloudPronunciation";
+
+const pron = (surface: string, reading: string): PronunciationEntry => ({ id: surface, surface, reading });
 
 const voice = (voiceURI: string, lang: string, localService: boolean): ReadAloudVoiceLike => ({
   voiceURI,
@@ -158,5 +161,50 @@ describe("B4 voice choice (privacy: on-device unless explicitly chosen)", () => 
     // a stale / unknown / non-Japanese preference falls back to the automatic on-device voice
     expect(chooseReadAloudVoice([localJa, onlineJa], "gone").selected).toBe(localJa);
     expect(chooseReadAloudVoice([localJa, localEn], "local-en").selected).toBe(localJa);
+  });
+});
+
+describe("B4 (Revision 3) pronunciation priority: ruby > dictionary > browser default", () => {
+  it("with no dictionary, plain text is unchanged (browser default reading applies)", () => {
+    expect(buildSpeechText("人気がない。")).toBe("人気がない。");
+  });
+
+  it("applies the dictionary to plain text", () => {
+    expect(buildSpeechText("人気がない。", undefined, [pron("人気", "ひとけ")])).toBe("ひとけがない。");
+  });
+
+  it("an explicit ruby reading ALWAYS wins over a dictionary entry for the same characters -- the dictionary is never even consulted for ruby", () => {
+    const withRuby = "｜人気《にんき》がない。";
+    expect(buildSpeechText(withRuby, undefined, [pron("人気", "ひとけ")])).toBe("にんきがない。");
+    expect(buildSpeechText(withRuby)).toBe("にんきがない。"); // same result without the dictionary at all
+  });
+
+  it("the dictionary still applies to plain text elsewhere in the same sentence as a ruby", () => {
+    const text = "｜人気《にんき》のある大分に行く。";
+    expect(buildSpeechText(text, undefined, [pron("人気", "ひとけ"), pron("大分", "おおいた")])).toBe("にんきのあるおおいたに行く。");
+  });
+
+  it("縦中横 keeps its own value regardless of the dictionary (not a text run either)", () => {
+    expect(buildSpeechText("[tate]12[/tate]月", undefined, [pron("12", "じゅうに")])).toBe("12月");
+  });
+
+  it("applies within a partial (selection/paragraph) range exactly as it would to the full text", () => {
+    const text = "人気がない。大分に行く。";
+    const range = { start: 0, end: "人気がない。".length };
+    expect(buildSpeechText(text, range, [pron("人気", "ひとけ"), pron("大分", "おおいた")])).toBe("ひとけがない。");
+  });
+
+  it("reaches buildReadAloudChunks (the function the engine actually calls) and survives chunking", () => {
+    expect(buildReadAloudChunks("full", "人気がない。", { start: 0, end: 0 }, [pron("人気", "ひとけ")])).toEqual(["ひとけがない。"]);
+  });
+
+  it("an empty or omitted dictionary changes nothing (no accidental empty-array behaviour difference)", () => {
+    expect(buildSpeechText("人気がない。", undefined, [])).toBe(buildSpeechText("人気がない。"));
+  });
+
+  it("does not mutate the manuscript string itself -- buildSpeechText only ever returns a NEW string for speech", () => {
+    const manuscript = "人気がない。";
+    buildSpeechText(manuscript, undefined, [pron("人気", "ひとけ")]);
+    expect(manuscript).toBe("人気がない。");
   });
 });

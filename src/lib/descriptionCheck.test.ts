@@ -212,7 +212,7 @@ describe("B5 privacy: local analysis only", () => {
     "src/lib/descriptionCandidateNav.ts",
     "src/lib/readAloudHeldSelection.ts",
     "src/components/ReadAloudDockCard.tsx",
-    "src/components/ReviewDock.tsx",
+    "src/components/ReviewRail.tsx",
     "src/hooks/useDescriptionCheck.ts",
     "src/components/DescriptionCheckControls.tsx",
     "src/components/DescriptionMarkOverlay.tsx",

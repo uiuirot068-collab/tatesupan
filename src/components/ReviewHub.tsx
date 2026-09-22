@@ -57,8 +57,17 @@ interface ReviewHubPanelProps {
   open: boolean;
   onClose: () => void;
   sections: Record<ReviewHubToolId, ReactNode>;
-  /** Measured cap (px) = space between the Editor pane's top and the footer; the CSS cap is the fallback before it is measured. */
+  /** Measured cap (px) = space between the Editor pane's top and the footer; the CSS cap is the fallback before it is measured. Ignored when `sheet` is true. */
   maxHeightPx?: number | null;
+  /**
+   * Revision 3: on the "compact" Review surface (phone + narrower "tablet" desktop widths, see
+   * `useReviewSurface`) the panel becomes a real Bottom Sheet — fixed to the viewport, a backdrop,
+   * up to 75vh, rounded top corners, a bigger close target, safe-area bottom padding — instead of the
+   * small panel anchored just above the footer. On the "rail" surface (wide desktop) it keeps the
+   * original small anchored panel; that space is not a problem there. Same content/behaviour either
+   * way (same open/close state, same Escape/outside-press/Hub state) — only the container changes.
+   */
+  sheet?: boolean;
 }
 
 /**
@@ -68,7 +77,63 @@ interface ReviewHubPanelProps {
  * height. Always in the DOM (so `aria-controls` resolves) and `hidden` while
  * closed.
  */
-export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null }: ReviewHubPanelProps) {
+export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sheet = false }: ReviewHubPanelProps) {
+  const toolList = (
+    <ul className="mt-2.5 divide-y divide-ink/10">
+      {REVIEW_HUB_TOOLS.map((tool) => (
+        <li key={tool.id} data-review-hub-tool={tool.id} className="py-3 first:pt-0 last:pb-0">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-ink">{tool.title}</p>
+            <ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-ink/70">{tool.summary}</p>
+          {sections[tool.id]}
+        </li>
+      ))}
+    </ul>
+  );
+
+  if (sheet) {
+    return (
+      <>
+        {open && (
+          <div
+            data-review-hub-sheet-backdrop=""
+            aria-hidden
+            onClick={onClose}
+            className="fixed inset-0 z-30 bg-ink/25"
+          />
+        )}
+        <section
+          id={REVIEW_HUB_PANEL_ID}
+          data-review-hub-panel=""
+          data-review-hub-sheet=""
+          aria-labelledby={REVIEW_HUB_HEADING_ID}
+          hidden={!open}
+          className="fixed inset-x-0 bottom-0 z-40 flex max-h-[75vh] flex-col rounded-t-2xl border-t border-ink/15 bg-base pb-[calc(env(safe-area-inset-bottom)+0.75rem)] text-xs text-ink shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
+        >
+          <div aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-ink/15" />
+          <div className="flex flex-none items-start justify-between gap-3 px-4 pt-2">
+            <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold">
+              {REVIEW_HUB_HEADING}
+            </h2>
+            <ReviewHubFooterPinNote />
+            <button
+              type="button"
+              data-review-hub-close=""
+              aria-label="見直しを閉じる"
+              onClick={onClose}
+              className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base text-ink/60 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">{toolList}</div>
+        </section>
+      </>
+    );
+  }
+
   return (
     <section
       id={REVIEW_HUB_PANEL_ID}
@@ -76,9 +141,9 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null }: 
       aria-labelledby={REVIEW_HUB_HEADING_ID}
       hidden={!open}
       style={maxHeightPx === null ? undefined : { maxHeight: maxHeightPx }}
-      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-3 text-xs text-ink shadow-lg md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
+      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-3.5 text-xs text-ink shadow-lg md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <h2 id={REVIEW_HUB_HEADING_ID} className="text-sm font-bold">
           {REVIEW_HUB_HEADING}
         </h2>
@@ -93,18 +158,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null }: 
           ✕
         </button>
       </div>
-      <ul className="mt-1.5 divide-y divide-ink/10">
-        {REVIEW_HUB_TOOLS.map((tool) => (
-          <li key={tool.id} data-review-hub-tool={tool.id} className="py-2 first:pt-0 last:pb-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold">{tool.title}</p>
-              <ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />
-            </div>
-            <p className="text-[11px] text-ink/60">{tool.summary}</p>
-            {sections[tool.id]}
-          </li>
-        ))}
-      </ul>
+      {toolList}
     </section>
   );
 }

@@ -276,14 +276,18 @@ describe("B2 Human QA: the Editor title action row stays ONE row at 768-905px (p
   const row = paneBetween('data-editor-action-row=""', "{focusMode && (");
 
   it("tightens gap/padding only in the tablet range and keeps every action", () => {
-    expect(row).toContain("md:gap-2 md:max-[905px]:gap-1"); // desktop gap unchanged, tablet tighter
+    // TSP-Review-UI (Revision 3): this range is a CONTAINER query (`@max-[905px]`) on #tsp-manuscript,
+    // not a viewport media query -- it now also compacts when the Review Rail narrows the editor column
+    // at an unchanged viewport width, not just in a narrow split-screen viewport. See TategakiEditor.tsx's
+    // `@container` comment and reviewLayout.e2e.mjs's manuscriptHeightUnaffectedByRail.
+    expect(row).toContain("md:gap-2 md:@max-[905px]:gap-1"); // desktop gap unchanged, tablet/rail-narrowed tighter
     for (const action of ["undo", "redo", "page-break", "replace"]) expect(row).toContain(`data-editor-action="${action}"`);
-    expect((row.match(/md:px-3 md:py-1 md:max-\[905px\]:px-2/g) ?? []).length).toBeGreaterThanOrEqual(2); // 改ページ挿入 / 置換
+    expect((row.match(/md:px-3 md:py-1 md:@max-\[905px\]:px-2/g) ?? []).length).toBeGreaterThanOrEqual(2); // 改ページ挿入 / 置換
   });
 
   it("shows 元に戻す / やり直す as icon-only in that range, still labelled for assistive tech and tooltips", () => {
-    // the label span keeps its own `hidden md:inline`; the tablet range hides it from the button (Round 5 contract untouched)
-    expect(row.match(/md:max-\[905px\]:\[&>span:not\(\[aria-hidden\]\)\]:hidden/g)).toHaveLength(2);
+    // the label span keeps its own `hidden md:inline`; the tablet/rail-narrowed range hides it from the button (Round 5 contract untouched)
+    expect(row.match(/md:@max-\[905px\]:\[&>span:not\(\[aria-hidden\]\)\]:hidden/g)).toHaveLength(2);
     expect(row).toContain('aria-label="元に戻す"');
     expect(row).toContain('aria-label="やり直す"');
     expect(row).toContain('title="元に戻す（Ctrl/Cmd+Z）"');

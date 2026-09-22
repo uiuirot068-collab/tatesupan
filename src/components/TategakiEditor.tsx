@@ -32,6 +32,9 @@ import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/ma
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
+import ReviewRail from "./ReviewRail";
+import { useReviewSurface } from "@/hooks/useReviewSurface";
+import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
@@ -321,6 +324,20 @@ export default function TategakiEditor({
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
+  // TSP-Review-UI (Revision 3): the editor/preview split's own container -- see the matching comment
+  // in the JSX below. The divider drag math must measure THIS element's width, not <main>'s, now that
+  // the Review Rail can claim part of <main>'s width as a third flex sibling.
+  const editorSplitRef = useRef<HTMLDivElement | null>(null);
+  // TSP-Review-UI (Revision 3): whether pinned Review tools (音読β / 描写・修飾チェックβ) get a desktop
+  // sidebar (Review Rail) or the compact mini-bar + Bottom Sheet -- see useReviewSurface's own doc for
+  // why this measures <main>'s width rather than using a viewport media query.
+  const reviewSurface = useReviewSurface(mainRef);
+  const { pins: reviewFooterPins } = useReviewHubFooterPins();
+  const reviewRailEligible =
+    reviewSurface === "rail" &&
+    !focusMode &&
+    (reviewFooterPins.includes("read-aloud") || reviewFooterPins.includes("description-check"));
+  const [reviewRailNode, setReviewRailNode] = useState<HTMLDivElement | null>(null);
   const txtInputRef = useRef<HTMLInputElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
@@ -468,8 +485,8 @@ export default function TategakiEditor({
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || !mainRef.current) return;
-      const rect = mainRef.current.getBoundingClientRect();
+      if (!isDraggingRef.current || !editorSplitRef.current) return;
+      const rect = editorSplitRef.current.getBoundingClientRect();
       const percent = ((e.clientX - rect.left) / rect.width) * 100;
       const clamped = Math.min(80, Math.max(20, percent));
       setEditorWidthPercent(clamped);
@@ -814,8 +831,23 @@ export default function TategakiEditor({
 
       <main
         ref={mainRef}
+        data-review-surface={reviewSurface}
         className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row md:pr-6 md:pb-6"
       >
+        {/* TSP-Review-UI (Revision 3): the editor/preview split's percentage widths (--editor-w / --preview-w)
+            must resolve against THIS wrapper's own width, not <main>'s full width -- otherwise a 50/50 split
+            already consumes 100% of <main> and the Review Rail (a flex-none THIRD sibling, below) would be
+            pushed outside the viewport instead of sharing the space. Introducing this inner flex-row container
+            is the whole fix: the rail eats from ITS flex-basis, and the browser naturally recomputes the split's
+            percentages against the wrapper's now-smaller actual width. */}
+        <div ref={editorSplitRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row">
+        {/* TSP-Review-UI (Revision 3): `@container` here, paired with EditorPane's `md:@max-[905px]:`
+            action-row classes, is what keeps the manuscript's HEIGHT stable when the Rail toggles on/off
+            (see manuscriptHeightUnaffectedByRail in reviewLayout.e2e.mjs). Those classes used to be plain
+            `md:max-[905px]:` viewport media queries -- correct for a narrow split-screen VIEWPORT, but blind
+            to the Rail claiming width at an unchanged viewport size, so at 1180px the action row's last
+            button silently wrapped to a second line and ate 34px of the manuscript's own height. Querying
+            this section's actual rendered width fixes both cases with one rule. */}
         <section
           id="tsp-manuscript"
           style={
@@ -823,7 +855,7 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             ref={editorPaneRef}
@@ -852,6 +884,8 @@ export default function TategakiEditor({
             focusMode={focusMode}
             onExitFocus={exitFocusMode}
             keyboardActive={keyboardActive}
+            reviewSurface={reviewSurface}
+            reviewRailNode={reviewRailEligible ? reviewRailNode : null}
           />
         </section>
 
@@ -908,7 +942,9 @@ export default function TategakiEditor({
             onSelectedChange={setSelectedPages}
           />
         </section>
+        </div>
 
+        {reviewRailEligible && <ReviewRail mountRef={setReviewRailNode} />}
       </main>
 
       {isSearchOpen && (

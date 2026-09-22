@@ -109,6 +109,11 @@ async function realClickAt(x, y) {
   await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
 }
 async function realClick(selector) {
+  // The panel's own scroll position can drift after content changes size (e.g. the 文字数カウント
+  // growing digits while the panel is open, or an earlier reachability scan's scrollIntoView calls) --
+  // scroll the target into view first so its measured position always matches what is actually visible,
+  // rather than a stale pre-reflow position that happens to fall outside the panel's clipped viewport.
+  await cdp.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => x.getClientRects().length > 0); e?.scrollIntoView({ block: 'nearest' }); return true; })()`);
   const c = await cdp.evaluate(`(() => {
     const cands = [...document.querySelectorAll(${JSON.stringify(selector)})].filter((e) => e.getClientRects().length > 0 && !e.disabled);
     const e = cands[0];
@@ -160,14 +165,27 @@ const RESULT_LIST_OPEN = `(() => { const ul = document.querySelector('[data-writ
  */
 async function assertPanelGeometry(tag, areaHeight) {
   const p = await rect(PANEL);
+  const isSheet = await cdp.evaluate(`document.querySelector('${PANEL}').hasAttribute('data-review-hub-sheet')`);
   const g = await cdp.evaluate(`(() => { const f = document.querySelector('[data-editor-footer]'); const el = document.querySelector('${PANEL}'); const pr = f.parentElement.getBoundingClientRect();
     return { footerTop: f.getBoundingClientRect().top, paneTop: pr.top, paneLeft: pr.left, paneRight: pr.right, natural: el.scrollHeight, client: el.clientHeight,
       actionRowBottom: document.querySelector('[data-editor-action-row]').getBoundingClientRect().bottom }; })()`);
   assert.ok(insideViewport(p), `${tag}: panel fully inside the viewport ${JSON.stringify(p)}`);
-  // The pane clips its children (overflow-hidden): a panel wider than the pane would have its edge -- and controls -- cut off.
-  assert.ok(p.l >= g.paneLeft - 0.5 && p.r <= g.paneRight + 0.5, `${tag}: panel must fit the Editor pane horizontally, not be clipped (panel ${Math.round(p.l)}-${Math.round(p.r)}, pane ${Math.round(g.paneLeft)}-${Math.round(g.paneRight)})`);
-  assert.ok(p.b <= g.footerTop + 0.5, `${tag}: panel must sit ABOVE the footer stack (panel bottom ${p.b} <= footer top ${g.footerTop})`);
-  assert.ok(p.t >= g.paneTop - 0.5, `${tag}: panel must stay inside the Editor pane, never over the global header (panel top ${p.t}, pane top ${g.paneTop})`);
+  if (isSheet) {
+    // TSP-Review-UI (Revision 3): below the Rail's measured-width threshold the Review Hub is a Bottom
+    // Sheet -- by design it spans the full viewport width (not clipped to the Editor pane, which the OLD
+    // anchored-panel contract below required) and is anchored to the viewport's bottom edge, with a
+    // backdrop behind it. reviewLayout.e2e.mjs's compactBottomSheet is the dedicated geometry proof
+    // (<=75vh, backdrop, close target); this only re-confirms the parts of the pre-Revision-3 contract
+    // that still apply on this surface (no clipping, everything reachable -- checked below either way).
+    assert.ok(p.l <= 0.5 && p.r >= p.vw - 0.5, `${tag}: sheet spans the full viewport width, not clipped to the Editor pane (panel ${Math.round(p.l)}-${Math.round(p.r)}, vw ${p.vw})`);
+    assert.ok(p.b >= p.vh - 0.5, `${tag}: sheet is anchored to the bottom of the viewport (panel bottom ${Math.round(p.b)}, vh ${p.vh})`);
+    assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-hub-sheet-backdrop]')`), true, `${tag}: sheet has a backdrop`);
+  } else {
+    // The pane clips its children (overflow-hidden): a panel wider than the pane would have its edge -- and controls -- cut off.
+    assert.ok(p.l >= g.paneLeft - 0.5 && p.r <= g.paneRight + 0.5, `${tag}: panel must fit the Editor pane horizontally, not be clipped (panel ${Math.round(p.l)}-${Math.round(p.r)}, pane ${Math.round(g.paneLeft)}-${Math.round(g.paneRight)})`);
+    assert.ok(p.b <= g.footerTop + 0.5, `${tag}: panel must sit ABOVE the footer stack (panel bottom ${p.b} <= footer top ${g.footerTop})`);
+    assert.ok(p.t >= g.paneTop - 0.5, `${tag}: panel must stay inside the Editor pane, never over the global header (panel top ${p.t}, pane top ${g.paneTop})`);
+  }
   // B1 originally held two tiny tools and needed no scrolling. From B4 the Hub holds 3+ tools (音読β has real controls),
   // so the panel may scroll INSIDE its cap (overflow-y-auto, documented in reviewHub.ts). The contract that matters is
   // unchanged: no control is pushed out of reach -- each one can be scrolled into view and is hit-testable there.
@@ -182,7 +200,9 @@ async function assertPanelGeometry(tag, areaHeight) {
       if (!(c === top || c.contains(top) || top?.closest('label') === c.closest('label') || top?.tagName === 'NEXTJS-PORTAL') || r.top < pr.top - 0.5 || r.bottom > pr.bottom + 0.5) bad.push(c.outerHTML.slice(0, 90)); }
     panel.scrollTop = 0; return bad; })()`);
   assert.deepEqual(unreachable, [], `${tag}: every control in the panel must be reachable (scroll into view + hit-testable)`);
-  if (g.natural + 8 <= areaHeight) {
+  if (isSheet) {
+    log(`  ${tag}: Bottom Sheet -- full viewport width, backdrop, everything reachable OK`);
+  } else if (g.natural + 8 <= areaHeight) {
     assert.ok(p.t >= g.actionRowBottom - 0.5, `${tag}: on this screen the panel fits over the manuscript, so it must not cover the title/undo/redo rows (panel top ${p.t}, row bottom ${g.actionRowBottom})`);
   } else {
     log(`  ${tag}: short screen -- manuscript area ${Math.round(areaHeight)}px < panel ${g.natural}px, so the panel rises over the rows above only as far as needed (top ${Math.round(p.t)}px, pane top ${Math.round(g.paneTop)}px)`);
@@ -237,7 +257,11 @@ async function expandedFooterPhase(v) {
   await openHub(tag);
   assert.equal((await activeInfo()).inPanel, false, `${tag}: opening must not move focus into the panel`);
   const p = await assertPanelGeometry(tag, editorBefore.h);
-  if (v.width >= 768) assert.ok(p.w <= 353, `${tag}: desktop panel is compact (${p.w}px)`);
+  // TSP-Review-UI (Revision 3): the "compact desktop panel" contract (narrow, anchored above the footer)
+  // only applies on the RAIL surface now -- below its measured-width threshold the panel is a full-width
+  // Bottom Sheet by design (asserted inside assertPanelGeometry), so this only fires where a sheet is not used.
+  const isSheetHere = await cdp.evaluate(`document.querySelector('${PANEL}').hasAttribute('data-review-hub-sheet')`);
+  if (v.width >= 768 && !isSheetHere) assert.ok(p.w <= 353, `${tag}: desktop panel is compact (${p.w}px)`);
   const editorOpen = await rect('[data-demo-target="editor"]');
   assert.ok(Math.abs(editorOpen.h - editorBefore.h) < 0.5 && Math.abs(editorOpen.t - editorBefore.t) < 0.5, `${tag}: panel must not resize/shift the manuscript textarea`);
   const content = await cdp.evaluate(`({
@@ -263,6 +287,9 @@ async function expandedFooterPhase(v) {
   await cdp.waitFor(`(() => { const h = (document.querySelector('[data-review-hub-character-count] strong')?.textContent ?? '').replace(/[^0-9]/g, ''); return Number(h) >= 1290 && h === (document.querySelector('[title="現在の原稿文字数"]')?.textContent ?? '').replace(/[^0-9]/g, ''); })()`, { label: `${tag}: count follows typing` });
   assert.ok(digits(await hubCount()) >= 1290, `${tag}: count reflects the typed text (${await hubCount()})`);
   assert.match(await hubCount(), /,/, `${tag}: grouped digits`);
+  // the count text updates on its own debounce, but the Hub panel's own height/position (ResizeObserver,
+  // and on the compact surface the sheet's own layout) settle one frame later -- let it before tapping.
+  await sleep(350);
 
   // 文章チェックβ: same checkbox, same storage key
   const wcState = () => cdp.evaluate(`({ bar: document.querySelector('[data-writing-check-surface] input[type=checkbox]').checked,

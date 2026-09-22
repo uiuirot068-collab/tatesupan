@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/lib/tategaki";
 import { ensureLongtaskObserver, getEditorProbeMode, isPerfDebugEnabled, perfMark, perfSpan } from "@/lib/perfDebug";
 import DiagnosticShadowEditor from "./DiagnosticShadowEditor";
@@ -36,7 +37,9 @@ import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingC
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
 import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
 import { ReadAloudDockCard } from "./ReadAloudDockCard";
-import ReviewDock from "./ReviewDock";
+import { ReadAloudPronunciationSection } from "./ReadAloudPronunciationPanel";
+import { useReadAloudPronunciation } from "@/hooks/useReadAloudPronunciation";
+import type { ReviewSurface } from "@/hooks/useReviewSurface";
 import { captureHeldSelection, sameHeldSelection, validHeldSelection, type HeldSelection } from "@/lib/readAloudHeldSelection";
 import { stepDescriptionCandidate } from "@/lib/descriptionCandidateNav";
 import { useReadAloud } from "@/hooks/useReadAloud";
@@ -136,6 +139,15 @@ interface EditorPaneProps {
    * is unchanged.
    */
   keyboardActive?: boolean;
+  /**
+   * TSP-Review-UI (Revision 3): where pinned Review tools (音読β / 描写・修飾チェックβ) render.
+   * "rail" portals their daily-control cards into `reviewRailNode` (a sidebar TategakiEditor
+   * renders beside the manuscript); "compact" shows a one-line mini control instead and the full
+   * Review Hub panel becomes a Bottom Sheet. See `useReviewSurface`.
+   */
+  reviewSurface: ReviewSurface;
+  /** The DOM node to portal Rail cards into. Only used while `reviewSurface === "rail"`. */
+  reviewRailNode?: HTMLDivElement | null;
 }
 
 export interface EditorPaneHandle {
@@ -176,6 +188,8 @@ function EditorPaneInner(
     focusMode = false,
     onExitFocus,
     keyboardActive = false,
+    reviewSurface,
+    reviewRailNode = null,
   }: EditorPaneProps,
   ref: React.Ref<EditorPaneHandle>
 ) {
@@ -333,13 +347,15 @@ function EditorPaneInner(
   const writingCheckPinned = footerPins.includes("writing-check");
   // TSP-B4 音読β: ONE controller for the Hub section and the footer control. It reads the selection / caret /
   // manuscript only at the moment of a press (never automatically) and hands the text to the device speech engine only.
+  // TSP-B4 (Revision 3): local pronunciation dictionary, browser-local, applied only to plain text (ruby always wins) -- see readAloudPronunciation.ts.
+  const pronunciation = useReadAloudPronunciation();
   const getReadAloudSource = useCallback(() => {
     if (isWindowed) {
-      return { content, selection: pagedEditorRef.current?.getSelectionGlobal() ?? { start: 0, end: 0 } };
+      return { content, selection: pagedEditorRef.current?.getSelectionGlobal() ?? { start: 0, end: 0 }, pronunciation: pronunciation.entries };
     }
     const el = textareaRef.current;
-    return { content, selection: { start: el?.selectionStart ?? 0, end: el?.selectionEnd ?? 0 } };
-  }, [content, isWindowed]);
+    return { content, selection: { start: el?.selectionStart ?? 0, end: el?.selectionEnd ?? 0 }, pronunciation: pronunciation.entries };
+  }, [content, isWindowed, pronunciation.entries]);
   const readAloud = useReadAloud(memoStorageKey, getReadAloudSource);
   // TSP-B4 (Revision 2) held 選択範囲: the browser keeps a textarea's selection when focus moves to the footer / Review
   // Hub but stops PAINTING it. We record the last non-empty selection so the UI can say 「選択範囲を保持中」 (and paint a
@@ -671,7 +687,7 @@ function EditorPaneInner(
           data-demo-target="title"
           className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
         />
-        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:max-[905px]:gap-1`}>
+        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:@max-[905px]:gap-1`}>
           <button
             type="button"
             data-editor-action="undo"
@@ -680,9 +696,9 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:max-[905px]:[&>span:not([aria-hidden])]:hidden"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
-            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:max-[905px]:text-[16px]">↶</span>
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:@max-[905px]:text-[16px]">↶</span>
             <span className="hidden md:inline">元に戻す</span>
           </button>
           <button
@@ -693,9 +709,9 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:max-[905px]:[&>span:not([aria-hidden])]:hidden"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
-            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:max-[905px]:text-[16px]">↷</span>
+            <span aria-hidden="true" className="text-xl leading-none md:text-xs md:@max-[905px]:text-[16px]">↷</span>
             <span className="hidden md:inline">やり直す</span>
           </button>
           <button
@@ -703,7 +719,7 @@ function EditorPaneInner(
             data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
-            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
+            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
           >
             改ページ挿入
           </button>
@@ -711,7 +727,7 @@ function EditorPaneInner(
             type="button"
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
-            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
+            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
           >
             置換
           </button>
@@ -733,7 +749,7 @@ function EditorPaneInner(
               data-editor-action="report"
               onClick={onOpenBetaFeedback}
               title="β版フィードバック（不具合・気になる事・要望）"
-              className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1 md:max-[905px]:px-2"
+              className="min-h-9 whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
             >
               報告
             </button>
@@ -1041,7 +1057,7 @@ function EditorPaneInner(
           <span className="min-w-0 shrink truncate whitespace-nowrap tabular-nums text-ink/70">
             現在{visualLength.toLocaleString("ja-JP")}字
           </span>
-          {footerPins.includes("read-aloud") && <ReadAloudFooterControl {...readAloudViewProps} />}
+          {(footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && <ReadAloudFooterControl {...readAloudViewProps} />}
           {footerPins.includes("description-check") && (
             <DescriptionCheckFooterPill
               enabled={descriptionCheck.enabled}
@@ -1065,32 +1081,41 @@ function EditorPaneInner(
         </div>
       )}
 
-      {(footerPins.includes("read-aloud") || footerPins.includes("description-check")) && (
-        <ReviewDock
-          className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}
-        >
-          {footerPins.map((id) =>
-            id === "read-aloud" ? (
-              <ReadAloudDockCard key={id} {...readAloudViewProps} />
-            ) : id === "description-check" ? (
-              <DescriptionCheckDockCard
-                key={id}
-                enabled={descriptionCheck.enabled}
-                categories={descriptionCheck.categories}
-                onToggle={descriptionCheck.setEnabled}
-                onToggleCategory={descriptionCheck.toggleCategory}
-                marks={descriptionCheck.marks}
-                current={descriptionCheck.current}
-                activeMark={descriptionActiveMark}
-                currentMark={descriptionCurrentMark}
-                onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
-                onPrev={() => stepDescription(-1)}
-                onNext={() => stepDescription(1)}
-              />
-            ) : null,
-          )}
-        </ReviewDock>
-      )}
+      {/* TSP-Review-UI (Revision 3): on the "rail" surface the pinned tools' daily-control cards
+          are portalled into the sidebar TategakiEditor renders beside the manuscript (`reviewRailNode`)
+          -- NOT rendered here -- so they cost the manuscript zero height on desktop. On the "compact"
+          surface (phone + narrower desktop widths) there is no permanent card at all; a one-line mini
+          control lives in the status row below instead, and full controls open in the Review Hub
+          Bottom Sheet. */}
+      {reviewSurface === "rail" &&
+        reviewRailNode &&
+        !focusMode &&
+        (footerPins.includes("read-aloud") || footerPins.includes("description-check")) &&
+        createPortal(
+          <>
+            {footerPins.map((id) =>
+              id === "read-aloud" ? (
+                <ReadAloudDockCard key={id} {...readAloudViewProps} />
+              ) : id === "description-check" ? (
+                <DescriptionCheckDockCard
+                  key={id}
+                  enabled={descriptionCheck.enabled}
+                  categories={descriptionCheck.categories}
+                  onToggle={descriptionCheck.setEnabled}
+                  onToggleCategory={descriptionCheck.toggleCategory}
+                  marks={descriptionCheck.marks}
+                  current={descriptionCheck.current}
+                  activeMark={descriptionActiveMark}
+                  currentMark={descriptionCurrentMark}
+                  onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
+                  onPrev={() => stepDescription(-1)}
+                  onNext={() => stepDescription(1)}
+                />
+              ) : null,
+            )}
+          </>,
+          reviewRailNode,
+        )}
       <div
         data-writing-check-surface=""
         className={`${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-2" : "order-1"}`}
@@ -1154,7 +1179,21 @@ function EditorPaneInner(
             onResume={resumeWorkSession}
             onEnd={onEndWorkSession}
           />
-          <span className="flex shrink-0 items-center gap-1.5">
+          <span className="flex shrink-0 flex-wrap items-center gap-1.5">
+            {/* Revision 3: a mini playback control stays reachable on the compact surface even while
+                UNPINNED, whenever 音読β is actually speaking/paused -- closing the Bottom Sheet must
+                never make an in-progress reading uncontrollable. */}
+            {reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && (
+              <ReadAloudFooterControl {...readAloudViewProps} />
+            )}
+            {reviewSurface === "compact" && footerPins.includes("description-check") && (
+              <DescriptionCheckFooterPill
+                enabled={descriptionCheck.enabled}
+                current={descriptionCheck.current}
+                count={descriptionCheck.marks.length}
+                onOpen={toggleReviewHub}
+              />
+            )}
             <ReviewHubFooterPinnedTools
               characterCount={
                 <span
@@ -1183,13 +1222,14 @@ function EditorPaneInner(
         </div>
       </div>
 
-      {descriptionActiveMark && !footerPins.includes("description-check") && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
+      {descriptionActiveMark && !(reviewSurface === "rail" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
         <DescriptionMarkDetailCard mark={descriptionActiveMark} onDismiss={() => setDescriptionDismissed(descriptionActiveMark)} />
       )}
       <ReviewHubPanel
         open={reviewHubOpen}
         onClose={closeReviewHub}
         maxHeightPx={reviewHubMaxHeightPx}
+        sheet={reviewSurface === "compact"}
         sections={{
           "writing-check": (
             <WritingCheckReviewSection
@@ -1201,7 +1241,17 @@ function EditorPaneInner(
             />
           ),
           "character-count": <CharacterCountReviewSection count={visualLength} />,
-          "read-aloud": <ReadAloudReviewSection {...readAloudViewProps} />,
+          "read-aloud": (
+            <>
+              <ReadAloudReviewSection {...readAloudViewProps} />
+              <ReadAloudPronunciationSection
+                held={held}
+                entries={pronunciation.entries}
+                onUpsert={pronunciation.upsertEntry}
+                onRemove={pronunciation.removeEntry}
+              />
+            </>
+          ),
           "description-check": (
             <DescriptionCheckReviewSection
               enabled={descriptionCheck.enabled}

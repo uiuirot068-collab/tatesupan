@@ -276,11 +276,12 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(pane).toContain("<DescriptionCheckDockCard");
   });
 
-  it("pinned = a Review Dock card (not a status-row pill); the Hub keeps the full list; the mobile collapsed row keeps the compact pill", () => {
-    expect(pane).toContain("<ReviewDock");
+  it("pinned = a Review Rail card on wide desktop (portalled, zero manuscript height cost), a compact mini pill otherwise; the Hub keeps the full list", () => {
+    expect(pane).toContain("createPortal(");
+    expect(pane).toContain("reviewRailNode,");
     expect(pane).toContain("onPrev={() => stepDescription(-1)}");
     expect(pane).toContain("onNext={() => stepDescription(1)}");
-    expect(pane).toContain('footerPins.includes("description-check") && (\n            <DescriptionCheckFooterPill');
+    expect(pane).toContain('reviewSurface === "compact" && footerPins.includes("description-check") && (\n              <DescriptionCheckFooterPill');
     expect(read("src/components/ReviewHubFooterPinnedTools.tsx")).not.toMatch(/description|readAloud|read-aloud/i);
   });
 
@@ -310,8 +311,8 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(pane).toContain("setRecheckNonce((value) => value + 1)");
   });
 
-  it("the floating detail card only serves the UNPINNED tool (a pinned dock card shows the same detail) and hides while the Hub is open, in 集中モード and with the keyboard", () => {
-    expect(pane).toContain('!footerPins.includes("description-check") && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive');
+  it("the floating detail card only serves the tool when it has no Rail card (unpinned, or pinned on the compact surface where the Rail does not exist); a pinned Rail card shows the same detail itself, and the card hides while the Hub is open, in 集中モード and with the keyboard", () => {
+    expect(pane).toContain('!(reviewSurface === "rail" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive');
   });
 
   it("a single click / tap reports the caret (no double-click): click, select, keyup handlers all feed the detail", () => {

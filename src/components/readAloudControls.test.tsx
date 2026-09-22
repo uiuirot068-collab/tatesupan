@@ -150,18 +150,21 @@ describe("B4 registry + EditorPane wiring", () => {
     expect(REVIEW_HUB_TOOLS.filter((tool) => tool.id === "read-aloud")).toEqual([
       { id: "read-aloud", title: "音読β", summary: "声に出して読む代わりに、文章のリズムを耳で確かめます。" },
     ]);
-    expect(pane).toContain('"read-aloud": <ReadAloudReviewSection {...readAloudViewProps} />');
+    expect(pane).toContain("<ReadAloudReviewSection {...readAloudViewProps} />");
     expect(read("src/components/Header.tsx")).not.toMatch(/音読|ReadAloud/);
   });
 
-  it("uses ONE controller for the Hub section and the footer control, keyed to the document, and reads the selection only from press handlers", () => {
+  it("uses ONE controller for the Hub section, the Rail card and the footer control, keyed to the document, and reads the selection only from press handlers", () => {
     expect(pane.match(/useReadAloud\(/g)).toHaveLength(1);
     expect(pane).toContain("useReadAloud(memoStorageKey, getReadAloudSource)");
     expect(pane).toContain("pagedEditorRef.current?.getSelectionGlobal()");
     expect(pane).toContain("textareaRef.current");
     expect(pane).toContain('footerPins.includes("read-aloud")');
-    expect(pane).toContain("<ReadAloudDockCard key={id} {...readAloudViewProps} />"); // pinned = a Review Dock card
-    expect(pane).toContain('footerPins.includes("read-aloud") && <ReadAloudFooterControl {...readAloudViewProps} />'); // mobile collapsed one-line row
+    // Revision 3: pinned = a Review Rail card (portalled into reviewRailNode) on wide desktop, a mini
+    // control inline on the compact surface -- both driven by the SAME readAloudViewProps.
+    expect(pane).toContain("<ReadAloudDockCard key={id} {...readAloudViewProps} />");
+    expect(pane).toContain("createPortal(");
+    expect(pane).toContain('reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle")');
   });
 
   it("the hook cancels speech on unmount, document change and page hide; nothing starts on its own", () => {

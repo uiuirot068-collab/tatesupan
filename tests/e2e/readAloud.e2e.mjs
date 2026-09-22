@@ -15,12 +15,19 @@
 //  * default voice is on-device Japanese; an online voice is used only when explicitly chosen (and warns);
 //  * unsupported browser / no on-device Japanese voice show guidance and never speak;
 //  * reloading (pagehide) cancels speech;
-//  * footer pin (Revision 2): 音読β becomes a Review Dock CARD with a 音読範囲 radiogroup (選択範囲 / 現在の段落 / 全文),
-//    a visible 「選択範囲を保持中」 state + ghost highlight while the editor is unfocused, stale-hold cleanup (edit / collapse /
-//    target switch), play / pause / resume / stop from the card; max-2 (a third pin is disabled, unpin frees a slot),
-//    order/persistence survive reload, and an unpinned 音読β stays fully usable from the Hub;
+//  * footer pin, Rail surface (1280, Revision 3 -- was a below-the-manuscript "Review Dock" in Revision 2):
+//    音読β becomes a card in the Review Rail beside the manuscript, with a 音読範囲 radiogroup (選択範囲 / 現在の段落 /
+//    全文), a visible 「選択範囲を保持中」 state + ghost highlight while the editor is unfocused, stale-hold cleanup
+//    (edit / collapse / target switch), play / pause / resume / stop from the card; max-2 (a third pin is disabled,
+//    unpin frees a slot), order/persistence survive reload, and an unpinned 音読β stays fully usable from the Hub;
+//  * footer pin, compact surface (390 / 770, Revision 3): no permanent card at all -- a one-line mini
+//    control in the footer status row that itself reads/pauses/resumes/stops, with full controls (target
+//    choice, speed, voice) still reachable from the Review Hub, now a Bottom Sheet there;
 //  * no external manuscript transmission: no request carries the manuscript sentinel, no non-loopback POST/beacon;
-//  * layout: nothing overflows horizontally, panel + footer controls stay inside the viewport.
+//  * layout: nothing overflows horizontally, panel + footer controls stay inside the viewport;
+//  * pronunciation dictionary (Revision 3): registering a reading from a held selection reaches what B4
+//    actually speaks; ruby still wins over a registered dictionary reading for the same word; the manuscript
+//    itself is never mutated; edit / delete / browser-local (localStorage) persistence across reload.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -345,21 +352,27 @@ async function coreViewport(v) {
 }
 
 async function pinViewport(v) {
-  const tag = `${v.name} dock`;
+  // TSP-Review-UI (Revision 3): the rich, always-mounted daily-control card (target radiogroup, visible
+  // held-selection state + ghost, play/pause/resume/stop) only exists on the RAIL surface now -- it is
+  // portalled into `[data-review-rail]` beside the manuscript instead of a below-the-manuscript "Review
+  // Dock". Below the Rail's measured-width threshold there is no permanent card at all (see
+  // compactPinViewport for that surface's mini-bar + Bottom Sheet coverage, and reviewLayout.e2e.mjs for
+  // the surface-level mechanics shared by both B4 and B5).
+  const tag = `${v.name} rail`;
   await openWith({ tatespun_editor_footer_collapsed: "off" }, v.width, v.height);
   await setText(TEXT);
   await openHub(tag);
   const toggle = (id) => `[data-review-hub-tool="${id}"] [data-review-hub-footer-pin-toggle]`;
   const state = (id) => cdp.evaluate(`(() => { const b = document.querySelector('${toggle(id)}'); return { pressed: b.getAttribute('aria-pressed'), disabled: b.disabled }; })()`);
   const pins = () => cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`);
-  const CARD = "[data-review-dock-card=read-aloud]";
+  const CARD = "[data-review-rail] [data-review-dock-card=read-aloud]";
   const ghost = () => cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`);
   const cardText = () => cdp.evaluate(`document.querySelector('${CARD}')?.textContent.replace(/\\s+/g, ' ').trim() ?? ''`);
   const editorFocused = () => cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target') === 'editor'`);
   const checkedTarget = () => cdp.evaluate(`document.querySelector('${CARD} [data-read-aloud-target][aria-checked="true"]')?.dataset.readAloudTarget ?? null`);
   assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`), null, `${tag}: default is unstored`);
   assert.deepEqual(await state("read-aloud"), { pressed: "false", disabled: true }, `${tag}: max-2 -- a third pin is disabled while two are shown`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock]')`), false, `${tag}: no dock while no dock tool is pinned`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: no rail while no dock tool is pinned`);
 
   // unpinned 音読β is fully usable from the Hub (pinned != enabled)
   await select(0, 0);
@@ -371,10 +384,9 @@ async function pinViewport(v) {
   await realClick(toggle("character-count"));
   await realClick(toggle("read-aloud"));
   await closeHub();
-  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: dock card appears` });
+  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: rail card appears` });
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: persisted in pin order`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no old one-line control in the expanded footer`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock] ${CARD.replace("[data-review-dock-card", "[data-review-dock-card")}')`), true, `${tag}: the card lives inside the Review Dock`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no compact mini control while on the rail surface`);
   insideViewport(await rect(CARD), `${tag} card`);
   await noHorizontalScroll(`${tag} (card)`);
 
@@ -472,22 +484,59 @@ async function pinViewport(v) {
   await openHub(tag);
   assert.deepEqual(await state("character-count"), { pressed: "false", disabled: true }, `${tag}: full again -> the unpinned tool is disabled`);
   await realClick(toggle("read-aloud"));
-  await cdp.waitFor(`!document.querySelector('[data-review-dock]')`, { label: `${tag}: unpinning removes the dock` });
+  await cdp.waitFor(`!document.querySelector('[data-review-rail]')`, { label: `${tag}: unpinning removes the rail` });
   await sleep(600); // the footer just changed height: let the Hub panel settle (its cap follows the footer via ResizeObserver) before the next tap
   await realClick(toggle("read-aloud"));
   await cdp.waitFor(`JSON.parse(localStorage.getItem('${PINS_KEY}')).includes('read-aloud')`, { label: `${tag}: re-pinned` });
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"]);
   await navigate();
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: pins survive reload`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: dock card survives reload`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: rail card survives reload`);
   await openHub(tag);
   await realClick(toggle("writing-check"));
   await realClick(toggle("read-aloud"));
   assert.deepEqual(await pins(), [], `${tag}: zero pins is a valid state`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock]')`), false);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-hub-tool="read-aloud"]')`), true);
   await closeHub();
   log(`  ${tag}: target chosen in the footer / held selection visible + ghost / lifecycle (edit, collapse, target switch) / play-pause-resume-stop from the card / max-2 + persistence OK`);
+}
+
+async function compactPinViewport(v) {
+  // TSP-Review-UI (Revision 3): below the Rail's measured-width threshold, pinning 音読β never mounts a
+  // permanent card (see pinViewport's comment) -- only a compact one-line mini control in the footer
+  // status row, with full controls reachable from the Review Hub Bottom Sheet. This is the B4-specific
+  // slice of that behaviour; the shared Rail/compact surface mechanics (backdrop, height cap, playback
+  // surviving a sheet close while UNPINNED) are covered once, for both B4 and B5, in reviewLayout.e2e.mjs.
+  const tag = `${v.name} compact`;
+  await openWith({ tatespun_editor_footer_collapsed: "off" }, v.width, v.height);
+  await setText(TEXT);
+  await openHub(tag);
+  const toggle = (id) => `[data-review-hub-tool="${id}"] [data-review-hub-footer-pin-toggle]`;
+  await realClick(toggle("character-count"));
+  await realClick(toggle("read-aloud"));
+  await closeHub();
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: pinning never mounts the Rail below its threshold`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock-card=read-aloud]')`), false, `${tag}: no permanent card at all`);
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-start]')`, { label: `${tag}: compact mini control appears in the footer` });
+  insideViewport(await rect("[data-read-aloud-footer-start]"), `${tag} mini start`);
+
+  // the mini control itself reads (paragraph at the caret, its default target)
+  await select(TEXT.indexOf("静かな夜") + 1, TEXT.indexOf("静かな夜") + 1);
+  await cdp.evaluate(`window.__ra.spoken.length = 0`);
+  await realClick("[data-read-aloud-footer-start]", { scroll: false });
+  await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: mini control starts reading` });
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-pause]')`, { label: `${tag}: mini control shows pause while reading` });
+  await realClick("[data-read-aloud-footer-stop]", { scroll: false });
+  await cdp.waitFor(`!document.querySelector('[data-read-aloud-footer-pause],[data-read-aloud-footer-resume]')`, { label: `${tag}: stop from the mini control` });
+
+  // full controls (target choice, speed, voice) are still reachable from the Hub -- now a Bottom Sheet
+  await openHub(tag);
+  assert.equal(await cdp.evaluate(`document.querySelector('${PANEL}').hasAttribute('data-review-hub-sheet')`), true, `${tag}: the Hub is the sheet variant here`);
+  assert.match(await cdp.evaluate(`document.querySelector('[data-review-hub-read-aloud]').textContent`), /選択範囲を読む/, `${tag}: full target choice still available inside the sheet`);
+  await closeHub();
+  await noHorizontalScroll(`${tag}`);
+  log(`  ${tag}: no permanent card / mini control reads+controls / full controls reachable from the Bottom Sheet OK`);
 }
 
 async function stateViewport(v) {
@@ -513,6 +562,107 @@ async function stateViewport(v) {
   log(`  ${tag}: unsupported browser / no on-device Japanese voice OK`);
 }
 
+async function pronunciationViewport(v) {
+  // TSP-Review-UI (Revision 3) 音読の読み辞書: register a corrected reading from a manuscript selection,
+  // confirm it actually reaches what B4 speaks, confirm ruby still wins over the dictionary (the exact
+  // 人気《にんき》 example from the spec), confirm the manuscript itself is never touched, and exercise
+  // edit / delete / reload persistence -- all browser-local (no Supabase/cloud round trip exists to check).
+  const tag = `${v.name} pronunciation`;
+  const DICT_KEY = "tatespun.readAloudPronunciation.v1";
+  const P_TEXT = "大分は美しい県です。｜人気《にんき》があります。";
+  const dictEntries = () => cdp.evaluate(`(() => { try { return JSON.parse(localStorage.getItem('${DICT_KEY}') || '[]'); } catch { return []; } })()`);
+  const setDictInput = (selector, value) =>
+    cdp.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const readFullNow = async () => {
+    await cdp.evaluate(`window.__ra.spoken.length = 0`);
+    await realClick("[data-read-aloud-start=full]");
+    await waitIdle(`${tag}: full reading completes`);
+    return spokenTexts();
+  };
+  // A fresh select() makes the NEXT pointerdown inside the Hub the one that first captures `held` --
+  // which visibly grows the read-aloud section by a line (the held-selection state it now reflects) an
+  // instant into that same click. A coordinate-based click computed just before mousedown can therefore
+  // land on stale coordinates by the time mouseup actually resolves. Priming on a stable, non-interactive
+  // line first lets that one-time reflow happen and settle, so the real click below lands correctly.
+  const primeHeldSelection = async () => {
+    await realClick("[data-read-aloud-pronunciation] p");
+    await sleep(400);
+  };
+
+  await openWith({}, v.width, v.height);
+  await setText(P_TEXT);
+  await openHub(tag);
+
+  // register 大分 -> おおいた from a plain (non-ruby) selection
+  const at1 = P_TEXT.indexOf("大分");
+  assert.equal(await select(at1, at1 + 2), "大分");
+  await primeHeldSelection();
+  await realClick("[data-read-aloud-pronunciation-register-open]");
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-pronunciation-form]')`, { label: `${tag}: register form opens from a held selection` });
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-read-aloud-pronunciation-surface]').textContent`), "大分", `${tag}: 表記 is pre-filled from the selection`);
+  await setDictInput("[data-read-aloud-pronunciation-reading]", "おおいた");
+  await realClick("[data-read-aloud-pronunciation-save]");
+  await cdp.waitFor(`!document.querySelector('[data-read-aloud-pronunciation-form]')`, { label: `${tag}: form closes after saving` });
+  assert.deepEqual((await dictEntries()).map((e) => [e.surface, e.reading]), [["大分", "おおいた"]], `${tag}: saved browser-locally`);
+
+  // register 人気 -> ひとけ -- 人気 ALSO carries a ruby reading (にんき) in the manuscript; the ruby must
+  // still win when actually reading (priority: ruby > dictionary > browser default).
+  const at2 = P_TEXT.indexOf("人気");
+  assert.equal(await select(at2, at2 + 2), "人気");
+  await primeHeldSelection();
+  await realClick("[data-read-aloud-pronunciation-register-open]");
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-pronunciation-form]')`);
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-read-aloud-pronunciation-surface]').textContent`), "人気");
+  await setDictInput("[data-read-aloud-pronunciation-reading]", "ひとけ");
+  await realClick("[data-read-aloud-pronunciation-save]");
+  await cdp.waitFor(`!document.querySelector('[data-read-aloud-pronunciation-form]')`);
+
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-demo-target="editor"]').value`), P_TEXT, `${tag}: registering readings never mutates the manuscript`);
+
+  await select(0, 0);
+  assert.deepEqual(
+    await readFullNow(),
+    ["おおいたは美しい県です。", "にんきがあります。"],
+    `${tag}: dictionary reading used for 大分, ruby reading (not the dictionary) used for 人気`
+  );
+
+  // edit: 大分's reading
+  const idOf = async (surface) => ((await dictEntries()).find((e) => e.surface === surface) ?? {}).id ?? null;
+  const id1 = await idOf("大分");
+  assert.ok(id1, `${tag}: 大分 entry has an id`);
+  await cdp.evaluate(`document.querySelector('[data-read-aloud-pronunciation-list]')?.setAttribute('open', '')`);
+  await realClick(`[data-read-aloud-pronunciation-item="${id1}"] [data-read-aloud-pronunciation-edit]`);
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-pronunciation-item="${id1}"] [data-read-aloud-pronunciation-edit-input]')`, { label: `${tag}: edit row opens` });
+  await setDictInput(`[data-read-aloud-pronunciation-item="${id1}"] [data-read-aloud-pronunciation-edit-input]`, "おおいたけん");
+  await realClick(`[data-read-aloud-pronunciation-item="${id1}"] [data-read-aloud-pronunciation-edit-save]`);
+  await cdp.waitFor(`JSON.parse(localStorage.getItem('${DICT_KEY}') || '[]').find((e) => e.surface === '大分')?.reading === 'おおいたけん'`, { label: `${tag}: edit persists` });
+
+  // delete: 人気's dictionary entry (ruby already wins for it, so reading is unaffected either way)
+  const id2 = await idOf("人気");
+  assert.ok(id2, `${tag}: 人気 entry has an id`);
+  await realClick(`[data-read-aloud-pronunciation-item="${id2}"] [data-read-aloud-pronunciation-remove]`);
+  await cdp.waitFor(`JSON.parse(localStorage.getItem('${DICT_KEY}') || '[]').length === 1`, { label: `${tag}: delete removes the entry` });
+
+  assert.deepEqual(
+    await readFullNow(),
+    ["おおいたけんは美しい県です。", "にんきがあります。"],
+    `${tag}: edited reading applied; deleting 人気's entry changes nothing (ruby already won)`
+  );
+
+  // reload: the dictionary is browser-local (localStorage) and survives independently of B4's held selection
+  await navigate();
+  assert.deepEqual((await dictEntries()).map((e) => [e.surface, e.reading]), [["大分", "おおいたけん"]], `${tag}: dictionary survives reload`);
+  await setText(P_TEXT);
+  await openHub(tag);
+  assert.deepEqual(
+    await readFullNow(),
+    ["おおいたけんは美しい県です。", "にんきがあります。"],
+    `${tag}: reading after reload still uses the persisted dictionary`
+  );
+  await closeHub();
+  log(`  ${tag}: register from selection / ruby beats dictionary / manuscript untouched / edit / delete / reload persistence OK`);
+}
+
 async function lifecycle(v) {
   const tag = `${v.name} lifecycle`;
   await openWith({}, v.width, v.height);
@@ -533,9 +683,11 @@ async function lifecycle(v) {
 
 try {
   for (const v of VIEWPORTS) await coreViewport(v);
-  for (const v of VIEWPORTS) await pinViewport(v);
+  for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactPinViewport(v); // 390 / 770: below the Rail threshold
+  await pinViewport(VIEWPORTS[2]); // 1280: the Rail surface -- the only one with a permanent daily-control card
   for (const v of [VIEWPORTS[0], VIEWPORTS[2]]) await stateViewport(v);
   await lifecycle(VIEWPORTS[2]);
+  await pronunciationViewport(VIEWPORTS[2]);
   assert.deepEqual(dialogs, [], `unexpected native dialog(s): ${JSON.stringify(dialogs)}`);
   assert.deepEqual(pageErrors, [], `uncaught page error(s): ${JSON.stringify(pageErrors)}`);
   const external = requests.filter((r) => !isLoopback(r.url) && (r.method !== "GET" || r.hasPost));

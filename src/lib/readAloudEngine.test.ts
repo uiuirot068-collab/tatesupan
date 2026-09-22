@@ -359,3 +359,27 @@ describe("B4 privacy: no network path exists in the read-aloud code", () => {
     expect(all).not.toMatch(/azure|polly|elevenlabs|openai|google-cloud|VOICEVOX/i);
   });
 });
+
+describe("B4 (Revision 3) pronunciation reaches the actual spoken utterance", () => {
+  it("source.pronunciation is applied when building the chunks for a run", () => {
+    const { stub, controller } = ready();
+    controller.start("full", { content: "人気がない。", selection: { start: 0, end: 0 }, pronunciation: [{ id: "a", surface: "人気", reading: "ひとけ" }] });
+    expect(stub.last().text).toBe("ひとけがない。");
+  });
+
+  it("an explicit ruby reading still wins even when the dictionary has an entry for the same characters", () => {
+    const { stub, controller } = ready();
+    controller.start("full", {
+      content: "｜人気《にんき》がない。",
+      selection: { start: 0, end: 0 },
+      pronunciation: [{ id: "a", surface: "人気", reading: "ひとけ" }],
+    });
+    expect(stub.last().text).toBe("にんきがない。");
+  });
+
+  it("omitting pronunciation entirely behaves exactly as before (no dictionary = unchanged)", () => {
+    const { stub, controller } = ready();
+    controller.start("full", { content: "人気がない。", selection: { start: 0, end: 0 } });
+    expect(stub.last().text).toBe("人気がない。");
+  });
+});

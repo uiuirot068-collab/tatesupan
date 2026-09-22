@@ -25,6 +25,7 @@ import {
   type ReadAloudRange,
   type ReadAloudVoiceLike,
 } from "./readAloud";
+import type { PronunciationEntry } from "./readAloudPronunciation";
 
 export const READ_ALOUD_STORAGE_KEY = "tatespun.readAloud.v1";
 /** Some browsers never fire `voiceschanged`; stop showing "loading" after this long. */
@@ -112,6 +113,8 @@ export const READ_ALOUD_SERVER_STATE: ReadAloudState = {
 export interface ReadAloudSource {
   content: string;
   selection: ReadAloudRange;
+  /** Browser-local pronunciation corrections (Revision 3); applied to plain text only, ruby always wins. Optional — omitted = none. */
+  pronunciation?: readonly PronunciationEntry[];
 }
 
 export interface ReadAloudController {
@@ -284,7 +287,7 @@ export function createReadAloudController(env: ReadAloudEnv): ReadAloudControlle
 
     start(mode, source) {
       if (!supported) return;
-      const nextChunks = buildReadAloudChunks(mode, source.content, source.selection);
+      const nextChunks = buildReadAloudChunks(mode, source.content, source.selection, source.pronunciation);
       run += 1;
       cancelSynth();
       restartOnResume = false;

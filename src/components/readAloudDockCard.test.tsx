@@ -5,10 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReadAloudDockCard } from "./ReadAloudDockCard";
 import { ReadAloudFooterControl, type ReadAloudViewProps } from "./ReadAloudControls";
-import ReviewDock from "./ReviewDock";
+import ReviewRail from "./ReviewRail";
 import { READ_ALOUD_SERVER_STATE, type ReadAloudState } from "@/lib/readAloudEngine";
 import { captureHeldSelection } from "@/lib/readAloudHeldSelection";
 import { REVIEW_HUB_FOOTER_MAX } from "@/lib/reviewHubFooterPins";
+import { REVIEW_RAIL_MIN_MAIN_WIDTH_PX, reviewSurfaceForMainWidth } from "@/hooks/useReviewSurface";
 
 const noop = () => {};
 const read = (path: string) => readFileSync(resolve(path), "utf8");
@@ -150,36 +151,62 @@ describe("B4 held-selection wiring in EditorPane (lifecycle)", () => {
   });
 });
 
-describe("Review Dock layout (E-1 … E-3)", () => {
-  it("is a dedicated region: a top separator, its own background, padding and a gap from the manuscript", () => {
-    const html = renderToStaticMarkup(createElement(ReviewDock, null, createElement("span", null, "x")));
-    expect(html).toContain('data-review-dock=""');
+describe("Review Rail (desktop) — Revision 3", () => {
+  it("is a dedicated sidebar shell: a portal mount point, a left border, comfortable width, its own scroll", () => {
+    const html = renderToStaticMarkup(createElement(ReviewRail, { mountRef: noop }));
+    expect(html).toContain('data-review-rail=""');
     expect(html).toContain('aria-label="見直しツール"');
-    for (const cls of ["border-t", "bg-ink/[0.03]", "px-2", "py-1.5", "mt-1", "gap-1.5"]) expect(html).toContain(cls);
+    for (const cls of ["border-l", "w-[17rem]", "flex-col", "gap-3", "overflow-y-auto"]) expect(html).toContain(cls);
+    // no horizontal scroll / wrap concern: the rail is a single vertical column, not a horizontal row
+    expect(html).not.toMatch(/overflow-x|whitespace-nowrap|flex-wrap/);
   });
 
-  it("two cards sit side by side when they fit and stack when they do not: wrap + a minimum card width, never a horizontal scroller", () => {
-    const html = renderToStaticMarkup(createElement(ReviewDock, null));
-    expect(html).toContain("flex-wrap");
-    expect(html).not.toMatch(/overflow-x|whitespace-nowrap|overflow-auto|overflow-scroll/);
+  it("cards keep a sane minimum width so they are never squeezed illegibly inside the rail", () => {
     expect(read("src/components/ReadAloudDockCard.tsx")).toContain("min-w-[15rem] flex-1");
     expect(read("src/components/DescriptionCheckControls.tsx")).toContain("min-w-[15rem] flex-1");
   });
 
-  it("sits ABOVE the existing footer rows inside the footer stack, and follows the footer's own 集中モード / collapsed / keyboard rules", () => {
-    const dockAt = pane.indexOf("<ReviewDock");
-    expect(dockAt).toBeGreaterThan(pane.indexOf("data-editor-footer"));
-    expect(dockAt).toBeLessThan(pane.indexOf('data-writing-check-surface=""'));
-    expect(pane).toContain('className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}');
+  it("TategakiEditor mounts the rail beside the manuscript only on the measured 'rail' surface, with a pinned dock tool, and not in 集中モード", () => {
+    const tge = read("src/components/TategakiEditor.tsx");
+    expect(tge).toContain("useReviewSurface(mainRef)");
+    expect(tge).toContain('reviewSurface === "rail" &&\n    !focusMode &&\n    (reviewFooterPins.includes("read-aloud") || reviewFooterPins.includes("description-check"))');
+    expect(tge).toContain("<ReviewRail mountRef={setReviewRailNode} />");
   });
 
-  it("holds at most the B2 maximum of two cards and renders them in pin order", () => {
+  it("exposes the measured surface on <main> regardless of pin state (a plain observability hook, not layout-affecting), so it can be told apart from 'is the rail mounted' (which also needs a pin)", () => {
+    expect(read("src/components/TategakiEditor.tsx")).toContain("data-review-surface={reviewSurface}");
+  });
+
+  it("the rail breakpoint is measured (main element width), not a plain viewport media query, and matches the documented measurements", () => {
+    expect(reviewSurfaceForMainWidth(REVIEW_RAIL_MIN_MAIN_WIDTH_PX - 1)).toBe("compact");
+    expect(reviewSurfaceForMainWidth(REVIEW_RAIL_MIN_MAIN_WIDTH_PX)).toBe("rail");
+    // measured real <main> widths (see the hook's own doc): 1024/1100 viewport -> compact, 1180/1280 -> rail
+    expect(reviewSurfaceForMainWidth(952)).toBe("compact"); // 1024px viewport
+    expect(reviewSurfaceForMainWidth(1028)).toBe("compact"); // 1100px viewport
+    expect(reviewSurfaceForMainWidth(1108)).toBe("rail"); // 1180px viewport
+    expect(reviewSurfaceForMainWidth(1208)).toBe("rail"); // 1280px viewport
+  });
+
+  it("EditorPane portals the pinned cards into the rail node -- costing the manuscript's HEIGHT nothing -- in pin order, up to the B2 maximum of two", () => {
     expect(REVIEW_HUB_FOOTER_MAX).toBe(2);
-    expect(pane).toContain("{footerPins.map((id) =>");
+    expect(pane).toContain('reviewSurface === "rail" &&\n        reviewRailNode &&\n        !focusMode &&');
+    expect(pane).toContain("createPortal(");
+    expect(pane).toContain("footerPins.map((id) =>");
+    expect(pane).toContain("reviewRailNode,");
+  });
+});
+
+describe("Compact surface (phone + narrower desktop) mini bar — Revision 3", () => {
+  it("shows a one-line mini control per pinned dock tool in the footer status row instead of a permanent card, only on the compact surface", () => {
+    expect(pane).toContain('reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle")');
+    expect(pane).toContain('reviewSurface === "compact" && footerPins.includes("description-check")');
   });
 
-  it("the old status-row pills for 音読β / 描写・修飾 are gone (one representation per tool)", () => {
-    expect(pane).not.toContain("readAloud={<ReadAloudFooterControl");
-    expect(pane).not.toContain("descriptionCheck={\n");
+  it("keeps 音読β controllable even while UNPINNED, as long as it is actually speaking/paused (closing the sheet must not strand playback)", () => {
+    expect(pane.match(/readAloud\.state\.status !== "idle"/g)?.length).toBeGreaterThanOrEqual(2); // expanded row + collapsed one-line row
+  });
+
+  it("the mobile collapsed one-line row (< md, always within the compact surface) carries the same rule", () => {
+    expect(pane).toContain('{(footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && <ReadAloudFooterControl {...readAloudViewProps} />}');
   });
 });
