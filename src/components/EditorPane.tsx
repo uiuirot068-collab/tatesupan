@@ -32,7 +32,7 @@ import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
 import { ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
-import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
+import { ReadAloudFooterControl, ReadAloudReviewSection, ReadAloudStatusPill } from "./ReadAloudControls";
 import { DesktopReviewBar } from "./DesktopReviewBar";
 import { ReadAloudPronunciationSection } from "./ReadAloudPronunciationPanel";
 import { useReadAloudPronunciation } from "@/hooks/useReadAloudPronunciation";
@@ -49,6 +49,7 @@ import {
 } from "./DescriptionCheckControls";
 import { findMarkAt, type DescriptionMark } from "@/lib/descriptionCheckManuscript";
 import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
+import type { ReviewHubToolId } from "@/lib/reviewHub";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -339,6 +340,28 @@ function EditorPaneInner(
     onKeyDown: handleReviewHubKeyDown,
     maxHeightPx: reviewHubMaxHeightPx,
   } = useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef, [desktopBarWrapperRef]);
+  const [reviewHubFocusTool, setReviewHubFocusTool] = useState<ReviewHubToolId | null>(null);
+  const toggleReviewHubAll = () => {
+    if (reviewHubOpen && reviewHubFocusTool !== null) {
+      setReviewHubFocusTool(null);
+      return;
+    }
+    setReviewHubFocusTool(null);
+    toggleReviewHub();
+  };
+  const openReviewTool = (toolId: ReviewHubToolId) => {
+    if (reviewHubOpen && reviewHubFocusTool === toolId) {
+      setReviewHubFocusTool(null);
+      closeReviewHub();
+      return;
+    }
+    setReviewHubFocusTool(toolId);
+    if (!reviewHubOpen) toggleReviewHub();
+  };
+  const closeReviewPanel = () => {
+    setReviewHubFocusTool(null);
+    closeReviewHub();
+  };
   const [writingCheckResultsRequest, setWritingCheckResultsRequest] = useState(0);
   // TSP-B2: which Review Hub tools are shown in the footer. 文章チェックβ's footer strip / one-line checkbox follow
   // this (display only -- `writingCheckEnabled` is separate). With both shown, pin order = top-to-bottom order.
@@ -693,9 +716,10 @@ function EditorPaneInner(
   const reviewHubPanelElement = (
     <ReviewHubPanel
       open={reviewHubOpen}
-      onClose={closeReviewHub}
+      onClose={closeReviewPanel}
       maxHeightPx={reviewHubMaxHeightPx}
       sheet={reviewSurface === "compact"}
+      focusToolId={reviewHubFocusTool}
       sections={{
         "writing-check": (
           <WritingCheckReviewSection
@@ -1103,27 +1127,31 @@ function EditorPaneInner(
           data-mobile-review-footer=""
           className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/80"
         >
-          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
+          <ReviewHubTrigger open={reviewHubOpen && reviewHubFocusTool === null} onToggle={toggleReviewHubAll} compact />
           {writingCheckPinned && (
             <button
               type="button"
               data-mobile-writing-check-pill=""
-              onClick={toggleReviewHub}
+              onClick={() => openReviewTool("writing-check")}
               className="shrink-0 whitespace-nowrap rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 font-semibold text-red-800"
             >
               {writingCheckEnabled ? `文章β ${summarizeWritingIssues(writingIssuesForContent).total}件` : "文章β OFF"}
             </button>
           )}
           {footerPins.includes("character-count") && (
-            <WorkSessionFooterPill state={workSession} onOpen={toggleReviewHub} />
+            <WorkSessionFooterPill state={workSession} onOpen={() => openReviewTool("character-count")} />
           )}
-          {(footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && <ReadAloudFooterControl {...readAloudViewProps} />}
+          {readAloud.state.status !== "idle" ? (
+            <ReadAloudFooterControl {...readAloudViewProps} />
+          ) : footerPins.includes("read-aloud") ? (
+            <ReadAloudStatusPill state={readAloud.state} onOpen={() => openReviewTool("read-aloud")} />
+          ) : null}
           {footerPins.includes("description-check") && (
             <DescriptionCheckFooterPill
               enabled={descriptionCheck.enabled}
               current={descriptionCheck.current}
               count={descriptionCheck.marks.length}
-              onOpen={toggleReviewHub}
+              onOpen={() => openReviewTool("description-check")}
             />
           )}
         </div>
@@ -1135,7 +1163,7 @@ function EditorPaneInner(
           <DesktopReviewBar
             wrapperRef={desktopBarWrapperRef}
             reviewHubOpen={reviewHubOpen}
-            onToggleReviewHub={toggleReviewHub}
+            onToggleReviewHub={toggleReviewHubAll}
             reviewHubPanel={reviewHubPanelElement}
             readAloudPinned={footerPins.includes("read-aloud")}
             readAloud={readAloudViewProps}
@@ -1159,7 +1187,7 @@ function EditorPaneInner(
             onOpenWritingCheck={handleReviewHubShowResults}
             writingCheckHost={writingCheckHostElement}
             workSessionPinned={footerPins.includes("character-count")}
-            workSessionPill={<WorkSessionFooterPill state={workSession} onOpen={toggleReviewHub} />}
+            workSessionPill={<WorkSessionFooterPill state={workSession} onOpen={() => openReviewTool("character-count")} />}
           />,
           reviewBarNode,
         )}

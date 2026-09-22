@@ -9,7 +9,6 @@ import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { READ_ALOUD_SERVER_STATE, type ReadAloudState } from "@/lib/readAloudEngine";
 import { captureHeldSelection } from "@/lib/readAloudHeldSelection";
 import { REVIEW_HUB_FOOTER_MAX } from "@/lib/reviewHubFooterPins";
-import { REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX, reviewSurfaceForMainWidth } from "@/hooks/useReviewSurface";
 
 const noop = () => {};
 const read = (path: string) => readFileSync(resolve(path), "utf8");
@@ -176,14 +175,12 @@ describe("Desktop Review Bar (bottom of Preview) — Revision 4", () => {
     expect(read("src/components/TategakiEditor.tsx")).toContain("data-review-surface={reviewSurface}");
   });
 
-  it("the desktop breakpoint is measured (main element width), not a plain viewport media query, and matches the documented measurements (unchanged from Revision 3's Rail threshold -- Human QA asked 770/900-1024 to stay compact)", () => {
-    expect(reviewSurfaceForMainWidth(REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX - 1)).toBe("compact");
-    expect(reviewSurfaceForMainWidth(REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX)).toBe("desktop");
-    // measured real <main> widths (see the hook's own doc): 1024/1100 viewport -> compact, 1180/1280 -> desktop
-    expect(reviewSurfaceForMainWidth(952)).toBe("compact"); // 1024px viewport
-    expect(reviewSurfaceForMainWidth(1028)).toBe("compact"); // 1100px viewport
-    expect(reviewSurfaceForMainWidth(1108)).toBe("desktop"); // 1180px viewport
-    expect(reviewSurfaceForMainWidth(1208)).toBe("desktop"); // 1280px viewport
+  it("uses the app's actual mobile breakpoint for Review placement", () => {
+    const source = read("src/hooks/useReviewSurface.ts");
+    expect(source).toContain('const MOBILE_REVIEW_QUERY = "(max-width: 767px)"');
+    expect(source).toContain('media.matches ? "compact" : "desktop"');
+    expect(source).not.toContain("new ResizeObserver(");
+    expect(source).not.toContain("reviewSurfaceForMainWidth");
   });
 
   it("EditorPane portals ONE interactive <DesktopReviewBar> into the mount node -- costing the manuscript's or Preview's HEIGHT nothing -- carrying the full pin set (up to the B2 maximum of two) and the Hub panel", () => {
@@ -194,8 +191,11 @@ describe("Desktop Review Bar (bottom of Preview) — Revision 4", () => {
     expect(pane).toContain("reviewHubPanel={reviewHubPanelElement}");
   });
 
-  it("the manuscript-footer's own 見直し trigger is hidden on the desktop surface (the bar owns the ONE trigger there instead), but kept for the compact surface", () => {
-    expect(pane).toContain('{reviewSurface !== "desktop" && <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />}');
+  it("keeps the manuscript-side Review trigger only inside the mobile Review footer", () => {
+    expect(pane).toContain('data-mobile-review-footer=""');
+    expect(pane).toContain('reviewSurface === "compact" && !focusMode && !keyboardActive');
+    expect(pane).toContain('reviewHubFocusTool === null');
+    expect(pane).toContain('onToggle={toggleReviewHubAll}');
   });
 
   it("the Review Hub panel element is built once and used in exactly one of two mutually exclusive places depending on surface (never duplicated in the DOM)", () => {
@@ -209,17 +209,23 @@ describe("Desktop Review Bar (bottom of Preview) — Revision 4", () => {
   });
 });
 
-describe("Compact surface (phone + narrower desktop) mini bar — Revision 3", () => {
-  it("shows a one-line mini control per pinned dock tool in the footer status row instead of a permanent card, only on the compact surface", () => {
-    expect(pane).toContain('reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle")');
-    expect(pane).toContain('reviewSurface === "compact" && footerPins.includes("description-check")');
+describe("Mobile Review footer — final targeted-detail contract", () => {
+  it("shows the one-line Review footer only on the compact/mobile surface", () => {
+    expect(pane).toContain('reviewSurface === "compact" && !focusMode && !keyboardActive');
+    expect(pane).toContain('data-mobile-review-footer=""');
   });
 
-  it("keeps 音読β controllable even while UNPINNED, as long as it is actually speaking/paused (closing the sheet must not strand playback)", () => {
-    expect(pane.match(/readAloud\.state\.status !== "idle"/g)?.length).toBeGreaterThanOrEqual(2); // expanded row + collapsed one-line row
+  it("routes pinned tools to their own detail while 見直し opens the full Hub", () => {
+    expect(pane).toContain('openReviewTool("writing-check")');
+    expect(pane).toContain('openReviewTool("character-count")');
+    expect(pane).toContain('openReviewTool("read-aloud")');
+    expect(pane).toContain('openReviewTool("description-check")');
+    expect(pane).toContain('reviewHubFocusTool === null');
+    expect(pane).toContain('toggleReviewHubAll');
   });
 
-  it("the mobile collapsed one-line row (< md, always within the compact surface) carries the same rule", () => {
-    expect(pane).toContain('{(footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && <ReadAloudFooterControl {...readAloudViewProps} />}');
+  it("keeps active 音読β pause/stop directly reachable after the sheet closes", () => {
+    expect(pane).toContain('readAloud.state.status !== "idle"');
+    expect(pane).toContain('<ReadAloudFooterControl {...readAloudViewProps} />');
   });
 });

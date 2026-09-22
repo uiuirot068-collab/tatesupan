@@ -68,6 +68,8 @@ interface ReviewHubPanelProps {
    * way (same open/close state, same Escape/outside-press/Hub state) — only the container changes.
    */
   sheet?: boolean;
+  /** When set, show ONLY this pinned tool's detail instead of the whole Hub. */
+  focusToolId?: ReviewHubToolId | null;
 }
 
 /**
@@ -77,16 +79,17 @@ interface ReviewHubPanelProps {
  * height. Always in the DOM (so `aria-controls` resolves) and `hidden` while
  * closed.
  */
-export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sheet = false }: ReviewHubPanelProps) {
+export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sheet = false, focusToolId = null }: ReviewHubPanelProps) {
+  const visibleTools = focusToolId ? REVIEW_HUB_TOOLS.filter((tool) => tool.id === focusToolId) : REVIEW_HUB_TOOLS;
   const toolList = (
     <ul className="mt-3 divide-y divide-ink/10">
-      {REVIEW_HUB_TOOLS.map((tool) => (
+      {visibleTools.map((tool) => (
         <li key={tool.id} data-review-hub-tool={tool.id} className="py-4 first:pt-0 last:pb-0">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold text-ink">{tool.title}</p>
+            <p className="text-sm font-semibold text-ink">{tool.title}</p>
             <ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />
           </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-ink/70">{tool.summary}</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/75">{tool.summary}</p>
           {sections[tool.id]}
         </li>
       ))}
@@ -108,6 +111,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
           id={REVIEW_HUB_PANEL_ID}
           data-review-hub-panel=""
           data-review-hub-sheet=""
+          data-review-hub-focus-tool={focusToolId ?? undefined}
           aria-labelledby={REVIEW_HUB_HEADING_ID}
           hidden={!open}
           className="fixed inset-x-0 bottom-0 z-40 flex max-h-[75vh] flex-col rounded-t-2xl border-t border-ink/15 bg-base pb-[calc(env(safe-area-inset-bottom)+0.75rem)] text-xs text-ink shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
@@ -138,13 +142,14 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
     <section
       id={REVIEW_HUB_PANEL_ID}
       data-review-hub-panel=""
+      data-review-hub-focus-tool={focusToolId ?? undefined}
       aria-labelledby={REVIEW_HUB_HEADING_ID}
       hidden={!open}
       style={maxHeightPx === null ? undefined : { maxHeight: maxHeightPx }}
-      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-4 text-xs text-ink shadow-lg md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
+      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-4 text-sm text-ink shadow-lg md:left-2 md:right-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 id={REVIEW_HUB_HEADING_ID} className="text-sm font-bold">
+        <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold">
           {REVIEW_HUB_HEADING}
         </h2>
         <ReviewHubFooterPinNote />

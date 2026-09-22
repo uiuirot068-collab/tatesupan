@@ -145,7 +145,7 @@ export function DesktopReviewBar({
       )}
       {workSessionPinned && workSessionPill}
       {showReadAloud && (
-        <div className="ml-auto min-w-0">
+        <div className="min-w-0">
           <ReadAloudInlineBar {...readAloud} />
         </div>
       )}
