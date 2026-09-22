@@ -1,0 +1,71 @@
+{
+  "measuredAt": "2026-09-21T23:54:10.566Z",
+  "note": "px measured in headless Chrome (WINDOWED editor); manuscriptH = textarea height",
+  "measurements": [
+    {
+      "viewport": "770x720",
+      "pins": "none",
+      "manuscriptH": 228
+    },
+    {
+      "viewport": "770x720",
+      "pins": "writing-check",
+      "manuscriptH": 164
+    },
+    {
+      "viewport": "770x720",
+      "pins": "character-count",
+      "manuscriptH": 203
+    },
+    {
+      "viewport": "770x720",
+      "pins": "read-aloud",
+      "manuscriptH": 132,
+      "dockH": 92,
+      "cards": 1
+    },
+    {
+      "viewport": "770x720",
+      "pins": "description-check",
+      "manuscriptH": 143,
+      "dockH": 81,
+      "cards": 1
+    },
+    {
+      "viewport": "770x720",
+      "pins": "read-aloud+description-check",
+      "manuscriptH": 58,
+      "dockH": 166,
+      "cards": 2,
+      "layout": "stacked"
+    },
+    {
+      "viewport": "770x720",
+      "pins": "read-aloud+writing-check",
+      "manuscriptH": 67,
+      "dockH": 92,
+      "cards": 1
+    },
+    {
+      "viewport": "770x720",
+      "pins": "description-check+writing-check",
+      "manuscriptH": 79,
+      "dockH": 81,
+      "cards": 1
+    },
+    {
+      "viewport": "770x720",
+      "pins": "read-aloud+character-count",
+      "manuscriptH": 107,
+      "dockH": 92,
+      "cards": 1
+    },
+    {
+      "viewport": "770x720",
+      "pins": "description-check+character-count",
+      "manuscriptH": 118,
+      "dockH": 81,
+      "cards": 1
+    }
+  ]
+}

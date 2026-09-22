@@ -2,15 +2,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_DESCRIPTION_MODE,
+  DEFAULT_DESCRIPTION_CATEGORIES,
+  DESCRIPTION_CATEGORIES,
+  DESCRIPTION_CATEGORY_SUMMARIES,
+  DESCRIPTION_CATEGORY_TITLES,
   DESCRIPTION_KEEP_NOTE,
-  DESCRIPTION_MODES,
-  DESCRIPTION_MODE_LABELS,
   DESCRIPTION_NOT_A_JUDGEMENT_NOTE,
   analyzeDescriptionParagraph,
-  categoriesForMode,
-  filterCandidatesByMode,
-  normalizeDescriptionMode,
+  describeDescriptionCategory,
+  enabledDescriptionCategories,
+  filterCandidatesByCategories,
+  migrateDescriptionPrefs,
+  toggleDescriptionCategory,
+  type DescriptionCategory,
+  type DescriptionCategorySet,
 } from "./descriptionCheck";
 import { evaluateCorpus, evaluateRow, parseCorpus } from "./descriptionCheckCorpus";
 
@@ -51,32 +56,82 @@ describe("B5 spec / regression corpus (the human-readable table is the data)", (
   });
 });
 
-describe("B5 mode contract: A ⊂ A+B ⊂ A+B+C, default A", () => {
+describe("B5 independent categories (Revision 2): candidate.category ∈ enabled categories", () => {
   const sample = "昨日の夜、まるで夢のような静かな景色を、泣いている少女が笑いながら見ていた。";
   const all = analyzeDescriptionParagraph(sample);
+  const set = (A: boolean, B: boolean, C: boolean): DescriptionCategorySet => ({ A, B, C });
+  const cats = (list: { category: DescriptionCategory }[]) => new Set(list.map((c) => c.category));
 
-  it("default mode is A and A-only shows only category A", () => {
-    expect(DEFAULT_DESCRIPTION_MODE).toBe("A");
-    expect(normalizeDescriptionMode(undefined)).toBe("A");
-    expect(normalizeDescriptionMode("garbage")).toBe("A");
-    expect(normalizeDescriptionMode("AB")).toBe("AB");
-    expect(normalizeDescriptionMode("ABC")).toBe("ABC");
-    expect(new Set(filterCandidatesByMode(all, "A").map((c) => c.category))).toEqual(new Set(["A"]));
+  it("the sample really contains A, B and C candidates", () => {
+    expect(cats(all)).toEqual(new Set(["A", "B", "C"]));
   });
 
-  it("each wider mode is a superset of the narrower one and adds only its own categories", () => {
-    const a = filterCandidatesByMode(all, "A");
-    const ab = filterCandidatesByMode(all, "AB");
-    const abc = filterCandidatesByMode(all, "ABC");
-    expect(a.length).toBeGreaterThan(0);
-    expect(ab.length).toBeGreaterThan(a.length);
-    expect(abc.length).toBeGreaterThan(ab.length);
-    for (const c of a) expect(ab).toContain(c);
-    for (const c of ab) expect(abc).toContain(c);
-    expect(new Set(ab.map((c) => c.category))).toEqual(new Set(["A", "B"]));
-    expect(new Set(abc.map((c) => c.category))).toEqual(new Set(["A", "B", "C"]));
-    expect(DESCRIPTION_MODES.map((m) => categoriesForMode(m).join(""))).toEqual(["A", "AB", "ABC"]);
-    expect(DESCRIPTION_MODES.map((m) => DESCRIPTION_MODE_LABELS[m])).toEqual(["A", "A+B", "A+B+C"]);
+  it("first enable = A only", () => {
+    expect(DEFAULT_DESCRIPTION_CATEGORIES).toEqual({ A: true, B: false, C: false });
+    expect(migrateDescriptionPrefs(undefined)).toEqual({ enabled: false, categories: { A: true, B: false, C: false } });
+    expect(migrateDescriptionPrefs("garbage")).toEqual({ enabled: false, categories: { A: true, B: false, C: false } });
+    expect(migrateDescriptionPrefs({ enabled: true })).toEqual({ enabled: true, categories: { A: true, B: false, C: false } });
+  });
+
+  it.each([
+    [set(true, false, false), ["A"]],
+    [set(false, true, false), ["B"]],
+    [set(false, false, true), ["C"]],
+    [set(true, true, false), ["A", "B"]],
+    [set(true, false, true), ["A", "C"]],
+    [set(false, true, true), ["B", "C"]],
+    [set(true, true, true), ["A", "B", "C"]],
+  ])("shows exactly the enabled categories %j -> %j (no staging: B is not 'A plus more')", (enabled, expected) => {
+    const shown = filterCandidatesByCategories(all, enabled);
+    expect(shown.length).toBeGreaterThan(0);
+    expect([...cats(shown)].sort()).toEqual(expected);
+    for (const candidate of shown) expect(enabled[candidate.category]).toBe(true);
+    expect(enabledDescriptionCategories(enabled)).toEqual(expected);
+  });
+
+  it("zero selected categories is valid and shows nothing", () => {
+    expect(filterCandidatesByCategories(all, set(false, false, false))).toEqual([]);
+    expect(enabledDescriptionCategories(set(false, false, false))).toEqual([]);
+  });
+
+  it("a candidate's category never changes with the selection (filtering only hides)", () => {
+    const before = all.map((c) => `${c.start}:${c.end}:${c.category}`);
+    for (const enabled of [set(true, false, false), set(false, true, true), set(true, true, true)]) {
+      const shown = filterCandidatesByCategories(all, enabled).map((c) => `${c.start}:${c.end}:${c.category}`);
+      for (const entry of shown) expect(before).toContain(entry);
+    }
+  });
+
+  it("toggling one category leaves the other two alone", () => {
+    expect(toggleDescriptionCategory(set(true, false, false), "B")).toEqual(set(true, true, false));
+    expect(toggleDescriptionCategory(set(true, true, true), "A")).toEqual(set(false, true, true));
+    expect(toggleDescriptionCategory(set(false, false, false), "C")).toEqual(set(false, false, true));
+  });
+
+  it("migrates the first B5 build's staged mode to independent categories (A / A+B / A+B+C)", () => {
+    expect(migrateDescriptionPrefs({ enabled: true, mode: "A" })).toEqual({ enabled: true, categories: set(true, false, false) });
+    expect(migrateDescriptionPrefs({ enabled: true, mode: "AB" })).toEqual({ enabled: true, categories: set(true, true, false) });
+    expect(migrateDescriptionPrefs({ enabled: false, mode: "ABC" })).toEqual({ enabled: false, categories: set(true, true, true) });
+    expect(migrateDescriptionPrefs({ enabled: true, mode: "nonsense" })).toEqual({ enabled: true, categories: set(true, false, false) });
+  });
+
+  it("independent selections round-trip through the stored JSON (B only / A+C / none survive reload) and win over a leftover old mode", () => {
+    for (const enabled of [set(false, true, false), set(true, false, true), set(false, false, false), set(false, true, true)]) {
+      const stored = JSON.parse(JSON.stringify({ enabled: true, categories: enabled }));
+      expect(migrateDescriptionPrefs(stored)).toEqual({ enabled: true, categories: enabled });
+    }
+    expect(migrateDescriptionPrefs({ enabled: true, mode: "ABC", categories: set(false, true, false) }).categories).toEqual(set(false, true, false));
+    // a partly-wrong stored object never throws and never turns something on by accident
+    expect(migrateDescriptionPrefs({ enabled: true, categories: { A: "yes", B: 1 } }).categories).toEqual(set(false, false, false));
+  });
+
+  it("describes each category in words (and as a text tag), never as severity or quality", () => {
+    expect(DESCRIPTION_CATEGORIES).toEqual(["A", "B", "C"]);
+    expect(DESCRIPTION_CATEGORY_SUMMARIES.A).toContain("直接的な説明");
+    expect(DESCRIPTION_CATEGORY_SUMMARIES.B).toContain("描写的な");
+    expect(DESCRIPTION_CATEGORY_SUMMARIES.C).toMatch(/時間・場所・用途/);
+    expect(DESCRIPTION_CATEGORIES.map((c) => describeDescriptionCategory(c))).toEqual(["A｜直接的な説明", "B｜描写的な修飾", "C｜広い修飾"]);
+    expect(Object.values(DESCRIPTION_CATEGORY_TITLES).concat(Object.values(DESCRIPTION_CATEGORY_SUMMARIES)).join("")).not.toMatch(/重大|危険|悪い|警告|優先|深刻|レベル|ランク/);
   });
 
   it("every candidate carries a category, a label, a reason, and a non-empty valid span", () => {
@@ -136,7 +191,9 @@ describe("B5 framing: candidates are prompts, not verdicts", () => {
   it("the keep note explains that leaving the phrase can be right, and A/B/C are not quality ranks", () => {
     expect(DESCRIPTION_KEEP_NOTE).toContain("そのまま残してください");
     expect(DESCRIPTION_KEEP_NOTE).toMatch(/情景|動作|感覚|たとえ/);
-    expect(DESCRIPTION_NOT_A_JUDGEMENT_NOTE).toContain("良し悪しではなく");
+    expect(DESCRIPTION_NOT_A_JUDGEMENT_NOTE).toContain("良し悪しを判定する機能ではありません");
+    expect(DESCRIPTION_NOT_A_JUDGEMENT_NOTE).toContain("残してよい表現も含まれます");
+    expect(DESCRIPTION_NOT_A_JUDGEMENT_NOTE).toContain("色は種類だけ");
   });
 
   it("no wording tells the writer to delete or fix (source scan of the analyzer + views)", () => {
@@ -152,6 +209,10 @@ describe("B5 privacy: local analysis only", () => {
     "src/lib/descriptionCheckManuscript.ts",
     "src/lib/descriptionCheckCorpus.ts",
     "src/lib/descriptionMarkSegments.ts",
+    "src/lib/descriptionCandidateNav.ts",
+    "src/lib/readAloudHeldSelection.ts",
+    "src/components/ReadAloudDockCard.tsx",
+    "src/components/ReviewDock.tsx",
     "src/hooks/useDescriptionCheck.ts",
     "src/components/DescriptionCheckControls.tsx",
     "src/components/DescriptionMarkOverlay.tsx",

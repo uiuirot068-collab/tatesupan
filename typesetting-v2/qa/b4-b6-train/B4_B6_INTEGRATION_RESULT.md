@@ -1,5 +1,7 @@
 # B4–B6 train — integration result
 
+> **Revision 2 (Human QA round 1 = CHANGES REQUESTED for B4 and B5) is appended at the end (§7).** §1–§6 describe the first pass and are kept as history; where they mention the old A / A+B / A+B+C modes or the footer pill, §7 supersedes them.
+
 Branch `feat/tsp-b4-b6-train-20260922` · base = B3 closeout `7d6e4ced6ee2e5dbe661233504038afe6a7403b7` · worktree `tate-b4-b6-train-20260922`
 push NO · deploy NO · master merge NO · A4 untouched · DB/Auth/Supabase/schema/migrations/env/secrets untouched · held migration `47d66df` untouched · feedback CORS/Turnstile untouched · no reset / stash / clean / `git add .`
 
@@ -63,3 +65,38 @@ cd "D:\Dropbox\neuneunet Dropbox\なつおりく\molnatu共有\□2026からサ�
 npx next dev --webpack -p 3117
 ```
 URL: **http://localhost:3117/editor** (verified: serves HTTP 200 with the prepared ignored `.env.local`: beta feedback flag ON, editor surface WINDOWED). `--webpack` is required because `node_modules` here is a junction (Turbopack rejects it). Stop any other `next dev` started from this same folder first (per-folder lock).
+
+
+## 7. Revision 2 — Human QA UX fix (B4 / B5 CHANGES REQUESTED)
+
+Starting HEAD `2fd7e7e`; one checkpoint commit `fix(review): refine B4 B5 footer and category UX`. Untouched: B6, canonical-URL item, Supabase/Auth/DB/migrations, env, A4, production Update History, master/remote/deploy.
+
+| Area | Result |
+|---|---|
+| Review Dock | New dedicated region (`ReviewDock.tsx`) as the first child of the footer stack: top separator, subtle background, padding, gap from the manuscript, cards. B4 and B5 pins render as **cards**; 文章チェックβ keeps its own strip and 文字数 its pill (B2 places preserved, below the dock). Two cards side by side at 1280, stacked at 770 / 390, `min-w-[15rem]`, no horizontal scroll, no internal scroll for ordinary controls. |
+| B4 | footer card with 音読範囲 radiogroup, 「選択範囲を保持中（N文字）」, ghost highlight, derived-validity held selection, stale cleanup (edit / collapse / document key), target follows into the mobile collapsed ▶ 音読. |
+| B5 | independent A / B / C (old staged mode removed; migration of stored A / AB / ABC), zero-selected valid (no analysis), three tints of one yellow family + text tags, single click / tap, pinned card with ON/OFF + A/B/C + count + 前へ/次へ + current candidate + 理由を見る; floating detail card only when the tool is not pinned. |
+| **B1 internal-scroll contract** | **PENDING HUMAN ACCEPTANCE.** The first-pass E2E relaxation ("no internal scrolling" → "every control reachable") is still only *recorded*, not adopted as the new B1 contract; the Human decides whether the Review Hub panel scrolling inside its unchanged cap with four tools is acceptable (question in the Human QA sheet §3). The footer Review Dock does not rely on internal scrolling for ordinary controls (asserted: `dock.scrollHeight − clientHeight ≤ 1` in every combination). |
+
+### Tests (final state of Revision 2)
+| Suite | Result |
+|---|---|
+| `src/lib` / `src/components` / `src/hooks` vitest configs | 613 pass + 1 known baseline (`exportCancellation`) / 217 / 22 |
+| new / rewritten unit files | `descriptionCheck.test.ts` (independent categories, migration, first-enable, zero, persistence round-trips, wording), `descriptionCandidateNav.test.ts` (previous/next/wrap, category segments), `readAloudHeldSelection.test.ts` (capture, derived validity, lifecycle), `descriptionCheckControls.test.tsx`, `readAloudDockCard.test.tsx` (targets, held/need-selection/never-phantom, ghost wiring, dock layout) |
+| ESLint (touched files) / `tsc` / `git diff --check` | 0 errors, the 4 known baseline warnings only / clean except pre-existing `LayoutProps` / clean |
+| E2E `readAloud.e2e.mjs` (B4; 390/770/1280) | **PASS** — dock card, target switching, held selection + ghost, edit/collapse/target-switch cleanup, real double-click selection, play/pause/resume/stop, max-2, persistence |
+| E2E `descriptionCheck.e2e.mjs` core / dock / long | **PASS** — independent combinations (B only, C only, A+C…), tint alpha order, text tags, single click + touch tap, none-selected, migration of old modes, persistence, card ON/OFF + A/B/C + 前へ/次へ + 理由を見る + navigation lands (WINDOWED) + phone blur/ghost, coexistence with 文章チェックβ and B4's ghost; 102k-char manuscript: analysis 0.8 s, typing unaffected |
+| E2E `reviewDock.e2e.mjs` (0 / single / 5 pair combinations × 390, 770×900, 770×720, 1280) | **PASS** — dock only when B4/B5 pinned, separation gap + border, dock above the editor's own footer rows, side-by-side ≥1200 / stacked ≤800, no card squeezed, no overflow, no internal scroll, manuscript keeps a usable height; max-2 / unpin frees / order / reload persistence / Hub lists all four |
+| E2E `reviewHub.e2e.mjs` (B1/B2), `reviewHubFeedback.e2e.mjs` (B3, dummy backend), `mobileSharedExport.e2e.mjs` (Preview/JPG/PDF, 9 downloads) | **PASS** |
+| Baseline reproduced | `exportCancellation` (vitest); `headerTabletDensity` fails at 906×720 with the beta flag on (identical) |
+| New failures | none |
+
+Measured dock geometry (px; `evidence/review-dock-geometry-*.json`): at 770×900 the manuscript keeps 238 px with both cards stacked (dock 166 px) and 312–323 px with one card; at 1280×720 both cards sit side by side.
+
+### Harness notes (not product changes)
+Layout-shift races were fixed in the E2Es, not hidden: the Hub panel's height cap is re-measured one frame after the footer changes height (ResizeObserver), so the harness waits 350 ms before tapping ✕; the Hub's "held selection" line was moved *below* the mode buttons in the Hub so it can never shift a button between pointer-down and pointer-up.
+
+### Known limits carried into the Human gate
+- 音読β held-selection ghost and the B5 navigation ghost share one light-blue layer; on desktop the editor's own selection is also visible (harmless overlap).
+- On a real phone the software keyboard behaviour after 前へ/次へ (editor blurred to protect the footer) can only be confirmed on a device.
+- With four tools the Review Hub panel still scrolls internally (B1 contract pending Human acceptance, above).

@@ -13,10 +13,13 @@ import type { ReadAloudMode } from "../lib/readAloud";
 
 export interface UseReadAloud {
   state: ReadAloudState;
-  /** Reads the CURRENT selection / caret / manuscript at the moment of the press; never starts by itself. */
+  /** What ▶ reads: 選択範囲 / 現在の段落 / 全文 (Review Dock + collapsed footer). Session-only; starts as the paragraph. */
+  target: ReadAloudMode;
+  setTarget: (mode: ReadAloudMode) => void;
+  /** Reads the CURRENT selection / caret / manuscript at the moment of the press, and makes `mode` the target; never starts by itself. */
   start: (mode: ReadAloudMode) => void;
-  /** Speaks the selection if there is one, otherwise the paragraph under the caret (footer one-tap action). */
-  startQuick: () => void;
+  /** Reads the chosen target (the footer's single ▶ action). */
+  startTarget: () => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -37,6 +40,7 @@ export interface UseReadAloud {
 export function useReadAloud(documentKey: string, getSource: () => ReadAloudSource): UseReadAloud {
   const [controller] = useState<ReadAloudController>(() => createReadAloudController(createBrowserReadAloudEnv()));
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, () => READ_ALOUD_SERVER_STATE);
+  const [target, setTarget] = useState<ReadAloudMode>("paragraph");
 
   // Another document: stop what was being read from the previous one.
   useEffect(() => () => controller.stop(), [controller, documentKey]);
@@ -50,23 +54,28 @@ export function useReadAloud(documentKey: string, getSource: () => ReadAloudSour
     };
   }, [controller]);
 
-  const start = useCallback((mode: ReadAloudMode) => controller.start(mode, getSource()), [controller, getSource]);
-  const startQuick = useCallback(() => {
-    const source = getSource();
-    controller.start(source.selection.start !== source.selection.end ? "selection" : "paragraph", source);
-  }, [controller, getSource]);
+  const start = useCallback(
+    (mode: ReadAloudMode) => {
+      setTarget(mode);
+      controller.start(mode, getSource());
+    },
+    [controller, getSource],
+  );
+  const startTarget = useCallback(() => controller.start(target, getSource()), [controller, getSource, target]);
 
   return useMemo(
     () => ({
       state,
+      target,
+      setTarget,
       start,
-      startQuick,
+      startTarget,
       pause: controller.pause,
       resume: controller.resume,
       stop: controller.stop,
       setRate: controller.setRate,
       setPreferredVoice: controller.setPreferredVoice,
     }),
-    [state, start, startQuick, controller],
+    [state, target, start, startTarget, controller],
   );
 }

@@ -76,3 +76,12 @@ The real-browser run also asserts: default OFF (no overlay, no stored key), enab
 
 ## 9. Rollback
 Revert the B5 checkpoint commit. No data/storage migration; `tatespun.descriptionCheck.v1` and a `"description-check"` pin id are ignored/dropped by the older normaliser.
+
+
+## 10. Revision 2 (Human QA round 1 = CHANGES REQUESTED, 2026-09-22)
+- **Old staged mode removed** (`DescriptionMode`, A / A+B / A+B+C, `filterCandidatesByMode`). **New state:** `{ enabled, categories: { A, B, C } }` — independent; a candidate has ONE category and is shown iff `candidate.category ∈ enabled categories`. Zero selected is valid (calm message, no marker, no count, and **no analysis runs**). First enable = A only.
+- **Meanings (shown in the Hub and in every tag):** A｜直接的な説明（直接的な説明・状態・評価・様子）, B｜描写的な修飾（描写的な連体・連用の修飾）, C｜広い修飾（時間・場所・用途・識別など）. Not quality, severity, badness or deletion priority; the not-a-judgement note says so and says colour means the kind only.
+- **Persistence migration** (`migrateDescriptionPrefs`, same key `tatespun.descriptionCheck.v1`): old `{enabled, mode:"A"|"AB"|"ABC"}` → A / A+B / A+B+C checkboxes on read; the next change writes the new shape (no `mode`); independent states (B only, A+C, none) round-trip; junk never throws. Browser-local only; no cloud.
+- **Markers:** three tints of one yellow family (`rgba(250,204,21, .58 / .36 / .20)` for A / B / C; A>B>C where candidates overlap); category also always as text; no traffic-light colours (source-tested). Single click / tap reports the caret (select, click, keyup handlers) → detail; the Hub says 「色の付いた箇所をクリック（タップ）すると、候補になった理由を確認できます。」
+- **Pinned card** (`DescriptionCheckDockCard`): ON/OFF switch, [A][B][C] quick toggles (aria-pressed), count, **前へ / 次へ** over the visible candidates (wrapping; `descriptionCandidateNav.ts`), current phrase + text tag, **理由を見る**; the caret's candidate wins, else the last one navigated to; on a phone the editor is blurred after navigating and a light-blue ghost keeps the place. The Hub keeps settings, explanations and the full list.
+- Status unchanged: IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED, still with the BETA LIMITATION REVIEW (heuristic analysis).

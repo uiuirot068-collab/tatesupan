@@ -1,5 +1,13 @@
 # B4 音読β Human QA checklist (physical / audible / product judgement only)
 
+## Human QA history
+| Round | Verdict | Notes |
+|---|---|---|
+| 1 (2026-09-22) | **CHANGES REQUESTED** | The stored selection was remembered internally but visually looked lost as soon as the Review Hub / footer took focus; the footer only exposed playback, so the reading target could only be changed by reopening 見直し. |
+| 2 (this checklist, "Revision 2") | pending | Footer Review Dock card with 音読範囲 [選択範囲][現在の段落][全文]; 「選択範囲を保持中（N文字）」 + ghost highlight; derived (never stale) hold. The retry checklist in easy Japanese is `../b4-b6-train/HUMAN_QA_B4_B6_JA.md` §1 and §3. |
+
+Status: IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED (not FIXED).
+
 Automated coverage already proves mechanics with a fake speech engine (see `B4_IMPLEMENTATION_RESULT.md` §5). Only a human can judge **real device voices** and **usefulness**. The combined B4–B6 sheet is `../b4-b6-train/HUMAN_QA_B4_B6_JA.md`; this file is the B4 detail.
 
 Setup: local build (see the combined sheet for the command). Use the ~1000-character standard QA story if available, otherwise any manuscript with several paragraphs, at least one ruby (`｜漢字《かんじ》`) and one 「会話文」.
@@ -32,6 +40,13 @@ Setup: local build (see the combined sheet for the command). Use the ~1000-chara
 - [ ] Reading a paragraph aloud reveals something about tempo / 読点 / repetition that you would not see on screen. (yes / a little / no) — comment: ______
 - [ ] Sentence-sized pauses feel natural for judging rhythm (or they distort it): ______
 - [ ] Missing for real proofreading? (e.g. follow-highlight, reading dictionary, read-from-cursor): ______
+
+## E2. Revision 2 (Review Dock card) — retry items
+- [ ] Pin 音読β: a card appears in the Review Dock under the manuscript with **音読範囲 [選択範囲][現在の段落][全文]**; the current target is obvious; switching needs no trip to 見直し.
+- [ ] Select text, then touch the footer: the card says **「選択範囲を保持中（N文字）」** and a light blue ghost highlight stays on the text although the editor lost focus. Reading starts from the card and reads only that text.
+- [ ] Collapse the selection (click in the text) / edit the manuscript / switch document: the 「保持中」 line disappears and the ghost with it (never a phantom).
+- [ ] 選択範囲 with nothing selected: an explanation, play disabled. 現在の段落 / 全文: readable from the card; pause / resume / stop / 「読み上げ中 n / N」 on the card.
+- [ ] 390: the card stacks, nothing overflows, buttons are tappable.
 
 ## F. Footer and Hub (B2 regression with three tools)
 - [ ] 音読β → フッターに表示: `▶ 音読` appears in the footer; reads the selection, or the paragraph if nothing is selected; shows ⏸/■ and `n/N` while reading.

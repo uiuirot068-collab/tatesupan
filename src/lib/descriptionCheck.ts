@@ -4,10 +4,11 @@
  * WHAT THIS IS (and is not)
  * Candidate detection for "expressions that explain a property / state / manner",
  * as a prompt for the writer to reconsider, NOT a quality judgement.
- *   A  narrowest: direct adjective / state / evaluation / manner
- *   B  broader attributive / adverbial modifiers that may already work as description
- *   C  broadest: time / place / purpose / identification modifiers
- * A/B/C are detection breadth, never "bad writing" ranks.
+ *   A  直接的な説明・状態・評価・様子 (direct adjective / state / evaluation / manner)
+ *   B  描写的な連体・連用の修飾 (attributive / adverbial modifiers that may already work as description)
+ *   C  時間・場所・用途・識別など広い修飾 (time / place / purpose / identification)
+ * The three are INDEPENDENT categories the writer switches on/off one by one (Revision 2); they are
+ * never quality scores, severity, bad-writing levels or deletion priority.
  *
  * ANALYSIS APPROACH (honest description — see qa/b5-description-check)
  * There is no full morphological analyzer (no POS dictionary) in the browser build:
@@ -25,7 +26,7 @@
  */
 
 export type DescriptionCategory = "A" | "B" | "C";
-export type DescriptionMode = "A" | "AB" | "ABC";
+export const DESCRIPTION_CATEGORIES = ["A", "B", "C"] as const;
 
 export interface DescriptionCandidate {
   /** Offsets into the analysed string (paragraph-local unless stated otherwise). */
@@ -39,40 +40,71 @@ export interface DescriptionCandidate {
   reason: string;
 }
 
-export const DESCRIPTION_MODES: readonly DescriptionMode[] = ["A", "AB", "ABC"];
-export const DEFAULT_DESCRIPTION_MODE: DescriptionMode = "A";
+/**
+ * Independent category selection (Revision 2). The writer chooses exactly which categories to see;
+ * B is NOT "A plus more" and C is NOT "A+B plus more". A candidate has ONE category and is shown
+ * iff that category is switched on. All-off is a valid state ("nothing selected", not an error).
+ */
+export type DescriptionCategorySet = Readonly<Record<DescriptionCategory, boolean>>;
 
-export const DESCRIPTION_MODE_LABELS: Record<DescriptionMode, string> = {
-  A: "A",
-  AB: "A+B",
-  ABC: "A+B+C",
+/** First enable: A only. */
+export const DEFAULT_DESCRIPTION_CATEGORIES: DescriptionCategorySet = { A: true, B: false, C: false };
+
+export const DESCRIPTION_CATEGORY_TITLES: Record<DescriptionCategory, string> = {
+  A: "直接的な説明",
+  B: "描写的な修飾",
+  C: "広い修飾",
 };
 
-export const DESCRIPTION_MODE_SUMMARIES: Record<DescriptionMode, string> = {
-  A: "いちばん絞って確認：形容・状態・様子をそのまま説明している表現",
-  AB: "少し広げる：情景として働いているかもしれない連体・連用の修飾まで",
-  ABC: "広く観察：時間・場所・用途・識別などの修飾まで",
+/** One line per category for the explanation next to the toggles. */
+export const DESCRIPTION_CATEGORY_SUMMARIES: Record<DescriptionCategory, string> = {
+  A: "直接的な説明・状態・評価・様子",
+  B: "描写的な連体・連用の修飾",
+  C: "時間・場所・用途・識別など広い修飾",
 };
 
-export const DESCRIPTION_CATEGORY_LABELS: Record<DescriptionCategory, string> = {
-  A: "A｜直接の形容・状態・様子",
-  B: "B｜描写になりうる修飾",
-  C: "C｜時間・場所・用途・識別",
-};
+/** Text label shown wherever a candidate appears; colour is never the only carrier of the category. */
+export function describeDescriptionCategory(category: DescriptionCategory): string {
+  return `${category}｜${DESCRIPTION_CATEGORY_TITLES[category]}`;
+}
 
 /** Shown with every candidate: keeping it may be right; this only invites a look. */
 export const DESCRIPTION_KEEP_NOTE =
   "必要であればそのまま残してください。情景・動作・感覚・たとえで見せる余地がないか、確かめるためのチェックです。";
 
 export const DESCRIPTION_NOT_A_JUDGEMENT_NOTE =
-  "A・B・Cは文章の良し悪しではなく、拾う範囲の広さです。";
+  "文章の良し悪しを判定する機能ではありません。残してよい表現も含まれます。A・B・Cは重さや悪さの順ではなく、種類の分け方です。色は種類だけを表します。";
 
-export function categoriesForMode(mode: DescriptionMode): readonly DescriptionCategory[] {
-  return mode === "A" ? ["A"] : mode === "AB" ? ["A", "B"] : ["A", "B", "C"];
+export function enabledDescriptionCategories(set: DescriptionCategorySet): DescriptionCategory[] {
+  return DESCRIPTION_CATEGORIES.filter((category) => set[category]);
 }
 
-export function normalizeDescriptionMode(value: unknown): DescriptionMode {
-  return value === "AB" || value === "ABC" ? value : "A";
+export function toggleDescriptionCategory(set: DescriptionCategorySet, category: DescriptionCategory): DescriptionCategorySet {
+  return { ...set, [category]: !set[category] };
+}
+
+export interface DescriptionPrefs {
+  enabled: boolean;
+  categories: DescriptionCategorySet;
+}
+
+/**
+ * Reads a stored (browser-local) value of either shape:
+ *   new: { enabled, categories: { A, B, C } }
+ *   old: { enabled, mode: "A" | "AB" | "ABC" }   -> A / A+B / A+B+C
+ * Anything else (nothing stored, junk) -> OFF with A only. Never throws.
+ */
+export function migrateDescriptionPrefs(raw: unknown): DescriptionPrefs {
+  const value = (typeof raw === "object" && raw !== null ? raw : {}) as { enabled?: unknown; categories?: unknown; mode?: unknown };
+  const enabled = value.enabled === true;
+  const stored = value.categories;
+  if (typeof stored === "object" && stored !== null && !Array.isArray(stored)) {
+    const c = stored as Record<string, unknown>;
+    return { enabled, categories: { A: c.A === true, B: c.B === true, C: c.C === true } };
+  }
+  if (value.mode === "ABC") return { enabled, categories: { A: true, B: true, C: true } };
+  if (value.mode === "AB") return { enabled, categories: { A: true, B: true, C: false } };
+  return { enabled, categories: DEFAULT_DESCRIPTION_CATEGORIES };
 }
 
 // ---------------------------------------------------------------- tables
@@ -477,7 +509,7 @@ function dedupeSameCategory(candidates: DescriptionCandidate[]): DescriptionCand
   return result;
 }
 
-export function filterCandidatesByMode<T extends { category: DescriptionCategory }>(candidates: readonly T[], mode: DescriptionMode): T[] {
-  const allowed = categoriesForMode(mode);
-  return candidates.filter((candidate) => allowed.includes(candidate.category));
+/** candidate.category ∈ enabled categories (independent; no staging). */
+export function filterCandidatesByCategories<T extends { category: DescriptionCategory }>(candidates: readonly T[], set: DescriptionCategorySet): T[] {
+  return candidates.filter((candidate) => set[candidate.category]);
 }

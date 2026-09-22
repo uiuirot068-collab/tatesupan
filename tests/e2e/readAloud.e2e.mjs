@@ -15,8 +15,10 @@
 //  * default voice is on-device Japanese; an online voice is used only when explicitly chosen (and warns);
 //  * unsupported browser / no on-device Japanese voice show guidance and never speak;
 //  * reloading (pagehide) cancels speech;
-//  * footer pin: 3 tools + max-2 (a third pin is disabled, unpin frees a slot), order/persistence survive reload,
-//    the pinned compact control reads too, and an unpinned 音読β stays fully usable from the Hub;
+//  * footer pin (Revision 2): 音読β becomes a Review Dock CARD with a 音読範囲 radiogroup (選択範囲 / 現在の段落 / 全文),
+//    a visible 「選択範囲を保持中」 state + ghost highlight while the editor is unfocused, stale-hold cleanup (edit / collapse /
+//    target switch), play / pause / resume / stop from the card; max-2 (a third pin is disabled, unpin frees a slot),
+//    order/persistence survive reload, and an unpinned 音読β stays fully usable from the Hub;
 //  * no external manuscript transmission: no request carries the manuscript sentinel, no non-loopback POST/beacon;
 //  * layout: nothing overflows horizontally, panel + footer controls stay inside the viewport.
 import assert from "node:assert/strict";
@@ -172,9 +174,11 @@ const openHub = async (label) => {
   if (await panelShown()) return;
   await realClick("[data-editor-review-hub-trigger]", { scroll: false });
   await cdp.waitFor(`getComputedStyle(document.querySelector('${PANEL}')).display !== 'none'`, { label: `${label}: Hub opens` });
+  await sleep(350); // the panel's height cap is measured one frame after it opens (ResizeObserver); tap only once it has settled
 };
 const closeHub = async () => {
   if (!(await panelShown())) return;
+  await sleep(350); // a pin toggle just changed the footer height: let the panel cap re-measure before tapping ✕
   await realClick("[data-review-hub-close]");
   await cdp.waitFor(`getComputedStyle(document.querySelector('${PANEL}')).display === 'none'`, { label: "Hub closes" });
 };
@@ -341,15 +345,21 @@ async function coreViewport(v) {
 }
 
 async function pinViewport(v) {
-  const tag = `${v.name} pins`;
+  const tag = `${v.name} dock`;
   await openWith({ tatespun_editor_footer_collapsed: "off" }, v.width, v.height);
   await setText(TEXT);
   await openHub(tag);
   const toggle = (id) => `[data-review-hub-tool="${id}"] [data-review-hub-footer-pin-toggle]`;
   const state = (id) => cdp.evaluate(`(() => { const b = document.querySelector('${toggle(id)}'); return { pressed: b.getAttribute('aria-pressed'), disabled: b.disabled }; })()`);
+  const pins = () => cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`);
+  const CARD = "[data-review-dock-card=read-aloud]";
+  const ghost = () => cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`);
+  const cardText = () => cdp.evaluate(`document.querySelector('${CARD}')?.textContent.replace(/\\s+/g, ' ').trim() ?? ''`);
+  const editorFocused = () => cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target') === 'editor'`);
+  const checkedTarget = () => cdp.evaluate(`document.querySelector('${CARD} [data-read-aloud-target][aria-checked="true"]')?.dataset.readAloudTarget ?? null`);
   assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`), null, `${tag}: default is unstored`);
   assert.deepEqual(await state("read-aloud"), { pressed: "false", disabled: true }, `${tag}: max-2 -- a third pin is disabled while two are shown`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no footer control while unpinned`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock]')`), false, `${tag}: no dock while no dock tool is pinned`);
 
   // unpinned 音読β is fully usable from the Hub (pinned != enabled)
   await select(0, 0);
@@ -357,55 +367,127 @@ async function pinViewport(v) {
   await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: unpinned tool works from the Hub` });
   await realClick("[data-read-aloud-stop]");
 
-  // free a slot, pin 音読β
+  // free a slot and pin 音読β -> a Review Dock card (not a status-row pill)
   await realClick(toggle("character-count"));
-  assert.deepEqual(await state("read-aloud"), { pressed: "false", disabled: false }, `${tag}: unpinning frees a slot`);
   await realClick(toggle("read-aloud"));
-  await cdp.waitFor(`!!document.querySelector('[data-review-hub-footer-tool="read-aloud"] [data-read-aloud-footer-start]')`, { label: `${tag}: footer control appears` });
-  assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}'))`), ["writing-check", "read-aloud"], `${tag}: persisted in pin order`);
-  assert.deepEqual(await state("character-count"), { pressed: "false", disabled: true }, `${tag}: full again -> the unpinned tool is disabled`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[title="現在の原稿文字数"]')`), false, `${tag}: count pill gone (display only)`);
   await closeHub();
+  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: dock card appears` });
+  assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: persisted in pin order`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no old one-line control in the expanded footer`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock] ${CARD.replace("[data-review-dock-card", "[data-review-dock-card")}')`), true, `${tag}: the card lives inside the Review Dock`);
+  insideViewport(await rect(CARD), `${tag} card`);
+  await noHorizontalScroll(`${tag} (card)`);
 
-  // footer control reads (selection, else paragraph)
-  const foot = await rect("[data-read-aloud-footer-start]");
-  insideViewport(foot, `${tag} footer ▶ 音読`);
-  await select(TEXT.indexOf("静かな夜"), TEXT.indexOf("静かな夜") + 4);
+  // ---- the reading target is chosen in the footer (no need to open 見直し)
+  assert.equal(await checkedTarget(), "paragraph", `${tag}: default target is 現在の段落`);
+  for (const target of ["full", "selection", "paragraph"]) {
+    await realClick(`${CARD} [data-read-aloud-target=${target}]`, { scroll: false });
+    await cdp.waitFor(`document.querySelector('${CARD} [data-read-aloud-target=${target}]').getAttribute('aria-checked') === 'true'`, { label: `${tag}: target ${target} selected` });
+    assert.equal(await checkedTarget(), target, `${tag}: exactly one target is selected (${target})`);
+  }
+  assert.equal(await cdp.evaluate(`document.querySelectorAll('${CARD} [data-read-aloud-target][aria-checked="true"]').length`), 1);
+
+  // ---- 選択範囲 with nothing selected: explained, never "保持中", play disabled
+  await select(3, 3);
+  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
+  assert.match(await cardText(), /本文の読みたい文字を選ぶと、選択範囲を読めます/, `${tag}: says text must be selected first`);
+  assert.doesNotMatch(await cardText(), /保持中/, `${tag}: no phantom 保持中`);
+  assert.equal(await cdp.evaluate(`document.querySelector('${CARD} [data-read-aloud-card-play]').disabled`), true, `${tag}: play disabled without a selection`);
+  assert.equal(await ghost(), "", `${tag}: no ghost highlight without a selection`);
+
+  // ---- select text, then interact with the footer: the selection is remembered AND visibly held
+  const sentence = "静かな夜だった。";
+  const at = TEXT.indexOf(sentence);
+  assert.equal(await select(at, at + sentence.length), sentence);
+  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false }); // real pointer contact with the footer -> editor loses focus
+  assert.equal(await editorFocused(), false, `${tag}: the editor lost focus (the browser stops painting its own selection)`);
+  await cdp.waitFor(`/選択範囲を保持中（${sentence.length}文字）/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: card says 選択範囲を保持中` });
+  assert.equal(await ghost(), sentence, `${tag}: a ghost highlight paints exactly the held selection while the editor is unfocused`);
+  await shot(`b4-dock-held-${v.name}`);
+  // opening 見直し keeps it (and the Hub says so too)
+  await openHub(tag);
+  assert.match(await cdp.evaluate(`document.querySelector('[data-review-hub-read-aloud]').textContent`), /選択範囲を保持中/, `${tag}: still held after opening the Hub`);
+  assert.equal(await ghost(), sentence);
+  await closeHub();
+  // reading starts from the footer and reads ONLY the held selection; the hold survives reading
   await cdp.evaluate(`window.__ra.spoken.length = 0`);
-  await realClick("[data-read-aloud-footer-start]", { scroll: false });
-  await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: footer action speaks` });
-  assert.equal((await spokenTexts())[0], "静かな夜", `${tag}: footer action reads the selection`);
-  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-pause]')`);
-  insideViewport(await rect("[data-read-aloud-footer-pause]"), `${tag} footer pause`);
-  insideViewport(await rect("[data-read-aloud-footer-stop]"), `${tag} footer stop`);
-  await noHorizontalScroll(`${tag} (footer control reading)`);
-  await shot(`b4-footer-reading-${tag.split(" ")[0]}`);
-  await realClick("[data-read-aloud-footer-pause]", { scroll: false });
-  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-resume]')`);
-  await realClick("[data-read-aloud-footer-resume]", { scroll: false });
-  await realClick("[data-read-aloud-footer-stop]", { scroll: false });
-  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-start]')`);
-  // no selection -> paragraph at the caret
-  await select(2, 2);
+  await realClick(`${CARD} [data-read-aloud-card-play]`, { scroll: false });
+  await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: footer play speaks the selection` });
+  assert.deepEqual(await spokenTexts(), [sentence], `${tag}: only the selection is read`);
+  await cdp.waitFor(`!!document.querySelector('${CARD} [data-read-aloud-card-pause]')`, { timeoutMs: 5_000, label: "playing state" }).catch(() => {});
+  await cdp.waitFor(`!document.querySelector('${CARD} [data-read-aloud-card-stop]')`, { timeoutMs: 20_000, label: `${tag}: reading ends` });
+  assert.match(await cardText(), /選択範囲を保持中/, `${tag}: still held after reading`);
+  // another target keeps the hold in memory but hides the ghost; back to 選択範囲 shows it again
+  await realClick(`${CARD} [data-read-aloud-target=full]`, { scroll: false });
+  assert.equal(await ghost(), "", `${tag}: ghost hidden for another target`);
+  assert.doesNotMatch(await cardText(), /保持中/, `${tag}: 保持中 is only shown for the 選択範囲 target`);
+  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
+  assert.equal(await ghost(), sentence, `${tag}: ghost back for 選択範囲`);
+
+  // ---- lifecycle: manuscript edited -> the hold is dropped; a click that collapses the selection -> dropped
+  await setText(TEXT + "追記");
+  await cdp.waitFor(`!/保持中/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: edited manuscript drops the hold` });
+  assert.equal(await ghost(), "", `${tag}: no stale ghost after an edit`);
+  assert.match(await cardText(), /本文の読みたい文字を選ぶと/, `${tag}: back to the explanation`);
+  await setText(TEXT);
+  await select(at, at + sentence.length);
+  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
+  await cdp.waitFor(`/保持中/.test(document.querySelector('${CARD}').textContent)`);
+  const ta = await rect("[data-demo-target=editor]");
+  await realClickAt(ta.l + 30, ta.t + 20); // a real click inside the text collapses the selection
+  await cdp.waitFor(`!/保持中/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: collapsing the selection drops the hold` });
+  assert.equal(await ghost(), "", `${tag}: no ghost after the selection collapsed`);
+  // a real double-click selects a word and the hold appears WITHOUT touching the footer (the user's own event path)
+  await realClickAt(ta.l + 40, ta.t + 22);
+  await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: ta.l + 40, y: ta.t + 22, button: "left", clickCount: 2 });
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: ta.l + 40, y: ta.t + 22, button: "left", clickCount: 2 });
+  await cdp.waitFor(`/選択範囲を保持中（[0-9]+文字）/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: a mouse selection is held without touching the footer` });
+
+  // ---- paragraph + full targets still work from the card; pause / resume / stop from the footer
+  await realClick(`${CARD} [data-read-aloud-target=paragraph]`, { scroll: false });
+  await select(TEXT.indexOf("静かな夜") + 1, TEXT.indexOf("静かな夜") + 1);
   await cdp.evaluate(`window.__ra.spoken.length = 0`);
-  await realClick("[data-read-aloud-footer-start]", { scroll: false });
+  await realClick(`${CARD} [data-read-aloud-card-play]`, { scroll: false });
   await cdp.waitFor(`window.__ra.spoken.length >= 1`);
-  assert.equal((await spokenTexts())[0], P1_SPOKEN[0], `${tag}: footer action reads the caret's paragraph when nothing is selected`);
-  await realClick("[data-read-aloud-footer-stop]", { scroll: false });
+  await cdp.waitFor(`!document.querySelector('${CARD} [data-read-aloud-card-stop]')`, { timeoutMs: 20_000 });
+  assert.deepEqual(await spokenTexts(), P2_SPOKEN, `${tag}: 現在の段落 reads the caret's paragraph`);
+  await realClick(`${CARD} [data-read-aloud-target=full]`, { scroll: false });
+  await cdp.evaluate(`window.__ra.spoken.length = 0; window.__ra.maxActive = 0`);
+  await realClick(`${CARD} [data-read-aloud-card-play]`, { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('${CARD} [data-read-aloud-card-pause]')`, { label: `${tag}: pause while playing` });
+  assert.match(await cardText(), /読み上げ中 1 \/ 6/, `${tag}: progress in the card`);
+  insideViewport(await rect(`${CARD} [data-read-aloud-card-pause]`), `${tag} card pause`);
+  await realClick(`${CARD} [data-read-aloud-card-pause]`, { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('${CARD} [data-read-aloud-card-resume]')`);
+  assert.equal((await synthState()).paused, true, `${tag}: engine paused from the footer`);
+  await realClick(`${CARD} [data-read-aloud-card-resume]`, { scroll: false });
+  await cdp.waitFor(`window.__ra.spoken.length >= 2`, { label: `${tag}: resume continues` });
+  await realClick(`${CARD} [data-read-aloud-card-stop]`, { scroll: false });
+  await cdp.waitFor(`!document.querySelector('${CARD} [data-read-aloud-card-stop]')`);
+  assert.deepEqual(await synthState(), { paused: false, current: null, queue: 0 }, `${tag}: synth clean after stop`);
+  assert.ok((await maxActive()) <= 1, `${tag}: no overlapping speech`);
+  await noHorizontalScroll(`${tag} (after reading)`);
 
-  // reorder + reload persistence; footer control survives
+  // ---- pins: max 2, unpin frees, order + reload persistence, zero pins
+  await openHub(tag);
+  assert.deepEqual(await state("character-count"), { pressed: "false", disabled: true }, `${tag}: full again -> the unpinned tool is disabled`);
+  await realClick(toggle("read-aloud"));
+  await cdp.waitFor(`!document.querySelector('[data-review-dock]')`, { label: `${tag}: unpinning removes the dock` });
+  await sleep(600); // the footer just changed height: let the Hub panel settle (its cap follows the footer via ResizeObserver) before the next tap
+  await realClick(toggle("read-aloud"));
+  await cdp.waitFor(`JSON.parse(localStorage.getItem('${PINS_KEY}')).includes('read-aloud')`, { label: `${tag}: re-pinned` });
+  assert.deepEqual(await pins(), ["writing-check", "read-aloud"]);
   await navigate();
-  assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}'))`), ["writing-check", "read-aloud"], `${tag}: pins survive reload`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer-start]')`), true, `${tag}: footer control survives reload`);
-  // unpin both -> zero pins is allowed and 音読β still works from the Hub
+  assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: pins survive reload`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: dock card survives reload`);
   await openHub(tag);
   await realClick(toggle("writing-check"));
   await realClick(toggle("read-aloud"));
-  assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}'))`), [], `${tag}: zero pins is a valid state`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false);
-  assert.equal((await cdp.evaluate(`!!document.querySelector('[data-review-hub-tool="read-aloud"]')`)), true);
+  assert.deepEqual(await pins(), [], `${tag}: zero pins is a valid state`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock]')`), false);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-hub-tool="read-aloud"]')`), true);
   await closeHub();
-  log(`  ${tag}: max-2 with 3 tools / unpinned still usable / pin + order persisted / footer control reads / zero pins OK`);
+  log(`  ${tag}: target chosen in the footer / held selection visible + ghost / lifecycle (edit, collapse, target switch) / play-pause-resume-stop from the card / max-2 + persistence OK`);
 }
 
 async function stateViewport(v) {

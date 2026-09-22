@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createJsonLocalStorageHook } from "./createJsonLocalStorageHook";
 import {
-  DEFAULT_DESCRIPTION_MODE,
-  filterCandidatesByMode,
-  normalizeDescriptionMode,
-  type DescriptionMode,
+  DEFAULT_DESCRIPTION_CATEGORIES,
+  filterCandidatesByCategories,
+  migrateDescriptionPrefs,
+  toggleDescriptionCategory,
+  type DescriptionCategory,
+  type DescriptionPrefs,
 } from "../lib/descriptionCheck";
 import {
   analyzeDescriptionSourceAsync,
@@ -14,21 +16,22 @@ import {
   type DescriptionMark,
 } from "../lib/descriptionCheckManuscript";
 
-/** Browser-local preference (never part of the manuscript / cloud data). Default: OFF, mode A. */
+/**
+ * Browser-local preference (never part of the manuscript / cloud data). Default: OFF, categories A only.
+ * Stored shape: { enabled, categories: { A, B, C } }. Values written by the first B5 build
+ * ({ enabled, mode: "A" | "AB" | "ABC" }) are migrated on read (A -> A / AB -> A+B / ABC -> A+B+C) and are
+ * replaced by the new shape on the next change; nothing else in local storage is touched.
+ */
 export const DESCRIPTION_CHECK_STORAGE_KEY = "tatespun.descriptionCheck.v1";
 export const DESCRIPTION_CHECK_DEBOUNCE_MS = 450;
 
-interface StoredPrefs {
-  enabled?: unknown;
-  mode?: unknown;
-}
-const usePrefsStorage = createJsonLocalStorageHook<StoredPrefs>(DESCRIPTION_CHECK_STORAGE_KEY, {
+const usePrefsStorage = createJsonLocalStorageHook<unknown>(DESCRIPTION_CHECK_STORAGE_KEY, {
   enabled: false,
-  mode: DEFAULT_DESCRIPTION_MODE,
+  categories: DEFAULT_DESCRIPTION_CATEGORIES,
 });
 
 /**
- * TSP-B5: enable flag + detection mode (persisted in this browser only) and the analysis of the
+ * TSP-B5: enable flag + which categories are shown (persisted in this browser only) and the analysis of the
  * current manuscript.
  *
  * Disabled = no analysis at all (the effect returns before scheduling anything). Enabled =
@@ -38,13 +41,14 @@ const usePrefsStorage = createJsonLocalStorageHook<StoredPrefs>(DESCRIPTION_CHEC
  */
 export function useDescriptionCheck(content: string, isComposing: () => boolean, recheckKey: number) {
   const [prefs, setPrefs] = usePrefsStorage();
-  const enabled = prefs?.enabled === true;
-  const mode: DescriptionMode = normalizeDescriptionMode(prefs?.mode);
+  const { enabled, categories }: DescriptionPrefs = useMemo(() => migrateDescriptionPrefs(prefs), [prefs]);
+  // Nothing selected = nothing to show, so nothing is analysed either.
+  const anyCategory = categories.A || categories.B || categories.C;
   const [cache] = useState(() => createDescriptionCache());
   const [analysis, setAnalysis] = useState<{ text: string; marks: DescriptionMark[] }>({ text: "", marks: [] });
 
   useEffect(() => {
-    if (!enabled || isComposing()) return;
+    if (!enabled || !anyCategory || isComposing()) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void analyzeDescriptionSourceAsync(content, { cache, isCancelled: () => cancelled }).then((marks) => {
@@ -57,13 +61,17 @@ export function useDescriptionCheck(content: string, isComposing: () => boolean,
     };
     // isComposing reads a ref; recheckKey re-runs the effect when a composition ends.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, enabled, recheckKey, cache]);
+  }, [content, enabled, anyCategory, recheckKey, cache]);
 
-  const marks = useMemo(() => filterCandidatesByMode(analysis.marks, mode), [analysis.marks, mode]);
-  const current = analysis.text === content;
+  // candidate.category ∈ enabled categories; all three off = nothing shown (not an error).
+  const marks = useMemo(() => filterCandidatesByCategories(analysis.marks, categories), [analysis.marks, categories]);
+  const current = !anyCategory || analysis.text === content;
 
-  const setEnabled = useCallback((next: boolean) => setPrefs({ enabled: next, mode }), [mode, setPrefs]);
-  const setMode = useCallback((next: DescriptionMode) => setPrefs({ enabled, mode: next }), [enabled, setPrefs]);
+  const setEnabled = useCallback((next: boolean) => setPrefs({ enabled: next, categories }), [categories, setPrefs]);
+  const toggleCategory = useCallback(
+    (category: DescriptionCategory) => setPrefs({ enabled, categories: toggleDescriptionCategory(categories, category) }),
+    [enabled, categories, setPrefs],
+  );
 
-  return { enabled, mode, setEnabled, setMode, marks, current, analysisText: analysis.text } as const;
+  return { enabled, categories, setEnabled, toggleCategory, marks, current, analysisText: analysis.text } as const;
 }

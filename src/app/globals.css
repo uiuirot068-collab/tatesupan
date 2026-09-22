@@ -69,10 +69,27 @@
   text-underline-offset: 0.15em;
 }
 
-/* TSP-B5 描写語・修飾表現チェックβ -- ONE yellow highlight for every category (A / B / C are told apart in the
-   detail, never by colour). A background, deliberately different from the wavy underline of 文章チェックβ. */
+/* TSP-B5 描写語・修飾表現チェックβ -- three tints of the SAME yellow/gold family, one per category. The colour means
+   CATEGORY ONLY (A a little stronger, B standard, C paler): never severity, never good/bad. The category is also
+   always written out (A｜… / B｜… / C｜…) in every detail view, so colour is never the only signal. */
 .tsp-description-mark {
-  background-color: rgba(250, 204, 21, 0.4);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.tsp-description-mark-a {
+  background-color: rgba(250, 204, 21, 0.58);
+}
+.tsp-description-mark-b {
+  background-color: rgba(250, 204, 21, 0.36);
+}
+.tsp-description-mark-c {
+  background-color: rgba(250, 204, 21, 0.2);
+}
+
+/* TSP-B4 ghost highlight of the stored 選択範囲 (the browser stops painting a textarea's selection once focus leaves it). */
+.tsp-held-selection {
+  background-color: rgba(59, 130, 246, 0.24);
   border-radius: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;

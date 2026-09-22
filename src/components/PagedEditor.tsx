@@ -98,7 +98,13 @@ export interface PagedEditorDescriptionMarksProps {
   enabled: boolean;
   /** The exact manuscript `marks` was computed against; drawn only while it matches `content`. */
   analysisText: string;
-  marks: readonly { start: number; end: number }[];
+  marks: readonly PagedEditorDescriptionMarkRange[];
+}
+
+export interface PagedEditorDescriptionMarkRange {
+  start: number;
+  end: number;
+  category?: "A" | "B" | "C";
 }
 
 export interface PagedEditorWritingCheckProps {
@@ -128,6 +134,8 @@ export interface PagedEditorProps {
   ) => void;
   writingCheck?: PagedEditorWritingCheckProps;
   descriptionMarks?: PagedEditorDescriptionMarksProps;
+  /** GLOBAL ranges to ghost-highlight (B4's held 選択範囲, B5's current candidate) while the textarea is not painting a native selection. */
+  ghostRanges?: readonly { start: number; end: number }[];
   placeholder?: string;
   className?: string;
 }
@@ -254,6 +262,7 @@ function PagedEditorInner(
     onNativeIntegrityRepair,
     writingCheck,
     descriptionMarks,
+    ghostRanges,
     placeholder,
     className,
   }: PagedEditorProps,
@@ -1159,6 +1168,11 @@ function PagedEditorInner(
     return marksForPage(descriptionMarks.marks, currentPage.start, currentPage.end);
   }, [showDescriptionMarks, descriptionMarks, currentPage.start, currentPage.end]);
 
+  const pageLocalGhostRanges = useMemo(
+    () => (ghostRanges && ghostRanges.length > 0 ? marksForPage(ghostRanges, currentPage.start, currentPage.end) : []),
+    [ghostRanges, currentPage.start, currentPage.end],
+  );
+
   return (
     <div className="absolute inset-0 flex flex-col">
       <div
@@ -1267,6 +1281,11 @@ function PagedEditorInner(
       </div>
 
       <div className="relative min-h-0 flex-1">
+        {pageLocalGhostRanges.length > 0 && (
+          <div className="pointer-events-none absolute inset-0">
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={pageText} marks={pageLocalGhostRanges} />
+          </div>
+        )}
         {showDescriptionMarks && (
           <div className="pointer-events-none absolute inset-0">
             <DescriptionMarkOverlay textareaRef={textareaRef} text={pageText} marks={pageLocalDescriptionMarks} />

@@ -24,8 +24,11 @@ const base: ReadAloudState = {
 };
 const props = (state: Partial<ReadAloudState> = {}, handlers: Partial<ReadAloudViewProps> = {}): ReadAloudViewProps => ({
   state: { ...base, ...state },
+  target: "paragraph",
+  onTargetChange: noop,
+  held: null,
   onStart: noop,
-  onStartQuick: noop,
+  onStartTarget: noop,
   onPause: noop,
   onResume: noop,
   onStop: noop,
@@ -72,7 +75,7 @@ describe("B4 Hub section", () => {
     expect(source).toContain("onClick={props.onStop}");
     expect(source).toContain("props.onRateChange(Number(event.target.value))");
     expect(source).toContain("props.onVoiceChange(");
-    expect(source).toContain("props.onStartQuick");
+    expect(source).toContain("props.onStartTarget");
   });
 
   it("explains an unsupported browser and disables reading", () => {
@@ -157,7 +160,8 @@ describe("B4 registry + EditorPane wiring", () => {
     expect(pane).toContain("pagedEditorRef.current?.getSelectionGlobal()");
     expect(pane).toContain("textareaRef.current");
     expect(pane).toContain('footerPins.includes("read-aloud")');
-    expect(pane).toContain("readAloud={<ReadAloudFooterControl {...readAloudViewProps} />}");
+    expect(pane).toContain("<ReadAloudDockCard key={id} {...readAloudViewProps} />"); // pinned = a Review Dock card
+    expect(pane).toContain('footerPins.includes("read-aloud") && <ReadAloudFooterControl {...readAloudViewProps} />'); // mobile collapsed one-line row
   });
 
   it("the hook cancels speech on unmount, document change and page hide; nothing starts on its own", () => {

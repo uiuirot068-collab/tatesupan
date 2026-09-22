@@ -35,10 +35,15 @@ import InlineMemoAccordion from "./InlineMemoAccordion";
 import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
 import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
+import { ReadAloudDockCard } from "./ReadAloudDockCard";
+import ReviewDock from "./ReviewDock";
+import { captureHeldSelection, sameHeldSelection, validHeldSelection, type HeldSelection } from "@/lib/readAloudHeldSelection";
+import { stepDescriptionCandidate } from "@/lib/descriptionCandidateNav";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { useDescriptionCheck } from "@/hooks/useDescriptionCheck";
 import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
 import {
+  DescriptionCheckDockCard,
   DescriptionCheckFooterPill,
   DescriptionCheckReviewSection,
   DescriptionMarkDetailCard,
@@ -336,12 +341,27 @@ function EditorPaneInner(
     return { content, selection: { start: el?.selectionStart ?? 0, end: el?.selectionEnd ?? 0 } };
   }, [content, isWindowed]);
   const readAloud = useReadAloud(memoStorageKey, getReadAloudSource);
+  // TSP-B4 (Revision 2) held 選択範囲: the browser keeps a textarea's selection when focus moves to the footer / Review
+  // Hub but stops PAINTING it. We record the last non-empty selection so the UI can say 「選択範囲を保持中」 (and paint a
+  // ghost highlight) -- and derive validity (same document, same text at the same place), so a stale range is never shown.
+  const [heldRaw, setHeldRaw] = useState<HeldSelection | null>(null);
+  const held = useMemo(() => validHeldSelection(heldRaw, content, memoStorageKey), [heldRaw, content, memoStorageKey]);
+  const refreshHeldSelection = useCallback(() => {
+    const source = getReadAloudSource();
+    const next = captureHeldSelection(source.content, source.selection, memoStorageKey);
+    setHeldRaw((previous) => (sameHeldSelection(previous, next) ? previous : next));
+  }, [getReadAloudSource, memoStorageKey]);
   // TSP-B5 描写語・修飾表現チェックβ: default OFF; while OFF nothing is analysed. The caret is tracked (only while ON) so the
   // candidate under it can show its category / reason -- the "select a marker, see why" detail.
   const descriptionCheck = useDescriptionCheck(content, () => isComposingRef.current, recheckNonce);
   // -1 = the writer has not put a caret anywhere yet: no candidate is 'under the caret' until they do.
   const [descriptionCaret, setDescriptionCaret] = useState(-1);
   const [descriptionDismissed, setDescriptionDismissed] = useState<DescriptionMark | null>(null);
+  // The candidate last visited with 前へ / 次へ (the caret's candidate wins while the caret is inside one).
+  const [descriptionNavMark, setDescriptionNavMark] = useState<DescriptionMark | null>(null);
+  // Focusing the editor for 前へ / 次へ makes the browser / React report the OLD selection first; those stale reports must
+  // not un-mark the candidate we just moved to, so cursor events are ignored for a moment after a navigation.
+  const descriptionNavGuardUntil = useRef(0);
   const {
     enabled: descriptionEnabled,
     current: descriptionCurrent,
@@ -352,21 +372,47 @@ function EditorPaneInner(
     () => (descriptionEnabled && descriptionCurrent ? findMarkAt(descriptionMarks, descriptionCaret) : null),
     [descriptionEnabled, descriptionCurrent, descriptionMarks, descriptionCaret]
   );
+  const descriptionCurrentMark = useMemo(() => {
+    if (descriptionActiveMark) return descriptionActiveMark;
+    const nav = descriptionNavMark;
+    if (!nav) return null;
+    return descriptionMarks.find((mark) => mark.start === nav.start && mark.end === nav.end && mark.ruleId === nav.ruleId) ?? null;
+  }, [descriptionActiveMark, descriptionNavMark, descriptionMarks]);
   const handleCursorIndexChange = useCallback(
     (index: number) => {
+      if (performance.now() < descriptionNavGuardUntil.current) {
+        onCursorIndexChange?.(index);
+        return;
+      }
       if (descriptionEnabled) setDescriptionCaret(index);
+      // The place 前へ / 次へ marked stays marked only while the caret is still on it.
+      setDescriptionNavMark((nav) => (nav && (index < nav.start || index >= nav.end) ? null : nav));
+      refreshHeldSelection();
       onCursorIndexChange?.(index);
     },
-    [descriptionEnabled, onCursorIndexChange]
+    [descriptionEnabled, refreshHeldSelection, onCursorIndexChange]
   );
   const descriptionPagedProps = useMemo(
     () => (descriptionEnabled ? { enabled: true, analysisText: descriptionAnalysisText, marks: descriptionMarks } : undefined),
     [descriptionEnabled, descriptionAnalysisText, descriptionMarks]
   );
+  // Ghost highlights (blue, behind the text): B4's held 選択範囲 while 選択範囲 is the reading target, and the candidate B5's
+  // 前へ / 次へ is on (so the place stays obvious even when the editor is not focused, e.g. after blurring on a phone).
+  const ghostRanges = useMemo(() => {
+    const ranges: { start: number; end: number }[] = [];
+    if (readAloud.target === "selection" && held) ranges.push({ start: held.start, end: held.end });
+    if (descriptionEnabled && footerPins.includes("description-check") && descriptionNavMark && descriptionCurrentMark) {
+      ranges.push({ start: descriptionCurrentMark.start, end: descriptionCurrentMark.end });
+    }
+    return ranges;
+  }, [readAloud.target, held, descriptionEnabled, footerPins, descriptionNavMark, descriptionCurrentMark]);
   const readAloudViewProps = {
     state: readAloud.state,
+    target: readAloud.target,
+    onTargetChange: readAloud.setTarget,
+    held,
     onStart: readAloud.start,
-    onStartQuick: readAloud.startQuick,
+    onStartTarget: readAloud.startTarget,
     onPause: readAloud.pause,
     onResume: readAloud.resume,
     onStop: readAloud.stop,
@@ -451,6 +497,21 @@ function EditorPaneInner(
     const e = Math.min(end, el.value.length);
     el.setSelectionRange(s, e);
     reportCursorIndex();
+  };
+
+  /** B5 前へ / 次へ: visit the next candidate of the categories that are on. On a phone the editor is blurred again so the software keyboard does not swallow the footer; the ghost highlight keeps the place visible. */
+  const stepDescription = (dir: 1 | -1) => {
+    const step = stepDescriptionCandidate(descriptionMarks, descriptionCurrentMark, descriptionCaret, dir);
+    if (!step) return;
+    descriptionNavGuardUntil.current = performance.now() + 500;
+    setDescriptionNavMark(step.mark);
+    setDescriptionCaret(step.mark.start);
+    setDescriptionDismissed(null);
+    navigateToGlobalOffset(step.mark.start, step.mark.end);
+    window.setTimeout(refreshHeldSelection, 550); // the phrase is now selected: let B4's held selection follow once the guard has passed
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      requestAnimationFrame(() => (document.activeElement as HTMLElement | null)?.blur?.());
+    }
   };
 
   const handleSelectWritingIssue = (issue: WritingDiagnostic) => {
@@ -743,6 +804,7 @@ function EditorPaneInner(
             }}
             onCursorIndexChange={handleCursorIndexChange}
             descriptionMarks={descriptionPagedProps}
+            ghostRanges={ghostRanges}
             onNativeKeyDown={(el) => logNativeEvent("keydown", el)}
             onNativeBeforeInput={(el, inputType) => captureTextareaInput(el, inputType)}
             onNativeCompositionStart={(el) => {
@@ -791,6 +853,11 @@ function EditorPaneInner(
           />
         ) : (
         <>
+        {ghostRanges.length > 0 && (
+          <div className="pointer-events-none absolute inset-0">
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={content} marks={ghostRanges} />
+          </div>
+        )}
         {descriptionCheck.enabled && (
           <div className={`pointer-events-none absolute inset-0 ${descriptionCheck.current ? "visible" : "invisible"}`}>
             <DescriptionMarkOverlay
@@ -936,6 +1003,7 @@ function EditorPaneInner(
         ref={reviewHubFooterRef}
         data-editor-footer=""
         onKeyDown={handleReviewHubKeyDown}
+        onPointerDownCapture={refreshHeldSelection}
         className="relative flex min-w-0 flex-none flex-col"
       >
       {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only, one-line collapsed
@@ -997,6 +1065,32 @@ function EditorPaneInner(
         </div>
       )}
 
+      {(footerPins.includes("read-aloud") || footerPins.includes("description-check")) && (
+        <ReviewDock
+          className={focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""}
+        >
+          {footerPins.map((id) =>
+            id === "read-aloud" ? (
+              <ReadAloudDockCard key={id} {...readAloudViewProps} />
+            ) : id === "description-check" ? (
+              <DescriptionCheckDockCard
+                key={id}
+                enabled={descriptionCheck.enabled}
+                categories={descriptionCheck.categories}
+                onToggle={descriptionCheck.setEnabled}
+                onToggleCategory={descriptionCheck.toggleCategory}
+                marks={descriptionCheck.marks}
+                current={descriptionCheck.current}
+                activeMark={descriptionActiveMark}
+                currentMark={descriptionCurrentMark}
+                onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
+                onPrev={() => stepDescription(-1)}
+                onNext={() => stepDescription(1)}
+              />
+            ) : null,
+          )}
+        </ReviewDock>
+      )}
       <div
         data-writing-check-surface=""
         className={`${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-2" : "order-1"}`}
@@ -1062,15 +1156,6 @@ function EditorPaneInner(
           />
           <span className="flex shrink-0 items-center gap-1.5">
             <ReviewHubFooterPinnedTools
-              readAloud={<ReadAloudFooterControl {...readAloudViewProps} />}
-              descriptionCheck={
-                <DescriptionCheckFooterPill
-                  enabled={descriptionCheck.enabled}
-                  current={descriptionCheck.current}
-                  count={descriptionCheck.marks.length}
-                  onOpen={toggleReviewHub}
-                />
-              }
               characterCount={
                 <span
                   title="現在の原稿文字数"
@@ -1098,7 +1183,7 @@ function EditorPaneInner(
         </div>
       </div>
 
-      {descriptionActiveMark && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
+      {descriptionActiveMark && !footerPins.includes("description-check") && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
         <DescriptionMarkDetailCard mark={descriptionActiveMark} onDismiss={() => setDescriptionDismissed(descriptionActiveMark)} />
       )}
       <ReviewHubPanel
@@ -1120,9 +1205,9 @@ function EditorPaneInner(
           "description-check": (
             <DescriptionCheckReviewSection
               enabled={descriptionCheck.enabled}
-              mode={descriptionCheck.mode}
+              categories={descriptionCheck.categories}
               onToggle={descriptionCheck.setEnabled}
-              onModeChange={descriptionCheck.setMode}
+              onToggleCategory={descriptionCheck.toggleCategory}
               marks={descriptionCheck.marks}
               current={descriptionCheck.current}
               activeMark={descriptionActiveMark}

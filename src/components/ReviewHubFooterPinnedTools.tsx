@@ -10,10 +10,6 @@ interface ReviewHubFooterPinnedToolsProps {
    * never counts anything itself.
    */
   characterCount: ReactNode;
-  /** B4: the compact 音読β control (shown only while 音読β is フッターに表示). */
-  readAloud?: ReactNode;
-  /** B5: the compact 描写・修飾 pill (`描写・修飾 18件` / `描写・修飾 OFF`). */
-  descriptionCheck?: ReactNode;
 }
 
 /**
@@ -21,21 +17,14 @@ interface ReviewHubFooterPinnedToolsProps {
  * is set to フッターに表示 (B4 adds the compact 音読β control the same way).
  * (文章チェックβ's footer strip is shown/hidden by EditorPane from the same preference; both are display only.)
  */
-export function ReviewHubFooterPinnedTools({ characterCount, readAloud, descriptionCheck }: ReviewHubFooterPinnedToolsProps) {
-  const { pins } = useReviewHubFooterPins();
-  // Pin order = display order left to right; 文章チェックβ has its own strip above this row.
-  const shown = pins.filter(
-    (id) => id === "character-count" || (id === "read-aloud" && readAloud) || (id === "description-check" && descriptionCheck),
-  );
-  if (shown.length === 0) return null;
+export function ReviewHubFooterPinnedTools({ characterCount }: ReviewHubFooterPinnedToolsProps) {
+  const { isPinned } = useReviewHubFooterPins();
+  // 音読β and 描写・修飾チェックβ are Review Dock cards (EditorPane); 文章チェックβ keeps its own strip.
+  if (!isPinned("character-count")) return null;
 
   return (
-    <>
-      {shown.map((id) => (
-        <span key={id} data-review-hub-footer-tool={id} className="contents">
-          {id === "read-aloud" ? readAloud : id === "description-check" ? descriptionCheck : characterCount}
-        </span>
-      ))}
-    </>
+    <span data-review-hub-footer-tool="character-count" className="contents">
+      {characterCount}
+    </span>
   );
 }

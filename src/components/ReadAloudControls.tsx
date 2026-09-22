@@ -9,6 +9,7 @@ import {
   type ReadAloudMode,
 } from "@/lib/readAloud";
 import type { ReadAloudState } from "@/lib/readAloudEngine";
+import { describeHeldSelection, type HeldSelection } from "@/lib/readAloudHeldSelection";
 
 /**
  * TSP-B4 音読β views (Review Hub section + compact footer representation).
@@ -21,8 +22,13 @@ const PILL_BUTTON =
 
 export interface ReadAloudViewProps {
   state: ReadAloudState;
+  /** What the footer ▶ reads. */
+  target: ReadAloudMode;
+  onTargetChange: (mode: ReadAloudMode) => void;
+  /** The stored, still-valid 選択範囲 (null = none). The UI only ever says 「保持中」 while this is non-null. */
+  held: HeldSelection | null;
   onStart: (mode: ReadAloudMode) => void;
-  onStartQuick: () => void;
+  onStartTarget: () => void;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
@@ -32,6 +38,13 @@ export interface ReadAloudViewProps {
 
 const MODES: readonly ReadAloudMode[] = ["selection", "paragraph", "full"];
 const AUTO_VOICE_VALUE = "";
+
+/** Short names for the three reading targets (footer / dock labels; the long ones live in `READ_ALOUD_MODE_LABELS`). */
+export const READ_ALOUD_TARGET_TITLES: Record<ReadAloudMode, string> = {
+  selection: "選択範囲",
+  paragraph: "現在の段落",
+  full: "全文",
+};
 
 /** One human sentence for the most relevant non-playing situation, or null when reading is available. */
 export function describeReadAloudAvailability(state: ReadAloudState): string | null {
@@ -85,6 +98,12 @@ export function ReadAloudReviewSection(props: ReadAloudViewProps) {
           </button>
         ))}
       </div>
+
+      {props.held ? (
+        <p data-read-aloud-held="" className="text-[11px] font-semibold text-ink/80">
+          {describeHeldSelection(props.held)}
+        </p>
+      ) : null}
 
       {active ? (
         <div data-read-aloud-playback="" className="flex flex-wrap items-center gap-1.5">
@@ -205,10 +224,10 @@ export function ReadAloudFooterControl(props: ReadAloudViewProps) {
         <button
           type="button"
           data-read-aloud-footer-start=""
-          disabled={unavailable !== null}
-          title={unavailable ?? "選択範囲（なければ現在の段落）を読みます"}
-          aria-label="音読（選択範囲、なければ現在の段落）"
-          onClick={props.onStartQuick}
+          disabled={unavailable !== null || (props.target === "selection" && !props.held)}
+          title={unavailable ?? `${READ_ALOUD_TARGET_TITLES[props.target]}を読みます`}
+          aria-label={`音読（${READ_ALOUD_TARGET_TITLES[props.target]}）`}
+          onClick={props.onStartTarget}
           className={button}
         >
           ▶ 音読
