@@ -32,9 +32,8 @@ import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/ma
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
-import ReviewRail from "./ReviewRail";
+import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { useReviewSurface } from "@/hooks/useReviewSurface";
-import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
@@ -325,19 +324,19 @@ export default function TategakiEditor({
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
   // TSP-Review-UI (Revision 3): the editor/preview split's own container -- see the matching comment
-  // in the JSX below. The divider drag math must measure THIS element's width, not <main>'s, now that
-  // the Review Rail can claim part of <main>'s width as a third flex sibling.
+  // in the JSX below. The divider drag math must measure THIS element's width, not <main>'s.
   const editorSplitRef = useRef<HTMLDivElement | null>(null);
-  // TSP-Review-UI (Revision 3): whether pinned Review tools (音読β / 描写・修飾チェックβ) get a desktop
-  // sidebar (Review Rail) or the compact mini-bar + Bottom Sheet -- see useReviewSurface's own doc for
-  // why this measures <main>'s width rather than using a viewport media query.
+  // TSP-Review-UI (Revision 4): whether pinned Review tools (音読β / 描写・修飾チェックβ) get the
+  // Desktop Review Bar (bottom of Preview) or the compact mini-bar + Bottom Sheet -- see
+  // useReviewSurface's own doc for why this measures <main>'s width rather than a viewport media query.
   const reviewSurface = useReviewSurface(mainRef);
-  const { pins: reviewFooterPins } = useReviewHubFooterPins();
-  const reviewRailEligible =
-    reviewSurface === "rail" &&
-    !focusMode &&
-    (reviewFooterPins.includes("read-aloud") || reviewFooterPins.includes("description-check"));
-  const [reviewRailNode, setReviewRailNode] = useState<HTMLDivElement | null>(null);
+  // Revision 4: the Desktop Review Bar always shows a 見直し entry point (it replaces the manuscript
+  // footer's own trigger on this surface -- see EditorPane), regardless of pins; only its per-tool
+  // quick-status pills are pin-gated. So the bar mounts whenever the surface/focus state allows it,
+  // not only when a dock-eligible tool happens to be pinned (Revision 3's Rail was pin-gated because
+  // an EMPTY rail had no reason to exist; an empty bar still needs to carry 見直し).
+  const reviewBarEligible = reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed;
+  const [reviewBarNode, setReviewBarNode] = useState<HTMLDivElement | null>(null);
   const txtInputRef = useRef<HTMLInputElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
@@ -885,7 +884,7 @@ export default function TategakiEditor({
             onExitFocus={exitFocusMode}
             keyboardActive={keyboardActive}
             reviewSurface={reviewSurface}
-            reviewRailNode={reviewRailEligible ? reviewRailNode : null}
+            reviewBarNode={reviewBarEligible ? reviewBarNode : null}
           />
         </section>
 
@@ -905,7 +904,10 @@ export default function TategakiEditor({
           // manuscript editor stays dominant; collapsed it is the same thin
           // rail as the normal desktop collapse. Outside focus mode the normal
           // split (`--preview-w` / `md:flex-1`) is unchanged.
-          className={`min-h-0 min-w-0 transition-all duration-200 overflow-hidden md:flex md:h-full md:flex-none ${
+          // TSP-Review-UI (Revision 4): `md:flex-col` (added) stacks PreviewPane above the Desktop
+          // Review Bar; `overflow-hidden` moved to the inner wrapper below PreviewPane's own content
+          // so the bar's popovers (absolutely positioned, opening upward) are never clipped by it.
+          className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none md:flex-col ${
             isPreviewCollapsed
               ? "md:w-12"
               : focusMode
@@ -913,38 +915,43 @@ export default function TategakiEditor({
                 : "md:w-[var(--preview-w)] md:flex-1"
           } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
         >
-          <PreviewPane
-            content={previewContent}
-            title={title}
-            settings={settings}
-            layout={layout}
-            images={images}
-            imageLayerOrder={imageLayerOrder}
-            unresolvedImageIds={unresolvedImageIdSet}
-            blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
-            onContentChange={setContent}
-            onSettingsChange={setSettings}
-            onImageAdd={handleImageAdd}
-            onImageDelete={handleImageDelete}
-            onImageLayerChange={handleImageLayerChange}
-            cursorIndex={previewCursorIndex}
-            onNavigateToSource={navigateEditorToGlobalOffset}
-            onBodyPageCountChange={setBodyPageCount}
-            onPdfExportSuccess={handlePreviewPdfExportSuccess}
-            mobileExportOpen={sharedExport.mobileExportOpen}
-            onMobileExportClose={sharedExport.closeMobileExport}
-            onExportActiveChange={sharedExport.onExportActiveChange}
-            // On a phone showing the プレビュー workspace the preview is always
-            // full — the collapse rail is a desktop-only affordance.
-            isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
-            onToggleCollapse={handleTogglePreviewCollapse}
-            selected={selectedPages}
-            onSelectedChange={setSelectedPages}
-          />
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <PreviewPane
+              content={previewContent}
+              title={title}
+              settings={settings}
+              layout={layout}
+              images={images}
+              imageLayerOrder={imageLayerOrder}
+              unresolvedImageIds={unresolvedImageIdSet}
+              blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
+              onContentChange={setContent}
+              onSettingsChange={setSettings}
+              onImageAdd={handleImageAdd}
+              onImageDelete={handleImageDelete}
+              onImageLayerChange={handleImageLayerChange}
+              cursorIndex={previewCursorIndex}
+              onNavigateToSource={navigateEditorToGlobalOffset}
+              onBodyPageCountChange={setBodyPageCount}
+              onPdfExportSuccess={handlePreviewPdfExportSuccess}
+              mobileExportOpen={sharedExport.mobileExportOpen}
+              onMobileExportClose={sharedExport.closeMobileExport}
+              onExportActiveChange={sharedExport.onExportActiveChange}
+              // On a phone showing the プレビュー workspace the preview is always
+              // full — the collapse rail is a desktop-only affordance.
+              isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
+              onToggleCollapse={handleTogglePreviewCollapse}
+              selected={selectedPages}
+              onSelectedChange={setSelectedPages}
+            />
+          </div>
+          {reviewBarEligible && (
+            <div className="hidden md:block">
+              <DesktopReviewBarMount mountRef={setReviewBarNode} />
+            </div>
+          )}
         </section>
         </div>
-
-        {reviewRailEligible && <ReviewRail mountRef={setReviewRailNode} />}
       </main>
 
       {isSearchOpen && (

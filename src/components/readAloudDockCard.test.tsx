@@ -5,11 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReadAloudDockCard } from "./ReadAloudDockCard";
 import { ReadAloudFooterControl, type ReadAloudViewProps } from "./ReadAloudControls";
-import ReviewRail from "./ReviewRail";
+import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { READ_ALOUD_SERVER_STATE, type ReadAloudState } from "@/lib/readAloudEngine";
 import { captureHeldSelection } from "@/lib/readAloudHeldSelection";
 import { REVIEW_HUB_FOOTER_MAX } from "@/lib/reviewHubFooterPins";
-import { REVIEW_RAIL_MIN_MAIN_WIDTH_PX, reviewSurfaceForMainWidth } from "@/hooks/useReviewSurface";
+import { REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX, reviewSurfaceForMainWidth } from "@/hooks/useReviewSurface";
 
 const noop = () => {};
 const read = (path: string) => readFileSync(resolve(path), "utf8");
@@ -151,48 +151,61 @@ describe("B4 held-selection wiring in EditorPane (lifecycle)", () => {
   });
 });
 
-describe("Review Rail (desktop) — Revision 3", () => {
-  it("is a dedicated sidebar shell: a portal mount point, a left border, comfortable width, its own scroll", () => {
-    const html = renderToStaticMarkup(createElement(ReviewRail, { mountRef: noop }));
-    expect(html).toContain('data-review-rail=""');
-    expect(html).toContain('aria-label="見直しツール"');
-    for (const cls of ["border-l", "w-[17rem]", "flex-col", "gap-3", "overflow-y-auto"]) expect(html).toContain(cls);
-    // no horizontal scroll / wrap concern: the rail is a single vertical column, not a horizontal row
-    expect(html).not.toMatch(/overflow-x|whitespace-nowrap|flex-wrap/);
+describe("Desktop Review Bar (bottom of Preview) — Revision 4", () => {
+  it("the mount shell is a plain relative anchor point, nothing else -- no width/border opinions imposed by TategakiEditor (Preview owns the visual box)", () => {
+    const html = renderToStaticMarkup(createElement(DesktopReviewBarMount, { mountRef: noop }));
+    expect(html).toContain('data-desktop-review-bar-mount=""');
+    expect(html).toContain("relative");
+    expect(html).toContain("flex-none");
   });
 
-  it("cards keep a sane minimum width so they are never squeezed illegibly inside the rail", () => {
+  it("cards keep a sane minimum width so they are never squeezed illegibly inside a popover", () => {
     expect(read("src/components/ReadAloudDockCard.tsx")).toContain("min-w-[15rem] flex-1");
     expect(read("src/components/DescriptionCheckControls.tsx")).toContain("min-w-[15rem] flex-1");
   });
 
-  it("TategakiEditor mounts the rail beside the manuscript only on the measured 'rail' surface, with a pinned dock tool, and not in 集中モード", () => {
+  it("TategakiEditor mounts the bar at the bottom of the Preview pane only on the measured 'desktop' surface, and not in 集中モード or while Preview is collapsed -- unlike Revision 3's Rail, this is NOT pin-gated (見直し must stay reachable even with nothing pinned)", () => {
     const tge = read("src/components/TategakiEditor.tsx");
     expect(tge).toContain("useReviewSurface(mainRef)");
-    expect(tge).toContain('reviewSurface === "rail" &&\n    !focusMode &&\n    (reviewFooterPins.includes("read-aloud") || reviewFooterPins.includes("description-check"))');
-    expect(tge).toContain("<ReviewRail mountRef={setReviewRailNode} />");
+    expect(tge).toContain('reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed');
+    expect(tge).toContain("<DesktopReviewBarMount mountRef={setReviewBarNode} />");
+    expect(tge).not.toMatch(/reviewBarEligible[^;]*footerPins/); // not conditioned on any pin
   });
 
-  it("exposes the measured surface on <main> regardless of pin state (a plain observability hook, not layout-affecting), so it can be told apart from 'is the rail mounted' (which also needs a pin)", () => {
+  it("exposes the measured surface on <main> regardless of pin state (a plain observability hook, not layout-affecting)", () => {
     expect(read("src/components/TategakiEditor.tsx")).toContain("data-review-surface={reviewSurface}");
   });
 
-  it("the rail breakpoint is measured (main element width), not a plain viewport media query, and matches the documented measurements", () => {
-    expect(reviewSurfaceForMainWidth(REVIEW_RAIL_MIN_MAIN_WIDTH_PX - 1)).toBe("compact");
-    expect(reviewSurfaceForMainWidth(REVIEW_RAIL_MIN_MAIN_WIDTH_PX)).toBe("rail");
-    // measured real <main> widths (see the hook's own doc): 1024/1100 viewport -> compact, 1180/1280 -> rail
+  it("the desktop breakpoint is measured (main element width), not a plain viewport media query, and matches the documented measurements (unchanged from Revision 3's Rail threshold -- Human QA asked 770/900-1024 to stay compact)", () => {
+    expect(reviewSurfaceForMainWidth(REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX - 1)).toBe("compact");
+    expect(reviewSurfaceForMainWidth(REVIEW_DESKTOP_MIN_MAIN_WIDTH_PX)).toBe("desktop");
+    // measured real <main> widths (see the hook's own doc): 1024/1100 viewport -> compact, 1180/1280 -> desktop
     expect(reviewSurfaceForMainWidth(952)).toBe("compact"); // 1024px viewport
     expect(reviewSurfaceForMainWidth(1028)).toBe("compact"); // 1100px viewport
-    expect(reviewSurfaceForMainWidth(1108)).toBe("rail"); // 1180px viewport
-    expect(reviewSurfaceForMainWidth(1208)).toBe("rail"); // 1280px viewport
+    expect(reviewSurfaceForMainWidth(1108)).toBe("desktop"); // 1180px viewport
+    expect(reviewSurfaceForMainWidth(1208)).toBe("desktop"); // 1280px viewport
   });
 
-  it("EditorPane portals the pinned cards into the rail node -- costing the manuscript's HEIGHT nothing -- in pin order, up to the B2 maximum of two", () => {
+  it("EditorPane portals ONE interactive <DesktopReviewBar> into the mount node -- costing the manuscript's or Preview's HEIGHT nothing -- carrying the full pin set (up to the B2 maximum of two) and the Hub panel", () => {
     expect(REVIEW_HUB_FOOTER_MAX).toBe(2);
-    expect(pane).toContain('reviewSurface === "rail" &&\n        reviewRailNode &&\n        !focusMode &&');
-    expect(pane).toContain("createPortal(");
-    expect(pane).toContain("footerPins.map((id) =>");
-    expect(pane).toContain("reviewRailNode,");
+    expect(pane).toContain('reviewSurface === "desktop" &&\n        reviewBarNode &&\n        createPortal(');
+    expect(pane).toContain("<DesktopReviewBar");
+    expect(pane).toContain("reviewBarNode,");
+    expect(pane).toContain("reviewHubPanel={reviewHubPanelElement}");
+  });
+
+  it("the manuscript-footer's own 見直し trigger is hidden on the desktop surface (the bar owns the ONE trigger there instead), but kept for the compact surface", () => {
+    expect(pane).toContain('{reviewSurface !== "desktop" && <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />}');
+  });
+
+  it("the Review Hub panel element is built once and used in exactly one of two mutually exclusive places depending on surface (never duplicated in the DOM)", () => {
+    expect(pane).toContain("const reviewHubPanelElement = (");
+    expect(pane).toContain('{reviewSurface !== "desktop" && reviewHubPanelElement}');
+  });
+
+  it("a press inside the portalled bar/popovers still counts as 'inside' for the Hub's outside-press close (extraContainmentRefs)", () => {
+    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef, [desktopBarWrapperRef]);");
+    expect(read("src/hooks/useReviewHubDisclosure.ts")).toContain("extraContainmentRefs?.some((ref) => ref.current?.contains(target))");
   });
 });
 

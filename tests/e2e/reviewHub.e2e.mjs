@@ -76,7 +76,11 @@ const insideViewport = (r) => r && r.shown && r.l >= -0.5 && r.t >= -0.5 && r.r 
 
 const TRIGGERS = `[...document.querySelectorAll('[data-editor-review-hub-trigger]')].filter((e) => e.getClientRects().length > 0)`;
 const PANEL = "[data-review-hub-panel]";
-const panelShown = () => cdp.evaluate(`getComputedStyle(document.querySelector('${PANEL}')).display !== 'none'`);
+// On the desktop surface the panel is portalled into the Desktop Review Bar's own mount, which
+// unmounts entirely in 集中モード (reviewBarEligible requires !focusMode) -- so the panel can be
+// absent from the DOM outright, not just `hidden`. Absent counts as "not shown", same as `hidden`.
+const panelShown = () =>
+  cdp.evaluate(`(() => { const p = document.querySelector('${PANEL}'); return !!p && getComputedStyle(p).display !== 'none'; })()`);
 const triggerState = () =>
   cdp.evaluate(`(() => { const t = ${TRIGGERS}; return { count: t.length, text: t[0]?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
     expanded: t[0]?.getAttribute('aria-expanded') ?? null, controls: t[0]?.getAttribute('aria-controls') ?? null,
@@ -166,12 +170,16 @@ const RESULT_LIST_OPEN = `(() => { const ul = document.querySelector('[data-writ
 async function assertPanelGeometry(tag, areaHeight) {
   const p = await rect(PANEL);
   const isSheet = await cdp.evaluate(`document.querySelector('${PANEL}').hasAttribute('data-review-hub-sheet')`);
+  // TSP-Review-UI (Revision 4): on the "desktop" surface the panel is portalled into the Desktop
+  // Review Bar (bottom of Preview) instead of anchored above the manuscript's own footer -- neither of
+  // the two branches below (Bottom Sheet / anchored-to-editor-footer) describes it.
+  const isDesktopBar = await cdp.evaluate(`!!document.querySelector('[data-desktop-review-bar]')`);
   const g = await cdp.evaluate(`(() => { const f = document.querySelector('[data-editor-footer]'); const el = document.querySelector('${PANEL}'); const pr = f.parentElement.getBoundingClientRect();
     return { footerTop: f.getBoundingClientRect().top, paneTop: pr.top, paneLeft: pr.left, paneRight: pr.right, natural: el.scrollHeight, client: el.clientHeight,
       actionRowBottom: document.querySelector('[data-editor-action-row]').getBoundingClientRect().bottom }; })()`);
   assert.ok(insideViewport(p), `${tag}: panel fully inside the viewport ${JSON.stringify(p)}`);
   if (isSheet) {
-    // TSP-Review-UI (Revision 3): below the Rail's measured-width threshold the Review Hub is a Bottom
+    // TSP-Review-UI (Revision 3): below the desktop measured-width threshold the Review Hub is a Bottom
     // Sheet -- by design it spans the full viewport width (not clipped to the Editor pane, which the OLD
     // anchored-panel contract below required) and is anchored to the viewport's bottom edge, with a
     // backdrop behind it. reviewLayout.e2e.mjs's compactBottomSheet is the dedicated geometry proof
@@ -180,6 +188,14 @@ async function assertPanelGeometry(tag, areaHeight) {
     assert.ok(p.l <= 0.5 && p.r >= p.vw - 0.5, `${tag}: sheet spans the full viewport width, not clipped to the Editor pane (panel ${Math.round(p.l)}-${Math.round(p.r)}, vw ${p.vw})`);
     assert.ok(p.b >= p.vh - 0.5, `${tag}: sheet is anchored to the bottom of the viewport (panel bottom ${Math.round(p.b)}, vh ${p.vh})`);
     assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-hub-sheet-backdrop]')`), true, `${tag}: sheet has a backdrop`);
+  } else if (isDesktopBar) {
+    // Revision 4: anchored to the Desktop Review Bar's own bounds instead -- it must fit within the
+    // Preview pane horizontally (not clipped) and sit ABOVE the bar (an overlay that never resizes
+    // Preview -- reviewLayout.e2e.mjs's popoverDoesNotResize is the dedicated proof of that part).
+    const bar = await rect("[data-desktop-review-bar]");
+    const previewSection = await cdp.evaluate(`(() => { const s = document.querySelector('[data-desktop-review-bar]').closest('section'); const r = s.getBoundingClientRect(); return { l: r.left, r: r.right }; })()`);
+    assert.ok(p.l >= previewSection.l - 0.5 && p.r <= previewSection.r + 0.5, `${tag}: panel must fit the Preview pane horizontally, not be clipped (panel ${Math.round(p.l)}-${Math.round(p.r)}, pane ${Math.round(previewSection.l)}-${Math.round(previewSection.r)})`);
+    assert.ok(p.b <= bar.t + 0.5, `${tag}: panel must sit ABOVE the Desktop Review Bar (panel bottom ${p.b} <= bar top ${bar.t})`);
   } else {
     // The pane clips its children (overflow-hidden): a panel wider than the pane would have its edge -- and controls -- cut off.
     assert.ok(p.l >= g.paneLeft - 0.5 && p.r <= g.paneRight + 0.5, `${tag}: panel must fit the Editor pane horizontally, not be clipped (panel ${Math.round(p.l)}-${Math.round(p.r)}, pane ${Math.round(g.paneLeft)}-${Math.round(g.paneRight)})`);
@@ -202,6 +218,11 @@ async function assertPanelGeometry(tag, areaHeight) {
   assert.deepEqual(unreachable, [], `${tag}: every control in the panel must be reachable (scroll into view + hit-testable)`);
   if (isSheet) {
     log(`  ${tag}: Bottom Sheet -- full viewport width, backdrop, everything reachable OK`);
+  } else if (isDesktopBar) {
+    // The panel is near Preview, not the manuscript -- "does it cover the title/action row" (an
+    // Editor-pane-only concern) does not apply here; popoverDoesNotResize already proves it never
+    // resizes/covers Editor or Preview.
+    log(`  ${tag}: Desktop Review Bar popover -- fits Preview horizontally, sits above the bar, everything reachable OK`);
   } else if (g.natural + 8 <= areaHeight) {
     assert.ok(p.t >= g.actionRowBottom - 0.5, `${tag}: on this screen the panel fits over the manuscript, so it must not cover the title/undo/redo rows (panel top ${p.t}, row bottom ${g.actionRowBottom})`);
   } else {
@@ -214,16 +235,21 @@ async function assertPanelGeometry(tag, areaHeight) {
 async function expandedFooterPhase(v) {
   await openWith({ [COLLAPSED_KEY]: "off" }, v.width, v.height);
   const tag = v.name;
+  // TSP-Review-UI (Revision 4): on the "desktop" surface the ONE 見直し trigger lives in the Desktop
+  // Review Bar (bottom of Preview) instead of the manuscript's own footer -- see EditorPane.tsx's
+  // `{reviewSurface !== "desktop" && <ReviewHubTrigger .../>}` gate. Below that surface's threshold
+  // (all of PHONES / NARROW_DESKTOPS / the 768 entry in DESKTOPS) it is unaffected, still footer-only.
+  const isDesktopBar = await cdp.evaluate(`!!document.querySelector('[data-desktop-review-bar]')`);
 
-  // top toolbar unchanged, Hub only in the footer
+  // top toolbar unchanged, Hub only in the footer (or, on the desktop surface, the Desktop Review Bar)
   const nav = await cdp.evaluate(`({
     secondary: [...document.querySelectorAll('[data-editor-secondary]')].map((b) => b.dataset.editorSecondary),
     navMentions: /見直し/.test(document.querySelector('[data-editor-secondary-row]')?.textContent ?? ''),
-    triggersOutsideFooter: [...document.querySelectorAll('[data-editor-review-hub-trigger]')].filter((e) => !e.closest('[data-editor-footer]')).length,
+    triggersElsewhere: [...document.querySelectorAll('[data-editor-review-hub-trigger]')].filter((e) => !e.closest('[data-editor-footer]') && !e.closest('[data-desktop-review-bar]')).length,
   })`);
   assert.deepEqual(nav.secondary, ["settings", "options", "memo", "help"], `${tag}: top toolbar must stay 設定・オプション・メモ・ヘルプ`);
   assert.equal(nav.navMentions, false, `${tag}: no Review Hub item in the top toolbar`);
-  assert.equal(nav.triggersOutsideFooter, 0, `${tag}: the trigger must live only in the footer`);
+  assert.equal(nav.triggersElsewhere, 0, `${tag}: the trigger must live only in the footer or the Desktop Review Bar`);
 
   // trigger contract
   const t = await triggerState();
@@ -241,7 +267,9 @@ async function expandedFooterPhase(v) {
 
   // B1 FIX (770px density): on desktop the footer controls row must stay ONE line -- the trigger sits on the
   // syntax-hint row above it -- so opening the Hub's footer never costs the manuscript a line of height.
-  if (v.width >= 768) {
+  // Revision 4: on the desktop-bar surface the trigger is not in the footer at all, so this footer-row
+  // check does not apply there (it is still exercised at every OTHER >=768px width, which stays compact).
+  if (v.width >= 768 && !isDesktopBar) {
     const rows = await cdp.evaluate(`(() => { const c = document.querySelector('[data-editor-footer-controls]'); const t = ${TRIGGERS}[0];
       const cr = c.getBoundingClientRect(), tr = t.getBoundingClientRect(); return { controlsH: cr.height, controlsTop: cr.top, triggerBottom: tr.bottom, triggerH: tr.height,
         hintH: document.querySelector('[data-editor-footer-help]').getBoundingClientRect().height }; })()`);

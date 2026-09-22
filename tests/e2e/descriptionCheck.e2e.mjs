@@ -14,7 +14,8 @@
 //  * a single click (mouse) or tap (touch) on a coloured phrase shows category + reason + "keeping it may be right";
 //  * zero categories: calm explanation, no markers, no count; prefs persist across reload (B only / A+C survive), and the first
 //    B5 build's { mode } value is migrated (A / AB / ABC -> independent categories);
-//  * pinned = a Review Dock card: ON/OFF, A/B/C quick toggles, count, 前へ / 次へ over the visible candidates, current phrase + tag,
+//  * pinned (desktop) = a status pill on the Desktop Review Bar (bottom of Preview) that opens a popover
+//    card: ON/OFF, A/B/C quick toggles, count, 前へ / 次へ over the visible candidates, current phrase + tag,
 //    理由を見る, navigation lands on the candidate in the WINDOWED editor;
 //  * B5 markers coexist with 文章チェックβ underlines and with B4's held-selection ghost;
 //  * a long manuscript stays responsive; no manuscript text leaves the device; no horizontal scroll at any width.
@@ -330,17 +331,27 @@ async function migrationAndTouch() {
 }
 
 async function dockViewport(v) {
-  // TSP-Review-UI (Revision 3): this rich, always-mounted daily-control card only exists on the RAIL
-  // surface now (portalled into `[data-review-rail]` beside the manuscript). Below the Rail's measured-
-  // width threshold there is no permanent card at all -- see compactDockViewport for that surface's mini
-  // pill + Bottom Sheet coverage, and reviewLayout.e2e.mjs for the surface-level mechanics shared with B4.
-  const tag = `${v.name} rail`;
+  // TSP-Review-UI (Revision 4): this rich daily-control card only exists on the DESKTOP surface now,
+  // as the content of a POPOVER opened from the Desktop Review Bar's count pill (bottom of Preview) --
+  // not a permanently-mounted card beside the manuscript (Revision 3's Rail) or below it (Revision 2's
+  // Review Dock). A press outside the bar/popover closes it, so any interaction that lands outside it
+  // (opening the full Hub) must reopen the popover afterward if the test still needs the card. See
+  // compactDockViewport for the compact surface's mini pill + Bottom Sheet coverage, and
+  // reviewLayout.e2e.mjs for the surface-level mechanics (popover overlay, mutual exclusivity,
+  // Escape/outside-press) shared with B4.
+  const tag = `${v.name} desktop`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["writing-check", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: false, categories: CATS(true, false, false) }) }, v.width, v.height);
   await setText(TEXT);
-  const CARD = "[data-review-rail] [data-review-dock-card=description-check]";
+  const CARD = '[data-desktop-review-popover="description-check"] [data-review-dock-card=description-check]';
   const cardText = () => cdp.evaluate(`document.querySelector('${CARD}')?.textContent.replace(/\\s+/g, ' ').trim() ?? ''`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: pinned = a dock card`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-check-footer]')`), false, `${tag}: no status-row pill in the expanded footer`);
+  const openPopover = async () => {
+    if (await cdp.evaluate(`!!document.querySelector('${CARD}')`)) return;
+    await realClick("[data-description-check-footer]", { scroll: false });
+    await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: popover opens` });
+  };
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-check-footer]')`), true, `${tag}: pinned = a status pill (not a permanent card)`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), false, `${tag}: pinning alone does not open the popover`);
+  await openPopover();
   insideViewport(await rect(CARD), `${tag} card`);
   // OFF card
   assert.match(await cardText(), /いまはオフです/, `${tag}: OFF card explains itself`);
@@ -396,11 +407,13 @@ async function dockViewport(v) {
   await realClick(`${CARD} [data-description-card-category=C]`, { scroll: false });
   await cdp.waitFor(`document.querySelector('[data-description-mark="C"]') !== null`);
   assert.equal(await shownCategories(), "C", `${tag}: C only from the card`);
-  // the Hub keeps the full list + explanation
+  // the Hub keeps the full list + explanation -- opening it closes the popover (mutual exclusivity),
+  // so it must be reopened afterward to keep testing the card.
   await openHub(tag);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-description-list]')`), true, `${tag}: Hub still owns the full candidate list`);
   assert.equal(await checkedBoxes(), "C", `${tag}: Hub checkboxes follow the card`);
   await closeHub();
+  await openPopover();
   await noHorizontalScroll(`${tag} (card)`);
   await shot(`b5-dock-card-${v.name}`);
 
@@ -420,14 +433,15 @@ async function setCategoriesViaCard(card, want) {
 }
 
 async function compactDockViewport(v) {
-  // TSP-Review-UI (Revision 3): below the Rail's threshold, pinning 描写語・修飾表現チェックβ never mounts a
-  // permanent card -- only a compact count pill in the footer status row (a tap opens the Hub, now a
-  // Bottom Sheet here). The rich card lives only on the Rail (dockViewport, 1280).
+  // TSP-Review-UI (Revision 4): below the desktop measured-width threshold, pinning 描写語・修飾表現チェックβ
+  // never mounts a Desktop Review Bar / popover -- only a compact count pill in the footer status row
+  // (a tap opens the Hub, now a Bottom Sheet here). The rich card lives only in the desktop popover
+  // (dockViewport, 1280).
   const tag = `${v.name} compact`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["writing-check", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: true, categories: CATS(true, false, false) }) }, v.width, v.height);
   await setText(TEXT);
   await cdp.waitFor(`document.querySelectorAll('[data-description-mark]').length > 0`, { label: `${tag}: markers` });
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: pinning never mounts the Rail below its threshold`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-bar]')`), false, `${tag}: pinning never mounts the Desktop Review Bar below its threshold`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock-card=description-check]')`), false, `${tag}: no permanent card at all`);
   await cdp.waitFor(`!!document.querySelector('[data-description-check-footer]')`, { label: `${tag}: compact count pill appears in the footer` });
   assert.match(await cdp.evaluate(`document.querySelector('[data-description-check-footer]').textContent`), /描写・修飾 [0-9,]+件/, `${tag}: pill shows the count`);
@@ -443,6 +457,12 @@ async function compactDockViewport(v) {
 }
 
 async function coexistWithHeldGhost() {
+  // TSP-Review-UI (Revision 4): B4 and B5 popovers are now mutually exclusive (only one Desktop Review
+  // Bar popover open at a time -- see reviewLayout.e2e.mjs's popoverMutualExclusivity), so this no
+  // longer proves "both cards visible side by side" (Revision 3's Rail). What actually matters --
+  // and still must hold -- is that the manuscript's own rendered LAYERS (B4's held-selection ghost, B5's
+  // category tint) are independent of which popover's UI happens to be open, or whether either is open
+  // at all: B4's popover is open here, B5's is not, and B5's tint is still there regardless.
   const tag = "1280x720 B4+B5";
   await openWith(
     { tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["read-aloud", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: true, categories: CATS(true, true, false) }) },
@@ -450,22 +470,24 @@ async function coexistWithHeldGhost() {
   );
   await setText(TEXT);
   await cdp.waitFor(`document.querySelector('[data-description-mark]') !== null`, { label: `${tag}: markers` });
-  // B4: choose 選択範囲, select a B5-marked phrase, move focus to the footer -> ghost + B5 tint + native selection state all consistent
+  // B5's tint is already on the page before B4's popover is even opened -- an always-on manuscript
+  // overlay, not something tied to B5's own popover being open.
   const phrase = "泣いている";
   const at = TEXT.indexOf(phrase);
+  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint is present before B4's popover opens`);
+  // open B4's popover, choose 選択範囲, select the SAME B5-marked phrase -> ghost + B5 tint + native
+  // selection state all consistent, and B5's own popover is (correctly) NOT open at the same time.
+  await realClick("[data-read-aloud-status-pill]", { scroll: false });
+  const CARD = '[data-desktop-review-popover="read-aloud"] [data-review-dock-card=read-aloud]';
+  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: B4 popover opens` });
   await cdp.evaluate(`(() => { const t = document.querySelector('[data-demo-target="editor"]'); t.focus(); t.setSelectionRange(${at}, ${at + phrase.length}); })()`);
-  await realClick("[data-review-rail] [data-review-dock-card=read-aloud] [data-read-aloud-target=selection]", { scroll: false });
-  await cdp.waitFor(`/選択範囲を保持中/.test(document.querySelector('[data-review-rail] [data-review-dock-card=read-aloud]').textContent)`, { label: `${tag}: held` });
+  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
+  await cdp.waitFor(`/選択範囲を保持中/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: held` });
   assert.equal(await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`), phrase, `${tag}: ghost paints the held phrase`);
-  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint on the same phrase is still there (independent layers)`);
-  assert.equal(await cdp.evaluate(`document.querySelector('[data-review-rail] [data-review-dock-card=read-aloud]') !== null && document.querySelector('[data-review-rail] [data-review-dock-card=description-check]') !== null`), true, `${tag}: both cards in the Rail`);
-  // TSP-Review-UI (Revision 3): the Rail is a narrow vertical sidebar (not a full-width dock under the
-  // manuscript), so two pinned cards always stack top-to-bottom -- never side by side, at any width.
-  const a = await rect("[data-review-rail] [data-review-dock-card=read-aloud]");
-  const b = await rect("[data-review-rail] [data-review-dock-card=description-check]");
-  assert.ok(a.b <= b.t + 1 || b.b <= a.t + 1, `${tag}: B4 and B5 cards stack vertically in the Rail (never overlap)`);
+  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint on the same phrase is still there (independent layers, independent of B5's OWN popover being closed)`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-popover="description-check"]')`), false, `${tag}: B5's popover is correctly not open at the same time as B4's (mutual exclusivity)`);
   await shot("b5-b4-coexist-1280x720");
-  log(`  ${tag}: B4 held ghost + B5 tint + both Rail cards coexist OK`);
+  log(`  ${tag}: B4 held ghost + B5 tint coexist as independent manuscript layers, regardless of which popover (if any) is open OK`);
 }
 
 async function longManuscript() {
@@ -536,8 +558,8 @@ try {
     await migrationAndTouch();
   }
   if (!ONLY || ONLY === "dock") {
-    for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactDockViewport(v); // 390 / 770: below the Rail threshold
-    await dockViewport(VIEWPORTS[2]); // 1280: the Rail surface -- the only one with a permanent daily-control card
+    for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactDockViewport(v); // 390 / 770: below the desktop threshold
+    await dockViewport(VIEWPORTS[2]); // 1280: the desktop surface -- the only one with a popover-based daily-control card
     await coexistWithHeldGhost();
   }
   if (!ONLY || ONLY === "long") await longManuscript();

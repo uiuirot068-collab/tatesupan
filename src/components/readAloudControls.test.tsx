@@ -154,15 +154,18 @@ describe("B4 registry + EditorPane wiring", () => {
     expect(read("src/components/Header.tsx")).not.toMatch(/音読|ReadAloud/);
   });
 
-  it("uses ONE controller for the Hub section, the Rail card and the footer control, keyed to the document, and reads the selection only from press handlers", () => {
+  it("uses ONE controller for the Hub section, the Desktop Review Bar's quick popover and the footer control, keyed to the document, and reads the selection only from press handlers", () => {
     expect(pane.match(/useReadAloud\(/g)).toHaveLength(1);
     expect(pane).toContain("useReadAloud(memoStorageKey, getReadAloudSource)");
     expect(pane).toContain("pagedEditorRef.current?.getSelectionGlobal()");
     expect(pane).toContain("textareaRef.current");
     expect(pane).toContain('footerPins.includes("read-aloud")');
-    // Revision 3: pinned = a Review Rail card (portalled into reviewRailNode) on wide desktop, a mini
-    // control inline on the compact surface -- both driven by the SAME readAloudViewProps.
-    expect(pane).toContain("<ReadAloudDockCard key={id} {...readAloudViewProps} />");
+    // Revision 4: pinned (or actively playing) = a status pill on the Desktop Review Bar (bottom of
+    // Preview) that opens a quick popover -- `ReadAloudDockCard` itself now lives inside
+    // DesktopReviewBar.tsx, portalled via EditorPane, driven by the SAME readAloudViewProps; a mini
+    // control stays inline on the compact surface.
+    expect(pane).toContain("readAloud={readAloudViewProps}");
+    expect(read("src/components/DesktopReviewBar.tsx")).toContain("<ReadAloudDockCard {...readAloud} />");
     expect(pane).toContain("createPortal(");
     expect(pane).toContain('reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle")');
   });

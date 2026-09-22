@@ -15,14 +15,16 @@
 //  * default voice is on-device Japanese; an online voice is used only when explicitly chosen (and warns);
 //  * unsupported browser / no on-device Japanese voice show guidance and never speak;
 //  * reloading (pagehide) cancels speech;
-//  * footer pin, Rail surface (1280, Revision 3 -- was a below-the-manuscript "Review Dock" in Revision 2):
-//    音読β becomes a card in the Review Rail beside the manuscript, with a 音読範囲 radiogroup (選択範囲 / 現在の段落 /
-//    全文), a visible 「選択範囲を保持中」 state + ghost highlight while the editor is unfocused, stale-hold cleanup
-//    (edit / collapse / target switch), play / pause / resume / stop from the card; max-2 (a third pin is disabled,
-//    unpin frees a slot), order/persistence survive reload, and an unpinned 音読β stays fully usable from the Hub;
-//  * footer pin, compact surface (390 / 770, Revision 3): no permanent card at all -- a one-line mini
-//    control in the footer status row that itself reads/pauses/resumes/stops, with full controls (target
-//    choice, speed, voice) still reachable from the Review Hub, now a Bottom Sheet there;
+//  * footer pin, desktop surface (1280, Revision 4 -- was a dedicated third-column Review Rail in
+//    Revision 3, rejected by Human QA for feeling too far from the editor and eating into Preview's
+//    width): 音読β becomes a status pill on the Desktop Review Bar (bottom of Preview) that opens a
+//    popover with a 音読範囲 radiogroup (選択範囲 / 現在の段落 / 全文), a visible 「選択範囲を保持中」 state +
+//    ghost highlight while the editor is unfocused, stale-hold cleanup (edit / collapse / target
+//    switch), play / pause / resume / stop from the card; max-2 (a third pin is disabled, unpin frees
+//    a slot), order/persistence survive reload, and an unpinned 音読β stays fully usable from the Hub;
+//  * footer pin, compact surface (390 / 770, Revision 3, unchanged): no permanent card at all -- a
+//    one-line mini control in the footer status row that itself reads/pauses/resumes/stops, with full
+//    controls (target choice, speed, voice) still reachable from the Review Hub, now a Bottom Sheet there;
 //  * no external manuscript transmission: no request carries the manuscript sentinel, no non-loopback POST/beacon;
 //  * layout: nothing overflows horizontally, panel + footer controls stay inside the viewport;
 //  * pronunciation dictionary (Revision 3): registering a reading from a held selection reaches what B4
@@ -352,27 +354,37 @@ async function coreViewport(v) {
 }
 
 async function pinViewport(v) {
-  // TSP-Review-UI (Revision 3): the rich, always-mounted daily-control card (target radiogroup, visible
-  // held-selection state + ghost, play/pause/resume/stop) only exists on the RAIL surface now -- it is
-  // portalled into `[data-review-rail]` beside the manuscript instead of a below-the-manuscript "Review
-  // Dock". Below the Rail's measured-width threshold there is no permanent card at all (see
-  // compactPinViewport for that surface's mini-bar + Bottom Sheet coverage, and reviewLayout.e2e.mjs for
-  // the surface-level mechanics shared by both B4 and B5).
-  const tag = `${v.name} rail`;
+  // TSP-Review-UI (Revision 4): the rich daily-control card (target radiogroup, visible held-selection
+  // state + ghost, play/pause/resume/stop) only exists on the DESKTOP surface now -- it is the content
+  // of a POPOVER opened from the Desktop Review Bar's status pill (bottom of Preview), not a
+  // permanently-mounted card beside the manuscript (Revision 3's Rail) or below it (Revision 2's Review
+  // Dock). Only one popover is open at a time, and a press outside the bar/popover closes it -- so
+  // every interaction that lands outside it (a click in the manuscript, opening the full Hub) must
+  // reopen the popover afterward if the test still needs the card. See compactPinViewport for the
+  // compact surface's mini-bar + Bottom Sheet coverage, and reviewLayout.e2e.mjs for the surface-level
+  // mechanics (popover overlay, mutual exclusivity, Escape/outside-press) shared by both B4 and B5.
+  const tag = `${v.name} desktop`;
   await openWith({ tatespun_editor_footer_collapsed: "off" }, v.width, v.height);
   await setText(TEXT);
   await openHub(tag);
   const toggle = (id) => `[data-review-hub-tool="${id}"] [data-review-hub-footer-pin-toggle]`;
   const state = (id) => cdp.evaluate(`(() => { const b = document.querySelector('${toggle(id)}'); return { pressed: b.getAttribute('aria-pressed'), disabled: b.disabled }; })()`);
   const pins = () => cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`);
-  const CARD = "[data-review-rail] [data-review-dock-card=read-aloud]";
+  const CARD = '[data-desktop-review-popover="read-aloud"] [data-review-dock-card=read-aloud]';
   const ghost = () => cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`);
   const cardText = () => cdp.evaluate(`document.querySelector('${CARD}')?.textContent.replace(/\\s+/g, ' ').trim() ?? ''`);
   const editorFocused = () => cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target') === 'editor'`);
   const checkedTarget = () => cdp.evaluate(`document.querySelector('${CARD} [data-read-aloud-target][aria-checked="true"]')?.dataset.readAloudTarget ?? null`);
+  const openPopover = async () => {
+    if (await cdp.evaluate(`!!document.querySelector('${CARD}')`)) return;
+    await realClick("[data-read-aloud-status-pill]", { scroll: false });
+    await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: popover opens` });
+  };
   assert.deepEqual(await cdp.evaluate(`JSON.parse(localStorage.getItem('${PINS_KEY}') ?? 'null')`), null, `${tag}: default is unstored`);
   assert.deepEqual(await state("read-aloud"), { pressed: "false", disabled: true }, `${tag}: max-2 -- a third pin is disabled while two are shown`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: no rail while no dock tool is pinned`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-status-pill]')`), false, `${tag}: no status pill while unpinned and idle`);
+  // The bar itself (見直し) is unconditional on this surface, unlike Revision 3's pin-gated Rail.
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-bar]')`), true, `${tag}: the bar itself is always present on the desktop surface`);
 
   // unpinned 音読β is fully usable from the Hub (pinned != enabled)
   await select(0, 0);
@@ -380,13 +392,15 @@ async function pinViewport(v) {
   await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: unpinned tool works from the Hub` });
   await realClick("[data-read-aloud-stop]");
 
-  // free a slot and pin 音読β -> a Review Dock card (not a status-row pill)
+  // free a slot and pin 音読β -> a status pill that opens a popover (not a permanent card)
   await realClick(toggle("character-count"));
   await realClick(toggle("read-aloud"));
   await closeHub();
-  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: rail card appears` });
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: persisted in pin order`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no compact mini control while on the rail surface`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), false, `${tag}: pinning alone does not open the popover`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer]')`), false, `${tag}: no compact mini control while on the desktop surface`);
+  await openPopover();
+  assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: still persisted in pin order`);
   insideViewport(await rect(CARD), `${tag} card`);
   await noHorizontalScroll(`${tag} (card)`);
 
@@ -416,11 +430,14 @@ async function pinViewport(v) {
   await cdp.waitFor(`/選択範囲を保持中（${sentence.length}文字）/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: card says 選択範囲を保持中` });
   assert.equal(await ghost(), sentence, `${tag}: a ghost highlight paints exactly the held selection while the editor is unfocused`);
   await shot(`b4-dock-held-${v.name}`);
-  // opening 見直し keeps it (and the Hub says so too)
+  // opening 見直し keeps it (and the Hub says so too) -- opening the Hub closes the quick popover
+  // (mutual exclusivity), so it must be reopened afterward to keep testing the card.
   await openHub(tag);
   assert.match(await cdp.evaluate(`document.querySelector('[data-review-hub-read-aloud]').textContent`), /選択範囲を保持中/, `${tag}: still held after opening the Hub`);
   assert.equal(await ghost(), sentence);
   await closeHub();
+  await openPopover();
+  assert.match(await cardText(), /選択範囲を保持中/, `${tag}: still held after the Hub round-trip`);
   // reading starts from the footer and reads ONLY the held selection; the hold survives reading
   await cdp.evaluate(`window.__ra.spoken.length = 0`);
   await realClick(`${CARD} [data-read-aloud-card-play]`, { scroll: false });
@@ -445,15 +462,22 @@ async function pinViewport(v) {
   await select(at, at + sentence.length);
   await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
   await cdp.waitFor(`/保持中/.test(document.querySelector('${CARD}').textContent)`);
+  // Revision 4: a real click inside the manuscript is now also an OUTSIDE press for the popover (by
+  // design -- see reviewLayout.e2e.mjs's popoverMutualExclusivity), so it closes the popover as a side
+  // effect here; the popover must be reopened to keep observing the card's (still-correct) state.
   const ta = await rect("[data-demo-target=editor]");
   await realClickAt(ta.l + 30, ta.t + 20); // a real click inside the text collapses the selection
-  await cdp.waitFor(`!/保持中/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: collapsing the selection drops the hold` });
+  await cdp.waitFor(`!document.querySelector('${CARD}')`, { label: `${tag}: the click outside the popover closes it too` });
+  await openPopover();
+  assert.doesNotMatch(await cardText(), /保持中/, `${tag}: collapsing the selection drops the hold`);
   assert.equal(await ghost(), "", `${tag}: no ghost after the selection collapsed`);
-  // a real double-click selects a word and the hold appears WITHOUT touching the footer (the user's own event path)
+  // a real double-click selects a word and the hold appears WITHOUT touching the footer (the user's own
+  // event path) -- the underlying held state is captured regardless of the popover; reopen it to observe.
   await realClickAt(ta.l + 40, ta.t + 22);
   await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: ta.l + 40, y: ta.t + 22, button: "left", clickCount: 2 });
   await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: ta.l + 40, y: ta.t + 22, button: "left", clickCount: 2 });
-  await cdp.waitFor(`/選択範囲を保持中（[0-9]+文字）/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: a mouse selection is held without touching the footer` });
+  await openPopover();
+  assert.match(await cardText(), /選択範囲を保持中（[0-9]+文字）/, `${tag}: a mouse selection is held without touching the footer`);
 
   // ---- paragraph + full targets still work from the card; pause / resume / stop from the footer
   await realClick(`${CARD} [data-read-aloud-target=paragraph]`, { scroll: false });
@@ -484,30 +508,35 @@ async function pinViewport(v) {
   await openHub(tag);
   assert.deepEqual(await state("character-count"), { pressed: "false", disabled: true }, `${tag}: full again -> the unpinned tool is disabled`);
   await realClick(toggle("read-aloud"));
-  await cdp.waitFor(`!document.querySelector('[data-review-rail]')`, { label: `${tag}: unpinning removes the rail` });
+  await cdp.waitFor(`!document.querySelector('[data-read-aloud-status-pill]')`, { label: `${tag}: unpinning removes the status pill` });
   await sleep(600); // the footer just changed height: let the Hub panel settle (its cap follows the footer via ResizeObserver) before the next tap
   await realClick(toggle("read-aloud"));
   await cdp.waitFor(`JSON.parse(localStorage.getItem('${PINS_KEY}')).includes('read-aloud')`, { label: `${tag}: re-pinned` });
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"]);
   await navigate();
   assert.deepEqual(await pins(), ["writing-check", "read-aloud"], `${tag}: pins survive reload`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: rail card survives reload`);
+  // popovers are session-local UI state (closed by default), unlike Revision 3's always-open Rail card --
+  // the pin itself (and therefore the status pill + the ability to reopen the card) is what survives.
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-status-pill]')`), true, `${tag}: status pill survives reload`);
+  await openPopover();
+  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: card reopens after reload`);
   await openHub(tag);
   await realClick(toggle("writing-check"));
   await realClick(toggle("read-aloud"));
   assert.deepEqual(await pins(), [], `${tag}: zero pins is a valid state`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-status-pill]')`), false, `${tag}: no status pill once unpinned`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-hub-tool="read-aloud"]')`), true);
   await closeHub();
   log(`  ${tag}: target chosen in the footer / held selection visible + ghost / lifecycle (edit, collapse, target switch) / play-pause-resume-stop from the card / max-2 + persistence OK`);
 }
 
 async function compactPinViewport(v) {
-  // TSP-Review-UI (Revision 3): below the Rail's measured-width threshold, pinning 音読β never mounts a
-  // permanent card (see pinViewport's comment) -- only a compact one-line mini control in the footer
-  // status row, with full controls reachable from the Review Hub Bottom Sheet. This is the B4-specific
-  // slice of that behaviour; the shared Rail/compact surface mechanics (backdrop, height cap, playback
-  // surviving a sheet close while UNPINNED) are covered once, for both B4 and B5, in reviewLayout.e2e.mjs.
+  // TSP-Review-UI (Revision 4): below the desktop measured-width threshold, pinning 音読β never mounts
+  // a Desktop Review Bar / popover (see pinViewport's comment) -- only a compact one-line mini control
+  // in the footer status row, with full controls reachable from the Review Hub Bottom Sheet. This is
+  // the B4-specific slice of that behaviour; the shared desktop/compact surface mechanics (backdrop,
+  // height cap, playback surviving a close while UNPINNED) are covered once, for both B4 and B5, in
+  // reviewLayout.e2e.mjs.
   const tag = `${v.name} compact`;
   await openWith({ tatespun_editor_footer_collapsed: "off" }, v.width, v.height);
   await setText(TEXT);
@@ -516,7 +545,7 @@ async function compactPinViewport(v) {
   await realClick(toggle("character-count"));
   await realClick(toggle("read-aloud"));
   await closeHub();
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-rail]')`), false, `${tag}: pinning never mounts the Rail below its threshold`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-bar]')`), false, `${tag}: pinning never mounts the Desktop Review Bar below its threshold`);
   assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock-card=read-aloud]')`), false, `${tag}: no permanent card at all`);
   await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-start]')`, { label: `${tag}: compact mini control appears in the footer` });
   insideViewport(await rect("[data-read-aloud-footer-start]"), `${tag} mini start`);
@@ -683,8 +712,8 @@ async function lifecycle(v) {
 
 try {
   for (const v of VIEWPORTS) await coreViewport(v);
-  for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactPinViewport(v); // 390 / 770: below the Rail threshold
-  await pinViewport(VIEWPORTS[2]); // 1280: the Rail surface -- the only one with a permanent daily-control card
+  for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactPinViewport(v); // 390 / 770: below the desktop threshold
+  await pinViewport(VIEWPORTS[2]); // 1280: the desktop surface -- the only one with a popover-based daily-control card
   for (const v of [VIEWPORTS[0], VIEWPORTS[2]]) await stateViewport(v);
   await lifecycle(VIEWPORTS[2]);
   await pronunciationViewport(VIEWPORTS[2]);

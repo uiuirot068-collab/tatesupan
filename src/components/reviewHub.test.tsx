@@ -107,12 +107,16 @@ describe("B1 footer trigger", () => {
     const collapsedRow = paneBetween('data-editor-footer-collapsed=""', 'data-writing-check-surface=""');
     expect(collapsedRow).toContain("<ReviewHubTrigger");
     expect(collapsedRow).toContain("compact");
-    const statusRow = paneBetween('data-editor-status-surfaces=""', "<ReviewHubPanel");
+    // Revision 4: `<ReviewHubPanel` itself is now declared once, earlier in the component (see
+    // `reviewHubPanelElement`), and only its RENDER SITE (a bare identifier reference, conditional on
+    // surface) sits inside the footer wrapper -- so that reference is the correct "end"/"after" marker
+    // here, not the JSX tag text itself (which textually precedes the wrapper now).
+    const statusRow = paneBetween('data-editor-status-surfaces=""', "reviewHubPanelElement}");
     expect(statusRow).toContain("<ReviewHubTrigger");
 
     const wrapperStart = pane.indexOf('data-editor-footer=""');
     expect(wrapperStart).toBeGreaterThan(-1);
-    for (const marker of ["<ReviewHubTrigger", "<ReviewHubPanel", 'data-editor-status-surfaces=""']) {
+    for (const marker of ["<ReviewHubTrigger", "reviewHubPanelElement}", 'data-editor-status-surfaces=""']) {
       expect(pane.indexOf(marker), marker).toBeGreaterThan(wrapperStart);
     }
     expect(paneBetween('data-editor-footer=""', "{/* TSP-RC-LATIN")).toContain("relative");
@@ -389,7 +393,7 @@ describe("B1 follows the existing footer chrome rules (focus mode / mobile keybo
   });
 
   it("drives the state from the canonical focusMode / keyboardActive props and resets when the footer hides", () => {
-    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef)");
+    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef, [desktopBarWrapperRef]);");
     expect(hubHook).toContain("if (suppressed) setRequestedOpen(false);");
     expect(hubHook).toContain("isReviewHubVisible(requestedOpen, chrome)");
   });
@@ -420,9 +424,10 @@ describe("B1 keyboard / focus behaviour (pure parts)", () => {
     expect(hubView).not.toMatch(/autoFocus|aria-modal|role="dialog"/); // a disclosure panel, not a modal
   });
 
-  it("closes on an outside press like the existing 文章チェックβ popover", () => {
+  it("closes on an outside press like the existing 文章チェックβ popover -- and now also honours extraContainmentRefs, so the Desktop Review Bar's portalled panel does not self-close on open", () => {
     expect(hubHook).toContain('document.addEventListener("pointerdown"');
-    expect(hubHook).toContain("wrapperRef.current.contains(event.target as Node)");
+    expect(hubHook).toContain("wrapperRef.current?.contains(target)");
+    expect(hubHook).toContain("extraContainmentRefs?.some((ref) => ref.current?.contains(target))");
   });
 
   it("does not throw when the trigger is toggled with the noop handler (smoke)", () => {
@@ -450,7 +455,7 @@ describe("B1 panel height is bounded by the space between the Editor pane's top 
   });
 
   it("measures the pane root and the footer wrapper and hands the cap to the panel", () => {
-    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef)");
+    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef, [desktopBarWrapperRef]);");
     expect(pane).toContain('<div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">');
     expect(pane).toContain("maxHeightPx={reviewHubMaxHeightPx}");
     expect(hubHook).toContain("new ResizeObserver(");
@@ -483,7 +488,7 @@ describe("B1 narrow-footer overflow contract (source; pixel proof is the real-br
 
   it("the desktop trigger shares the syntax-hint row, NOT the controls row (770px density: no extra footer line)", () => {
     // Controls row = 作業カウンター + 現在の原稿文字数 only. A third item there wrapped in the ~335px split-screen Editor column.
-    const controlsRow = paneBetween("data-editor-footer-controls", "<ReviewHubPanel");
+    const controlsRow = paneBetween("data-editor-footer-controls", "reviewHubPanelElement}");
     expect(controlsRow).not.toContain("<ReviewHubTrigger");
     const hintRow = paneBetween('data-editor-status-surfaces=""', "data-editor-footer-controls");
     expect(hintRow).toContain("<ReviewHubTrigger");

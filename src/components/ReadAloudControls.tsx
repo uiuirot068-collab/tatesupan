@@ -236,3 +236,28 @@ export function ReadAloudFooterControl(props: ReadAloudViewProps) {
     </span>
   );
 }
+
+/**
+ * TSP-Review-UI (Revision 4): the Desktop Review Bar's 音読β indicator -- a status pill like
+ * `DescriptionCheckFooterPill`'s, not a direct play control like `ReadAloudFooterControl` above.
+ * A click opens the quick popover (daily controls, held selection, progress); it never itself
+ * starts/pauses/stops reading.
+ */
+export function ReadAloudStatusPill(props: { state: ReadAloudState; onOpen: () => void }) {
+  const { state } = props;
+  const active = state.status !== "idle";
+  const label = active
+    ? `音読 ${state.status === "speaking" ? "⏸" : "▶"} ${state.chunkIndex + 1}/${state.chunkCount}`
+    : "音読 ▶";
+  return (
+    <button
+      type="button"
+      data-read-aloud-status-pill=""
+      onClick={props.onOpen}
+      title="音読β（クリックで開く）"
+      className="shrink-0 whitespace-nowrap rounded-full border border-ink/20 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-ink/80 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      {label}
+    </button>
+  );
+}

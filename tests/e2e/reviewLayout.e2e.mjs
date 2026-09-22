@@ -1,5 +1,6 @@
-// Explicit-run real-browser E2E for the Review UI responsive architecture (Human-QA revision 3):
-// desktop Review Rail / compact mini bar + Bottom Sheet / Review Hub readability.
+// Explicit-run real-browser E2E for the Review UI responsive architecture (Human-QA revision 4):
+// desktop Review Bar (bottom of Preview) + popovers / compact mini bar + Bottom Sheet / Review Hub
+// readability.
 //
 //   TATESPUN_E2E_BASE_URL=http://127.0.0.1:3117 npm run test:e2e:review-layout
 //   (optional) TATESPUN_E2E_SHOTS=<dir>       screenshots
@@ -11,16 +12,19 @@
 // 1180/1280/1440 (wide desktop) -- WINDOWED editor:
 //  * <1100px measured <main> width -> the COMPACT surface: no permanently-mounted card, a one-line
 //    mini control per pinned dock tool in the footer status row, the manuscript keeps its viewport;
-//  * >=1100px measured <main> width -> the RAIL surface: pinned tools become cards in a dedicated
-//    sidebar beside the manuscript; the manuscript's HEIGHT is unaffected by how many tools are
-//    pinned (only its WIDTH narrows, and only on the rail surface);
+//  * >=1100px measured <main> width -> the DESKTOP surface: a compact one-line Review Bar at the
+//    BOTTOM of the Preview pane (見直し always present + a status pill per pinned dock tool); daily
+//    controls / the full Hub open as a POPOVER above the bar that overlays Preview WITHOUT resizing
+//    Editor or Preview, and only one popover is open at a time (Revision 3's dedicated third-column
+//    Review Rail was rejected by Human QA -- editor/Review felt too far apart, and it ate into
+//    Preview's own width);
 //  * on the compact surface the Review Hub (見直し) is a real Bottom Sheet: fixed to the viewport,
 //    a backdrop, <=75vh, rounded top, a real close button, scrollable content, no horizontal scroll;
 //  * an actively-playing 音読β stays controllable via the mini bar even when UNPINNED and even after
-//    the Bottom Sheet is closed;
-//  * B5 candidate navigation still works from both the Rail card and from inside the Bottom Sheet;
-//  * B4's held-selection state survives opening/closing the Hub, switching Rail/Bottom Sheet, and
-//    Rail vs compact transitions (same derived-validity model as Revision 2 -- unaffected by this UI change);
+//    the Bottom Sheet is closed (compact) / after its popover closes (desktop);
+//  * B5 candidate navigation still works from both the desktop quick popover and the Bottom Sheet;
+//  * B4's held-selection state survives opening/closing the Hub, switching desktop/compact, and
+//    surface transitions (same derived-validity model as Revision 2 -- unaffected by this UI change);
 //  * max-2 pin regression holds on both surfaces; no horizontal overflow anywhere.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -38,9 +42,9 @@ const ALL_VIEWPORTS = [
   { name: "390x844", width: 390, height: 844, surface: "compact" },
   { name: "770x900", width: 770, height: 900, surface: "compact" },
   { name: "1024x800", width: 1024, height: 800, surface: "compact" },
-  { name: "1180x800", width: 1180, height: 800, surface: "rail" },
-  { name: "1280x720", width: 1280, height: 720, surface: "rail" },
-  { name: "1440x800", width: 1440, height: 800, surface: "rail" },
+  { name: "1180x800", width: 1180, height: 800, surface: "desktop" },
+  { name: "1280x720", width: 1280, height: 720, surface: "desktop" },
+  { name: "1440x800", width: 1440, height: 800, surface: "desktop" },
 ];
 const ONLY = (process.env.TATESPUN_E2E_VIEWPORTS || "").split(",").filter(Boolean);
 const VIEWPORTS = ONLY.length ? ALL_VIEWPORTS.filter((v) => ONLY.includes(v.name)) : ALL_VIEWPORTS;
@@ -63,7 +67,7 @@ const pageErrors = [];
 cdp.on("Runtime.exceptionThrown", (p) => pageErrors.push(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "exception"));
 const measurements = [];
 
-// fake speech engine (silent, deterministic) so the "active playback survives sheet close" scenario needs no audio
+// fake speech engine (silent, deterministic) so the "active playback survives popover/sheet close" scenario needs no audio
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
   source: `(() => {
     const V = (u, n, l, ls) => ({ voiceURI: u, name: n, lang: l, localService: ls, default: false });
@@ -129,9 +133,12 @@ async function shot(name) {
 const noOverflow = (tag) =>
   cdp.evaluate(`({ doc: document.documentElement.scrollWidth, body: document.body.scrollWidth, vw: innerWidth })`).then((m) =>
     assert.ok(m.doc <= m.vw + 1 && m.body <= m.vw + 1, `${tag}: horizontal scroll ${JSON.stringify(m)}`));
+function insideViewport(r, tag) {
+  assert.ok(r && r.shown && r.l >= -0.5 && r.t >= -0.5 && r.r <= r.vw + 0.5 && r.b <= r.vh + 0.5, `${tag}: outside viewport ${JSON.stringify(r)}`);
+}
 /** The surface takes up to ~2s to settle after a fresh load in dev mode (see harness note in the QA doc) -- poll, don't assume it's instant.
- *  Reads <main data-review-surface> directly (set from the SAME useReviewSurface value TategakiEditor renders with) rather than inferring it
- *  from whether the rail is mounted, since the rail additionally requires a pinned dock tool and would never appear with zero pins. */
+ *  Reads <main data-review-surface> directly (set from the SAME useReviewSurface value TategakiEditor renders with) -- unlike Revision 3's
+ *  Rail, the Desktop Review Bar mounts on this surface regardless of pins, so no pin-dependent inference is needed either way. */
 const waitSurface = (tag, want) =>
   cdp.waitFor(`document.querySelector('main')?.dataset.reviewSurface === ${JSON.stringify(want)}`, { timeoutMs: 6_000, label: `${tag}: surface settles to ${want}` });
 
@@ -141,14 +148,14 @@ async function comboCheck(v, pins) {
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(pins) }, v.width, v.height);
   await setText(TEXT);
   const dockTools = pins.filter((id) => id === "read-aloud" || id === "description-check");
-  await waitSurface(tag, v.surface); // the surface itself (rail vs compact) is pin-independent; only WHETHER the rail mounts depends on pins
+  await waitSurface(tag, v.surface);
   await noOverflow(tag);
   const ta = await rect("[data-demo-target=editor]");
-  const rail = await rect("[data-review-rail]");
+  const bar = await rect("[data-desktop-review-bar]");
   const m = { viewport: v.name, expectedSurface: v.surface, pins: pins.join("+") || "none", manuscriptH: Math.round(ta.h), manuscriptW: Math.round(ta.w) };
 
   if (v.surface === "compact") {
-    assert.equal(rail, null, `${tag}: no rail on the compact surface`);
+    assert.equal(bar, null, `${tag}: no Desktop Review Bar on the compact surface`);
     assert.equal(await cdp.evaluate(`document.querySelectorAll('[data-review-dock-card]').length`), 0, `${tag}: no permanent card on the compact surface`);
     if (dockTools.length > 0) {
       for (const id of dockTools) {
@@ -157,34 +164,59 @@ async function comboCheck(v, pins) {
       }
     }
   } else {
-    if (dockTools.length === 0) {
-      assert.equal(rail, null, `${tag}: no rail reserved when nothing dock-eligible is pinned`);
-    } else {
-      assert.ok(rail && rail.shown, `${tag}: rail present`);
-      assert.equal(await cdp.evaluate(`document.querySelectorAll('[data-review-rail] [data-review-dock-card]').length`), dockTools.length, `${tag}: one card per pinned dock tool, inside the rail`);
-      assert.ok(rail.l >= -0.5 && rail.r <= rail.vw + 0.5, `${tag}: rail inside the viewport`);
-      const inner = await cdp.evaluate(`(() => { const r = document.querySelector('[data-review-rail]'); const rr = r.getBoundingClientRect(); const bad = [];
-        for (const el of r.querySelectorAll('button, input, select, [data-review-dock-card]')) { const b = el.getBoundingClientRect(); if (b.width === 0) continue;
-          if (b.left < rr.left - 0.5 || b.right > rr.right + 0.5) bad.push(el.outerHTML.slice(0, 60)); }
-        return bad; })()`);
-      assert.deepEqual(inner, [], `${tag}: every rail control stays inside the rail horizontally`);
+    // Revision 4: the bar itself is unconditional on this surface (it carries 見直し regardless of
+    // pins) -- unlike Revision 3's Rail, which only existed at all with a dock-eligible pin.
+    assert.ok(bar && bar.shown, `${tag}: Desktop Review Bar present`);
+    assert.ok(bar.l >= -0.5 && bar.r <= bar.vw + 0.5, `${tag}: bar inside the viewport`);
+    assert.equal(await cdp.evaluate(`!!document.querySelector('[data-editor-review-hub-trigger]')`), true, `${tag}: 見直し reachable regardless of pins`);
+    // No permanently-mounted dock card / popover -- daily controls open on demand only.
+    assert.equal(await cdp.evaluate(`document.querySelectorAll('[data-review-dock-card]').length`), 0, `${tag}: no permanently-open popover`);
+    for (const id of ["read-aloud", "description-check"]) {
+      const pillSel = id === "read-aloud" ? "[data-read-aloud-status-pill]" : "[data-description-check-footer]";
+      const expected = dockTools.includes(id);
+      assert.equal(await cdp.evaluate(`!!document.querySelector('${pillSel}')`), expected, `${tag}: ${id} status pill ${expected ? "shown" : "absent"}`);
     }
   }
-  m.railPresent = !!rail;
+  m.barPresent = !!bar;
   measurements.push(m);
 }
 
-async function manuscriptHeightUnaffectedByRail(v) {
-  const tag = `${v.name} height`;
+async function manuscriptAndPreviewUnaffectedByPins(v) {
+  const tag = `${v.name} dimensions`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify([]) }, v.width, v.height);
-  await waitSurface(tag, "rail");
-  const hNone = (await rect("[data-demo-target=editor]")).h;
+  await waitSurface(tag, "desktop");
+  const editorNone = await rect("[data-demo-target=editor]");
+  const previewNone = await rect("[data-desktop-review-bar]").then(() => cdp.evaluate(`(() => { const s = document.querySelector('[data-desktop-review-bar]')?.closest('section'); const r = s?.getBoundingClientRect(); return r ? { w: r.width, h: r.height } : null; })()`));
   await cdp.evaluate(`localStorage.setItem('${PINS_KEY}', JSON.stringify(['read-aloud','description-check']))`);
   await navigate();
-  await waitSurface(tag, "rail");
-  const hBoth = (await rect("[data-demo-target=editor]")).h;
-  assert.ok(Math.abs(hBoth - hNone) < 2, `${tag}: pinning both B4+B5 does not change the manuscript's HEIGHT on the rail surface (0 pins ${hNone}px, 2 pins ${hBoth}px)`);
-  log(`  ${tag}: manuscript height unaffected by pinning B4+B5 on the rail surface (0 pins ${Math.round(hNone)}px, 2 pins ${Math.round(hBoth)}px) OK`);
+  await waitSurface(tag, "desktop");
+  const editorBoth = await rect("[data-demo-target=editor]");
+  const previewBoth = await cdp.evaluate(`(() => { const s = document.querySelector('[data-desktop-review-bar]')?.closest('section'); const r = s?.getBoundingClientRect(); return r ? { w: r.width, h: r.height } : null; })()`);
+  assert.ok(Math.abs(editorBoth.h - editorNone.h) < 2, `${tag}: pinning both B4+B5 does not change the manuscript's HEIGHT (0 pins ${editorNone.h}px, 2 pins ${editorBoth.h}px)`);
+  assert.ok(Math.abs(editorBoth.w - editorNone.w) < 2, `${tag}: pinning both B4+B5 does not change the manuscript's WIDTH (0 pins ${editorNone.w}px, 2 pins ${editorBoth.w}px)`);
+  assert.ok(Math.abs(previewBoth.w - previewNone.w) < 2, `${tag}: pinning both B4+B5 does not change Preview's WIDTH (0 pins ${previewNone.w}px, 2 pins ${previewBoth.w}px)`);
+  assert.ok(Math.abs(previewBoth.h - previewNone.h) < 2, `${tag}: pinning both B4+B5 does not change Preview's HEIGHT (0 pins ${previewNone.h}px, 2 pins ${previewBoth.h}px)`);
+  log(`  ${tag}: manuscript + Preview dimensions unaffected by pinning B4+B5 (editor ${Math.round(editorNone.w)}x${Math.round(editorNone.h)}px, preview ${Math.round(previewNone.w)}x${Math.round(previewNone.h)}px) OK`);
+}
+
+/** Opening/closing a popover must not resize Editor or Preview either (the whole point of a popover
+ *  OVERLAYING Preview instead of the old Rail's permanent third column). */
+async function popoverDoesNotResize(v) {
+  const tag = `${v.name} popover-no-resize`;
+  await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["read-aloud", "description-check"]) }, v.width, v.height);
+  await setText(TEXT);
+  await waitSurface(tag, "desktop");
+  const editorBefore = await rect("[data-demo-target=editor]");
+  const previewBefore = await cdp.evaluate(`(() => { const s = document.querySelector('[data-desktop-review-bar]').closest('section'); const r = s.getBoundingClientRect(); return { w: r.width, h: r.height }; })()`);
+  await realClick("[data-read-aloud-status-pill]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="read-aloud"]')`, { label: `${tag}: B4 popover opens` });
+  const editorOpen = await rect("[data-demo-target=editor]");
+  const previewOpen = await cdp.evaluate(`(() => { const s = document.querySelector('[data-desktop-review-bar]').closest('section'); const r = s.getBoundingClientRect(); return { w: r.width, h: r.height }; })()`);
+  assert.ok(Math.abs(editorOpen.w - editorBefore.w) < 1 && Math.abs(editorOpen.h - editorBefore.h) < 1, `${tag}: opening the popover must not resize Editor`);
+  assert.ok(Math.abs(previewOpen.w - previewBefore.w) < 1 && Math.abs(previewOpen.h - previewBefore.h) < 1, `${tag}: opening the popover must not resize Preview`);
+  const popover = await rect('[data-desktop-review-popover="read-aloud"]');
+  assert.ok(popover.b <= (await rect("[data-desktop-review-bar]")).t + 1, `${tag}: popover sits ABOVE the bar (overlay, not push)`);
+  log(`  ${tag}: opening a popover resizes neither Editor nor Preview OK`);
 }
 
 async function compactBottomSheet(v) {
@@ -212,44 +244,107 @@ async function compactBottomSheet(v) {
   log(`  ${tag}: full-width, <=75vh, backdrop, comfortable close target, no overflow OK`);
 }
 
-async function activePlaybackSurvivesSheetClose(v) {
+async function activePlaybackSurvivesClose(v) {
   const tag = `${v.name} playback-survives-close`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify([]) }, v.width, v.height); // 音読β UNPINNED
   await setText(TEXT);
-  await waitSurface(tag, "compact");
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer-start],[data-read-aloud-footer-pause]')`), false, `${tag}: no mini control while idle and unpinned`);
-  await realClick("[data-editor-review-hub-trigger]");
-  await cdp.waitFor(`!document.querySelector('${PANEL}').hasAttribute('hidden')`);
-  await realClick("[data-read-aloud-start=full]");
-  await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: reading starts from inside the sheet` });
-  await realClickAt(4, 4); // close via backdrop
-  await cdp.waitFor(`document.querySelector('${PANEL}').hasAttribute('hidden')`);
-  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-pause]')`, { label: `${tag}: mini control appears for the still-UNPINNED but actively-speaking tool` });
-  insideViewport(await rect("[data-read-aloud-footer-pause]"), `${tag} mini pause`);
-  await realClick("[data-read-aloud-footer-pause]", { scroll: false });
-  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-resume]')`, { label: `${tag}: pause from the mini control` });
-  await realClick("[data-read-aloud-footer-stop]", { scroll: false });
-  await cdp.waitFor(`!document.querySelector('[data-read-aloud-footer-pause],[data-read-aloud-footer-resume]')`, { label: `${tag}: stop from the mini control` });
-  log(`  ${tag}: closing the sheet never strands an in-progress reading OK`);
-}
-function insideViewport(r, tag) {
-  assert.ok(r && r.shown && r.l >= -0.5 && r.t >= -0.5 && r.r <= r.vw + 0.5 && r.b <= r.vh + 0.5, `${tag}: outside viewport ${JSON.stringify(r)}`);
+  await waitSurface(tag, v.surface);
+  if (v.surface === "compact") {
+    assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-footer-start],[data-read-aloud-footer-pause]')`), false, `${tag}: no mini control while idle and unpinned`);
+    await realClick("[data-editor-review-hub-trigger]");
+    await cdp.waitFor(`!document.querySelector('${PANEL}').hasAttribute('hidden')`);
+    await realClick("[data-read-aloud-start=full]");
+    await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: reading starts from inside the sheet` });
+    await realClickAt(4, 4); // close via backdrop
+    await cdp.waitFor(`document.querySelector('${PANEL}').hasAttribute('hidden')`);
+    await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-pause]')`, { label: `${tag}: mini control appears for the still-UNPINNED but actively-speaking tool` });
+    insideViewport(await rect("[data-read-aloud-footer-pause]"), `${tag} mini pause`);
+    await realClick("[data-read-aloud-footer-pause]", { scroll: false });
+    await cdp.waitFor(`!!document.querySelector('[data-read-aloud-footer-resume]')`, { label: `${tag}: pause from the mini control` });
+    await realClick("[data-read-aloud-footer-stop]", { scroll: false });
+    await cdp.waitFor(`!document.querySelector('[data-read-aloud-footer-pause],[data-read-aloud-footer-resume]')`, { label: `${tag}: stop from the mini control` });
+  } else {
+    assert.equal(await cdp.evaluate(`!!document.querySelector('[data-read-aloud-status-pill]')`), false, `${tag}: no status pill while idle and unpinned`);
+    await realClick("[data-editor-review-hub-trigger]");
+    await cdp.waitFor(`!document.querySelector('${PANEL}').hasAttribute('hidden')`);
+    await realClick("[data-read-aloud-start=full]");
+    await cdp.waitFor(`window.__ra.spoken.length >= 1`, { label: `${tag}: reading starts from inside the Hub popover` });
+    // Escape closes the Hub popover mid-reading
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+    await cdp.waitFor(`document.querySelector('${PANEL}').hasAttribute('hidden')`, { label: `${tag}: Escape closes the Hub popover` });
+    // On the desktop surface there is no direct-control mini element (no room for one on a one-line
+    // bar) -- the status PILL itself stays reachable (even unpinned, since it is actively speaking),
+    // and clicking it reopens the same daily-control card in its popover, from where pause/resume/stop
+    // are reachable exactly as they were before the Hub was opened.
+    await cdp.waitFor(`!!document.querySelector('[data-read-aloud-status-pill]')`, { label: `${tag}: status pill appears for the still-UNPINNED but actively-speaking tool` });
+    insideViewport(await rect("[data-read-aloud-status-pill]"), `${tag} status pill`);
+    await realClick("[data-read-aloud-status-pill]", { scroll: false });
+    await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-pause]')`, { label: `${tag}: reopening the popover shows pause (still playing)` });
+    await realClick('[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-pause]', { scroll: false });
+    await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-resume]')`, { label: `${tag}: pause from the reopened popover` });
+    await realClick('[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-stop]', { scroll: false });
+    await cdp.waitFor(`!document.querySelector('[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-pause],[data-desktop-review-popover="read-aloud"] [data-read-aloud-card-resume]')`, { label: `${tag}: stop from the reopened popover` });
+  }
+  log(`  ${tag}: closing the ${v.surface === "compact" ? "sheet" : "Hub popover"} never strands an in-progress reading OK`);
 }
 
-async function railCandidateNavigation(v) {
-  const tag = `${v.name} rail-nav`;
+async function desktopCandidateNavigation(v) {
+  const tag = `${v.name} desktop-nav`;
   await openWith(
     { tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["description-check"]), "tatespun.descriptionCheck.v1": JSON.stringify({ enabled: true, categories: { A: true, B: true, C: false } }) },
     v.width, v.height,
   );
   await setText(TEXT);
-  await waitSurface(tag, "rail");
+  await waitSurface(tag, "desktop");
   await cdp.waitFor(`document.querySelectorAll('[data-description-mark]').length > 0`, { label: `${tag}: markers` });
-  const CARD = "[data-review-rail] [data-review-dock-card=description-check]";
-  assert.equal(await cdp.evaluate(`!!document.querySelector('${CARD}')`), true, `${tag}: card is inside the rail`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-review-dock-card=description-check]')`), false, `${tag}: no permanently-open popover before the pill is clicked`);
+  await realClick("[data-description-check-footer]", { scroll: false });
+  const CARD = '[data-desktop-review-popover="description-check"] [data-review-dock-card=description-check]';
+  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: pill opens the quick popover` });
   await realClick(`${CARD} [data-description-card-next]`, { scroll: false });
   await cdp.waitFor(`document.querySelector('${CARD} [data-description-card-position]').textContent.trim().startsWith('1 /')`, { label: `${tag}: 次へ reaches the first candidate`, timeoutMs: 8000 });
-  log(`  ${tag}: B5 candidate navigation works from the Rail card OK`);
+  log(`  ${tag}: B5 candidate navigation works from the desktop quick popover OK`);
+}
+
+/** Revision 4's core interaction contract: only one popover open at a time; selecting a different
+ *  tool switches (never stacks); Escape / an outside press close whichever is open. */
+async function popoverMutualExclusivity(v) {
+  const tag = `${v.name} mutual-exclusivity`;
+  await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["read-aloud", "description-check"]) }, v.width, v.height);
+  await setText(TEXT);
+  await waitSurface(tag, "desktop");
+  const open = () => cdp.evaluate(`({
+    hub: !document.querySelector('${PANEL}').hasAttribute('hidden'),
+    ra: !!document.querySelector('[data-desktop-review-popover="read-aloud"]'),
+    dc: !!document.querySelector('[data-desktop-review-popover="description-check"]'),
+  })`);
+
+  await realClick("[data-read-aloud-status-pill]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="read-aloud"]')`, { label: `${tag}: B4 popover opens` });
+  assert.deepEqual(await open(), { hub: false, ra: true, dc: false }, `${tag}: only the B4 popover is open`);
+
+  // selecting B5 switches (does not stack)
+  await realClick("[data-description-check-footer]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="description-check"]')`, { label: `${tag}: B5 popover opens` });
+  assert.deepEqual(await open(), { hub: false, ra: false, dc: true }, `${tag}: switching to B5 closes B4 (never both)`);
+
+  // opening 見直し switches away from B5
+  await realClick("[data-editor-review-hub-trigger]", { scroll: false });
+  await cdp.waitFor(`!document.querySelector('${PANEL}').hasAttribute('hidden')`, { label: `${tag}: Hub opens` });
+  assert.deepEqual(await open(), { hub: true, ra: false, dc: false }, `${tag}: opening 見直し closes the quick popover`);
+
+  // Escape closes the Hub
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await cdp.waitFor(`document.querySelector('${PANEL}').hasAttribute('hidden')`, { label: `${tag}: Escape closes the Hub popover` });
+
+  // an outside press closes a quick popover
+  await realClick("[data-read-aloud-status-pill]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="read-aloud"]')`, { label: `${tag}: B4 popover reopens` });
+  await realClickAt(4, 4);
+  await cdp.waitFor(`!document.querySelector('[data-desktop-review-popover="read-aloud"]')`, { label: `${tag}: an outside press closes the quick popover` });
+  log(`  ${tag}: one popover at a time / switching / Escape / outside-press all OK`);
 }
 
 async function maxTwoOnBothSurfaces(v) {
@@ -277,13 +372,17 @@ try {
     for (const pins of COMBOS) await comboCheck(v, pins);
     log(`  ${v.name} (${v.surface}): ${COMBOS.length} pin combinations OK`);
   }
-  for (const v of VIEWPORTS.filter((x) => x.surface === "rail")) {
-    await manuscriptHeightUnaffectedByRail(v);
-    await railCandidateNavigation(v);
+  for (const v of VIEWPORTS.filter((x) => x.surface === "desktop")) {
+    await manuscriptAndPreviewUnaffectedByPins(v);
+    await popoverDoesNotResize(v);
+    await desktopCandidateNavigation(v);
+    await popoverMutualExclusivity(v);
   }
   for (const v of VIEWPORTS.filter((x) => x.surface === "compact")) {
     await compactBottomSheet(v);
-    await activePlaybackSurvivesSheetClose(v);
+  }
+  for (const v of VIEWPORTS) {
+    await activePlaybackSurvivesClose(v);
   }
   for (const v of [VIEWPORTS.find((x) => x.name === "390x844"), VIEWPORTS.find((x) => x.name === "1280x720")].filter(Boolean)) {
     await maxTwoOnBothSurfaces(v);

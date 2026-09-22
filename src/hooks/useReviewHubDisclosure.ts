@@ -23,7 +23,15 @@ import { recordReviewHubOpen } from "@/lib/reviewHubUsage";
  */
 export function useReviewHubDisclosure(
   chrome: { focusMode: boolean; keyboardActive: boolean },
-  paneRef: RefObject<HTMLElement | null>
+  paneRef: RefObject<HTMLElement | null>,
+  /**
+   * TSP-Review-UI (Revision 4): the Review Hub panel can now be portalled somewhere other than
+   * inside `wrapperRef` (the Desktop Review Bar at the bottom of Preview, instead of the manuscript
+   * footer) -- a press inside that portalled content is still DOM-outside `wrapperRef`, so without
+   * this it would be treated as an outside press and close the panel the instant it opens. Any of
+   * these containers additionally counts as "inside" for the outside-press check.
+   */
+  extraContainmentRefs?: readonly RefObject<HTMLElement | null>[]
 ) {
   const suppressed = chrome.focusMode || chrome.keyboardActive;
   const [requestedOpen, setRequestedOpen] = useState(false);
@@ -49,12 +57,14 @@ export function useReviewHubDisclosure(
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setRequestedOpen(false);
-      }
+      const target = event.target as Node;
+      if (wrapperRef.current?.contains(target)) return;
+      if (extraContainmentRefs?.some((ref) => ref.current?.contains(target))) return;
+      setRequestedOpen(false);
     };
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- extraContainmentRefs is a ref array, not reactive state
   }, [open]);
 
   // Follow the pane/footer geometry (window, keyboard, rotation, footer folding).
@@ -75,12 +85,15 @@ export function useReviewHubDisclosure(
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       if (!open || !shouldCloseReviewHubOnKey(event.key, event.nativeEvent.isComposing)) return;
-      const wrapper = wrapperRef.current;
-      const focusWasInPanel = !!wrapper?.querySelector("[data-review-hub-panel]")?.contains(document.activeElement);
+      // TSP-Review-UI (Revision 4): the panel (and its trigger) may now be portalled outside
+      // `wrapperRef`'s own DOM subtree (the Desktop Review Bar) -- there is only ever one of each
+      // in the document, so a global lookup is correct regardless of where either is mounted.
+      const focusWasInPanel = !!document.querySelector("[data-review-hub-panel]")?.contains(document.activeElement);
       setRequestedOpen(false);
       if (!focusWasInPanel) return;
-      // Two triggers exist in the DOM (expanded + mobile-collapsed footer); only one is displayed.
-      const triggers = wrapper?.querySelectorAll<HTMLElement>("[data-editor-review-hub-trigger]") ?? [];
+      // Multiple triggers can exist in the DOM (expanded footer / mobile-collapsed footer / Desktop
+      // Review Bar); only one is displayed at a time.
+      const triggers = document.querySelectorAll<HTMLElement>("[data-editor-review-hub-trigger]");
       Array.from(triggers).find((trigger) => trigger.offsetParent !== null)?.focus();
     },
     [open]

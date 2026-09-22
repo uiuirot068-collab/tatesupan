@@ -36,7 +36,7 @@ import InlineMemoAccordion from "./InlineMemoAccordion";
 import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
 import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
-import { ReadAloudDockCard } from "./ReadAloudDockCard";
+import { DesktopReviewBar } from "./DesktopReviewBar";
 import { ReadAloudPronunciationSection } from "./ReadAloudPronunciationPanel";
 import { useReadAloudPronunciation } from "@/hooks/useReadAloudPronunciation";
 import type { ReviewSurface } from "@/hooks/useReviewSurface";
@@ -46,7 +46,6 @@ import { useReadAloud } from "@/hooks/useReadAloud";
 import { useDescriptionCheck } from "@/hooks/useDescriptionCheck";
 import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
 import {
-  DescriptionCheckDockCard,
   DescriptionCheckFooterPill,
   DescriptionCheckReviewSection,
   DescriptionMarkDetailCard,
@@ -140,14 +139,15 @@ interface EditorPaneProps {
    */
   keyboardActive?: boolean;
   /**
-   * TSP-Review-UI (Revision 3): where pinned Review tools (音読β / 描写・修飾チェックβ) render.
-   * "rail" portals their daily-control cards into `reviewRailNode` (a sidebar TategakiEditor
-   * renders beside the manuscript); "compact" shows a one-line mini control instead and the full
-   * Review Hub panel becomes a Bottom Sheet. See `useReviewSurface`.
+   * TSP-Review-UI (Revision 4): where pinned Review tools (音読β / 描写・修飾チェックβ) render.
+   * "desktop" portals the interactive `<DesktopReviewBar>` (見直し + per-tool quick popovers) into
+   * `reviewBarNode` (a mount point TategakiEditor renders at the bottom of the Preview pane);
+   * "compact" shows a one-line mini control instead and the full Review Hub panel becomes a
+   * Bottom Sheet. See `useReviewSurface`.
    */
   reviewSurface: ReviewSurface;
-  /** The DOM node to portal Rail cards into. Only used while `reviewSurface === "rail"`. */
-  reviewRailNode?: HTMLDivElement | null;
+  /** The DOM node to portal the Desktop Review Bar into. Only used while `reviewSurface === "desktop"`. */
+  reviewBarNode?: HTMLDivElement | null;
 }
 
 export interface EditorPaneHandle {
@@ -189,7 +189,7 @@ function EditorPaneInner(
     onExitFocus,
     keyboardActive = false,
     reviewSurface,
-    reviewRailNode = null,
+    reviewBarNode = null,
   }: EditorPaneProps,
   ref: React.Ref<EditorPaneHandle>
 ) {
@@ -330,6 +330,11 @@ function EditorPaneInner(
   // focus-mode / mobile-keyboard hiding, plus a counter that asks the existing
   // WritingCheckBar to open its result list.
   const paneRef = useRef<HTMLDivElement>(null);
+  // TSP-Review-UI (Revision 4): the Review Hub panel can be portalled into the Desktop Review Bar
+  // (bottom of Preview) instead of rendered inline here -- a press inside it is DOM-outside
+  // `reviewHubFooterRef`, so it must count as "inside" for the disclosure hook's outside-press check
+  // too, or the panel would close itself the instant it opens on the desktop surface.
+  const desktopBarWrapperRef = useRef<HTMLDivElement>(null);
   // (destructured on purpose: the hook also returns a ref, and React Compiler lint
   // treats property reads on a value that carries a ref as ref access during render)
   const {
@@ -339,7 +344,7 @@ function EditorPaneInner(
     wrapperRef: reviewHubFooterRef,
     onKeyDown: handleReviewHubKeyDown,
     maxHeightPx: reviewHubMaxHeightPx,
-  } = useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef);
+  } = useReviewHubDisclosure({ focusMode, keyboardActive }, paneRef, [desktopBarWrapperRef]);
   const [writingCheckResultsRequest, setWritingCheckResultsRequest] = useState(0);
   // TSP-B2: which Review Hub tools are shown in the footer. 文章チェックβ's footer strip / one-line checkbox follow
   // this (display only -- `writingCheckEnabled` is separate). With both shown, pin order = top-to-bottom order.
@@ -676,6 +681,54 @@ function EditorPaneInner(
     revealWritingCheckSurface();
     setSettingsOpen(true);
   };
+
+  // TSP-Review-UI (Revision 4): ONE element, used in exactly one of two mutually-exclusive places
+  // depending on `reviewSurface` -- portalled into the Desktop Review Bar (bottom of Preview) on
+  // "desktop", or rendered inline here (its own `sheet` variant) on "compact". Built once so both
+  // call sites always agree on open state / sections / content.
+  const reviewHubPanelElement = (
+    <ReviewHubPanel
+      open={reviewHubOpen}
+      onClose={closeReviewHub}
+      maxHeightPx={reviewHubMaxHeightPx}
+      sheet={reviewSurface === "compact"}
+      sections={{
+        "writing-check": (
+          <WritingCheckReviewSection
+            enabled={writingCheckEnabled}
+            onToggle={setWritingCheckEnabled}
+            summary={summarizeWritingIssues(writingIssuesForContent)}
+            onShowResults={handleReviewHubShowResults}
+            onOpenSettings={handleReviewHubOpenSettings}
+          />
+        ),
+        "character-count": <CharacterCountReviewSection count={visualLength} />,
+        "read-aloud": (
+          <>
+            <ReadAloudReviewSection {...readAloudViewProps} />
+            <ReadAloudPronunciationSection
+              held={held}
+              entries={pronunciation.entries}
+              onUpsert={pronunciation.upsertEntry}
+              onRemove={pronunciation.removeEntry}
+            />
+          </>
+        ),
+        "description-check": (
+          <DescriptionCheckReviewSection
+            enabled={descriptionCheck.enabled}
+            categories={descriptionCheck.categories}
+            onToggle={descriptionCheck.setEnabled}
+            onToggleCategory={descriptionCheck.toggleCategory}
+            marks={descriptionCheck.marks}
+            current={descriptionCheck.current}
+            activeMark={descriptionActiveMark}
+            onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
+          />
+        ),
+      }}
+    />
+  );
 
   return (
     <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
@@ -1081,40 +1134,39 @@ function EditorPaneInner(
         </div>
       )}
 
-      {/* TSP-Review-UI (Revision 3): on the "rail" surface the pinned tools' daily-control cards
-          are portalled into the sidebar TategakiEditor renders beside the manuscript (`reviewRailNode`)
-          -- NOT rendered here -- so they cost the manuscript zero height on desktop. On the "compact"
-          surface (phone + narrower desktop widths) there is no permanent card at all; a one-line mini
-          control lives in the status row below instead, and full controls open in the Review Hub
-          Bottom Sheet. */}
-      {reviewSurface === "rail" &&
-        reviewRailNode &&
-        !focusMode &&
-        (footerPins.includes("read-aloud") || footerPins.includes("description-check")) &&
+      {/* TSP-Review-UI (Revision 4): on the "desktop" surface the interactive Review Bar (見直し +
+          per-tool quick popovers) is portalled into the mount point TategakiEditor renders at the
+          bottom of the Preview pane (`reviewBarNode`) -- NOT rendered here -- so it costs the
+          manuscript zero height and sits visually with Preview instead of the editor. On the
+          "compact" surface (phone + narrower desktop widths) there is no permanent card at all; a
+          one-line mini control lives in the status row below instead, and full controls open in the
+          Review Hub Bottom Sheet. */}
+      {reviewSurface === "desktop" &&
+        reviewBarNode &&
         createPortal(
-          <>
-            {footerPins.map((id) =>
-              id === "read-aloud" ? (
-                <ReadAloudDockCard key={id} {...readAloudViewProps} />
-              ) : id === "description-check" ? (
-                <DescriptionCheckDockCard
-                  key={id}
-                  enabled={descriptionCheck.enabled}
-                  categories={descriptionCheck.categories}
-                  onToggle={descriptionCheck.setEnabled}
-                  onToggleCategory={descriptionCheck.toggleCategory}
-                  marks={descriptionCheck.marks}
-                  current={descriptionCheck.current}
-                  activeMark={descriptionActiveMark}
-                  currentMark={descriptionCurrentMark}
-                  onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
-                  onPrev={() => stepDescription(-1)}
-                  onNext={() => stepDescription(1)}
-                />
-              ) : null,
-            )}
-          </>,
-          reviewRailNode,
+          <DesktopReviewBar
+            wrapperRef={desktopBarWrapperRef}
+            reviewHubOpen={reviewHubOpen}
+            onToggleReviewHub={toggleReviewHub}
+            reviewHubPanel={reviewHubPanelElement}
+            readAloudPinned={footerPins.includes("read-aloud")}
+            readAloud={readAloudViewProps}
+            descriptionPinned={footerPins.includes("description-check")}
+            description={{
+              enabled: descriptionCheck.enabled,
+              categories: descriptionCheck.categories,
+              onToggle: descriptionCheck.setEnabled,
+              onToggleCategory: descriptionCheck.toggleCategory,
+              marks: descriptionCheck.marks,
+              current: descriptionCheck.current,
+              activeMark: descriptionActiveMark,
+              currentMark: descriptionCurrentMark,
+              onJump: (mark) => navigateToGlobalOffset(mark.start, mark.end),
+              onPrev: () => stepDescription(-1),
+              onNext: () => stepDescription(1),
+            }}
+          />,
+          reviewBarNode,
         )}
       <div
         data-writing-check-surface=""
@@ -1166,7 +1218,10 @@ function EditorPaneInner(
             text stays in the title / dialog). */}
         <div className="flex min-w-0 items-center gap-2">
           <div data-ruby-tcy-status="" className="min-w-0 flex-1"><EditorSyntaxHelp /></div>
-          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />
+          {/* TSP-Review-UI (Revision 4): on the "desktop" surface the Desktop Review Bar (bottom of
+              Preview) owns the ONE 見直し trigger instead -- rendering a second one here would be
+              redundant and confusing (two buttons that both open the same panel). */}
+          {reviewSurface !== "desktop" && <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />}
         </div>
         <div
           data-editor-footer-controls
@@ -1222,50 +1277,12 @@ function EditorPaneInner(
         </div>
       </div>
 
-      {descriptionActiveMark && !(reviewSurface === "rail" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
+      {descriptionActiveMark && !(reviewSurface === "desktop" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
         <DescriptionMarkDetailCard mark={descriptionActiveMark} onDismiss={() => setDescriptionDismissed(descriptionActiveMark)} />
       )}
-      <ReviewHubPanel
-        open={reviewHubOpen}
-        onClose={closeReviewHub}
-        maxHeightPx={reviewHubMaxHeightPx}
-        sheet={reviewSurface === "compact"}
-        sections={{
-          "writing-check": (
-            <WritingCheckReviewSection
-              enabled={writingCheckEnabled}
-              onToggle={setWritingCheckEnabled}
-              summary={summarizeWritingIssues(writingIssuesForContent)}
-              onShowResults={handleReviewHubShowResults}
-              onOpenSettings={handleReviewHubOpenSettings}
-            />
-          ),
-          "character-count": <CharacterCountReviewSection count={visualLength} />,
-          "read-aloud": (
-            <>
-              <ReadAloudReviewSection {...readAloudViewProps} />
-              <ReadAloudPronunciationSection
-                held={held}
-                entries={pronunciation.entries}
-                onUpsert={pronunciation.upsertEntry}
-                onRemove={pronunciation.removeEntry}
-              />
-            </>
-          ),
-          "description-check": (
-            <DescriptionCheckReviewSection
-              enabled={descriptionCheck.enabled}
-              categories={descriptionCheck.categories}
-              onToggle={descriptionCheck.setEnabled}
-              onToggleCategory={descriptionCheck.toggleCategory}
-              marks={descriptionCheck.marks}
-              current={descriptionCheck.current}
-              activeMark={descriptionActiveMark}
-              onJump={(mark) => navigateToGlobalOffset(mark.start, mark.end)}
-            />
-          ),
-        }}
-      />
+      {/* On "desktop" this same element is portalled into the Desktop Review Bar instead (see above);
+          rendering it a second time here would duplicate `id={REVIEW_HUB_PANEL_ID}` in the DOM. */}
+      {reviewSurface !== "desktop" && reviewHubPanelElement}
       </div>
     </div>
   );

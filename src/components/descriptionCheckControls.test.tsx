@@ -273,14 +273,17 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(read("src/components/Header.tsx")).not.toMatch(/描写|DescriptionCheck/);
     expect(pane).toContain('"description-check": (');
     expect(pane).toContain("<DescriptionCheckReviewSection");
-    expect(pane).toContain("<DescriptionCheckDockCard");
+    // Revision 4: the dock card itself now lives inside DesktopReviewBar.tsx (portalled via EditorPane),
+    // not directly in EditorPane's own JSX -- see the next test.
+    expect(read("src/components/DesktopReviewBar.tsx")).toContain("<DescriptionCheckDockCard {...description} />");
   });
 
-  it("pinned = a Review Rail card on wide desktop (portalled, zero manuscript height cost), a compact mini pill otherwise; the Hub keeps the full list", () => {
+  it("pinned = a status pill on the Desktop Review Bar (bottom of Preview) that opens a quick popover (portalled, zero manuscript/Preview height cost), a compact mini pill otherwise; the Hub keeps the full list", () => {
     expect(pane).toContain("createPortal(");
-    expect(pane).toContain("reviewRailNode,");
-    expect(pane).toContain("onPrev={() => stepDescription(-1)}");
-    expect(pane).toContain("onNext={() => stepDescription(1)}");
+    expect(pane).toContain("reviewBarNode,");
+    expect(pane).toContain("description={{");
+    expect(pane).toContain("onPrev: () => stepDescription(-1),");
+    expect(pane).toContain("onNext: () => stepDescription(1),");
     expect(pane).toContain('reviewSurface === "compact" && footerPins.includes("description-check") && (\n              <DescriptionCheckFooterPill');
     expect(read("src/components/ReviewHubFooterPinnedTools.tsx")).not.toMatch(/description|readAloud|read-aloud/i);
   });
@@ -311,8 +314,8 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(pane).toContain("setRecheckNonce((value) => value + 1)");
   });
 
-  it("the floating detail card only serves the tool when it has no Rail card (unpinned, or pinned on the compact surface where the Rail does not exist); a pinned Rail card shows the same detail itself, and the card hides while the Hub is open, in 集中モード and with the keyboard", () => {
-    expect(pane).toContain('!(reviewSurface === "rail" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive');
+  it("the floating detail card only serves the tool when it has no desktop quick popover (unpinned, or pinned on the compact surface where the Desktop Review Bar does not exist); a pinned popover shows the same detail itself, and the card hides while the Hub is open, in 集中モード and with the keyboard", () => {
+    expect(pane).toContain('!(reviewSurface === "desktop" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive');
   });
 
   it("a single click / tap reports the caret (no double-click): click, select, keyup handlers all feed the detail", () => {
