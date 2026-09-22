@@ -54,6 +54,7 @@ import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
 import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/txtTransfer";
+import { readDocxFile } from "@/lib/docxImport";
 import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
@@ -338,6 +339,7 @@ export default function TategakiEditor({
   const reviewBarEligible = reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed;
   const [reviewBarNode, setReviewBarNode] = useState<HTMLDivElement | null>(null);
   const txtInputRef = useRef<HTMLInputElement | null>(null);
+  const docxInputRef = useRef<HTMLInputElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = demoMode || isEphemeralDocId(docId);
@@ -370,6 +372,20 @@ export default function TategakiEditor({
     setToast(imageIds.length > 0
       ? "TXTを読み込みました。画像データはTXTに含まれないため、画像を再設定してください。"
       : "TXTを読み込みました。");
+  };
+
+  const importDocx = async (file: File) => {
+    const result = await readDocxFile(file);
+    if (content.length > 0 && !window.confirm("現在の原稿をDOCXから取り込んだ本文で置き換えます。元のDOCXは変更されません。続けますか？")) return;
+    setContent(result.text);
+    setImages({});
+    setImageLayerOrder({});
+    setUnresolvedCloudImages(null);
+    setToast(
+      result.notices.length > 0
+        ? `DOCXを読み込みました。${result.notices[0]}。対応範囲はヘルプをご確認ください。`
+        : "DOCXを読み込みました。"
+    );
   };
 
   const applyCloudProject = useCallback((project: Project) => {
@@ -765,6 +781,17 @@ export default function TategakiEditor({
           if (file) void importTxt(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
         }}
       />
+      <input
+        ref={docxInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void importDocx(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
+        }}
+      />
       {/* Focus mode collapses the full header at every viewport width, so the
           vertical space it occupied is reclaimed by the manuscript/preview
           workspace. `hidden` (display:none) removes it from layout and tab
@@ -976,6 +1003,7 @@ export default function TategakiEditor({
           onOpenToc={() => { setBookPartsInitialTab("toc"); setIsBookPartsModalOpen(true); }}
           onOpenChecklist={() => setIsChecklistOpen(true)}
           onImportSourceTxt={() => txtInputRef.current?.click()}
+          onImportDocx={() => docxInputRef.current?.click()}
           onExportSourceTxt={exportSourceTxt}
           onExportReadableTxt={exportReadableTxt}
           onClose={() => setActiveDrawer(null)}
