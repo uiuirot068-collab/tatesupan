@@ -38,8 +38,8 @@ export const REVIEW_HUB_TOOLS: readonly ReviewHubToolMeta[] = [
   },
   {
     id: "character-count",
-    title: "文字数カウント",
-    summary: "画面下の表示と同じ、現在の原稿の文字数です。",
+    title: "作業カウンター",
+    summary: "執筆中の作業時間と、今回書いた文字数を記録します。",
   },
   {
     id: "read-aloud",

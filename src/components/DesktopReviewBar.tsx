@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { ReviewHubTrigger } from "./ReviewHub";
-import { ReadAloudDockCard } from "./ReadAloudDockCard";
-import { ReadAloudStatusPill, type ReadAloudViewProps } from "./ReadAloudControls";
+import { ReadAloudDockCard, ReadAloudInlineBar } from "./ReadAloudDockCard";
+import { type ReadAloudViewProps } from "./ReadAloudControls";
 import { DescriptionCheckDockCard, DescriptionCheckFooterPill, type DescriptionDockCardProps } from "./DescriptionCheckControls";
 
 /**
@@ -32,6 +32,13 @@ interface DesktopReviewBarProps {
   readAloud: ReadAloudViewProps;
   descriptionPinned: boolean;
   description: Omit<DescriptionDockCardProps, "onPrev" | "onNext"> & { onPrev: () => void; onNext: () => void };
+  writingCheckPinned?: boolean;
+  writingCheckEnabled?: boolean;
+  writingCheckCount?: number;
+  onOpenWritingCheck?: () => void;
+  writingCheckHost?: ReactNode;
+  workSessionPinned?: boolean;
+  workSessionPill?: ReactNode;
 }
 
 /**
@@ -50,6 +57,13 @@ export function DesktopReviewBar({
   readAloud,
   descriptionPinned,
   description,
+  writingCheckPinned = false,
+  writingCheckEnabled = false,
+  writingCheckCount = 0,
+  onOpenWritingCheck,
+  writingCheckHost = null,
+  workSessionPinned = false,
+  workSessionPill = null,
 }: DesktopReviewBarProps) {
   const [quickPopover, setQuickPopover] = useState<"read-aloud" | "description-check" | null>(null);
   const activePopover = reviewHubOpen ? "hub" : quickPopover;
@@ -93,7 +107,7 @@ export function DesktopReviewBar({
         </div>
       )}
       {activePopover === "description-check" && (
-        <div data-desktop-review-popover="description-check" className="absolute bottom-full left-0 z-20 mb-1.5 w-[19rem] max-w-[calc(100vw-2rem)]">
+        <div data-desktop-review-popover="description-check" className="absolute bottom-full left-0 z-20 mb-1.5 w-[24rem] max-w-[calc(100vw-2rem)]">
           <DescriptionCheckDockCard {...description} />
         </div>
       )}
@@ -101,9 +115,26 @@ export function DesktopReviewBar({
           instead of the manuscript footer on this surface) -- its own "anchored" variant already
           renders `absolute bottom-full ...`, so it needs no extra positioning wrapper here. */}
       {reviewHubPanel}
+      {writingCheckHost ? (
+        <div data-desktop-writing-check-host="" className="pointer-events-none absolute inset-x-0 bottom-0 h-0 z-30">
+          <div className="pointer-events-auto relative w-full">{writingCheckHost}</div>
+        </div>
+      ) : null}
 
       <ReviewHubTrigger open={reviewHubOpen} onToggle={openHub} />
-      {showReadAloud && <ReadAloudStatusPill state={readAloud.state} onOpen={() => selectQuick("read-aloud")} />}
+      {writingCheckPinned && (
+        <button
+          type="button"
+          data-desktop-writing-check-pill=""
+          onClick={() => {
+            if (writingCheckEnabled && writingCheckCount > 0) onOpenWritingCheck?.();
+            else openHub();
+          }}
+          className="shrink-0 whitespace-nowrap rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {writingCheckEnabled ? `文章β ${writingCheckCount.toLocaleString("ja-JP")}件` : "文章β OFF"}
+        </button>
+      )}
       {descriptionPinned && (
         <DescriptionCheckFooterPill
           enabled={description.enabled}
@@ -111,6 +142,12 @@ export function DesktopReviewBar({
           count={description.marks.length}
           onOpen={() => selectQuick("description-check")}
         />
+      )}
+      {workSessionPinned && workSessionPill}
+      {showReadAloud && (
+        <div className="ml-auto min-w-0">
+          <ReadAloudInlineBar {...readAloud} />
+        </div>
       )}
     </div>
   );

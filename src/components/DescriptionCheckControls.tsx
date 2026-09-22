@@ -83,7 +83,7 @@ export function DescriptionMarkDetailBody({ mark }: { mark: DescriptionMark }) {
         <span data-description-detail-text="">「{mark.text}」</span>
       </p>
       <p data-description-detail-reason="">{mark.reason}</p>
-      <p data-description-detail-keep="" className="text-ink/60">
+      <p data-description-detail-keep="" className="text-ink/70">
         {DESCRIPTION_KEEP_NOTE}
       </p>
     </div>
@@ -107,7 +107,7 @@ function CategoryToggles(props: Pick<DescriptionCheckViewProps, "categories" | "
           <span className="text-[11px] leading-snug">
             <span className={`mr-1 rounded px-1 font-semibold ${CATEGORY_TINT[category]}`}>{category}</span>
             <span className="font-medium">{DESCRIPTION_CATEGORY_TITLES[category]}</span>
-            <span className="block text-ink/60">{DESCRIPTION_CATEGORY_SUMMARIES[category]}</span>
+            <span className="block text-ink/70">{DESCRIPTION_CATEGORY_SUMMARIES[category]}</span>
           </span>
         </label>
       ))}
@@ -136,7 +136,7 @@ export function DescriptionCheckReviewSection(props: DescriptionCheckViewProps) 
       {enabled ? (
         <>
           <CategoryToggles categories={categories} onToggleCategory={props.onToggleCategory} />
-          <p data-description-not-judgement="" className="text-[11px] text-ink/60">
+          <p data-description-not-judgement="" className="text-[11px] text-ink/70">
             {DESCRIPTION_NOT_A_JUDGEMENT_NOTE}
           </p>
           {none ? (
@@ -148,7 +148,7 @@ export function DescriptionCheckReviewSection(props: DescriptionCheckViewProps) 
               <p data-description-check-status="" role="status" className="text-[11px] font-semibold tabular-nums text-ink/70">
                 {current ? `候補 ${marks.length.toLocaleString("ja-JP")}件` : "確認中…"}
               </p>
-              <p data-description-hint="" className="text-[11px] text-ink/60">
+              <p data-description-hint="" className="text-[11px] text-ink/70">
                 {DESCRIPTION_CLICK_HINT}
               </p>
             </>
@@ -161,7 +161,7 @@ export function DescriptionCheckReviewSection(props: DescriptionCheckViewProps) 
           ) : null}
 
           {!none && current && marks.length === 0 ? (
-            <p data-description-empty="" className="text-[11px] text-ink/60">
+            <p data-description-empty="" className="text-[11px] text-ink/70">
               選んだ種類では候補が見つかりませんでした。
             </p>
           ) : null}
@@ -184,7 +184,7 @@ export function DescriptionCheckReviewSection(props: DescriptionCheckViewProps) 
                       <span className="ml-1">
                         <CategoryBadge category={mark.category} />
                       </span>
-                      <span className="block text-ink/60">{mark.reason}</span>
+                      <span className="block text-ink/70">{mark.reason}</span>
                     </button>
                   </li>
                 ))}
@@ -193,7 +193,7 @@ export function DescriptionCheckReviewSection(props: DescriptionCheckViewProps) 
           ) : null}
         </>
       ) : (
-        <p data-description-off-note="" className="text-[11px] text-ink/60">
+        <p data-description-off-note="" className="text-[11px] text-ink/70">
           OFFのあいだは何も解析しません。使うと、形容・様子の説明になっている表現に色をつけてお知らせします（最初は「A」だけ）。
         </p>
       )}
@@ -224,7 +224,7 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
     <section
       data-review-dock-card="description-check"
       aria-label="描写・修飾チェックβ"
-      className="min-w-[15rem] flex-1 rounded-lg border border-ink/15 bg-base p-1.5 text-xs text-ink"
+      className="min-w-[15rem] flex-1 rounded-lg border border-ink/15 bg-base p-2.5 text-xs text-ink"
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-[12px] font-bold">描写・修飾チェックβ</h3>
@@ -241,11 +241,11 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
       </div>
 
       {!enabled ? (
-        <p data-description-card-off="" className="mt-1 text-[11px] text-ink/60">
+        <p data-description-card-off="" className="mt-1 text-[11px] text-ink/70">
           いまはオフです。ONにすると、形容・様子の説明になっている表現に色をつけます。
         </p>
       ) : (
-        <div className="mt-1 space-y-1">
+        <div className="mt-2 space-y-2">
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-[11px] text-ink/70">対象</span>
             {DESCRIPTION_CATEGORIES.map((category) => (
@@ -286,8 +286,8 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
               </div>
 
               {currentMark ? (
-                <div data-description-card-current="" className="rounded border border-ink/10 bg-ink/[0.03] px-1.5 py-1">
-                  <p className="truncate text-[12px] font-semibold">「{currentMark.text}」</p>
+                <div data-description-card-current="" className="rounded border border-ink/10 bg-ink/[0.03] px-2.5 py-2">
+                  <p className="text-[13px] font-semibold leading-relaxed">「{currentMark.text}」</p>
                   <p className="flex items-center justify-between gap-1.5 text-[11px]">
                     <CategoryBadge category={currentMark.category} />
                     <button
@@ -301,14 +301,14 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
                     </button>
                   </p>
                   {reasonOpen ? (
-                    <div data-description-card-reason="" className="mt-1 space-y-0.5 text-[11px] leading-snug">
+                    <div data-description-card-reason="" className="mt-2 space-y-1 text-[12px] leading-relaxed">
                       <p>{currentMark.reason}</p>
-                      <p className="text-ink/60">{DESCRIPTION_KEEP_NOTE}</p>
+                      <p className="text-ink/70">{DESCRIPTION_KEEP_NOTE}</p>
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <p data-description-card-hint="" className="text-[11px] text-ink/60">
+                <p data-description-card-hint="" className="text-[11px] text-ink/70">
                   「次へ」で最初の候補へ移動します。{DESCRIPTION_CLICK_HINT}
                 </p>
               )}

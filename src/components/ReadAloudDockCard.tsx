@@ -15,6 +15,56 @@ const TARGET_HINTS: Record<ReadAloudMode, string> = {
   full: "原稿の最初から最後まで読みます。",
 };
 
+/** Compact desktop Preview-footer control: scope is always visible; advanced voice/speed/dictionary live in 見直し. */
+export function ReadAloudInlineBar(props: ReadAloudViewProps) {
+  const { state, target, held } = props;
+  const unavailable = describeReadAloudAvailability(state);
+  const active = state.status !== "idle";
+  const playDisabled = unavailable !== null || (target === "selection" && !held);
+  return (
+    <div data-read-aloud-inline-bar="" className="flex min-w-0 items-center gap-1 text-[11px] text-ink/80">
+      <span className="shrink-0 font-semibold">音読範囲</span>
+      <span role="radiogroup" aria-label="音読範囲" className="flex shrink-0 items-center gap-1">
+        {MODES.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            role="radio"
+            aria-checked={target === mode}
+            data-read-aloud-inline-target={mode}
+            onClick={() => props.onTargetChange(mode)}
+            className={`${PILL_BUTTON} ${target === mode ? "border-ink/50 bg-ink/10 font-semibold text-ink" : ""}`}
+          >
+            {READ_ALOUD_TARGET_TITLES[mode]}
+          </button>
+        ))}
+      </span>
+      {active ? (
+        <span className="flex shrink-0 items-center gap-1">
+          {state.status === "speaking" ? (
+            <button type="button" data-read-aloud-inline-pause="" onClick={props.onPause} className={PILL_BUTTON}>⏸</button>
+          ) : (
+            <button type="button" data-read-aloud-inline-resume="" onClick={props.onResume} className={PILL_BUTTON}>▶</button>
+          )}
+          <button type="button" data-read-aloud-inline-stop="" onClick={props.onStop} className={PILL_BUTTON}>■</button>
+          <span className="tabular-nums text-ink/70">{state.chunkIndex + 1}/{state.chunkCount}</span>
+        </span>
+      ) : (
+        <button
+          type="button"
+          data-read-aloud-inline-play=""
+          disabled={playDisabled}
+          onClick={props.onStartTarget}
+          className={PILL_BUTTON}
+          title={unavailable ?? undefined}
+        >
+          ▶
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
  * TSP-B4 (Revision 2): the pinned tool as a Review Dock card.
  *

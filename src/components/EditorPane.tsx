@@ -10,7 +10,6 @@ import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingChe
 import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
 import { resolveTextareaDeletion, type TextareaDeletionSnapshot } from "@/lib/editorInputIntegrity";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
-import { useEditorFooterCollapsed } from "@/hooks/useEditorFooterCollapsed";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
 import { useWritingCheckRuleConfig } from "@/hooks/useWritingCheckRuleConfig";
@@ -27,14 +26,12 @@ import {
   type CompletedWorkSession,
   type WorkSessionState,
 } from "@/lib/editorSessionActivity";
-import EditorSyntaxHelp from "./EditorSyntaxHelp";
-import WorkSessionTracker from "./WorkSessionTracker";
+import WorkSessionTracker, { WorkSessionFooterPill } from "./WorkSessionTracker";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import WritingCheckBar from "./WritingCheckBar";
 import WritingCheckSettingsPanel from "./WritingCheckSettingsPanel";
 import InlineMemoAccordion from "./InlineMemoAccordion";
-import { CharacterCountReviewSection, ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
-import { ReviewHubFooterPinnedTools } from "./ReviewHubFooterPinnedTools";
+import { ReviewHubPanel, ReviewHubTrigger, WritingCheckReviewSection } from "./ReviewHub";
 import { ReadAloudFooterControl, ReadAloudReviewSection } from "./ReadAloudControls";
 import { DesktopReviewBar } from "./DesktopReviewBar";
 import { ReadAloudPronunciationSection } from "./ReadAloudPronunciationPanel";
@@ -317,9 +314,6 @@ function EditorPaneInner(
 
   // ---- TSP-LOOP-004 → 文章チェック β 2.0 (local, deterministic, no network) ----
   const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();
-  // TSP-RC-LATIN-AND-MOBILE-COMPACT-001: collapse/expand for the 文章
-  // チェックβ + 作業カウンター footer area (mobile input-area space).
-  const [footerCollapsed, setFooterCollapsed] = useEditorFooterCollapsed();
   const isComposingRef = useRef(false);
   const [recheckNonce, setRecheckNonce] = useState(0);
   const { presetId, ruleOverrides, selectPreset, setRuleEnabled } = useWritingCheckRuleConfig();
@@ -440,8 +434,6 @@ function EditorPaneInner(
     onRateChange: readAloud.setRate,
     onVoiceChange: readAloud.setPreferredVoice,
   };
-  const footerToolsSwapped =
-    writingCheckPinned && footerPins.includes("character-count") && footerPins.indexOf("character-count") < footerPins.indexOf("writing-check");
   // Phase 12: occurrence-level, in-memory-only ignore state -- never
   // persisted, naturally forgotten on remount/reload (see `ignoredOccurrences.ts`).
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
@@ -666,21 +658,33 @@ function EditorPaneInner(
     onResumeWorkSession();
   };
 
-  // TSP-B1: Review Hub entries reuse the existing 文章チェックβ surfaces. The
-  // mobile one-line footer hides both the result list and the settings
-  // dialog's host, so expand it first — the same action as its own ▲ button.
-  const revealWritingCheckSurface = () => {
-    closeReviewHub();
-    if (footerCollapsed) setFooterCollapsed(false);
-  };
+  // Review results/settings now open from Preview Review Bar / Review Hub without expanding an Editor footer.
   const handleReviewHubShowResults = () => {
-    revealWritingCheckSurface();
+    closeReviewHub();
     setWritingCheckResultsRequest((value) => value + 1);
   };
   const handleReviewHubOpenSettings = () => {
-    revealWritingCheckSurface();
+    closeReviewHub();
     setSettingsOpen(true);
   };
+
+  const writingCheckHostElement = (
+    <WritingCheckBar
+      showBar={false}
+      enabled={writingCheckEnabled}
+      onToggle={setWritingCheckEnabled}
+      text={analysisCurrent ? analysis.text : ""}
+      issues={writingIssuesForContent}
+      onSelectIssue={handleSelectWritingIssue}
+      onFixIssue={handleFixIssue}
+      onIgnoreIssue={handleIgnoreIssue}
+      onBulkFix={handleBulkFix}
+      onOpenSettings={() => setSettingsOpen(true)}
+      undoAvailable={undoState !== null}
+      onUndo={handleUndoFix}
+      resultsRequestNonce={writingCheckResultsRequest}
+    />
+  );
 
   // TSP-Review-UI (Revision 4): ONE element, used in exactly one of two mutually-exclusive places
   // depending on `reviewSurface` -- portalled into the Desktop Review Bar (bottom of Preview) on
@@ -702,7 +706,15 @@ function EditorPaneInner(
             onOpenSettings={handleReviewHubOpenSettings}
           />
         ),
-        "character-count": <CharacterCountReviewSection count={visualLength} />,
+        "character-count": (
+          <WorkSessionTracker
+            state={workSession}
+            onStart={onStartWorkSession}
+            onPause={onPauseWorkSession}
+            onResume={resumeWorkSession}
+            onEnd={onEndWorkSession}
+          />
+        ),
         "read-aloud": (
           <>
             <ReadAloudReviewSection {...readAloudViewProps} />
@@ -733,13 +745,22 @@ function EditorPaneInner(
   return (
     <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 px-2 py-1.5 md:gap-2 md:px-4 md:py-3">
-        <input
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="ドキュメント・タイトル名"
-          data-demo-target="title"
-          className={`w-full min-w-0 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg ${focusMode ? "max-md:hidden" : ""}`}
-        />
+        <div className={`flex min-w-0 items-center gap-2 ${focusMode ? "max-md:hidden" : ""}`}>
+          <input
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="ドキュメント・タイトル名"
+            data-demo-target="title"
+            className="min-w-0 flex-1 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg"
+          />
+          <span
+            data-editor-character-count=""
+            title="現在の原稿文字数"
+            className="shrink-0 whitespace-nowrap rounded-full bg-accent/80 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-paper-ink"
+          >
+            {visualLength.toLocaleString("ja-JP")}文字
+          </span>
+        </div>
         <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:@max-[905px]:gap-1`}>
           <button
             type="button"
@@ -1075,41 +1096,27 @@ function EditorPaneInner(
         onPointerDownCapture={refreshHeldSelection}
         className="relative flex min-w-0 flex-none flex-col"
       >
-      {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only, one-line collapsed
-          form of the 文章チェックβ + 作業カウンター area below, reusing the
-          exact same state/handlers (no new counter logic). Desktop (md+)
-          always shows the full form regardless of this preference. */}
-      {footerCollapsed && !focusMode && !keyboardActive && (
+      {/* Final Review surface: Editor footer is review-only on compact widths; Desktop Review lives with Preview. */}
+      {reviewSurface === "compact" && !focusMode && !keyboardActive && (
         <div
           data-editor-footer-collapsed=""
-          className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/70 md:hidden"
+          data-mobile-review-footer=""
+          className="flex min-w-0 flex-none items-center gap-1 overflow-hidden border-t border-ink/10 px-2 py-1 text-[11px] text-ink/80"
         >
+          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
           {writingCheckPinned && (
-            <>
-              <label className="flex shrink-0 cursor-pointer select-none items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={writingCheckEnabled}
-                  onChange={(event) => setWritingCheckEnabled(event.target.checked)}
-                  className="h-3 w-3 shrink-0 accent-[#dc2626]"
-                />
-                <span className="whitespace-nowrap font-medium">チェックβ</span>
-              </label>
-              <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
-            </>
+            <button
+              type="button"
+              data-mobile-writing-check-pill=""
+              onClick={toggleReviewHub}
+              className="shrink-0 whitespace-nowrap rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 font-semibold text-red-800"
+            >
+              {writingCheckEnabled ? `文章β ${summarizeWritingIssues(writingIssuesForContent).total}件` : "文章β OFF"}
+            </button>
           )}
-          <WorkSessionTracker
-            state={workSession}
-            onStart={onStartWorkSession}
-            onPause={onPauseWorkSession}
-            onResume={resumeWorkSession}
-            onEnd={onEndWorkSession}
-            compact
-          />
-          <span aria-hidden="true" className="shrink-0 text-ink/25 max-[359px]:hidden">｜</span>
-          <span className="min-w-0 shrink truncate whitespace-nowrap tabular-nums text-ink/70">
-            現在{visualLength.toLocaleString("ja-JP")}字
-          </span>
+          {footerPins.includes("character-count") && (
+            <WorkSessionFooterPill state={workSession} onOpen={toggleReviewHub} />
+          )}
           {(footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && <ReadAloudFooterControl {...readAloudViewProps} />}
           {footerPins.includes("description-check") && (
             <DescriptionCheckFooterPill
@@ -1119,28 +1126,9 @@ function EditorPaneInner(
               onOpen={toggleReviewHub}
             />
           )}
-          <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} compact />
-          <button
-            type="button"
-            data-editor-footer-collapse-toggle="expand"
-            onClick={() => setFooterCollapsed(false)}
-            aria-expanded={false}
-            aria-label="文章チェックβ・作業カウンターを展開"
-            title="展開"
-            className="ml-auto shrink-0 rounded px-1 py-0.5 text-ink/50 hover:bg-ink/5"
-          >
-            ▲
-          </button>
         </div>
       )}
 
-      {/* TSP-Review-UI (Revision 4): on the "desktop" surface the interactive Review Bar (見直し +
-          per-tool quick popovers) is portalled into the mount point TategakiEditor renders at the
-          bottom of the Preview pane (`reviewBarNode`) -- NOT rendered here -- so it costs the
-          manuscript zero height and sits visually with Preview instead of the editor. On the
-          "compact" surface (phone + narrower desktop widths) there is no permanent card at all; a
-          one-line mini control lives in the status row below instead, and full controls open in the
-          Review Hub Bottom Sheet. */}
       {reviewSurface === "desktop" &&
         reviewBarNode &&
         createPortal(
@@ -1165,28 +1153,18 @@ function EditorPaneInner(
               onPrev: () => stepDescription(-1),
               onNext: () => stepDescription(1),
             }}
+            writingCheckPinned={writingCheckPinned}
+            writingCheckEnabled={writingCheckEnabled}
+            writingCheckCount={summarizeWritingIssues(writingIssuesForContent).total}
+            onOpenWritingCheck={handleReviewHubShowResults}
+            writingCheckHost={writingCheckHostElement}
+            workSessionPinned={footerPins.includes("character-count")}
+            workSessionPill={<WorkSessionFooterPill state={workSession} onOpen={toggleReviewHub} />}
           />,
           reviewBarNode,
         )}
-      <div
-        data-writing-check-surface=""
-        className={`${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-2" : "order-1"}`}
-      >
-      <WritingCheckBar
-        showBar={writingCheckPinned}
-        enabled={writingCheckEnabled}
-        onToggle={setWritingCheckEnabled}
-        text={analysisCurrent ? analysis.text : ""}
-        issues={writingIssuesForContent}
-        onSelectIssue={handleSelectWritingIssue}
-        onFixIssue={handleFixIssue}
-        onIgnoreIssue={handleIgnoreIssue}
-        onBulkFix={handleBulkFix}
-        onOpenSettings={() => setSettingsOpen(true)}
-        undoAvailable={undoState !== null}
-        onUndo={handleUndoFix}
-        resultsRequestNonce={writingCheckResultsRequest}
-      />
+
+      {reviewSurface === "compact" && writingCheckHostElement}
 
       {settingsOpen && (
         <WritingCheckSettingsPanel
@@ -1203,79 +1181,6 @@ function EditorPaneInner(
           onRemoveNgWordEntry={ngWords.removeEntry}
         />
       )}
-      </div>
-
-      {/* Compact syntax help never creates a second line; touch/keyboard users
-          can open its full text without permanently growing the footer. */}
-      <div
-        data-editor-status-surfaces=""
-        className={`flex flex-none flex-col gap-1.5 border-t border-ink/10 px-4 py-2 text-xs text-ink/60 ${focusMode ? "max-md:hidden md:hidden" : footerCollapsed || keyboardActive ? "max-md:hidden" : ""} ${footerToolsSwapped ? "order-1" : "order-2"}`}
-      >
-        {/* TSP-B1: the Review Hub trigger shares this already one-line, truncating row rather than the
-            controls row below. In the ~335px Editor column of a 768-900px split screen the controls row
-            (作業カウンター + 現在の原稿文字数) has no spare width, so a third item there wrapped and cost the
-            manuscript a full extra line. Here it only narrows the hint, which already truncates (its full
-            text stays in the title / dialog). */}
-        <div className="flex min-w-0 items-center gap-2">
-          <div data-ruby-tcy-status="" className="min-w-0 flex-1"><EditorSyntaxHelp /></div>
-          {/* TSP-Review-UI (Revision 4): on the "desktop" surface the Desktop Review Bar (bottom of
-              Preview) owns the ONE 見直し trigger instead -- rendering a second one here would be
-              redundant and confusing (two buttons that both open the same panel). */}
-          {reviewSurface !== "desktop" && <ReviewHubTrigger open={reviewHubOpen} onToggle={toggleReviewHub} flush />}
-        </div>
-        <div
-          data-editor-footer-controls
-          className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5"
-        >
-          <WorkSessionTracker
-            state={workSession}
-            onStart={onStartWorkSession}
-            onPause={onPauseWorkSession}
-            onResume={resumeWorkSession}
-            onEnd={onEndWorkSession}
-          />
-          <span className="flex shrink-0 flex-wrap items-center gap-1.5">
-            {/* Revision 3: a mini playback control stays reachable on the compact surface even while
-                UNPINNED, whenever 音読β is actually speaking/paused -- closing the Bottom Sheet must
-                never make an in-progress reading uncontrollable. */}
-            {reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle") && (
-              <ReadAloudFooterControl {...readAloudViewProps} />
-            )}
-            {reviewSurface === "compact" && footerPins.includes("description-check") && (
-              <DescriptionCheckFooterPill
-                enabled={descriptionCheck.enabled}
-                current={descriptionCheck.current}
-                count={descriptionCheck.marks.length}
-                onOpen={toggleReviewHub}
-              />
-            )}
-            <ReviewHubFooterPinnedTools
-              characterCount={
-                <span
-                  title="現在の原稿文字数"
-                  className="shrink-0 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink"
-                >
-                  現在の原稿文字数 {visualLength}文字
-                </span>
-              }
-            />
-            {/* TSP-RC-LATIN-AND-MOBILE-COMPACT-001: mobile-only collapse
-                toggle for the compact one-line form above. Desktop always
-                shows the full form, so this control has no desktop role. */}
-            <button
-              type="button"
-              data-editor-footer-collapse-toggle="collapse"
-              onClick={() => setFooterCollapsed(true)}
-              aria-expanded={true}
-              aria-label="文章チェックβ・作業カウンターを折りたたむ"
-              title="折りたたむ"
-              className="shrink-0 rounded px-1 py-0.5 text-ink/50 hover:bg-ink/5 md:hidden"
-            >
-              ▼
-            </button>
-          </span>
-        </div>
-      </div>
 
       {descriptionActiveMark && !(reviewSurface === "desktop" && footerPins.includes("description-check")) && descriptionActiveMark !== descriptionDismissed && !reviewHubOpen && !focusMode && !keyboardActive && (
         <DescriptionMarkDetailCard mark={descriptionActiveMark} onDismiss={() => setDescriptionDismissed(descriptionActiveMark)} />

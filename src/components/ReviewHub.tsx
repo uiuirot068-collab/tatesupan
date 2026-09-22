@@ -21,7 +21,7 @@ import { ReviewHubFooterPinControl, ReviewHubFooterPinNote } from "./ReviewHubFo
  */
 
 const PILL_BUTTON =
-  "rounded-full border border-ink/20 px-2 py-0.5 text-[11px] text-ink/70 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "rounded-full border border-ink/20 px-2 py-0.5 text-[11px] text-ink/80 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 interface ReviewHubTriggerProps {
   open: boolean;
@@ -43,7 +43,7 @@ export function ReviewHubTrigger({ open, onToggle, compact = false, flush = fals
       onClick={onToggle}
       className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-ink/20 ${
         compact ? "gap-0 px-1" : "gap-1 px-2"
-      } ${flush ? "py-px" : "py-0.5"} text-[11px] font-semibold text-ink/70 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+      } ${flush ? "py-px" : "py-0.5"} text-[11px] font-semibold text-ink/80 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
     >
       <span aria-hidden="true" className={`inline-block transition-transform ${open ? "-rotate-90" : ""}`}>
         ▶
@@ -79,9 +79,9 @@ interface ReviewHubPanelProps {
  */
 export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sheet = false }: ReviewHubPanelProps) {
   const toolList = (
-    <ul className="mt-2.5 divide-y divide-ink/10">
+    <ul className="mt-3 divide-y divide-ink/10">
       {REVIEW_HUB_TOOLS.map((tool) => (
-        <li key={tool.id} data-review-hub-tool={tool.id} className="py-3 first:pt-0 last:pb-0">
+        <li key={tool.id} data-review-hub-tool={tool.id} className="py-4 first:pt-0 last:pb-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-semibold text-ink">{tool.title}</p>
             <ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />
@@ -141,7 +141,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
       aria-labelledby={REVIEW_HUB_HEADING_ID}
       hidden={!open}
       style={maxHeightPx === null ? undefined : { maxHeight: maxHeightPx }}
-      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-3.5 text-xs text-ink shadow-lg md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
+      className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-4 text-xs text-ink shadow-lg md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
     >
       <div className="flex items-start justify-between gap-3">
         <h2 id={REVIEW_HUB_HEADING_ID} className="text-sm font-bold">
@@ -153,7 +153,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
           data-review-hub-close=""
           aria-label="見直しを閉じる"
           onClick={onClose}
-          className="-mr-1 -mt-1 rounded px-1.5 py-0.5 text-ink/50 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="-mr-1 -mt-1 rounded px-1.5 py-0.5 text-ink/65 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           ✕
         </button>
@@ -193,7 +193,7 @@ export function WritingCheckReviewSection({
       </label>
       {enabled && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span data-review-hub-writing-check-status="" className="text-[11px] font-semibold text-ink/70">
+          <span data-review-hub-writing-check-status="" className="text-[11px] font-semibold text-ink/80">
             {describeWritingIssueSummary(summary)}
           </span>
           {summary.total > 0 && (
