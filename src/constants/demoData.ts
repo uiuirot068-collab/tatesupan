@@ -139,10 +139,10 @@ export const DEMO_STEPS: DemoStep[] = [
     targetSelector: "[data-editor-page-navigator]",
   },
   {
-    title: "作業タイムを記録しよう",
+    title: "「見直し」で原稿をチェックしよう",
     body:
-      "「作業スタート」から「作業終了」までに新しく書いた文字数を記録できます。これまでの結果は「作業記録」から確認できます。",
-    target: "work-session",
+      "「見直し」を押すと、文章チェックβ・作業カウンター・音読β・描写語・修飾表現チェックβなど、原稿を見直すための機能がまとまって開きます。フッターに表示する機能は最大2つまで選べます。",
+    targetSelector: "[data-editor-review-hub-trigger]",
   },
   {
     title: "作品を書き出してみよう",

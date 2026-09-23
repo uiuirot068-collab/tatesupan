@@ -52,6 +52,12 @@ interface UpdateLogEntry {
 
 const FALLBACK_LOGS: UpdateLogEntry[] = [
   {
+    date: "2026-09-23",
+    type: "update",
+    title: "文章見直しツール",
+    body: "HOW TOに「文章見直しツール」を追加し、文章チェックβ・作業カウンター・音読β・描写語・修飾表現チェックβとフッター表示の使い方を整理しました。デモSTEP 9も「見直し」の案内に更新しました。",
+  },
+  {
     date: "2026-09-12",
     type: "update",
     title: "HOW TO TateSpun v3.4",
@@ -178,7 +184,7 @@ export default function HowToPage() {
                   <li><a href="#my-check">マイチェック</a></li>
                   <li><a href="#writing-check">文章チェックβ</a></li>
                   <li><a href="#body-notation">本文記法</a></li>
-                  <li><a href="#work-counter">作業カウント</a></li>
+                  <li><a href="#work-counter">作業カウンター</a></li>
                   <li><a href="#varied-use">多様な使い方</a></li>
                 </ol>
               </div>
@@ -266,7 +272,7 @@ export default function HowToPage() {
             <p data-copy-id="TEXT_INTRO_BODY_01"><a href="#my-check">1. 完成前マイチェックリスト＋PDF書き出し前チェック</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_02"><a href="#writing-check">2. 文章チェックβ</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_03"><a href="#body-notation">3. ルビ・縦中横・改ページの本文記法</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウント＋一時停止</a></p>
+            <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウンター＋一時停止</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_05"><a href="#varied-use">5. 「ここで書かなくてもいい」原稿持ち込み運用</a></p>
           </div>
 
@@ -324,7 +330,7 @@ export default function HowToPage() {
 
         <section className="chapter" id="writing-check">
           <h2 data-copy-id="TEXT_SECTION_02_TITLE">2. 文章チェックβ</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：テキスト入力エディターの下部</div>
+          <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：「見直し」→文章チェックβ</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.writingCheck.file)} alt={HOWTO_IMAGES.writingCheck.alt} loading="lazy" />
@@ -377,8 +383,8 @@ export default function HowToPage() {
         </section>
 
         <section className="chapter" id="work-counter">
-          <h2 data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウント</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：テキストエディター下部</div>
+          <h2 data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウンター</h2>
+          <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：「見直し」→作業カウンター</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.workCounter.file)} alt={HOWTO_IMAGES.workCounter.alt} loading="lazy" />
@@ -430,6 +436,40 @@ export default function HowToPage() {
               </section>
             </div>
           </div>
+        </section>
+
+        <section className="review-tools-guide" id="review-tools">
+          <h2 data-copy-id="TEXT_REVIEW_TOOLS_TITLE">文章見直しツール</h2>
+          <p className="review-tools-lead" data-copy-id="TEXT_REVIEW_TOOLS_LEAD">
+            エディターの「見直し」には、原稿を書きながら確認したい機能をまとめています。PCではプレビュー下の見直しバー、モバイルではエディター下の1行バーから開けます。
+          </p>
+          <div className="review-tools-usage">
+            <h3>よく使う機能はフッターに最大2つまで</h3>
+            <p>
+              各機能の「フッターに表示」から、すぐ触りたい機能を最大2つまで選べます。フッター表示は機能そのもののON／OFFとは別です。フッターから外しても「見直し」を開けばいつでも使えます。設定はこのブラウザに保存されます。
+            </p>
+          </div>
+          <div className="review-tools-grid">
+            <article className="review-tool-card">
+              <h3>文章チェックβ</h3>
+              <p>括弧の閉じ忘れや句読点の重複、登録した「わたしの辞書」「NGワード」など、確認したい箇所を波線でお知らせします。必要な修正はボタンを押したときだけ本文へ反映され、勝手に書き換えることはありません。</p>
+            </article>
+            <article className="review-tool-card">
+              <h3>作業カウンター</h3>
+              <p>「作業スタート」から「作業終了」までの実作業時間と、今回書いた文字数を記録します。一時停止・再開、過去の作業記録、Xへのシェアにも対応しています。タイトル横に常時表示される「現在の原稿文字数」とは別の値です。</p>
+            </article>
+            <article className="review-tool-card">
+              <h3>音読β</h3>
+              <p>選択範囲・現在の段落・全文から読み上げ範囲を選び、速度や音声を調整できます。読み辞書も登録でき、読み方は「本文のルビ → 読み辞書 → ブラウザ／端末の音声」の順で優先されます。</p>
+            </article>
+            <article className="review-tool-card">
+              <h3>描写語・修飾表現チェックβ</h3>
+              <p>A「直接的な説明」・B「描写的な修飾」・C「広い修飾」を個別に選び、見直し候補を黄色で表示します。A・B・Cは良し悪しや重要度ではなく、表現の種類です。文章の品質を自動判定する機能ではありません。</p>
+            </article>
+          </div>
+          <p className="review-tools-note">
+            文章チェックβと描写語・修飾表現チェックβの解析はブラウザ内で行います。音読βは端末内の音声を選んでいる場合は原稿を外部へ送りません。オンライン音声を選んだ場合は、読み上げる本文がブラウザの音声サービスへ送られる場合があります。
+          </p>
         </section>
 
         <section className="tips-index" id="tips">
@@ -713,7 +753,6 @@ export default function HowToPage() {
               <span>UPDATE / DEBUG LOG</span>
               <h2 data-copy-id="TEXT_DEVLOG_TITLE">更新・デバッグログ</h2>
             </div>
-            <p>別ページを増やさず、このページの最下部へ追記していきます。</p>
           </div>
           <div className="log-list">
             {visibleLogs.map((entry, i) => (
