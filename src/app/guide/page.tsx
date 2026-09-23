@@ -26,6 +26,9 @@ interface Card {
   body: string;
   /** Stable Help section this card explains. */
   helpSection?: HelpSectionId;
+  /** Direct destination when this feature is explained outside Help. */
+  href?: string;
+  hrefLabel?: string;
 }
 
 const CARDS: Card[] = [
@@ -86,10 +89,11 @@ const CARDS: Card[] = [
   },
   {
     n: "09",
-    title: "文章チェックβ",
+    title: "見直しツール",
     body:
-      "括弧の閉じ忘れなど、気になる箇所をブラウザ内でチェック。原稿を勝手に外部AIへ送信しません。",
-    helpSection: "writing-check",
+      "文章チェックβ・作業カウンター・音読β・描写語／修飾表現チェックβをひとつにまとめています。よく使う機能はフッターに最大2つまで表示できます。",
+    href: "/howto#review-tools",
+    hrefLabel: "HOW TOで詳しく見る →",
   },
   {
     n: "10",
@@ -102,6 +106,13 @@ const CARDS: Card[] = [
     title: "完成前マイチェックリスト",
     body:
       "入稿前に繰り返し使えるチェックリストです。用意されたプリセットを編集したり、自分専用のリストを作ったりでき、状態はこのブラウザに保存されます。確認漏れによる入稿ミスを防ぎます。",
+  },
+  {
+    n: "12",
+    title: "TXT入出力・Word（.docx）読み込みβ",
+    body:
+      "原稿データTXTの読み込み・書き出しと、記法を除いた整形本文TXTの書き出しに対応。Word（.docx）は本文を読み込み、対応できるルビや手動改ページをTateSpunの記法へ変換します。DOCX書き出しには対応していません。",
+    helpSection: "manuscript-transfer",
   },
 ];
 
@@ -144,7 +155,15 @@ export default function FeatureGuidePage() {
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink/70">
               {card.body}
             </p>
-            {card.helpSection && (
+            {card.href ? (
+              <Link
+                href={card.href}
+                data-feature-link-cta={card.n}
+                className="mt-3 -ml-1.5 self-start rounded-md px-1.5 py-1 text-xs font-medium text-accent hover:bg-ink/5 hover:underline sm:mt-auto sm:pt-3"
+              >
+                {card.hrefLabel ?? "詳しく見る →"}
+              </Link>
+            ) : card.helpSection ? (
               <button
                 type="button"
                 data-feature-help-cta={card.helpSection}
@@ -153,7 +172,7 @@ export default function FeatureGuidePage() {
               >
                 使い方を見る →
               </button>
-            )}
+            ) : null}
           </section>
         ))}
       </div>

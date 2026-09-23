@@ -70,6 +70,9 @@ export interface DemoStep {
    * on screen — device-appropriate wording, never a fabricated control.
    */
   mobileNote?: string;
+  /** Optional contextual link shown under this step's explanation. */
+  moreInfoHref?: string;
+  moreInfoLabel?: string;
 }
 
 export const DEMO_STEPS: DemoStep[] = [
@@ -100,8 +103,11 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     title: "困ったらヘルプへ",
-    body: "わからないことがあれば、いつでもヘルプを確認できます。開いても、このデモの進み具合は消えません。",
+    body:
+      "わからないことがあれば、いつでもヘルプを確認できます。開いても、このデモの進み具合は消えません。TateSpunで使える機能をまとめて知りたいときは、HOW TOで詳しい説明を確認できます。",
     target: "help",
+    moreInfoHref: "/howto",
+    moreInfoLabel: "HOW TOで機能を見る ↗",
   },
   {
     title: "集中モードで本文を広く",

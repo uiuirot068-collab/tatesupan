@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import {
   DEMO_CLOUD_SAVE_GUEST,
   DEMO_CLOUD_SAVE_MEMBER,
@@ -145,6 +146,17 @@ export default function DemoTour({
         <p className="mt-1 text-[13px] leading-relaxed text-ink/75">
           {stepBody(step, isMember, narrow)}
         </p>
+        {step.moreInfoHref && step.moreInfoLabel ? (
+          <Link
+            href={step.moreInfoHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1.5 inline-flex text-xs font-semibold text-accent hover:underline"
+            data-demo-more-info=""
+          >
+            {step.moreInfoLabel}
+          </Link>
+        ) : null}
       </div>
 
       {isLast ? (
