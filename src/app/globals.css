@@ -69,6 +69,32 @@
   text-underline-offset: 0.15em;
 }
 
+/* TSP-B5 描写語・修飾表現チェックβ -- three tints of the SAME yellow/gold family, one per category. The colour means
+   CATEGORY ONLY (A a little stronger, B standard, C paler): never severity, never good/bad. The category is also
+   always written out (A｜… / B｜… / C｜…) in every detail view, so colour is never the only signal. */
+.tsp-description-mark {
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.tsp-description-mark-a {
+  background-color: rgba(250, 204, 21, 0.58);
+}
+.tsp-description-mark-b {
+  background-color: rgba(250, 204, 21, 0.36);
+}
+.tsp-description-mark-c {
+  background-color: rgba(250, 204, 21, 0.2);
+}
+
+/* TSP-B4 ghost highlight of the stored 選択範囲 (the browser stops painting a textarea's selection once focus leaves it). */
+.tsp-held-selection {
+  background-color: rgba(59, 130, 246, 0.24);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* NG words retain their explicit textual identity in the results and use a
    separate purple wave in the editor; this does not alter detection meaning. */
 .tsp-writing-wavy-ng {

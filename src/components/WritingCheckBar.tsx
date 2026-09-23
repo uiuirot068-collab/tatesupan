@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { issueContext, type WritingDiagnostic } from "@/lib/writingCheckEngine";
+import { summarizeWritingIssues } from "@/lib/writingCheckSummary";
 
 interface WritingCheckBarProps {
   enabled: boolean;
@@ -16,12 +17,28 @@ interface WritingCheckBarProps {
   onOpenSettings: () => void;
   undoAvailable: boolean;
   onUndo: () => void;
+  /**
+   * TSP-B1: bump this counter to open the result list from outside (the Review
+   * Hub's 「確認候補を見る」). Purely a request — the list still only opens when
+   * the check is on and has candidates, exactly as before.
+   */
+  resultsRequestNonce?: number;
+  /**
+   * TSP-B2: whether the footer strip (checkbox, candidate count, settings, note) is displayed. Display only —
+   * `enabled` is untouched, and the result-list popover host stays mounted so the Review Hub's 「確認候補を見る」
+   * still opens it. While a fix's one-step 元に戻す window is open that single button is kept, so an automated
+   * manuscript change is never left without an undo.
+   */
+  showBar?: boolean;
+  /** Where the results list is rendered. Desktop Review Bar uses inline so it never overlaps the footer. */
+  resultsPlacement?: "popover" | "inline";
 }
 
 /**
  * TSP-LOOP-004 → 文章チェック β 2.0 (Phase 3) result panel. Lives in the
- * editor footer area; the reason list is a popover so it never changes the
- * textarea's height. Selecting an item's own text moves the caret/selection
+ * editor footer area. The reason list can be a popover or an inline panel;
+ * the desktop Review Bar uses the inline form so it never overlaps the footer.
+ * Selecting an item's own text moves the caret/selection
  * to that range — it never edits the text on its own; only the explicit 直す
  * / まとめて直す buttons ever mutate the manuscript, and only in direct
  * response to a click (see `applyFix.ts`/`applyBulkFix.ts`'s own doc: a fix
@@ -44,13 +61,23 @@ export default function WritingCheckBar({
   onOpenSettings,
   undoAvailable,
   onUndo,
+  resultsRequestNonce,
+  showBar = true,
+  resultsPlacement = "popover",
 }: WritingCheckBarProps) {
   const [open, setOpen] = useState(false);
+  // Adjust-state-during-render: a changed request counter opens the list once.
+  const [handledResultsRequest, setHandledResultsRequest] = useState(resultsRequestNonce);
+  if (resultsRequestNonce !== handledResultsRequest) {
+    setHandledResultsRequest(resultsRequestNonce);
+    if (resultsRequestNonce !== undefined) setOpen(true);
+  }
   const rootRef = useRef<HTMLDivElement>(null);
-  const redCount = useMemo(() => issues.filter((i) => i.severity === "HIGH_CONFIDENCE").length, [issues]);
-  const yellowCount = issues.length - redCount;
+  const summary = useMemo(() => summarizeWritingIssues(issues), [issues]);
+  const redCount = summary.red;
+  const yellowCount = summary.yellow;
   const bulkFixCount = useMemo(() => issues.filter((i) => i.fixClass === "SAFE_AUTO_FIX" && i.suggestedReplacement).length, [issues]);
-  const count = issues.length;
+  const count = summary.total;
   const isOpen = open && enabled && count > 0;
 
   useEffect(() => {
@@ -72,19 +99,25 @@ export default function WritingCheckBar({
   return (
     <div
       ref={rootRef}
-      className="relative flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 px-4 py-1.5 text-xs text-ink/70"
+      className={
+        showBar || (enabled && undoAvailable)
+          ? "relative flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 px-4 py-1.5 text-xs text-ink/70"
+          : "relative flex-none"
+      }
     >
-      <label className="flex cursor-pointer select-none items-center gap-1.5">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => onToggle(event.target.checked)}
-          className="h-3.5 w-3.5 accent-[#dc2626]"
-        />
-        <span className="font-medium">文章チェック β</span>
-      </label>
+      {showBar && (
+        <label className="flex cursor-pointer select-none items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => onToggle(event.target.checked)}
+            className="h-3.5 w-3.5 accent-[#dc2626]"
+          />
+          <span className="font-medium">文章チェック β</span>
+        </label>
+      )}
 
-      {enabled && (
+      {showBar && enabled && (
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -116,7 +149,7 @@ export default function WritingCheckBar({
         </button>
       )}
 
-      {enabled && (
+      {showBar && enabled && (
         <button
           type="button"
           onClick={onOpenSettings}
@@ -127,14 +160,22 @@ export default function WritingCheckBar({
         </button>
       )}
 
-      {enabled && (
+      {showBar && enabled && (
         <span className="text-[10px] text-ink/40">
           波線は編集画面のみ。本文・プレビュー・書き出しには影響しません
         </span>
       )}
 
       {isOpen && (
-        <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-80 overflow-y-auto rounded-lg border border-ink/15 bg-base p-1.5 shadow-lg">
+        <div
+          data-writing-check-results-panel=""
+          data-writing-check-results-placement={resultsPlacement}
+          className={
+            resultsPlacement === "inline"
+              ? "relative max-h-64 overflow-y-auto border-b border-ink/10 bg-base p-1.5"
+              : "absolute bottom-full left-2 right-2 z-20 mb-1 max-h-80 overflow-y-auto rounded-lg border border-ink/15 bg-base p-1.5 shadow-lg"
+          }
+        >
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <p className="text-[10px] text-ink/50">
               波線は「間違い」ではなく確認の目安です。内容を確認してご自身で判断してください。

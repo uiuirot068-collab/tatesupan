@@ -484,6 +484,8 @@ interface PreviewPaneProps {
    */
   onExportActiveChange?: (active: boolean) => void;
   isCollapsed?: boolean;
+  /** Desktop Review Bar is mounted as a sibling; when true the parent section owns the shared frame. */
+  integratedFrame?: boolean;
   onToggleCollapse?: () => void;
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
   selected: Set<number>;
@@ -512,6 +514,7 @@ function PreviewPane({
   onMobileExportClose,
   onExportActiveChange,
   isCollapsed = false,
+  integratedFrame = false,
   onToggleCollapse,
   selected,
   onSelectedChange: setSelected,
@@ -2223,7 +2226,16 @@ function PreviewPane({
   }
 
   return (
-    <div ref={previewRootRef} className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm">
+    <div
+      ref={previewRootRef}
+      data-preview-pane-root=""
+      data-preview-frame-mode={integratedFrame ? "integrated" : "standalone"}
+      className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-base ${
+        integratedFrame
+          ? "rounded-t-2xl border border-b-0 border-ink/10 shadow-none"
+          : "rounded-2xl border border-ink/10 shadow-sm"
+      }`}
+    >
       {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}

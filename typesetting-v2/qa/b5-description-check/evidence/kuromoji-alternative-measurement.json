@@ -1,0 +1,16 @@
+{
+  "purpose": "Measured cost of the smallest REAL Japanese morphological analyzer usable in a browser, for the B5 BETA LIMITATION REVIEW. Installed in an isolated scratch directory, NOT added to the repo.",
+  "package": "kuromoji@0.1.2 (IPADIC), Node v24.18.0, Windows 11",
+  "dictionaryGzBytes": 17791956,
+  "dictionaryGzMB": 17,
+  "dictionaryFiles": 12,
+  "runtimeJsKB": 304,
+  "loadMsNodeFromLocalDisk": 291,
+  "heapUsedMBAfterLoad": 83,
+  "rssMBAfterLoad": 374,
+  "rssDeltaMB": 318,
+  "tokenize100kCharsMs": 396,
+  "tokens": 67024,
+  "posQualityOnSpotSentences": "Correct on every spot sentence: 美しい=形容詞-自立, 静か/勇敢=名詞-形容動詞語幹+な, ゆっくり/ぱらぱら=副詞, 昨日/夜=名詞-副詞可能, の=助詞-連体化, 痛々しい=形容詞-自立 (an unseen word), 泣いて/いる+少女 = 連体節.",
+  "browserNotes": "Would need the 12 .dat.gz files served next to the app (a runtime same-origin download of ~17 MB, gunzipped in JS) plus ~300 KB of JS; Node figures are a lower bound for a phone. Not adopted for the beta: see B5_IMPLEMENTATION_RESULT.md section 3."
+}

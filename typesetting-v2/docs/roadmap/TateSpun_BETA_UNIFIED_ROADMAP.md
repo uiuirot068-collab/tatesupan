@@ -973,7 +973,7 @@ No other candidates were found in the excerpt (okurigana forms like `生れ付�
 
 ### Addendum A — Review Hub / 見直し
 
-- **Status:** `PLANNED / NOT IMPLEMENTED`
+- **Status:** ~~`PLANNED / NOT IMPLEMENTED`~~ → first slice (B1) `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED` on a local branch (2026-09-21, see B1); the future-tool items below (`描写語・修飾表現チェックβ`, `音読β`) remain `PLANNED / NOT IMPLEMENTED` and are not exposed.
 - **Canonical UX direction:** top menuの `設定・オプション・メモ・ヘルプ` の4項目は維持し、新しい上部メニュー項目は追加しない。エディターフッターには常時 `▶ 見直し` を配置する構想とし、押下時にはフッターから上方向へReview Hubを展開する。
 - **Consolidation target:** 既存の `文章チェックβ`、既存の `文字数カウント`、新規の `描写語・修飾表現チェックβ`、新規の `音読β / リズム確認`、および将来の文章確認・推敲補助機能をReview Hubへ統合する構想。
 - **Role:** Review Hubは「機能追加によってEditor UIを肥大化させないための収納・整理レイヤー」として扱う。新しい常時表示メニューや機能の無秩序な追加を許可するものではない。
@@ -1162,7 +1162,8 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B1. Review Hub / 見直し
 
 - **Intent:** すでに密度の高いEditor UIを、機能追加のたびに肥大化させない。文章確認・推敲補助を一つの整理された収納レイヤーへ集約する。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のearly target。Review Hubは別機能ではなく、機能の収納・整理・発見可能性を扱うIA layerとして扱う。
+- **Status (updated 2026-09-21, after Human QA): `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`.** Human QA: all B1 functions PASS. One ~770px observation was investigated: the header density is pre-existing (recorded separately in `typesetting-v2/qa/b1-review-hub/OBSERVATION_770PX_HEADER_DENSITY.md`, not part of B1), but a footer line B1 added at 768–~905px was a B1 regression and is fixed (trigger moved to the hint row; `B1_IMPLEMENTATION_RESULT.md` §8). Not pushed / deployed / merged; Production PASS not claimed. Earlier checkpoint text follows: implemented on the local branch `feat/tsp-b1-review-hub-20260921` (base `6dc820e`); not pushed, not deployed, not merged; Update History not changed; Production PASS not claimed. Scope of this B1: `▶ 見直し` in the Editor footer opening an upward panel with only the tools that already exist (`文章チェックβ`, `文字数カウント`), reusing their existing state/actions; top toolbar unchanged; no B2–B6 behaviour. Automated evidence and open Human decisions: `typesetting-v2/qa/b1-review-hub/` (`B1_IMPLEMENTATION_RESULT.md`, `B1_HUMAN_QA_TEMPLATE.md`, `B1_RELEASE_NOTES_DRAFT.md`). The Human QA has been returned (PASS).
+- **Decision / stage:** ~~`PLANNED / NOT STARTED`~~ (see Status above)。β公開期間中のearly target。Review Hubは別機能ではなく、機能の収納・整理・発見可能性を扱うIA layerとして扱う。
 - **Detailed contract:** top toolbarの `設定・オプション・メモ・ヘルプ` の4項目を維持し、Review Hubを第五の常時top-menu itemにしない。Editor footerに常時 `▶ 見直し` を置き、押下時にfooterから上方向へpanelを展開する。既存の `文章チェックβ`、`文字数カウント`、`描写語・修飾表現チェックβ`、`音読β`、将来の文章確認・推敲補助機能を統合対象とする。
 - **Guardrails:** Review Hubを「機能を無制限に増やす許可」と解釈しない。optional/default-OFF、progressive disclosure、mobile/desktopのUI密度、初見ユーザーの負荷を各実装で確認する。
 - **Acceptance / Human feedback:** Production導入後、Hubの開閉、目的のツールへの到達、footerとの関係、mobile densityをHuman確認し、C3のfeedback questionsで継続的なusage evidenceを集める。
@@ -1170,7 +1171,7 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B2. Footer 2-tool customization
 
 - **Intent:** よく使う確認ツールだけをcompactに手元へ残しつつ、Review Hub内の全機能へのアクセスを失わない。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のReview Hub contract。
+- **Decision / stage:** `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`。Human QA PASS (2026-09-21 JST)。
 - **Detailed contract:** Review Hub内の任意の最大2 toolsをEditor footerへ常時表示できる。各toolにcompact representationを用意する（例: `文章チェック 3件`、`描写・修飾 18件`、音読のcompact playback/action、`12,843字`）。
 - **Semantic guardrail:** `フッターに表示すること` は `機能が利用可能 / ONであること` と別。pinされていないtoolもReview Hubを開けば通常通り利用可能。footer pin/display settingをfeature enable/disableとして実装しない。UI wordingは `フッターに表示` またはpin/favorite相当とし、誤解を避ける。
 - **Persistence:** 選択はmanuscript単位ではなくbrowser/device local preferenceとし、新規作品、別作品への移動、原稿削除/再作成をまたいで維持する。manuscript/cloud dataと分離し、Supabase/loginを必須にしない。別browser/deviceで別設定でもよい。
@@ -1178,8 +1179,8 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 
 ### B3. Review Hub feedback/report instrumentation
 
-- **Intent:** v1.0のfooter count/layoutを、永久に「2枠が正しい」と仮定するのではなく、実際の利用 evidenceで判断する。
-- **Decision / stage:** Review Hub + 2-slot footerがProductionに到達した後に有効化する**beta-period feedback contract**。feature access前に質問しない。
+- **Status (updated 2026-09-21): `HUMAN_GATE / IMPLEMENTED — NOT RELEASED`.** Implemented on the local branch `feat/tsp-b3-feedback-20260921` (base = B2 closeout `a46279a`); automated QA passed; not pushed, not deployed, not merged; Human QA pending; Production PASS not claimed; **not FIXED**. Design: a third tab `見直し` in the existing β 報告 modal (Q1 + Q2 as written below, optional note, and the current footer tools + two per-page-load counters shown before sending), sent as an ordinary `feedback` report through the existing `beta-feedback` transport (Edge Function → Discord forum + 「気になる事」 sheet) — **no backend / schema / env / Edge Function change and no manuscript content**. Q2 currently offers only the two tools that exist in the Hub today (`文章チェックβ`, `文字数カウント`); 描写語・修飾表現チェックβ / 音読β appear automatically once B4/B5 register them in the Hub. Evidence, exact data sent / not sent, rollback and the Human QA checklist: `typesetting-v2/qa/b3-feedback/` (`B3_IMPLEMENTATION_RESULT.md`, `B3_HUMAN_QA.md`, `B3_RELEASE_NOTES_DRAFT.md`).
+- **Decision / stage:** `FIXED / RELEASE-CANDIDATE READY / NOT RELEASED`。Human QA PASS (2026-09-21 JST)。
 - **Detailed contract:** 既存のuser report/review areaへ次の2問を追加する。Q1 `見直しのフッター表示は最大2枠で足りていますか？` choices: `足りている`、`もう1枠ほしい`、`もっとほしい`、`常時表示は不要`。Q2 `「見直し」の中で、よく使っているものを選んでください`。maximum 2 selections。initial choices: `文章チェックβ`、`描写語・修飾表現チェックβ`、`音読β`、`文字数カウント`。
 - **Guardrails:** 質問文で2枠を正解へ誘導しない。未導入ユーザーへ導入済み機能の質問を表示しない。回答を機能の存廃へ機械的に直結させず、usage・Human observation・UI densityと合わせて判断する。
 - **Acceptance / release rule:** Review Hub Production Releaseは、対応するreport/review questionsが追加され、回答収集の動作が確認されるまでfully completeとしない。
@@ -1187,7 +1188,10 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B4. 音読β / リズム確認
 
 - **Intent:** 声を出して音読しづらい環境でも、文章の「鳴り」を実際に耳で確認できるようにする。高品質なaudiobook生成ではなく、校正・確認を目的とする。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中に導入するcandidate。minimum targetは、選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、speed。
+- **Status (updated 2026-09-22): `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED`.** Implemented on local branch `feat/tsp-b4-b6-train-20260922` (base = B3 closeout `7d6e4ce`); not pushed / deployed / merged; Human QA pending; **not FIXED**. Design: Review Hub tool #3 (`音読β`), browser `SpeechSynthesis` only — on-device Japanese voice by default, an online voice only by explicit choice (with a warning), never a silent fallback; ruby read as its reading; selection / caret paragraph / full manuscript; play・pause/resume・stop・speed(0.5–2.0)・optional voice selector; footer compact control (`▶ 音読` → ⏸/■ n/N) under the B2 max-2 pin rule; no network path. Evidence, limits (device voices), Human checklist: `typesetting-v2/qa/b4-read-aloud/`. The B1 E2E "no internal scrolling" contract was relaxed to "every control reachable" (the Hub now holds 3 tools) — see `B4_IMPLEMENTATION_RESULT.md` §6.
+- **Human QA round 1 (2026-09-22): `CHANGES REQUESTED`** → Revision 2 on the same local branch: a Review Dock card in the footer with 音読範囲 [選択範囲][現在の段落][全文], a visible 「選択範囲を保持中（N文字）」 状態 + ghost highlight (validity derived: same document + same text), stale-hold cleanup; status stays `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED` (not FIXED). The relaxed B1 "no internal scrolling" contract stays `PENDING HUMAN ACCEPTANCE`. Details: `qa/b4-read-aloud/B4_IMPLEMENTATION_RESULT.md` §9.
+- **Human QA round 2 (2026-09-22): core `PASS`, Review Dock `CHANGES REQUESTED`** → Revision 3 on the same local branch: the Review Dock card, permanently mounted below the manuscript, "consumes too much editor height" on desktop and "significantly compresses the editor" on mobile. Desktop: pinned tools become cards in a dedicated **Review Rail** beside the manuscript (measured-width breakpoint, not a hardcoded viewport query) — the manuscript's height is unaffected by how many tools are pinned, only its width narrows. Compact/mobile: no permanently-mounted card; a one-line mini control in the footer, full controls in a Review Hub **Bottom Sheet**; an actively-playing reading stays controllable from the mini bar even unpinned and even after the sheet closes. New: a browser-local **読み辞書** (register a corrected reading from a selection; ruby still wins over a registered reading; edit/delete; no cloud). Status stays `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED` (not FIXED); B1 "no internal scrolling" stays `PENDING HUMAN ACCEPTANCE`. Details: `qa/b4-read-aloud/B4_IMPLEMENTATION_RESULT.md` §10.
+- **Original decision / stage:** `PLANNED / NOT STARTED`。β公開期間中に導入するcandidate。minimum targetは、選択範囲を読む、現在の段落を読む、全文を読む、再生、一時停止、停止、speed。
 - **Detailed contract:** rhythm、pacing、punctuation、repetition、grooveの確認を主目的とする。primary research directionはbrowser/device speech synthesis。local/device behaviorを優先し、manuscript textを外部speech serviceへ黙示的に送らない。available voice selectionは調査結果に応じて含める。
 - **Guardrails:** VOICEVOXはseparate future optional researchであり、音読βをVOICEVOX待ちにしない。高品質朗読作品生成、external audio production、cloud voice dependencyを初期contractへ入れない。
 - **Acceptance / Human feedback:** 実browser/deviceで範囲・段落・全文、再生/一時停止/停止/speedをHuman確認し、原稿のprivacy boundaryとリズム確認としての実用性を記録する。
@@ -1195,7 +1199,10 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B5. 描写語・修飾表現チェックβ
 
 - **Intent:** 性質・状態・様子を説明する表現を、削除命令ではなく書き手自身の気づきとして提示する。
-- **Decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のcandidate。feature defaultはOFF。有効化時のdefaultはA only。
+- **Status (updated 2026-09-22): `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED` — with a `BETA LIMITATION REVIEW` on the analysis method.** Local branch `feat/tsp-b4-b6-train-20260922`; not pushed / deployed / merged; not FIXED. Review Hub tool #4; default OFF, then mode A; A / A+B / A+B+C; one yellow highlight for all categories, category + reason + "keeping it may be right" in a detail card / Hub; footer pill `描写・修飾 N件`; browser-local pref; no AI, no upload, no dependency. **Analysis is heuristic** (productive morphology + closed-class tables + phrase-span rules; no POS dictionary): blind-run accuracy on the author's own unseen sentences 74 % / 79 % (`qa/b5-description-check/B5_IMPLEMENTATION_RESULT.md` §4); the smallest real analyzer (kuromoji) was measured at a 17 MB dictionary / +318 MB RSS and NOT adopted — a Human decision after real-manuscript QA. Long manuscript (102k chars, real Chrome): analysis 0.6–0.9 s in the background, typing unaffected. Corpus (the human-readable table is the regression data): `qa/b5-description-check/B5_SPEC_REGRESSION_CORPUS.md`.
+- **Human QA round 1 (2026-09-22): `CHANGES REQUESTED`** → Revision 2: the staged A / A+B / A+B+C is replaced by **independent A / B / C checkboxes** (first enable = A only; zero allowed; old stored modes migrated), three tints of one yellow family with text category tags, single click/tap for the reason, and a pinned **Review Dock card** (ON/OFF, A/B/C, count, 前へ/次へ, current candidate, 理由を見る). Status stays `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED` with the `BETA LIMITATION REVIEW`. Details: `qa/b5-description-check/B5_IMPLEMENTATION_RESULT.md` §10.
+- **Human QA round 2 (2026-09-22): core `PASS`, Review Dock `CHANGES REQUESTED`** → Revision 3: independent A/B/C + single-click reason confirmed correct (B/C tint difference explicitly accepted as a beta limitation this round); same Review Dock placement verdict as B4. `DescriptionCheckDockCard` (unchanged) now portals into the shared **Review Rail** on desktop (two pinned cards stack vertically in the Rail, never side by side); on compact/mobile only `DescriptionCheckFooterPill` (count pill) is shown, opening the Review Hub Bottom Sheet for the full list/settings. Status stays `IMPLEMENTED / AUTOMATED QA PASS / HUMAN_GATE / NOT RELEASED` with the `BETA LIMITATION REVIEW`. Details: `qa/b5-description-check/B5_IMPLEMENTATION_RESULT.md` §11.
+- **Original decision / stage:** `PLANNED / NOT STARTED`。β公開期間中のcandidate。feature defaultはOFF。有効化時のdefaultはA only。
 - **Detailed contract:** detection modesは `A`、`A+B`、`A+B+C`。Aは直接的な形容・状態・評価・様子の説明を中心とした最も絞った候補。Bは描写性を持つ連体・連用修飾まで広げ、情景描写として既に機能している可能性を含む。Cは時間・場所・用途・識別情報などを含む広義の連体/連用修飾を確認する。A/B/Cは品質評価・良し悪し・悪い文章ランキングではなく、検出範囲/候補強度の分類。
 - **Marker / explanation:** 原則同じ黄色系。EditorをA/B/Cで多色化しない。詳細表示でcategory/reasonを示し、必要なら残せることと情景・動作・感覚・比喩での再検討を案内する。
 - **Analysis policy:** generative AIを必須にしない。manuscriptを外部AI/APIへ送らない。browser/local Japanese analysisを優先し、known sample matchingだけでなく、未知の文章の構造・品詞・修飾関係から反応する設計を目指す。Human作成のA/B/C/対象外/迷う例は `specification corpus + regression corpus` として扱う。
@@ -1204,11 +1211,16 @@ TateSpunは、開発者自身が実際に小説執筆へ使用するためのプ
 ### B6. 傍点（圏点）
 
 - **Intent:** 選択した本文範囲に強調点を付け、意味上の強調を縦組みの見た目に反映する。
-- **Decision / stage:** `BETA CANDIDATE / PLANNED / NOT A RELEASE BLOCKER`。categoryは `AUTHORING / TYPOGRAPHY / TEXT DECORATION`。Review Hub toolではなくmanuscript formattingとして扱う。
+- **Status (updated 2026-09-22): `BLOCKED / PARITY NOT PROVEN / NOT RELEASED`.** Bounded investigation done on the local branch `feat/tsp-b4-b6-train-20260922`; **no product code was changed**. Reason: export parity must hold in both renderer modes (LEGACY DOM/`html-to-image`/raster-PDF and V2_BETA Core-contract → paint models → vector PDF / raster JPG), V2_BETA needs a change to the frozen Core unit contract plus Preview/Publication paint models, `pdfGenerator` and `rasterGenerator`, and the production renderer flag cannot be verified from the repo. CSS `text-emphasis` was measured to leave the vertical column pitch unchanged (LEGACY Preview only) but does not reach V2_BETA and LEGACY JPG/PDF is unproven; shipping it alone would be partial fake support. Recommended design (string notation `《《…》》`, paint-plan dot primitive, parity harness) and the Human decisions needed (production renderer, ruby-vs-dot side, TCY/punctuation, dot look, go/no-go): `typesetting-v2/qa/b6-emphasis/B6_ARCHITECTURE_DECISION.md`.
+- **Original decision / stage:** `BETA CANDIDATE / PLANNED / NOT A RELEASE BLOCKER`。categoryは `AUTHORING / TYPOGRAPHY / TEXT DECORATION`。Review Hub toolではなくmanuscript formattingとして扱う。
 - **Detailed contract:** 初期βは標準のblack-dot style一つ。多くのemphasis styleを最初から作らない。傍点とrubyはsemantically distinctで、ruby dataを流用して傍点を偽装しない。Editorで選択範囲へ適用し、Preview/JPG/PDFまで同じ意味・見た目を保持する。
 - **Required investigation:** ruby + 傍点 coexistence、overlap、range editing、boundary edits、delete/backspace、Undo/Redo、save/reload、TCY、punctuation、page break。CSS `text-emphasis`は調査候補だが、CSS-only renderingだけでは不十分で、export parityを証明できない場合は採用しない。
 - **Guardrails:** 既存のrenderer/typesetting/ruby/TCY/page-break contractsを破壊しない。初期scopeを超えるゴマ点・白丸・多スタイルはv1.0候補へ回す。
 - **Acceptance / Human feedback:** Editor/Preview/JPG/PDFのparity、選択・境界編集・削除・Undo/Redo・reloadをHuman確認する。β feedbackで意味上の強調として役立つか、誤操作や視覚的混乱がないかを評価する。parityが証明できなければβ導入を延期する。
+
+### Canonical URL cleanup (TateSpun self-credit) — 2026-09-22
+
+- **Status:** `DEFERRED / LOCATION NOT REPRODUCED / NOT A B4-B6 BLOCKER`. The Human reported two TateSpun self-credit locations showing `https://tatespun.pages.dev/`; the runtime source has **0** user-visible hits (the Web footer in `PageCard.tsx`, the share text and Auth already use `https://spuntales.net/tatespun/`; the only credit-like hit is dead data in `src/lib/constants/presets.ts:123`, `PAGE_PRESETS` has zero importers). Infra/security `pages.dev` references (beta-feedback CORS + Turnstile hostname allowlists, comments, tests) are intentionally preserved. **No change was made.** Resume when the Human names the screen/export where the two old credits were seen (asked in `qa/b4-b6-train/HUMAN_QA_B4_B6_JA.md` §6).
 
 ### B7. Update History during beta
 

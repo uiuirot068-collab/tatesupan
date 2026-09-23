@@ -32,6 +32,8 @@ import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/ma
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
+import { DesktopReviewBarMount } from "./DesktopReviewBar";
+import { useReviewSurface } from "@/hooks/useReviewSurface";
 import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
@@ -52,6 +54,7 @@ import { useAuth } from "./AuthProvider";
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
 import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/txtTransfer";
+import { readDocxFile } from "@/lib/docxImport";
 import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
@@ -321,7 +324,22 @@ export default function TategakiEditor({
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
+  // TSP-Review-UI (Revision 3): the editor/preview split's own container -- see the matching comment
+  // in the JSX below. The divider drag math must measure THIS element's width, not <main>'s.
+  const editorSplitRef = useRef<HTMLDivElement | null>(null);
+  // TSP-Review-UI (Revision 4): whether pinned Review tools (音読β / 描写・修飾チェックβ) get the
+  // Desktop Review Bar (bottom of Preview) or the compact mini-bar + Bottom Sheet -- see
+  // useReviewSurface's own doc for why this measures <main>'s width rather than a viewport media query.
+  const reviewSurface = useReviewSurface(mainRef);
+  // Revision 4: the Desktop Review Bar always shows a 見直し entry point (it replaces the manuscript
+  // footer's own trigger on this surface -- see EditorPane), regardless of pins; only its per-tool
+  // quick-status pills are pin-gated. So the bar mounts whenever the surface/focus state allows it,
+  // not only when a dock-eligible tool happens to be pinned (Revision 3's Rail was pin-gated because
+  // an EMPTY rail had no reason to exist; an empty bar still needs to carry 見直し).
+  const reviewBarEligible = reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed;
+  const [reviewBarNode, setReviewBarNode] = useState<HTMLDivElement | null>(null);
   const txtInputRef = useRef<HTMLInputElement | null>(null);
+  const docxInputRef = useRef<HTMLInputElement | null>(null);
 
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = demoMode || isEphemeralDocId(docId);
@@ -354,6 +372,20 @@ export default function TategakiEditor({
     setToast(imageIds.length > 0
       ? "TXTを読み込みました。画像データはTXTに含まれないため、画像を再設定してください。"
       : "TXTを読み込みました。");
+  };
+
+  const importDocx = async (file: File) => {
+    const result = await readDocxFile(file);
+    if (content.length > 0 && !window.confirm("現在の原稿をDOCXから取り込んだ本文で置き換えます。元のDOCXは変更されません。続けますか？")) return;
+    setContent(result.text);
+    setImages({});
+    setImageLayerOrder({});
+    setUnresolvedCloudImages(null);
+    setToast(
+      result.notices.length > 0
+        ? `DOCXを読み込みました。${result.notices[0]}。対応範囲はヘルプをご確認ください。`
+        : "DOCXを読み込みました。"
+    );
   };
 
   const applyCloudProject = useCallback((project: Project) => {
@@ -468,8 +500,8 @@ export default function TategakiEditor({
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || !mainRef.current) return;
-      const rect = mainRef.current.getBoundingClientRect();
+      if (!isDraggingRef.current || !editorSplitRef.current) return;
+      const rect = editorSplitRef.current.getBoundingClientRect();
       const percent = ((e.clientX - rect.left) / rect.width) * 100;
       const clamped = Math.min(80, Math.max(20, percent));
       setEditorWidthPercent(clamped);
@@ -749,6 +781,17 @@ export default function TategakiEditor({
           if (file) void importTxt(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
         }}
       />
+      <input
+        ref={docxInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void importDocx(file).catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)));
+        }}
+      />
       {/* Focus mode collapses the full header at every viewport width, so the
           vertical space it occupied is reclaimed by the manuscript/preview
           workspace. `hidden` (display:none) removes it from layout and tab
@@ -814,8 +857,23 @@ export default function TategakiEditor({
 
       <main
         ref={mainRef}
+        data-review-surface={reviewSurface}
         className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row md:pr-6 md:pb-6"
       >
+        {/* TSP-Review-UI (Revision 3): the editor/preview split's percentage widths (--editor-w / --preview-w)
+            must resolve against THIS wrapper's own width, not <main>'s full width -- otherwise a 50/50 split
+            already consumes 100% of <main> and the Review Rail (a flex-none THIRD sibling, below) would be
+            pushed outside the viewport instead of sharing the space. Introducing this inner flex-row container
+            is the whole fix: the rail eats from ITS flex-basis, and the browser naturally recomputes the split's
+            percentages against the wrapper's now-smaller actual width. */}
+        <div ref={editorSplitRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:overflow-visible md:flex-row">
+        {/* TSP-Review-UI (Revision 3): `@container` here, paired with EditorPane's `md:@max-[905px]:`
+            action-row classes, is what keeps the manuscript's HEIGHT stable when the Rail toggles on/off
+            (see manuscriptHeightUnaffectedByRail in reviewLayout.e2e.mjs). Those classes used to be plain
+            `md:max-[905px]:` viewport media queries -- correct for a narrow split-screen VIEWPORT, but blind
+            to the Rail claiming width at an unchanged viewport size, so at 1180px the action row's last
+            button silently wrapped to a second line and ate 34px of the manuscript's own height. Querying
+            this section's actual rendered width fixes both cases with one rule. */}
         <section
           id="tsp-manuscript"
           style={
@@ -823,7 +881,7 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             ref={editorPaneRef}
@@ -852,6 +910,8 @@ export default function TategakiEditor({
             focusMode={focusMode}
             onExitFocus={exitFocusMode}
             keyboardActive={keyboardActive}
+            reviewSurface={reviewSurface}
+            reviewBarNode={reviewBarEligible ? reviewBarNode : null}
           />
         </section>
 
@@ -863,6 +923,7 @@ export default function TategakiEditor({
         )}
 
         <section
+          data-preview-frame={reviewBarEligible ? "integrated" : "standalone"}
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
           // Narrow: fills the remaining dynamic viewport; PreviewPane owns the
           // single inner scroll/pan surface. Wide keeps the existing split.
@@ -871,44 +932,55 @@ export default function TategakiEditor({
           // manuscript editor stays dominant; collapsed it is the same thin
           // rail as the normal desktop collapse. Outside focus mode the normal
           // split (`--preview-w` / `md:flex-1`) is unchanged.
-          className={`min-h-0 min-w-0 transition-all duration-200 overflow-hidden md:flex md:h-full md:flex-none ${
+          // TSP-Review-UI (Revision 4): `md:flex-col` (added) stacks PreviewPane above the Desktop
+          // Review Bar; `overflow-hidden` moved to the inner wrapper below PreviewPane's own content
+          // so the bar's popovers (absolutely positioned, opening upward) are never clipped by it.
+          className={`min-h-0 min-w-0 transition-all duration-200 md:flex md:h-full md:flex-none md:flex-col ${
             isPreviewCollapsed
               ? "md:w-12"
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
+          } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"} ${reviewBarEligible ? "md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""}`}
         >
-          <PreviewPane
-            content={previewContent}
-            title={title}
-            settings={settings}
-            layout={layout}
-            images={images}
-            imageLayerOrder={imageLayerOrder}
-            unresolvedImageIds={unresolvedImageIdSet}
-            blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
-            onContentChange={setContent}
-            onSettingsChange={setSettings}
-            onImageAdd={handleImageAdd}
-            onImageDelete={handleImageDelete}
-            onImageLayerChange={handleImageLayerChange}
-            cursorIndex={previewCursorIndex}
-            onNavigateToSource={navigateEditorToGlobalOffset}
-            onBodyPageCountChange={setBodyPageCount}
-            onPdfExportSuccess={handlePreviewPdfExportSuccess}
-            mobileExportOpen={sharedExport.mobileExportOpen}
-            onMobileExportClose={sharedExport.closeMobileExport}
-            onExportActiveChange={sharedExport.onExportActiveChange}
-            // On a phone showing the プレビュー workspace the preview is always
-            // full — the collapse rail is a desktop-only affordance.
-            isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
-            onToggleCollapse={handleTogglePreviewCollapse}
-            selected={selectedPages}
-            onSelectedChange={setSelectedPages}
-          />
+          <div className={`min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
+            <PreviewPane
+              content={previewContent}
+              title={title}
+              settings={settings}
+              layout={layout}
+              images={images}
+              imageLayerOrder={imageLayerOrder}
+              unresolvedImageIds={unresolvedImageIdSet}
+              blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
+              onContentChange={setContent}
+              onSettingsChange={setSettings}
+              onImageAdd={handleImageAdd}
+              onImageDelete={handleImageDelete}
+              onImageLayerChange={handleImageLayerChange}
+              cursorIndex={previewCursorIndex}
+              onNavigateToSource={navigateEditorToGlobalOffset}
+              onBodyPageCountChange={setBodyPageCount}
+              onPdfExportSuccess={handlePreviewPdfExportSuccess}
+              mobileExportOpen={sharedExport.mobileExportOpen}
+              onMobileExportClose={sharedExport.closeMobileExport}
+              onExportActiveChange={sharedExport.onExportActiveChange}
+              // On a phone showing the プレビュー workspace the preview is always
+              // full — the collapse rail is a desktop-only affordance.
+              isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
+              integratedFrame={reviewBarEligible}
+              onToggleCollapse={handleTogglePreviewCollapse}
+              selected={selectedPages}
+              onSelectedChange={setSelectedPages}
+            />
+          </div>
+          {reviewBarEligible && (
+            <div className="hidden md:block">
+              <DesktopReviewBarMount mountRef={setReviewBarNode} />
+            </div>
+          )}
         </section>
-
+        </div>
       </main>
 
       {isSearchOpen && (
@@ -933,6 +1005,7 @@ export default function TategakiEditor({
           onOpenToc={() => { setBookPartsInitialTab("toc"); setIsBookPartsModalOpen(true); }}
           onOpenChecklist={() => setIsChecklistOpen(true)}
           onImportSourceTxt={() => txtInputRef.current?.click()}
+          onImportDocx={() => docxInputRef.current?.click()}
           onExportSourceTxt={exportSourceTxt}
           onExportReadableTxt={exportReadableTxt}
           onClose={() => setActiveDrawer(null)}

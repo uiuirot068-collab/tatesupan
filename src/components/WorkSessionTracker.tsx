@@ -237,6 +237,29 @@ function WorkSessionHistoryModal({
   );
 }
 
+export function WorkSessionFooterPill({
+  state,
+  onOpen,
+}: {
+  state: WorkSessionState;
+  onOpen: () => void;
+}) {
+  const label = state.active
+    ? `作業 ${state.active.writtenCharacterCount.toLocaleString("ja-JP")}字`
+    : "作業カウンター";
+  return (
+    <button
+      type="button"
+      data-work-session-footer-pill=""
+      onClick={onOpen}
+      title="作業カウンターの詳細を見直しで開く"
+      className="shrink-0 whitespace-nowrap rounded-full border border-ink/20 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-ink/80 hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function WorkSessionTracker({
   state,
   onStart,

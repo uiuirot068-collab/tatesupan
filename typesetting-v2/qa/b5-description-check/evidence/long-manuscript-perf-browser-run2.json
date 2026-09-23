@@ -1,0 +1,61 @@
+{
+  "measuredAt": "2026-09-21T22:32:17.099Z",
+  "browser": "headless Chrome (CDP), WINDOWED editor, 1280x720",
+  "chars": 102000,
+  "paragraphs": 1500,
+  "keystrokeMsOff": [
+    111,
+    148,
+    511,
+    83,
+    84,
+    83
+  ],
+  "longTasksWhileTypingOffMs": [
+    79,
+    55,
+    101,
+    77,
+    303,
+    337,
+    132,
+    93,
+    66,
+    79,
+    77,
+    77,
+    70,
+    105
+  ],
+  "analysisWallMs": 751,
+  "candidatesModeA": 4501,
+  "longTasksDuringAnalysisMs": [
+    53,
+    179
+  ],
+  "keystrokeMsOn": [
+    29,
+    84,
+    78,
+    85,
+    80,
+    75
+  ],
+  "longTasksWhileTypingMs": [
+    68,
+    68,
+    69,
+    69,
+    64,
+    58,
+    324,
+    57,
+    80,
+    66
+  ],
+  "keystrokeMedianOff": 111,
+  "keystrokeMedianOn": 80,
+  "worstLongTaskOffMs": 337,
+  "worstLongTaskMs": 324,
+  "candidatesModeABC": 12002
+}

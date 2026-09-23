@@ -78,6 +78,8 @@ import {
 } from "@/lib/windowedEditor/undoModel";
 import { resolveTextareaDeletion } from "@/lib/editorInputIntegrity";
 import WritingCheckOverlay from "./WritingCheckOverlay";
+import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
+import { marksForPage } from "@/lib/descriptionMarkSegments";
 import type { WritingDiagnostic } from "@/lib/writingCheckEngine";
 
 export interface PagedEditorHandle {
@@ -89,6 +91,20 @@ export interface PagedEditorHandle {
   replaceRangeGlobal(start: number, end: number, text: string, options?: { caretOffsetInInsertedText?: number }): void;
   /** Application-level undo/redo -- see the module doc for why this replaces native history here. */
   runHistory(command: "undo" | "redo"): void;
+}
+
+/** B5: yellow 描写語・修飾表現 markers (GLOBAL offsets; this component maps them to the current page like `writingCheck`). */
+export interface PagedEditorDescriptionMarksProps {
+  enabled: boolean;
+  /** The exact manuscript `marks` was computed against; drawn only while it matches `content`. */
+  analysisText: string;
+  marks: readonly PagedEditorDescriptionMarkRange[];
+}
+
+export interface PagedEditorDescriptionMarkRange {
+  start: number;
+  end: number;
+  category?: "A" | "B" | "C";
 }
 
 export interface PagedEditorWritingCheckProps {
@@ -117,6 +133,9 @@ export interface PagedEditorProps {
     detail: { inputType: string; beforeLength: number; rejectedLength: number; repairedLength: number }
   ) => void;
   writingCheck?: PagedEditorWritingCheckProps;
+  descriptionMarks?: PagedEditorDescriptionMarksProps;
+  /** GLOBAL ranges to ghost-highlight (B4's held 選択範囲, B5's current candidate) while the textarea is not painting a native selection. */
+  ghostRanges?: readonly { start: number; end: number }[];
   placeholder?: string;
   className?: string;
 }
@@ -242,6 +261,8 @@ function PagedEditorInner(
     onNativeChangeCommitted,
     onNativeIntegrityRepair,
     writingCheck,
+    descriptionMarks,
+    ghostRanges,
     placeholder,
     className,
   }: PagedEditorProps,
@@ -1141,6 +1162,17 @@ function PagedEditorInner(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showWritingCheck, writingCheck, currentPage.start, currentPage.end]);
 
+  const showDescriptionMarks = Boolean(descriptionMarks?.enabled && descriptionMarks.analysisText === content);
+  const pageLocalDescriptionMarks = useMemo(() => {
+    if (!showDescriptionMarks || !descriptionMarks) return [];
+    return marksForPage(descriptionMarks.marks, currentPage.start, currentPage.end);
+  }, [showDescriptionMarks, descriptionMarks, currentPage.start, currentPage.end]);
+
+  const pageLocalGhostRanges = useMemo(
+    () => (ghostRanges && ghostRanges.length > 0 ? marksForPage(ghostRanges, currentPage.start, currentPage.end) : []),
+    [ghostRanges, currentPage.start, currentPage.end],
+  );
+
   return (
     <div className="absolute inset-0 flex flex-col">
       <div
@@ -1249,6 +1281,16 @@ function PagedEditorInner(
       </div>
 
       <div className="relative min-h-0 flex-1">
+        {pageLocalGhostRanges.length > 0 && (
+          <div className="pointer-events-none absolute inset-0">
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={pageText} marks={pageLocalGhostRanges} />
+          </div>
+        )}
+        {showDescriptionMarks && (
+          <div className="pointer-events-none absolute inset-0">
+            <DescriptionMarkOverlay textareaRef={textareaRef} text={pageText} marks={pageLocalDescriptionMarks} />
+          </div>
+        )}
         {showWritingCheck && (
           <div className="pointer-events-none absolute inset-0">
             <WritingCheckOverlay textareaRef={textareaRef} text={pageText} issues={pageLocalIssues} />

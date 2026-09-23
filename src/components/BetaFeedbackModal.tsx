@@ -21,6 +21,14 @@ import {
 } from "@/lib/betaFeedback";
 import { submitBetaFeedback } from "@/lib/betaFeedbackClient";
 import { useTurnstile } from "@/lib/turnstile";
+import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
+import {
+  REVIEW_HUB_SURVEY_TAB_LABEL,
+  buildReviewHubSurveyMessage,
+  canSubmitReviewHubSurvey,
+} from "@/lib/reviewHubFeedback";
+import { getReviewHubSessionUsage } from "@/lib/reviewHubUsage";
+import ReviewHubFeedbackTab, { type ReviewHubSurveyAnswers } from "./ReviewHubFeedbackTab";
 import {
   collectFeedbackEnvironment,
   feedbackUserVisibleRows,
@@ -31,14 +39,16 @@ import {
  * TSP-LOOP-006 — 「β版フィードバック」モーダル。
  *
  * β 限定機能。エディタツールバーの黄色い「報告」ボタンからのみ開く。
- * 2 タブ（気になる事 / review）。既定は「気になる事」。
+ * 3 タブ（気になる事 / review / 見直し）。既定は「気になる事」。
+ * 「見直し」タブ（TSP-B3）の回答は、ここで送信する `feedback` の本文として
+ * 既存の送信経路にそのまま載る（新しい送信先・フィールドは無い）。
  * 原稿・タイトル・ドキュメント ID は一切参照しない（props に渡さない）。
  */
 interface BetaFeedbackModalProps {
   onClose: () => void;
 }
 
-type TabId = "feedback" | "review";
+type TabId = "feedback" | "review" | "review-hub";
 type SendState = "idle" | "sending" | "success" | "error";
 
 interface Attachment {
@@ -63,6 +73,28 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
   const [note, setNote] = useState("");
   const [reviewState, setReviewState] = useState<SendState>("idle");
   const reviewSendingRef = useRef(false);
+
+  // --- 見直し（TSP-B3）: 回答は「気になる事」と同じ feedback 経路で送る ---
+  const [surveyAnswers, setSurveyAnswers] = useState<ReviewHubSurveyAnswers>({
+    slotAnswer: null,
+    favorites: [],
+    note: "",
+  });
+  const [surveyState, setSurveyState] = useState<SendState>("idle");
+  const surveySendingRef = useRef(false);
+  const { pins: footerPins } = useReviewHubFooterPins();
+  // モーダルは全面オーバーレイなので、開いている間に Hub 操作は起きない。開いた時点の値で固定する。
+  const [sessionUsage] = useState(getReviewHubSessionUsage);
+  const survey = useMemo(
+    () =>
+      buildReviewHubSurveyMessage({
+        ...surveyAnswers,
+        footerTools: footerPins,
+        usage: sessionUsage,
+      }),
+    [surveyAnswers, footerPins, sessionUsage]
+  );
+  const canSendSurvey = canSubmitReviewHubSurvey(surveyAnswers);
 
   // --- TSP-LOOP-019: Turnstile（両タブ共通）+ honeypot ---
   const {
@@ -236,6 +268,36 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
     }
   };
 
+  const handleSendSurvey = async () => {
+    if (surveySendingRef.current || !canSendSurvey || !turnstileReady || !environment) return;
+    const submission = {
+      type: "feedback" as const,
+      message: survey.message,
+      images: [] as File[],
+    };
+    const shape = validateSubmissionShape(submission);
+    if (!shape.ok) {
+      setSurveyState("error");
+      return;
+    }
+    surveySendingRef.current = true;
+    setSurveyState("sending");
+    const { ok } = await submitBetaFeedback(submission, {
+      turnstileToken,
+      honeypot,
+      environment,
+    });
+    surveySendingRef.current = false;
+    resetTurnstile();
+    if (ok) {
+      setSurveyAnswers({ slotAnswer: null, favorites: [], note: "" });
+      setSurveyState("success");
+    } else {
+      // 失敗時は回答を維持する。
+      setSurveyState("error");
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
@@ -266,6 +328,9 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
           </TabButton>
           <TabButton active={tab === "review"} onClick={() => setTab("review")}>
             review
+          </TabButton>
+          <TabButton active={tab === "review-hub"} onClick={() => setTab("review-hub")}>
+            {REVIEW_HUB_SURVEY_TAB_LABEL}
           </TabButton>
         </div>
 
@@ -341,7 +406,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               )}
 
             </div>
-          ) : (
+          ) : tab === "review" ? (
             <div className="flex flex-col gap-3">
               <p className="text-xs leading-relaxed text-ink/70">{REVIEW_INTRO}</p>
               <ul className="flex flex-col gap-1.5">
@@ -373,6 +438,15 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
               </label>
 
             </div>
+          ) : (
+            <ReviewHubFeedbackTab
+              answers={surveyAnswers}
+              onChange={(next) => {
+                setSurveyAnswers(next);
+                if (surveyState !== "sending") setSurveyState("idle");
+              }}
+              usageRows={survey.usageRows}
+            />
           )}
 
           <section
@@ -439,7 +513,7 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                 {feedbackState === "sending" ? "送信中…" : "匿名で送信する"}
               </button>
             </>
-          ) : (
+          ) : tab === "review" ? (
             <>
               {reviewState === "success" && (
                 <p className="text-xs font-medium text-emerald-700">
@@ -456,6 +530,26 @@ export default function BetaFeedbackModal({ onClose }: BetaFeedbackModalProps) {
                 className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {reviewState === "sending" ? "送信中…" : "reviewを送信"}
+              </button>
+            </>
+          ) : (
+            <>
+              {surveyState === "success" && (
+                <p className="text-xs font-medium text-emerald-700">
+                  {FEEDBACK_SUCCESS_MESSAGE}
+                </p>
+              )}
+              {surveyState === "error" && (
+                <p className="text-xs text-red-600">{FEEDBACK_FAILURE_MESSAGE}</p>
+              )}
+              <button
+                type="button"
+                data-review-hub-survey-send=""
+                onClick={handleSendSurvey}
+                disabled={!canSendSurvey || surveyState === "sending" || !turnstileReady || !environment}
+                className="self-start rounded bg-amber-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {surveyState === "sending" ? "送信中…" : "匿名で送信する"}
               </button>
             </>
           )}

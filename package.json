@@ -14,6 +14,13 @@
     "test:e2e:editor-input-integrity": "node tests/e2e/editorInputIntegrity.e2e.mjs",
     "test:e2e:production-odd-page": "node tests/e2e/productionOddPageWarning.e2e.mjs",
     "test:e2e:mobile-shared-export": "node tests/e2e/mobileSharedExport.e2e.mjs",
+    "test:e2e:review-hub": "node tests/e2e/reviewHub.e2e.mjs",
+    "test:e2e:review-hub-feedback": "node tests/e2e/reviewHubFeedback.e2e.mjs",
+    "test:e2e:read-aloud": "node tests/e2e/readAloud.e2e.mjs",
+    "test:e2e:description-check": "node tests/e2e/descriptionCheck.e2e.mjs",
+    "test:e2e:review-layout": "node tests/e2e/reviewLayout.e2e.mjs",
+    "qa:local-feedback-send": "node tests/local-feedback-harness/run.mjs",
+    "test:e2e:header-density": "node tests/e2e/headerTabletDensity.e2e.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
