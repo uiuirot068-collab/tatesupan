@@ -923,6 +923,7 @@ export default function TategakiEditor({
         )}
 
         <section
+          data-preview-frame={reviewBarEligible ? "integrated" : "standalone"}
           style={{ "--preview-w": `${100 - editorWidthPercent}%` } as React.CSSProperties}
           // Narrow: fills the remaining dynamic viewport; PreviewPane owns the
           // single inner scroll/pan surface. Wide keeps the existing split.
@@ -940,7 +941,7 @@ export default function TategakiEditor({
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
+          } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
         >
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             <PreviewPane
@@ -967,6 +968,7 @@ export default function TategakiEditor({
               // On a phone showing the プレビュー workspace the preview is always
               // full — the collapse rail is a desktop-only affordance.
               isCollapsed={isPreviewCollapsed && mobileView !== "preview"}
+              integratedFrame={reviewBarEligible}
               onToggleCollapse={handleTogglePreviewCollapse}
               selected={selectedPages}
               onSelectedChange={setSelectedPages}

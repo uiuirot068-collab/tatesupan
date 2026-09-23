@@ -185,6 +185,89 @@ async function comboCheck(v, pins) {
   measurements.push(m);
 }
 
+
+async function integratedPreviewFrame(v) {
+  const tag = `${v.name} integrated-frame`;
+  await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["description-check"]) }, v.width, v.height);
+  await setText(TEXT);
+  await waitSurface(tag, "desktop");
+  const metrics = await cdp.evaluate(`(() => {
+    const bar = document.querySelector('[data-desktop-review-bar]');
+    const frame = bar?.closest('section');
+    const pane = frame?.querySelector('[data-preview-pane-root]');
+    if (!bar || !frame || !pane) return null;
+    const fs = getComputedStyle(frame);
+    const ps = getComputedStyle(pane);
+    const bs = getComputedStyle(bar);
+    const fr = frame.getBoundingClientRect();
+    const pr = pane.getBoundingClientRect();
+    const br = bar.getBoundingClientRect();
+    return {
+      frameMode: frame.getAttribute('data-preview-frame'),
+      paneMode: pane.getAttribute('data-preview-frame-mode'),
+      frame: { l: fr.left, r: fr.right, t: fr.top, b: fr.bottom },
+      pane: { l: pr.left, r: pr.right, t: pr.top, b: pr.bottom },
+      bar: { l: br.left, r: br.right, t: br.top, b: br.bottom },
+      frameStyles: {
+        borderRightWidth: fs.borderRightWidth,
+        borderBottomWidth: fs.borderBottomWidth,
+        topRightRadius: fs.borderTopRightRadius,
+        bottomRightRadius: fs.borderBottomRightRadius,
+        overflowX: fs.overflowX,
+        overflowY: fs.overflowY,
+        boxShadow: fs.boxShadow,
+      },
+      paneStyles: {
+        borderRightWidth: ps.borderRightWidth,
+        borderBottomWidth: ps.borderBottomWidth,
+        topRightRadius: ps.borderTopRightRadius,
+        boxShadow: ps.boxShadow,
+      },
+      barStyles: { bottomRightRadius: bs.borderBottomRightRadius },
+    };
+  })()`);
+  assert.ok(metrics, `${tag}: frame / pane / bar all exist`);
+  assert.equal(metrics.frameMode, "integrated", `${tag}: outer section owns integrated frame`);
+  assert.equal(metrics.paneMode, "integrated", `${tag}: PreviewPane switches out of standalone frame mode`);
+  assert.ok(parseFloat(metrics.frameStyles.borderRightWidth) >= 1, `${tag}: outer frame owns right border`);
+  assert.ok(parseFloat(metrics.frameStyles.borderBottomWidth) >= 1, `${tag}: outer frame owns bottom border`);
+  assert.ok(parseFloat(metrics.frameStyles.topRightRadius) > 0 && parseFloat(metrics.frameStyles.bottomRightRadius) > 0, `${tag}: outer frame owns right-side rounding`);
+  assert.notEqual(metrics.frameStyles.overflowX, "hidden", `${tag}: outer frame must not clip popovers horizontally`);
+  assert.notEqual(metrics.frameStyles.overflowY, "hidden", `${tag}: outer frame must not clip popovers vertically`);
+  assert.equal(parseFloat(metrics.paneStyles.borderRightWidth), 0, `${tag}: PreviewPane has no duplicate right border`);
+  assert.equal(parseFloat(metrics.paneStyles.borderBottomWidth), 0, `${tag}: PreviewPane has no duplicate bottom border`);
+  assert.equal(metrics.paneStyles.boxShadow, "none", `${tag}: PreviewPane has no duplicate shadow`);
+  assert.ok(parseFloat(metrics.paneStyles.topRightRadius) > 0, `${tag}: PreviewPane still clips its own top-right content to the shared frame`);
+  assert.ok(parseFloat(metrics.barStyles.bottomRightRadius) > 0, `${tag}: Review Bar background closes the lower-right curve without clipping its popovers`);
+  assert.ok(Math.abs(metrics.bar.r - (metrics.frame.r - parseFloat(metrics.frameStyles.borderRightWidth))) < 2.5, `${tag}: Review Bar reaches shared frame right edge`);
+  assert.ok(Math.abs(metrics.bar.b - (metrics.frame.b - parseFloat(metrics.frameStyles.borderBottomWidth))) < 2.5, `${tag}: Review Bar reaches shared frame bottom edge`);
+  await noOverflow(tag);
+  await shot(`integrated-frame-${v.name}`);
+  log(`  ${tag}: one outer frame, no double border/shadow, popover-safe overflow OK`);
+}
+
+async function standalonePreviewModes(v) {
+  const tag = `${v.name} standalone-modes`;
+  await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["description-check"]) }, v.width, v.height);
+  await waitSurface(tag, "desktop");
+
+  await realClick("[data-preview-collapse-toggle]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-preview-collapsed-toggle]') && !document.querySelector('[data-desktop-review-bar]')`, { label: `${tag}: manual collapse removes Review Bar` });
+  let standalone = await cdp.evaluate(`(() => { const e = document.querySelector('[data-preview-collapsed-toggle]'); const s = getComputedStyle(e); return { border: s.borderRightWidth, radius: s.borderBottomRightRadius, shadow: s.boxShadow }; })()`);
+  assert.ok(parseFloat(standalone.border) >= 1 && parseFloat(standalone.radius) > 0 && standalone.shadow !== "none", `${tag}: collapsed Preview keeps standalone frame`);
+  await realClick("[data-preview-collapsed-toggle]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-bar]')`, { label: `${tag}: manual expand restores Review Bar` });
+
+  await realClick("[data-demo-target=focus-mode]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-preview-collapsed-toggle]') && !document.querySelector('[data-desktop-review-bar]')`, { label: `${tag}: focus mode uses collapsed standalone Preview` });
+  standalone = await cdp.evaluate(`(() => { const e = document.querySelector('[data-preview-collapsed-toggle]'); const s = getComputedStyle(e); return { border: s.borderRightWidth, radius: s.borderBottomRightRadius, shadow: s.boxShadow }; })()`);
+  assert.ok(parseFloat(standalone.border) >= 1 && parseFloat(standalone.radius) > 0 && standalone.shadow !== "none", `${tag}: focus-mode Preview keeps standalone frame`);
+  await realClick("[data-editor-action=exit-focus]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-bar]')`, { label: `${tag}: leaving focus restores integrated Review Bar frame` });
+  await noOverflow(tag);
+  log(`  ${tag}: collapsed Preview + focus mode standalone frames preserved OK`);
+}
+
 async function manuscriptAndPreviewUnaffectedByPins(v) {
   const tag = `${v.name} dimensions`;
   await openWith({ tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify([]) }, v.width, v.height);
@@ -428,11 +511,14 @@ try {
     log(`  ${v.name} (${v.surface}): ${COMBOS.length} pin combinations OK`);
   }
   for (const v of VIEWPORTS.filter((x) => x.surface === "desktop")) {
+    await integratedPreviewFrame(v);
     await manuscriptAndPreviewUnaffectedByPins(v);
     await popoverDoesNotResize(v);
     await desktopCandidateNavigation(v);
     await popoverMutualExclusivity(v);
   }
+  const standaloneModeViewport = VIEWPORTS.find((x) => x.name === "1280x720");
+  if (standaloneModeViewport) await standalonePreviewModes(standaloneModeViewport);
   for (const v of VIEWPORTS.filter((x) => x.surface === "compact")) {
     await compactBottomSheet(v);
   }
