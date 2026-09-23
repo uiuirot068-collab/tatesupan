@@ -234,7 +234,48 @@ async function popoverDoesNotResize(v) {
     `${tag}: B5 card stays inside Preview frame (card ${Math.round(popoverCard.l)}..${Math.round(popoverCard.r)}, Preview ${Math.round(previewBounds.l)}..${Math.round(previewBounds.r)})`,
   );
   assert.ok(popoverCard.w <= 384.5, `${tag}: B5 card keeps the 24rem maximum width (${Math.round(popoverCard.w)}px)`);
-  log(`  ${tag}: B4 inline + B5 popover; no resize + B5 contained inside Preview frame OK`);
+
+  const descriptionEnabled = await cdp.evaluate(`document.querySelector('[data-description-card-toggle]')?.getAttribute('aria-checked') === 'true'`);
+  if (!descriptionEnabled) {
+    await realClick("[data-description-card-toggle]", { scroll: false });
+  }
+  await cdp.waitFor(`!!document.querySelector('[data-description-card-count]') && !!document.querySelector('[data-description-card-next]')`, {
+    label: `${tag}: B5 narrow controls render`,
+  });
+
+  const dockMetrics = await cdp.evaluate(`(() => {
+    const dock = document.querySelector('[data-review-dock-card="description-check"]');
+    const card = document.querySelector('[data-desktop-review-popover-card="description-check"]');
+    const selectors = [
+      ['toggle', '[data-description-card-toggle]'],
+      ['count', '[data-description-card-count]'],
+      ['prev', '[data-description-card-prev]'],
+      ['position', '[data-description-card-position]'],
+      ['next', '[data-description-card-next]'],
+    ];
+    const cr = card.getBoundingClientRect();
+    return {
+      dockClientWidth: dock.clientWidth,
+      dockScrollWidth: dock.scrollWidth,
+      card: { l: cr.left, r: cr.right },
+      controls: selectors.map(([name, selector]) => {
+        const r = document.querySelector(selector).getBoundingClientRect();
+        return { name, l: r.left, r: r.right, w: r.width, shown: r.width > 0 && r.height > 0 };
+      }),
+    };
+  })()`);
+  assert.ok(
+    dockMetrics.dockScrollWidth <= dockMetrics.dockClientWidth + 1,
+    `${tag}: B5 dock has no internal horizontal overflow (client ${dockMetrics.dockClientWidth}, scroll ${dockMetrics.dockScrollWidth})`,
+  );
+  for (const control of dockMetrics.controls) {
+    assert.ok(control.shown, `${tag}: B5 ${control.name} is visible`);
+    assert.ok(
+      control.l >= dockMetrics.card.l - 1 && control.r <= dockMetrics.card.r + 1,
+      `${tag}: B5 ${control.name} stays inside card (control ${Math.round(control.l)}..${Math.round(control.r)}, card ${Math.round(dockMetrics.card.l)}..${Math.round(dockMetrics.card.r)})`,
+    );
+  }
+  log(`  ${tag}: B4 inline + B5 popover; no resize + outer/inner B5 containment OK`);
 }
 async function compactBottomSheet(v) {
   const tag = `${v.name} sheet`;

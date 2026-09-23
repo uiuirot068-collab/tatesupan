@@ -224,10 +224,10 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
     <section
       data-review-dock-card="description-check"
       aria-label="描写・修飾チェックβ"
-      className="min-w-[15rem] flex-1 rounded-lg border border-ink/15 bg-base p-2.5 text-xs text-ink"
+      className="@container min-w-0 w-full max-w-full flex-1 rounded-lg border border-ink/15 bg-base p-2.5 text-xs text-ink"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[12px] font-bold">描写・修飾チェックβ</h3>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <h3 className="min-w-0 text-[12px] font-bold">描写・修飾チェックβ</h3>
         <button
           type="button"
           role="switch"
@@ -262,7 +262,7 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
                 {categories[category] ? "☑" : "☐"} {category}
               </button>
             ))}
-            <span data-description-card-count="" className="ml-auto text-[11px] font-semibold tabular-nums text-ink/70">
+            <span data-description-card-count="" className="ml-auto text-[11px] font-semibold tabular-nums text-ink/70 @max-[360px]:ml-0 @max-[360px]:basis-full @max-[360px]:w-full">
               {none ? "未選択" : current ? `候補 ${marks.length.toLocaleString("ja-JP")}件` : "確認中…"}
             </span>
           </div>
@@ -273,22 +273,24 @@ export function DescriptionCheckDockCard(props: DescriptionDockCardProps) {
             </p>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-1.5">
+              <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5">
                 <button type="button" data-description-card-prev="" disabled={navDisabled} onClick={props.onPrev} className={PILL_BUTTON}>
-                  ← 前へ
+                  <span className="@max-[360px]:hidden">← 前へ</span>
+                  <span className="hidden @max-[360px]:inline">←前へ</span>
                 </button>
-                <span data-description-card-position="" className="text-[11px] tabular-nums text-ink/70">
+                <span data-description-card-position="" className="min-w-0 text-center text-[11px] tabular-nums text-ink/70">
                   {formatCandidatePosition(marks, currentMark)}
                 </span>
                 <button type="button" data-description-card-next="" disabled={navDisabled} onClick={props.onNext} className={PILL_BUTTON}>
-                  次へ →
+                  <span className="@max-[360px]:hidden">次へ →</span>
+                  <span className="hidden @max-[360px]:inline">次へ→</span>
                 </button>
               </div>
 
               {currentMark ? (
                 <div data-description-card-current="" className="rounded border border-ink/10 bg-ink/[0.03] px-2.5 py-2">
                   <p className="text-[13px] font-semibold leading-relaxed">「{currentMark.text}」</p>
-                  <p className="flex items-center justify-between gap-1.5 text-[11px]">
+                  <p className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
                     <CategoryBadge category={currentMark.category} />
                     <button
                       type="button"
