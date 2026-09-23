@@ -222,8 +222,19 @@ async function popoverDoesNotResize(v) {
   assert.ok(Math.abs(editorOpen.w - editorBefore.w) < 1 && Math.abs(editorOpen.h - editorBefore.h) < 1, `${tag}: opening the popover must not resize Editor`);
   assert.ok(Math.abs(previewOpen.w - previewBefore.w) < 1 && Math.abs(previewOpen.h - previewBefore.h) < 1, `${tag}: opening the popover must not resize Preview`);
   const popover = await rect('[data-desktop-review-popover="description-check"]');
+  const popoverCard = await rect('[data-desktop-review-popover-card="description-check"]');
+  const previewBounds = await cdp.evaluate(`(() => {
+    const s = document.querySelector('[data-desktop-review-bar]').closest('section');
+    const r = s.getBoundingClientRect();
+    return { l: r.left, r: r.right };
+  })()`);
   assert.ok(popover.b <= (await rect("[data-desktop-review-bar]")).t + 1, `${tag}: popover sits ABOVE the bar (overlay, not push)`);
-  log(`  ${tag}: B4 inline + B5 popover; opening B5 resizes neither Editor nor Preview OK`);
+  assert.ok(
+    popoverCard.l >= previewBounds.l - 1 && popoverCard.r <= previewBounds.r + 1,
+    `${tag}: B5 card stays inside Preview frame (card ${Math.round(popoverCard.l)}..${Math.round(popoverCard.r)}, Preview ${Math.round(previewBounds.l)}..${Math.round(previewBounds.r)})`,
+  );
+  assert.ok(popoverCard.w <= 384.5, `${tag}: B5 card keeps the 24rem maximum width (${Math.round(popoverCard.w)}px)`);
+  log(`  ${tag}: B4 inline + B5 popover; no resize + B5 contained inside Preview frame OK`);
 }
 async function compactBottomSheet(v) {
   const tag = `${v.name} sheet`;

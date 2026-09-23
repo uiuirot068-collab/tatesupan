@@ -107,8 +107,16 @@ export function DesktopReviewBar({
         </div>
       )}
       {activePopover === "description-check" && (
-        <div data-desktop-review-popover="description-check" className="absolute bottom-full left-0 z-20 mb-1.5 w-[24rem] max-w-full">
-          <DescriptionCheckDockCard {...description} />
+        <div
+          data-desktop-review-popover="description-check"
+          className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-1.5"
+        >
+          <div
+            data-desktop-review-popover-card="description-check"
+            className="pointer-events-auto w-full max-w-[24rem]"
+          >
+            <DescriptionCheckDockCard {...description} />
+          </div>
         </div>
       )}
       {/* The Hub popover is `<ReviewHubPanel>` itself (EditorPane's single instance, portalled here
