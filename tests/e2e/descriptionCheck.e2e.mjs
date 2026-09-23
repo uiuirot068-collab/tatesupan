@@ -456,13 +456,8 @@ async function compactDockViewport(v) {
   log(`  ${tag}: no permanent card / count pill opens the Hub / full list reachable from the Bottom Sheet OK`);
 }
 
+
 async function coexistWithHeldGhost() {
-  // TSP-Review-UI (Revision 4): B4 and B5 popovers are now mutually exclusive (only one Desktop Review
-  // Bar popover open at a time -- see reviewLayout.e2e.mjs's popoverMutualExclusivity), so this no
-  // longer proves "both cards visible side by side" (Revision 3's Rail). What actually matters --
-  // and still must hold -- is that the manuscript's own rendered LAYERS (B4's held-selection ghost, B5's
-  // category tint) are independent of which popover's UI happens to be open, or whether either is open
-  // at all: B4's popover is open here, B5's is not, and B5's tint is still there regardless.
   const tag = "1280x720 B4+B5";
   await openWith(
     { tatespun_editor_footer_collapsed: "off", [PINS_KEY]: JSON.stringify(["read-aloud", "description-check"]), [PREFS_KEY]: JSON.stringify({ enabled: true, categories: CATS(true, true, false) }) },
@@ -470,26 +465,29 @@ async function coexistWithHeldGhost() {
   );
   await setText(TEXT);
   await cdp.waitFor(`document.querySelector('[data-description-mark]') !== null`, { label: `${tag}: markers` });
-  // B5's tint is already on the page before B4's popover is even opened -- an always-on manuscript
-  // overlay, not something tied to B5's own popover being open.
+  await cdp.waitFor(`!!document.querySelector('[data-read-aloud-inline-bar]')`, { label: `${tag}: B4 inline bar` });
+
   const phrase = "泣いている";
   const at = TEXT.indexOf(phrase);
-  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint is present before B4's popover opens`);
-  // open B4's popover, choose 選択範囲, select the SAME B5-marked phrase -> ghost + B5 tint + native
-  // selection state all consistent, and B5's own popover is (correctly) NOT open at the same time.
-  await realClick("[data-read-aloud-status-pill]", { scroll: false });
-  const CARD = '[data-desktop-review-popover="read-aloud"] [data-review-dock-card=read-aloud]';
-  await cdp.waitFor(`!!document.querySelector('${CARD}')`, { label: `${tag}: B4 popover opens` });
-  await cdp.evaluate(`(() => { const t = document.querySelector('[data-demo-target="editor"]'); t.focus(); t.setSelectionRange(${at}, ${at + phrase.length}); })()`);
-  await realClick(`${CARD} [data-read-aloud-target=selection]`, { scroll: false });
-  await cdp.waitFor(`/選択範囲を保持中/.test(document.querySelector('${CARD}').textContent)`, { label: `${tag}: held` });
-  assert.equal(await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`), phrase, `${tag}: ghost paints the held phrase`);
-  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: the B5 tint on the same phrase is still there (independent layers, independent of B5's OWN popover being closed)`);
-  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-popover="description-check"]')`), false, `${tag}: B5's popover is correctly not open at the same time as B4's (mutual exclusivity)`);
-  await shot("b5-b4-coexist-1280x720");
-  log(`  ${tag}: B4 held ghost + B5 tint coexist as independent manuscript layers, regardless of which popover (if any) is open OK`);
-}
+  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: B5 tint is present before B4 interaction`);
 
+  await cdp.evaluate(`(() => { const t = document.querySelector('[data-demo-target="editor"]'); t.focus(); t.setSelectionRange(${at}, ${at + phrase.length}); })()`);
+  await realClick("[data-read-aloud-inline-target=selection]", { scroll: false });
+  await cdp.waitFor(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('') === ${JSON.stringify(phrase)}`, { label: `${tag}: B4 held ghost` });
+
+  assert.equal(await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`), phrase, `${tag}: ghost paints the held phrase`);
+  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: B5 tint remains on the same phrase`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('[data-desktop-review-popover="read-aloud"]')`), false, `${tag}: no legacy B4 popover in final desktop UI`);
+
+  // Opening B5's quick popover must not disturb the B4 held-selection layer.
+  await realClick("[data-description-check-footer]", { scroll: false });
+  await cdp.waitFor(`!!document.querySelector('[data-desktop-review-popover="description-check"]')`, { label: `${tag}: B5 popover opens` });
+  assert.equal(await cdp.evaluate(`[...document.querySelectorAll('[data-held-selection]')].map((e) => e.textContent).join('')`), phrase, `${tag}: B4 ghost survives B5 popover`);
+  assert.ok((await runsByCategory()).B.includes(phrase), `${tag}: B5 tint remains while its quick popover is open`);
+
+  await shot("b5-b4-coexist-1280x720");
+  log(`  ${tag}: B4 inline held ghost + B5 tint/popover coexist as independent layers OK`);
+}
 async function longManuscript() {
   const tag = "1280x720 long";
   await openWith({ tatespun_editor_footer_collapsed: "off" }, 1280, 720);
@@ -558,8 +556,8 @@ try {
     await migrationAndTouch();
   }
   if (!ONLY || ONLY === "dock") {
-    for (const v of [VIEWPORTS[0], VIEWPORTS[1]]) await compactDockViewport(v); // 390 / 770: below the desktop threshold
-    await dockViewport(VIEWPORTS[2]); // 1280: the desktop surface -- the only one with a popover-based daily-control card
+    await compactDockViewport(VIEWPORTS[0]); // 390: true mobile (<768)
+    for (const v of [VIEWPORTS[1], VIEWPORTS[2]]) await dockViewport(v); // 770 / 1280: Desktop Review Bar
     await coexistWithHeldGhost();
   }
   if (!ONLY || ONLY === "long") await longManuscript();

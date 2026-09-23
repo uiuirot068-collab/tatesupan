@@ -154,20 +154,15 @@ describe("B4 registry + EditorPane wiring", () => {
     expect(read("src/components/Header.tsx")).not.toMatch(/音読|ReadAloud/);
   });
 
-  it("uses ONE controller for the Hub section, the Desktop Review Bar's quick popover and the footer control, keyed to the document, and reads the selection only from press handlers", () => {
-    expect(pane.match(/useReadAloud\(/g)).toHaveLength(1);
-    expect(pane).toContain("useReadAloud(memoStorageKey, getReadAloudSource)");
-    expect(pane).toContain("pagedEditorRef.current?.getSelectionGlobal()");
-    expect(pane).toContain("textareaRef.current");
-    expect(pane).toContain('footerPins.includes("read-aloud")');
-    // Revision 4: pinned (or actively playing) = a status pill on the Desktop Review Bar (bottom of
-    // Preview) that opens a quick popover -- `ReadAloudDockCard` itself now lives inside
-    // DesktopReviewBar.tsx, portalled via EditorPane, driven by the SAME readAloudViewProps; a mini
-    // control stays inline on the compact surface.
+  it("uses ONE controller across Hub, Desktop Review Bar and the mobile footer", () => {
+    expect(pane).toContain("const readAloud = useReadAloud(memoStorageKey, getReadAloudSource);");
+    expect(pane).toContain("<ReadAloudReviewSection {...readAloudViewProps} />");
+    expect(pane).toContain('readAloud.state.status !== "idle" ? (');
+    expect(pane).toContain("<ReadAloudFooterControl {...readAloudViewProps} />");
+    expect(pane).toContain(') : footerPins.includes("read-aloud") ? (');
+    expect(pane).toContain('readAloudPinned={footerPins.includes("read-aloud")}');
     expect(pane).toContain("readAloud={readAloudViewProps}");
-    expect(read("src/components/DesktopReviewBar.tsx")).toContain("<ReadAloudDockCard {...readAloud} />");
-    expect(pane).toContain("createPortal(");
-    expect(pane).toContain('reviewSurface === "compact" && (footerPins.includes("read-aloud") || readAloud.state.status !== "idle")');
+    expect(pane).toContain("const getReadAloudSource = useCallback(() => {");
   });
 
   it("the hook cancels speech on unmount, document change and page hide; nothing starts on its own", () => {

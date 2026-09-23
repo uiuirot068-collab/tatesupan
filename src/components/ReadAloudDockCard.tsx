@@ -22,8 +22,8 @@ export function ReadAloudInlineBar(props: ReadAloudViewProps) {
   const active = state.status !== "idle";
   const playDisabled = unavailable !== null || (target === "selection" && !held);
   return (
-    <div data-read-aloud-inline-bar="" className="flex min-w-0 items-center gap-1 text-[11px] text-ink/80">
-      <span className="shrink-0 font-semibold">音読範囲</span>
+    <div data-read-aloud-inline-bar="" className="flex min-w-0 items-center gap-1 text-[11px] text-ink/80 @max-[360px]:gap-0.5">
+      <span className="shrink-0 font-semibold @max-[360px]:hidden">音読範囲</span>
       <span role="radiogroup" aria-label="音読範囲" className="flex shrink-0 items-center gap-1">
         {MODES.map((mode) => (
           <button
@@ -33,21 +33,24 @@ export function ReadAloudInlineBar(props: ReadAloudViewProps) {
             aria-checked={target === mode}
             data-read-aloud-inline-target={mode}
             onClick={() => props.onTargetChange(mode)}
-            className={`${PILL_BUTTON} ${target === mode ? "border-ink/50 bg-ink/10 font-semibold text-ink" : ""}`}
+            className={`${PILL_BUTTON} @max-[360px]:px-1 ${target === mode ? "border-ink/50 bg-ink/10 font-semibold text-ink" : ""}`}
           >
-            {READ_ALOUD_TARGET_TITLES[mode]}
+            <span className="@max-[360px]:hidden">{READ_ALOUD_TARGET_TITLES[mode]}</span>
+            <span className="hidden @max-[360px]:inline">
+              {mode === "selection" ? "選択" : mode === "paragraph" ? "段落" : "全文"}
+            </span>
           </button>
         ))}
       </span>
       {active ? (
-        <span className="flex shrink-0 items-center gap-1">
+        <span className="flex shrink-0 items-center gap-1 @max-[360px]:gap-0.5">
           {state.status === "speaking" ? (
-            <button type="button" data-read-aloud-inline-pause="" onClick={props.onPause} className={PILL_BUTTON}>⏸</button>
+            <button type="button" data-read-aloud-inline-pause="" aria-label="一時停止" title="一時停止" onClick={props.onPause} className={`${PILL_BUTTON} @max-[360px]:px-1`}>⏸</button>
           ) : (
-            <button type="button" data-read-aloud-inline-resume="" onClick={props.onResume} className={PILL_BUTTON}>▶</button>
+            <button type="button" data-read-aloud-inline-resume="" aria-label="再開" title="再開" onClick={props.onResume} className={`${PILL_BUTTON} @max-[360px]:px-1`}>▶</button>
           )}
-          <button type="button" data-read-aloud-inline-stop="" onClick={props.onStop} className={PILL_BUTTON}>■</button>
-          <span className="tabular-nums text-ink/70">{state.chunkIndex + 1}/{state.chunkCount}</span>
+          <button type="button" data-read-aloud-inline-stop="" aria-label="停止" title="停止" onClick={props.onStop} className={`${PILL_BUTTON} @max-[360px]:px-1`}>■</button>
+          <span className="tabular-nums text-ink/70 @max-[360px]:hidden">{state.chunkIndex + 1}/{state.chunkCount}</span>
         </span>
       ) : (
         <button
@@ -55,7 +58,7 @@ export function ReadAloudInlineBar(props: ReadAloudViewProps) {
           data-read-aloud-inline-play=""
           disabled={playDisabled}
           onClick={props.onStartTarget}
-          className={PILL_BUTTON}
+          className={`${PILL_BUTTON} @max-[360px]:px-1`}
           title={unavailable ?? undefined}
         >
           ▶

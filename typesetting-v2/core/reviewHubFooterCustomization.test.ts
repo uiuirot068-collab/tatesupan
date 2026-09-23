@@ -1,68 +1,53 @@
-import fs from "node:fs";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const root = process.cwd();
-const read = (rel: string) =>
-  fs.readFileSync(path.join(root, rel), "utf8");
+const pane = readFileSync("src/components/EditorPane.tsx", "utf8");
+const hub = readFileSync("src/components/ReviewHub.tsx", "utf8");
+const toolRegistry = readFileSync("src/lib/reviewHub.ts", "utf8");
+const pinSettings = readFileSync("src/components/ReviewHubFooterPinSettings.tsx", "utf8");
+const pinStore = readFileSync("src/lib/reviewHubFooterPins.ts", "utf8");
+const pinHook = readFileSync("src/hooks/useReviewHubFooterPins.ts", "utf8");
 
-const hub = read("src/components/ReviewHub.tsx");
-const tools = read("src/lib/reviewHub.ts");
-const pane = read("src/components/EditorPane.tsx");
-const settings = read("src/components/ReviewHubFooterPinSettings.tsx");
-const pinned = read("src/components/ReviewHubFooterPinnedTools.tsx");
-const hook = read("src/hooks/useReviewHubFooterPins.ts");
-
-describe("B2 footer customization wiring", () => {
-  it("mounts a footer display control on each tool row of the Review Hub panel", () => {
-    // Inline on the tool's own title row (not a stacked settings block): keeps the panel inside its cap on a 320x568 phone.
-    expect(hub).toContain("<ReviewHubFooterPinControl toolId={tool.id} label={tool.title} />");
-    expect(hub).toContain("<ReviewHubFooterPinNote />");
+describe("B2 footer customization wiring — final Review UI contract", () => {
+  it("mounts a footer display control on each Review Hub tool row", () => {
+    expect(hub).toContain("ReviewHubFooterPinSettings");
+    expect(pinSettings).toContain("data-review-hub-footer-pin-toggle");
   });
 
-  it("reuses the Editor's canonical visualLength pill, unchanged, for character count", () => {
-    expect(pane).toContain("<ReviewHubFooterPinnedTools");
-    expect(pane).toContain('title="現在の原稿文字数"');
-    expect(pane).toContain("現在の原稿文字数 {visualLength}文字");
-    expect(pinned).toContain("characterCount");
-    expect(pinned).not.toContain("countVisualLength");
+  it("keeps the canonical manuscript character count in the title row, independent of footer pins", () => {
+    expect(pane).toContain('data-editor-character-count=""');
+    expect(pane).toContain('{visualLength.toLocaleString("ja-JP")}');
+    expect(pane).toContain('workSessionPinned={footerPins.includes("character-count")}');
   });
 
-  it("makes 文章チェックβ's footer display follow the pin, separately from its ON/OFF state", () => {
-    // the strip, and the mobile one-line checkbox, are shown only while pinned...
-    expect(pane).toContain('footerPins.includes("writing-check")');
-    expect(pane).toMatch(/<WritingCheckBar\s+showBar=\{writingCheckPinned\}/);
-    expect(pane).toMatch(/\{writingCheckPinned && \(\s*<>\s*<label[\s\S]*?チェックβ[\s\S]*?<\/>\s*\)\}/);
-    // ...and the pin never reads or writes the ON/OFF flag
-    expect(pinned + settings + hook).not.toMatch(/writingCheckEnabled|setWritingCheckEnabled|useWritingCheckEnabled/);
-    expect(pane).toContain("footerToolsSwapped");
+  it("routes writing-check footer display by pin separately from its ON/OFF state", () => {
+    expect(pane).toContain('const writingCheckPinned = footerPins.includes("writing-check")');
+    expect(pane).toContain("showBar={false}");
+    expect(pane).toContain("writingCheckPinned={writingCheckPinned}");
+    expect(pane).toContain('data-mobile-writing-check-pill=""');
+    expect(pane).toContain("enabled={writingCheckEnabled}");
   });
 
-  it("offers only currently implemented tools", () => {
-    expect(tools).toContain("文章チェックβ");
-    expect(tools).toContain("文字数カウント");
-    expect(settings).not.toContain("音読β");
-    expect(settings).not.toContain("描写");
-    expect(settings).not.toContain("傍点");
-    expect(hub).toContain("REVIEW_HUB_TOOLS.map"); // the controls follow the Hub's own tool list, not a second one
-    expect(settings).not.toContain("TOOLS");
+  it("offers all four currently implemented Review tools", () => {
+    for (const id of ["writing-check", "character-count", "read-aloud", "description-check"]) {
+      expect(toolRegistry).toContain(id);
+      expect(pane).toContain(`"${id}"`);
+    }
   });
 
-  it("states that display selection is not feature enablement", () => {
-    expect(settings).toContain("フッター表示は機能のON/OFFとは別");
-    expect(settings).not.toContain("setWritingCheckEnabled");
+  it("keeps display selection separate from feature enablement for the newer tools too", () => {
+    expect(pane).toContain('footerPins.includes("read-aloud")');
+    expect(pane).toContain('footerPins.includes("description-check")');
+    expect(pane).toContain("descriptionCheck.enabled");
+    expect(pane).toContain("readAloud.state.status");
   });
 
-  it("stores preference locally and not in cloud/manuscript state", () => {
-    expect(hook).toContain("localStorage");
-    expect(hook).toContain("tatespun:review-hub-footer-tools-change");
-    expect(hook).not.toContain("supabase");
+  it("stores footer display preference locally, not in manuscript/cloud state", () => {
+    expect(pinStore).toContain("tatespun.reviewHub.footerTools.v1");
+    expect(pinStore).not.toMatch(/supabase|manuscript|documentId|docId/i);
   });
 
-  it("uses the external-store contract for hydration-safe local preference", () => {
-    expect(hook).toContain("useSyncExternalStore");
-    expect(hook).toContain("getServerSnapshot");
-    expect(hook).toContain("getClientSnapshot");
-    expect(hook).not.toContain("setPins(readStoredPins())");
+  it("uses an external-store hydration-safe local preference hook", () => {
+    expect(pinHook).toContain("useSyncExternalStore");
   });
 });

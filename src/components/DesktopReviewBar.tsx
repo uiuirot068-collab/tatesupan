@@ -100,14 +100,14 @@ export function DesktopReviewBar({
   const showReadAloud = readAloudPinned || readAloudActive;
 
   return (
-    <div ref={wrapperRef} data-desktop-review-bar="" className="relative flex min-w-0 items-center gap-1.5 border-t border-ink/10 bg-base px-2 py-1.5">
+    <div ref={wrapperRef} data-desktop-review-bar="" className="@container relative flex min-w-0 items-center gap-1.5 border-t border-ink/10 bg-base px-2 py-1.5">
       {activePopover === "read-aloud" && (
         <div data-desktop-review-popover="read-aloud" className="absolute bottom-full left-0 z-20 mb-1.5 w-[19rem] max-w-[calc(100vw-2rem)]">
           <ReadAloudDockCard {...readAloud} />
         </div>
       )}
       {activePopover === "description-check" && (
-        <div data-desktop-review-popover="description-check" className="absolute bottom-full left-0 z-20 mb-1.5 w-[24rem] max-w-[calc(100vw-2rem)]">
+        <div data-desktop-review-popover="description-check" className="absolute bottom-full left-0 z-20 mb-1.5 w-[24rem] max-w-full">
           <DescriptionCheckDockCard {...description} />
         </div>
       )}

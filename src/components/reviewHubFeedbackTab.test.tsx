@@ -85,7 +85,7 @@ describe("B3 見直し tab: structure", () => {
     const html = render();
     expect(html).toContain("回答と一緒に送られる情報");
     expect(html).toContain("フッターに表示中");
-    expect(html).toContain("文章チェックβ → 文字数カウント（2/2）");
+    expect(html).toContain("文章チェックβ → 作業カウンター（2/2）");
     expect(html).toContain("フッター表示を変えた回数");
     expect(html).toContain("見直しを開いた回数");
     expect(html.match(/<dt/g)).toHaveLength(3);

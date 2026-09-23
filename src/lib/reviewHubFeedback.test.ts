@@ -58,7 +58,7 @@ describe("B3 roadmap wording", () => {
   it("Q2 choices are exactly the tools the Hub offers today (registry-driven): no unimplemented 傍点 / VOICEVOX choice", () => {
     const labels = reviewHubFavoriteChoices().map((c) => c.label);
     expect(labels).toEqual(REVIEW_HUB_TOOLS.map((t) => t.title));
-    expect(labels).toEqual(["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"]);
+    expect(labels).toEqual(["文章チェックβ", "作業カウンター", "音読β", "描写語・修飾表現チェックβ"]);
     expect(labels.join()).not.toMatch(/VOICEVOX|傍点/);
   });
 });
@@ -70,8 +70,8 @@ describe("B3 message composition (what leaves the device)", () => {
       [
         "【見直しアンケート】",
         "Q1 見直しのフッター表示は最大2枠で足りていますか？: もう1枠ほしい",
-        "Q2 見直しでよく使うもの: 文章チェックβ、文字数カウント",
-        "フッターに表示中: 文章チェックβ → 文字数カウント（2/2）",
+        "Q2 見直しでよく使うもの: 文章チェックβ、作業カウンター",
+        "フッターに表示中: 文章チェックβ → 作業カウンター（2/2）",
         "フッター表示を変えた回数: 1回（このページを開いてから）",
         "見直しを開いた回数: 3回（このページを開いてから）",
         "自由記述: （なし）",
@@ -99,9 +99,9 @@ describe("B3 message composition (what leaves the device)", () => {
   });
 
   it("reports the current footer order (single pin, and swapped order)", () => {
-    expect(buildReviewHubSurveyMessage({ ...baseInput, footerTools: ["character-count"] }).usageRows[0][1]).toBe("文字数カウント（1/2）");
+    expect(buildReviewHubSurveyMessage({ ...baseInput, footerTools: ["character-count"] }).usageRows[0][1]).toBe("作業カウンター（1/2）");
     expect(buildReviewHubSurveyMessage({ ...baseInput, footerTools: ["character-count", "writing-check"] }).usageRows[0][1]).toBe(
-      "文字数カウント → 文章チェックβ（2/2）"
+      "作業カウンター → 文章チェックβ（2/2）"
     );
   });
 
@@ -119,7 +119,7 @@ describe("B3 privacy: the answer can only ever contain allowlisted choices, coun
       favorites: ["writing-check", "writing-check", "unknown-tool", "character-count", "writing-check"] as never,
       footerTools: ["writing-check", "secret-tool"] as never,
     });
-    expect(message).toContain("Q2 見直しでよく使うもの: 文章チェックβ、文字数カウント");
+    expect(message).toContain("Q2 見直しでよく使うもの: 文章チェックβ、作業カウンター");
     expect(message).not.toContain("unknown-tool");
     expect(message).not.toContain("secret-tool");
     expect(message).toContain("フッターに表示中: 文章チェックβ（1/2）");

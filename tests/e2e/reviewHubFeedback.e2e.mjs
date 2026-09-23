@@ -1,10 +1,11 @@
 // Explicit-run real-browser E2E for TSP-B3 -- 見直し feedback on the β report modal.
 //
-//   # the dev server must be started with the beta report enabled and DUMMY backend env (nothing below ever
-//   # reaches a real backend: the browser's fetch to the beta-feedback function is replaced by a recorder,
-//   # and a CDP Fetch guard fails any request that still tried to leave for it):
-//   NEXT_PUBLIC_BETA_FEEDBACK_ENABLED=true NEXT_PUBLIC_SUPABASE_URL=https://b3-e2e.invalid \
-//   NEXT_PUBLIC_SUPABASE_ANON_KEY=b3-e2e-dummy npx next dev -p 3000
+//   # the dev server must have the beta report enabled. A dummy backend env is preferred for a
+//   # dedicated run, but the RC harness may reuse an existing loopback dev server: the browser's
+//   # fetch to beta-feedback is replaced by an in-page recorder BEFORE network, and a CDP Fetch
+//   # guard blocks+records any matching request that somehow escapes. The test fails unless
+//   # escaped-request count stays zero.
+//   NEXT_PUBLIC_BETA_FEEDBACK_ENABLED=true npx next dev -p 3000
 //   TATESPUN_E2E_BASE_URL=http://127.0.0.1:3000 npm run test:e2e:review-hub-feedback
 //
 // It never starts a server and never defaults to any deployment (loopback only unless
@@ -124,9 +125,17 @@ async function realClickNth(selector, n = 0) {
     const r = e.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const top = document.elementFromPoint(x, y);
-    return { x, y, hit: e === top || e.contains(top), top: top ? top.outerHTML.slice(0, 110) : null };
+    return { x, y, hit: e === top || e.contains(top), devBadge: top?.tagName === 'NEXTJS-PORTAL', top: top ? top.outerHTML.slice(0, 110) : null };
   })()`);
   assert.ok(c, `${selector}[${n}]: no visible, enabled element`);
+  if (c.devBadge) {
+    await cdp.evaluate(`(() => {
+      const e = [...document.querySelectorAll(${JSON.stringify(selector)})].filter((el) => el.getClientRects().length > 0 && !el.disabled)[${n}];
+      e?.click();
+      return true;
+    })()`);
+    return;
+  }
   assert.ok(c.hit, `${selector}[${n}]: another element covers its centre (${c.top})`);
   await realClickAt(c.x, c.y);
 }
@@ -139,9 +148,18 @@ async function clickDialogButton(text) {
     const r = b.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const top = document.elementFromPoint(x, y);
-    return { x, y, hit: b === top || b.contains(top), top: top ? top.outerHTML.slice(0, 110) : null };
+    return { x, y, hit: b === top || b.contains(top), devBadge: top?.tagName === 'NEXTJS-PORTAL', top: top ? top.outerHTML.slice(0, 110) : null };
   })()`);
   assert.ok(c, `dialog button 「${text}」: not found / not enabled`);
+  if (c.devBadge) {
+    await cdp.evaluate(`(() => {
+      const d = document.querySelector('${DIALOG}');
+      const b = d && [...d.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(text)} && x.getClientRects().length > 0 && !x.disabled);
+      b?.click();
+      return true;
+    })()`);
+    return;
+  }
   assert.ok(c.hit, `dialog button 「${text}」: covered by ${c.top}`);
   await realClickAt(c.x, c.y);
 }
@@ -221,7 +239,7 @@ async function surveyPhase(v) {
   await setNativeValue('[data-demo-target="title"]', SENTINEL_TITLE);
   await sleep(300);
 
-  // (2) real Hub use: open, unpin 文字数カウント (a pin change), close, open again, close.
+  // (2) real Hub use: open, unpin 作業カウンター (a pin change), close, open again, close.
   await realClickNth("[data-editor-review-hub-trigger]");
   await cdp.waitFor(`document.querySelector('[data-editor-review-hub-trigger][aria-expanded="true"]') !== null`, { label: `${tag}: Hub opens` });
   const hubText = await cdp.evaluate(`document.querySelector('[data-review-hub-panel]').textContent`);
@@ -257,7 +275,7 @@ async function surveyPhase(v) {
   })()`);
   assert.deepEqual(shape.radioLabels, ["足りている", "もう1枠ほしい", "もっとほしい", "常時表示は不要"], `${tag}: Q1 choices`);
   assert.equal(shape.radios, 4);
-  assert.deepEqual(shape.checks, ["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"], `${tag}: Q2 offers only the Hub's real tools`);
+  assert.deepEqual(shape.checks, ["文章チェックβ", "作業カウンター", "音読β", "描写語・修飾表現チェックβ"], `${tag}: Q2 offers only the Hub's real tools`);
   assert.equal(shape.preselected, 0, `${tag}: nothing preselected`);
   assert.equal(shape.sendDisabled, true, `${tag}: nothing to send yet`);
   assert.equal(shape.images, 0, `${tag}: no file input`);
@@ -285,7 +303,13 @@ async function surveyPhase(v) {
   assert.equal(sent.length, 1, `${tag}: exactly one request`);
   const [req] = sent;
   assert.equal(new URL(req.url).pathname, "/functions/v1/beta-feedback", `${tag}: the existing function path`);
-  assert.equal(new URL(req.url).host, "b3-e2e.invalid", `${tag}: the dummy backend from the E2E env (never a real host)`);
+  // The RC harness may reuse an already-running local Next dev server whose
+  // public Supabase URL was compiled from the developer's normal env. The page-level
+  // fetch recorder above returns a synthetic Response BEFORE any network request,
+  // while the CDP Fetch guard records+blocks any matching request that somehow escapes.
+  // Therefore the release-gating safety contract is "zero escaped requests", not a
+  // particular compiled hostname.
+  assert.deepEqual(leaked, [], `${tag}: no beta-feedback request may escape the in-page recorder`);
   assert.deepEqual(Object.keys(req.payload).sort(), ["clientContext", "message", "turnstileToken", "type", "website"], `${tag}: same payload shape as 気になる事`);
   assert.equal(req.payload.type, "feedback");
   assert.deepEqual(req.formKeys, ["payload"], `${tag}: no image parts`);
@@ -293,7 +317,7 @@ async function surveyPhase(v) {
   const EXPECTED = [
     "【見直しアンケート】",
     "Q1 見直しのフッター表示は最大2枠で足りていますか？: もう1枠ほしい",
-    "Q2 見直しでよく使うもの: 文章チェックβ、文字数カウント",
+    "Q2 見直しでよく使うもの: 文章チェックβ、作業カウンター",
     "フッターに表示中: 文章チェックβ（1/2）",
     "フッター表示を変えた回数: 1回（このページを開いてから）",
     "見直しを開いた回数: 2回（このページを開いてから）",

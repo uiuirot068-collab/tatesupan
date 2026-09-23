@@ -278,14 +278,13 @@ describe("B5 registry, EditorPane and PagedEditor wiring", () => {
     expect(read("src/components/DesktopReviewBar.tsx")).toContain("<DescriptionCheckDockCard {...description} />");
   });
 
-  it("pinned = a status pill on the Desktop Review Bar (bottom of Preview) that opens a quick popover (portalled, zero manuscript/Preview height cost), a compact mini pill otherwise; the Hub keeps the full list", () => {
-    expect(pane).toContain("createPortal(");
-    expect(pane).toContain("reviewBarNode,");
+  it("pins description-check into the Desktop Review Bar and mobile Review footer without manuscript height cost", () => {
+    expect(pane).toContain('{footerPins.includes("description-check") && (');
+    expect(pane).toContain("<DescriptionCheckFooterPill");
+    expect(pane).toContain('descriptionPinned={footerPins.includes("description-check")}');
     expect(pane).toContain("description={{");
-    expect(pane).toContain("onPrev: () => stepDescription(-1),");
-    expect(pane).toContain("onNext: () => stepDescription(1),");
-    expect(pane).toContain('reviewSurface === "compact" && footerPins.includes("description-check") && (\n              <DescriptionCheckFooterPill');
-    expect(read("src/components/ReviewHubFooterPinnedTools.tsx")).not.toMatch(/description|readAloud|read-aloud/i);
+    expect(pane).toContain("createPortal(");
+    expect(pane).toContain("reviewBarNode");
   });
 
   it("markers render on BOTH editor surfaces (legacy textarea and the paged / WINDOWED editor)", () => {

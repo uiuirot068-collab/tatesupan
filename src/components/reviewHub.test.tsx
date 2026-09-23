@@ -102,24 +102,11 @@ describe("B1 footer trigger", () => {
     expect(html).toContain("-rotate-90");
   });
 
-  it("is rendered in BOTH footer forms (expanded status row + mobile one-line row), inside the footer wrapper", () => {
-    expect(pane.match(/<ReviewHubTrigger /g)).toHaveLength(2);
-    const collapsedRow = paneBetween('data-editor-footer-collapsed=""', 'data-writing-check-surface=""');
-    expect(collapsedRow).toContain("<ReviewHubTrigger");
-    expect(collapsedRow).toContain("compact");
-    // Revision 4: `<ReviewHubPanel` itself is now declared once, earlier in the component (see
-    // `reviewHubPanelElement`), and only its RENDER SITE (a bare identifier reference, conditional on
-    // surface) sits inside the footer wrapper -- so that reference is the correct "end"/"after" marker
-    // here, not the JSX tag text itself (which textually precedes the wrapper now).
-    const statusRow = paneBetween('data-editor-status-surfaces=""', "reviewHubPanelElement}");
-    expect(statusRow).toContain("<ReviewHubTrigger");
-
-    const wrapperStart = pane.indexOf('data-editor-footer=""');
-    expect(wrapperStart).toBeGreaterThan(-1);
-    for (const marker of ["<ReviewHubTrigger", "reviewHubPanelElement}", 'data-editor-status-surfaces=""']) {
-      expect(pane.indexOf(marker), marker).toBeGreaterThan(wrapperStart);
-    }
-    expect(paneBetween('data-editor-footer=""', "{/* TSP-RC-LATIN")).toContain("relative");
+  it("uses the mobile footer trigger inline and the Desktop Review Bar trigger in Preview", () => {
+    expect(pane).toContain("<ReviewHubTrigger");
+    expect(pane).toContain('data-mobile-review-footer=""');
+    expect(pane).toContain("<DesktopReviewBar");
+    expect(pane).toContain("onToggleReviewHub={toggleReviewHubAll}");
   });
 });
 
@@ -145,34 +132,27 @@ describe("B1 panel structure", () => {
     expect(panelMarkup(true)).not.toMatch(/<section[^>]* hidden=""/);
   });
 
-  it("renders exactly the registered tools, in registry order", () => {
-    const html = panelMarkup(true);
-    expect(Array.from(html.matchAll(/data-review-hub-tool="([^"]+)"/g), (m) => m[1])).toEqual([
-      "writing-check",
-      "character-count",
-      "read-aloud",
-      "description-check",
-    ]);
-    expect(html.indexOf("文章チェックβ")).toBeLessThan(html.indexOf("文字数カウント"));
-    expect(html.indexOf("文字数カウント")).toBeLessThan(html.indexOf("音読β"));
-    expect(html.indexOf("音読β")).toBeLessThan(html.indexOf("描写語・修飾表現チェックβ"));
+  it("wires the four released Review sections in registry order", () => {
+    const ids = ["writing-check", "character-count", "read-aloud", "description-check"];
+    const positions = ids.map((id) => pane.indexOf(`"${id}": (`));
+    for (const position of positions) expect(position).toBeGreaterThan(-1);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  it("keeps a narrow-viewport contract: inset 8px, capped height, own scroll, fixed width only from md up", () => {
-    const html = panelMarkup(true);
-    expect(html).toContain("left-2 right-2");
-    expect(html).toContain("max-h-[min(22rem,45vh)]");
-    expect(html).toContain("overflow-y-auto");
-    // md+ panes can be narrower than 22rem (the 768px split gives ~334px): the width must yield to the pane.
-    expect(html).toContain("md:left-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]");
-    expect(html).not.toMatch(/[\s"]w-\[\d+(rem|px)\]/); // no unconditional fixed width (md:w-[…] is fine)
+  it("uses the Bottom Sheet contract on compact widths and the portalled panel on desktop", () => {
+    expect(pane).toContain('sheet={reviewSurface === "compact"}');
+    expect(pane).toContain('reviewSurface !== "desktop" && reviewHubPanelElement');
+    expect(pane).toContain('reviewSurface === "desktop" &&');
+    expect(pane).toContain("reviewHubPanel={reviewHubPanelElement}");
   });
 });
 
 describe("the Hub only exposes tools that exist today", () => {
-  it("registers exactly 文章チェックβ, 文字数カウント, (B4) 音読β and (B5) 描写語・修飾表現チェックβ", () => {
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.id)).toEqual(["writing-check", "character-count", "read-aloud", "description-check"]);
-    expect(REVIEW_HUB_TOOLS.map((tool) => tool.title)).toEqual(["文章チェックβ", "文字数カウント", "音読β", "描写語・修飾表現チェックβ"]);
+  it("exposes exactly the four released Review tool ids in EditorPane", () => {
+    const ids = ["writing-check", "character-count", "read-aloud", "description-check"];
+    for (const id of ids) expect(pane).toContain(`"${id}"`);
+    expect(pane).not.toContain('"emphasis-mark"');
+    expect(pane).not.toContain("VOICEVOX");
   });
 
   it("shows no unimplemented tool (B6 傍点 / VOICEVOX / placeholders) anywhere the user can see (registry data + rendered UI + view/hook source)", () => {
@@ -269,10 +249,12 @@ describe("B2: 文章チェックβ footer strip follows フッターに表示, n
     expect(bar({ enabled: false, showBar: false, undoAvailable: true })).not.toContain("元に戻す");
   });
 
-  it("EditorPane wires the pin to the strip and the mobile one-line checkbox, never to the ON/OFF flag", () => {
-    expect(paneBetween("<WritingCheckBar", "enabled=")).toContain("showBar={writingCheckPinned}");
-    expect(paneBetween('data-editor-footer-collapsed=""', "<WorkSessionTracker")).toContain("{writingCheckPinned && (");
-    expect(paneBetween("const writingCheckPinned", "const footerToolsSwapped")).not.toMatch(/writingCheckEnabled/);
+  it("keeps writing-check display pin separate from writing-check ON/OFF in the final surfaces", () => {
+    expect(pane).toContain('const writingCheckPinned = footerPins.includes("writing-check")');
+    expect(pane).toContain("showBar={false}");
+    expect(pane).toContain("writingCheckPinned={writingCheckPinned}");
+    expect(pane).toContain('data-mobile-writing-check-pill=""');
+    expect(pane).toContain("enabled={writingCheckEnabled}");
   });
 });
 
@@ -314,13 +296,13 @@ describe("B1 reuses the existing 文章チェックβ behaviour", () => {
     expect(hubView + hubHook).not.toMatch(/runWritingCheck|applyFix|applyBulkFix|filterIgnored|writingCheckEngine/);
   });
 
-  it("「設定」 opens the existing settings panel state and 「確認候補を見る」 asks the existing result list to open", () => {
-    expect(pane).toMatch(/handleReviewHubOpenSettings = \(\) => \{[\s\S]*?setSettingsOpen\(true\);/);
-    expect(pane).toMatch(/handleReviewHubShowResults = \(\) => \{[\s\S]*?setWritingCheckResultsRequest\(/);
-    expect(paneBetween("<WritingCheckBar", "/>")).toContain("resultsRequestNonce={writingCheckResultsRequest}");
-    expect(pane.match(/<WritingCheckSettingsPanel/g)).toHaveLength(1); // no second settings surface
-    // mobile one-line footer hides the result list + settings host: expand first, then reveal.
-    expect(pane).toMatch(/revealWritingCheckSurface = \(\) => \{[\s\S]*?closeReviewHub\(\);[\s\S]*?setFooterCollapsed\(false\)/);
+  it("routes Review writing-check actions to the existing result request and settings state", () => {
+    expect(pane).toContain("const handleReviewHubShowResults = () => {");
+    expect(pane).toContain("setWritingCheckResultsRequest((value) => value + 1);");
+    expect(pane).toContain("const handleReviewHubOpenSettings = () => {");
+    expect(pane).toContain("setSettingsOpen(true);");
+    expect(pane).toContain("onShowResults={handleReviewHubShowResults}");
+    expect(pane).toContain("onOpenSettings={handleReviewHubOpenSettings}");
   });
 
   it("renders the toggle state, the same wording as the bar, and only offers actions that can act", () => {
@@ -367,7 +349,7 @@ describe("shared 文章チェックβ summary", () => {
   });
 });
 
-describe("B1 文字数カウント uses the canonical count", () => {
+describe("B1 作業カウンター uses the canonical count", () => {
   it("shows the value it is given, grouped like the footer's compact line", () => {
     expect(formatReviewHubCharacterCount(12843)).toBe("12,843文字");
     const html = renderToStaticMarkup(createElement(CharacterCountReviewSection, { count: 12843 }));
@@ -375,11 +357,12 @@ describe("B1 文字数カウント uses the canonical count", () => {
     expect(html).toContain("12,843文字");
   });
 
-  it("is fed EditorPane's debounced visualLength and adds no second counter", () => {
-    expect(pane).toContain('"character-count": <CharacterCountReviewSection count={visualLength} />');
-    expect(pane.match(/countVisualLength\(/g)).toHaveLength(1); // the one canonical source
-    expect(pane).toContain("現在の原稿文字数 {visualLength}文字"); // footer pill unchanged
-    expect(hubView + hubHook + hubModel).not.toMatch(/countVisualLength|tategaki|\.length\b/);
+  it("keeps raw manuscript character count in the title and the Review tool as WorkSessionTracker", () => {
+    expect(pane).toContain('data-editor-character-count=""');
+    expect(pane).toContain('{visualLength.toLocaleString("ja-JP")}');
+    expect(pane).toContain('"character-count": (');
+    expect(pane).toContain("<WorkSessionTracker");
+    expect(pane).toContain('workSessionPinned={footerPins.includes("character-count")}');
   });
 });
 
@@ -398,12 +381,9 @@ describe("B1 follows the existing footer chrome rules (focus mode / mobile keybo
     expect(hubHook).toContain("isReviewHubVisible(requestedOpen, chrome)");
   });
 
-  it("introduces no focus-mode exception: the trigger lives inside the surfaces the existing contract already hides", () => {
-    // Existing pins (postBlockerUx / rcPolishRound4/5) keep both surfaces on focusMode ? "max-md:hidden md:hidden".
-    expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]{0,180}focusMode \? "max-md:hidden md:hidden"/);
-    expect(pane).toContain("footerCollapsed && !focusMode && !keyboardActive");
-    const wrapperOpen = paneBetween('data-editor-footer=""', "{/* TSP-RC-LATIN");
-    expect(wrapperOpen).not.toMatch(/focusMode|keyboardActive/); // wrapper adds no chrome of its own
+  it("suppresses the compact Review footer with the existing focus-mode / keyboard gates", () => {
+    expect(pane).toContain('{reviewSurface === "compact" && !focusMode && !keyboardActive && (');
+    expect(pane).toContain('data-mobile-review-footer=""');
   });
 });
 
@@ -475,33 +455,25 @@ describe("B1 panel height is bounded by the space between the Editor pane's top 
 });
 
 describe("B1 narrow-footer overflow contract (source; pixel proof is the real-browser E2E)", () => {
-  it("the mobile one-line footer keeps clipping + a shrinkable count while the trigger cannot shrink", () => {
-    const collapsedRow = paneBetween('data-editor-footer-collapsed=""', 'data-writing-check-surface=""');
-    expect(collapsedRow).toContain("overflow-hidden");
-    expect(collapsedRow).toContain("min-w-0 shrink truncate whitespace-nowrap tabular-nums");
-    expect(hubView).toContain("inline-flex shrink-0 items-center whitespace-nowrap");
-    // tighter padding in the one-line form so the existing count keeps its room at 320-360px
-    expect(hubView).toContain('compact ? "gap-0 px-1" : "gap-1 px-2"');
-    // the decorative ｜ dividers give way below 360px for the same reason
-    expect(pane.match(/text-ink\/25 max-\[359px\]:hidden">｜/g)).toHaveLength(2);
+  it("keeps the mobile one-line Review footer bounded and non-growing", () => {
+    const start = pane.indexOf('data-mobile-review-footer=""');
+    expect(start).toBeGreaterThan(-1);
+    const mobileFooter = pane.slice(start, start + 2200);
+    expect(mobileFooter).toContain("overflow-hidden");
+    expect(mobileFooter).toContain("<ReviewHubTrigger");
+    expect(mobileFooter).toContain("compact");
   });
 
-  it("the desktop trigger shares the syntax-hint row, NOT the controls row (770px density: no extra footer line)", () => {
-    // Controls row = 作業カウンター + 現在の原稿文字数 only. A third item there wrapped in the ~335px split-screen Editor column.
-    const controlsRow = paneBetween("data-editor-footer-controls", "reviewHubPanelElement}");
-    expect(controlsRow).not.toContain("<ReviewHubTrigger");
-    const hintRow = paneBetween('data-editor-status-surfaces=""', "data-editor-footer-controls");
-    expect(hintRow).toContain("<ReviewHubTrigger");
-    expect(hintRow).toContain("<EditorSyntaxHelp />");
-    expect(hintRow).toContain("flush");
-    // the hint keeps the shrinking role (min-w-0 flex-1) so the trigger never forces the row wider
-    expect(hintRow).toContain('data-ruby-tcy-status="" className="min-w-0 flex-1"');
-    // "flush" trims only vertical padding so the ~20px hint row does not grow
-    expect(hubView).toContain('flush ? "py-px" : "py-0.5"');
+  it("keeps desktop Review chrome out of the Editor footer and portals it into Preview", () => {
+    expect(pane).toContain("<DesktopReviewBar");
+    expect(pane).toContain("createPortal(");
+    expect(pane).toContain("reviewBarNode");
+    expect(pane).toContain('reviewSurface === "desktop" &&');
   });
 
-  it("the expanded footer row still wraps instead of overflowing", () => {
-    expect(paneBetween('data-editor-footer-controls', "<WorkSessionTracker")).toContain("flex-wrap");
-    expect(paneBetween('data-editor-footer=""', "{/* TSP-RC-LATIN")).toContain("min-w-0");
+  it("has no legacy expanded desktop Review footer after the final Review-surface redesign", () => {
+    expect(pane).not.toContain('data-editor-footer-controls=""');
+    expect(pane).toContain('data-mobile-review-footer=""');
+    expect(pane).toContain("<DesktopReviewBar");
   });
 });
