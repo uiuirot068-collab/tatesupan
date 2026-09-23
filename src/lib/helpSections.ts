@@ -20,14 +20,25 @@
 export const HELP_SECTION_IDS = [
   "preview",
   "vertical-typesetting",
+  "ruby",
+  "tcy",
   "page-break",
   "replace",
   "writing-check",
+  "manuscript-transfer",
   "export",
   "page-settings",
+  "preview-navigation",
+  "trim-line",
+  "page-selection",
   "table-of-contents",
   "colophon",
+  "review-tools",
+  "beta-feedback",
   "images",
+  "psd-images",
+  "image-storage",
+  "shortcuts",
 ] as const;
 
 export type HelpSectionId = (typeof HELP_SECTION_IDS)[number];
