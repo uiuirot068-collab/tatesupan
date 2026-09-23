@@ -2231,7 +2231,9 @@ function PreviewPane({
       data-preview-pane-root=""
       data-preview-frame-mode={integratedFrame ? "integrated" : "standalone"}
       className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-base ${
-        integratedFrame ? "rounded-t-2xl" : "rounded-2xl border border-ink/10 shadow-sm"
+        integratedFrame
+          ? "rounded-t-2xl border border-b-0 border-ink/10 shadow-none"
+          : "rounded-2xl border border-ink/10 shadow-sm"
       }`}
     >
       {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}

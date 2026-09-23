@@ -100,7 +100,11 @@ export function DesktopReviewBar({
   const showReadAloud = readAloudPinned || readAloudActive;
 
   return (
-    <div ref={wrapperRef} data-desktop-review-bar="" className="@container relative flex min-w-0 items-center gap-1.5 rounded-b-2xl border-t border-ink/10 bg-base px-2 py-1.5">
+    <div
+      ref={wrapperRef}
+      data-desktop-review-bar=""
+      className="@container relative flex min-w-0 flex-none flex-col rounded-b-2xl border border-ink/10 bg-base"
+    >
       {activePopover === "read-aloud" && (
         <div data-desktop-review-popover="read-aloud" className="absolute bottom-full left-0 z-20 mb-1.5 w-[19rem] max-w-[calc(100vw-2rem)]">
           <ReadAloudDockCard {...readAloud} />
@@ -124,39 +128,41 @@ export function DesktopReviewBar({
           renders `absolute bottom-full ...`, so it needs no extra positioning wrapper here. */}
       {reviewHubPanel}
       {writingCheckHost ? (
-        <div data-desktop-writing-check-host="" className="pointer-events-none absolute inset-x-0 bottom-0 h-0 z-30">
-          <div className="pointer-events-auto relative w-full">{writingCheckHost}</div>
+        <div data-desktop-writing-check-host="" className="min-w-0">
+          {writingCheckHost}
         </div>
       ) : null}
 
-      <ReviewHubTrigger open={reviewHubOpen} onToggle={openHub} />
-      {writingCheckPinned && (
-        <button
-          type="button"
-          data-desktop-writing-check-pill=""
-          onClick={() => {
-            if (writingCheckEnabled && writingCheckCount > 0) onOpenWritingCheck?.();
-            else openHub();
-          }}
-          className="shrink-0 whitespace-nowrap rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          {writingCheckEnabled ? `文章β ${writingCheckCount.toLocaleString("ja-JP")}件` : "文章β OFF"}
-        </button>
-      )}
-      {descriptionPinned && (
-        <DescriptionCheckFooterPill
-          enabled={description.enabled}
-          current={description.current}
-          count={description.marks.length}
-          onOpen={() => selectQuick("description-check")}
-        />
-      )}
-      {workSessionPinned && workSessionPill}
-      {showReadAloud && (
-        <div className="min-w-0">
-          <ReadAloudInlineBar {...readAloud} />
-        </div>
-      )}
+      <div data-desktop-review-bar-row="" className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+        <ReviewHubTrigger open={reviewHubOpen} onToggle={openHub} />
+        {writingCheckPinned && (
+          <button
+            type="button"
+            data-desktop-writing-check-pill=""
+            onClick={() => {
+              if (writingCheckEnabled && writingCheckCount > 0) onOpenWritingCheck?.();
+              else openHub();
+            }}
+            className="shrink-0 whitespace-nowrap rounded-full border border-red-300/70 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {writingCheckEnabled ? `文章β ${writingCheckCount.toLocaleString("ja-JP")}件` : "文章β OFF"}
+          </button>
+        )}
+        {descriptionPinned && (
+          <DescriptionCheckFooterPill
+            enabled={description.enabled}
+            current={description.current}
+            count={description.marks.length}
+            onOpen={() => selectQuick("description-check")}
+          />
+        )}
+        {workSessionPinned && workSessionPill}
+        {showReadAloud && (
+          <div className="min-w-0">
+            <ReadAloudInlineBar {...readAloud} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

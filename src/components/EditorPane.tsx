@@ -706,6 +706,7 @@ function EditorPaneInner(
       undoAvailable={undoState !== null}
       onUndo={handleUndoFix}
       resultsRequestNonce={writingCheckResultsRequest}
+      resultsPlacement={reviewSurface === "desktop" ? "inline" : "popover"}
     />
   );
 

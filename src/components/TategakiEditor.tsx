@@ -866,7 +866,7 @@ export default function TategakiEditor({
             pushed outside the viewport instead of sharing the space. Introducing this inner flex-row container
             is the whole fix: the rail eats from ITS flex-basis, and the browser naturally recomputes the split's
             percentages against the wrapper's now-smaller actual width. */}
-        <div ref={editorSplitRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:flex-row">
+        <div ref={editorSplitRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden md:overflow-visible md:flex-row">
         {/* TSP-Review-UI (Revision 3): `@container` here, paired with EditorPane's `md:@max-[905px]:`
             action-row classes, is what keeps the manuscript's HEIGHT stable when the Rail toggles on/off
             (see manuscriptHeightUnaffectedByRail in reviewLayout.e2e.mjs). Those classes used to be plain
@@ -941,9 +941,9 @@ export default function TategakiEditor({
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"}`}
+          } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"} ${reviewBarEligible ? "md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""}`}
         >
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div className={`min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
               content={previewContent}
               title={title}

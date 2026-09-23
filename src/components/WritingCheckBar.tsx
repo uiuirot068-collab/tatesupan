@@ -30,12 +30,15 @@ interface WritingCheckBarProps {
    * manuscript change is never left without an undo.
    */
   showBar?: boolean;
+  /** Where the results list is rendered. Desktop Review Bar uses inline so it never overlaps the footer. */
+  resultsPlacement?: "popover" | "inline";
 }
 
 /**
  * TSP-LOOP-004 → 文章チェック β 2.0 (Phase 3) result panel. Lives in the
- * editor footer area; the reason list is a popover so it never changes the
- * textarea's height. Selecting an item's own text moves the caret/selection
+ * editor footer area. The reason list can be a popover or an inline panel;
+ * the desktop Review Bar uses the inline form so it never overlaps the footer.
+ * Selecting an item's own text moves the caret/selection
  * to that range — it never edits the text on its own; only the explicit 直す
  * / まとめて直す buttons ever mutate the manuscript, and only in direct
  * response to a click (see `applyFix.ts`/`applyBulkFix.ts`'s own doc: a fix
@@ -60,6 +63,7 @@ export default function WritingCheckBar({
   onUndo,
   resultsRequestNonce,
   showBar = true,
+  resultsPlacement = "popover",
 }: WritingCheckBarProps) {
   const [open, setOpen] = useState(false);
   // Adjust-state-during-render: a changed request counter opens the list once.
@@ -163,7 +167,15 @@ export default function WritingCheckBar({
       )}
 
       {isOpen && (
-        <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-80 overflow-y-auto rounded-lg border border-ink/15 bg-base p-1.5 shadow-lg">
+        <div
+          data-writing-check-results-panel=""
+          data-writing-check-results-placement={resultsPlacement}
+          className={
+            resultsPlacement === "inline"
+              ? "relative max-h-64 overflow-y-auto border-b border-ink/10 bg-base p-1.5"
+              : "absolute bottom-full left-2 right-2 z-20 mb-1 max-h-80 overflow-y-auto rounded-lg border border-ink/15 bg-base p-1.5 shadow-lg"
+          }
+        >
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <p className="text-[10px] text-ink/50">
               波線は「間違い」ではなく確認の目安です。内容を確認してご自身で判断してください。
