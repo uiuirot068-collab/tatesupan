@@ -80,7 +80,7 @@
 .howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
 .howto-page .guide-logo span { font-size: 11px; }
 .howto-page .guide-logo b { font: 700 17px Georgia, serif; }
-.howto-page .guide-links { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; flex: 1; max-width: 560px; }
+.howto-page .guide-links { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; flex: 1; max-width: 680px; }
 /* The missing rule: without it, a nav item's Japanese text wrapped
    character-by-character the moment its 1fr column got narrower than the
    text itself. keep-all only allows breaking at an existing `<br />`/word
@@ -127,6 +127,23 @@
 .howto-page .image-frame { padding: 20px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--slot); min-height: 200px; }
 .howto-page .image-frame img { display: block; max-width: 100%; height: auto; }
 
+.howto-page .review-tools-guide { padding: 0 0 94px; scroll-margin-top: 125px; }
+.howto-page .review-tools-guide > h2 { width: 74%; margin: 0 auto 20px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
+.howto-page .review-tools-lead { max-width: 760px; margin: 0 auto 22px; font-size: 14px; line-height: 1.9; }
+.howto-page .review-tools-usage { max-width: 760px; margin: 0 auto 22px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--sub); }
+.howto-page .review-tools-usage h3 { margin: 0 0 8px; font-size: 15px; }
+.howto-page .review-tools-usage p { margin: 0; font-size: 14px; line-height: 1.8; }
+.howto-page .review-tool-sections { display: grid; gap: 28px; max-width: 760px; margin: 0 auto; }
+.howto-page .review-tool-section { min-width: 0; }
+.howto-page .review-tool-section > h3 { margin: 0; padding: 9px 16px; background: var(--gold); color: #fff; font-size: 15px; font-weight: 700; line-height: 1.5; }
+.howto-page .review-tool-copy { padding: 20px 22px 22px; border: 1px solid var(--line); border-top: 0; background: var(--paper); font-size: 13px; line-height: 1.85; }
+.howto-page .review-tool-copy h4 { margin: 20px 0 7px; font-size: 14px; }
+.howto-page .review-tool-copy h4:first-child { margin-top: 0; }
+.howto-page .review-tool-copy p { margin: 0 0 12px; }
+.howto-page .review-tool-copy p:last-child { margin-bottom: 0; }
+.howto-page .review-tool-copy ul { margin: 8px 0 14px; padding-left: 1.5em; }
+.howto-page .review-tool-copy li { margin: 5px 0; }
+
 .howto-page .tips-index { padding: 0 0 94px; scroll-margin-top: 125px; }
 .howto-page .tips-index > h2 { width: 74%; margin: 0 auto 24px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; }
 .howto-page .tips-index ol { columns: 2; gap: 40px; max-width: 680px; margin: 0 auto; padding-left: 2em; }
@@ -153,7 +170,7 @@
 .howto-page .contact-actions button.primary:hover { background: var(--gold-dark); }
 
 .howto-page .devlog { margin: 0 -64px; padding: 60px 64px 70px; background: var(--dark); color: #f6f0e7; scroll-margin-top: 110px; }
-.howto-page .devlog-heading { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: end; margin-bottom: 30px; }
+.howto-page .devlog-heading { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: end; margin-bottom: 30px; }
 .howto-page .devlog-heading span { font-size: 11px; letter-spacing: .15em; color: #bfb7ac; }
 .howto-page .devlog-heading h2 { margin: 4px 0 0; font-size: 22px; }
 .howto-page .devlog-heading p { font-size: 13px; color: #bdb5aa; }
@@ -184,7 +201,7 @@
    FANBOX/OFUSE support, not the config-gated Amazon/Rakuten shopping
    links) so the two never share markup or compliance wording rules.
    .support-actions wraps for no horizontal overflow down to 320px. */
-.howto-page .support-footer { max-width: 680px; margin: 40px auto 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); text-align: center; }
+.howto-page .support-footer { max-width: 680px; margin: 40px auto 72px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); text-align: center; }
 .howto-page .support-footer h2 { margin: 0 0 8px; font-size: 18px; }
 .howto-page .support-lead { margin: 0 0 16px; font-size: 14px; }
 .howto-page .support-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 14px; }
@@ -222,6 +239,8 @@
   .howto-page .chapter > h2 { width: 100%; }
   .howto-page .subhead { width: 90%; }
   .howto-page .tips-index ol { columns: 1; }
+  .howto-page .review-tools-guide > h2 { width: 100%; }
+  .howto-page .review-tool-copy { padding: 17px 16px 19px; }
   .howto-page .devlog { margin: 0 -22px; padding: 48px 22px 58px; }
   .howto-page .devlog-heading { grid-template-columns: 1fr; }
   .howto-page .log-row { grid-template-columns: 1fr; gap: 5px; }

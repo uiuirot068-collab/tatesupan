@@ -188,34 +188,6 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
                 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs
                 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink/10 [&_pre]:p-2 [&_pre]:text-xs"
             >
-              <nav
-                aria-label="ヘルプ目次"
-                data-help-table-of-contents=""
-                className="rounded-lg border border-ink/10 bg-ink/[0.025] p-3"
-              >
-                <p className="text-xs font-bold text-ink/75">目次</p>
-                <ul className="mt-2 grid !list-none grid-cols-1 gap-x-3 gap-y-1 !pl-0 min-[420px]:grid-cols-2">
-                  {sections.map((section) => (
-                    <li key={section.id} className="flex min-w-0 items-start gap-1">
-                      <span
-                        aria-hidden="true"
-                        className="shrink-0 py-1 text-sm leading-relaxed text-accent"
-                      >
-                        •
-                      </span>
-                      <button
-                        type="button"
-                        data-help-toc-target={section.id}
-                        onClick={() => activateTableOfContentsItem(section.id)}
-                        className="min-w-0 flex-1 truncate rounded px-0.5 py-1 text-left text-sm leading-relaxed text-accent hover:bg-ink/5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1"
-                        title={section.title}
-                      >
-                        {section.title}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
               <section
                 aria-label="組版記法をコピー"
                 data-help-notation-actions=""
@@ -251,6 +223,34 @@ export default function HelpModal({ onClose, initialSectionId }: HelpModalProps)
                   </p>
                 )}
               </section>
+              <nav
+                aria-label="ヘルプ目次"
+                data-help-table-of-contents=""
+                className="rounded-lg border border-ink/10 bg-ink/[0.025] p-3"
+              >
+                <p className="text-xs font-bold text-ink/75">目次</p>
+                <ul className="mt-2 grid !list-none grid-cols-1 gap-x-3 gap-y-1 !pl-0 min-[420px]:grid-cols-2">
+                  {sections.map((section) => (
+                    <li key={section.id} className="flex min-w-0 items-start gap-1">
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 py-1 text-sm leading-relaxed text-accent"
+                      >
+                        •
+                      </span>
+                      <button
+                        type="button"
+                        data-help-toc-target={section.id}
+                        onClick={() => activateTableOfContentsItem(section.id)}
+                        className="min-w-0 flex-1 truncate rounded px-0.5 py-1 text-left text-sm leading-relaxed text-accent hover:bg-ink/5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1"
+                        title={section.title}
+                      >
+                        {section.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
               <ReactMarkdown
                 components={{
                   h2: headingComponent("h2"),

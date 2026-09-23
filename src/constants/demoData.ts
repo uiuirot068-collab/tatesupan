@@ -70,6 +70,9 @@ export interface DemoStep {
    * on screen — device-appropriate wording, never a fabricated control.
    */
   mobileNote?: string;
+  /** Optional contextual link shown under this step's explanation. */
+  moreInfoHref?: string;
+  moreInfoLabel?: string;
 }
 
 export const DEMO_STEPS: DemoStep[] = [
@@ -100,8 +103,11 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     title: "困ったらヘルプへ",
-    body: "わからないことがあれば、いつでもヘルプを確認できます。開いても、このデモの進み具合は消えません。",
+    body:
+      "わからないことがあれば、いつでもヘルプを確認できます。開いても、このデモの進み具合は消えません。TateSpunで使える機能をまとめて知りたいときは、HOW TOで詳しい説明を確認できます。",
     target: "help",
+    moreInfoHref: "/howto",
+    moreInfoLabel: "HOW TOで機能を見る ↗",
   },
   {
     title: "集中モードで本文を広く",
@@ -139,10 +145,10 @@ export const DEMO_STEPS: DemoStep[] = [
     targetSelector: "[data-editor-page-navigator]",
   },
   {
-    title: "作業タイムを記録しよう",
+    title: "「見直し」で原稿をチェックしよう",
     body:
-      "「作業スタート」から「作業終了」までに新しく書いた文字数を記録できます。これまでの結果は「作業記録」から確認できます。",
-    target: "work-session",
+      "「見直し」を押すと、文章チェックβ・作業カウンター・音読β・描写語・修飾表現チェックβなど、原稿を見直すための機能がまとまって開きます。フッターに表示する機能は最大2つまで選べます。",
+    targetSelector: "[data-editor-review-hub-trigger]",
   },
   {
     title: "作品を書き出してみよう",

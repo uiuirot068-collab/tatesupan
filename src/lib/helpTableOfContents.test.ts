@@ -35,6 +35,10 @@ describe("Help top table of contents", () => {
   it("uses native buttons so pointer, Enter, and Space activation share one path", () => {
     const modal = readFileSync(join(ROOT, "src", "components", "HelpModal.tsx"), "utf8");
     expect(modal).toContain('data-help-table-of-contents=""');
+    expect(modal).toContain('data-help-notation-actions=""');
+    expect(modal.indexOf('data-help-notation-actions=""')).toBeLessThan(
+      modal.indexOf('data-help-table-of-contents=""'),
+    );
     expect(modal).toMatch(/sections\.map[\s\S]{0,500}<button[\s\S]{0,120}type="button"/);
     expect(modal).toContain("activateTableOfContentsItem(section.id)");
     expect(modal).toContain("tabIndex={id ? -1 : undefined}");

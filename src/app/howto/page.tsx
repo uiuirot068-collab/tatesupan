@@ -52,6 +52,12 @@ interface UpdateLogEntry {
 
 const FALLBACK_LOGS: UpdateLogEntry[] = [
   {
+    date: "2026-09-23",
+    type: "update",
+    title: "文章見直しツール",
+    body: "HOW TOに「文章見直しツール」を追加し、Hero・ヘッダーから直接移動できるようにしました。文章チェックβ・作業カウンター・音読β・描写語／修飾表現チェックβの詳しい使い方を整理し、デモと機能ガイドからの案内も更新しました。",
+  },
+  {
     date: "2026-09-12",
     type: "update",
     title: "HOW TO TateSpun v3.4",
@@ -178,10 +184,13 @@ export default function HowToPage() {
                   <li><a href="#my-check">マイチェック</a></li>
                   <li><a href="#writing-check">文章チェックβ</a></li>
                   <li><a href="#body-notation">本文記法</a></li>
-                  <li><a href="#work-counter">作業カウント</a></li>
+                  <li><a href="#work-counter">作業カウンター</a></li>
                   <li><a href="#varied-use">多様な使い方</a></li>
                 </ol>
               </div>
+              <a className="hero-simple-link" href="#review-tools" data-copy-id="TEXT_HERO_MENU_REVIEW">
+                文章見直し<br />ツール
+              </a>
               <div className="hero-menu-block">
                 <div className="hero-menu-row">
                   <button
@@ -244,6 +253,7 @@ export default function HowToPage() {
               actual root cause of the character-by-character collapse. */}
           <div className="guide-links">
             <a href="#five-features" data-copy-id="TEXT_NAV_01">まずは知ってほしい<br />５つの機能</a>
+            <a href="#review-tools" data-copy-id="TEXT_NAV_REVIEW">文章見直し<br />ツール</a>
             <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技<br />10選β版</a>
             <a href="#faq" data-copy-id="TEXT_NAV_03">FAQ<br /><span>困ったとき</span></a>
             <button
@@ -266,7 +276,7 @@ export default function HowToPage() {
             <p data-copy-id="TEXT_INTRO_BODY_01"><a href="#my-check">1. 完成前マイチェックリスト＋PDF書き出し前チェック</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_02"><a href="#writing-check">2. 文章チェックβ</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_03"><a href="#body-notation">3. ルビ・縦中横・改ページの本文記法</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウント＋一時停止</a></p>
+            <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウンター＋一時停止</a></p>
             <p data-copy-id="TEXT_INTRO_BODY_05"><a href="#varied-use">5. 「ここで書かなくてもいい」原稿持ち込み運用</a></p>
           </div>
 
@@ -324,7 +334,7 @@ export default function HowToPage() {
 
         <section className="chapter" id="writing-check">
           <h2 data-copy-id="TEXT_SECTION_02_TITLE">2. 文章チェックβ</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：テキスト入力エディターの下部</div>
+          <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：「見直し」→文章チェックβ</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.writingCheck.file)} alt={HOWTO_IMAGES.writingCheck.alt} loading="lazy" />
@@ -377,8 +387,8 @@ export default function HowToPage() {
         </section>
 
         <section className="chapter" id="work-counter">
-          <h2 data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウント</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：テキストエディター下部</div>
+          <h2 data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウンター</h2>
+          <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：「見直し」→作業カウンター</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.workCounter.file)} alt={HOWTO_IMAGES.workCounter.alt} loading="lazy" />
@@ -429,6 +439,111 @@ export default function HowToPage() {
                 <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_04">{EDITOR_PAGE_EXPLANATION_BODY}</div>
               </section>
             </div>
+          </div>
+        </section>
+
+        <section className="review-tools-guide" id="review-tools">
+          <h2 data-copy-id="TEXT_REVIEW_TOOLS_TITLE">文章見直し<br />ツール</h2>
+          <p className="review-tools-lead" data-copy-id="TEXT_REVIEW_TOOLS_LEAD">
+            エディターの「見直し」には、原稿を書きながら確認したい機能をまとめています。PCではプレビュー下の見直しバー、モバイルではエディター下の1行バーから開けます。
+          </p>
+
+          <div className="review-tools-usage">
+            <h3>よく使う機能はフッターに最大2つまで</h3>
+            <p>
+              各機能の「フッターに表示」から、すぐ触りたい機能を最大2つまで選べます。フッター表示は機能そのもののON／OFFとは別です。フッターから外しても「見直し」を開けばいつでも使えます。設定はこのブラウザに保存されます。
+            </p>
+          </div>
+
+          <div className="review-tool-sections">
+            <article className="review-tool-section" id="review-writing-check">
+              <h3>文章チェックβ</h3>
+              <div className="review-tool-copy">
+                <p>入力中の文章から、括弧の閉じ忘れや句読点の重複など「確認した方がよい箇所」を波線でお知らせする機能です。「見直し」からいつでもオン／オフを切り替えられます。設定はこの端末に保存され、本文には記録されません。</p>
+
+                <h4>赤い波線・黄色い波線について</h4>
+                <p>波線は「文章が間違っている」と断定するものではありません。小説・創作では意図的な表現もあるため、内容を確認したうえで最終的には作者ご自身がご判断ください。TateSpunが文章を自動で書き換えることはありません。</p>
+                <ul>
+                  <li><strong>赤い波線（事故確認）:</strong> 括弧の対応ミスなど、原稿の事故である可能性が高い確認候補</li>
+                  <li><strong>黄色い波線（確認推奨）:</strong> 三点リーダー・ダッシュの形や表記ゆれなど、文脈によって判断が分かれる確認候補</li>
+                </ul>
+
+                <h4>現在チェックするもの</h4>
+                <ul>
+                  <li>括弧の対応（「」 『』 （） ［］ 【】 の閉じ忘れ・対応ミス）</li>
+                  <li>句読点の重複や、疑問符・感嘆符の直後に空白なしで本文が続く箇所</li>
+                  <li>TateSpun記法の一部の入力ミス</li>
+                  <li>三点リーダー・ダッシュの形</li>
+                  <li>行末の余分な空白、行頭のタブと全角スペースの混在、連続する空行</li>
+                  <li>半角カタカナ、登録した表記ゆれ（わたしの辞書）・NGワード</li>
+                </ul>
+
+                <h4>直す・無視・まとめて直す</h4>
+                <p>「直す」はその1件だけを提案どおりに修正し、「無視」はその候補を一時的に非表示にします。「安全な項目をまとめて直す」は、書き換え内容が一意に決まる項目だけをまとめて修正します。「元に戻す」で直前の操作を一度だけ取り消せます。</p>
+
+                <h4>設定・辞書・プライバシー</h4>
+                <p>「⚙ 設定」から「入稿前おすすめ」「記号だけ」「しっかりチェック」のプリセットや、個別ルールを切り替えられます。「わたしの辞書」と「NGワード」も登録できます。判定はブラウザ内で行われ、この機能のために本文や登録内容を外部AI／APIへ送りません。波線はプレビュー・JPG・PDFにも出力されません。</p>
+              </div>
+            </article>
+
+            <article className="review-tool-section" id="review-work-counter">
+              <h3>作業カウンター</h3>
+              <div className="review-tool-copy">
+                <p>「作業スタート」から「作業終了」までの実作業時間と、その作業中に新しく入力した文字数を記録する機能です。タイトル横に表示される「現在の原稿文字数」とは別の値です。</p>
+
+                <h4>作業中の操作</h4>
+                <ul>
+                  <li><strong>作業スタート:</strong> その作品の記録を開始</li>
+                  <li><strong>一時停止:</strong> 作業時間のカウントを停止。一時停止中の時間は実作業時間に含まれません</li>
+                  <li><strong>作業を再開する:</strong> 一時停止した続きから記録を再開</li>
+                  <li><strong>作業終了:</strong> 今回の作業記録を確定</li>
+                </ul>
+
+                <h4>作業終了後・作業記録</h4>
+                <p>作業を終了すると、今回書いた文字数・実作業時間・開始時刻・終了時刻を確認できます。結果はテキストとしてコピーしたり、Xへシェアしたりできます。「作業記録」では過去の完了した作業を見返せます。</p>
+
+                <h4>文字数の数え方</h4>
+                <p>作品全体の現在文字数ではなく、作業中に入力した文字数を積み上げます。そのため、あとから文字を削除した場合でも「現在の原稿文字数」と一致しないことがあります。Undo／Redoなど一部の操作は加算されません。記録は作品ごとに、このブラウザ内へ保存されます。</p>
+              </div>
+            </article>
+
+            <article className="review-tool-section" id="review-read-aloud">
+              <h3>音読β</h3>
+              <div className="review-tool-copy">
+                <p>原稿をブラウザや端末の読み上げ機能で音読し、目で読むだけでは気づきにくい文章の引っかかりや誤字を確認するための機能です。</p>
+
+                <h4>読み上げる範囲と操作</h4>
+                <p>「選択範囲」「現在の段落」「全文」から読み上げる範囲を選べます。読み上げ中は一時停止・再開・停止ができ、速度も調整できます。利用できる環境では読み上げに使う音声も選べます。</p>
+                <p>音声読み上げに対応していないブラウザや、端末に日本語音声がない環境では使用できない場合があります。</p>
+
+                <h4>読み辞書</h4>
+                <p>固有名詞など、読み上げ方を直したい言葉と読みを登録できます。読み方は <strong>本文に明示したルビ → 音読βの読み辞書 → ブラウザ／端末の通常の読み方</strong> の順で優先されます。読み辞書は本文を書き換えず、このブラウザ内に保存されます。</p>
+
+                <h4>プライバシー</h4>
+                <p>この端末の音声を選んでいる場合、音読のために原稿を外部へ送りません。オンライン音声を選んだ場合は、読み上げる本文がブラウザの音声サービスへ送られる場合があり、その場合は画面にも注意が表示されます。</p>
+              </div>
+            </article>
+
+            <article className="review-tool-section" id="review-description-check">
+              <h3>描写語・修飾表現チェックβ</h3>
+              <div className="review-tool-copy">
+                <p>原稿の中から、描写や修飾として働いている表現を見つけ、黄色系の色で「見直し候補」として表示する機能です。文章の良し悪しや、削除した方がよい表現を判定するものではありません。</p>
+
+                <h4>A・B・Cについて</h4>
+                <ul>
+                  <li><strong>A｜直接的な説明:</strong> 状態・評価・様子などを直接説明している表現</li>
+                  <li><strong>B｜描写的な修飾:</strong> 比喩や様子など、描写として働く連体・連用修飾</li>
+                  <li><strong>C｜広い修飾:</strong> 時間・場所・用途・所属・識別など、より広い種類の修飾</li>
+                </ul>
+                <p>A・B・Cは重要度や「直した方がよい順番」ではなく、表現の種類です。確認したい種類だけを個別にオン／オフできます。最初はAだけが選ばれています。</p>
+
+                <h4>候補を確認する</h4>
+                <p>色の付いた箇所をクリック／タップすると、候補になった理由を確認できます。「前へ」「次へ」で候補を順番に見たり、「候補の一覧」から該当箇所へ移動したりできます。残した方がよい表現も多いため、最終的には作者ご自身で判断してください。</p>
+
+                <h4>オン／オフとプライバシー</h4>
+                <p>「描写語・修飾表現チェックβを使う」からいつでもオン／オフできます。オフのあいだは解析を行いません。判定はブラウザ内で行われ、この機能のために原稿本文を外部AI／APIへ送信しません。自動で削除・書き換えることもありません。</p>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -713,7 +828,6 @@ export default function HowToPage() {
               <span>UPDATE / DEBUG LOG</span>
               <h2 data-copy-id="TEXT_DEVLOG_TITLE">更新・デバッグログ</h2>
             </div>
-            <p>別ページを増やさず、このページの最下部へ追記していきます。</p>
           </div>
           <div className="log-list">
             {visibleLogs.map((entry, i) => (
