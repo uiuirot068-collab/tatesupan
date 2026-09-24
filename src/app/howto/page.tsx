@@ -52,6 +52,12 @@ interface UpdateLogEntry {
 
 const FALLBACK_LOGS: UpdateLogEntry[] = [
   {
+    date: "2026-09-24",
+    type: "update",
+    title: "PDF書き出しを更新しました",
+    body: "PDF書き出しをベクター／埋め込みフォント中心の方式へ更新し、仕上がり・塗り足し3mm・トンボ付き出力のPDF内部Boxを整備しました。A5／B5／B6／新書／A6／文庫で確認し、縦組みのかぎ括弧・約物も改善。FAQに固定DPI・フォント埋め込み・β版の縦組み記号の注意点を追加しました。",
+  },
+  {
     date: "2026-09-23",
     type: "update",
     title: "文章見直しツール",
@@ -747,6 +753,7 @@ export default function HowToPage() {
                   <li>入稿用フルサイズ（トンボ＋塗り足し3mm付き）</li>
                 </ul>
                 <p data-copy-id="TEXT_SECTION_15_BODY_02">{PDF_FILENAME_EXPLANATION}</p>
+                <p>PDFの解像度・フォント埋め込み・縦組み記号のβ版注意点は、このページ下部の<a href="#faq">FAQ</a>にまとめています。</p>
                 <p>デスクトップ版では、出力中にEscを押すと出力を中断できます。「書き出し途中にミスに気付いたけれど、出力が長い……」というときにご活用ください。</p>
               </div>
             </div>
@@ -755,6 +762,36 @@ export default function HowToPage() {
 
         <section className="faq" id="faq">
           <h2 data-copy-id="TEXT_FAQ_TITLE">FAQ</h2>
+
+          <div className="faq-item">
+            <div className="faq-q">600dpiでPDFを書き出す必要はありますか？</div>
+            <div className="faq-text" data-copy-id="TEXT_FAQ_PDF_DPI">
+              <p><strong>いいえ。TateSpunのPDF出力は、600dpiなどの固定解像度に依存していません。</strong></p>
+              <p>本文文字は埋め込みフォントと文字の配置情報を中心に保持し、一部の縦組み字形やトンボなどはベクターデータ（線や輪郭を座標として保持するデータ）としてPDFへ出力します。ページサイズもmm・pt単位の実寸座標で保持されるため、本文文字やトンボの品質は「300dpi」「600dpi」といった画像解像度によって決まるものではありません。</p>
+              <p>なお、原稿内に写真やイラストなどの画像を使用する場合は、その画像自体には実効解像度（元画像のピクセル数と、紙面上で使用する大きさから決まるppi）が関係します。印刷所から画像解像度の指定がある場合は、その指定をご確認ください。</p>
+              <p>また、印刷所からPDF/Xなど特定のPDF形式を指定されている場合は、印刷所の入稿仕様を優先してください。</p>
+            </div>
+          </div>
+
+          <div className="faq-item">
+            <div className="faq-q">縦組みで、かぎ括弧の文末の「。」「、」や全角の「！？」「？！」の位置がずれます。</div>
+            <div className="faq-text" data-copy-id="TEXT_FAQ_VERTICAL_PUNCTUATION">
+              <p>現在（2026年9月時点）のβ版では、縦組みの約物（句読点・かぎ括弧・感嘆符などの記号）の組版に一部既知の制限があります。</p>
+              <p>たとえば「明日も、同じ場所で。」のように、閉じかぎ括弧「」」の直前へ「。」「、」を置いた場合、句読点の位置や文字間隔が不自然になることがあります。</p>
+              <p>また、全角の連続記号「！？」「？！」などは、縦組み時の配置によって一部の記号がずれて見える場合があります。</p>
+              <p>β版では、気になる場合は「閉じかぎ括弧直前の句点を省く」「全角の！？・？！を半角の!?・?!に置き換える」などの方法をご検討ください。これらは今後の組版改善対象です。</p>
+            </div>
+          </div>
+
+          <div className="faq-item">
+            <div className="faq-q">印刷所のパソコンにTateSpunと同じフォントがなくても大丈夫ですか？</div>
+            <div className="faq-text" data-copy-id="TEXT_FAQ_FONT_EMBEDDING">
+              <p>はい。TateSpunのPDFでは、使用するフォントをPDF内に埋め込んで出力します。そのため、PDFを開く側のパソコンに同じフォントがインストールされていなくても、基本的にはPDF内のフォント情報を使って同じ文字を表示できます。</p>
+              <p>現在TateSpunで使用しているShippori Minchoは、SIL Open Font License 1.1のフォントで、PDFへのフォント埋め込みが認められています。</p>
+              <p>ただし、印刷所によってPDF/Xなど独自の入稿形式が指定されている場合があります。最終入稿前には、利用する印刷所の入稿仕様もあわせてご確認ください。</p>
+            </div>
+          </div>
+
           <div className="faq-item">
             <div className="faq-q">不具合があったら？</div>
             <div className="faq-text" data-copy-id="TEXT_FAQ_LEAD">
