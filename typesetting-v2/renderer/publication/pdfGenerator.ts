@@ -1219,7 +1219,7 @@ function publicationBoxToJsPdfPoints(
  * MediaBox remains owned by addPage().
  */
 function applyPublicationPdfPageBoxes(pdf: jsPDF, output: PublicationPdfPageOutput): void {
-  const pageContext = pdf.internal.getCurrentPageInfo().pageContext as JsPdfPageContextWithPrintBoxes;
+  const pageContext = pdf.getCurrentPageInfo().pageContext as JsPdfPageContextWithPrintBoxes;
   const scaleFactor = pdf.internal.scaleFactor;
   pageContext.cropBox = publicationBoxToJsPdfPoints(output.cropBox, output.heightMm, scaleFactor);
   pageContext.bleedBox = publicationBoxToJsPdfPoints(output.bleedBox, output.heightMm, scaleFactor);
