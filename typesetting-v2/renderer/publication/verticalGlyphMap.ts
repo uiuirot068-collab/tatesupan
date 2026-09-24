@@ -59,10 +59,25 @@
 const VERTICAL_FORM_MAP: ReadonlyMap<number, number> = new Map([
   [0x3001, 0xfe11], // 、 -> vertical ideographic comma
   [0x3002, 0xfe12], // 。 -> vertical ideographic full stop
+  [0xff0c, 0xfe10], // ， -> vertical comma
+  [0x3008, 0xfe3f], // 〈 -> vertical left angle bracket
+  [0x3009, 0xfe40], // 〉 -> vertical right angle bracket
+  [0x300a, 0xfe3d], // 《 -> vertical left double angle bracket
+  [0x300b, 0xfe3e], // 》 -> vertical right double angle bracket
   [0x300c, 0xfe41], // 「 -> vertical left corner bracket
   [0x300d, 0xfe42], // 」 -> vertical right corner bracket
+  [0x300e, 0xfe43], // 『 -> vertical left white corner bracket
+  [0x300f, 0xfe44], // 』 -> vertical right white corner bracket
+  [0x3010, 0xfe3b], // 【 -> vertical left black lenticular bracket
+  [0x3011, 0xfe3c], // 】 -> vertical right black lenticular bracket
+  [0x3014, 0xfe39], // 〔 -> vertical left tortoise shell bracket
+  [0x3015, 0xfe3a], // 〕 -> vertical right tortoise shell bracket
   [0xff08, 0xfe35], // （ -> vertical left parenthesis
   [0xff09, 0xfe36], // ） -> vertical right parenthesis
+  [0xff3b, 0xfe47], // ［ -> vertical left square bracket
+  [0xff3d, 0xfe48], // ］ -> vertical right square bracket
+  [0xff5b, 0xfe37], // ｛ -> vertical left curly bracket
+  [0xff5d, 0xfe38], // ｝ -> vertical right curly bracket
   [0x2015, 0xfe31], // ― -> vertical em dash
   [0x2026, 0xfe19], // … -> vertical horizontal ellipsis
 ]);
@@ -110,15 +125,31 @@ export function verticalPaintTextFor(text: string): string {
 export type PunctuationClass = "OPEN_BRACKET" | "CLOSE_BRACKET" | "COMMA" | "PERIOD";
 
 const PUNCTUATION_CLASS_MAP: ReadonlyMap<number, PunctuationClass> = new Map([
+  [0x3008, "OPEN_BRACKET"], // 〈
+  [0x300a, "OPEN_BRACKET"], // 《
   [0x300c, "OPEN_BRACKET"], // 「
+  [0x300e, "OPEN_BRACKET"], // 『
+  [0x3010, "OPEN_BRACKET"], // 【
+  [0x3014, "OPEN_BRACKET"], // 〔
   [0xff08, "OPEN_BRACKET"], // （
+  [0xff3b, "OPEN_BRACKET"], // ［
+  [0xff5b, "OPEN_BRACKET"], // ｛
+  [0x3009, "CLOSE_BRACKET"], // 〉
+  [0x300b, "CLOSE_BRACKET"], // 》
   [0x300d, "CLOSE_BRACKET"], // 」
+  [0x300f, "CLOSE_BRACKET"], // 』
+  [0x3011, "CLOSE_BRACKET"], // 】
+  [0x3015, "CLOSE_BRACKET"], // 〕
   [0xff09, "CLOSE_BRACKET"], // ）
+  [0xff3d, "CLOSE_BRACKET"], // ］
+  [0xff5d, "CLOSE_BRACKET"], // ｝
   [0x3001, "COMMA"], // 、
+  [0xff0c, "COMMA"], // ，
   [0x3002, "PERIOD"], // 。
+  [0xff0e, "PERIOD"], // ．
 ]);
 
-/** Classifies a SOURCE grapheme (before substitution) into a punctuation class, or undefined if it isn't one of these four. */
+/** Classifies a SOURCE grapheme (before substitution) into the supported punctuation classes. */
 export function classifyPunctuation(grapheme: string): PunctuationClass | undefined {
   if (Array.from(grapheme).length !== 1) return undefined;
   return PUNCTUATION_CLASS_MAP.get(grapheme.codePointAt(0)!);
