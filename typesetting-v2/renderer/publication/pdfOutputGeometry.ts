@@ -11,18 +11,25 @@ export interface PdfCropMarkSegment {
   y2Mm: number;
 }
 
+export interface PublicationPdfPageBoxMm {
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+}
+
 export interface PublicationPdfPageOutput {
   mode: PublicationPdfMode;
   widthMm: number;
   heightMm: number;
   contentOffsetXMm: number;
   contentOffsetYMm: number;
-  trimBox: {
-    xMm: number;
-    yMm: number;
-    widthMm: number;
-    heightMm: number;
-  };
+  /** Finished/trim size, measured in output-sheet coordinates. */
+  trimBox: PublicationPdfPageBoxMm;
+  /** 3 mm bleed region. Equals trim in trim mode and the full sheet in bleed mode. */
+  bleedBox: PublicationPdfPageBoxMm;
+  /** Viewer/print clipping region. Kept at the emitted sheet so full-mode crop marks remain visible. */
+  cropBox: PublicationPdfPageBoxMm;
   cropMarks: PdfCropMarkSegment[];
 }
 
@@ -53,13 +60,16 @@ export function resolvePublicationPdfPageOutput(
   assertPublicationPdfMode(mode);
 
   if (mode === "trim") {
+    const trimBox = { xMm: 0, yMm: 0, widthMm: trimWidthMm, heightMm: trimHeightMm };
     return {
       mode,
       widthMm: trimWidthMm,
       heightMm: trimHeightMm,
       contentOffsetXMm: 0,
       contentOffsetYMm: 0,
-      trimBox: { xMm: 0, yMm: 0, widthMm: trimWidthMm, heightMm: trimHeightMm },
+      trimBox,
+      bleedBox: { ...trimBox },
+      cropBox: { ...trimBox },
       cropMarks: [],
     };
   }
@@ -74,6 +84,13 @@ export function resolvePublicationPdfPageOutput(
     widthMm: trimWidthMm,
     heightMm: trimHeightMm,
   };
+  const bleedBox = {
+    xMm: cropMarkMarginMm,
+    yMm: cropMarkMarginMm,
+    widthMm: trimWidthMm + PDF_BLEED_MM * 2,
+    heightMm: trimHeightMm + PDF_BLEED_MM * 2,
+  };
+  const cropBox = { xMm: 0, yMm: 0, widthMm, heightMm };
 
   return {
     mode,
@@ -82,6 +99,8 @@ export function resolvePublicationPdfPageOutput(
     contentOffsetXMm: trimOriginMm,
     contentOffsetYMm: trimOriginMm,
     trimBox,
+    bleedBox,
+    cropBox,
     cropMarks: mode === "full"
       ? buildLegacyParityCropMarks(widthMm, heightMm)
       : [],
