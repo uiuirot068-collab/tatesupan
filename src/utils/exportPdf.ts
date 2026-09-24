@@ -2,9 +2,18 @@
 
 import { jsPDF } from 'jspdf';
 import { encode } from 'fast-png';
-import { capturePageToCanvas, EXPORT_TIMING_ENABLED } from './exportCapture';
+import {
+  capturePageToCanvas,
+  EXPORT_TIMING_ENABLED,
+  waitForCaptureTargetsReady,
+} from './exportCapture';
 import { BLEED_MM } from '@/lib/pageLayout';
 import { waitForExportPermission } from '@/lib/exportCancellation';
+import {
+  describePdfCaptureSizeMismatch,
+  expectedPdfCapturePixels,
+  isPdfCaptureSizePlausible,
+} from '@/lib/pdfCaptureSafety';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -149,6 +158,12 @@ export async function exportCustomPdf(
   const bleedHeight = pageHeight + bleed * 2;
   const margin = 15; // トンボ用余白（入稿用フルサイズのみ）
 
+  // Fail-closed raster geometry contract. A valid DOM capture must be close
+  // to the physical bleed size at the requested export scale. The 2026-09-24
+  // incident emitted ~10x11px pages where ~2600x3600px was expected; a PDF
+  // containing such a page must never be treated as a successful export.
+  const expectedCaptureSize = expectedPdfCapturePixels(bleedWidth, bleedHeight, scale);
+
   let pdfWidth = pageWidth;
   let pdfHeight = pageHeight;
 
@@ -178,7 +193,26 @@ export async function exportCustomPdf(
     // capturePageToCanvasは常に塗り足し込み(bleedWidth×bleedHeight相当)の
     // .page-card要素全体をcaptureする——trim/bleed/fullいずれのmodeでも
     // ここでのsource canvasは同じ。
-    const canvas = await capturePageToCanvas(el, { pixelRatio: scale });
+    let canvas = await capturePageToCanvas(el, { pixelRatio: scale });
+
+    if (!isPdfCaptureSizePlausible(canvas, expectedCaptureSize)) {
+      // One automatic retry is allowed after an explicit layout-stability
+      // wait. If the raster is still implausible, abort the WHOLE PDF rather
+      // than shipping a blank/missing page silently.
+      canvas.width = 0;
+      canvas.height = 0;
+      await waitForCaptureTargetsReady([el]);
+      await waitForExportPermission(signal);
+      canvas = await capturePageToCanvas(el, { pixelRatio: scale });
+    }
+
+    if (!isPdfCaptureSizePlausible(canvas, expectedCaptureSize)) {
+      const message = describePdfCaptureSizeMismatch(i + 1, canvas, expectedCaptureSize);
+      canvas.width = 0;
+      canvas.height = 0;
+      throw new Error(message);
+    }
+
     if (signal?.aborted) {
       canvas.width = 0;
       canvas.height = 0;
