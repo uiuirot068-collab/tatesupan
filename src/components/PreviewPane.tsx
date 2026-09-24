@@ -47,6 +47,7 @@ import {
   measureTrimGuideRatioRect,
   prewarmExportFonts,
   prewarmExportImage,
+  waitForCaptureTargetsReady,
 } from "@/utils/exportCapture";
 import { withBasePath } from "@/lib/basePath";
 import {
@@ -1736,9 +1737,26 @@ function PreviewPane({
     if (includeColophonInPdf && !colophonPlaced && colophonElementRef.current) {
       elements.push(colophonElementRef.current);
     }
-    if (elements.length === 0) { releaseExportMount(); return; }
+
+    const expectedElementCount = indices.length + (includeColophonInPdf ? 1 : 0);
+    if (elements.length !== expectedElementCount) {
+      releaseExportMount();
+      alert(
+        `PDF書き出し対象のページを準備できませんでした（${elements.length}/${expectedElementCount}ページ）。` +
+        " 安全のため書き出しを中止しました。もう一度お試しください。"
+      );
+      return;
+    }
+
     const signal = beginExport("PDF", elements.length);
     try {
+      // Force-mounted virtualized pages need at least one real browser layout
+      // pass before html-to-image measures them. The 2026-09-24 incident
+      // captured the first newly-mounted pages at ~1 CSS px, producing 10x11
+      // pixel blank PDF pages. Wait for every target to stabilize before page 1
+      // capture starts; fail closed if the browser never reaches a real size.
+      await waitForCaptureTargetsReady(elements);
+
       // PDFは正式仕様で常に印刷用紙preset・600dpi固定（Web閲覧用はUI側で
       // 選択不可のためここに到達しない）。
       await exportCustomPdf(elements, {

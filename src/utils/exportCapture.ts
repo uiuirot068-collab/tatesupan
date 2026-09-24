@@ -47,6 +47,69 @@ export function measureCaptureSize(root: HTMLElement): { width: number; height: 
   };
 }
 
+
+const EXPORT_READY_MIN_DIMENSION_PX = 32;
+const EXPORT_READY_MAX_FRAMES = 30;
+const EXPORT_READY_MATCH_RATIO = 0.9;
+
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/**
+ * Long-document previews window off-screen spreads. PDF/JPG export force-mounts
+ * the required spreads synchronously, but React commit completion does not mean
+ * the browser has already completed layout for every newly-mounted page.
+ *
+ * The 2026-09-24 production incident produced 10x11px raster pages for the
+ * first few force-mounted spreads while later pages, captured after the browser
+ * caught up, were normal. Before any raster export starts, wait until every
+ * requested page has a real, mutually-consistent capture box for two
+ * consecutive animation frames. Fail closed instead of exporting a partial
+ * document if layout never stabilizes.
+ */
+export async function waitForCaptureTargetsReady(
+  roots: readonly HTMLElement[]
+): Promise<void> {
+  if (roots.length === 0) return;
+
+  let consecutiveReadyFrames = 0;
+  for (let frame = 0; frame < EXPORT_READY_MAX_FRAMES; frame += 1) {
+    await nextAnimationFrame();
+
+    const sizes = roots.map(measureCaptureSize);
+    const maxWidth = Math.max(...sizes.map((size) => size.width));
+    const maxHeight = Math.max(...sizes.map((size) => size.height));
+    const allReady =
+      maxWidth >= EXPORT_READY_MIN_DIMENSION_PX &&
+      maxHeight >= EXPORT_READY_MIN_DIMENSION_PX &&
+      sizes.every(
+        (size) =>
+          size.width >= EXPORT_READY_MIN_DIMENSION_PX &&
+          size.height >= EXPORT_READY_MIN_DIMENSION_PX &&
+          size.width >= maxWidth * EXPORT_READY_MATCH_RATIO &&
+          size.height >= maxHeight * EXPORT_READY_MATCH_RATIO
+      );
+
+    if (allReady) {
+      consecutiveReadyFrames += 1;
+      if (consecutiveReadyFrames >= 2) return;
+    } else {
+      consecutiveReadyFrames = 0;
+    }
+  }
+
+  const summary = roots
+    .map((root, index) => {
+      const size = measureCaptureSize(root);
+      return `#${index + 1} ${size.width}x${size.height}px`;
+    })
+    .join(", ");
+  throw new Error(
+    `書き出しページのレイアウト準備が完了しませんでした（${summary}）。安全のため書き出しを中止しました。`
+  );
+}
+
 /** [0,1]区間の比率で表した矩形。基準となる要素の canonical width/height に対する割合。 */
 export interface RelativeRect {
   xRatio: number;
