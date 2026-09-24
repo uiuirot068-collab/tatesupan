@@ -1253,7 +1253,7 @@ export function renderPaintPlanToPdf(
   fontResource?: PublicationFontResource,
   options: PublicationPdfRenderOptions = {},
 ): PublicationPdfResult {
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1] });
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
   if (fontResource) {
     pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
     pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
@@ -1291,7 +1291,7 @@ export async function renderPaintPlanToPdfAsync(
   fontResource?: PublicationFontResource,
   options: AsyncPdfRenderOptions = {}
 ): Promise<PublicationPdfResult> {
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1] });
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
   if (fontResource) {
     pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
     pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
