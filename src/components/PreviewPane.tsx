@@ -697,9 +697,9 @@ function PreviewPane({
     : canonicalPageHeightPx;
 
   const internalV2Beta = isV2BetaRendererEnabled();
-  // Local benchmark branch only: force V2 in development so the existing
-  // canonical V2 PDF worker can be measured against the same manuscript.
-  // Production still obeys the normal rollout flag and therefore remains LEGACY.
+  // 2026-09-24 public RC: development continues to force V2 for reproducible
+  // QA, while production follows v2Rollout.ts. That rollout now defaults to
+  // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
   const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
   // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: renderer-agnostic now -- see the
   // doc comment on `shouldVirtualizePreview` itself for why the previous
