@@ -14,6 +14,10 @@ import {
   expectedPdfCapturePixels,
   isPdfCaptureSizePlausible,
 } from '@/lib/pdfCaptureSafety';
+import {
+  downloadPdfExportPerfReport,
+  type PdfExportPerfPageSample,
+} from '@/lib/pdfExportPerfAudit';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -140,6 +144,10 @@ export async function exportCustomPdf(
 
   await waitForExportPermission(signal);
 
+  const perfEnabled = process.env.NODE_ENV !== 'production';
+  const perfStartedAt = performance.now();
+  const perfPages: PdfExportPerfPageSample[] = [];
+
   // 用紙サイズの確定（仕上がり/trim寸法。例: A5 = 148×210mm）
   let pageWidth = customWidth;
   let pageHeight = customHeight;
@@ -181,19 +189,29 @@ export async function exportCustomPdf(
     format: [pdfWidth, pdfHeight],
   });
 
+  const perfLoopStartedAt = performance.now();
+
   for (let i = 0; i < elements.length; i++) {
     await waitForExportPermission(signal);
     if (i > 0) pdf.addPage();
     if (onProgress) onProgress(i + 1, elements.length);
 
     const el = elements[i];
+    const perfPageStartedAt = performance.now();
+    let perfCaptureMs = 0;
+    let perfCropMs = 0;
+    let perfEncodeMs = 0;
+    let perfAddImageMs = 0;
+    let perfRetryCount = 0;
     if (EXPORT_TIMING_ENABLED) {
       console.groupCollapsed(`[export timing] ${fileName} page ${i + 1}/${elements.length}`);
     }
     // capturePageToCanvasは常に塗り足し込み(bleedWidth×bleedHeight相当)の
     // .page-card要素全体をcaptureする——trim/bleed/fullいずれのmodeでも
     // ここでのsource canvasは同じ。
+    const perfCaptureStartedAt = performance.now();
     let canvas = await capturePageToCanvas(el, { pixelRatio: scale });
+    perfCaptureMs += performance.now() - perfCaptureStartedAt;
 
     if (!isPdfCaptureSizePlausible(canvas, expectedCaptureSize)) {
       // One automatic retry is allowed after an explicit layout-stability
@@ -203,7 +221,10 @@ export async function exportCustomPdf(
       canvas.height = 0;
       await waitForCaptureTargetsReady([el]);
       await waitForExportPermission(signal);
+      perfRetryCount += 1;
+      const perfRetryCaptureStartedAt = performance.now();
       canvas = await capturePageToCanvas(el, { pixelRatio: scale });
+      perfCaptureMs += performance.now() - perfRetryCaptureStartedAt;
     }
 
     if (!isPdfCaptureSizePlausible(canvas, expectedCaptureSize)) {
@@ -224,17 +245,20 @@ export async function exportCustomPdf(
       // しない（正式仕様C）。
       const tCropStart = performance.now();
       const cropped = cropToTrimCanvas(canvas, bleedWidth, bleedHeight, pageWidth, pageHeight, bleed);
+      perfCropMs += performance.now() - tCropStart;
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas crop（仕上がり）: ${(performance.now() - tCropStart).toFixed(1)} ms`);
       }
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(cropped);
+      perfEncodeMs += performance.now() - tEncodeStart;
       await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
       const tAddImageStart = performance.now();
       pdf.addImage(pngData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'MEDIUM');
+      perfAddImageMs += performance.now() - tAddImageStart;
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
@@ -244,12 +268,14 @@ export async function exportCustomPdf(
       // 断ち落としPDF: 塗り足し込みページを原寸のまま出力。
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(canvas);
+      perfEncodeMs += performance.now() - tEncodeStart;
       await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
       }
       const tAddImageStart = performance.now();
       pdf.addImage(pngData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'MEDIUM');
+      perfAddImageMs += performance.now() - tAddImageStart;
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
@@ -258,6 +284,7 @@ export async function exportCustomPdf(
       // （正式仕様E。以前はここでtrim寸法へ縮小してしまっていた）。
       const tEncodeStart = performance.now();
       const pngData = canvasToGrayscalePng(canvas);
+      perfEncodeMs += performance.now() - tEncodeStart;
       await waitForExportPermission(signal);
       if (EXPORT_TIMING_ENABLED) {
         console.log(`canvas → grayscale PNG (fast-png encode): ${(performance.now() - tEncodeStart).toFixed(1)} ms`);
@@ -274,6 +301,7 @@ export async function exportCustomPdf(
 
       const tAddImageStart = performance.now();
       pdf.addImage(pngData, 'PNG', margin, margin, bleedWidth, bleedHeight, undefined, 'MEDIUM');
+      perfAddImageMs += performance.now() - tAddImageStart;
       if (EXPORT_TIMING_ENABLED) {
         console.log(`PDF addImage: ${(performance.now() - tAddImageStart).toFixed(1)} ms`);
       }
@@ -316,10 +344,49 @@ export async function exportCustomPdf(
     if (EXPORT_TIMING_ENABLED) console.groupEnd();
 
     // マクロタスク挿入（UI開放・フリーズ防止）
+    const perfYieldStartedAt = performance.now();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await waitForExportPermission(signal);
+    const perfYieldMs = performance.now() - perfYieldStartedAt;
+
+    if (perfEnabled) {
+      perfPages.push({
+        page: i + 1,
+        captureMs: perfCaptureMs,
+        cropMs: perfCropMs,
+        encodeMs: perfEncodeMs,
+        addImageMs: perfAddImageMs,
+        yieldMs: perfYieldMs,
+        retryCount: perfRetryCount,
+        canvasWidth: Math.round(expectedCaptureSize.widthPx),
+        canvasHeight: Math.round(expectedCaptureSize.heightPx),
+      });
+    }
   }
 
+  const perfLoopEndedAt = performance.now();
   await waitForExportPermission(signal);
+  const perfSaveStartedAt = performance.now();
   pdf.save(fileName);
+  const perfSaveEndedAt = performance.now();
+
+  if (perfEnabled) {
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    downloadPdfExportPerfReport({
+      kind: "TateSpun PDF legacy perf audit",
+      createdAt: new Date().toISOString(),
+      mode,
+      paperSizeName,
+      pageCount: elements.length,
+      scale,
+      preflightMs: perfLoopStartedAt - perfStartedAt,
+      loopMs: perfLoopEndedAt - perfLoopStartedAt,
+      saveMs: perfSaveEndedAt - perfSaveStartedAt,
+      totalMs: perfSaveEndedAt - perfStartedAt,
+      browser: navigator.userAgent,
+      hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+      deviceMemoryGb: nav.deviceMemory ?? null,
+      pages: perfPages,
+    });
+  }
 }

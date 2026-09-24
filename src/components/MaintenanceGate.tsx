@@ -82,14 +82,15 @@ function MaintenancePage() {
 export default function MaintenanceGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // Production is intentionally gated during the PDF safety incident.
-  // Local development stays available so the fix can be reproduced and
-  // Human-QA'd without weakening the live maintenance barrier.
-  if (process.env.NODE_ENV !== "production") {
-    return <>{children}</>;
-  }
+  // 2026-09-24 PDF incident is closed after automated + Human QA.
+  // Maintenance is now OFF by default. Keep one explicit production-only
+  // emergency switch so a future incident can re-enable the same gate
+  // without another source-code rewrite.
+  const maintenanceEnabled =
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PUBLIC_TATESPUN_MAINTENANCE === "true";
 
-  if (isMaintenancePath(pathname)) {
+  if (maintenanceEnabled && isMaintenancePath(pathname)) {
     return <MaintenancePage />;
   }
 

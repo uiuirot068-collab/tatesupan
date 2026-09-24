@@ -95,6 +95,7 @@ import {
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
 import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
 import { exportPaintPlanToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
@@ -696,7 +697,10 @@ function PreviewPane({
     : canonicalPageHeightPx;
 
   const internalV2Beta = isV2BetaRendererEnabled();
-  const useV2Engine = internalV2Beta;
+  // 2026-09-24 public RC: development continues to force V2 for reproducible
+  // QA, while production follows v2Rollout.ts. That rollout now defaults to
+  // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
+  const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
   // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: renderer-agnostic now -- see the
   // doc comment on `shouldVirtualizePreview` itself for why the previous
   // V2-only gate was removed.
@@ -1678,8 +1682,12 @@ function PreviewPane({
     const { indices, pdfFileName, includeColophonInPdf } = pending;
     if (useV2Engine) {
       let signal: AbortSignal | null = null;
+      const perfEnabled = process.env.NODE_ENV !== "production";
+      const perfStartedAt = performance.now();
+      let perfPlanReadyAt = perfStartedAt;
       try {
         const { font, plan } = await requireV2PublicationPlan();
+        perfPlanReadyAt = performance.now();
         const physicalIndices = pdfScope === "all"
           ? plan.map((_, index) => index)
           : indices.map(v2PhysicalIndexForBody);
@@ -1695,6 +1703,7 @@ function PreviewPane({
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
         }
         signal = beginExport("PDF", exportPlan.length);
+        const perfWorkerStartedAt = performance.now();
         const handle = startV2PdfWorker(exportPlan, font, pdfMode, ({ current, total }) => {
           setExportProgress({ current, total });
         });
@@ -1702,9 +1711,31 @@ function PreviewPane({
         const cancelWorker = () => handle.cancel();
         signal.addEventListener("abort", cancelWorker, { once: true });
         const bytes = await handle.result;
+        const perfWorkerEndedAt = performance.now();
         signal.removeEventListener("abort", cancelWorker);
         await waitForExportPermission(signal);
+        const perfDownloadStartedAt = performance.now();
         downloadBytes(bytes, pdfFileName, "application/pdf");
+        const perfDownloadEndedAt = performance.now();
+
+        if (perfEnabled) {
+          const nav = navigator as Navigator & { deviceMemory?: number };
+          exposeV2PdfPerfReport({
+            kind: "TateSpun PDF V2 perf audit",
+            createdAt: new Date().toISOString(),
+            mode: pdfMode,
+            pageCount: exportPlan.length,
+            planMs: perfPlanReadyAt - perfStartedAt,
+            workerMs: perfWorkerEndedAt - perfWorkerStartedAt,
+            downloadTriggerMs: perfDownloadEndedAt - perfDownloadStartedAt,
+            totalMs: perfDownloadEndedAt - perfStartedAt,
+            pdfBytes: bytes.byteLength,
+            browser: navigator.userAgent,
+            hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+            deviceMemoryGb: nav.deviceMemory ?? null,
+          });
+        }
+
         setIsPdfModalOpen(false);
         onPdfExportSuccess?.();
       } catch (error: unknown) {
