@@ -1184,6 +1184,48 @@ export interface PublicationPdfRenderOptions {
   mode?: PublicationPdfMode;
 }
 
+type JsPdfPageBox = {
+  bottomLeftX: number;
+  bottomLeftY: number;
+  topRightX: number;
+  topRightY: number;
+};
+
+type JsPdfPageContextWithPrintBoxes = {
+  cropBox: JsPdfPageBox | null;
+  bleedBox: JsPdfPageBox | null;
+  trimBox: JsPdfPageBox | null;
+};
+
+/** Convert TateSpun mm/top-left boxes to jsPDF pt/bottom-left page boxes. */
+function publicationBoxToJsPdfPoints(
+  box: PublicationPdfPageOutput["trimBox"],
+  outputHeightMm: number,
+  scaleFactor: number,
+): JsPdfPageBox {
+  return {
+    bottomLeftX: box.xMm * scaleFactor,
+    bottomLeftY: (outputHeightMm - box.yMm - box.heightMm) * scaleFactor,
+    topRightX: (box.xMm + box.widthMm) * scaleFactor,
+    topRightY: (outputHeightMm - box.yMm) * scaleFactor,
+  };
+}
+
+/**
+ * jsPDF serializes CropBox/BleedBox/TrimBox from each pageContext, but has
+ * no public setter for those page-dictionary entries. Populate that existing
+ * metadata immediately after addPage/setPage so print PDFs explicitly carry
+ * finished and bleed geometry instead of relying only on visible crop marks.
+ * MediaBox remains owned by addPage().
+ */
+function applyPublicationPdfPageBoxes(pdf: jsPDF, output: PublicationPdfPageOutput): void {
+  const pageContext = pdf.internal.getCurrentPageInfo().pageContext as JsPdfPageContextWithPrintBoxes;
+  const scaleFactor = pdf.internal.scaleFactor;
+  pageContext.cropBox = publicationBoxToJsPdfPoints(output.cropBox, output.heightMm, scaleFactor);
+  pageContext.bleedBox = publicationBoxToJsPdfPoints(output.bleedBox, output.heightMm, scaleFactor);
+  pageContext.trimBox = publicationBoxToJsPdfPoints(output.trimBox, output.heightMm, scaleFactor);
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
@@ -1267,6 +1309,7 @@ export function renderPaintPlanToPdf(
     const output = resolvePublicationPdfPageOutput(page.widthMm, page.heightMm, options.mode ?? "trim");
     pdf.addPage([output.widthMm, output.heightMm], "portrait");
     pdf.setPage(i + 2); // page 1 is the throwaway placeholder
+    applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
     paintPageCommands(pdf, page, output);
   });
@@ -1302,6 +1345,7 @@ export async function renderPaintPlanToPdfAsync(
     const output = resolvePublicationPdfPageOutput(page.widthMm, page.heightMm, options.mode ?? "trim");
     pdf.addPage([output.widthMm, output.heightMm], "portrait");
     pdf.setPage(index + 2);
+    applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
     paintPageCommands(pdf, page, output);
     options.onProgress?.(index + 1, plan.length);
