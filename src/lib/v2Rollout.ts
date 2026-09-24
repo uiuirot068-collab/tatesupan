@@ -1,14 +1,19 @@
 export type RendererRolloutMode = "LEGACY" | "V2_BETA";
 
 /**
- * Single internal rollout choke point. Next inlines NEXT_PUBLIC variables at
- * build time, so static hosting needs no server or remote flag service.
- * Unset/unknown values fail closed to LEGACY for immediate rollback.
+ * Single renderer rollout choke point.
+ *
+ * 2026-09-24 public RC: V2_BETA is now the default when the build variable is
+ * unset. An explicit LEGACY value remains the emergency rollback switch.
+ * Unknown non-empty values still fail closed to LEGACY rather than silently
+ * enabling an unintended renderer.
  */
 export function resolveRendererRolloutMode(
   configured: string | undefined = process.env.NEXT_PUBLIC_TATESPUN_RENDERER
 ): RendererRolloutMode {
-  return configured === "V2_BETA" ? "V2_BETA" : "LEGACY";
+  const normalized = configured?.trim();
+  if (!normalized) return "V2_BETA";
+  return normalized === "V2_BETA" ? "V2_BETA" : "LEGACY";
 }
 
 export function isV2BetaRendererEnabled(configured?: string): boolean {
