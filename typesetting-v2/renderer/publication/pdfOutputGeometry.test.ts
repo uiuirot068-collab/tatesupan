@@ -1,3 +1,4 @@
+import { inflateSync } from "zlib";
 import { describe, expect, it } from "vitest";
 import { renderPaintPlanToPdf, renderPaintPlanToPdfAsync, type PaintPlan } from "./pdfGenerator";
 import {
@@ -17,16 +18,47 @@ function mediaBoxesMm(bytes: Uint8Array): Array<{ widthMm: number; heightMm: num
   }));
 }
 
+function decodedContentStreams(bytes: Uint8Array): string {
+  const buffer = Buffer.from(bytes);
+  const latin1 = buffer.toString("latin1");
+  const objectHeaderRe = /(\d+)\s+0\s+obj\b/g;
+  const decoded: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = objectHeaderRe.exec(latin1)) !== null) {
+    const objectStart = match.index;
+    const endObj = latin1.indexOf("endobj", objectStart);
+    if (endObj === -1) continue;
+    const objectText = latin1.slice(objectStart, endObj);
+    const streamRel = objectText.indexOf("stream");
+    if (streamRel === -1) continue;
+    const streamKeyword = objectStart + streamRel;
+    let dataStart = streamKeyword + "stream".length;
+    if (buffer[dataStart] === 0x0d && buffer[dataStart + 1] === 0x0a) dataStart += 2;
+    else if (buffer[dataStart] === 0x0a) dataStart += 1;
+    const endStream = latin1.indexOf("endstream", dataStart);
+    if (endStream === -1 || endStream > endObj) continue;
+    let dataEnd = endStream;
+    while (dataEnd > dataStart && (buffer[dataEnd - 1] === 0x0a || buffer[dataEnd - 1] === 0x0d)) dataEnd -= 1;
+    const raw = buffer.subarray(dataStart, dataEnd);
+    if (/\/Filter\s*\/FlateDecode/.test(objectText.slice(0, streamRel))) {
+      decoded.push(inflateSync(raw).toString("latin1"));
+    } else {
+      decoded.push(raw.toString("latin1"));
+    }
+  }
+  return decoded.join("\n");
+}
+
 function firstRectangleOperands(bytes: Uint8Array): number[] {
-  const raw = Buffer.from(bytes).toString("latin1");
-  const match = raw.match(/([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+re/);
+  const content = decodedContentStreams(bytes);
+  const match = content.match(/([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+re/);
   if (!match) throw new Error("Expected a rectangle operator in generated PDF.");
   return match.slice(1).map(Number);
 }
 
 function strokedLineCount(bytes: Uint8Array): number {
-  const raw = Buffer.from(bytes).toString("latin1");
-  return Array.from(raw.matchAll(/[\d.-]+\s+[\d.-]+\s+m\s+[\d.-]+\s+[\d.-]+\s+l\s+S/g)).length;
+  const content = decodedContentStreams(bytes);
+  return Array.from(content.matchAll(/[\d.-]+\s+[\d.-]+\s+m\s+[\d.-]+\s+[\d.-]+\s+l\s+S/g)).length;
 }
 
 function normalizedPdf(bytes: Uint8Array): string {
