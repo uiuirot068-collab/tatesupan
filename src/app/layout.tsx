@@ -3,6 +3,7 @@ import { Inter, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
+import MaintenanceGate from "@/components/MaintenanceGate";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -53,7 +54,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             __html: `(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`,
           }}
         />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <MaintenanceGate>{children}</MaintenanceGate>
+        </AuthProvider>
       </body>
     </html>
   );
