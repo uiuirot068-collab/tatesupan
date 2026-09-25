@@ -1,0 +1,226 @@
+/* TateSpun home V2 — an editorial surface inspired by a book's endpaper,
+   composing marks, and quiet Japanese stationery. All rules are route-scoped. */
+[data-home-v2-page] {
+  --home-paper: #f4f0e7;
+  --home-paper-deep: #e9e2d5;
+  --home-ink: #17243a;
+  --home-shelf: #566078;
+  --home-gold: #b5994d;
+  --home-line: rgba(23, 36, 58, 0.16);
+  background-color: var(--home-paper);
+  background-image:
+    linear-gradient(90deg, transparent 0, transparent calc(50% - .5px), rgba(23, 36, 58, .035) 50%, transparent calc(50% + .5px)),
+    radial-gradient(circle at 14% 6%, rgba(181, 153, 77, .12), transparent 25%),
+    radial-gradient(circle at 88% 22%, rgba(86, 96, 120, .06), transparent 22%);
+  color: var(--home-ink);
+}
+
+[data-theme="dark"] [data-home-v2-page] {
+  --home-paper: #10151d;
+  --home-paper-deep: #171d27;
+  --home-ink: #e4dfd3;
+  --home-shelf: #939daf;
+  --home-gold: #c6af63;
+  --home-line: rgba(228, 223, 211, 0.14);
+  background-image:
+    linear-gradient(90deg, transparent 0, transparent calc(50% - .5px), rgba(228, 223, 211, .025) 50%, transparent calc(50% + .5px)),
+    radial-gradient(circle at 14% 6%, rgba(198, 175, 99, .09), transparent 25%);
+}
+
+.home-v2-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+/* V2 top is a home surface: the shared Home header already links to the
+   SpunTales portal. Add the requested portal mark locally without changing
+   production Header.tsx. */
+[data-home-v2-page] header a[href="https://spuntales.net/"]::before {
+  margin-right: .28em;
+  color: var(--home-gold);
+  content: "✦";
+}
+
+.home-v2-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  opacity: .32;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E");
+}
+
+.home-v2-hero {
+  position: relative;
+  border: 1px solid var(--home-line);
+  border-radius: 2px 28px 2px 2px;
+  background: rgba(255, 253, 248, .7);
+  box-shadow: 0 28px 80px rgba(34, 35, 31, .08);
+}
+
+[data-theme="dark"] .home-v2-hero {
+  background: rgba(18, 24, 33, .76);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .22);
+}
+
+.home-v2-hero::before,
+.home-v2-hero::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+
+.home-v2-hero::before {
+  inset: 11px;
+  border: 1px solid color-mix(in srgb, var(--home-gold) 38%, transparent);
+  border-radius: 1px 19px 1px 1px;
+}
+
+.home-v2-hero::after {
+  top: 0;
+  right: clamp(24px, 7vw, 72px);
+  width: 1px;
+  height: 72px;
+  background: var(--home-shelf);
+}
+
+.home-v2-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  color: var(--home-shelf);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .24em;
+}
+
+.home-v2-kicker::before {
+  width: 28px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.home-v2-title {
+  color: var(--home-ink);
+  text-wrap: balance;
+  text-shadow: 0 1px rgba(255,255,255,.45);
+}
+
+.home-v2-seal {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--home-shelf) 75%, transparent);
+  color: var(--home-shelf);
+  font-family: var(--font-serif);
+  font-size: 11px;
+  letter-spacing: .08em;
+  line-height: 1.15;
+  transform: rotate(3deg);
+}
+
+.home-v2-primary {
+  box-shadow: 0 9px 0 rgba(23, 36, 58, .1);
+}
+
+.home-v2-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 11px 0 rgba(23, 36, 58, .12);
+}
+
+.home-v2-choice {
+  position: relative;
+  overflow: hidden;
+  transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
+}
+
+.home-v2-choice::after {
+  position: absolute;
+  right: -14px;
+  bottom: -24px;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--home-line);
+  border-radius: 50%;
+  content: "";
+}
+
+.home-v2-choice:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--home-shelf) 50%, transparent);
+}
+
+.home-v2-process {
+  counter-reset: home-step;
+}
+
+.home-v2-process > li {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.home-v2-process > li:not([aria-hidden])::before {
+  counter-increment: home-step;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--home-line);
+  border-radius: 50%;
+  color: var(--home-shelf);
+  content: counter(home-step, decimal-leading-zero);
+  font-family: var(--font-geist-mono);
+  font-size: 8px;
+}
+
+.home-v2-section-rule {
+  position: relative;
+}
+
+.home-v2-section-rule::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(92%, 920px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--home-line) 15%, var(--home-line) 85%, transparent);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.home-v2-action-card {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(26, 31, 45, .045);
+}
+
+.home-v2-action-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 3px;
+  background: var(--home-shelf);
+  content: "";
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-v2-hero > div {
+    animation: home-v2-enter .7s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes home-v2-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (max-width: 719px) {
+  .home-v2-hero { border-radius: 2px 20px 2px 2px; }
+  .home-v2-hero::before { inset: 7px; border-radius: 1px 14px 1px 1px; }
+  .home-v2-process > li[aria-hidden] { display: none; }
+}
+
