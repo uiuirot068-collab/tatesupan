@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default function HomeV2Page() {
   return (
     <Suspense fallback={null}>
-      <HomeV2Client />
+      <HomeV2Client allowQaMode />
     </Suspense>
   );
 }
