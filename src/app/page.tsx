@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import HomeClient from "./HomeClient";
+import { Suspense } from "react";
+import HomeV2Client from "./home-v2/HomeV2Client";
+import "./home-v2/home-v2.css";
 
 export const metadata: Metadata = {
   title: "TateSpun（タテスパン）｜同人小説の縦書き・PDF組版Webエディタ",
@@ -11,5 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <HomeClient />;
+  return (
+    <Suspense fallback={null}>
+      <HomeV2Client />
+    </Suspense>
+  );
 }
