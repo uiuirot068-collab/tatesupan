@@ -68,10 +68,14 @@ const QA_BOOKS: DocumentRecord[] = [
 // このカードだけを見ればよいよう、参照は withBasePath("/help/…") 経由で統一。
 type BookshelfTab = "local" | "cloud";
 
-export default function HomeV2Client() {
+interface HomeV2ClientProps {
+  allowQaMode?: boolean;
+}
+
+export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps) {
   const router = useRouter();
   const demo = useSearchParams().get("demo");
-  const qaMode = demo === "empty" || demo === "books" ? demo : undefined;
+  const qaMode = allowQaMode && (demo === "empty" || demo === "books") ? demo : undefined;
   const { user: authUser, session: authSession, isLoading: authIsLoading } = useAuth();
   const user = qaMode ? null : authUser;
   const session = qaMode ? null : authSession;
