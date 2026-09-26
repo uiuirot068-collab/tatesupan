@@ -30,7 +30,8 @@ import {
   type ImagePosition,
   type TategakiPage,
 } from "@/lib/tategaki";
-import { computeSpreadGroups, moveSelected, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import { computeSpreadGroups, moveSelected, pruneSelectedPages, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
@@ -87,6 +88,7 @@ import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE } from "@/lib/cloudImageSync";
 import {
   ExportCancellationCoordinator,
   isExportCancelledError,
+  throwIfExportCancelled,
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
@@ -807,6 +809,18 @@ function PreviewPane({
     onBodyPageCountChange?.(listPages.length);
   }, [listPages.length, onBodyPageCountChange]);
 
+  // Phase 6.1: when the page count shrinks, drop only the selected indices
+  // that no longer exist (selected ∩ current pages), so the selection panel and
+  // 選択ページ export never refer to missing pages. In V2 mode this waits for
+  // the canonical V2 list: the LEGACY fallback (before the first V2 layout, or
+  // V2 HOLD) may paginate differently and must not prune V2 selections.
+  const pageListIsCanonical = !useV2Engine || v2PageModel !== null;
+  useEffect(() => {
+    if (!pageListIsCanonical) return;
+    const pruned = pruneSelectedPages(selected, listPages.length);
+    if (pruned !== selected) setSelected(new Set(pruned));
+  }, [pageListIsCanonical, listPages.length, selected, setSelected]);
+
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads — Presentation Sequence 全体（奥付含む）
   // を単位にする。
@@ -1005,6 +1019,13 @@ function PreviewPane({
 
   const isPanningRef = useRef(false);
   const panPointerIdRef = useRef<number | null>(null);
+  // Phase 6.1: releases the <body> userSelect lock of the current pan; also
+  // released on unmount, when the pointerup that normally ends the pan never comes.
+  const releasePanUserSelectRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => {
+    releasePanUserSelectRef.current?.();
+    releasePanUserSelectRef.current = null;
+  }, []);
   const startPosRef = useRef({ x: 0, y: 0 });
   const scrollPosRef = useRef({ left: 0, top: 0 });
 
@@ -1434,6 +1455,18 @@ function PreviewPane({
   const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
   const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
+  // Phase 6.1: leaving the editor cancels an in-flight export — the V2 PDF
+  // worker is terminated and no download fires after unmount. Every download
+  // path waits at `waitForExportPermission(signal)` right before saving, so an
+  // aborted signal is enough; an export still preparing when this runs gets an
+  // already-cancelled signal from `begin()`.
+  useEffect(() => {
+    exportCancellation.activate();
+    return () => {
+      exportCancellation.dispose();
+      v2PdfHandleRef.current?.cancel();
+    };
+  }, [exportCancellation]);
 
   const onExportActiveChangeRef = useRef(onExportActiveChange);
   useEffect(() => {
@@ -1914,6 +1947,8 @@ function PreviewPane({
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
         }
         signal = beginExport("PDF", exportPlan.length);
+        // Unmounted while the plan was prepared: do not start a worker.
+        throwIfExportCancelled(signal);
         const perfWorkerStartedAt = performance.now();
         const handle = startV2PdfWorker(exportPlan, font, pdfMode, ({ current, total }) => {
           setExportProgress({ current, total });
@@ -2106,7 +2141,8 @@ function PreviewPane({
     startPosRef.current = { x: event.clientX, y: event.clientY };
     scrollPosRef.current = { left: container.scrollLeft, top: container.scrollTop };
     container.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
+    releasePanUserSelectRef.current?.();
+    releasePanUserSelectRef.current = lockUserSelect(document.body.style);
   };
 
   const handlePanPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -2131,7 +2167,8 @@ function PreviewPane({
         container.releasePointerCapture(pointerId);
       }
     }
-    document.body.style.userSelect = "";
+    releasePanUserSelectRef.current?.();
+    releasePanUserSelectRef.current = null;
   };
 
   const canReorder = Boolean(onContentChange);

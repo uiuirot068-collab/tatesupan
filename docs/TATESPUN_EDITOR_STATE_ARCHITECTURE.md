@@ -108,7 +108,13 @@ keystroke → EditorPane → setContent (TategakiEditor, A)
    Another scope reads as empty without a reset effect.
 4. The image pool and IndexedDB image store are global by design. Writing a repaired image after a
    switch is harmless; writing *technical state* after a switch is not.
-5. Autosave writes only when `loadedDocIdRef.current === docId` (pre-existing).
+5. Autosave schedules only when `loadedDocIdRef.current === docId` (pre-existing). Since
+   Phase 6.1 the scheduled save is a job that carries its own `docId` (§12.1).
+6. **Document-switch persistence contract (Phase 6.1).** Before the open document is replaced
+   (route load effect, 保存作品一覧), its pending autosave job is flushed to *its* `docId`.
+   A route load of a local document awaits that flush before `loadDocument` (A → B → A reads
+   A's last edit). The route load also captures `documentEpoch`, so a project opened from
+   保存作品一覧 while a route load is in flight is not overwritten by that load.
 
 ## 8. Race-prevention contracts
 
@@ -140,37 +146,84 @@ keystroke → EditorPane → setContent (TategakiEditor, A)
 Tests: `src/lib/documentScope.test.ts` (semantic) and `src/components/editorDocumentScope.test.ts`.
 The second is a source contract, because this repo has no DOM test environment.
 
-## 10. Remaining high-risk areas (not changed)
+## 10. Remaining high-risk areas
 
-1. **Pending autosave is dropped on unmount or document switch.** The autosave cleanup clears the
-   1.5 s timer and nothing flushes it (there is no `pagehide`/`beforeunload` handler). Edits typed
-   ≤1.5 s before leaving `/editor` or opening a project from 保存作品一覧 are lost. Fix:
-   keep the pending job in a ref and flush it on unmount or docId change. It needs a product
-   decision plus E2E because it changes save timing.
-2. **保存作品一覧 does not restore the selected project's images.** `applyCloudProject` only swaps
-   text and settings. Only the `?cloudId=` load path restores images from the cloud. A project opened
-   from the list shows only images that happen to be in this browser's pool.
-3. **Selection is not pruned when the page count shrinks.** Out-of-range indices stay in
-   `selectedPages`. PDF "selected" then fails closed ("could not resolve") and JPG batch filters
-   them out. Deriving an effective selection would change export behaviour, so it is deferred.
-4. An in-flight V2 PDF worker is not cancelled on editor unmount, so the download still fires
-   after leaving the page.
-5. `document.body.style.userSelect` stays `none` if the editor unmounts mid-drag
-   (divider or Preview pan).
-6. `imageWarningLifecycle.ts` header still says warning pages are LEGACY in V2 mode. Phase 5 changed
-   this to V2 ownership; the comment is stale.
+Items 1–6 of the Phase 6 list were fixed in Phase 6.1 (§12): autosave flush, 保存作品一覧
+image restore, selection pruning, export cancel on unmount, userSelect cleanup, and the stale
+`imageWarningLifecycle.ts` header.
+
 7. A local document that is cloud-saved gets `currentProjectId` only in memory. After a reload,
    the next クラウドに保存 creates a new project (pre-existing product behaviour).
+8. Unload protection is best effort. `pagehide` / `visibilitychange=hidden` start an IndexedDB
+   write, which is async. A tab killed right after it is hidden can still lose the last ≤1.5 s.
+   Nothing is sent to the cloud on unload. A cloud project opened via `?cloudId=`/保存作品一覧 has
+   no local autosave at all (pre-existing: `docId` is null), so there is nothing to flush.
+9. An autosave flush that fails after a switch sets `saveStatus = "error"` on the *new* document
+   (logged to the console). The failed edit is not retried.
 
 ## 11. Recommended future refactors
 
 - `useV2LayoutLifecycle`: the adapter plus `v2PageModel` plus supersede effect as one hook with a
   `{layout, sourceContent, isCurrentFor(content)}` contract.
-- `useImageTechnicalState`: `unresolvedCloudImages`, baseline, poll, replace, dismiss in one hook,
-  keyed by document epoch.
-- An autosave flush contract (see §10.1).
-- Move `selectedPages` to a selector validated against the current page count, once the export
-  behaviour for stale selections is decided.
+- `useImageTechnicalState`: `unresolvedCloudImages`, baseline, poll, replace, dismiss, and the
+  Phase 6.1 cloud restore (`openCloudProjectImages`) in one hook, keyed by document epoch.
+- `useAutosave`: the Phase 6.1 job, timer, flush and lifecycle listeners in one hook.
+
+## 12. Phase 6.1 document-safety contracts
+
+### 12.1 Autosave flush ownership
+
+- `src/lib/pendingAutosave.ts` `PendingAutosave`: the debounced save is a **job**
+  `{docId, title, content, settings, plotNote}` built from the committed state (the live
+  `content`, never the debounced `previewContent`). The autosave effect schedules it. The effect
+  cleanup cancels only the timer, and the job stays pending.
+- A job is taken **once**, by the 1.5 s timer or by `flushAutosave()`, and is always written to
+  its own `docId`. So a late flush can never write A's data into B.
+- `flushAutosave()` runs on: the route load effect (before `beginDocumentSwitch`), 保存作品一覧
+  (`handleSelectProject`), unmount, `pagehide`, and `visibilitychange` → hidden. Ctrl+S
+  (`saveNow`) clears the job it replaces. Nothing pending means no write.
+
+### 12.2 Saved-project image restoration
+
+- `openCloudProjectImages(project, isCurrent)` is the ONE restore for both cloud-open paths
+  (`?cloudId=` and 保存作品一覧). The pure helper `openedCloudProjectImageState`
+  (cloudImageSync) keeps only the images the manuscript references: cloud copy, else this
+  browser's original. It also keeps their locally persisted `layerOrder` (the cloud does not store
+  it) and the silent baseline of ids already broken at open.
+- While a restore runs, `cloudImagesRestoring` holds the manifest poll back. Until then `images` is
+  still the previous document's pool, so the poll would announce this project's images as broken.
+  `beginDocumentSwitch` resets it, and a superseded restore writes nothing (`isCurrent`).
+- A restore request that throws is treated like a manifest error: every referenced image is
+  unmanifested, and local originals still apply.
+
+### 12.3 Page-selection pruning
+
+- `pruneSelectedPages(selected, pageCount)` (pageOrder): `selected ∩ [0, pageCount)`. It returns
+  the same set when nothing changes. PreviewPane runs it when `listPages.length` changes, **only
+  when the list is canonical** (`!useV2Engine || v2PageModel`). The LEGACY fallback before the
+  first V2 layout or on V2 HOLD must not prune V2 selections.
+- Selection semantics are otherwise unchanged: valid indices stay, a document switch still clears.
+
+### 12.4 Export worker cleanup
+
+- PreviewPane's unmount effect calls `ExportCancellationCoordinator.dispose()`. This follows the
+  same path as 中止: the signal aborts, the V2 PDF worker is terminated through its abort listener,
+  and every download path already waits at `waitForExportPermission(signal)` right before saving.
+  An export still preparing its plan gets an already-aborted, untracked signal from `begin()`.
+  The V2 PDF path checks it before starting a worker. `activate()` undoes `dispose()` for the
+  StrictMode effect re-run.
+- Limitation: work that is already running synchronously (a page capture) finishes, but nothing
+  after it downloads.
+
+### 12.5 Unmount cleanup
+
+- `lockUserSelect(style)` (`src/lib/bodyUserSelect.ts`) returns an idempotent release that
+  restores the previous value. The divider drag (TategakiEditor) and the Preview pan release it on
+  mouseup/pointerup **and** in their unmount cleanup.
+
+Tests: `src/lib/pendingAutosave.test.ts`, `src/lib/documentSafetyHelpers.test.ts`,
+`src/lib/exportUnmount.test.ts` (semantic), `src/components/editorDocumentSafety.test.ts`
+(wiring contract).
 
 ## Performance observations (for the Long Manuscript Performance phase)
 

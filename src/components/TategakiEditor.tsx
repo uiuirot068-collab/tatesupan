@@ -32,6 +32,7 @@ import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptI
 import { contentHasImages, openedCloudProjectImageState, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
 import { DocumentEpoch } from "@/lib/documentScope";
 import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
+import { lockUserSelect } from "@/lib/bodyUserSelect";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -401,6 +402,7 @@ export default function TategakiEditor({
   }, [pendingAutosave]);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
+  const releaseDividerUserSelectRef = useRef<(() => void) | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   // TSP-Review-UI (Revision 3): the editor/preview split's own container -- see the matching comment
   // in the JSX below. The divider drag math must measure THIS element's width, not <main>'s.
@@ -626,10 +628,14 @@ export default function TategakiEditor({
       setEditorWidthPercent(clamped);
     };
 
+    const releaseDividerUserSelect = () => {
+      releaseDividerUserSelectRef.current?.();
+      releaseDividerUserSelectRef.current = null;
+    };
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      document.body.style.userSelect = "";
+      releaseDividerUserSelect();
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -637,12 +643,16 @@ export default function TategakiEditor({
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      // Phase 6.1: unmounted mid-drag — mouseup will never reach us.
+      isDraggingRef.current = false;
+      releaseDividerUserSelect();
     };
   }, []);
 
   const handleDividerMouseDown = () => {
     isDraggingRef.current = true;
-    document.body.style.userSelect = "none";
+    releaseDividerUserSelectRef.current?.();
+    releaseDividerUserSelectRef.current = lockUserSelect(document.body.style);
   };
 
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: these 5 callbacks are PreviewPane

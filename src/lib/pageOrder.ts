@@ -77,3 +77,19 @@ export function computeSpreadGroups(pageCount: number): number[][] {
   }
   return groups;
 }
+
+/**
+ * Phase 6.1 selection pruning: `selected ∩ existing pages`. Keeps every valid
+ * selected index, removes only indices that no longer exist (the page count
+ * shrank). Returns the SAME set when nothing is removed, so callers can skip
+ * a state update and never loop.
+ */
+export function pruneSelectedPages(selected: ReadonlySet<number>, pageCount: number): ReadonlySet<number> {
+  let pruned: Set<number> | null = null;
+  for (const index of selected) {
+    if (Number.isInteger(index) && index >= 0 && index < pageCount) continue;
+    pruned ??= new Set(selected);
+    pruned.delete(index);
+  }
+  return pruned ?? selected;
+}

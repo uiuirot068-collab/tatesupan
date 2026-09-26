@@ -72,7 +72,18 @@ export class ExportCancellationCoordinator {
   private waiters = new Set<ExportPauseWaiter>();
   private currentState: ExportCancellationState = "idle";
 
+  private disposed = false;
+
   begin(): AbortSignal {
+    if (this.disposed) {
+      // The owner unmounted while this export was still preparing (awaiting its
+      // plan/font). It gets an already-cancelled signal that is not tracked, so
+      // its first cancellation checkpoint throws and no download or state
+      // update follows (finish() returns false for it).
+      const controller = new AbortController();
+      controller.abort();
+      return controller.signal;
+    }
     if (this.controller) {
       throw new Error("An export is already active.");
     }
@@ -120,6 +131,26 @@ export class ExportCancellationCoordinator {
     this.rejectWaiters();
     this.currentState = "cancelled";
     return true;
+  }
+
+  /**
+   * Phase 6.1: the owning component unmounted. Cancels the active export (the
+   * same path as the Human's 中止, so a V2 PDF worker is terminated through its
+   * abort listener and every download checkpoint throws) and cancels every
+   * export that begins later. `activate()` undoes it for a remount (React
+   * StrictMode runs effect cleanup + setup once on mount).
+   */
+  dispose(): void {
+    this.disposed = true;
+    this.cancelExport();
+  }
+
+  activate(): void {
+    this.disposed = false;
+  }
+
+  get isDisposed(): boolean {
+    return this.disposed;
   }
 
   private waitUntilResumed(signal: AbortSignal): Promise<void> {
