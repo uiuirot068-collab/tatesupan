@@ -1,4 +1,5 @@
 import type { SourceSpan } from "../source/span";
+import type { InlineDecoration } from "./decoration";
 
 // Explicit TCY unit (Contract §10). Auto-detection threshold (P3-O07) is
 // explicitly not decided here or by the Core contract — this shape only
@@ -8,4 +9,5 @@ export interface TCYUnit {
   span: SourceSpan;
   displayText: string;
   logicalCells: number; // structural cell consumption, cl-30 atomic group
+  decoration?: InlineDecoration;
 }

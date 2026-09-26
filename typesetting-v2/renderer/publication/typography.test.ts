@@ -29,6 +29,9 @@ function horizontalBoundsMm(cmd: PaintCommand): { xMin: number; xMax: number } {
   if (cmd.op === "rect" || cmd.op === "image") {
     return { xMin: cmd.xMm, xMax: cmd.xMm + cmd.widthMm };
   }
+  if (cmd.op === "circle") {
+    return { xMin: cmd.xMm - cmd.radiusMm, xMax: cmd.xMm + cmd.radiusMm };
+  }
   const xs = cmd.commands.flatMap((c) => (c.type === "Z" ? [] : c.type === "C" ? [c.x1, c.x2, c.x] : [c.x]));
   return { xMin: Math.min(...xs), xMax: Math.max(...xs) };
 }

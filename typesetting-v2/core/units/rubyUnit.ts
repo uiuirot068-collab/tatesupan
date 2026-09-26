@@ -1,4 +1,5 @@
 import type { SourceSpan } from "../source/span";
+import type { InlineDecoration } from "./decoration";
 
 // Group-ruby (distinct from atomic mono-ruby) is a recorded CONTRACT GAP
 // (Contract §31) and is treated as ATOMIC by default until researched
@@ -39,4 +40,5 @@ export interface RubyUnit {
   // convention); Core itself never derives one from the other.
   readingText: string;
   segments?: RubySegment[]; // JUKUGO only — ATOMIC ruby has no internal segmentation
+  decoration?: InlineDecoration; // applies to the BASE characters (傍点), never the reading
 }

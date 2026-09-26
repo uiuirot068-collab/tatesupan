@@ -53,7 +53,14 @@ export interface V2BridgeResult {
  * "colophon is off by default" contract (`src/lib/colophon.ts`).
  */
 export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
-  const { units, source } = buildV2UnitsFromManuscript("body", input.content);
+  // Body-only typography (post-beta Phase 1, see manuscriptAdapter.ts):
+  // 傍点 decoration, and ―― runs as inseparable DASH units. `charsPerLine - 1`
+  // keeps every grouped run narrower than a paragraph-first (一字下げ) line.
+  // The colophon (horizontal, its own painter) keeps the prior plain units.
+  const { units, source } = buildV2UnitsFromManuscript("body", input.content, {
+    maxDashRunCells: Math.floor(input.settings.charsPerLine) - 1,
+    decorations: true,
+  });
   const layoutSettings = buildV2LayoutSettings(input.settings);
   const pageGeometry = buildV2PageGeometry(input.settings);
   const folioSettings = buildV2FolioSettings(input.settings);

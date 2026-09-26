@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createFakeMeasurementProvider } from "../measurement/fakeProvider";
 import { DEFAULT_RULE_SET_V2 } from "../rules/defaultRuleSet";
 import type { SourceSpan } from "../source/span";
-import type { LogicalUnit, ParagraphBreakUnit, RubyUnit, TCYUnit, TextUnit } from "../units";
+import type { LogicalUnit, ParagraphBreakUnit, RubyUnit, SemanticRunUnit, TCYUnit, TextUnit } from "../units";
 import { composeColumn, type ColumnCompositionSettings } from "./column";
 import { composeLine } from "./line";
 
@@ -84,11 +84,20 @@ describe("Human Product Decision A — 一字下げ auto-indent", () => {
     expect(result.consumedThroughOffset).toBe(4); // no extra offset consumed for the indent itself
   });
 
-  it("cannot determine a first character for RUBY or SEMANTIC_RUN — no indent applies (disclosed architecture limitation)", () => {
+  it("cannot determine a first character for RUBY — no indent applies (disclosed architecture limitation)", () => {
     const ruby: RubyUnit = { kind: "RUBY", span: span(0, 2), rubyKind: "ATOMIC", baseSpan: span(0, 2), readingSpan: span(10, 15), readingText: "よみかた" };
     const after = text("あいう", 2);
     const result = composeLine([ruby, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 5, true);
     expect(result.line.indentTick).toBeUndefined(); // no indent — RubyUnit stores no base text for the check
+  });
+
+  it("a paragraph opening with a DASH SEMANTIC_RUN is indented like the same ―― composed as TEXT (run identity decides)", () => {
+    const dash: SemanticRunUnit = { kind: "SEMANTIC_RUN", span: span(0, 2), runKind: "DASH", length: 2 };
+    const after = text("あいう", 2);
+    const asRun = composeLine([dash, after], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6, true);
+    const asText = composeLine([text("――あいう", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 6, true);
+    expect(asRun.line.indentTick).toBe(CELL);
+    expect(asRun.line.indentTick).toBe(asText.line.indentTick);
   });
 
   it("TCY's displayText is determinable, so indent applies normally when a paragraph starts with TCY", () => {

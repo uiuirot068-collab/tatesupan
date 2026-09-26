@@ -13,7 +13,7 @@
 // source span, unit kind, GeometryTick coordinates, paragraph-start/
 // manual-break flags, and provisional/ruby-annotation-pending state.
 
-import type { PaintColumn, PaintDocument, PaintLine, PaintPage, PaintPlacedUnit } from "./paintModel";
+import type { EmphasisDotsPaint, PaintColumn, PaintDocument, PaintLine, PaintPage, PaintPlacedUnit } from "./paintModel";
 // Human/Product decision (2026-09-07): TateSpun v2's single authoritative
 // ruby-scale value — Core measurement, Preview paint, and Publication
 // paint must all derive from this ONE constant, never an independently-
@@ -22,6 +22,7 @@ import type { PaintColumn, PaintDocument, PaintLine, PaintPage, PaintPlacedUnit 
 // decision resolves).
 import { DEFAULT_RUBY_SCALE } from "../../core";
 import { rubyLaneGeometry } from "../rubyLane";
+import { emphasisDotLane } from "../emphasisMarks";
 
 export type PreviewMode = "normal" | "debug";
 
@@ -131,6 +132,12 @@ const PREVIEW_RENDERER_RULES = `
      ruby-reading-extent measurement now uses -- no longer an independently
      -hardcoded 0.55 (Publication paint uses the identical constant). */
   .ruby-annotation { position: absolute; font-size: ${DEFAULT_RUBY_SCALE}em; white-space: nowrap; color: #444; text-align: start; }
+  /* Post-beta typography Phase 1 (傍点): a filled circle per dot-bearing
+     grapheme, positioned from the shared emphasisMarks.ts lane (the same
+     geometry the vector PDF / JPG paint) -- never CSS text-emphasis, which
+     html/PDF export could not reproduce. A sibling of .unit-ink (like the
+     ruby annotation) so glyph ink clipping never clips a dot. */
+  .emphasis-dot { position: absolute; border-radius: 50%; background: currentColor; pointer-events: none; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -170,6 +177,26 @@ export const PREVIEW_RENDERER_DOCUMENT_STYLES = `
 
 function DebugBadge({ text }: { text: string }) {
   return <span className="debug-info">{text}</span>;
+}
+
+// Post-beta typography Phase 1 (傍点): paints the paint model's already-
+// resolved dot centres at the shared emphasisMarks.ts lane — never measures
+// or re-derives which characters are emphasised.
+function EmphasisDotMarks({ dots, fontSizePx, linePitchPx }: { dots: EmphasisDotsPaint; fontSizePx: number; linePitchPx: number }) {
+  const lane = emphasisDotLane(fontSizePx, linePitchPx, dots.side);
+  const size = lane.radius * 2;
+  return (
+    <>
+      {dots.flowCentersPx.map((center, i) => (
+        <span
+          key={i}
+          className="emphasis-dot"
+          data-emphasis-dot={dots.side}
+          style={{ top: center - lane.radius, left: `calc(50% + ${lane.centerFromParentCenter - lane.radius}px)`, width: size, height: size }}
+        />
+      ))}
+    </>
+  );
 }
 
 function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode }) {
@@ -248,6 +275,7 @@ function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUni
           {unit.rubyAnnotation.text}
         </span>
       )}
+      {unit.emphasisDots && <EmphasisDotMarks dots={unit.emphasisDots} fontSizePx={fontSizePx} linePitchPx={linePitchPx} />}
       {mode === "debug" && unit.rubyAnnotation?.status === "PENDING" && <span className="ruby-annotation-pending">annotation pending</span>}
       {mode === "debug" && <DebugBadge text={debugText} />}
     </div>

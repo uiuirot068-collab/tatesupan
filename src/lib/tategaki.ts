@@ -1,10 +1,23 @@
 /** 挿絵の配置位置: 天側（上部）/ 中央 / 地側（下部）/ ページ全体 */
 export type ImagePosition = "top" | "center" | "bottom" | "full";
 
+/** 傍点の種類。Phase 1 は黒点（`dot`）のみ。 */
+export type EmphasisMark = "dot";
+
+/**
+ * 本文トークンに付く装飾メタデータ（文字そのものは変えない）。
+ * 未指定＝装飾なし。装飾の有無は `tokenLength` / pagination の文字数計算に
+ * 一切影響しない（記法 `《《`・`》》` 自体もトークンに残らない）。
+ * 将来の縦書き装飾（傍線・白ゴマ点など）はここへフィールドを足して表す。
+ */
+export interface InlineDecoration {
+  emphasis?: EmphasisMark;
+}
+
 export type TategakiToken =
-  | { type: "text"; value: string }
-  | { type: "ruby"; base: string; rt: string }
-  | { type: "tcy"; value: string }
+  | { type: "text"; value: string; decoration?: InlineDecoration }
+  | { type: "ruby"; base: string; rt: string; decoration?: InlineDecoration }
+  | { type: "tcy"; value: string; decoration?: InlineDecoration }
   | { type: "image"; id: string; widthMm: number; heightMm: number; position: ImagePosition }
   | { type: "pageBreak" };
 
@@ -26,6 +39,14 @@ const TCY_PATTERN =
 // bare auto-detect と同じ形（round-trip 用）。detokenize がこれに一致しない
 // 縦中横だけ `[tate]…[/tate]` へ書き戻す。
 const TCY_BARE_FORM = /^(?:\d{2}|[!?！？]{2})$/;
+// 傍点: `《《傍点》》`（カクヨム等と同じ記法）。中身は1文字以上・改行なし。
+// 中にルビ（`《《｜漢字《かんじ》》》` / `《《漢字《かんじ》》》`）と縦中横を
+// 書ける——ルビの `《…》` だけは中身として許す。`《《》》`（空）や閉じ忘れ
+// （`《《abc`）は一致せず、これまで通りそのまま本文の文字として残る。
+// 既存のルビ記法は `《` の直後に `《` を取れないため、この記法と衝突しない。
+export const BOUTEN_OPEN = "《《";
+export const BOUTEN_CLOSE = "》》";
+const BOUTEN_PATTERN = /《《((?:[^《》\n]|《[^《》\n]+》)+)》》/g;
 // 挿絵 marker embedded in the raw text: 【IMG:<id>:<widthMm>:<heightMm>:<position>】
 // (the trailing :<position> is optional for backward compatibility with
 // documents saved before positioning was introduced; it defaults to "center")
@@ -160,7 +181,7 @@ export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
     const consumeEnd = breakSpan ? breakSpan.consumeEnd : end;
 
     if (consumeStart > lastIndex) {
-      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, consumeStart), lastIndex));
+      tokens.push(...tokenizeInline(source.slice(lastIndex, consumeStart), lastIndex));
     }
     if (isImageMarker) {
       tokens.push({
@@ -181,10 +202,59 @@ export function tokenizeTategakiWithOffsets(source: string): OffsetToken[] {
   }
 
   if (lastIndex < source.length) {
-    tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex), lastIndex));
+    tokens.push(...tokenizeInline(source.slice(lastIndex), lastIndex));
   }
 
   return tokens;
+}
+
+const EMPHASIS_DOT: InlineDecoration = { emphasis: "dot" };
+
+/**
+ * 傍点 `《《…》》` の範囲を先に切り出し、範囲の内外それぞれを既存の
+ * ルビ／縦中横トークナイザへ渡す。範囲内で得た text/ruby/tcy トークンには
+ * `decoration` を付けるだけで、トークンの種類・値・source offset は記法が
+ * 無い場合と同じ規則のまま（記法の `《《`・`》》` はどのトークンにも含まれず、
+ * offset の隙間として残る）。
+ */
+function tokenizeInline(source: string, baseOffset: number): OffsetToken[] {
+  if (!source.includes(BOUTEN_OPEN)) return tokenizeRubyAndTcy(source, baseOffset);
+  const tokens: OffsetToken[] = [];
+  let lastIndex = 0;
+  for (const match of source.matchAll(BOUTEN_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex, index), baseOffset + lastIndex));
+    }
+    const innerOffset = baseOffset + index + BOUTEN_OPEN.length;
+    for (const entry of tokenizeRubyAndTcy(match[1], innerOffset)) {
+      tokens.push({ ...entry, token: withDecoration(entry.token, EMPHASIS_DOT) });
+    }
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < source.length) {
+    tokens.push(...tokenizeRubyAndTcy(source.slice(lastIndex), baseOffset + lastIndex));
+  }
+  return tokens;
+}
+
+function withDecoration(token: TategakiToken, decoration: InlineDecoration): TategakiToken {
+  if (token.type === "text" || token.type === "ruby" || token.type === "tcy") {
+    return { ...token, decoration };
+  }
+  return token;
+}
+
+/** Removes the 傍点 notation, keeping the enclosed text (readable exports). */
+export function stripBoutenNotation(source: string): string {
+  return source.includes(BOUTEN_OPEN) ? source.replace(BOUTEN_PATTERN, "$1") : source;
+}
+
+/** The token's 傍点 mark, if any. */
+export function tokenEmphasis(token: TategakiToken): EmphasisMark | undefined {
+  return token.type === "text" || token.type === "ruby" || token.type === "tcy"
+    ? token.decoration?.emphasis
+    : undefined;
 }
 
 function tokenizeRubyAndTcy(source: string, baseOffset: number): OffsetToken[] {
@@ -775,6 +845,12 @@ function paginateTokensByLines(
     if (token.type === "text") {
       let i = 0;
       const value = token.value;
+      // A slice of this token keeps its decoration (傍点) — the key is only
+      // present when the source token had one, so undecorated slices stay
+      // byte-identical to before.
+      const decoration = token.decoration;
+      const piece = (slice: string): TategakiToken =>
+        decoration ? { type: "text", value: slice, decoration } : { type: "text", value: slice };
       while (i < value.length) {
         if (value[i] === "\n") {
           if (lineFilledByWrap) {
@@ -828,13 +904,13 @@ function paginateTokensByLines(
           !isHangingPunctuation(value[j + 1] ?? "")
         ) {
           if (j > i) {
-            placeToken({ type: "text", value: value.slice(i, j) });
+            placeToken(piece(value.slice(i, j)));
             lineChars += j - i;
           }
-          placeToken({ type: "text", value: value[j] });
+          placeToken(piece(value[j]));
           let hangEnd = j + 1;
           if (isHangingCloseBracket(value[hangEnd] ?? "")) {
-            placeToken({ type: "text", value: value[hangEnd] });
+            placeToken(piece(value[hangEnd]));
             hangEnd += 1;
           }
           i = hangEnd;
@@ -845,7 +921,7 @@ function paginateTokensByLines(
 
         j = adjustLineSplit(value, i, j, !isFreshLine);
         if (j > i) {
-          placeToken({ type: "text", value: value.slice(i, j) });
+          placeToken(piece(value.slice(i, j)));
           lineChars += j - i;
           i = j;
         }
@@ -1185,21 +1261,37 @@ export function formatImageMarker(token: Extract<TategakiToken, { type: "image" 
   return `【IMG:${token.id}:${token.widthMm}:${token.heightMm}:${token.position}】`;
 }
 
-/** Reverses `tokenizeTategaki`, re-serializing ruby/image tokens back to their marker form. */
+/**
+ * Reverses `tokenizeTategaki`, re-serializing ruby/image tokens back to their
+ * marker form. A run of consecutive 傍点-decorated tokens is wrapped in ONE
+ * `《《…》》` (so a range pagination split into several tokens re-serializes
+ * as a single range, never as nested or doubled markers).
+ */
 export function detokenizeTategaki(tokens: TategakiToken[]): string {
-  return tokens
-    .map((token) => {
-      if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
-      if (token.type === "image") return formatImageMarker(token);
-      if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
-      // 縦中横: bare auto-detect と同じ形はそのまま（再トークン化で復元）、
-      // それ以外（明示記法由来）は `[tate]…[/tate]` へ書き戻す。
-      if (token.type === "tcy") {
-        return TCY_BARE_FORM.test(token.value) ? token.value : `[tate]${token.value}[/tate]`;
-      }
-      return token.value;
-    })
-    .join("");
+  let out = "";
+  let emphasisOpen = false;
+  for (const token of tokens) {
+    const emphasized = tokenEmphasis(token) !== undefined;
+    if (emphasized !== emphasisOpen) {
+      out += emphasized ? BOUTEN_OPEN : BOUTEN_CLOSE;
+      emphasisOpen = emphasized;
+    }
+    out += serializeToken(token);
+  }
+  if (emphasisOpen) out += BOUTEN_CLOSE;
+  return out;
+}
+
+function serializeToken(token: TategakiToken): string {
+  if (token.type === "ruby") return `｜${token.base}《${token.rt}》`;
+  if (token.type === "image") return formatImageMarker(token);
+  if (token.type === "pageBreak") return PAGE_BREAK_MARKER;
+  // 縦中横: bare auto-detect と同じ形はそのまま（再トークン化で復元）、
+  // それ以外（明示記法由来）は `[tate]…[/tate]` へ書き戻す。
+  if (token.type === "tcy") {
+    return TCY_BARE_FORM.test(token.value) ? token.value : `[tate]${token.value}[/tate]`;
+  }
+  return token.value;
 }
 
 /**

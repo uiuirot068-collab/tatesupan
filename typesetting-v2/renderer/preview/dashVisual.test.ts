@@ -170,9 +170,13 @@ describe("P3-O04 — Dash Visual", () => {
     const { units, source } = buildFixtureUnits("body", [{ kind: "SEMANTIC_RUN", text: "――", runKind: "DASH" }, { kind: "TEXT", text: "と言った" }]);
     const { document, model } = composeAndPaint(units, source, { charsPerLine: 8, linesPerColumn: 3, columnCount: 1 });
     const line0 = document.pages[0].columns[0].lines[0];
-    expect(line0.indentTick).toBeUndefined(); // DASH's first-char indeterminacy (disclosed architecture limitation) -> no indent, matching Core's own documented behavior
+    // Post-beta typography Phase 1: Core resolves a DASH run's first character
+    // by run identity ("―", never an exempt opener), so the paragraph gets
+    // the ordinary one-cell 一字下げ — the same as when the Editor composed
+    // ―― as plain TEXT. The run itself moves by exactly that indent.
+    expect(line0.indentTick).toBeGreaterThan(0);
     const dash = findDashUnit(model);
-    expect(dash.topPx).toBe(0);
+    expect(dash.topPx).toBe(model.pages[0].columns[0].lines[0].indentPx);
   });
 
   it("dash near paragraph break: composes and paints correctly immediately after a bare paragraph break", () => {

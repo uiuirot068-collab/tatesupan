@@ -101,6 +101,13 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       ctx.strokeRect(mmToPx(cmd.xMm, dpi), mmToPx(cmd.yMm, dpi), mmToPx(cmd.widthMm, dpi), mmToPx(cmd.heightMm, dpi));
       continue;
     }
+    if (cmd.op === "circle") {
+      // Filled, like pdfGenerator.ts's `pdf.circle(..., "F")` (傍点).
+      ctx.beginPath();
+      ctx.arc(mmToPx(cmd.xMm, dpi), mmToPx(cmd.yMm, dpi), mmToPx(cmd.radiusMm, dpi), 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
     if (cmd.op === "image") {
       const cacheKey = `${cmd.bytes.byteLength}:${cmd.format}:${cmd.xMm}:${cmd.yMm}`;
       let image = imageCache.get(cacheKey);

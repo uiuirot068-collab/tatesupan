@@ -27,21 +27,98 @@
  * v2's own existing `PARAGRAPH_BREAK` span-ownership contract (see
  * `tools/compare/fixtureBuilder.ts`'s own "text defaults to \n" handling),
  * not an invented new concept.
+ *
+ * Post-beta typography Phase 1 (body block only, see
+ * `ManuscriptAdapterOptions`):
+ *  - 傍点: a token's `decoration` (from `《《…》》`) is carried onto its unit
+ *    as Core's paint-only `InlineDecoration`. Spans/advances are unchanged.
+ *  - Continuous dash: a run of 2+ `―`/`—` inside plain text becomes ONE
+ *    `SEMANTIC_RUN` DASH unit -- Core's existing cl-08 unit, whose run is
+ *    inseparable (no line/page break inside it) and which Preview paints as
+ *    one native vertical shaping run. The legacy paginator already refuses
+ *    to split `――` (`adjustSplitForNowrapRun`); before this, V2 composed each
+ *    dash as an independent TEXT atom that could break between the pair and
+ *    painted each glyph as its own text node.
  */
-import { tokenizeTategakiWithOffsets } from "../tategaki";
+import { tokenizeTategakiWithOffsets, type InlineDecoration as TokenDecoration, type TategakiToken } from "../tategaki";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
-import type { LogicalUnit } from "../../../typesetting-v2/core/units";
+import type { InlineDecoration, LogicalUnit } from "../../../typesetting-v2/core/units";
 
 const IMAGE_MARKER_CHAR = String.fromCharCode(1);
 
-function pushPlainText(blockId: string, text: string, state: { cursor: number; flow: string; units: LogicalUnit[] }): void {
+export interface ManuscriptAdapterOptions {
+  /**
+   * Longest dash run (in cells) composed as one inseparable DASH
+   * SEMANTIC_RUN. A longer run stays plain TEXT (breakable anywhere, the
+   * prior behavior), because an atom wider than a line has no legal break
+   * and Core would HOLD the whole document. Callers pass `charsPerLine - 1`
+   * so a run always fits even on a paragraph-first (一字下げ) line. Omitted
+   * or < 2: no dash grouping at all.
+   */
+  maxDashRunCells?: number;
+  /** Carry 傍点 decoration onto units. Omitted: decoration is dropped. */
+  decorations?: boolean;
+}
+
+interface AdapterState {
+  cursor: number;
+  flow: string;
+  units: LogicalUnit[];
+}
+
+// Same family legacy pagination/PageCard treat as one ―― run (`[―—]`).
+const DASH_RUN_PATTERN = /[―—]{2,}/g;
+
+function coreDecoration(decoration: TokenDecoration | undefined, options: ManuscriptAdapterOptions): { decoration: InlineDecoration } | Record<string, never> {
+  if (!options.decorations || decoration?.emphasis !== "dot") return {};
+  return { decoration: { emphasis: "DOT" } };
+}
+
+function pushTextUnit(blockId: string, text: string, state: AdapterState, decoration: { decoration?: InlineDecoration }): void {
+  const start = state.cursor;
+  state.cursor += Array.from(text).length;
+  state.flow += text;
+  state.units.push({ kind: "TEXT", span: { blockId, start, end: state.cursor }, text, ...decoration });
+}
+
+function pushLineText(
+  blockId: string,
+  text: string,
+  state: AdapterState,
+  options: ManuscriptAdapterOptions,
+  decoration: { decoration?: InlineDecoration }
+): void {
+  const maxCells = options.maxDashRunCells ?? 0;
+  if (maxCells < 2 || !/[―—]{2}/.test(text)) {
+    pushTextUnit(blockId, text, state, decoration);
+    return;
+  }
+  let last = 0;
+  for (const match of text.matchAll(DASH_RUN_PATTERN)) {
+    const length = Array.from(match[0]).length;
+    if (length > maxCells) continue; // stays inside the surrounding TEXT unit
+    const index = match.index ?? 0;
+    if (index > last) pushTextUnit(blockId, text.slice(last, index), state, decoration);
+    const start = state.cursor;
+    state.cursor += length;
+    state.flow += match[0];
+    state.units.push({ kind: "SEMANTIC_RUN", span: { blockId, start, end: state.cursor }, runKind: "DASH", length, ...decoration });
+    last = index + match[0].length;
+  }
+  if (last < text.length) pushTextUnit(blockId, text.slice(last), state, decoration);
+}
+
+function pushPlainText(
+  blockId: string,
+  text: string,
+  state: AdapterState,
+  options: ManuscriptAdapterOptions,
+  decoration: { decoration?: InlineDecoration }
+): void {
   const parts = text.split("\n");
   parts.forEach((part, i) => {
     if (part.length > 0) {
-      const start = state.cursor;
-      state.cursor += Array.from(part).length;
-      state.flow += part;
-      state.units.push({ kind: "TEXT", span: { blockId, start, end: state.cursor }, text: part });
+      pushLineText(blockId, part, state, options, decoration);
     }
     if (i < parts.length - 1) {
       const start = state.cursor;
@@ -50,6 +127,45 @@ function pushPlainText(blockId: string, text: string, state: { cursor: number; f
       state.units.push({ kind: "PARAGRAPH_BREAK", span: { blockId, start, end: state.cursor } });
     }
   });
+}
+
+type RubyToken = Extract<TategakiToken, { type: "ruby" }>;
+type ReadingQueue = Array<{ text: string; unitIndex: number }>;
+
+/**
+ * The ONE place an Editor ruby token becomes a Core `RubyUnit` (ruby
+ * foundation, post-beta Phase 1). Today every Editor ruby is a basic group
+ * ruby over its whole base — `rubyKind: "ATOMIC"`, one reading, never split
+ * across lines — exactly as before. Core already supports `JUKUGO` with
+ * per-segment readings (`RubyUnit.segments`, `core/ruby`), and
+ * `InlineDecoration` already carries base-character metadata (傍点); future
+ * mono / 熟語 / long-reading ruby only has to decide `rubyKind` +
+ * `segments` here from new token fields — the tokenizer, pagination and
+ * both paint models need no second ruby path. The reading text is appended
+ * to the unit's source after the body flow (`readingQueue`), unchanged.
+ */
+function pushRubyUnit(
+  blockId: string,
+  token: RubyToken,
+  state: AdapterState,
+  readingQueue: ReadingQueue,
+  decoration: { decoration?: InlineDecoration }
+): void {
+  const start = state.cursor;
+  state.cursor += Array.from(token.base).length;
+  state.flow += token.base;
+  const baseSpan = { blockId, start, end: state.cursor };
+  const unitIndex = state.units.length;
+  state.units.push({
+    kind: "RUBY",
+    span: baseSpan,
+    rubyKind: "ATOMIC",
+    baseSpan,
+    readingSpan: { blockId, start: -1, end: -1 },
+    readingText: token.rt,
+    ...decoration,
+  });
+  readingQueue.push({ text: token.rt, unitIndex });
 }
 
 export interface ManuscriptComposition {
@@ -61,29 +177,20 @@ export interface ManuscriptComposition {
  * `blockId` identifies this manuscript's own SourceBlock (Contract §1) --
  * pass a stable id for the body block (e.g. `"body"`).
  */
-export function buildV2UnitsFromManuscript(blockId: string, content: string): ManuscriptComposition {
+export function buildV2UnitsFromManuscript(
+  blockId: string,
+  content: string,
+  options: ManuscriptAdapterOptions = {}
+): ManuscriptComposition {
   const tokens = tokenizeTategakiWithOffsets(content).map((t) => t.token);
-  const state = { cursor: 0, flow: "", units: [] as LogicalUnit[] };
-  const readingQueue: Array<{ text: string; unitIndex: number }> = [];
+  const state: AdapterState = { cursor: 0, flow: "", units: [] };
+  const readingQueue: ReadingQueue = [];
 
   for (const token of tokens) {
     if (token.type === "text") {
-      pushPlainText(blockId, token.value, state);
+      pushPlainText(blockId, token.value, state, options, coreDecoration(token.decoration, options));
     } else if (token.type === "ruby") {
-      const start = state.cursor;
-      state.cursor += Array.from(token.base).length;
-      state.flow += token.base;
-      const baseSpan = { blockId, start, end: state.cursor };
-      const unitIndex = state.units.length;
-      state.units.push({
-        kind: "RUBY",
-        span: baseSpan,
-        rubyKind: "ATOMIC",
-        baseSpan,
-        readingSpan: { blockId, start: -1, end: -1 },
-        readingText: token.rt,
-      });
-      readingQueue.push({ text: token.rt, unitIndex });
+      pushRubyUnit(blockId, token, state, readingQueue, coreDecoration(token.decoration, options));
     } else if (token.type === "tcy") {
       const start = state.cursor;
       state.cursor += Array.from(token.value).length;
@@ -91,7 +198,13 @@ export function buildV2UnitsFromManuscript(blockId: string, content: string): Ma
       // logicalCells: 1 -- matches Core's own real convention (verified
       // against `core/tcy/index.test.ts`: a TCY run consumes exactly one
       // logical cell regardless of digit count, e.g. "1999" also uses 1).
-      state.units.push({ kind: "TCY", span: { blockId, start, end: state.cursor }, displayText: token.value, logicalCells: 1 });
+      state.units.push({
+        kind: "TCY",
+        span: { blockId, start, end: state.cursor },
+        displayText: token.value,
+        logicalCells: 1,
+        ...coreDecoration(token.decoration, options),
+      });
     } else if (token.type === "image") {
       const start = state.cursor;
       state.cursor += 1;

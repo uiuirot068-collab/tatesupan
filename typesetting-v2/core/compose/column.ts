@@ -75,6 +75,7 @@ function sliceUnitsFrom(units: LogicalUnit[], offset: number): LogicalUnit[] {
         kind: "TEXT",
         span: { blockId: unit.span.blockId, start: offset, end: unit.span.end },
         text: remainingText,
+        ...(unit.decoration ? { decoration: unit.decoration } : {}),
       });
     } else {
       result.push(unit);

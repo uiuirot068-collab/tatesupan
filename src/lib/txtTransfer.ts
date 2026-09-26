@@ -1,4 +1,5 @@
 import { sanitizeFilename } from "@/utils/exportFilename";
+import { stripBoutenNotation } from "./tategaki";
 
 export type TxtNewlinePolicy = "preserve" | "lf" | "crlf";
 
@@ -69,7 +70,8 @@ export function buildTxtFileName(title: string): string {
  * completely unchanged.
  */
 export function serializeReadableTxt(source: string): string {
-  const withoutControls = source
+  // 傍点 first, so a ruby written inside 《《…》》 is then stripped like any other.
+  const withoutControls = stripBoutenNotation(source)
     .replace(/\r\n?/g, "\n")
     .replace(/!\[[^\]\n]*\]\([^\)\n]*\)/g, "")
     .replace(/【IMG:[^】\n]*】/g, "")

@@ -22,6 +22,7 @@
 import type { CanonicalDocument, CanonicalPage, ColophonPlacement, ImagePlacement, LogicalUnit, PhysicalPageRef, PlacedUnit } from "../../core";
 import type { SourceSpan } from "../../core/source/span";
 import { tickToMm } from "./geometry";
+import { emphasisDotsForUnit, type EmphasisSide } from "../emphasisMarks";
 
 export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" | "UNKNOWN";
 
@@ -100,7 +101,17 @@ export interface PaintPlacedUnit {
   /** Editor UI's explicit 「全面（ページを覆う）」 paint contract. */
   imageFullPageCover?: boolean;
   semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER";
+  // Post-beta typography Phase 1 (傍点): resolved from the owning unit's
+  // paint-only `InlineDecoration` by the SAME `emphasisMarks.ts` contract
+  // Preview uses. Flow centres are mm from this unit's own `topMm`;
+  // `pdfGenerator.ts` adds the shared cross-axis lane. Absent == no 傍点.
+  emphasisDots?: EmphasisDotsPaint;
   debug: PaintDebugInfo;
+}
+
+export interface EmphasisDotsPaint {
+  side: EmphasisSide;
+  flowCentersMm: number[];
 }
 
 export interface PaintLine {
@@ -361,7 +372,11 @@ function buildPaintLine(
       // clamped so it can only ever shrink toward the line's own remaining
       // budget, never overshoot it.
       const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
-      const guess = prev ? placed.yTick - prev.yTick : ctx.linePitchTicks;
+      // Same multi-cell SEMANTIC_RUN rule as Preview's paintModel.ts: a
+      // run's own cell count, never a neighbour's 1-cell delta.
+      const guess = owner && owner.kind === "SEMANTIC_RUN"
+        ? (ctx.bodyFontSizeTick ?? ctx.linePitchTicks) * owner.length
+        : prev ? placed.yTick - prev.yTick : ctx.linePitchTicks;
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
@@ -383,6 +398,7 @@ function buildPaintLine(
     const isImage = kind === "IMAGE" && owner && owner.kind === "IMAGE";
     const heightMm = isImage ? Math.max(tickToMm(owner.intrinsicHeight), 0.001) : Math.max(tickToMm(extentTicks), 0.001);
     const semanticRunKind = kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? owner.runKind : undefined;
+    const emphasis = emphasisDotsForUnit(owner, text, heightMm);
     return {
       id: placed.id,
       kind,
@@ -400,6 +416,7 @@ function buildPaintLine(
         imageFullPageCover: owner.placement === "FULL" && ctx.fullImageCoversPage === true,
       } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),
+      ...(emphasis ? { emphasisDots: { side: emphasis.side, flowCentersMm: emphasis.flowCenters } } : {}),
       debug: {
         pageOrder,
         columnOrder,

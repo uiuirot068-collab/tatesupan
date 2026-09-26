@@ -60,6 +60,7 @@ import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 import { rubyLaneGeometry } from "../rubyLane";
+import { emphasisDotLane } from "../emphasisMarks";
 import {
   resolvePublicationPdfPageOutput,
   type PublicationPdfMode,
@@ -163,7 +164,11 @@ export type PaintCommand =
   // decoder (unavoidable — the PDF image-XObject model has no native
   // PNG encoding), which does preserve a real alpha channel via jsPDF's
   // own SMask support.
-  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG" };
+  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG" }
+  // Post-beta typography Phase 1 (傍点): one FILLED vector circle, centre
+  // (xMm, yMm). Font-independent geometry, so PDF (jsPDF circle) and both
+  // JPG rasterizers (Canvas arc) paint the identical dot.
+  | { op: "circle"; xMm: number; yMm: number; radiusMm: number };
 
 export interface PaintPagePlan {
   widthMm: number;
@@ -652,6 +657,19 @@ function unitCommands(
   return [{ op: "rect", xMm: x, yMm: y, widthMm: lineWidthMm, heightMm: unit.heightMm }];
 }
 
+// Post-beta typography Phase 1 (傍点): the paint model already resolved which
+// graphemes of this atom carry a dot and where along the flow
+// (`emphasisDots`, shared `emphasisMarks.ts` contract); this only adds the
+// shared cross-axis lane — the same lane Preview paints — and emits one
+// filled circle per dot. Never re-derives emphasis from the text.
+function emphasisDotCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: number, yOffsetMm: number, bodyEmMm: number): PaintCommand[] {
+  if (!unit.emphasisDots) return [];
+  const lane = emphasisDotLane(bodyEmMm, lineWidthMm, unit.emphasisDots.side);
+  const xMm = x + lineWidthMm / 2 + lane.centerFromParentCenter;
+  const topMm = yOffsetMm + unit.topMm;
+  return unit.emphasisDots.flowCentersMm.map((center) => ({ op: "circle" as const, xMm, yMm: topMm + center, radiusMm: lane.radius }));
+}
+
 // Pure, jsPDF-free: PublicationDocument -> a plain-data paint plan. This is
 // what every typography regression test asserts against directly.
 //
@@ -718,6 +736,7 @@ function buildBodyPaintPage(
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
             commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm));
+            commands.push(...emphasisDotCommands(unit, x, line.widthMm, yOffsetMm, doc.bodyEmMm));
           }
         }
       }
@@ -1239,6 +1258,10 @@ function paintPageCommands(
   for (const cmd of page.commands) {
     if (cmd.op === "rect") {
       pdf.rect(cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      continue;
+    }
+    if (cmd.op === "circle") {
+      pdf.circle(cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.radiusMm, "F");
       continue;
     }
     if (cmd.op === "image") {

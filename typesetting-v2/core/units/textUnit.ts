@@ -1,4 +1,5 @@
 import type { SourceSpan } from "../source/span";
+import type { InlineDecoration } from "./decoration";
 
 // One or more consecutive plain characters sharing no special structure
 // (Contract §5). `text` must be grapheme-cluster-safe (Contract §6) — never
@@ -10,4 +11,5 @@ export interface TextUnit {
   kind: "TEXT";
   span: SourceSpan;
   text: string;
+  decoration?: InlineDecoration;
 }

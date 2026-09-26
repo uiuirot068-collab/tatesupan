@@ -19,7 +19,7 @@ import type { GeometryTick } from "../geometry/tick";
 import type { SourceSpan } from "../source/span";
 import type { RuleSetVersion } from "../rules/characterClass";
 import type { MeasurementFacts } from "../measurement/facts";
-import type { LogicalUnit } from "../units";
+import type { LogicalUnit, SemanticRunKind } from "../units";
 import type { TraceRecorder } from "../trace";
 import type { CanonicalLine, PlacedUnit } from "../layout/schema";
 import { deriveBreakOpportunities, type BreakOpportunity } from "../breaks/opportunity";
@@ -82,17 +82,31 @@ const AUTO_INDENT_CHAR = "　"; // full-width space (U+3000)
 // The first visible character of a unit, for the auto-indent exemption
 // check only — determinable for TEXT/TCY (both store their own content
 // directly); NOT determinable for RUBY (Core's RubyUnit carries only
-// `baseSpan`, never the base text itself) or SEMANTIC_RUN (carries only
-// `length`, never its literal characters) — a known, disclosed architecture
+// `baseSpan`, never the base text itself) — a known, disclosed architecture
 // constraint (`qa/evidence/PARAGRAPH_SEMANTICS_PRE_STAGE_D.md` §5): a
-// paragraph starting with one of these two kinds will not receive
-// auto-indent in v2, unlike legacy (whose own tokens store this content
-// directly). `undefined` here mirrors legacy's own `firstVisibleTokenChar`
+// paragraph starting with a ruby will not receive auto-indent in v2, unlike
+// legacy (whose own tokens store this content directly). SEMANTIC_RUN is
+// resolved by run identity (see below). `undefined` here mirrors legacy's own `firstVisibleTokenChar`
 // returning `""` for anything it doesn't special-case (image/pageBreak) —
 // both paths converge on "auto-indent does not apply" with no character.
+//
+// SEMANTIC_RUN (post-beta typography Phase 1): a cl-08 run carries no literal
+// text, but its kind alone fixes which character class it starts with — the
+// run's own identity character, never an exempt opener or space — so the
+// indent decision is determinable without inventing text. This keeps a
+// paragraph that opens with `――` indented exactly as it was when the same
+// characters were composed as plain TEXT (legacy `paragraphNeedsAutoIndent`
+// parity).
+const SEMANTIC_RUN_IDENTITY_CHAR: Record<SemanticRunKind, string> = {
+  DASH: "―",
+  ELLIPSIS: "…",
+  TWO_DOT_LEADER: "‥",
+};
+
 function firstVisibleCharFor(unit: LogicalUnit): string | undefined {
   if (unit.kind === "TEXT") return Array.from(unit.text)[0];
   if (unit.kind === "TCY") return Array.from(unit.displayText)[0];
+  if (unit.kind === "SEMANTIC_RUN") return SEMANTIC_RUN_IDENTITY_CHAR[unit.runKind];
   return undefined;
 }
 

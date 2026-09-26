@@ -12,6 +12,7 @@ export type { SemanticRunKind, SemanticRunUnit } from "./semanticRunUnit";
 export type { ManualBreakUnit } from "./manualBreakUnit";
 export type { ImagePlacement, ImageUnit } from "./imageUnit";
 export type { ParagraphBreakUnit } from "./paragraphBreakUnit";
+export type { EmphasisMarkKind, InlineDecoration } from "./decoration";
 
 import type { TextUnit } from "./textUnit";
 import type { RubyUnit } from "./rubyUnit";

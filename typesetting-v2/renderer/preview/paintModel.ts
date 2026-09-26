@@ -34,6 +34,7 @@ import type {
 } from "../../core";
 import type { SourceSpan } from "../../core/source/span";
 import { tickToPx } from "./geometry";
+import { emphasisDotsForUnit, type EmphasisSide } from "../emphasisMarks";
 
 export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" | "UNKNOWN";
 
@@ -105,7 +106,18 @@ export interface PaintPlacedUnit {
   // never touches SemanticRunUnit, SourceSpan, or canonical occupancy —
   // Core still sees and composes exactly one atomic run.
   dashGlyphs?: DashGlyphPaint[];
+  // Post-beta typography Phase 1 (傍点): the owning unit's paint-only
+  // `InlineDecoration.emphasis`, resolved once here via the shared
+  // `emphasisMarks.ts` contract (the same one Publication uses). Flow
+  // centres are px from this unit's own `topPx`; the renderer only adds the
+  // shared cross-axis lane. Absent == no 傍点.
+  emphasisDots?: EmphasisDotsPaint;
   debug: PaintDebugInfo;
+}
+
+export interface EmphasisDotsPaint {
+  side: EmphasisSide;
+  flowCentersPx: number[];
 }
 
 export interface DashGlyphPaint {
@@ -420,13 +432,19 @@ function buildPaintLine(
       // it never grows it, and never claims a more exact value than the
       // guess it is.
       const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
-      const guess = prev ? placed.yTick - prev.yTick : ctx.nominalCellTicks;
+      // A multi-cell SEMANTIC_RUN (――) knows its own cell count — never
+      // borrow a neighbour's 1-cell delta for it, or a run that wraps at the
+      // line end would be painted squeezed into one cell.
+      const guess = owner && owner.kind === "SEMANTIC_RUN"
+        ? ctx.nominalCellTicks * owner.length
+        : prev ? placed.yTick - prev.yTick : ctx.nominalCellTicks;
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;
     }
     const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);
     const heightPx = Math.max(tickToPx(extentTicks, ctx.scaleMultiplier), 1);
     const semanticRunKind = kind === "SEMANTIC_RUN" && owner && owner.kind === "SEMANTIC_RUN" ? owner.runKind : undefined;
+    const emphasis = emphasisDotsForUnit(owner, text, heightPx);
     return {
       id: placed.id,
       kind,
@@ -440,6 +458,7 @@ function buildPaintLine(
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),
       ...(semanticRunKind === "DASH" ? { dashGlyphs: dashGlyphsFor(text, heightPx, ctx) } : {}),
+      ...(emphasis ? { emphasisDots: { side: emphasis.side, flowCentersPx: emphasis.flowCenters } } : {}),
       debug: {
         pageOrder,
         columnOrder,
