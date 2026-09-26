@@ -432,11 +432,16 @@ function buildPaintLine(
       // it never grows it, and never claims a more exact value than the
       // guess it is.
       const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
-      // A multi-cell SEMANTIC_RUN (――) knows its own cell count — never
-      // borrow a neighbour's 1-cell delta for it, or a run that wraps at the
-      // line end would be painted squeezed into one cell.
-      const guess = owner && owner.kind === "SEMANTIC_RUN"
-        ? ctx.nominalCellTicks * owner.length
+      // A multi-cell atom knows its own cell count — a SEMANTIC_RUN (――/……)
+      // its run length, a RUBY atom its base span (Core composed it at
+      // perCell × base width) — never borrow a neighbour's 1-cell delta for
+      // it, or an atom that ends a wrapped line is painted squeezed into one
+      // cell (ruby: 2nd base glyph clipped).
+      const ownCells = owner?.kind === "SEMANTIC_RUN"
+        ? owner.length
+        : owner?.kind === "RUBY" ? placed.sourceSpan.end - placed.sourceSpan.start : undefined;
+      const guess = ownCells !== undefined
+        ? ctx.nominalCellTicks * ownCells
         : prev ? placed.yTick - prev.yTick : ctx.nominalCellTicks;
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;

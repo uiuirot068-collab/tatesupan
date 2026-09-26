@@ -372,10 +372,13 @@ function buildPaintLine(
       // clamped so it can only ever shrink toward the line's own remaining
       // budget, never overshoot it.
       const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
-      // Same multi-cell SEMANTIC_RUN rule as Preview's paintModel.ts: a
-      // run's own cell count, never a neighbour's 1-cell delta.
-      const guess = owner && owner.kind === "SEMANTIC_RUN"
-        ? (ctx.bodyFontSizeTick ?? ctx.linePitchTicks) * owner.length
+      // Same multi-cell rule as Preview's paintModel.ts: a SEMANTIC_RUN's
+      // run length / a RUBY atom's base span, never a neighbour's 1-cell delta.
+      const ownCells = owner?.kind === "SEMANTIC_RUN"
+        ? owner.length
+        : owner?.kind === "RUBY" ? placed.sourceSpan.end - placed.sourceSpan.start : undefined;
+      const guess = ownCells !== undefined
+        ? (ctx.bodyFontSizeTick ?? ctx.linePitchTicks) * ownCells
         : prev ? placed.yTick - prev.yTick : ctx.linePitchTicks;
       extentTicks = Math.min(guess, remainingLineExtentTicks);
       heightIsApproximate = true;

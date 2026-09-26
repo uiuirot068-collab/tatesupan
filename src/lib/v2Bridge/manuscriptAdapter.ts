@@ -39,6 +39,10 @@
  *    to split `――` (`adjustSplitForNowrapRun`); before this, V2 composed each
  *    dash as an independent TEXT atom that could break between the pair and
  *    painted each glyph as its own text node.
+ *  - Continuous ellipsis (Phase 1.1): a run of 2+ `…` becomes ONE
+ *    `SEMANTIC_RUN` ELLIPSIS unit on the same terms (cl-08 inseparable; the
+ *    legacy paginator already refuses to split `……`). `‥` (TWO_DOT_LEADER)
+ *    is left as TEXT: Publication has no paint branch for that run kind.
  */
 import { tokenizeTategakiWithOffsets, type InlineDecoration as TokenDecoration, type TategakiToken } from "../tategaki";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
@@ -48,14 +52,14 @@ const IMAGE_MARKER_CHAR = String.fromCharCode(1);
 
 export interface ManuscriptAdapterOptions {
   /**
-   * Longest dash run (in cells) composed as one inseparable DASH
-   * SEMANTIC_RUN. A longer run stays plain TEXT (breakable anywhere, the
+   * Longest `――` / `……` run (in cells) composed as one inseparable
+   * DASH / ELLIPSIS SEMANTIC_RUN. A longer run stays plain TEXT (breakable anywhere, the
    * prior behavior), because an atom wider than a line has no legal break
    * and Core would HOLD the whole document. Callers pass `charsPerLine - 1`
    * so a run always fits even on a paragraph-first (一字下げ) line. Omitted
-   * or < 2: no dash grouping at all.
+   * or < 2: no run grouping at all.
    */
-  maxDashRunCells?: number;
+  maxSemanticRunCells?: number;
   /** Carry 傍点 decoration onto units. Omitted: decoration is dropped. */
   decorations?: boolean;
 }
@@ -66,8 +70,10 @@ interface AdapterState {
   units: LogicalUnit[];
 }
 
-// Same family legacy pagination/PageCard treat as one ―― run (`[―—]`).
-const DASH_RUN_PATTERN = /[―—]{2,}/g;
+// Dash: the same family legacy pagination/PageCard treat as one ―― run
+// (`[―—]`). Ellipsis: `…` only (see the module doc for `‥`).
+const SEMANTIC_RUN_PATTERN = /[―—]{2,}|…{2,}/g;
+const HAS_SEMANTIC_RUN = /[―—]{2}|……/;
 
 function coreDecoration(decoration: TokenDecoration | undefined, options: ManuscriptAdapterOptions): { decoration: InlineDecoration } | Record<string, never> {
   if (!options.decorations || decoration?.emphasis !== "dot") return {};
@@ -88,13 +94,13 @@ function pushLineText(
   options: ManuscriptAdapterOptions,
   decoration: { decoration?: InlineDecoration }
 ): void {
-  const maxCells = options.maxDashRunCells ?? 0;
-  if (maxCells < 2 || !/[―—]{2}/.test(text)) {
+  const maxCells = options.maxSemanticRunCells ?? 0;
+  if (maxCells < 2 || !HAS_SEMANTIC_RUN.test(text)) {
     pushTextUnit(blockId, text, state, decoration);
     return;
   }
   let last = 0;
-  for (const match of text.matchAll(DASH_RUN_PATTERN)) {
+  for (const match of text.matchAll(SEMANTIC_RUN_PATTERN)) {
     const length = Array.from(match[0]).length;
     if (length > maxCells) continue; // stays inside the surrounding TEXT unit
     const index = match.index ?? 0;
@@ -102,7 +108,7 @@ function pushLineText(
     const start = state.cursor;
     state.cursor += length;
     state.flow += match[0];
-    state.units.push({ kind: "SEMANTIC_RUN", span: { blockId, start, end: state.cursor }, runKind: "DASH", length, ...decoration });
+    state.units.push({ kind: "SEMANTIC_RUN", span: { blockId, start, end: state.cursor }, runKind: match[0][0] === "…" ? "ELLIPSIS" : "DASH", length, ...decoration });
     last = index + match[0].length;
   }
   if (last < text.length) pushTextUnit(blockId, text.slice(last), state, decoration);

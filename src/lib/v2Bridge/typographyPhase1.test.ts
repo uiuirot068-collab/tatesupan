@@ -44,7 +44,7 @@ const circles = (bridge: V2BridgeResult): Array<Extract<PaintCommand, { op: "cir
   bridge.plan.flatMap((page) => page.commands.filter((c): c is Extract<PaintCommand, { op: "circle" }> => c.op === "circle"));
 
 describe("manuscript adapter: decoration + dash units", () => {
-  const body = { maxDashRunCells: 9, decorations: true };
+  const body = { maxSemanticRunCells: 9, decorations: true };
 
   it("plain text regression: no decoration key, no SEMANTIC_RUN when there is nothing to group", () => {
     const { units } = buildV2UnitsFromManuscript("body", "吾輩は猫である。", body);
@@ -93,7 +93,7 @@ describe("manuscript adapter: decoration + dash units", () => {
     ]);
   });
 
-  it("a mixed ―— run is one run (legacy family), and a run longer than maxDashRunCells stays breakable TEXT", () => {
+  it("a mixed ―— run is one run (legacy family), and a run longer than maxSemanticRunCells stays breakable TEXT", () => {
     expect(buildV2UnitsFromManuscript("body", "―—", body).units[0]).toMatchObject({ kind: "SEMANTIC_RUN", runKind: "DASH", length: 2 });
     const long = "―".repeat(10);
     expect(buildV2UnitsFromManuscript("body", long, body).units).toStrictEqual([
@@ -262,5 +262,116 @@ describe("V2 continuous dash (――)", () => {
     const bridge = compose("「あ――い", settings(10));
     const texts = bridge.plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
     expect(texts.filter((c) => /[―︱]/.test(c.text))).toHaveLength(2);
+  });
+});
+
+describe("Phase 1.1: ruby at the end of a wrapped line", () => {
+  const cellOf = (units: PaintPlacedUnit[]) => units.find((u) => u.kind === "TEXT" && !u.heightIsApproximate)!.heightPx;
+
+  it("2-char base ending a wrapped line is painted over its own 2 cells (Preview) — the reported repro", () => {
+    const bridge = compose("「あ｜漢字《かんじ》いう", settings(4));
+    expect(pageLines(bridge)[0]).toEqual(["「あ漢字", "いう"]);
+    const units = previewUnits(bridge);
+    const ruby = units.find((u) => u.kind === "RUBY")!;
+    expect(ruby.heightIsApproximate).toBe(true); // it IS the line's last atom
+    expect(ruby.heightPx).toBeCloseTo(cellOf(units) * 2, 6);
+    expect(ruby.rubyAnnotation?.status).toBe("PLACED");
+  });
+
+  it("3-char base ending a wrapped line gets 3 cells", () => {
+    const units = previewUnits(compose("「｜東京都《とうきょうと》あい", settings(4)));
+    const ruby = units.find((u) => u.kind === "RUBY")!;
+    expect(ruby.text).toBe("東京都");
+    expect(ruby.heightPx).toBeCloseTo(cellOf(units) * 3, 6);
+  });
+
+  it("PDF/JPG plan agrees: the base glyphs sit one full cell apart, not squeezed into one cell", () => {
+    const bridge = compose("「あ｜漢字《かんじ》いう", settings(4));
+    const unit = bridge.model.pages[0].columns[0].lines[0].units.find((u) => u.kind === "RUBY")!;
+    const cellMm = bridge.model.pages[0].columns[0].lines[0].units[0].heightMm;
+    expect(unit.heightMm).toBeCloseTo(cellMm * 2, 6);
+    const texts = bridge.plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
+    const kan = texts.find((c) => c.text === "漢")!;
+    const ji = texts.find((c) => c.text === "字")!;
+    expect(ji.yMm - kan.yMm).toBeCloseTo(cellMm, 6);
+  });
+
+  it("the extent is still clamped to the line end (never paints past the frame)", () => {
+    const bridge = compose("「あ｜漢字《かんじ》いう", settings(4));
+    const page = buildV2PreviewDocument(bridge, {}).pages[0];
+    const ruby = page.columns[0].lines[0].units.find((u) => u.kind === "RUBY")!;
+    expect(ruby.topPx + ruby.heightPx).toBeLessThanOrEqual(page.heightPx + 1e-6);
+  });
+
+  it("non-line-end ruby regression: a mid-line ruby keeps its exact (non-estimated) 2-cell extent", () => {
+    const units = previewUnits(compose("「あ｜漢字《かんじ》いう", settings(10)));
+    const ruby = units.find((u) => u.kind === "RUBY")!;
+    expect(ruby.heightIsApproximate).toBe(false);
+    expect(ruby.heightPx).toBeCloseTo(cellOf(units) * 2, 6);
+  });
+
+  it("ruby stays ATOMIC: a base that does not fit moves whole to the next line", () => {
+    expect(pageLines(compose("「あい｜漢字《かんじ》", settings(4)))[0]).toEqual(["「あい", "漢字"]);
+    expect(compose("｜漢字《かんじ》", settings(4)).units[0]).toMatchObject({ kind: "RUBY", rubyKind: "ATOMIC" });
+  });
+});
+
+describe("Phase 1.1: continuous ellipsis (……)", () => {
+  const body = { maxSemanticRunCells: 9, decorations: true };
+
+  it("adapter: 2- and 4-char …… runs become one ELLIPSIS run; a lone … and ‥‥ stay TEXT; source text unchanged", () => {
+    const { units, source } = buildV2UnitsFromManuscript("body", "あ……い…………う…え‥‥お", body);
+    expect(source).toBe("あ……い…………う…え‥‥お");
+    expect(units.map((u) => (u.kind === "SEMANTIC_RUN" ? `${u.runKind}${u.length}` : u.kind === "TEXT" ? u.text : u.kind))).toEqual([
+      "あ",
+      "ELLIPSIS2",
+      "い",
+      "ELLIPSIS4",
+      "う…え‥‥お",
+    ]);
+  });
+
+  it("…… never splits across a line end — the run moves whole to the next line", () => {
+    expect(pageLines(compose("「あいう……」", settings(5)))[0]).toEqual(["「あいう", "……」"]);
+  });
+
+  it("4-char ………… never splits across a line end", () => {
+    expect(pageLines(compose("「あ…………い", settings(5)))[0]).toEqual(["「あ", "…………い"]);
+  });
+
+  it("punctuation after a run keeps kinsoku: 。 is never left alone at the next line head", () => {
+    const lines = pageLines(compose("「あいう……。", settings(5)))[0];
+    expect(lines).toEqual(["「あいう", "……。"]);
+  });
+
+  it("page boundary: a run that does not fit the page's last line starts the next page whole", () => {
+    const pages = pageLines(compose("「あいうえかきく……け", settings(4, 2)));
+    expect(pages[1][0].startsWith("……")).toBe(true);
+  });
+
+  it("a run longer than a line never HOLDs; it wraps like before", () => {
+    const bridge = compose("…".repeat(12), settings(5));
+    expect(bridge.document.hold).toBe(false);
+    expect(pageLines(bridge)[0].join("")).toBe("…".repeat(12));
+  });
+
+  it("a paragraph opening with …… keeps its 一字下げ", () => {
+    expect(compose("……始まり", settings(10)).document.pages[0].columns[0].lines[0].indentTick).toBeGreaterThan(0);
+  });
+
+  it("Preview and PDF/JPG agree: one 2-cell run in Preview (even at line end), two glyphs in the plan", () => {
+    const bridge = compose("「あい……うえ", settings(5));
+    expect(pageLines(bridge)[0]).toEqual(["「あい……", "うえ"]);
+    const units = previewUnits(bridge);
+    const run = units.find((u) => u.semanticRunKind === "ELLIPSIS")!;
+    expect(run.text).toBe("……");
+    expect(run.heightPx).toBeCloseTo(units.find((u) => u.text === "あ")!.heightPx * 2, 6);
+    const glyphs = bridge.plan[0].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text" && /[…︙]/.test(c.text));
+    expect(glyphs).toHaveLength(2);
+  });
+
+  it("ellipsis inside 傍点 gets no dots and keeps the range's letters dotted", () => {
+    const units = previewUnits(compose("《《待って……ね》》", settings(10)));
+    expect(units.filter((u) => u.emphasisDots).map((u) => u.text)).toEqual(["待", "っ", "て", "ね"]);
   });
 });
