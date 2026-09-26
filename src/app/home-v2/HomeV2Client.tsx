@@ -525,6 +525,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               <p className="rounded-[10px] border border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.1)] px-4 py-3 font-medium text-ink dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.08)] dark:text-[#D4DBE7]">
                 72時間で削除されるのは、クラウド上の一時コピーです。原稿本文や、この端末の画像を72時間後に削除するという意味ではありません。この端末で作業を続けるだけなら、72時間以内に何かをする必要はありません。
               </p>
+
+              <div>
+                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">画像を読み込めなくなったとき</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>クラウド上の一時コピーが期限切れ・欠損になり、今のブラウザにも元画像がない場合は「⚠️画像切れ」としてお知らせします。</li>
+                  <li>プレビューの該当位置にはCaroadと再配置案内が出て、フッターから問題のあるページへ移動・画像の差し替えができます。</li>
+                  <li>画像切れがあるページを含む書き出しだけ停止します。画像切れのないページを単ページで書き出すことはできます。</li>
+                </ul>
+              </div>
             </div>
           </aside>
 
