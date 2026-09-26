@@ -28,7 +28,7 @@ import { mobileShellHeightStyle, useMobileKeyboardViewport } from "@/hooks/useMo
 import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
-import { syncManuscriptImages, restoreManuscriptImages } from "@/lib/supabase/manuscriptImages";
+import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
@@ -306,6 +306,28 @@ export default function TategakiEditor({
       ]),
     [unresolvedCloudImages]
   );
+  // Cloud editor stays aware of 72h expiry while it is open. Manifest-only polling is
+  // intentionally light (60s); it does not download image blobs and local-only documents never poll.
+  useEffect(() => {
+    if (!currentProjectId || !contentHasImages(content)) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const status = await getUnresolvedManuscriptImages(currentProjectId, content);
+      if (cancelled || status.error) return;
+      // 72hはクラウド一時コピーだけの期限。今のブラウザに元画像が残っているIDは
+      // 実際には表示・出力可能なので「画像切れ」にはしない。
+      const missing = status.missing.filter((id) => !images[id]);
+      const unmanifested = status.unmanifested.filter((id) => !images[id]);
+      const hasIssues = missing.length > 0 || unmanifested.length > 0;
+      setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [content, currentProjectId, images]);
   const memoStorageKey = useMemo(
     () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
     [currentProjectId, docId]
@@ -539,6 +561,12 @@ export default function TategakiEditor({
   // dependencies (excluding the always-stable useState setters, per the
   // ordinary react-hooks/exhaustive-deps convention) is correct for the
   // runtime that actually ships; the lint rule is suppressed accordingly.
+  const showToast = (message: string) => {
+    setToast(message);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
+  };
+
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleImageAdd = useCallback((record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
@@ -556,6 +584,68 @@ export default function TategakiEditor({
     if (isSampleDocument) return;
     deleteImage(id).catch(() => setSaveStatus("error"));
   }, [isSampleDocument]);
+
+  // Broken cloud images are restored under the SAME image id. This keeps the IMG marker,
+  // page placement, size/position metadata and layer order intact.
+  const handleImageReplace = useCallback(async (id: string, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("画像ファイルを選択してください。");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error ?? new Error("画像を読み込めませんでした"));
+      reader.readAsDataURL(file);
+    });
+    const record: ImageRecord = {
+      id,
+      dataUrl,
+      createdAt: Date.now(),
+      layerOrder: imageLayerOrder[id],
+    };
+    const nextImages = { ...images, [id]: dataUrl };
+    setImages(nextImages);
+    if (!isSampleDocument) await saveImage(record);
+
+    if (currentProjectId) {
+      const sync = await syncManuscriptImages({ projectId: currentProjectId, content, localImages: nextImages });
+      if (sync.ok || sync.noImages) {
+        const status = await getUnresolvedManuscriptImages(currentProjectId, content);
+        const missing = status.missing.filter((imageId) => !nextImages[imageId]);
+        const unmanifested = status.unmanifested.filter((imageId) => !nextImages[imageId]);
+        const hasIssues = missing.length > 0 || unmanifested.length > 0;
+        setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
+        showToast("画像を再配置し、クラウドの保存期限を更新しました");
+      } else {
+        setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
+        alert("画像はこのブラウザに再配置しましたが、クラウド同期に失敗しました。もう一度「クラウドに保存」をお試しください。");
+      }
+    } else {
+      setUnresolvedCloudImages((prev) => {
+        if (!prev) return null;
+        const missing = prev.missing.filter((imageId) => imageId !== id);
+        const unmanifested = prev.unmanifested.filter((imageId) => imageId !== id);
+        return missing.length || unmanifested.length ? { missing, unmanifested } : null;
+      });
+      showToast("画像を再配置しました");
+    }
+  }, [content, currentProjectId, imageLayerOrder, images, isSampleDocument]);
+
+  const handleDismissResolvedImageWarnings = useCallback((ids: string[]) => {
+    const stillMissing = ids.filter((id) => !images[id]);
+    if (stillMissing.length > 0) {
+      alert("この画像はまだ読み込めません。画像を再配置するか、不要な画像を削除してください。");
+      return;
+    }
+    setUnresolvedCloudImages((prev) => {
+      if (!prev) return null;
+      const remove = new Set(ids);
+      const missing = prev.missing.filter((id) => !remove.has(id));
+      const unmanifested = prev.unmanifested.filter((id) => !remove.has(id));
+      return missing.length || unmanifested.length ? { missing, unmanifested } : null;
+    });
+  }, [images]);
 
   // Persists a front/back stacking swap for a small group of images (see
   // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,
@@ -613,12 +703,6 @@ export default function TategakiEditor({
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, []);
-
-  const showToast = (message: string) => {
-    setToast(message);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
-  };
 
   const saveNow = () => {
     if (docId === null || loadedDocIdRef.current !== docId) return;
@@ -957,6 +1041,8 @@ export default function TategakiEditor({
               onSettingsChange={setSettings}
               onImageAdd={handleImageAdd}
               onImageDelete={handleImageDelete}
+              onImageReplace={handleImageReplace}
+              onDismissImageWarnings={handleDismissResolvedImageWarnings}
               onImageLayerChange={handleImageLayerChange}
               cursorIndex={previewCursorIndex}
               onNavigateToSource={navigateEditorToGlobalOffset}

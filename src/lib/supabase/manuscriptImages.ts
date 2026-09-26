@@ -342,6 +342,41 @@ export interface ProjectCloudImageMeta {
 }
 
 /**
+ * Editor用の軽量リンク切れ確認。Storage本体は毎回downloadせず、manifestだけを読み、
+ * 本文が参照する画像について「行がない / missing=true / expires_at超過」を未解決として返す。
+ * 72h判定はUIでもexpires_at時刻を境界にするため、次のhourly purgeを待たず警告できる。
+ */
+export async function getUnresolvedManuscriptImages(
+  projectId: string,
+  content: string,
+  nowMs = Date.now()
+): Promise<{ missing: string[]; unmanifested: string[]; error?: string }> {
+  const referenced = referencedImageIds(content);
+  if (referenced.length === 0) return { missing: [], unmanifested: [] };
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("manuscript_cloud_images")
+    .select("local_image_id, expires_at, missing")
+    .eq("project_id", projectId);
+  if (error) return { missing: [], unmanifested: [], error: error.message };
+
+  const rowById = new Map((data ?? []).map((row) => [row.local_image_id, row]));
+  const missing: string[] = [];
+  const unmanifested: string[] = [];
+  for (const id of referenced) {
+    const row = rowById.get(id);
+    if (!row) {
+      unmanifested.push(id);
+      continue;
+    }
+    const expiresAtMs = new Date(row.expires_at).getTime();
+    if (row.missing || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) missing.push(id);
+  }
+  return { missing, unmanifested };
+}
+
+/**
  * bookshelf 用: ユーザーの全 manifest 行を **1 クエリ**で取り、プロジェクト
  * ごとに集約する。Storage への HEAD は一切発行しない。
  */
