@@ -22,13 +22,29 @@ function parseDataUrl(dataUrl: string): { format: "PNG" | "JPEG"; detectedFormat
   const match = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl);
   if (!match) return null;
   const mime = match[1].toLowerCase();
-  const binary = atob(match[2]);
+  // A malformed base64 body is ONE corrupt image (-> CORRUPT), not a failure
+  // of the whole composition: atob throws, which used to reject every image
+  // and put the entire Preview on V2 HOLD (found by the Phase 7 benchmark).
+  let binary: string;
+  try {
+    binary = atob(match[2]);
+  } catch {
+    return null;
+  }
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   if (mime === "image/png") return { format: "PNG", bytes };
   if (mime === "image/jpeg" || mime === "image/jpg") return { format: "JPEG", bytes };
   return { format: "PNG", detectedFormat: mime, bytes }; // format value unused when detectedFormat is set (see caller)
 }
+
+/**
+ * Phase 7: per-worker decode cache. The reusable Preview worker keeps one;
+ * an image whose data URL is unchanged since the last composition is not
+ * parsed or decoded again. Entries for ids no longer sent are dropped, so it
+ * holds only the current manuscript's images.
+ */
+export type ImageResolutionCache = Map<string, { dataUrl: string; resolution: ImageResolution }>;
 
 /**
  * Pre-resolves every real image (real bytes, real decoded pixel
@@ -39,29 +55,41 @@ function parseDataUrl(dataUrl: string): { format: "PNG" | "JPEG"; detectedFormat
  * SAME failure-handling contract Step 3's own pre-flight check already
  * enforces downstream in `generatePublicationPdf`/`generatePublicationJpgPages`.
  */
-export async function prepareImageResolver(images: Record<string, string>): Promise<ImageResolver> {
+export async function prepareImageResolver(images: Record<string, string>, cache?: ImageResolutionCache): Promise<ImageResolver> {
   const resolved = new Map<string, ImageResolution>();
+  const remember = (id: string, dataUrl: string, resolution: ImageResolution) => {
+    resolved.set(id, resolution);
+    cache?.set(id, { dataUrl, resolution });
+  };
 
   await Promise.all(
     Object.entries(images).map(async ([id, dataUrl]) => {
+      const cached = cache?.get(id);
+      if (cached && cached.dataUrl === dataUrl) {
+        resolved.set(id, cached.resolution);
+        return;
+      }
       const parsed = parseDataUrl(dataUrl);
       if (!parsed) {
-        resolved.set(id, { kind: "CORRUPT" });
+        remember(id, dataUrl, { kind: "CORRUPT" });
         return;
       }
       if (parsed.detectedFormat) {
-        resolved.set(id, { kind: "UNSUPPORTED_FORMAT", detectedFormat: parsed.detectedFormat });
+        remember(id, dataUrl, { kind: "UNSUPPORTED_FORMAT", detectedFormat: parsed.detectedFormat });
         return;
       }
       try {
         const bitmap = await createImageBitmap(new Blob([parsed.bytes as BlobPart]));
-        resolved.set(id, { kind: "RESOLVED", url: `local-editor-image://${id}`, bytes: parsed.bytes, format: parsed.format, pixelWidth: bitmap.width, pixelHeight: bitmap.height });
+        remember(id, dataUrl, { kind: "RESOLVED", url: `local-editor-image://${id}`, bytes: parsed.bytes, format: parsed.format, pixelWidth: bitmap.width, pixelHeight: bitmap.height });
         bitmap.close();
       } catch {
-        resolved.set(id, { kind: "CORRUPT" });
+        remember(id, dataUrl, { kind: "CORRUPT" });
       }
     })
   );
+  if (cache) {
+    for (const id of cache.keys()) if (!Object.hasOwn(images, id)) cache.delete(id);
+  }
 
   return (refId: string): ImageResolution => resolved.get(refId) ?? { kind: "MISSING" };
 }

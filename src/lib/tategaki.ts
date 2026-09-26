@@ -60,6 +60,20 @@ export const PAGE_BREAK_MARKER = "【改ページ】";
 const MARKER_PATTERN =
   /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
 
+/**
+ * Phase 7: every 挿絵 id the tokenizer recognizes in `source` (same pattern,
+ * same whole-source scan as `tokenizeTategakiWithOffsets`), in order,
+ * duplicates kept. Used to send the V2 layout worker only the images this
+ * manuscript can reference.
+ */
+export function imageMarkerIds(source: string): string[] {
+  const ids: string[] = [];
+  for (const match of source.matchAll(MARKER_PATTERN)) {
+    if (match[1] !== undefined) ids.push(match[1]);
+  }
+  return ids;
+}
+
 // Characters that carry no visible content of their own — Unicode format
 // characters (ZWSP U+200B, ZWNJ/ZWJ, word joiner U+2060, soft hyphen U+00AD,
 // bidi controls, BOM, …) and variation selectors. Real manuscripts pasted
