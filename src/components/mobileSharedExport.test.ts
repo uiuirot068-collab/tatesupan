@@ -24,7 +24,8 @@ describe("A. desktop regression -- the Preview's own 書き出し ▾ is intact"
   it("keeps the header 書き出し ▾ button, its label, disabled rule and fixed-position dropdown", () => {
     expect(preview).toContain('data-demo-target="export"');
     expect(preview).toContain('"書き出し ▾"');
-    expect(preview).toContain("disabled={isExporting || pages.length === 0}");
+    // Phase 5: same rule, counted on the Preview page list (V2 layout in V2 mode).
+    expect(preview).toContain("disabled={isExporting || listPages.length === 0}");
     expect(preview).toContain("isExportMenuOpen && exportMenuPos");
     expect(preview).toContain('position: "fixed", top: exportMenuPos.top, left: exportMenuPos.left');
   });

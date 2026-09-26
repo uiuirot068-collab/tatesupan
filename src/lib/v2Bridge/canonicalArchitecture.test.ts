@@ -150,6 +150,32 @@ describe("line-final atom extent is one shared contract (renderer/lastAtomExtent
   });
 });
 
+describe("Phase 5: the Preview page list is derived from the V2 layout in V2 mode", () => {
+  const model = readFileSync(join(REPO, "src", "lib", "v2Bridge", "previewPageModel.ts"), "utf8");
+  const pane = readFileSync(join(REPO, "src", "components", "PreviewPane.tsx"), "utf8");
+
+  it("the V2 page model never calls the LEGACY paginator (it is a view over Core's pageSequence)", () => {
+    const code = model.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    expect(code).not.toMatch(/paginateTokens|computePageSourceRanges|tokenizeTategaki/);
+    expect(code).toMatch(/import type \{[^}]*\} from "\.\.\/tategaki";/);
+    expect(code).toContain("layout.document.pageSequence");
+  });
+
+  it("exactly one page-count authority (no LEGACY + V2 last-writer race)", () => {
+    expect(pane.match(/onBodyPageCountChange\?\.\(/g)).toHaveLength(1);
+    expect(pane).toContain("onBodyPageCountChange?.(listPages.length)");
+  });
+
+  it("list, image ownership, caret mapping and reorder/insert ranges read the V2 model in V2 mode", () => {
+    expect(pane).toContain("const listPages: TategakiPage[] = v2PageModel ? v2PageModel.overlayPages : pages;");
+    expect(pane).toContain("if (v2PageModel) return v2PageModel.imagePageIndicesById;");
+    expect(pane).toContain("findPageIndexForCharIndex(listSourceRanges, cursorIndex)");
+    expect(pane).toContain("content.slice(listSourceRanges[runStart].start, listSourceRanges[runEnd].end)");
+    expect(pane).toContain("const insertAt = listSourceRanges[index].end;");
+    expect(pane).not.toMatch(/page=\{pages\[bodyIndex\]\}/);
+  });
+});
+
 describe("V2 path never depends on the LEGACY DOM renderer / capture stack", () => {
   const FORBIDDEN = /from\s+["'][^"']*(components\/PageCard|components\/ColophonPageCard|utils\/exportCapture|utils\/exportPdf|utils\/exportImage|html-to-image|html2canvas)["']/;
   const files = (dir: string): string[] =>
