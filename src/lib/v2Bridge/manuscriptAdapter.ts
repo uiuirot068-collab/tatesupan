@@ -278,14 +278,19 @@ export function buildV2UnitsFromManuscript(
     }
   }
 
-  let source = state.flow;
+  // Readings follow the flow. `state.cursor` is the flow's code-point length,
+  // so each span is tracked incrementally (Phase 7: re-counting the whole
+  // growing source per reading was quadratic — ~2 s for a ruby-heavy 100 pages).
+  let codePoints = state.cursor;
+  const readings: string[] = [];
   for (const entry of readingQueue) {
-    const start = Array.from(source).length;
-    source += entry.text;
-    const end = Array.from(source).length;
+    const start = codePoints;
+    codePoints += Array.from(entry.text).length;
+    readings.push(entry.text);
     const unit = state.units[entry.unitIndex];
-    if (unit.kind === "RUBY") unit.readingSpan = { blockId, start, end };
+    if (unit.kind === "RUBY") unit.readingSpan = { blockId, start, end: codePoints };
   }
+  const source = state.flow + readings.join("");
 
   return { units: state.units, source, sourceMap: { rawStart: Int32Array.from(state.rawStart), rawEnd: Int32Array.from(state.rawEnd) } };
 }

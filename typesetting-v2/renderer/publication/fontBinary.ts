@@ -24,8 +24,14 @@ class BrowserFontBinary extends Uint8Array implements FontBinary {
     return bytes;
   }
 
+  // Phase 7 (TateSpun long-manuscript performance): one DataView per font
+  // buffer instead of one per 16/32-bit read. Export PaintPlan construction
+  // performs millions of cmap/GSUB reads; allocating a view for each was
+  // ~80 % of its time. The bytes (and so every value read) are unchanged.
+  private cachedView: DataView | undefined;
+
   private view(): DataView {
-    return new DataView(this.buffer, this.byteOffset, this.byteLength);
+    return (this.cachedView ??= new DataView(this.buffer, this.byteOffset, this.byteLength));
   }
 
   readUInt16BE(offset: number): number {
