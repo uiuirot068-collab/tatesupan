@@ -280,3 +280,24 @@ QA evidence: `src/lib/v2Bridge/exportHardening.test.ts` (25), full vitest vs Pha
 - **Height cap mismatch in one case**: V2 also caps at one line's extent; with very few chars/line an image is smaller in export than in the Preview overlay.
 - **Page furniture not in V2 export**: `nombreBottomMargin` (export uses marginBottom/2 — geometry decision), `nombreFontFamily` (only Shippori is embedded), hidden nombre (print-shop marker, bleed-area placement), Web閲覧用 footer branding (web JPG only). Classified: folio margin/font = publication-required (needs decision); hidden nombre = publication-required when enabled; web footer = web-only.
 - Colophon Preview is still LEGACY `ColophonPageCard`; Preview page list still LEGACY.
+
+---
+
+## Phase 4 — broken-image warning contract (image recovery)
+
+**Two states, deliberately separate** (`src/lib/imageWarningLifecycle.ts`):
+
+| State | Question | Owner | Cleared by |
+|---|---|---|---|
+| Technical | Can this image be rendered in this browser now? | `TategakiEditor.unresolvedCloudImages` (manifest missing/expired/unmanifested, minus images available locally — `cloudImageSync.technicallyUnresolvedImages`) | same-ID replacement, successful resync, marker deletion |
+| Acknowledgment | Has the user acknowledged a detected break? | `PreviewPane` pending warnings, per document (`imageWarningScope`) | `通知解除` only |
+
+- A new technical break becomes a pending warning (footer, one interruption modal; breaks present when the document was opened — `silentImageWarningIds` — get the footer only). It blocks export of its pages.
+- **Repair does not auto-dismiss**: a replacement may be the wrong picture and a fix may have reflowed pages, so exporting those pages follows an explicit look + 通知解除. The footer row shows 「再配置済み・確認して通知解除」.
+- **Marker deletion keeps the last-known page**: the warning and the page-scoped block stay on the page the image was on (「原稿から削除済み」) until acknowledged, so the user can still see where it was.
+- `通知解除` is refused while the image is still broken (marker present, technically unresolved, no local data); accepted after repair or deletion. A later break of the same id re-arms and announces again.
+- Export block = pending pages ∪ currently unresolved pages (`affectedExportPageNumbers`); the colophon JPG checks no body page. Page indices are still the LEGACY Preview list (unchanged).
+
+**Bug fixed while auditing**: opening a cloud project restored images from the cloud copy only, so an expired/purged cloud copy showed as broken even when this browser still had the original in IndexedDB. The open path now falls back to local originals (`mergeCloudRestoreWithLocalOriginals`; a same-ID cloud copy still wins). The first-load "no modal" rule no longer depends on render timing (explicit baseline ids).
+
+**Coverage**: `src/lib/imageRecovery.test.ts` (manifest/local cases A–G with fixture rows and a fixed clock, full lifecycle, 5P/12P export-block matrix before/after repair/deletion/acknowledgment, placeholder safety); `tests/e2e/imageWarningLifecycle.e2e.mjs` (demo route, TXT-import break → repair → still blocked → 通知解除 → allowed; break → refused → delete → 通知解除). Cloud TTL/manifest paths are not browser-tested (no backend in E2E).

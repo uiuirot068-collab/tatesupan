@@ -29,7 +29,7 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
-import { contentHasImages } from "@/lib/cloudImageSync";
+import { contentHasImages, mergeCloudRestoreWithLocalOriginals, referencedImageIds, technicallyUnresolvedImages } from "@/lib/cloudImageSync";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -305,6 +305,10 @@ export default function TategakiEditor({
     missing: string[];
     unmanifested: string[];
   } | null>(null);
+  // Phase 4: ids already broken when this document was OPENED. They get the
+  // persistent footer warning but not the interruption modal, which is for a
+  // link that breaks while the editor is open (see imageWarningLifecycle.ts).
+  const [imageWarningBaselineIds, setImageWarningBaselineIds] = useState<ReadonlySet<string>>(() => new Set());
   // 参照安定な Set（PageCard の memo を壊さない）。エクスポートブロック判定にも使う。
   const unresolvedImageIdSet = useMemo(
     () =>
@@ -324,10 +328,7 @@ export default function TategakiEditor({
       if (cancelled || status.error) return;
       // 72hはクラウド一時コピーだけの期限。今のブラウザに元画像が残っているIDは
       // 実際には表示・出力可能なので「画像切れ」にはしない。
-      const missing = status.missing.filter((id) => !images[id]);
-      const unmanifested = status.unmanifested.filter((id) => !images[id]);
-      const hasIssues = missing.length > 0 || unmanifested.length > 0;
-      setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
+      setUnresolvedCloudImages(technicallyUnresolvedImages(status, images));
     };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 60_000);
@@ -450,6 +451,7 @@ export default function TategakiEditor({
         setImages({});
         setImageLayerOrder({});
         setUnresolvedCloudImages(null);
+        setImageWarningBaselineIds(new Set());
         setCurrentProjectId(null);
         loadedDocIdRef.current = DEMO_PROJECT.id;
         setDocId(DEMO_PROJECT.id);
@@ -468,17 +470,21 @@ export default function TategakiEditor({
         applyCloudProject(project);
         setImageLayerOrder({});
         setUnresolvedCloudImages(null);
+        setImageWarningBaselineIds(new Set());
         if (contentHasImages(project.content)) {
-          // 別端末でも挿絵を復元する（元の image id を維持）。
-          const restored = await restoreManuscriptImages(project.id, project.content);
+          // 別端末でも挿絵を復元する（元の image id を維持）。クラウドの一時コピーが
+          // 期限切れ・欠損でも、このブラウザに元画像（IndexedDB）が残っていれば
+          // それで表示・出力できるので「画像切れ」にはしない（72hはクラウド側だけの期限）。
+          const [restored, localRecords] = await Promise.all([
+            restoreManuscriptImages(project.id, project.content),
+            loadAllImages().catch(() => []),
+          ]);
           if (cancelled) return;
-          setImages(restored.images);
-          const unresolved = [...restored.missing, ...restored.unmanifested];
-          setUnresolvedCloudImages(
-            unresolved.length > 0
-              ? { missing: restored.missing, unmanifested: restored.unmanifested }
-              : null
-          );
+          const localOriginals = Object.fromEntries(localRecords.map((record) => [record.id, record.dataUrl]));
+          const opened = mergeCloudRestoreWithLocalOriginals(restored, localOriginals);
+          setImages(opened.images);
+          setUnresolvedCloudImages(opened.unresolved);
+          setImageWarningBaselineIds(new Set([...(opened.unresolved?.missing ?? []), ...(opened.unresolved?.unmanifested ?? [])]));
         } else {
           setImages({});
         }
@@ -497,6 +503,7 @@ export default function TategakiEditor({
 
       const imageRecords = await loadAllImages();
       if (cancelled) return;
+      setImageWarningBaselineIds(new Set());
 
       // Reset every field to the newly-loaded document's data (or blank
       // defaults for a brand-new document) so no state from the
@@ -620,10 +627,7 @@ export default function TategakiEditor({
       const sync = await syncManuscriptImages({ projectId: currentProjectId, content, localImages: nextImages });
       if (sync.ok || sync.noImages) {
         const status = await getUnresolvedManuscriptImages(currentProjectId, content);
-        const missing = status.missing.filter((imageId) => !nextImages[imageId]);
-        const unmanifested = status.unmanifested.filter((imageId) => !nextImages[imageId]);
-        const hasIssues = missing.length > 0 || unmanifested.length > 0;
-        setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
+        setUnresolvedCloudImages(technicallyUnresolvedImages(status, nextImages));
         showToast("画像を再配置し、クラウドの保存期限を更新しました");
       } else {
         setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
@@ -640,20 +644,21 @@ export default function TategakiEditor({
     }
   }, [content, currentProjectId, imageLayerOrder, images, isSampleDocument]);
 
+  // Phase 4: called after the user's 通知解除 was accepted (PreviewPane refuses
+  // it while an image is still broken). Clears only TECHNICAL state that is no
+  // longer really broken — the image is available in this browser, or its
+  // marker is gone — e.g. a manual recovery the 60s poll has not seen yet.
   const handleDismissResolvedImageWarnings = useCallback((ids: string[]) => {
-    const stillMissing = ids.filter((id) => !images[id]);
-    if (stillMissing.length > 0) {
-      alert("この画像はまだ読み込めません。画像を再配置するか、不要な画像を削除してください。");
-      return;
-    }
+    const referenced = new Set(referencedImageIds(content));
+    const clearable = new Set(ids.filter((id) => images[id] || !referenced.has(id)));
+    if (clearable.size === 0) return;
     setUnresolvedCloudImages((prev) => {
       if (!prev) return null;
-      const remove = new Set(ids);
-      const missing = prev.missing.filter((id) => !remove.has(id));
-      const unmanifested = prev.unmanifested.filter((id) => !remove.has(id));
+      const missing = prev.missing.filter((id) => !clearable.has(id));
+      const unmanifested = prev.unmanifested.filter((id) => !clearable.has(id));
       return missing.length || unmanifested.length ? { missing, unmanifested } : null;
     });
-  }, [images]);
+  }, [content, images]);
 
   // Persists a front/back stacking swap for a small group of images (see
   // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,
@@ -1052,6 +1057,8 @@ export default function TategakiEditor({
               onImageDelete={handleImageDelete}
               onImageReplace={handleImageReplace}
               onDismissImageWarnings={handleDismissResolvedImageWarnings}
+              imageWarningScope={workSessionScope ?? "editor"}
+              silentImageWarningIds={imageWarningBaselineIds}
               onImageLayerChange={handleImageLayerChange}
               cursorIndex={previewCursorIndex}
               onNavigateToSource={navigateEditorToGlobalOffset}

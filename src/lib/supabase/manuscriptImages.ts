@@ -17,6 +17,7 @@ import {
   nextExpiresAt,
   planCloudImageSync,
   referencedImageIds,
+  classifyReferencedCloudImages,
   type ManuscriptImageManifestRow,
 } from "../cloudImageSync";
 
@@ -361,19 +362,7 @@ export async function getUnresolvedManuscriptImages(
     .eq("project_id", projectId);
   if (error) return { missing: [], unmanifested: [], error: error.message };
 
-  const rowById = new Map((data ?? []).map((row) => [row.local_image_id, row]));
-  const missing: string[] = [];
-  const unmanifested: string[] = [];
-  for (const id of referenced) {
-    const row = rowById.get(id);
-    if (!row) {
-      unmanifested.push(id);
-      continue;
-    }
-    const expiresAtMs = new Date(row.expires_at).getTime();
-    if (row.missing || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) missing.push(id);
-  }
-  return { missing, unmanifested };
+  return classifyReferencedCloudImages(referenced, data ?? [], nowMs);
 }
 
 /**

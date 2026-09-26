@@ -361,3 +361,72 @@ export function planCloudImageSync(
 
   return { toUpload, toDeletePaths, unresolved };
 }
+
+/* ------------------------------------------------------------------ *
+ *  Editor-side resolution (Phase 4) — pure, testable without Supabase
+ * ------------------------------------------------------------------ */
+
+export interface CloudImageResolution {
+  /** manifest row exists but is a tombstone (`missing=true`) or past `expires_at`. */
+  missing: string[];
+  /** referenced but no manifest row at all (never synced / sync incomplete). */
+  unmanifested: string[];
+}
+
+/**
+ * Manifest-only classification of the images a manuscript references
+ * (`getUnresolvedManuscriptImages`): no row → unmanifested; tombstone or
+ * `expires_at <= now` (or unparsable) → missing; otherwise the cloud copy is
+ * valid. The 72h boundary is the manifest time, so the editor warns without
+ * waiting for the hourly purge.
+ */
+export function classifyReferencedCloudImages(
+  referenced: readonly string[],
+  rows: ReadonlyArray<{ local_image_id: string; expires_at: string; missing: boolean | null }>,
+  nowMs: number
+): CloudImageResolution {
+  const rowById = new Map(rows.map((row) => [row.local_image_id, row]));
+  const missing: string[] = [];
+  const unmanifested: string[] = [];
+  for (const id of referenced) {
+    const row = rowById.get(id);
+    if (!row) {
+      unmanifested.push(id);
+      continue;
+    }
+    const expiresAtMs = new Date(row.expires_at).getTime();
+    if (row.missing || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) missing.push(id);
+  }
+  return { missing, unmanifested };
+}
+
+/**
+ * The 72h TTL applies to the CLOUD copy only. An image whose original is
+ * available in this browser (IndexedDB / already loaded) can still be shown
+ * and exported, so it is never technically unresolved here. Returns null when
+ * nothing is unresolved (the editor's "no warning" state).
+ */
+export function technicallyUnresolvedImages(
+  status: CloudImageResolution,
+  localImages: Readonly<Record<string, string>>
+): CloudImageResolution | null {
+  const missing = status.missing.filter((id) => !localImages[id]);
+  const unmanifested = status.unmanifested.filter((id) => !localImages[id]);
+  return missing.length > 0 || unmanifested.length > 0 ? { missing, unmanifested } : null;
+}
+
+/**
+ * Opening a cloud project: images restored from the cloud copy win (they may
+ * be a newer same-ID replacement made on another device); any referenced image
+ * the cloud could not provide falls back to this browser's local original.
+ */
+export function mergeCloudRestoreWithLocalOriginals(
+  restored: { images: Record<string, string> } & CloudImageResolution,
+  localImages: Readonly<Record<string, string>>
+): { images: Record<string, string>; unresolved: CloudImageResolution | null } {
+  const images = { ...restored.images };
+  for (const id of [...restored.missing, ...restored.unmanifested]) {
+    if (!images[id] && localImages[id]) images[id] = localImages[id];
+  }
+  return { images, unresolved: technicallyUnresolvedImages(restored, images) };
+}

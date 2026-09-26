@@ -98,6 +98,18 @@ import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
 import type { PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
 
 import { imageMaxBoxForTextArea } from "@/lib/imageGeometry";
+import {
+  affectedExportPageNumbers,
+  blockedExportPageIndices,
+  dismissImageWarnings,
+  EMPTY_IMAGE_WARNING_STATE,
+  imageWarningPages,
+  imageWarningStatus,
+  reconcileImageWarnings,
+  type ImageWarningState,
+} from "@/lib/imageWarningLifecycle";
+
+const NO_UNRESOLVED_IMAGE_IDS: ReadonlySet<string> = new Set();
 
 const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
@@ -458,6 +470,13 @@ interface PreviewPaneProps {
   onImageReplace?: (imageId: string, file: File) => void | Promise<void>;
   /** 手動復旧後など、実体が戻っている警告だけを明示解除する。 */
   onDismissImageWarnings?: (imageIds: string[]) => void;
+  /**
+   * Phase 4: identity of the open document. The broken-image warning
+   * (acknowledgment) state belongs to one document and resets when it changes.
+   */
+  imageWarningScope?: string;
+  /** Phase 4: ids already broken when the document was opened (footer, no interruption modal). */
+  silentImageWarningIds?: ReadonlySet<string>;
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /**
    * Phase 3 (stale-layout export guard): returns the Editor's LIVE manuscript.
@@ -520,13 +539,14 @@ function PreviewPane({
   imageLayerOrder,
   getLatestContent,
   unresolvedImageIds,
-  blockExportForUnresolvedImages = false,
   onContentChange,
   onSettingsChange,
   onImageAdd,
   onImageDelete,
   onImageReplace,
   onDismissImageWarnings,
+  imageWarningScope = "editor",
+  silentImageWarningIds,
   onImageLayerChange,
   cursorIndex,
   onNavigateToSource,
@@ -579,52 +599,78 @@ function PreviewPane({
     settings.columnCount,
   ]);
 
-  const unresolvedImagePages = useMemo(() => {
-    if (!unresolvedImageIds || unresolvedImageIds.size === 0) return [] as {
-      pageIndex: number;
-      pageNumber: number;
-      imageIds: string[];
-    }[];
-    return pages.flatMap((page, pageIndex) => {
-      const imageIds = page.tokens.flatMap((token) =>
-        token.type === "image" && unresolvedImageIds.has(token.id) ? [token.id] : []
-      );
-      return imageIds.length > 0 ? [{ pageIndex, pageNumber: pageIndex + 1, imageIds }] : [];
+  // Phase 4 broken-image warnings (lib/imageWarningLifecycle.ts): the TECHNICAL
+  // state (`unresolvedImageIds`, owned by the Editor) and the user's
+  // ACKNOWLEDGMENT state (pending warnings here) are separate. A repaired or
+  // deleted image keeps its footer entry and its page export block until 通知解除.
+  const technicalUnresolvedIds = unresolvedImageIds ?? NO_UNRESOLVED_IMAGE_IDS;
+  const imagePageIndicesById = useMemo(() => {
+    const byId = new Map<string, number[]>();
+    pages.forEach((page, pageIndex) => {
+      for (const token of page.tokens) {
+        if (token.type !== "image") continue;
+        const list = byId.get(token.id) ?? [];
+        if (!list.includes(pageIndex)) list.push(pageIndex);
+        byId.set(token.id, list);
+      }
     });
-  }, [pages, unresolvedImageIds]);
-
-  const unresolvedPageIndexSet = useMemo(
-    () => new Set(unresolvedImagePages.map((entry) => entry.pageIndex)),
-    [unresolvedImagePages]
-  );
+    return byId;
+  }, [pages]);
+  // Stored with its document scope: switching documents yields a fresh state
+  // without an extra effect.
+  const [imageWarningStore, setImageWarningStore] = useState<{ scope: string; state: ImageWarningState }>(() => ({
+    scope: imageWarningScope,
+    state: EMPTY_IMAGE_WARNING_STATE,
+  }));
+  const imageWarnings = imageWarningStore.scope === imageWarningScope ? imageWarningStore.state : EMPTY_IMAGE_WARNING_STATE;
+  const imageWarningEntries = useMemo(() => imageWarningPages(imageWarnings), [imageWarnings]);
+  // Pending warnings (last-known pages) ∪ technically unresolved pages (covers
+  // the render before the reconcile effect below has recorded a new break).
+  const blockedExportPageSet = useMemo(() => {
+    const blocked = blockedExportPageIndices(imageWarnings);
+    technicalUnresolvedIds.forEach((id) => imagePageIndicesById.get(id)?.forEach((page) => blocked.add(page)));
+    return blocked;
+  }, [imageWarnings, technicalUnresolvedIds, imagePageIndicesById]);
+  const imageWarningStatusFor = (imageId: string) =>
+    imageWarningStatus({
+      technicallyUnresolved: technicalUnresolvedIds.has(imageId),
+      locallyAvailable: Boolean(images[imageId]),
+      markerExists: imagePageIndicesById.has(imageId),
+    });
   const [imageWarningOpen, setImageWarningOpen] = useState(false);
   const [imageBreakNoticePages, setImageBreakNoticePages] = useState<number[] | null>(null);
   const [pendingReplacementId, setPendingReplacementId] = useState<string | null>(null);
   const replacementInputRef = useRef<HTMLInputElement | null>(null);
-  const announcedBrokenIdsRef = useRef<Set<string>>(new Set());
-  const brokenSnapshotInitializedRef = useRef(false);
 
-  useEffect(() => {
-    const currentIds = new Set<string>();
-    unresolvedImagePages.forEach((entry) => entry.imageIds.forEach((id) => currentIds.add(id)));
-    // Opening an already-broken cloud project should show the persistent footer warning,
-    // but the interruption modal is reserved for a link that breaks WHILE this editor is open.
-    if (!brokenSnapshotInitializedRef.current) {
-      brokenSnapshotInitializedRef.current = true;
-      currentIds.forEach((id) => announcedBrokenIdsRef.current.add(id));
+  // Reconciled during render ("adjust state when inputs change"): the reducer is
+  // pure and returns the SAME state when nothing changed, so this settles in
+  // one extra pass and never loops. The interruption modal is for a link that
+  // breaks WHILE this editor is open; ids broken at document open
+  // (silentImageWarningIds) only get the footer.
+  const reconciledImageWarnings = reconcileImageWarnings(imageWarnings, {
+    unresolvedIds: technicalUnresolvedIds,
+    pageIndicesById: imagePageIndicesById,
+    silentIds: silentImageWarningIds,
+  });
+  if (reconciledImageWarnings.state !== imageWarnings) {
+    setImageWarningStore({ scope: imageWarningScope, state: reconciledImageWarnings.state });
+    if (reconciledImageWarnings.newlyBrokenIds.length > 0) {
+      const pagesForNotice = reconciledImageWarnings.newlyBrokenIds.flatMap((id) =>
+        (reconciledImageWarnings.state.pending[id] ?? []).map((page) => page + 1)
+      );
+      setImageBreakNoticePages([...new Set(pagesForNotice)].sort((a, b) => a - b));
+    }
+  }
+
+  const handleDismissImageWarningEntry = (imageIds: string[]) => {
+    const result = dismissImageWarnings(imageWarnings, imageIds, (id) => imageWarningStatusFor(id) === "broken");
+    if (result.refused.length > 0) {
+      alert("この画像はまだ読み込めません。画像を再配置するか、不要な画像を削除してください。");
       return;
     }
-    const newlyBrokenIds = [...currentIds].filter((id) => !announcedBrokenIdsRef.current.has(id));
-    for (const known of [...announcedBrokenIdsRef.current]) {
-      if (!currentIds.has(known)) announcedBrokenIdsRef.current.delete(known);
-    }
-    if (newlyBrokenIds.length === 0) return;
-    newlyBrokenIds.forEach((id) => announcedBrokenIdsRef.current.add(id));
-    const pagesForNotice = unresolvedImagePages
-      .filter((entry) => entry.imageIds.some((id) => newlyBrokenIds.includes(id)))
-      .map((entry) => entry.pageNumber);
-    setImageBreakNoticePages([...new Set(pagesForNotice)].sort((a, b) => a - b));
-  }, [unresolvedImagePages]);
+    setImageWarningStore({ scope: imageWarningScope, state: result.state });
+    onDismissImageWarnings?.(imageIds);
+  };
 
   const pageSourceRanges = useMemo(() => {
     const result = computePageSourceRanges(deferredContent, {
@@ -1473,19 +1519,17 @@ function PreviewPane({
 
   // 画像切れは「作品全体」ではなく今回の出力対象ページだけで判定する。
   // 例: 12Pだけ切れていても5P単体JPGは許可する。12Pを含む出力だけfail closed。
+  // Phase 4: blocked while a warning on those pages is unacknowledged — also
+  // after the image was repaired or its marker deleted, until 通知解除.
   const exportBlockedByUnresolvedImages = (targetPageIndices: number[]): boolean => {
-    if (!blockExportForUnresolvedImages || targetPageIndices.length === 0) return false;
-    const affected = [...new Set(
-      targetPageIndices
-        .filter((index) => unresolvedPageIndexSet.has(index))
-        .map((index) => index + 1)
-    )].sort((a, b) => a - b);
+    const affected = affectedExportPageNumbers(targetPageIndices, blockedExportPageSet);
     if (affected.length === 0) return false;
     alert(
       `${CLOUD_IMAGE_EXPORT_BLOCK_TITLE}\n\n` +
       `${affected.join("P・")}Pに画像リンク切れがあります。\n` +
       "画像を再配置するか、不要な画像を原稿から削除してください。\n" +
-      "フッターの「⚠️画像切れ」から対象ページを確認できます。"
+      "フッターの「⚠️画像切れ」から対象ページを確認できます。\n" +
+      "再配置・削除が済んだら、確認のうえ「通知解除」を押すと書き出せます。"
     );
     return true;
   };
@@ -2807,7 +2851,7 @@ function PreviewPane({
         </div>
       </div>
 
-      {unresolvedImagePages.length > 0 && (
+      {imageWarningEntries.length > 0 && (
         <div
           data-image-link-warning-footer=""
           className="relative flex flex-none items-center justify-end border-t border-amber-300/50 bg-amber-50 px-2 py-1.5 text-xs text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100"
@@ -2817,7 +2861,7 @@ function PreviewPane({
             onClick={() => setImageWarningOpen((open) => !open)}
             className="rounded-full border border-amber-500/50 bg-white px-3 py-1 font-semibold shadow-sm hover:bg-amber-100 dark:bg-neutral-900 dark:hover:bg-amber-950"
           >
-            {unresolvedImagePages.length === 1 ? "⚠️ 画像切れ" : "⚠️ 複数ページ画像切れ"}
+            {imageWarningEntries.length === 1 ? "⚠️ 画像切れ" : "⚠️ 複数ページ画像切れ"}
           </button>
           {imageWarningOpen && (
             <div className="absolute bottom-full right-2 z-50 mb-2 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-amber-300 bg-base p-3 shadow-xl dark:border-amber-700">
@@ -2826,34 +2870,46 @@ function PreviewPane({
                 画像を再配置するか、不要な画像を原稿から削除してください。
               </p>
               <div className="max-h-56 space-y-2 overflow-auto">
-                {unresolvedImagePages.map((entry) => (
-                  <div key={entry.pageIndex} className="rounded border border-ink/10 p-2">
-                    <button
-                      type="button"
-                      onClick={() => scrollToPreviewPage(entry.pageIndex)}
-                      className="mb-2 font-semibold text-ink underline-offset-2 hover:underline"
-                    >
-                      {entry.pageNumber}Pへ移動
-                    </button>
+                {imageWarningEntries.map((entry) => (
+                  <div key={entry.pageIndex} data-image-warning-page={entry.pageNumber} className="rounded border border-ink/10 p-2">
+                    {entry.pageIndex >= 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => scrollToPreviewPage(entry.pageIndex)}
+                        className="mb-2 font-semibold text-ink underline-offset-2 hover:underline"
+                      >
+                        {entry.pageNumber}Pへ移動
+                      </button>
+                    ) : (
+                      <p className="mb-2 font-semibold text-ink">ページ不明</p>
+                    )}
                     <div className="space-y-1">
-                      {entry.imageIds.map((imageId, imageIndex) => (
-                        <div key={imageId} className="flex flex-wrap items-center gap-1.5">
-                          <span className="mr-auto text-[11px] text-ink/60">
-                            画像{entry.imageIds.length > 1 ? imageIndex + 1 : ""}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => requestImageReplacement(imageId)}
-                            className="rounded border border-ink/20 px-2 py-1 text-[11px] hover:bg-ink/5"
-                          >
-                            画像を差し替える
-                          </button>
-                        </div>
-                      ))}
+                      {entry.imageIds.map((imageId, imageIndex) => {
+                        const status = imageWarningStatusFor(imageId);
+                        return (
+                          <div key={imageId} data-image-warning-image={imageId} data-image-warning-status={status} className="flex flex-wrap items-center gap-1.5">
+                            <span className="mr-auto text-[11px] text-ink/60">
+                              画像{entry.imageIds.length > 1 ? imageIndex + 1 : ""}
+                              {status === "repaired" ? "（再配置済み・確認して通知解除）" : status === "deleted" ? "（原稿から削除済み・通知解除できます）" : ""}
+                            </span>
+                            {status !== "deleted" && (
+                              <button
+                                type="button"
+                                data-image-warning-replace={imageId}
+                                onClick={() => requestImageReplacement(imageId)}
+                                className="rounded border border-ink/20 px-2 py-1 text-[11px] hover:bg-ink/5"
+                              >
+                                画像を差し替える
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     <button
                       type="button"
-                      onClick={() => onDismissImageWarnings?.(entry.imageIds)}
+                      data-image-warning-dismiss={entry.pageNumber}
+                      onClick={() => handleDismissImageWarningEntry(entry.imageIds)}
                       className="mt-2 text-[11px] text-ink/50 underline hover:text-ink"
                     >
                       通知解除
