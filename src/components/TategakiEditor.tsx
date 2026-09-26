@@ -314,8 +314,12 @@ export default function TategakiEditor({
     const refresh = async () => {
       const status = await getUnresolvedManuscriptImages(currentProjectId, content);
       if (cancelled || status.error) return;
-      const hasIssues = status.missing.length > 0 || status.unmanifested.length > 0;
-      setUnresolvedCloudImages(hasIssues ? { missing: status.missing, unmanifested: status.unmanifested } : null);
+      // 72hはクラウド一時コピーだけの期限。今のブラウザに元画像が残っているIDは
+      // 実際には表示・出力可能なので「画像切れ」にはしない。
+      const missing = status.missing.filter((id) => !images[id]);
+      const unmanifested = status.unmanifested.filter((id) => !images[id]);
+      const hasIssues = missing.length > 0 || unmanifested.length > 0;
+      setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
     };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 60_000);
@@ -323,7 +327,7 @@ export default function TategakiEditor({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [content, currentProjectId]);
+  }, [content, currentProjectId, images]);
   const memoStorageKey = useMemo(
     () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
     [currentProjectId, docId]
