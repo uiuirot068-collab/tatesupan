@@ -569,9 +569,9 @@ function PreviewPane({
       imageIds: string[];
     }[];
     return pages.flatMap((page, pageIndex) => {
-      const imageIds = page.tokens
-        .filter((token) => token.type === "image" && unresolvedImageIds.has(token.id))
-        .map((token) => token.id);
+      const imageIds = page.tokens.flatMap((token) =>
+        token.type === "image" && unresolvedImageIds.has(token.id) ? [token.id] : []
+      );
       return imageIds.length > 0 ? [{ pageIndex, pageNumber: pageIndex + 1, imageIds }] : [];
     });
   }, [pages, unresolvedImageIds]);
