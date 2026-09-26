@@ -23,6 +23,7 @@ import type { CanonicalDocument, CanonicalPage, ColophonPlacement, ImagePlacemen
 import type { SourceSpan } from "../../core/source/span";
 import { tickToMm } from "./geometry";
 import { emphasisDotsForUnit, type EmphasisSide } from "../emphasisMarks";
+import { lastAtomExtentTicks } from "../lastAtomExtent";
 
 export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" | "UNKNOWN";
 
@@ -372,15 +373,9 @@ function buildPaintLine(
       // clamped so it can only ever shrink toward the line's own remaining
       // budget, never overshoot it.
       const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
-      // Same multi-cell rule as Preview's paintModel.ts: a SEMANTIC_RUN's
-      // run length / a RUBY atom's base span, never a neighbour's 1-cell delta.
-      const ownCells = owner?.kind === "SEMANTIC_RUN"
-        ? owner.length
-        : owner?.kind === "RUBY" ? placed.sourceSpan.end - placed.sourceSpan.start : undefined;
-      const guess = ownCells !== undefined
-        ? (ctx.bodyFontSizeTick ?? ctx.linePitchTicks) * ownCells
-        : prev ? placed.yTick - prev.yTick : ctx.linePitchTicks;
-      extentTicks = Math.min(guess, remainingLineExtentTicks);
+      // Shared with the other paint model (lastAtomExtent.ts) so Preview and
+      // PDF/JPG always agree on a line-final atom's extent.
+      extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks: ctx.bodyFontSizeTick ?? ctx.linePitchTicks, remainingLineExtentTicks });
       heightIsApproximate = true;
     }
     const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);

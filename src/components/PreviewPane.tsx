@@ -90,6 +90,7 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
+import { colophonPhysicalIndex, physicalIndexForBodyIndex, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
@@ -1472,9 +1473,7 @@ function PreviewPane({
   };
 
   const v2PhysicalIndexForBody = (bodyIndex: number): number =>
-    v2Adapter.bridge?.document.pageSequence.findIndex(
-      (pageRef) => pageRef.kind === "body" && pageRef.index === bodyIndex
-    ) ?? -1;
+    physicalIndexForBodyIndex(v2Adapter.bridge?.document.pageSequence, bodyIndex);
 
   const exportV2JpgPages = async (
     physicalIndices: number[],
@@ -1566,9 +1565,7 @@ function PreviewPane({
   /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
   const handleExportColophonJpg = async () => {
     if (useV2Engine) {
-      const physicalIndex = v2Adapter.bridge?.document.pageSequence.findIndex(
-        (pageRef) => pageRef.kind === "colophon"
-      ) ?? -1;
+      const physicalIndex = colophonPhysicalIndex(v2Adapter.bridge?.document.pageSequence);
       await exportV2JpgPages([physicalIndex], [colophonPhysicalPageNumber], false);
       return;
     }
@@ -1748,16 +1745,13 @@ function PreviewPane({
       try {
         const { font, plan } = await requireV2PublicationPlan();
         perfPlanReadyAt = performance.now();
-        const physicalIndices = pdfScope === "all"
-          ? plan.map((_, index) => index)
-          : indices.map(v2PhysicalIndexForBody);
-        if (pdfScope === "selected" && includeColophonInPdf) {
-          const colophonIndex = v2Adapter.bridge?.document.pageSequence.findIndex(
-            (pageRef) => pageRef.kind === "colophon"
-          ) ?? -1;
-          if (colophonIndex >= 0) physicalIndices.push(colophonIndex);
-        }
-        const uniqueIndices = Array.from(new Set(physicalIndices)).sort((a, b) => a - b);
+        const uniqueIndices = resolvePdfPhysicalIndices({
+          pageSequence: v2Adapter.bridge?.document.pageSequence,
+          planLength: plan.length,
+          scope: pdfScope,
+          bodyIndices: indices,
+          includeColophon: includeColophonInPdf,
+        });
         const exportPlan = uniqueIndices.map((index) => plan[index]).filter((page) => page !== undefined);
         if (exportPlan.length === 0 || exportPlan.length !== uniqueIndices.length) {
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
