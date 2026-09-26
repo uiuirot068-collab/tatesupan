@@ -117,6 +117,9 @@ const NO_UNRESOLVED_IMAGE_IDS: ReadonlySet<string> = new Set();
 const LAYOUT_UPDATING_MESSAGE = "プレビューのレイアウトを更新しています。表示が落ち着いてから、もう一度お試しください。";
 
 const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
+// Phase 7: stable empty LEGACY results while the canonical V2 list is in use.
+const NO_LEGACY_PAGES: TategakiPage[] = [];
+const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
@@ -566,43 +569,14 @@ function PreviewPane({
   selected,
   onSelectedChange: setSelected,
 }: PreviewPaneProps) {
-  // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
-  // recompute's React scheduler priority -- it cannot interrupt a single
-  // monolithic O(content length) call like tokenizeTategaki/paginateTokens
-  // mid-execution, since React can only yield BETWEEN fiber work units, not
-  // inside one. Real-browser CPU profiling on a 260k-char manuscript showed
-  // the "deferred" low-priority render for this pipeline still completing
-  // inside the SAME task as the keystroke's own commit, blocking the
-  // browser's paint of the just-typed character for ~300ms. A real
-  // `setTimeout` macrotask boundary (the same debounce pattern already used
-  // for the V2 canonical preview pipeline in useV2PreviewAdapter) guarantees
-  // the browser gets a paint opportunity before this recompute ever starts,
-  // and keeps resetting while the user keeps typing so it never runs mid-burst.
-  const PREVIEW_CONTENT_DEBOUNCE_MS = 180;
-  const [deferredContent, setDeferredContent] = useState(content);
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDeferredContent(content);
-    }, PREVIEW_CONTENT_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
-  }, [content]);
-
-  const pages = useMemo(() => {
-    const tokens = tokenizeTategaki(deferredContent);
-    const result = paginateTokens(tokens, {
-      charsPerLine: layout.charsPerLine,
-      linesPerPage: layout.linesPerPage,
-      columnCount: settings.columnCount,
-      linesPerColumn: layout.linesPerColumn,
-    });
-    return result;
-  }, [
-    deferredContent,
-    layout.charsPerLine,
-    layout.linesPerPage,
-    layout.linesPerColumn,
-    settings.columnCount,
-  ]);
+  // TSP-EDITOR-LIVE-INPUT-LATENCY-002 / Phase 7: `content` already arrives
+  // debounced from TategakiEditor (PREVIEW_PROP_DEBOUNCE_MS, a real setTimeout
+  // macrotask after the keystroke has painted). That boundary is what keeps
+  // the O(content) LEGACY tokenize/paginate below off the keystroke's own
+  // task. Phase 7 removed this pane's second 180 ms content debounce: it only
+  // delayed the same work again. V2 composition keeps its own single debounce
+  // (V2_COMPOSITION_DEBOUNCE_MS). Typing → layout request: 3 stages → 2.
+  const deferredContent = content;
 
   const internalV2Beta = isV2BetaRendererEnabled();
   // 2026-09-24 public RC: development continues to force V2 for reproducible
@@ -626,6 +600,31 @@ function PreviewPane({
     () => (useV2Engine && v2Adapter.bridge && v2Adapter.input ? buildV2PreviewPageModel(v2Adapter.bridge, v2Adapter.input.content) : null),
     [useV2Engine, v2Adapter.bridge, v2Adapter.input]
   );
+  // Phase 7: the LEGACY paginator (and its source ranges below) runs only
+  // while something reads it: LEGACY mode (rollback), and in V2 mode until the
+  // first V2 layout exists or while V2 is on HOLD. Once `v2PageModel` exists,
+  // every V2-mode consumer reads the V2 list instead (listPages,
+  // listSourceRanges, imagePageIndicesById; V2 exports use the canonical
+  // layout), so re-paginating on every text change was pure waste.
+  const legacyPaginationNeeded = !useV2Engine || v2PageModel === null;
+  const pages = useMemo(() => {
+    if (!legacyPaginationNeeded) return NO_LEGACY_PAGES;
+    const tokens = tokenizeTategaki(deferredContent);
+    const result = paginateTokens(tokens, {
+      charsPerLine: layout.charsPerLine,
+      linesPerPage: layout.linesPerPage,
+      columnCount: settings.columnCount,
+      linesPerColumn: layout.linesPerColumn,
+    });
+    return result;
+  }, [
+    legacyPaginationNeeded,
+    deferredContent,
+    layout.charsPerLine,
+    layout.linesPerPage,
+    layout.linesPerColumn,
+    settings.columnCount,
+  ]);
   const listPages: TategakiPage[] = v2PageModel ? v2PageModel.overlayPages : pages;
 
   // Phase 4 broken-image warnings (lib/imageWarningLifecycle.ts): the TECHNICAL
@@ -704,12 +703,13 @@ function PreviewPane({
   };
 
   const pageSourceRanges = useMemo(() => {
+    if (!legacyPaginationNeeded) return NO_LEGACY_SOURCE_RANGES; // Phase 7, see `pages`
     const result = computePageSourceRanges(deferredContent, {
       charsPerLine: layout.charsPerLine,
       linesPerPage: layout.linesPerPage,
     });
     return result;
-  }, [deferredContent, layout.charsPerLine, layout.linesPerPage]);
+  }, [legacyPaginationNeeded, deferredContent, layout.charsPerLine, layout.linesPerPage]);
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
