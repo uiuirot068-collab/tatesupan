@@ -83,10 +83,7 @@ import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 import ColophonPageCard from "./ColophonPageCard";
 import { resolveColophonInsertion } from "@/lib/colophon";
-import {
-  CLOUD_IMAGE_EXPORT_BLOCK_BODY,
-  CLOUD_IMAGE_EXPORT_BLOCK_TITLE,
-} from "@/lib/cloudImageSync";
+import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE } from "@/lib/cloudImageSync";
 import {
   ExportCancellationCoordinator,
   isExportCancelledError,
@@ -441,7 +438,7 @@ interface PreviewPaneProps {
   imageLayerOrder: Record<string, number>;
   /** TSP-LOOP-007: 期限切れ/欠損で復元できなかったクラウド挿絵 id（参照安定な Set）。 */
   unresolvedImageIds?: ReadonlySet<string>;
-  /** TSP-LOOP-007: 未解決画像が1件でもあれば JPG/PDF 書き出しを完全ブロックする。 */
+  /** 未解決画像がある場合、出力対象ページに含まれるときだけJPG/PDFをブロックする。 */
   blockExportForUnresolvedImages?: boolean;
   onContentChange?: (content: string) => void;
   onSettingsChange?: (settings: PageSettings) => void;
@@ -588,10 +585,18 @@ function PreviewPane({
   const [pendingReplacementId, setPendingReplacementId] = useState<string | null>(null);
   const replacementInputRef = useRef<HTMLInputElement | null>(null);
   const announcedBrokenIdsRef = useRef<Set<string>>(new Set());
+  const brokenSnapshotInitializedRef = useRef(false);
 
   useEffect(() => {
     const currentIds = new Set<string>();
     unresolvedImagePages.forEach((entry) => entry.imageIds.forEach((id) => currentIds.add(id)));
+    // Opening an already-broken cloud project should show the persistent footer warning,
+    // but the interruption modal is reserved for a link that breaks WHILE this editor is open.
+    if (!brokenSnapshotInitializedRef.current) {
+      brokenSnapshotInitializedRef.current = true;
+      currentIds.forEach((id) => announcedBrokenIdsRef.current.add(id));
+      return;
+    }
     const newlyBrokenIds = [...currentIds].filter((id) => !announcedBrokenIdsRef.current.has(id));
     for (const known of [...announcedBrokenIdsRef.current]) {
       if (!currentIds.has(known)) announcedBrokenIdsRef.current.delete(known);
