@@ -48,7 +48,9 @@ export function useMobileSharedExport(params: {
     if (isPreviewCollapsed) setIsPreviewCollapsed(false);
     setIsOpen(true);
   };
-  const closeMobileExport = () => setIsOpen(false);
+  // Phase 7: a stable identity — it is a PreviewPane (React.memo) prop, and a
+  // new function per Editor render re-rendered PreviewPane on every keystroke.
+  const closeMobileExport = useCallback(() => setIsOpen(false), []);
 
   return {
     mobileExportOpen: isOpen && isNarrow,

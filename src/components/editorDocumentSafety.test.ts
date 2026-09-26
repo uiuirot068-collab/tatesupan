@@ -64,7 +64,8 @@ describe("TategakiEditor: cloud project images", () => {
     expect(restore).toContain("if (!isCurrent()) return;");
     expect(restore).toContain("openedCloudProjectImageState(project.content, restored, localRecords)");
     expect(restore).toContain("setImageLayerOrder(opened.imageLayerOrder);");
-    expect(editor).toContain("if (!currentProjectId || cloudImagesRestoring || !contentHasImages(content)) return;");
+    // Phase 7 keys the poll on the referenced image set (longManuscriptPerformanceContract.test.ts).
+    expect(editor).toContain('if (!currentProjectId || cloudImagesRestoring || referencedImageKey === "") return;');
     expect(body(editor, "const beginDocumentSwitch = useCallback(", "}, [documentEpoch]);")).toContain("setCloudImagesRestoring(false);");
   });
 });

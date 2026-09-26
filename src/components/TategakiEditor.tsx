@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocument,
   deleteImage,
-  loadAllImages,
   loadDocument,
+  loadImagesByIds,
   saveDocument,
   saveImage,
   updateImageLayerOrder,
@@ -29,10 +29,12 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
-import { contentHasImages, openedCloudProjectImageState, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
+import { contentHasImages, openedCloudProjectImageState, referencedImageIds, referencedImageSignature, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
 import { DocumentEpoch } from "@/lib/documentScope";
 import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
+import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
+import { imageMarkerIds } from "@/lib/tategaki";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -327,11 +329,17 @@ export default function TategakiEditor({
   );
   // Cloud editor stays aware of 72h expiry while it is open. Manifest-only polling is
   // intentionally light (60s); it does not download image blobs and local-only documents never poll.
+  // Phase 7: the check depends on the SET of referenced image ids, not on the
+  // text — before, every keystroke re-ran this effect, sent a request and
+  // restarted the 60 s interval. It still re-runs when a marker is added or
+  // removed, the image pool changes, or another document/project opens.
+  const referencedImageKey = useMemo(() => referencedImageSignature(content), [content]);
   useEffect(() => {
-    if (!currentProjectId || cloudImagesRestoring || !contentHasImages(content)) return;
+    if (!currentProjectId || cloudImagesRestoring || referencedImageKey === "") return;
     let cancelled = false;
     const refresh = async () => {
-      const status = await getUnresolvedManuscriptImages(currentProjectId, content);
+      // Only the referenced ids are used; the live text has exactly this set (or a newer one).
+      const status = await getUnresolvedManuscriptImages(currentProjectId, liveContentRef.current);
       if (cancelled || status.error) return;
       // 72hはクラウド一時コピーだけの期限。今のブラウザに元画像が残っているIDは
       // 実際には表示・出力可能なので「画像切れ」にはしない。
@@ -343,7 +351,7 @@ export default function TategakiEditor({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [cloudImagesRestoring, content, currentProjectId, images]);
+  }, [cloudImagesRestoring, currentProjectId, images, referencedImageKey]);
   const memoStorageKey = useMemo(
     () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
     [currentProjectId, docId]
@@ -424,6 +432,29 @@ export default function TategakiEditor({
   const layout = useMemo(() => computePageLayout(settings), [settings]);
   const isSampleDocument = demoMode || isEphemeralDocId(docId);
 
+  // Phase 7 (lib/documentImages.ts): a local document holds only the images
+  // its manuscript referenced when opened. A marker added later that is not in
+  // the pool (pasted from another document) is fetched from IndexedDB once, as
+  // the old all-images pool resolved it implicitly. Cloud projects keep their
+  // restore-only pool, as before.
+  const imageTopUpAttemptedRef = useRef<Set<string>>(new Set());
+  const imageMarkerKey = useMemo(() => Array.from(new Set(imageMarkerIds(content))).sort().join("\n"), [content]);
+  useEffect(() => {
+    if (docId === null || currentProjectId || isSampleDocument || !hasLoadedRef.current || loadedDocIdRef.current !== docId) return;
+    const missing = imageIdsToTopUp(imageMarkerKey.split("\n"), images, imageTopUpAttemptedRef.current);
+    if (missing.length === 0) return;
+    for (const id of missing) imageTopUpAttemptedRef.current.add(id);
+    const isSameDocument = documentEpoch.capture();
+    loadImagesByIds(missing)
+      .then((records) => {
+        if (!isSameDocument() || records.length === 0) return;
+        const found = imageStateFromRecords(records);
+        setImages((prev) => ({ ...found.images, ...prev }));
+        setImageLayerOrder((prev) => ({ ...found.imageLayerOrder, ...prev }));
+      })
+      .catch(() => undefined);
+  }, [currentProjectId, docId, documentEpoch, imageMarkerKey, images, isSampleDocument]);
+
   // pageOverrides は1始まりの印刷ページ番号でキーされる一方、selectedPages
   // （PreviewPaneの選択状態）は0-basedなインデックス——ここで一度だけ変換する。
   const selectedPageNumbers = useMemo(
@@ -450,6 +481,9 @@ export default function TategakiEditor({
     setContent(replacement);
     setImages({});
     setImageLayerOrder({});
+    // A TXT carries no image data: its markers stay broken (never topped up
+    // from IndexedDB behind the user's back — same result as before Phase 7).
+    imageTopUpAttemptedRef.current = new Set(imageIds);
     setUnresolvedCloudImages(imageIds.length > 0 ? { missing: imageIds, unmanifested: [] } : null);
     setToast(imageIds.length > 0
       ? "TXTを読み込みました。画像データはTXTに含まれないため、画像を再設定してください。"
@@ -506,7 +540,7 @@ export default function TategakiEditor({
         missing: [],
         unmanifested: referencedImageIds(project.content),
       })),
-      loadAllImages().catch(() => []),
+      loadImagesByIds(imageMarkerIds(project.content)).catch(() => []),
     ]);
     if (!isCurrent()) return;
     const opened = openedCloudProjectImageState(project.content, restored, localRecords);
@@ -578,8 +612,10 @@ export default function TategakiEditor({
         router.replace(`/editor?id=${id}`);
       }
 
-      const imageRecords = await loadAllImages();
+      // Phase 7: only this manuscript's images (lib/documentImages.ts).
+      const imageRecords = await loadImagesByIds(imageMarkerIds(doc?.content ?? ""));
       if (isStale()) return;
+      imageTopUpAttemptedRef.current = new Set();
       // A local document is never linked to a cloud project or image manifest
       // when it is opened (same as a fresh mount): drop the previous cloud
       // project's id — クラウドに保存 would otherwise overwrite THAT project
@@ -598,14 +634,9 @@ export default function TategakiEditor({
       if (doc) {
         setSettings(doc.settings ?? DEFAULT_PAGE_SETTINGS);
       }
-      setImages(Object.fromEntries(imageRecords.map((record) => [record.id, record.dataUrl])));
-      setImageLayerOrder(
-        Object.fromEntries(
-          imageRecords
-            .filter((record) => record.layerOrder !== undefined)
-            .map((record) => [record.id, record.layerOrder as number])
-        )
-      );
+      const opened = imageStateFromRecords(imageRecords);
+      setImages(opened.images);
+      setImageLayerOrder(opened.imageLayerOrder);
 
       loadedDocIdRef.current = id;
       setDocId(id);
@@ -703,6 +734,10 @@ export default function TategakiEditor({
     // the repaired image itself is always kept; only THIS document's technical
     // state and toast are skipped if another document was opened meanwhile.
     const isSameDocument = documentEpoch.capture();
+    // Phase 7: the live text at call time, not a dependency — a `content`
+    // dependency gave this PreviewPane prop a new identity on every keystroke,
+    // which defeated PreviewPane's React.memo.
+    const content = liveContentRef.current;
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result ?? ""));
@@ -737,18 +772,18 @@ export default function TategakiEditor({
       setUnresolvedCloudImages((prev) => withoutUnresolvedImageIds(prev, new Set([id])));
       showToast("画像を再配置しました");
     }
-  }, [content, currentProjectId, documentEpoch, imageLayerOrder, images, isSampleDocument]);
+  }, [currentProjectId, documentEpoch, imageLayerOrder, images, isSampleDocument]);
 
   // Phase 4: called after the user's 通知解除 was accepted (PreviewPane refuses
   // it while an image is still broken). Clears only TECHNICAL state that is no
   // longer really broken — the image is available in this browser, or its
   // marker is gone — e.g. a manual recovery the 60s poll has not seen yet.
   const handleDismissResolvedImageWarnings = useCallback((ids: string[]) => {
-    const referenced = new Set(referencedImageIds(content));
+    const referenced = new Set(referencedImageIds(liveContentRef.current)); // Phase 7: see handleImageReplace
     const clearable = new Set(ids.filter((id) => images[id] || !referenced.has(id)));
     if (clearable.size === 0) return;
     setUnresolvedCloudImages((prev) => withoutUnresolvedImageIds(prev, clearable));
-  }, [content, images]);
+  }, [images]);
 
   // Persists a front/back stacking swap for a small group of images (see
   // PageCard.tsx's handleLayerMove) — never touches `content`/IMG markers,

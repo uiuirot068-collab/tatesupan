@@ -70,6 +70,17 @@ export function referencedImageIds(content: string): string[] {
   return out;
 }
 
+/**
+ * Phase 7: a stable identity of the SET of images `content` references
+ * (sorted ids, one string). Ordinary typing leaves it unchanged; adding,
+ * removing or swapping a marker changes it. Effects that only need the
+ * referenced ids (the cloud manifest check) depend on this, not on the text.
+ * Empty string when nothing is referenced.
+ */
+export function referencedImageSignature(content: string): string {
+  return referencedImageIds(content).sort().join("\n");
+}
+
 /** content が挿絵を1枚でも参照しているか。 */
 export function contentHasImages(content: string): boolean {
   return imgIdPattern().test(content);

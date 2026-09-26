@@ -41,7 +41,7 @@ describe("TategakiEditor: one document-switch owner", () => {
   });
 
   it("a local document load unlinks the previous cloud project", () => {
-    expect(body(editor, "const imageRecords = await loadAllImages();", "setTitle(doc?.title")).toContain("setCurrentProjectId(null);");
+    expect(body(editor, "const imageRecords = await loadImagesByIds(", "setTitle(doc?.title")).toContain("setCurrentProjectId(null);");
   });
 });
 

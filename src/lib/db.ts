@@ -188,6 +188,19 @@ export async function loadAllImages(): Promise<ImageRecord[]> {
   return db.images.toArray();
 }
 
+/**
+ * Phase 7: reads only the given image ids (primary-key lookups, no schema
+ * change). Opening a local document loads the images its manuscript
+ * references instead of every document's images (`loadAllImages`). Ids with
+ * no stored record are simply absent from the result.
+ */
+export async function loadImagesByIds(ids: readonly string[]): Promise<ImageRecord[]> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return [];
+  const records = await db.images.bulkGet(unique);
+  return records.filter((record): record is ImageRecord => record !== undefined);
+}
+
 export async function deleteImage(id: string): Promise<void> {
   await db.images.delete(id);
 }
