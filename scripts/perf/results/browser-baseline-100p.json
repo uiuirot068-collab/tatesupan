@@ -1,0 +1,57 @@
+{
+  "label": "baseline",
+  "pages": 100,
+  "chars": 47418,
+  "open": {
+    "ms": 2936,
+    "previewPages": 112,
+    "workers": 2,
+    "composePosts": 2,
+    "payloadImages": [
+      32,
+      32
+    ]
+  },
+  "isolated": [
+    {
+      "keystrokeFrameMs": 174,
+      "inputToRequestMs": 932,
+      "requestToLayoutMs": 1575,
+      "inputToLayoutMs": 2508,
+      "workersCreated": 1,
+      "requests": 1,
+      "payloadImages": 32,
+      "replyType": "complete"
+    },
+    {
+      "keystrokeFrameMs": 159,
+      "inputToRequestMs": 601,
+      "requestToLayoutMs": 1688,
+      "inputToLayoutMs": 2289,
+      "workersCreated": 1,
+      "requests": 1,
+      "payloadImages": 32,
+      "replyType": "complete"
+    },
+    {
+      "keystrokeFrameMs": 123,
+      "inputToRequestMs": 572,
+      "requestToLayoutMs": 1512,
+      "inputToLayoutMs": 2084,
+      "workersCreated": 1,
+      "requests": 1,
+      "payloadImages": 32,
+      "replyType": "complete"
+    }
+  ],
+  "burst": {
+    "keystrokes": 8,
+    "keystrokeFrameMsMedian": 99,
+    "requests": 5,
+    "workersCreated": 5,
+    "lastInputToFinalLayoutMs": 1725,
+    "longTaskCount": 10,
+    "longTaskTotalMs": 964,
+    "longTaskMaxMs": 280
+  }
+}

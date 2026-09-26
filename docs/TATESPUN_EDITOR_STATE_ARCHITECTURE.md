@@ -30,11 +30,10 @@ Legend: **A** source of truth · **B** derived · **C** async computed · **D** 
 keystroke → EditorPane → setContent (TategakiEditor, A)
    ├─ liveContentRef  (effect-synced; getLatestContent for export and splices)
    ├─ autosave effect (1500 ms) → IndexedDB saveDocument                         F
-   ├─ manifest poll effect (cloud + images) → unresolvedCloudImages              G→A
-   └─ 180 ms → previewContent → PreviewPane.content
-         └─ 180 ms → deferredContent
-               ├─ LEGACY tokenize/paginate + computePageSourceRanges             H
-               └─ useV2PreviewAdapter: 180 ms → new Worker → compose → setState  C
+   ├─ manifest poll effect (keyed on referenced image ids, Phase 7) → unresolvedCloudImages  G→A
+   └─ 180 ms → previewContent → PreviewPane.content (= deferredContent, Phase 7)
+               ├─ LEGACY tokenize/paginate + computePageSourceRanges  H (only LEGACY mode / no V2 layout)
+               └─ useV2PreviewAdapter: 180 ms → reused worker (referenced images) → compose → setState  C
                      └─ v2PageModel → listPages, listSourceRanges, presentation,
                         imagePageIndicesById, onBodyPageCountChange              B
 ```
@@ -43,7 +42,7 @@ keystroke → EditorPane → setContent (TategakiEditor, A)
 
 | Flow | Steps | Stale-result guard |
 |---|---|---|
-| A typing → layout | Editor 180 ms → Preview 180 ms → adapter 180 ms → worker | effect `cancelled` + `worker.terminate()` on every input change; `gate.currentFor` skips equal input |
+| A typing → layout | Editor 180 ms → adapter 180 ms → reused worker (Phase 7) | request ids + cancel on every input change; a busy worker is terminated and replaced (`ReusablePreviewWorker`); `gate.currentFor` skips equal input |
 | B export | click → `awaitComposition(currentCompositionInput())` → plan cache → export | `CompositionGate` (exact input match); supersede effect rejects waits when the source changes |
 | C project open | `getProjectById` → `restoreManuscriptImages` ∥ `loadAllImages` → merge → unresolved + baseline | load-effect `cancelled`; **`beginDocumentSwitch` (Phase 6)** |
 | D image replace | FileReader → saveImage → sync → manifest → unresolved | **`documentEpoch.capture()` (Phase 6)** |
@@ -59,7 +58,7 @@ keystroke → EditorPane → setContent (TategakiEditor, A)
 | manuscript text `content` | TategakiEditor | A/F/G | Only writer is `setContent`. PreviewPane edits go through `onContentChange` |
 | `title`, `plotNote` | TategakiEditor | A/F | `plotNote` only in IndexedDB |
 | `settings` | `useEditorSettings` | A/F/G | also mirrored to localStorage as "last used" |
-| `images` (id → dataURL) | TategakiEditor | A/F | **one pool shared by every document** (`loadAllImages`). Ids are unique, so sharing is safe |
+| `images` (id → dataURL) | TategakiEditor | A/F | Phase 7: **document-scoped**. A local open loads the referenced ids (`loadImagesByIds`), plus a one-time top-up for pasted markers. A cloud open holds the restored set. Ids are unique |
 | `imageLayerOrder` | TategakiEditor | A/F | separate from content/markers |
 | `docId` / `loadedDocIdRef` | TategakiEditor | A | `loadedDocIdRef` is the autosave document guard |
 | `currentProjectId` | TategakiEditor | A (G link) | the cloud project the open document saves to |
@@ -106,8 +105,8 @@ keystroke → EditorPane → setContent (TategakiEditor, A)
    overwrite that project with the local document.
 3. Acknowledgment state is keyed by `imageWarningScope` (= work-session scope `local:/cloud:/demo:`).
    Another scope reads as empty without a reset effect.
-4. The image pool and IndexedDB image store are global by design. Writing a repaired image after a
-   switch is harmless; writing *technical state* after a switch is not.
+4. The IndexedDB image store is global by design; the in-memory pool is per document since Phase 7.
+   Writing a repaired image after a switch is harmless; writing *technical state* after a switch is not.
 5. Autosave schedules only when `loadedDocIdRef.current === docId` (pre-existing). Since
    Phase 6.1 the scheduled save is a job that carries its own `docId` (§12.1).
 6. **Document-switch persistence contract (Phase 6.1).** Before the open document is replaced
@@ -226,6 +225,11 @@ Tests: `src/lib/pendingAutosave.test.ts`, `src/lib/documentSafetyHelpers.test.ts
 (wiring contract).
 
 ## Performance observations (for the Long Manuscript Performance phase)
+
+Phase 7 addressed the manifest poll, LEGACY pagination in V2 mode, per-composition workers and the
+image payload, the stacked debounces and `loadAllImages`. It found `JSON.stringify` negligible.
+Results and the remaining bottlenecks are in `docs/TATESPUN_LONG_MANUSCRIPT_PERFORMANCE.md`.
+The list below is the Phase 6 snapshot.
 
 - **Manifest poll runs on every keystroke.** The effect depends on the live `content`, so for a
   cloud project with images each keystroke re-runs it and makes an immediate

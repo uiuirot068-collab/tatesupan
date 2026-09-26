@@ -1,0 +1,57 @@
+{
+  "label": "phase7-final",
+  "pages": 100,
+  "chars": 47418,
+  "open": {
+    "ms": 2069,
+    "previewPages": 112,
+    "workers": 2,
+    "composePosts": 2,
+    "payloadImages": [
+      0,
+      2
+    ]
+  },
+  "isolated": [
+    {
+      "keystrokeFrameMs": 145,
+      "inputToRequestMs": 400,
+      "requestToLayoutMs": 1038,
+      "inputToLayoutMs": 1437,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "keystrokeFrameMs": 144,
+      "inputToRequestMs": 386,
+      "requestToLayoutMs": 980,
+      "inputToLayoutMs": 1366,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "keystrokeFrameMs": 146,
+      "inputToRequestMs": 400,
+      "requestToLayoutMs": 1093,
+      "inputToLayoutMs": 1493,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    }
+  ],
+  "burst": {
+    "keystrokes": 8,
+    "keystrokeFrameMsMedian": 107,
+    "requests": 5,
+    "workersCreated": 4,
+    "lastInputToFinalLayoutMs": 1766,
+    "longTaskCount": 9,
+    "longTaskTotalMs": 1090,
+    "longTaskMaxMs": 352
+  }
+}
