@@ -606,8 +606,10 @@ export default function TategakiEditor({
       const sync = await syncManuscriptImages({ projectId: currentProjectId, content, localImages: nextImages });
       if (sync.ok || sync.noImages) {
         const status = await getUnresolvedManuscriptImages(currentProjectId, content);
-        const hasIssues = status.missing.length > 0 || status.unmanifested.length > 0;
-        setUnresolvedCloudImages(hasIssues ? { missing: status.missing, unmanifested: status.unmanifested } : null);
+        const missing = status.missing.filter((imageId) => !nextImages[imageId]);
+        const unmanifested = status.unmanifested.filter((imageId) => !nextImages[imageId]);
+        const hasIssues = missing.length > 0 || unmanifested.length > 0;
+        setUnresolvedCloudImages(hasIssues ? { missing, unmanifested } : null);
         showToast("画像を再配置し、クラウドの保存期限を更新しました");
       } else {
         setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
