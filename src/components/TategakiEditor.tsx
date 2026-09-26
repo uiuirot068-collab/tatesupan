@@ -31,6 +31,7 @@ import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type Clo
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages, mergeCloudRestoreWithLocalOriginals, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
 import { DocumentEpoch } from "@/lib/documentScope";
+import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -367,6 +368,32 @@ export default function TategakiEditor({
   // autosave effect can refuse to write if a document switch is in flight.
   const loadedDocIdRef = useRef<number | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Phase 6.1 autosave flush contract (lib/pendingAutosave.ts): the debounced
+  // save is a JOB holding its own docId and the committed state to write. A
+  // document switch, unmount or pagehide writes it now instead of dropping it,
+  // and it is always written to ITS document, never the one open at flush time.
+  const [pendingAutosave] = useState(() => new PendingAutosave<PageSettings>());
+  const isMountedRef = useRef(false);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const flushAutosave = useCallback((): Promise<void> => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    return flushPendingAutosave(pendingAutosave, (job) =>
+      saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)
+    ).then(
+      (job) => {
+        if (job && isMountedRef.current && loadedDocIdRef.current === job.docId && !pendingAutosave.hasPending) {
+          setSaveStatus("saved");
+        }
+      },
+      (error: unknown) => {
+        console.error("TateSpun: autosave flush failed", error);
+        if (isMountedRef.current) setSaveStatus("error");
+      }
+    );
+  }, [pendingAutosave]);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const mainRef = useRef<HTMLElement | null>(null);
@@ -453,6 +480,9 @@ export default function TategakiEditor({
   useEffect(() => {
     let cancelled = false;
 
+    // Phase 6.1: write the previous document's pending edits (to ITS docId)
+    // before any of its state is replaced.
+    const previousDocumentFlushed = flushAutosave();
     // Block the autosave effect from firing with a mismatched
     // docId/content pair while this document switch is in flight.
     hasLoadedRef.current = false;
@@ -514,6 +544,8 @@ export default function TategakiEditor({
       }
 
       let id = documentId && Number.isFinite(documentId) ? documentId : null;
+      // A → B → A: reopening a document must read the edits flushed above.
+      await previousDocumentFlushed;
       const doc = id ? await loadDocument(id) : undefined;
 
       if (!doc) {
@@ -560,7 +592,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentId, router, setSettings]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentId, flushAutosave, router, setSettings]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -721,20 +753,42 @@ export default function TategakiEditor({
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-    const targetDocId = docId;
+    // The job is this commit's state for THIS docId (see flushAutosave). The
+    // cleanup below only cancels the timer: the job stays pending until the
+    // next change replaces it, the timer takes it, or a flush writes it.
+    pendingAutosave.schedule({ docId, title, content, settings, plotNote });
     saveTimeoutRef.current = setTimeout(() => {
-      // Re-check immediately before writing in case the user switched
-      // documents again during the debounce window.
-      if (loadedDocIdRef.current !== targetDocId) return;
-      saveDocument(targetDocId, title, content, settings, plotNote)
-        .then(() => { setSaveStatus("saved"); })
+      saveTimeoutRef.current = null;
+      const job = pendingAutosave.take();
+      if (!job) return;
+      saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)
+        .then(() => { if (!pendingAutosave.hasPending) setSaveStatus("saved"); })
         .catch(() => { setSaveStatus("error"); });
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [docId, title, content, settings, plotNote]);
+  }, [docId, title, content, settings, plotNote, isSampleDocument, pendingAutosave]);
+
+  // Phase 6.1: leaving the editor (client navigation unmounts it) or the page
+  // writes the pending job to IndexedDB. pagehide / visibilitychange=hidden are
+  // best effort: the local write is async, and nothing is sent to the cloud.
+  useEffect(() => {
+    isMountedRef.current = true;
+    const flushOnPageHide = () => void flushAutosave();
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") void flushAutosave();
+    };
+    window.addEventListener("pagehide", flushOnPageHide);
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    return () => {
+      window.removeEventListener("pagehide", flushOnPageHide);
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      isMountedRef.current = false;
+      void flushAutosave();
+    };
+  }, [flushAutosave]);
 
   useEffect(() => {
     return () => {
@@ -749,6 +803,8 @@ export default function TategakiEditor({
       return;
     }
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    // The pending job holds this same committed state; this write replaces it.
+    pendingAutosave.clear();
     setSaveStatus("saving");
     saveDocument(docId, title, content, settings, plotNote)
       .then(() => {
@@ -841,6 +897,9 @@ export default function TategakiEditor({
   };
 
   const handleSelectProject = (project: Project) => {
+    // Phase 6.1: the open document's pending edits are written to ITS docId
+    // first; then the project's text, settings AND images replace it.
+    void flushAutosave();
     beginDocumentSwitch();
     applyCloudProject(project);
   };
