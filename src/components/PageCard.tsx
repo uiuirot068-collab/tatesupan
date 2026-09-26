@@ -2420,6 +2420,7 @@ function ExpiredImagePlaceholder({
       data-no-print="true"
       className="no-print"
       style={{
+        position: "relative",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -2432,8 +2433,26 @@ function ExpiredImagePlaceholder({
         writingMode: "horizontal-tb",
       }}
     >
+      <img
+        src={withBasePath("/caroad_main1.png")}
+        alt=""
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "8% auto auto 50%",
+          transform: "translateX(-50%)",
+          width: "42%",
+          maxHeight: "58%",
+          objectFit: "contain",
+          opacity: 0.12,
+          filter: "grayscale(100%)",
+          pointerEvents: "none",
+        }}
+      />
       <span
         style={{
+          position: "relative",
+          zIndex: 1,
           maxWidth: "90%",
           textAlign: "center",
           fontSize: 11,
@@ -2554,7 +2573,21 @@ function FullPageImage({
           writingMode: "horizontal-tb",
         }}
       >
-        <span style={{ textAlign: "center", fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: "#7c2d12" }}>
+        <img
+          src={withBasePath("/caroad_main1.png")}
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            width: "34%",
+            maxHeight: "46%",
+            objectFit: "contain",
+            opacity: 0.12,
+            filter: "grayscale(100%)",
+            pointerEvents: "none",
+          }}
+        />
+        <span style={{ position: "relative", zIndex: 1, textAlign: "center", fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: "#7c2d12" }}>
           ⚠️ 画像の保存期限が切れています
           <br />
           画像を再度配置してください
