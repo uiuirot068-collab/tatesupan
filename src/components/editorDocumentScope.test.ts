@@ -35,6 +35,9 @@ describe("TategakiEditor: one document-switch owner", () => {
   it("runs on every route-driven load and on 保存作品一覧", () => {
     expect(body(editor, "hasLoadedRef.current = false;", "async function run()")).toContain("beginDocumentSwitch();");
     expect(body(editor, "const handleSelectProject = ", "};")).toMatch(/beginDocumentSwitch\(\);\s*applyCloudProject\(project\);/);
+    // Phase 6.1: an in-flight route load cannot overwrite a project opened from 保存作品一覧.
+    const load = body(editor, "beginDocumentSwitch();\n    // 保存作品一覧 can open", "async function run()");
+    expect(load).toContain("const isStale = () => cancelled || !isCurrentDocument();");
   });
 
   it("a local document load unlinks the previous cloud project", () => {

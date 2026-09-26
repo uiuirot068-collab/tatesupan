@@ -29,7 +29,7 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
-import { contentHasImages, mergeCloudRestoreWithLocalOriginals, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
+import { contentHasImages, openedCloudProjectImageState, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
 import { DocumentEpoch } from "@/lib/documentScope";
 import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
 import type { Project } from "@/types/database";
@@ -311,6 +311,10 @@ export default function TategakiEditor({
   // persistent footer warning but not the interruption modal, which is for a
   // link that breaks while the editor is open (see imageWarningLifecycle.ts).
   const [imageWarningBaselineIds, setImageWarningBaselineIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Phase 6.1: true while an opened cloud project's images are being restored.
+  // The manifest poll waits for it: until then `images` is still the previous
+  // document's pool, so the poll would report this project's images as broken.
+  const [cloudImagesRestoring, setCloudImagesRestoring] = useState(false);
   // 参照安定な Set（PageCard の memo を壊さない）。エクスポートブロック判定にも使う。
   const unresolvedImageIdSet = useMemo(
     () =>
@@ -323,7 +327,7 @@ export default function TategakiEditor({
   // Cloud editor stays aware of 72h expiry while it is open. Manifest-only polling is
   // intentionally light (60s); it does not download image blobs and local-only documents never poll.
   useEffect(() => {
-    if (!currentProjectId || !contentHasImages(content)) return;
+    if (!currentProjectId || cloudImagesRestoring || !contentHasImages(content)) return;
     let cancelled = false;
     const refresh = async () => {
       const status = await getUnresolvedManuscriptImages(currentProjectId, content);
@@ -338,7 +342,7 @@ export default function TategakiEditor({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [content, currentProjectId, images]);
+  }, [cloudImagesRestoring, content, currentProjectId, images]);
   const memoStorageKey = useMemo(
     () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
     [currentProjectId, docId]
@@ -360,6 +364,7 @@ export default function TategakiEditor({
     documentEpoch.advance();
     setUnresolvedCloudImages(null);
     setImageWarningBaselineIds(new Set());
+    setCloudImagesRestoring(false);
     setSelectedPages(new Set());
   }, [documentEpoch]);
 
@@ -477,6 +482,39 @@ export default function TategakiEditor({
     setDocId(null);
   }, [setSettings]);
 
+  // Phase 6.1: ONE image restore for both cloud-open paths — the `?cloudId=`
+  // route and 保存作品一覧 (which used to swap only text and settings, leaving
+  // the previous document's images and no restore). `isCurrent` is the
+  // caller's document-scope guard; nothing is written once it turns false.
+  const openCloudProjectImages = useCallback(async (project: Project, isCurrent: () => boolean) => {
+    setImageLayerOrder({});
+    setUnresolvedCloudImages(null);
+    setImageWarningBaselineIds(new Set());
+    if (!contentHasImages(project.content)) {
+      setImages({});
+      return;
+    }
+    setCloudImagesRestoring(true);
+    // 別端末でも挿絵を復元する（元の image id を維持）。クラウドの一時コピーが
+    // 期限切れ・欠損でも、このブラウザに元画像（IndexedDB）が残っていれば
+    // それで表示・出力できるので「画像切れ」にはしない（72hはクラウド側だけの期限）。
+    const [restored, localRecords] = await Promise.all([
+      restoreManuscriptImages(project.id, project.content).catch(() => ({
+        images: {},
+        missing: [],
+        unmanifested: referencedImageIds(project.content),
+      })),
+      loadAllImages().catch(() => []),
+    ]);
+    if (!isCurrent()) return;
+    const opened = openedCloudProjectImageState(project.content, restored, localRecords);
+    setImages(opened.images);
+    setImageLayerOrder(opened.imageLayerOrder);
+    setUnresolvedCloudImages(opened.unresolved);
+    setImageWarningBaselineIds(opened.baselineIds);
+    setCloudImagesRestoring(false);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -488,6 +526,9 @@ export default function TategakiEditor({
     hasLoadedRef.current = false;
     setSaveStatus("loading");
     beginDocumentSwitch();
+    // 保存作品一覧 can open another document while this load is in flight.
+    const isCurrentDocument = documentEpoch.capture();
+    const isStale = () => cancelled || !isCurrentDocument();
 
     async function run() {
       if (demoMode) {
@@ -512,32 +553,14 @@ export default function TategakiEditor({
 
       if (cloudProjectId) {
         const project = await getProjectById(cloudProjectId);
-        if (cancelled) return;
+        if (isStale()) return;
         if (!project) {
           setSaveStatus("error");
           return;
         }
         applyCloudProject(project);
-        setImageLayerOrder({});
-        setUnresolvedCloudImages(null);
-        setImageWarningBaselineIds(new Set());
-        if (contentHasImages(project.content)) {
-          // 別端末でも挿絵を復元する（元の image id を維持）。クラウドの一時コピーが
-          // 期限切れ・欠損でも、このブラウザに元画像（IndexedDB）が残っていれば
-          // それで表示・出力できるので「画像切れ」にはしない（72hはクラウド側だけの期限）。
-          const [restored, localRecords] = await Promise.all([
-            restoreManuscriptImages(project.id, project.content),
-            loadAllImages().catch(() => []),
-          ]);
-          if (cancelled) return;
-          const localOriginals = Object.fromEntries(localRecords.map((record) => [record.id, record.dataUrl]));
-          const opened = mergeCloudRestoreWithLocalOriginals(restored, localOriginals);
-          setImages(opened.images);
-          setUnresolvedCloudImages(opened.unresolved);
-          setImageWarningBaselineIds(new Set([...(opened.unresolved?.missing ?? []), ...(opened.unresolved?.unmanifested ?? [])]));
-        } else {
-          setImages({});
-        }
+        await openCloudProjectImages(project, () => !isStale());
+        if (isStale()) return;
         hasLoadedRef.current = true;
         setSaveStatus("saved");
         return;
@@ -554,7 +577,7 @@ export default function TategakiEditor({
       }
 
       const imageRecords = await loadAllImages();
-      if (cancelled) return;
+      if (isStale()) return;
       // A local document is never linked to a cloud project or image manifest
       // when it is opened (same as a fresh mount): drop the previous cloud
       // project's id — クラウドに保存 would otherwise overwrite THAT project
@@ -592,7 +615,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentId, flushAutosave, router, setSettings]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -902,6 +925,7 @@ export default function TategakiEditor({
     void flushAutosave();
     beginDocumentSwitch();
     applyCloudProject(project);
+    void openCloudProjectImages(project, documentEpoch.capture());
   };
 
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {

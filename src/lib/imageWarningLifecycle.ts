@@ -19,8 +19,17 @@
  * marker. While the marker exists the mapping follows it; after the marker is
  * deleted the last-known pages are retained so the footer can still say where
  * the break was and the block still covers those pages until acknowledged.
- * (Body page indices come from the Preview page list — LEGACY in V2 mode too,
- * see docs/TATESPUN_V2_CANONICALIZATION_AUDIT.md; not changed here.)
+ * Body page indices come from the Preview page list. Since Phase 5 that list
+ * is the canonical V2 page model in V2 mode (`v2PageModel.imagePageIndicesById`,
+ * lib/v2Bridge/previewPageModel.ts), the same pages JPG/ZIP/PDF export; the
+ * LEGACY paginator is used only in LEGACY mode and until the first V2 layout.
+ *
+ * Document scope: the Editor clears the technical state on every document
+ * switch (`beginDocumentSwitch`), and PreviewPane keys this acknowledgment
+ * state by document (`imageWarningsForScope`), so one document's warnings
+ * never appear in another. When a cloud project is opened, its already-broken
+ * ids become the silent baseline (`silentImageWarningIds`) — see
+ * docs/TATESPUN_EDITOR_STATE_ARCHITECTURE.md §7.
  */
 
 export interface ImageWarningState {

@@ -446,3 +446,41 @@ export function mergeCloudRestoreWithLocalOriginals(
   }
   return { images, unresolved: technicallyUnresolvedImages(restored, images) };
 }
+
+/**
+ * Phase 6.1: the complete image state of a cloud project that was just opened,
+ * shared by BOTH open paths (`?cloudId=` route and 保存作品一覧) so they cannot
+ * drift apart again. Scoped to the images this manuscript references:
+ *  - `images`: cloud copies, falling back to this browser's local originals
+ *    (mergeCloudRestoreWithLocalOriginals); no other document's images.
+ *  - `imageLayerOrder`: the stacking rank persisted locally (IndexedDB
+ *    ImageRecord.layerOrder — the cloud does not store it) for referenced ids.
+ *  - `unresolved` / `baselineIds`: what is still technically broken; already
+ *    broken at open → silent baseline (footer only, imageWarningLifecycle.ts).
+ */
+export function openedCloudProjectImageState(
+  content: string,
+  restored: { images: Record<string, string> } & CloudImageResolution,
+  localRecords: readonly { id: string; dataUrl: string; layerOrder?: number }[]
+): {
+  images: Record<string, string>;
+  imageLayerOrder: Record<string, number>;
+  unresolved: CloudImageResolution | null;
+  baselineIds: Set<string>;
+} {
+  const referenced = new Set(referencedImageIds(content));
+  const localOriginals: Record<string, string> = {};
+  const imageLayerOrder: Record<string, number> = {};
+  for (const record of localRecords) {
+    if (!referenced.has(record.id)) continue;
+    localOriginals[record.id] = record.dataUrl;
+    if (record.layerOrder !== undefined) imageLayerOrder[record.id] = record.layerOrder;
+  }
+  const opened = mergeCloudRestoreWithLocalOriginals(restored, localOriginals);
+  return {
+    images: opened.images,
+    imageLayerOrder,
+    unresolved: opened.unresolved,
+    baselineIds: new Set([...(opened.unresolved?.missing ?? []), ...(opened.unresolved?.unmanifested ?? [])]),
+  };
+}
