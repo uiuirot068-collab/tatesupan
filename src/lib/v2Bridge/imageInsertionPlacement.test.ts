@@ -1,6 +1,7 @@
 import { encode } from "fast-png";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PAGE_SETTINGS } from "../pageLayout";
+import { DEFAULT_PAGE_SETTINGS, computePageLayout } from "../pageLayout";
+import { fitImageToBox, imageMaxBoxForTextArea } from "../imageGeometry";
 import { findImageTokenRange, formatImageMarker, type ImagePosition } from "../tategaki";
 import { createFakeMeasurementProvider } from "../../../typesetting-v2/core/measurement/fakeProvider";
 import { renderPaintPlanToPdf, type PaintCommand } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
@@ -60,8 +61,17 @@ describe("actual Editor IMG insertion/placement contract", () => {
 
     const painted = bridge.model.pages.flatMap((page) => page.columns.flatMap((column) => column.lines.flatMap((line) => line.units))).find((unit) => unit.kind === "IMAGE");
     expect(painted?.imagePlacement).toBe(position.toUpperCase());
-    expect(painted?.imageIntrinsicWidthMm).toBeCloseTo(WIDTH_MM, 3);
-    expect(painted?.heightMm).toBeCloseTo(HEIGHT_MM, 3);
+    // Marker mm (never a refId fallback), fitted into the shared 挿絵 box
+    // (lib/imageGeometry.ts) exactly like the Preview overlay: this fixture
+    // (101.6 mm tall) is taller than 60% of the 文庫 text frame.
+    const frame = computePageLayout(DEFAULT_PAGE_SETTINGS);
+    const box = imageMaxBoxForTextArea(frame.textAreaWidthMm, frame.textAreaHeightMm);
+    const lineExtentMm = DEFAULT_PAGE_SETTINGS.charsPerLine * (DEFAULT_PAGE_SETTINGS.fontSizePt * 25.4) / 72;
+    const expected = fitImageToBox({ widthMm: WIDTH_MM, heightMm: HEIGHT_MM }, { maxWidthMm: box.maxWidthMm, maxHeightMm: Math.min(box.maxHeightMm, lineExtentMm) });
+    expect(expected.heightMm).toBeLessThan(HEIGHT_MM);
+    expect(painted?.imageIntrinsicWidthMm).toBeCloseTo(expected.widthMm, 2);
+    expect(painted?.heightMm).toBeCloseTo(expected.heightMm, 2);
+    expect(painted!.imageIntrinsicWidthMm! / painted!.heightMm).toBeCloseTo(WIDTH_MM / HEIGHT_MM, 3);
 
     const command = imageCommand(bridge.plan[0].commands);
     const geometry = bridge.pageGeometry;

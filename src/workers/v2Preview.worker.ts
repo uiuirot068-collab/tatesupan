@@ -3,7 +3,7 @@
 import type { PageSettings } from "../lib/pageLayout";
 import { buildV2PreviewDocument } from "../lib/v2Bridge/buildV2PreviewDocument";
 import { loadV2BrowserMeasurementProvider } from "../lib/v2Bridge/browserMeasurementProvider";
-import { composeV2Document } from "../lib/v2Bridge/composeV2Document";
+import { composeV2Layout } from "../lib/v2Bridge/composeV2Document";
 import { prepareImageResolver } from "../lib/v2Bridge/imageResolverAdapter";
 
 interface ComposeMessage {
@@ -23,7 +23,8 @@ self.onmessage = (event: MessageEvent<ComposeMessage>) => {
     loadV2BrowserMeasurementProvider(),
     prepareImageResolver(input.images),
   ]).then(([measurement, imageResolver]) => {
-    const bridge = composeV2Document({
+    // Layout only: export builds its own font-aware PaintPlan from bridge.model.
+    const bridge = composeV2Layout({
       title: input.title.trim() || "TateSpun",
       content: input.content,
       settings: input.settings,

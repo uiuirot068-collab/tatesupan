@@ -164,7 +164,7 @@ export type PaintCommand =
   // decoder (unavoidable — the PDF image-XObject model has no native
   // PNG encoding), which does preserve a real alpha channel via jsPDF's
   // own SMask support.
-  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG" }
+  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string }
   // Post-beta typography Phase 1 (傍点): one FILLED vector circle, centre
   // (xMm, yMm). Font-independent geometry, so PDF (jsPDF circle) and both
   // JPG rasterizers (Canvas arc) paint the identical dot.
@@ -614,7 +614,7 @@ function unitCommands(
       const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
       const resolution = unit.imageResolution;
       return resolution && resolution.kind === "RESOLVED"
-        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }]
         : [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
     }
     if (placement === "FULL") {
@@ -627,7 +627,7 @@ function unitCommands(
       const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
       const resolution = unit.imageResolution;
       return resolution && resolution.kind === "RESOLVED"
-        ? [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }]
+        ? [{ op: "image", xMm: imageX, yMm: y, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }]
         : [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
     }
     const scale = Math.min(1, boxWidthMm / naturalWidthMm, boxHeightMm / naturalHeightMm);
@@ -641,7 +641,7 @@ function unitCommands(
         : boxTopMm + (boxHeightMm - heightMm) / 2;
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
-      return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format }];
+      return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }];
     }
     // PLACEHOLDER (no resolver wired) or an unresolved failure kind that
     // reached paint time without going through `generatePublicationPdf`'s

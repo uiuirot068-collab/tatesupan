@@ -135,7 +135,11 @@ describe("C. shared contract -- one export implementation, two entry points", ()
 describe("D. PDF Loop 2 contract is untouched", () => {
   it("still routes every PDF through the odd-page rule and runPdfExport (no second path)", () => {
     expect(preview).toContain("shouldWarnOddPageExport({");
-    expect(preview).toMatch(/scope: pdfScope,\s*bodyPageCount: pages\.length,\s*includeColophon: includeColophonInPdf/);
+    expect(preview).toMatch(/scope: pdfScope,\s*bodyPageCount: bodyPageCountForWarning,\s*includeColophon: includeColophonInPdf/);
+    // Phase 3: LEGACY page list only as the non-V2 default; V2 counts the
+    // canonical layout the PDF will actually contain.
+    expect(preview).toContain("let bodyPageCountForWarning = pages.length;");
+    expect(preview).toMatch(/bodyPageCountForWarning = bodyPageCount\(\(await v2Adapter\.awaitComposition\(currentCompositionInput\(\)\)\)\.document\.pageSequence\)/);
     expect(preview).toContain("await runPdfExport(pending)");
     expect(preview).toContain("void runPdfExport(pending)");
   });

@@ -109,6 +109,14 @@ export default function TategakiEditor({
   // captures whatever is currently rendered (html2canvas-style DOM capture),
   // so this doesn't add any new staleness window beyond what already existed.
   const PREVIEW_PROP_DEBOUNCE_MS = 180;
+  // Phase 3 stale-layout export guard: export must refer to the LIVE text, not
+  // the debounced `previewContent` snapshot. Synced after commit; read only
+  // from event handlers (export clicks), never during render.
+  const liveContentRef = useRef(content);
+  useEffect(() => {
+    liveContentRef.current = content;
+  }, [content]);
+  const getLatestContent = useCallback(() => liveContentRef.current, []);
   const [previewContent, setPreviewContent] = useState(content);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1030,6 +1038,7 @@ export default function TategakiEditor({
           <div className={`min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
               content={previewContent}
+              getLatestContent={getLatestContent}
               title={title}
               settings={settings}
               layout={layout}

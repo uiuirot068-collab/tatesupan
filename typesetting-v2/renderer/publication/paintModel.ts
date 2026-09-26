@@ -101,6 +101,8 @@ export interface PaintPlacedUnit {
   imagePlacement?: ImagePlacement;
   /** Editor UI's explicit 「全面（ページを覆う）」 paint contract. */
   imageFullPageCover?: boolean;
+  /** IMAGE units only: the Editor image id, so export can apply the user's layer order. */
+  imageRefId?: string;
   semanticRunKind?: "DASH" | "ELLIPSIS" | "TWO_DOT_LEADER";
   // Post-beta typography Phase 1 (傍点): resolved from the owning unit's
   // paint-only `InlineDecoration` by the SAME `emphasisMarks.ts` contract
@@ -412,6 +414,7 @@ function buildPaintLine(
         imageIntrinsicWidthMm: tickToMm(owner.intrinsicWidth),
         imagePlacement: owner.placement,
         imageFullPageCover: owner.placement === "FULL" && ctx.fullImageCoversPage === true,
+        imageRefId: owner.refId,
       } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),
       ...(emphasis ? { emphasisDots: { side: emphasis.side, flowCentersMm: emphasis.flowCenters } } : {}),

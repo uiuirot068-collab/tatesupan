@@ -44,3 +44,24 @@ export function resolvePdfPhysicalIndices(input: {
   }
   return Array.from(new Set(indices)).sort((a, b) => a - b);
 }
+
+/**
+ * 1-based numbers shown to users. Two vocabularies exist on purpose and are
+ * kept distinct (Phase 3: no inline ±1 at call sites):
+ * - BODY page number: JPG file names of body pages, image-break warnings
+ *   ("NP"), and `PageSettings.pageOverrides` keys.
+ * - PHYSICAL page number: Preview page labels, folios, the colophon JPG name.
+ * They differ only after a colophon placed before the end of the book.
+ */
+export function bodyPageNumber(bodyIndex: number): number {
+  return bodyIndex + 1;
+}
+
+export function physicalPageNumber(physicalIndex: number): number {
+  return physicalIndex + 1;
+}
+
+/** Number of BODY pages in Core's canonical layout (the colophon excluded). */
+export function bodyPageCount(pageSequence: readonly PhysicalPageRef[] | undefined): number {
+  return pageSequence?.filter((ref) => ref.kind === "body").length ?? 0;
+}

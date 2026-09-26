@@ -6,7 +6,7 @@ import {
   type PaintDocument,
   type PreviewRenderContext,
 } from "../../../typesetting-v2/renderer/preview/paintModel";
-import type { V2BridgeResult } from "./composeV2Document";
+import type { V2LayoutResult } from "./composeV2Document";
 
 /**
  * `PreviewRenderer` converts canonical millimeters at standard CSS density
@@ -17,7 +17,7 @@ export const PAGE_CARD_PREVIEW_SCALE_MULTIPLIER = PX_PER_MM / (96 / 25.4);
 
 /** Pure preview projection shared by the browser worker and parity tests. */
 export function buildV2PreviewDocument(
-  bridge: V2BridgeResult,
+  bridge: V2LayoutResult,
   images: Record<string, string>
 ): PaintDocument {
   const context: PreviewRenderContext = {

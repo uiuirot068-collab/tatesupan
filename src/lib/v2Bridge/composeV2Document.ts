@@ -9,8 +9,10 @@
  * rationale as `settingsAdapter.ts`'s own doc comment.
  */
 import { buildV2UnitsFromManuscript } from "./manuscriptAdapter";
-import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2HeaderPageOverrides, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
-import type { PageSettings } from "../pageLayout";
+import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
+import { applyEditorPageOverrides } from "./pageFurniture";
+import { computePageLayout, type PageSettings } from "../pageLayout";
+import { fitImageToBox, imageMaxBoxForTextArea } from "../imageGeometry";
 import { composeCanonicalDocument } from "../../../typesetting-v2/core/layout/assemble";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 import { DEFAULT_RULE_SET_V2 } from "../../../typesetting-v2/core/rules/defaultRuleSet";
@@ -33,6 +35,14 @@ export interface V2BridgeInput {
   imageResolver?: ImageResolver;
 }
 
+/**
+ * The canonical layout (Core document + Publication model + Preview inputs)
+ * WITHOUT a PaintPlan. The live Preview worker only needs this: export builds
+ * its own font-aware plan from `model` (`buildPublicationPaintPlan`), so the
+ * worker no longer composes and structured-clones an unused plan per update.
+ */
+export type V2LayoutResult = Omit<V2BridgeResult, "plan">;
+
 export interface V2BridgeResult {
   document: CanonicalDocument;
   model: PublicationDocument;
@@ -53,11 +63,38 @@ export interface V2BridgeResult {
  * "colophon is off by default" contract (`src/lib/colophon.ts`).
  */
 export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
+  const layout = composeV2Layout(input);
+  return { ...layout, plan: buildPaintPlan(layout.model, true, layout.pageGeometry, FALLBACK_BASELINE_RATIO) };
+}
+
+/**
+ * Caps every IMAGE unit to the shared 挿絵 box (`lib/imageGeometry.ts`: the
+ * insertion caps, plus never longer than one line — an atom longer than the
+ * line has no legal break and would HOLD the whole document). Aspect ratio is
+ * preserved; a marker that already fits is untouched.
+ */
+function capEditorImageUnits(units: LogicalUnit[], settings: PageSettings, lineExtentTicks: number): LogicalUnit[] {
+  if (!units.some((unit) => unit.kind === "IMAGE")) return units;
+  const frame = computePageLayout(settings);
+  const box = imageMaxBoxForTextArea(frame.textAreaWidthMm, frame.textAreaHeightMm);
+  const lineExtentMm = lineExtentTicks / mmToTicks(1);
+  const maxBox = { maxWidthMm: box.maxWidthMm, maxHeightMm: Math.min(box.maxHeightMm, lineExtentMm) };
+  const tickMm = mmToTicks(1);
+  return units.map((unit) => {
+    if (unit.kind !== "IMAGE") return unit;
+    const size = { widthMm: unit.intrinsicWidth / tickMm, heightMm: unit.intrinsicHeight / tickMm };
+    const fitted = fitImageToBox(size, maxBox);
+    if (fitted === size) return unit;
+    return { ...unit, intrinsicWidth: mmToTicks(fitted.widthMm), intrinsicHeight: Math.min(mmToTicks(fitted.heightMm), lineExtentTicks) };
+  });
+}
+
+export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   // Body-only typography (post-beta Phase 1, see manuscriptAdapter.ts):
   // 傍点 decoration, and ――/…… runs as inseparable SEMANTIC_RUN units. `charsPerLine - 1`
   // keeps every grouped run narrower than a paragraph-first (一字下げ) line.
   // The colophon (horizontal, its own painter) keeps the prior plain units.
-  const { units, source } = buildV2UnitsFromManuscript("body", input.content, {
+  const { units: rawUnits, source } = buildV2UnitsFromManuscript("body", input.content, {
     maxSemanticRunCells: Math.floor(input.settings.charsPerLine) - 1,
     decorations: true,
   });
@@ -65,7 +102,7 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
   const pageGeometry = buildV2PageGeometry(input.settings);
   const folioSettings = buildV2FolioSettings(input.settings);
   const headerSettings = buildV2HeaderSettings(input.settings);
-  const headerPageOverrides = buildV2HeaderPageOverrides(input.settings);
+  const units = capEditorImageUnits(rawUnits, input.settings, layoutSettings.lineExtentTicks);
 
   const colophonEnabled = input.settings.colophon.enabled;
   const colophonComposition = colophonEnabled ? buildV2UnitsFromManuscript("colophon", buildV2ColophonText(input.settings.colophon)) : undefined;
@@ -90,7 +127,10 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
         imageIntrinsicTick: (refId) => editorImageMeasurements.get(refId) ?? input.measurement.imageIntrinsicTick(refId),
       };
 
-  const document = composeCanonicalDocument({
+  // Editor page overrides are keyed by BODY page number; Core would apply
+  // header overrides by PHYSICAL number (and has no per-page hideNombre), so
+  // they are resolved once after composition — see pageFurniture.ts.
+  const composed = composeCanonicalDocument({
     bodyUnits: units,
     colophonUnits: colophonComposition?.units,
     colophonBlockId: colophonEnabled ? "colophon" : undefined,
@@ -99,10 +139,10 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
     settings: layoutSettings,
     folioSettings,
     headerSettings,
-    headerPageOverrides,
     colophonPagePosition: colophonEnabled ? buildV2ColophonPagePosition(input.settings.colophon) : undefined,
     colophonPlacement: colophonEnabled ? buildV2ColophonPlacement(input.settings.colophon) : undefined,
   });
+  const document = applyEditorPageOverrides(composed, headerSettings, input.settings.pageOverrides);
 
   const ctx: PublicationRenderContext = {
     linePitchTicks: layoutSettings.linePitchTicks,
@@ -129,12 +169,9 @@ export function composeV2Document(input: V2BridgeInput): V2BridgeResult {
     ? buildPublicationDocument("editor-doc", input.title, document, units, source, ctx, colophonComposition.units, colophonComposition.source)
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);
 
-  const plan = buildPaintPlan(model, true, pageGeometry, FALLBACK_BASELINE_RATIO);
-
   return {
     document,
     model,
-    plan,
     units,
     source,
     ...(colophonComposition

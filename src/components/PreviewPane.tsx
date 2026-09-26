@@ -90,7 +90,16 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
-import { colophonPhysicalIndex, physicalIndexForBodyIndex, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
+import { bodyPageCount, bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
+import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
+import type { V2LayoutResult } from "@/lib/v2Bridge/composeV2Document";
+import { applyImageLayerOrder, decodeImageInBrowser, ExportPlanCache, grayscalePlanImages } from "@/lib/v2Bridge/exportPlan";
+import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
+import type { PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
+
+import { imageMaxBoxForTextArea } from "@/lib/imageGeometry";
+
+const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
@@ -450,6 +459,12 @@ interface PreviewPaneProps {
   /** 手動復旧後など、実体が戻っている警告だけを明示解除する。 */
   onDismissImageWarnings?: (imageIds: string[]) => void;
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
+  /**
+   * Phase 3 (stale-layout export guard): returns the Editor's LIVE manuscript.
+   * `content` is a debounced snapshot, so export snapshots this instead and
+   * only runs on a V2 layout composed from exactly that text.
+   */
+  getLatestContent?: () => string;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
   /**
@@ -503,6 +518,7 @@ function PreviewPane({
   layout,
   images,
   imageLayerOrder,
+  getLatestContent,
   unresolvedImageIds,
   blockExportForUnresolvedImages = false,
   onContentChange,
@@ -762,6 +778,22 @@ function PreviewPane({
     title,
     images,
   });
+  // Phase 3: the exact source state an export click refers to.
+  const currentCompositionInput = (): V2CompositionInput => ({
+    content: getLatestContent?.() ?? content,
+    settings,
+    title,
+    images,
+  });
+  const { supersedePendingCompositions } = v2Adapter;
+  // A pending export waits for the layout of the source it snapshotted; once
+  // the source moves on (the user kept typing / changed settings) that wait is
+  // rejected instead of exporting either the old or a half-updated layout.
+  useEffect(() => {
+    if (!useV2Engine) return;
+    supersedePendingCompositions({ content: getLatestContent?.() ?? content, settings, title, images });
+  }, [useV2Engine, supersedePendingCompositions, getLatestContent, content, settings, title, images]);
+  const exportPlanCacheRef = useRef(new ExportPlanCache<[V2LayoutResult, PublicationFontResource, Record<string, number>]>());
   const v2BodyPreviewPages = useMemo(() => {
     if (!v2Adapter.bridge || !v2Adapter.preview) return [];
     return v2Adapter.bridge.document.pageSequence
@@ -1458,31 +1490,36 @@ function PreviewPane({
     return true;
   };
 
-  const requireV2PublicationPlan = async () => {
-    if (!v2Adapter.bridge) {
-      throw new Error(v2Adapter.error ?? "V2 Canonical Preview is still loading. Please retry.");
-    }
+  /**
+   * Phase 3: the ONE entry point every V2 export uses. Waits for the layout
+   * composed from exactly the current source (never a stale one), then reuses
+   * or builds the export plan for (layout, font, layer order), with layer order
+   * and grayscale applied (exportPlan.ts). Page selection must use the returned
+   * `bridge` so indices and pixels always come from the same revision.
+   */
+  const requireV2ExportPlan = async () => {
+    const bridge = await v2Adapter.awaitComposition(currentCompositionInput());
     const font = await loadV2PublicationFont();
-    const plan = buildPublicationPaintPlan(
-      v2Adapter.bridge.model,
-      font,
-      v2Adapter.bridge.pageGeometry,
-      "V2 Beta export"
+    const layerOrder = imageLayerOrder ?? NO_IMAGE_LAYER_ORDER;
+    const plan = await exportPlanCacheRef.current.get([bridge, font, layerOrder], async () =>
+      grayscalePlanImages(
+        applyImageLayerOrder(buildPublicationPaintPlan(bridge.model, font, bridge.pageGeometry, "V2 Beta export"), layerOrder),
+        decodeImageInBrowser
+      )
     );
-    return { font, plan };
+    return { bridge, font, plan };
   };
 
-  const v2PhysicalIndexForBody = (bodyIndex: number): number =>
-    physicalIndexForBodyIndex(v2Adapter.bridge?.document.pageSequence, bodyIndex);
-
   const exportV2JpgPages = async (
-    physicalIndices: number[],
-    filePageNumbers: number[],
+    selectPages: (pageSequence: readonly PhysicalPageRef[]) => { physicalIndices: number[]; filePageNumbers: number[] } | null,
     zipDownload: boolean
   ) => {
     let signal: AbortSignal | null = null;
     try {
-      const { plan } = await requireV2PublicationPlan();
+      const { bridge, plan } = await requireV2ExportPlan();
+      const selection = selectPages(bridge.document.pageSequence);
+      if (!selection) return;
+      const { physicalIndices, filePageNumbers } = selection;
       const exportPlan = physicalIndices.map((index) => plan[index]).filter((page) => page !== undefined);
       if (exportPlan.length !== physicalIndices.length || exportPlan.length === 0) {
         throw new Error("V2 JPG export could not resolve the selected canonical pages.");
@@ -1536,8 +1573,10 @@ function PreviewPane({
     }
     if (exportBlockedByUnresolvedImages([index])) return;
     if (useV2Engine) {
-      const physicalIndex = v2PhysicalIndexForBody(index);
-      await exportV2JpgPages([physicalIndex], [index + 1], false);
+      await exportV2JpgPages((sequence) => ({
+        physicalIndices: [physicalIndexForBodyIndex(sequence, index)],
+        filePageNumbers: [bodyPageNumber(index)],
+      }), false);
       return;
     }
     ensureExportMount([index], false);
@@ -1565,8 +1604,10 @@ function PreviewPane({
   /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
   const handleExportColophonJpg = async () => {
     if (useV2Engine) {
-      const physicalIndex = colophonPhysicalIndex(v2Adapter.bridge?.document.pageSequence);
-      await exportV2JpgPages([physicalIndex], [colophonPhysicalPageNumber], false);
+      await exportV2JpgPages((sequence) => {
+        const physicalIndex = colophonPhysicalIndex(sequence);
+        return { physicalIndices: [physicalIndex], filePageNumbers: [physicalPageNumber(physicalIndex)] };
+      }, false);
       return;
     }
     ensureExportMount([], true);
@@ -1592,16 +1633,21 @@ function PreviewPane({
   };
 
   const handleExportJpgBatch = async () => {
-    const bodyIndices = getJpgScopeIndices();
-    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     if (useV2Engine) {
-      await exportV2JpgPages(
-        bodyIndices.map(v2PhysicalIndexForBody),
-        bodyIndices.map((index) => index + 1),
-        false
-      );
+      // "No selection" = every body page of the CURRENT canonical layout (not
+      // the possibly-debounced LEGACY list); a selection is exported exactly.
+      await exportV2JpgPages((sequence) => {
+        const scope = resolveJpgPageIndices(bodyPageCount(sequence), selected);
+        if (exportBlockedByUnresolvedImages(scope)) return null;
+        return {
+          physicalIndices: scope.map((index) => physicalIndexForBodyIndex(sequence, index)),
+          filePageNumbers: scope.map(bodyPageNumber),
+        };
+      }, false);
       return;
     }
+    const bodyIndices = getJpgScopeIndices();
+    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     const scopeIndices = bodyIndices;
     ensureExportMount(scopeIndices, false);
     const items = buildSelectedPageItems(scopeIndices);
@@ -1626,16 +1672,21 @@ function PreviewPane({
   };
 
   const handleExportZip = async () => {
-    const bodyIndices = getJpgScopeIndices();
-    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     if (useV2Engine) {
-      await exportV2JpgPages(
-        bodyIndices.map(v2PhysicalIndexForBody),
-        bodyIndices.map((index) => index + 1),
-        true
-      );
+      // "No selection" = every body page of the CURRENT canonical layout (not
+      // the possibly-debounced LEGACY list); a selection is exported exactly.
+      await exportV2JpgPages((sequence) => {
+        const scope = resolveJpgPageIndices(bodyPageCount(sequence), selected);
+        if (exportBlockedByUnresolvedImages(scope)) return null;
+        return {
+          physicalIndices: scope.map((index) => physicalIndexForBodyIndex(sequence, index)),
+          filePageNumbers: scope.map(bodyPageNumber),
+        };
+      }, true);
       return;
     }
+    const bodyIndices = getJpgScopeIndices();
+    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     const scopeIndices = bodyIndices;
     ensureExportMount(scopeIndices, false);
     const items = buildSelectedPageItems(scopeIndices);
@@ -1718,6 +1769,17 @@ function PreviewPane({
       return;
     }
     if (exportBlockedByUnresolvedImages(indices)) return;
+    // Phase 3: in V2 the whole-book page count comes from the CURRENT canonical
+    // layout (what the PDF will actually contain), not the LEGACY page list.
+    let bodyPageCountForWarning = pages.length;
+    if (useV2Engine) {
+      try {
+        bodyPageCountForWarning = bodyPageCount((await v2Adapter.awaitComposition(currentCompositionInput())).document.pageSequence);
+      } catch (error: unknown) {
+        alert(error instanceof Error ? error.message : "V2 PDF export failed.");
+        return;
+      }
+    }
     // 全ページPDF: 奥付 ON なら含める。
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
@@ -1725,7 +1787,7 @@ function PreviewPane({
     const pending: PendingPdfExport = { indices, pdfFileName, includeColophonInPdf };
     const oddPageCheck = shouldWarnOddPageExport({
       scope: pdfScope,
-      bodyPageCount: pages.length,
+      bodyPageCount: bodyPageCountForWarning,
       includeColophon: includeColophonInPdf,
     });
     if (oddPageCheck) {
@@ -1743,10 +1805,10 @@ function PreviewPane({
       const perfStartedAt = performance.now();
       let perfPlanReadyAt = perfStartedAt;
       try {
-        const { font, plan } = await requireV2PublicationPlan();
+        const { bridge, font, plan } = await requireV2ExportPlan();
         perfPlanReadyAt = performance.now();
         const uniqueIndices = resolvePdfPhysicalIndices({
-          pageSequence: v2Adapter.bridge?.document.pageSequence,
+          pageSequence: bridge.document.pageSequence,
           planLength: plan.length,
           scope: pdfScope,
           bodyIndices: indices,
@@ -2162,11 +2224,8 @@ function PreviewPane({
     setInsertingImageIndex(index);
     try {
       const dataUrl = isPsd ? await convertPsdToPngDataUrl(file) : await readFileAsDataUrl(file);
-      const { widthMm, heightMm } = await fitImageToMm(
-        dataUrl,
-        layout.textAreaWidthMm * 0.9,
-        layout.textAreaHeightMm * 0.6
-      );
+      const insertBox = imageMaxBoxForTextArea(layout.textAreaWidthMm, layout.textAreaHeightMm);
+      const { widthMm, heightMm } = await fitImageToMm(dataUrl, insertBox.maxWidthMm, insertBox.maxHeightMm);
       const id = crypto.randomUUID();
       onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
       // Appended at this page's own source-range end (before any trailing

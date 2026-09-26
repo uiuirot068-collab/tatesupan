@@ -30,6 +30,7 @@ import {
 } from "@/lib/webFooterBranding";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
+import { fitImageToBox, imageMaxBoxForTextArea } from "@/lib/imageGeometry";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -538,8 +539,8 @@ function PageCard({
   // current page's usable area is smaller than that base size; switching to
   // a paper with more room again naturally displays the base size, with
   // nothing ever written back to content.
-  const maxImageWidthMm = layout.textAreaWidthMm * 0.9;
-  const maxImageHeightMm = layout.textAreaHeightMm * 0.6;
+  // Shared 挿絵 cap box (lib/imageGeometry.ts) — the same one insertion and V2 export use.
+  const { maxWidthMm: maxImageWidthMm, maxHeightMm: maxImageHeightMm } = imageMaxBoxForTextArea(layout.textAreaWidthMm, layout.textAreaHeightMm);
 
   // tategaki.ts が確定した論理行（各 <= charsPerLine 文字）をそのまま行要素
   // として描画する。ページ側で二重に linesPerPage/linesPerColumn を超えて
@@ -2390,11 +2391,7 @@ function getDisplayImageSize(
   maxWidthMm: number,
   maxHeightMm: number
 ): { widthMm: number; heightMm: number } {
-  if (maxWidthMm <= 0 || maxHeightMm <= 0 || token.widthMm <= 0 || token.heightMm <= 0) {
-    return { widthMm: token.widthMm, heightMm: token.heightMm };
-  }
-  const displayScale = Math.min(1, maxWidthMm / token.widthMm, maxHeightMm / token.heightMm);
-  return { widthMm: token.widthMm * displayScale, heightMm: token.heightMm * displayScale };
+  return fitImageToBox({ widthMm: token.widthMm, heightMm: token.heightMm }, { maxWidthMm, maxHeightMm });
 }
 
 const NO_UNRESOLVED_IMAGES: ReadonlySet<string> = new Set();
