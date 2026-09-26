@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://rgvqquuthovqjqfogfra.supabase.co
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
