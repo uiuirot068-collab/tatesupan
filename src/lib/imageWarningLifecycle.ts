@@ -32,6 +32,21 @@ export interface ImageWarningState {
 
 export const EMPTY_IMAGE_WARNING_STATE: ImageWarningState = { pending: {}, silenceUsed: new Set() };
 
+/** Acknowledgment state tagged with the document it belongs to (PreviewPane stores it this way). */
+export interface ScopedImageWarningState {
+  readonly scope: string;
+  readonly state: ImageWarningState;
+}
+
+/**
+ * The warnings of the OPEN document. A store written under another document's
+ * scope reads as empty, so switching documents never shows (or blocks export
+ * with) the previous document's warnings, and needs no reset effect.
+ */
+export function imageWarningsForScope(store: ScopedImageWarningState, scope: string): ImageWarningState {
+  return store.scope === scope ? store.state : EMPTY_IMAGE_WARNING_STATE;
+}
+
 export interface ReconcileInput {
   /** Technically unresolved image ids (cannot be rendered in this browser). */
   unresolvedIds: ReadonlySet<string>;

@@ -29,7 +29,8 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
-import { contentHasImages, mergeCloudRestoreWithLocalOriginals, referencedImageIds, technicallyUnresolvedImages } from "@/lib/cloudImageSync";
+import { contentHasImages, mergeCloudRestoreWithLocalOriginals, referencedImageIds, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
+import { DocumentEpoch } from "@/lib/documentScope";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -347,6 +348,20 @@ export default function TategakiEditor({
   // がPreviewPaneと同じ選択状態を参照できるよう、ここに持ち上げてcontrolledにする。
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
+  // Phase 6: this component is not remounted when the open document changes
+  // (see lib/documentScope.ts). `beginDocumentSwitch` is the ONE place that
+  // invalidates in-flight handler work for the previous document and clears
+  // the state that only ever describes the previous document: its technical
+  // image breaks (a document without images never re-polls, so they would
+  // otherwise stay on screen) and its page selection (indices into ITS pages).
+  const [documentEpoch] = useState(() => new DocumentEpoch());
+  const beginDocumentSwitch = useCallback(() => {
+    documentEpoch.advance();
+    setUnresolvedCloudImages(null);
+    setImageWarningBaselineIds(new Set());
+    setSelectedPages(new Set());
+  }, [documentEpoch]);
+
   const hasLoadedRef = useRef(false);
   // Tracks which document's data is currently reflected in state, so the
   // autosave effect can refuse to write if a document switch is in flight.
@@ -393,7 +408,9 @@ export default function TategakiEditor({
   };
 
   const importTxt = async (file: File) => {
+    const isSameDocument = documentEpoch.capture();
     const replacement = await readLocalTxtFile(file, { newlines: "lf" });
+    if (!isSameDocument()) return;
     if (content.length > 0 && !window.confirm("現在の原稿をTXTの内容で置き換えます。続けますか？")) return;
     const imageIds = Array.from(replacement.matchAll(/【IMG:([^:：】]+):/g), (match) => match[1]);
     setContent(replacement);
@@ -406,7 +423,9 @@ export default function TategakiEditor({
   };
 
   const importDocx = async (file: File) => {
+    const isSameDocument = documentEpoch.capture();
     const result = await readDocxFile(file);
+    if (!isSameDocument()) return;
     if (content.length > 0 && !window.confirm("現在の原稿をDOCXから取り込んだ本文で置き換えます。元のDOCXは変更されません。続けますか？")) return;
     setContent(result.text);
     setImages({});
@@ -438,6 +457,7 @@ export default function TategakiEditor({
     // docId/content pair while this document switch is in flight.
     hasLoadedRef.current = false;
     setSaveStatus("loading");
+    beginDocumentSwitch();
 
     async function run() {
       if (demoMode) {
@@ -503,6 +523,13 @@ export default function TategakiEditor({
 
       const imageRecords = await loadAllImages();
       if (cancelled) return;
+      // A local document is never linked to a cloud project or image manifest
+      // when it is opened (same as a fresh mount): drop the previous cloud
+      // project's id — クラウドに保存 would otherwise overwrite THAT project
+      // with this document — and any technical break its manifest poll
+      // reported while this load was in flight.
+      setCurrentProjectId(null);
+      setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
 
       // Reset every field to the newly-loaded document's data (or blank
@@ -533,7 +560,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, cloudProjectId, demoMode, documentId, router, setSettings]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentId, router, setSettings]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -607,6 +634,10 @@ export default function TategakiEditor({
       alert("画像ファイルを選択してください。");
       return;
     }
+    // Phase 6: the image pool and IndexedDB are shared by every document, so
+    // the repaired image itself is always kept; only THIS document's technical
+    // state and toast are skipped if another document was opened meanwhile.
+    const isSameDocument = documentEpoch.capture();
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result ?? ""));
@@ -620,29 +651,28 @@ export default function TategakiEditor({
       layerOrder: imageLayerOrder[id],
     };
     const nextImages = { ...images, [id]: dataUrl };
-    setImages(nextImages);
+    // Functional update: `images` above is this handler's render-time snapshot,
+    // and another image may have been added while the file was being read.
+    setImages((prev) => ({ ...prev, [id]: dataUrl }));
     if (!isSampleDocument) await saveImage(record);
 
     if (currentProjectId) {
       const sync = await syncManuscriptImages({ projectId: currentProjectId, content, localImages: nextImages });
       if (sync.ok || sync.noImages) {
         const status = await getUnresolvedManuscriptImages(currentProjectId, content);
+        if (!isSameDocument()) return;
         setUnresolvedCloudImages(technicallyUnresolvedImages(status, nextImages));
         showToast("画像を再配置し、クラウドの保存期限を更新しました");
       } else {
-        setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
+        if (isSameDocument()) setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
         alert("画像はこのブラウザに再配置しましたが、クラウド同期に失敗しました。もう一度「クラウドに保存」をお試しください。");
       }
     } else {
-      setUnresolvedCloudImages((prev) => {
-        if (!prev) return null;
-        const missing = prev.missing.filter((imageId) => imageId !== id);
-        const unmanifested = prev.unmanifested.filter((imageId) => imageId !== id);
-        return missing.length || unmanifested.length ? { missing, unmanifested } : null;
-      });
+      if (!isSameDocument()) return;
+      setUnresolvedCloudImages((prev) => withoutUnresolvedImageIds(prev, new Set([id])));
       showToast("画像を再配置しました");
     }
-  }, [content, currentProjectId, imageLayerOrder, images, isSampleDocument]);
+  }, [content, currentProjectId, documentEpoch, imageLayerOrder, images, isSampleDocument]);
 
   // Phase 4: called after the user's 通知解除 was accepted (PreviewPane refuses
   // it while an image is still broken). Clears only TECHNICAL state that is no
@@ -652,12 +682,7 @@ export default function TategakiEditor({
     const referenced = new Set(referencedImageIds(content));
     const clearable = new Set(ids.filter((id) => images[id] || !referenced.has(id)));
     if (clearable.size === 0) return;
-    setUnresolvedCloudImages((prev) => {
-      if (!prev) return null;
-      const missing = prev.missing.filter((id) => !clearable.has(id));
-      const unmanifested = prev.unmanifested.filter((id) => !clearable.has(id));
-      return missing.length || unmanifested.length ? { missing, unmanifested } : null;
-    });
+    setUnresolvedCloudImages((prev) => withoutUnresolvedImageIds(prev, clearable));
   }, [content, images]);
 
   // Persists a front/back stacking swap for a small group of images (see
@@ -737,6 +762,12 @@ export default function TategakiEditor({
 
   const handleSave = async () => {
     if (isSampleDocument) return;
+    // Phase 6: 保存作品一覧 stays usable while this save is in flight. The save
+    // itself (this document's title/content, sent to this document's project)
+    // still completes, but if another document was opened meanwhile its result
+    // must not re-link the NEW document to this project id or overwrite its
+    // technical image state.
+    const isSameDocument = documentEpoch.capture();
     setIsSaving(true);
     try {
       // Existing cloud projects can always be overwritten regardless of the
@@ -778,7 +809,7 @@ export default function TategakiEditor({
         return;
       }
 
-      if (!currentProjectId) setCurrentProjectId(result.data.id);
+      if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
@@ -788,7 +819,7 @@ export default function TategakiEditor({
         localImages: images,
       });
       if (sync.ok || sync.noImages) {
-        setUnresolvedCloudImages(null);
+        if (isSameDocument()) setUnresolvedCloudImages(null);
         alert(
           sync.noImages
             ? "クラウドに保存しました！"
@@ -797,7 +828,7 @@ export default function TategakiEditor({
       } else {
         // 本文は保存済みだが画像同期は未完了。既存の有効なクラウド画像・期限は
         // 壊していない。ユーザーへ明示し、再保存を促す（サイレント欠損を防ぐ）。
-        setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
+        if (isSameDocument()) setUnresolvedCloudImages({ missing: [], unmanifested: sync.unresolved });
         alert(
           "本文は保存しましたが、挿絵の一部をクラウドへ同期できませんでした。\n" +
             "元の画像がこの端末にあることを確認して、もう一度「クラウドに保存」してください。\n" +
@@ -810,6 +841,7 @@ export default function TategakiEditor({
   };
 
   const handleSelectProject = (project: Project) => {
+    beginDocumentSwitch();
     applyCloudProject(project);
   };
 

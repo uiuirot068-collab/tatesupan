@@ -105,9 +105,10 @@ import {
   dismissImageWarnings,
   EMPTY_IMAGE_WARNING_STATE,
   imageWarningPages,
+  imageWarningsForScope,
   imageWarningStatus,
   reconcileImageWarnings,
-  type ImageWarningState,
+  type ScopedImageWarningState,
 } from "@/lib/imageWarningLifecycle";
 
 const NO_UNRESOLVED_IMAGE_IDS: ReadonlySet<string> = new Set();
@@ -646,11 +647,11 @@ function PreviewPane({
   }, [pages, v2PageModel]);
   // Stored with its document scope: switching documents yields a fresh state
   // without an extra effect.
-  const [imageWarningStore, setImageWarningStore] = useState<{ scope: string; state: ImageWarningState }>(() => ({
+  const [imageWarningStore, setImageWarningStore] = useState<ScopedImageWarningState>(() => ({
     scope: imageWarningScope,
     state: EMPTY_IMAGE_WARNING_STATE,
   }));
-  const imageWarnings = imageWarningStore.scope === imageWarningScope ? imageWarningStore.state : EMPTY_IMAGE_WARNING_STATE;
+  const imageWarnings = imageWarningsForScope(imageWarningStore, imageWarningScope);
   const imageWarningEntries = useMemo(() => imageWarningPages(imageWarnings), [imageWarnings]);
   // Pending warnings (last-known pages) ∪ technically unresolved pages (covers
   // the render before the reconcile effect below has recorded a new break).
@@ -715,6 +716,13 @@ function PreviewPane({
   // Source-editing actions (reorder, image insertion) splice `content` by
   // these ranges; in V2 mode they must describe the CURRENT content.
   const listRangesAreCurrent = !v2PageModel || v2PageModel.sourceContent === content;
+  // Phase 6: `content` is the Editor's DEBOUNCED snapshot, and an async
+  // handler's closure is the render it started in. The live manuscript can be
+  // newer (keystrokes inside the debounce, typing during an image decode, or
+  // another document opened meanwhile); a splice of the old snapshot would
+  // silently drop that newer text. Range-based splices therefore require the
+  // snapshot to still BE the live text; marker-based splices start from it.
+  const readLiveContent = () => getLatestContent?.() ?? content;
   const paragraphStarts = useMemo(() => computePageParagraphStarts(listPages), [listPages]);
 
   // [TateSpun perf] PageCard.tsx側のReact.memoコンパレータへ渡す、ページ
@@ -2175,7 +2183,7 @@ function PreviewPane({
 
   const applyReorder = (nextPages: TategakiPage[], nextSelected: Set<number>) => {
     if (!onContentChange) return;
-    if (!listRangesAreCurrent) {
+    if (!listRangesAreCurrent || readLiveContent() !== content) {
       alert(LAYOUT_UPDATING_MESSAGE);
       return;
     }
@@ -2317,16 +2325,19 @@ function PreviewPane({
       const dataUrl = isPsd ? await convertPsdToPngDataUrl(file) : await readFileAsDataUrl(file);
       const insertBox = imageMaxBoxForTextArea(layout.textAreaWidthMm, layout.textAreaHeightMm);
       const { widthMm, heightMm } = await fitImageToMm(dataUrl, insertBox.maxWidthMm, insertBox.maxHeightMm);
-      const id = crypto.randomUUID();
-      onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
       // Appended at this page's own source-range end (before any trailing
       // 【改ページ】 marker, per `computePageSourceRanges`) — the same
       // insertion point the old tokens-append + detokenize approach
       // produced, just without reconstructing the rest of the page's text.
-      if (!listRangesAreCurrent) {
+      // Checked AFTER the decode awaits (Phase 6): the ranges and `content`
+      // below are from the click, and are only valid if nothing moved since.
+      // Checked before the image is stored, so a refusal leaves no orphan.
+      if (!listRangesAreCurrent || readLiveContent() !== content) {
         alert(LAYOUT_UPDATING_MESSAGE);
         return;
       }
+      const id = crypto.randomUUID();
+      onImageAdd?.({ id, dataUrl, createdAt: Date.now() });
       // Phase 5 (V2 mode): the end of this page's V2 source range. A new image
       // that no longer fits on a full page flows to the next page (V2 rule).
       const insertAt = listSourceRanges[index].end;
@@ -2352,17 +2363,19 @@ function PreviewPane({
   // reversible on the IMG marker / document content.
   const handleImagePositionChange = () => (imageId: string, position: ImagePosition) => {
     if (!onContentChange) return;
-    const match = findImageTokenRange(content, imageId);
+    const source = readLiveContent();
+    const match = findImageTokenRange(source, imageId);
     if (!match) return;
     const marker = formatImageMarker({ ...match.token, position });
-    onContentChange(content.slice(0, match.start) + marker + content.slice(match.end));
+    onContentChange(source.slice(0, match.start) + marker + source.slice(match.end));
   };
 
   const handleImageDelete = () => (imageId: string) => {
     if (!onContentChange) return;
-    const match = findImageTokenRange(content, imageId);
+    const source = readLiveContent();
+    const match = findImageTokenRange(source, imageId);
     if (!match) return;
-    onContentChange(content.slice(0, match.start) + content.slice(match.end));
+    onContentChange(source.slice(0, match.start) + source.slice(match.end));
     onImageDelete?.(imageId);
   };
 

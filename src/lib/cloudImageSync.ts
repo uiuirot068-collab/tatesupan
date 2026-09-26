@@ -416,6 +416,22 @@ export function technicallyUnresolvedImages(
 }
 
 /**
+ * The technical state minus `ids` (repaired in this browser, or no longer
+ * referenced). Returns null when nothing is left, like
+ * `technicallyUnresolvedImages`; returns `state` itself when nothing changed.
+ */
+export function withoutUnresolvedImageIds(
+  state: CloudImageResolution | null,
+  ids: ReadonlySet<string>
+): CloudImageResolution | null {
+  if (!state) return null;
+  const missing = state.missing.filter((id) => !ids.has(id));
+  const unmanifested = state.unmanifested.filter((id) => !ids.has(id));
+  if (missing.length === state.missing.length && unmanifested.length === state.unmanifested.length) return state;
+  return missing.length > 0 || unmanifested.length > 0 ? { missing, unmanifested } : null;
+}
+
+/**
  * Opening a cloud project: images restored from the cloud copy win (they may
  * be a newer same-ID replacement made on another device); any referenced image
  * the cloud could not provide falls back to this browser's local original.
