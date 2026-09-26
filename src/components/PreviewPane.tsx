@@ -447,6 +447,10 @@ interface PreviewPaneProps {
   onSettingsChange?: (settings: PageSettings) => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
+  /** Link切れ画像を既存imageIdのまま差し替える。 */
+  onImageReplace?: (imageId: string, file: File) => void | Promise<void>;
+  /** 手動復旧後など、実体が戻っている警告だけを明示解除する。 */
+  onDismissImageWarnings?: (imageIds: string[]) => void;
   onImageLayerChange?: (updates: { id: string; layerOrder: number }[]) => void;
   /** Character index of the editor caret into `content`; when it changes, the matching page scrolls into view. */
   cursorIndex?: number | null;
@@ -507,6 +511,8 @@ function PreviewPane({
   onSettingsChange,
   onImageAdd,
   onImageDelete,
+  onImageReplace,
+  onDismissImageWarnings,
   onImageLayerChange,
   cursorIndex,
   onNavigateToSource,
@@ -558,6 +564,45 @@ function PreviewPane({
     layout.linesPerColumn,
     settings.columnCount,
   ]);
+
+  const unresolvedImagePages = useMemo(() => {
+    if (!unresolvedImageIds || unresolvedImageIds.size === 0) return [] as {
+      pageIndex: number;
+      pageNumber: number;
+      imageIds: string[];
+    }[];
+    return pages.flatMap((page, pageIndex) => {
+      const imageIds = page.tokens
+        .filter((token) => token.type === "image" && unresolvedImageIds.has(token.id))
+        .map((token) => token.id);
+      return imageIds.length > 0 ? [{ pageIndex, pageNumber: pageIndex + 1, imageIds }] : [];
+    });
+  }, [pages, unresolvedImageIds]);
+
+  const unresolvedPageIndexSet = useMemo(
+    () => new Set(unresolvedImagePages.map((entry) => entry.pageIndex)),
+    [unresolvedImagePages]
+  );
+  const [imageWarningOpen, setImageWarningOpen] = useState(false);
+  const [imageBreakNoticePages, setImageBreakNoticePages] = useState<number[] | null>(null);
+  const [pendingReplacementId, setPendingReplacementId] = useState<string | null>(null);
+  const replacementInputRef = useRef<HTMLInputElement | null>(null);
+  const announcedBrokenIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentIds = new Set<string>();
+    unresolvedImagePages.forEach((entry) => entry.imageIds.forEach((id) => currentIds.add(id)));
+    const newlyBrokenIds = [...currentIds].filter((id) => !announcedBrokenIdsRef.current.has(id));
+    for (const known of [...announcedBrokenIdsRef.current]) {
+      if (!currentIds.has(known)) announcedBrokenIdsRef.current.delete(known);
+    }
+    if (newlyBrokenIds.length === 0) return;
+    newlyBrokenIds.forEach((id) => announcedBrokenIdsRef.current.add(id));
+    const pagesForNotice = unresolvedImagePages
+      .filter((entry) => entry.imageIds.some((id) => newlyBrokenIds.includes(id)))
+      .map((entry) => entry.pageNumber);
+    setImageBreakNoticePages([...new Set(pagesForNotice)].sort((a, b) => a - b));
+  }, [unresolvedImagePages]);
 
   const pageSourceRanges = useMemo(() => {
     const result = computePageSourceRanges(deferredContent, {
@@ -1388,11 +1433,22 @@ function PreviewPane({
     return computePrintJpgPixelRatio(trimEquivalentWidth, trimEquivalentHeight);
   };
 
-  // TSP-LOOP-007: 期限切れ/欠損/未解決の挿絵が1件でもあれば書き出しを完全ブロック。
-  // 「警告だけ出して続行」ではなく、OK を押しても開始させない。
-  const exportBlockedByUnresolvedImages = (): boolean => {
-    if (!blockExportForUnresolvedImages) return false;
-    alert(`${CLOUD_IMAGE_EXPORT_BLOCK_TITLE}\n\n${CLOUD_IMAGE_EXPORT_BLOCK_BODY}`);
+  // 画像切れは「作品全体」ではなく今回の出力対象ページだけで判定する。
+  // 例: 12Pだけ切れていても5P単体JPGは許可する。12Pを含む出力だけfail closed。
+  const exportBlockedByUnresolvedImages = (targetPageIndices: number[]): boolean => {
+    if (!blockExportForUnresolvedImages || targetPageIndices.length === 0) return false;
+    const affected = [...new Set(
+      targetPageIndices
+        .filter((index) => unresolvedPageIndexSet.has(index))
+        .map((index) => index + 1)
+    )].sort((a, b) => a - b);
+    if (affected.length === 0) return false;
+    alert(
+      `${CLOUD_IMAGE_EXPORT_BLOCK_TITLE}\n\n` +
+      `${affected.join("P・")}Pに画像リンク切れがあります。\n` +
+      "画像を再配置するか、不要な画像を原稿から削除してください。\n" +
+      "フッターの「⚠️画像切れ」から対象ページを確認できます。"
+    );
     return true;
   };
 
@@ -1463,7 +1519,6 @@ function PreviewPane({
   };
 
   const handleExportJpg = async () => {
-    if (exportBlockedByUnresolvedImages()) return;
     if (pages.length === 0) return;
     let index: number;
     if (selected.size === 1) {
@@ -1475,6 +1530,7 @@ function PreviewPane({
     } else {
       index = activePageIndex ?? 0;
     }
+    if (exportBlockedByUnresolvedImages([index])) return;
     if (useV2Engine) {
       const physicalIndex = v2PhysicalIndexForBody(index);
       await exportV2JpgPages([physicalIndex], [index + 1], false);
@@ -1504,7 +1560,6 @@ function PreviewPane({
 
   /** 奥付ページ単体を JPG 書き出し（本文ページと同じ capture pipeline を使う）。 */
   const handleExportColophonJpg = async () => {
-    if (exportBlockedByUnresolvedImages()) return;
     if (useV2Engine) {
       const physicalIndex = v2Adapter.bridge?.document.pageSequence.findIndex(
         (pageRef) => pageRef.kind === "colophon"
@@ -1535,9 +1590,9 @@ function PreviewPane({
   };
 
   const handleExportJpgBatch = async () => {
-    if (exportBlockedByUnresolvedImages()) return;
+    const bodyIndices = getJpgScopeIndices();
+    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     if (useV2Engine) {
-      const bodyIndices = getJpgScopeIndices();
       await exportV2JpgPages(
         bodyIndices.map(v2PhysicalIndexForBody),
         bodyIndices.map((index) => index + 1),
@@ -1545,7 +1600,7 @@ function PreviewPane({
       );
       return;
     }
-    const scopeIndices = getJpgScopeIndices();
+    const scopeIndices = bodyIndices;
     ensureExportMount(scopeIndices, false);
     const items = buildSelectedPageItems(scopeIndices);
     if (items.length === 0) { releaseExportMount(); return; }
@@ -1569,9 +1624,9 @@ function PreviewPane({
   };
 
   const handleExportZip = async () => {
-    if (exportBlockedByUnresolvedImages()) return;
+    const bodyIndices = getJpgScopeIndices();
+    if (exportBlockedByUnresolvedImages(bodyIndices)) return;
     if (useV2Engine) {
-      const bodyIndices = getJpgScopeIndices();
       await exportV2JpgPages(
         bodyIndices.map(v2PhysicalIndexForBody),
         bodyIndices.map((index) => index + 1),
@@ -1579,7 +1634,7 @@ function PreviewPane({
       );
       return;
     }
-    const scopeIndices = getJpgScopeIndices();
+    const scopeIndices = bodyIndices;
     ensureExportMount(scopeIndices, false);
     const items = buildSelectedPageItems(scopeIndices);
     if (items.length === 0) { releaseExportMount(); return; }
@@ -1652,7 +1707,6 @@ function PreviewPane({
   };
 
   const performDownloadPdf = async () => {
-    if (exportBlockedByUnresolvedImages()) return;
     if (layout.paper.isPx) return;
     if (pdfFilenameStem.length === 0) return; // ボタン側でも無効化するが、二重の安全網。
     const pdfFileName = buildPdfFileNameFromStem(pdfFilenameStem);
@@ -1661,6 +1715,7 @@ function PreviewPane({
       alert("書き出すページを選択してください。");
       return;
     }
+    if (exportBlockedByUnresolvedImages(indices)) return;
     // 全ページPDF: 奥付 ON なら含める。
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
@@ -2235,6 +2290,27 @@ function PreviewPane({
   };
   const stableNavigateToSource = useStableIndexedCallback(navigateToSource);
 
+  const scrollToPreviewPage = (bodyIndex: number) => {
+    const pageEl = pageElementsRef.current.get(bodyIndex);
+    if (pageEl) {
+      pageEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      return;
+    }
+    const spreadIndex = spreadIndexForBodyIndex(bodyIndex);
+    if (spreadIndex !== null) {
+      spreadElementsRef.current.get(spreadIndex)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "center",
+      });
+    }
+  };
+
+  const requestImageReplacement = (imageId: string) => {
+    setPendingReplacementId(imageId);
+    replacementInputRef.current?.click();
+  };
+
   // TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: ONE list for both the desktop
   // dropdown below and the phone Editor-view export sheet. `run` is always one
   // of the handlers defined above -- the only place ids are bound to them --
@@ -2672,6 +2748,102 @@ function PreviewPane({
         </div>
         </div>
       </div>
+
+      {unresolvedImagePages.length > 0 && (
+        <div
+          data-image-link-warning-footer=""
+          className="relative flex flex-none items-center justify-end border-t border-amber-300/50 bg-amber-50 px-2 py-1.5 text-xs text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <button
+            type="button"
+            onClick={() => setImageWarningOpen((open) => !open)}
+            className="rounded-full border border-amber-500/50 bg-white px-3 py-1 font-semibold shadow-sm hover:bg-amber-100 dark:bg-neutral-900 dark:hover:bg-amber-950"
+          >
+            {unresolvedImagePages.length === 1 ? "⚠️ 画像切れ" : "⚠️ 複数ページ画像切れ"}
+          </button>
+          {imageWarningOpen && (
+            <div className="absolute bottom-full right-2 z-50 mb-2 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-amber-300 bg-base p-3 shadow-xl dark:border-amber-700">
+              <p className="mb-2 font-semibold text-ink">画像リンク切れ</p>
+              <p className="mb-3 text-[11px] leading-relaxed text-ink/65">
+                画像を再配置するか、不要な画像を原稿から削除してください。
+              </p>
+              <div className="max-h-56 space-y-2 overflow-auto">
+                {unresolvedImagePages.map((entry) => (
+                  <div key={entry.pageIndex} className="rounded border border-ink/10 p-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollToPreviewPage(entry.pageIndex)}
+                      className="mb-2 font-semibold text-ink underline-offset-2 hover:underline"
+                    >
+                      {entry.pageNumber}Pへ移動
+                    </button>
+                    <div className="space-y-1">
+                      {entry.imageIds.map((imageId, imageIndex) => (
+                        <div key={imageId} className="flex flex-wrap items-center gap-1.5">
+                          <span className="mr-auto text-[11px] text-ink/60">
+                            画像{entry.imageIds.length > 1 ? imageIndex + 1 : ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => requestImageReplacement(imageId)}
+                            className="rounded border border-ink/20 px-2 py-1 text-[11px] hover:bg-ink/5"
+                          >
+                            画像を差し替える
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDismissImageWarnings?.(entry.imageIds)}
+                      className="mt-2 text-[11px] text-ink/50 underline hover:text-ink"
+                    >
+                      通知解除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <input
+            ref={replacementInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (!file || !pendingReplacementId) return;
+              void onImageReplace?.(pendingReplacementId, file);
+              setPendingReplacementId(null);
+            }}
+          />
+        </div>
+      )}
+
+      {imageBreakNoticePages && imageBreakNoticePages.length > 0 && (
+        <ViewportModal
+          title="⚠️ 画像のリンクが切れました"
+          titleId="image-link-broken-title"
+          closeLabel="画像リンク切れのお知らせを閉じる"
+          onClose={() => setImageBreakNoticePages(null)}
+          panelClassName="max-w-sm"
+          footer={(
+            <button
+              type="button"
+              onClick={() => setImageBreakNoticePages(null)}
+              className="rounded bg-ink px-3 py-1.5 text-xs font-semibold text-base"
+            >
+              閉じる
+            </button>
+          )}
+        >
+          <p className="text-sm leading-relaxed text-ink/75">
+            {imageBreakNoticePages.map((page) => `${page}P`).join("・")}の画像を読み込めなくなりました。
+            画像の再配置をおすすめします。閉じた後もフッターの「⚠️画像切れ」から確認できます。
+          </p>
+        </ViewportModal>
+      )}
 
       {/* TSP-PDF-GLOBAL-MODAL-AND-POST-NOTICE-CLEANUP-014B: application-level
           modal (portaled via ViewportModal, not a child of this pane's own
