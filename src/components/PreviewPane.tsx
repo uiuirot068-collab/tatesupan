@@ -91,6 +91,7 @@ import {
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 import { bodyPageCount, bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
+import { buildV2PreviewPageModel } from "@/lib/v2Bridge/previewPageModel";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
 import type { V2LayoutResult } from "@/lib/v2Bridge/composeV2Document";
 import { applyImageLayerOrder, decodeImageInBrowser, ExportPlanCache, grayscalePlanImages } from "@/lib/v2Bridge/exportPlan";
@@ -110,6 +111,7 @@ import {
 } from "@/lib/imageWarningLifecycle";
 
 const NO_UNRESOLVED_IMAGE_IDS: ReadonlySet<string> = new Set();
+const LAYOUT_UPDATING_MESSAGE = "プレビューのレイアウトを更新しています。表示が落ち着いてから、もう一度お試しください。";
 
 const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
@@ -599,12 +601,38 @@ function PreviewPane({
     settings.columnCount,
   ]);
 
+  const internalV2Beta = isV2BetaRendererEnabled();
+  // 2026-09-24 public RC: development continues to force V2 for reproducible
+  // QA, while production follows v2Rollout.ts. That rollout now defaults to
+  // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
+  const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
+  const v2Adapter = useV2PreviewAdapter(useV2Engine, {
+    content: deferredContent,
+    settings,
+    title,
+    images,
+  });
+  // Phase 5: in V2 mode the Preview PAGE LIST comes from the canonical V2
+  // layout (lib/v2Bridge/previewPageModel.ts) — page count, colophon slot,
+  // selection, export scope, image ownership / warning pages, caret→page,
+  // reorder and image insertion all read it, so they agree with the pages
+  // JPG/ZIP/PDF export. `listPages` / `listSourceRanges` are the LEGACY
+  // paginator's values in LEGACY mode (unchanged), and also while the first V2
+  // layout is still being composed or V2 failed (the V2 HOLD banner shows).
+  const v2PageModel = useMemo(
+    () => (useV2Engine && v2Adapter.bridge && v2Adapter.input ? buildV2PreviewPageModel(v2Adapter.bridge, v2Adapter.input.content) : null),
+    [useV2Engine, v2Adapter.bridge, v2Adapter.input]
+  );
+  const listPages: TategakiPage[] = v2PageModel ? v2PageModel.overlayPages : pages;
+
   // Phase 4 broken-image warnings (lib/imageWarningLifecycle.ts): the TECHNICAL
   // state (`unresolvedImageIds`, owned by the Editor) and the user's
   // ACKNOWLEDGMENT state (pending warnings here) are separate. A repaired or
   // deleted image keeps its footer entry and its page export block until 通知解除.
   const technicalUnresolvedIds = unresolvedImageIds ?? NO_UNRESOLVED_IMAGE_IDS;
   const imagePageIndicesById = useMemo(() => {
+    // Phase 5: V2 flow ownership (a boundary image belongs to the page it lands on).
+    if (v2PageModel) return v2PageModel.imagePageIndicesById;
     const byId = new Map<string, number[]>();
     pages.forEach((page, pageIndex) => {
       for (const token of page.tokens) {
@@ -615,7 +643,7 @@ function PreviewPane({
       }
     });
     return byId;
-  }, [pages]);
+  }, [pages, v2PageModel]);
   // Stored with its document scope: switching documents yields a fresh state
   // without an extra effect.
   const [imageWarningStore, setImageWarningStore] = useState<{ scope: string; state: ImageWarningState }>(() => ({
@@ -682,7 +710,12 @@ function PreviewPane({
 
   // 会話文（「」などで始まる段落）以外の地文だけを字下げ対象にするため、
   // ページをまたいで中断された段落の先頭には適用しないよう事前に判定する。
-  const paragraphStarts = useMemo(() => computePageParagraphStarts(pages), [pages]);
+  // Phase 5: raw source ranges of the Preview list (V2 layout in V2 mode).
+  const listSourceRanges = v2PageModel ? v2PageModel.bodySourceRanges : pageSourceRanges;
+  // Source-editing actions (reorder, image insertion) splice `content` by
+  // these ranges; in V2 mode they must describe the CURRENT content.
+  const listRangesAreCurrent = !v2PageModel || v2PageModel.sourceContent === content;
+  const paragraphStarts = useMemo(() => computePageParagraphStarts(listPages), [listPages]);
 
   // [TateSpun perf] PageCard.tsx側のReact.memoコンパレータへ渡す、ページ
   // ごとの軽量content signature。`pages`の各要素はpaginateTokensが呼ばれる
@@ -696,8 +729,8 @@ function PreviewPane({
   // cadence（debounce経由）でしか再計算されないため、1文字入力
   // ごとに毎回計算されるわけではない。
   const pageSignatures = useMemo(
-    () => pages.map((page) => detokenizeTategaki(page.tokens)),
-    [pages]
+    () => listPages.map((page) => detokenizeTategaki(page.tokens)),
+    [listPages]
   );
 
   // Maps each paginated page object back to its position in `pages` so
@@ -709,9 +742,9 @@ function PreviewPane({
   // them into a page's `tokens` array.
   const pageOriginalIndex = useMemo(() => {
     const map = new Map<TategakiPage, number>();
-    pages.forEach((page, i) => map.set(page, i));
+    listPages.forEach((page, i) => map.set(page, i));
     return map;
-  }, [pages]);
+  }, [listPages]);
 
   // TSP-LOOP-005: Presentation Page Sequence — 本文 `pages`（pagination 結果）
   // 自体は一切改変せず、その上に横書き奥付を1枚だけ差し込んだ「実際の作品
@@ -720,25 +753,51 @@ function PreviewPane({
   // Colophon を混ぜない（それらは今も `pages` = 本文だけを対象にする）。
   const showColophon = settings.colophon?.enabled === true;
   const colophonInsertion = useMemo(
-    () => resolveColophonInsertion(settings.colophon.pagePosition, pages.length),
-    [settings.colophon.pagePosition, pages.length]
+    () => resolveColophonInsertion(settings.colophon.pagePosition, listPages.length),
+    [settings.colophon.pagePosition, listPages.length]
   );
-  const presentationSequence = useMemo<PresentationItem[]>(() => {
+  // Phase 5: in V2 mode the physical order (and each item's physical page
+  // number) is Core's own `pageSequence`, exactly the PaintPlan order. The
+  // colophon is still shown with the LEGACY ColophonPageCard (the V2 Preview
+  // colophon painter is not production-ready — it paints vertically), placed
+  // and numbered where V2 put it; a multi-page V2 colophon shows as one card.
+  const presentation = useMemo<{ items: PresentationItem[]; physicalNumbers: number[] }>(() => {
+    if (v2PageModel && v2PageModel.bodyPageCount > 0) {
+      const items: PresentationItem[] = [];
+      const physicalNumbers: number[] = [];
+      for (const page of v2PageModel.pages) {
+        if (page.kind === "colophon") {
+          if (items[items.length - 1]?.kind === "colophon") continue;
+          items.push({ kind: "colophon" });
+        } else {
+          items.push({ kind: "body", bodyIndex: page.bodyIndex! });
+        }
+        physicalNumbers.push(page.physicalPageNumber);
+      }
+      return { items, physicalNumbers };
+    }
     const seq: PresentationItem[] = [];
-    for (let i = 0; i < pages.length; i++) {
+    for (let i = 0; i < listPages.length; i++) {
       if (showColophon && i === colophonInsertion.precedingBodyPages) seq.push({ kind: "colophon" });
       seq.push({ kind: "body", bodyIndex: i });
     }
-    if (showColophon && colophonInsertion.precedingBodyPages >= pages.length) {
+    if (showColophon && colophonInsertion.precedingBodyPages >= listPages.length) {
       seq.push({ kind: "colophon" });
     }
-    return seq;
-  }, [pages.length, showColophon, colophonInsertion.precedingBodyPages]);
-  const colophonPhysicalPageNumber = colophonInsertion.precedingBodyPages + 1;
+    return { items: seq, physicalNumbers: seq.map((_, index) => physicalPageNumber(index)) };
+  }, [v2PageModel, listPages.length, showColophon, colophonInsertion.precedingBodyPages]);
+  const presentationSequence = presentation.items;
+  const colophonPresentationIndex = presentationSequence.findIndex((item) => item.kind === "colophon");
+  const colophonPhysicalPageNumber = colophonPresentationIndex >= 0
+    ? presentation.physicalNumbers[colophonPresentationIndex]
+    : colophonInsertion.precedingBodyPages + 1;
 
+  // Phase 5: ONE page-count report. V2 mode reports the canonical V2 list
+  // (LEGACY paginator only until the first V2 layout exists); the previous
+  // separate LEGACY + V2 effects raced (last writer won).
   useEffect(() => {
-    onBodyPageCountChange?.(pages.length);
-  }, [pages.length, onBodyPageCountChange]);
+    onBodyPageCountChange?.(listPages.length);
+  }, [listPages.length, onBodyPageCountChange]);
 
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads — Presentation Sequence 全体（奥付含む）
@@ -809,21 +868,10 @@ function PreviewPane({
     ? defaultSpreadMeasurement.height
     : canonicalPageHeightPx;
 
-  const internalV2Beta = isV2BetaRendererEnabled();
-  // 2026-09-24 public RC: development continues to force V2 for reproducible
-  // QA, while production follows v2Rollout.ts. That rollout now defaults to
-  // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
-  const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
   // TSP-LEGACY-PREVIEW-VIRTUALIZATION-001: renderer-agnostic now -- see the
   // doc comment on `shouldVirtualizePreview` itself for why the previous
   // V2-only gate was removed.
   const virtualizePreview = shouldVirtualizePreview(spreadGroups.length);
-  const v2Adapter = useV2PreviewAdapter(useV2Engine, {
-    content: deferredContent,
-    settings,
-    title,
-    images,
-  });
   // Phase 3: the exact source state an export click refers to.
   const currentCompositionInput = (): V2CompositionInput => ({
     content: getLatestContent?.() ?? content,
@@ -846,11 +894,6 @@ function PreviewPane({
       .map((pageRef, physicalIndex) => pageRef.kind === "body" ? v2Adapter.preview?.pages[physicalIndex] : undefined)
       .filter((page): page is NonNullable<typeof page> => page !== undefined);
   }, [v2Adapter.bridge, v2Adapter.preview]);
-  useEffect(() => {
-    if (useV2Engine && v2BodyPreviewPages.length > 0) {
-      onBodyPageCountChange?.(v2BodyPreviewPages.length);
-    }
-  }, [onBodyPageCountChange, useV2Engine, v2BodyPreviewPages.length]);
   // TSP-LOOP-021 §2: which page's ⋮ menu is open (bodyIndex), or null. Lifted
   // here so opening one closes any other, and so an outside pointerdown /
   // Escape closes it. UI-only, never persisted.
@@ -1255,8 +1298,8 @@ function PreviewPane({
   };
 
   const activePageIndex = useMemo(
-    () => (cursorIndex == null ? null : findPageIndexForCharIndex(pageSourceRanges, cursorIndex)),
-    [cursorIndex, pageSourceRanges]
+    () => (cursorIndex == null ? null : findPageIndexForCharIndex(listSourceRanges, cursorIndex)),
+    [cursorIndex, listSourceRanges]
   );
   const activePresentationIndex = useMemo(
     () => activePageIndex == null
@@ -1604,7 +1647,7 @@ function PreviewPane({
   };
 
   const handleExportJpg = async () => {
-    if (pages.length === 0) return;
+    if (listPages.length === 0) return;
     let index: number;
     if (selected.size === 1) {
       index = Array.from(selected)[0];
@@ -1807,7 +1850,7 @@ function PreviewPane({
     if (layout.paper.isPx) return;
     if (pdfFilenameStem.length === 0) return; // ボタン側でも無効化するが、二重の安全網。
     const pdfFileName = buildPdfFileNameFromStem(pdfFilenameStem);
-    const indices = pdfScope === "all" ? pages.map((_, i) => i) : getOrderedSelectedIndices();
+    const indices = pdfScope === "all" ? listPages.map((_, i) => i) : getOrderedSelectedIndices();
     if (pdfScope === "selected" && indices.length === 0) {
       alert("書き出すページを選択してください。");
       return;
@@ -2098,7 +2141,7 @@ function PreviewPane({
 
     const flushRun = () => {
       if (runStart === null || runEnd === null) return;
-      const text = content.slice(pageSourceRanges[runStart].start, pageSourceRanges[runEnd].end);
+      const text = content.slice(listSourceRanges[runStart].start, listSourceRanges[runEnd].end);
       // insertPageBreakMarker (not a bare PAGE_BREAK_MARKER push): segments
       // are joined with "" below, so an unpadded marker here could land
       // mid-line against whatever the neighboring segment contains and
@@ -2132,6 +2175,10 @@ function PreviewPane({
 
   const applyReorder = (nextPages: TategakiPage[], nextSelected: Set<number>) => {
     if (!onContentChange) return;
+    if (!listRangesAreCurrent) {
+      alert(LAYOUT_UPDATING_MESSAGE);
+      return;
+    }
     onContentChange(buildReorderedContent(nextPages));
     setSelected(nextSelected);
   };
@@ -2168,7 +2215,7 @@ function PreviewPane({
   };
 
   const moveBy = (direction: -1 | 1) => {
-    const { items, selected: nextSelected } = moveSelected(pages, selected, direction);
+    const { items, selected: nextSelected } = moveSelected(listPages, selected, direction);
     applyReorder(items, nextSelected);
   };
 
@@ -2184,19 +2231,19 @@ function PreviewPane({
   const movePageBy = (bodyIndex: number, direction: -1 | 1) => {
     if (!onContentChange) return;
     const target = bodyIndex + direction;
-    if (target < 0 || target >= pages.length) return;
+    if (target < 0 || target >= listPages.length) return;
     // `reorderByDrag` inserts the moving block immediately *before* the item
     // at `insertionIndex` (original indices): −1 → before the previous page,
     // +1 → before the page two slots ahead (i.e. after the next page).
     const insertionIndex = direction === -1 ? bodyIndex - 1 : bodyIndex + 2;
-    const nextPages = reorderByDrag(pages, new Set([bodyIndex]), insertionIndex);
+    const nextPages = reorderByDrag(listPages, new Set([bodyIndex]), insertionIndex);
     applyReorder(nextPages, new Set([target]));
     setOpenPageMenuIndex(null);
   };
 
   const clearSelection = () => setSelected(new Set());
 
-  const selectAll = () => setSelected(new Set(pages.map((_, i) => i)));
+  const selectAll = () => setSelected(new Set(listPages.map((_, i) => i)));
 
   const handleDragStart = (index: number) => (event: DragEvent) => {
     const movingSet = selected.has(index) ? selected : new Set([index]);
@@ -2229,11 +2276,11 @@ function PreviewPane({
     // reorderByDragが期待する「この元indexの要素の直前に挿入」semanticsに
     // 合わせて、before/afterを単一の挿入位置へ変換する。関数本体は無変更。
     const insertionIndex = dropPosition === "after" ? index + 1 : index;
-    const nextPages = reorderByDrag(pages, movingSet, insertionIndex);
+    const nextPages = reorderByDrag(listPages, movingSet, insertionIndex);
 
     // Re-derive selection: which final positions hold the moved pages.
     const movedCount = movingSet.size;
-    const restIndices = pages
+    const restIndices = listPages
       .map((_, i) => i)
       .filter((i) => !movingSet.has(i));
     let insertAt = restIndices.findIndex((i) => i >= insertionIndex);
@@ -2276,7 +2323,13 @@ function PreviewPane({
       // 【改ページ】 marker, per `computePageSourceRanges`) — the same
       // insertion point the old tokens-append + detokenize approach
       // produced, just without reconstructing the rest of the page's text.
-      const insertAt = pageSourceRanges[index].end;
+      if (!listRangesAreCurrent) {
+        alert(LAYOUT_UPDATING_MESSAGE);
+        return;
+      }
+      // Phase 5 (V2 mode): the end of this page's V2 source range. A new image
+      // that no longer fits on a full page flows to the next page (V2 rule).
+      const insertAt = listSourceRanges[index].end;
       const marker = formatImageMarker({ type: "image", id, widthMm, heightMm, position: "center" });
       const before = content.slice(0, insertAt);
       const after = content.slice(insertAt);
@@ -2386,7 +2439,7 @@ function PreviewPane({
   // in the ⋮ menu. v1 precision: the page's own source-range START (see the
   // `onNavigateToSource` prop's own doc) -- not an exact clicked-token offset.
   const navigateToSource = (bodyIndex: number) => () => {
-    const range = pageSourceRanges[bodyIndex];
+    const range = listSourceRanges[bodyIndex];
     if (!range || !onNavigateToSource) return;
     onNavigateToSource(range.start, range.start);
   };
@@ -2518,7 +2571,7 @@ function PreviewPane({
               <button
                 type="button"
                 onClick={selectAll}
-                disabled={pages.length === 0 || selected.size === pages.length}
+                disabled={listPages.length === 0 || selected.size === listPages.length}
                 className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 全選択
@@ -2539,7 +2592,7 @@ function PreviewPane({
               type="button"
               data-demo-target="export"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
-              disabled={isExporting || pages.length === 0}
+              disabled={isExporting || listPages.length === 0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isExporting && exportProgress
@@ -2589,7 +2642,7 @@ function PreviewPane({
           </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
-          {layout.paper.label} / 全 {pages.length} ページ
+          {layout.paper.label} / 全 {listPages.length} ページ
           {showColophon ? " ＋ 奥付1ページ" : ""} / 1ページ
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
@@ -2666,7 +2719,7 @@ function PreviewPane({
         <div
           ref={scaleContentRef}
           data-export-scale-root="true"
-          data-preview-total-pages={pages.length}
+          data-preview-total-pages={listPages.length}
           className="flex w-max h-max flex-col gap-6"
           style={{
             transform: `scale(${presentationScale})`,
@@ -2748,7 +2801,7 @@ function PreviewPane({
               }}
             >
               {displayGroup.map((presIndex) => {
-                const physicalPageNumber = presIndex + 1;
+                const physicalPageNumber = presentation.physicalNumbers[presIndex] ?? presIndex + 1;
                 const item = presentationSequence[presIndex];
                 if (!item) return null;
 
@@ -2781,7 +2834,7 @@ function PreviewPane({
                     key={`body-${bodyIndex}`}
                     physicalPageNumber={physicalPageNumber}
                     registerRef={stableRegisterPageElement(bodyIndex)}
-                    page={pages[bodyIndex]}
+                    page={listPages[bodyIndex]}
                     v2PreviewPage={useV2Engine ? v2BodyPreviewPages[bodyIndex] : undefined}
                     v2PreviewFontSizePx={useV2Engine ? v2Adapter.preview?.fontSizePx : undefined}
                     v2PreviewEnabled={useV2Engine}
@@ -2829,7 +2882,7 @@ function PreviewPane({
                       onNavigateToSource ? stableNavigateToSource(bodyIndex) : undefined
                     }
                     canMovePageBackward={canReorder && bodyIndex > 0}
-                    canMovePageForward={canReorder && bodyIndex < pages.length - 1}
+                    canMovePageForward={canReorder && bodyIndex < listPages.length - 1}
                   />
                 );
               })}
@@ -3004,7 +3057,7 @@ function PreviewPane({
           <div className="mb-3 flex flex-col gap-2">
             {(
               [
-                { value: "all", label: `全ページ（全 ${pages.length} ページ）` },
+                { value: "all", label: `全ページ（全 ${listPages.length} ページ）` },
                 { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
               ] as { value: "all" | "selected"; label: string }[]
             ).map((option) => (
@@ -3120,7 +3173,7 @@ function PreviewPane({
                 key={entry.id}
                 type="button"
                 data-export-sheet-entry={entry.id}
-                disabled={entry.disabled || isExporting || pages.length === 0}
+                disabled={entry.disabled || isExporting || listPages.length === 0}
                 title={entry.disabledReason}
                 onClick={() => {
                   onMobileExportClose?.();

@@ -301,3 +301,42 @@ QA evidence: `src/lib/v2Bridge/exportHardening.test.ts` (25), full vitest vs Pha
 **Bug fixed while auditing**: opening a cloud project restored images from the cloud copy only, so an expired/purged cloud copy showed as broken even when this browser still had the original in IndexedDB. The open path now falls back to local originals (`mergeCloudRestoreWithLocalOriginals`; a same-ID cloud copy still wins). The first-load "no modal" rule no longer depends on render timing (explicit baseline ids).
 
 **Coverage**: `src/lib/imageRecovery.test.ts` (manifest/local cases A–G with fixture rows and a fixed clock, full lifecycle, 5P/12P export-block matrix before/after repair/deletion/acknowledgment, placeholder safety); `tests/e2e/imageWarningLifecycle.e2e.mjs` (demo route, TXT-import break → repair → still blocked → 通知解除 → allowed; break → refused → delete → 通知解除). Cloud TTL/manifest paths are not browser-tested (no backend in E2E).
+
+---
+
+## Phase 5 — V2 Preview page model (staged)
+
+**Moved to V2 (V2 mode only; LEGACY mode unchanged, rollback intact).** One view model over the V2 layout,
+`src/lib/v2Bridge/previewPageModel.ts` (not a second paginator — it reads Core's `pageSequence`, placed
+atoms, IMAGE units and the adapter's flow→raw source map, `ManuscriptSourceMap`). PreviewPane's
+`listPages` / `listSourceRanges` come from it, so these now agree with JPG/ZIP/PDF:
+
+| Concern | Now | Where |
+|---|---|---|
+| Page list / order / physical numbers | V2 `pageSequence` (colophon slot + physical numbers from Core) | `PreviewPane` `presentation` |
+| Page count | one report (`listPages.length`); the LEGACY+V2 last-writer race is gone | `onBodyPageCountChange` |
+| Image ownership (overlay + warning pages) | V2 flow: an image that does not fit goes to the NEXT page | `imagePageIndicesById`, overlay pages |
+| Selection / export scope | V2 body identities (Phase 3 helpers) | unchanged helpers |
+| Caret → page, 「編集位置へ移動」 | V2 raw source ranges | `listSourceRanges` |
+| Page reorder, 「このページに画像を挿入」 | V2 raw ranges; refused (message) while the V2 layout is still older than the text | `listRangesAreCurrent` |
+
+Before the first V2 layout (or on a V2 HOLD) the list falls back to the LEGACY paginator; an empty
+manuscript keeps one blank card (0 canonical body pages). Source ranges keep a page's own `《《`/`》》`.
+
+**Canonical image-boundary decision**: V2 flow model — the LEGACY "trailing image stays on the previous
+page" rule is retired in V2 mode. Inserting an image into a full page therefore shows it on the next page
+(Preview and export agree; verified in `tests/e2e/previewPageModel.e2e.mjs`).
+
+**Still LEGACY in V2 mode**
+- Colophon **visuals**: `ColophonPageCard` (placed/numbered by V2). The V2 Preview colophon painter is not
+  production-ready (paints `vertical-rl` columns, no label/value layout); a multi-page V2 colophon shows as one card.
+- TOC page numbers (`utils/tocGenerator.ts`): computed for not-yet-applied content with the synchronous
+  LEGACY `computePageSourceRanges`; V2 layout is async (worker + font measurement). Needs a decision
+  (async TOC vs. main-thread V2 compose). Differs from export only for boundary images / over-capacity settings.
+- Preview overlays in `PageCard`: images (now fed V2-owned tokens and V2-capped sizes), folio, running head,
+  hidden nombre, web footer, TrimGuide — still LEGACY painters from settings.
+- LEGACY export/capture modules and FixedSlot renderer: rollback only.
+
+**Blockers before LEGACY retirement**: V2 colophon Preview painter; folio/hidden-nombre/web-footer in
+Publication + V2 overlays; TOC on V2; windowed-editor pagination (`editorPagination`) review; explicit
+Human go/no-go on removing the `LEGACY` rollback value.

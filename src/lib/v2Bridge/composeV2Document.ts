@@ -8,7 +8,7 @@
  * -- never a second layout/composition engine. Deep imports only, same
  * rationale as `settingsAdapter.ts`'s own doc comment.
  */
-import { buildV2UnitsFromManuscript } from "./manuscriptAdapter";
+import { buildV2UnitsFromManuscript, type ManuscriptSourceMap } from "./manuscriptAdapter";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
 import { applyEditorPageOverrides } from "./pageFurniture";
 import { computePageLayout, type PageSettings } from "../pageLayout";
@@ -49,6 +49,8 @@ export interface V2BridgeResult {
   plan: PaintPlan;
   units: LogicalUnit[];
   source: string;
+  /** Body flow code point → raw manuscript offsets (manuscriptAdapter), for the Preview page model. */
+  bodySourceMap: ManuscriptSourceMap;
   colophonUnits?: LogicalUnit[];
   colophonSource?: string;
   layoutSettings: PageCompositionSettings;
@@ -94,7 +96,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   // 傍点 decoration, and ――/…… runs as inseparable SEMANTIC_RUN units. `charsPerLine - 1`
   // keeps every grouped run narrower than a paragraph-first (一字下げ) line.
   // The colophon (horizontal, its own painter) keeps the prior plain units.
-  const { units: rawUnits, source } = buildV2UnitsFromManuscript("body", input.content, {
+  const { units: rawUnits, source, sourceMap: bodySourceMap } = buildV2UnitsFromManuscript("body", input.content, {
     maxSemanticRunCells: Math.floor(input.settings.charsPerLine) - 1,
     decorations: true,
   });
@@ -174,6 +176,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
     model,
     units,
     source,
+    bodySourceMap,
     ...(colophonComposition
       ? { colophonUnits: colophonComposition.units, colophonSource: colophonComposition.source }
       : {}),

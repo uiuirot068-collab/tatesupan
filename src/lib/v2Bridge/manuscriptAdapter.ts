@@ -68,6 +68,41 @@ interface AdapterState {
   cursor: number;
   flow: string;
   units: LogicalUnit[];
+  /** Raw manuscript [start, end) (UTF-16) of every flow code point — see ManuscriptSourceMap. */
+  rawStart: number[];
+  rawEnd: number[];
+}
+
+/**
+ * Where each composed (flow) code point came from in the RAW manuscript
+ * (UTF-16 offsets into the Editor's `content`). Plain text maps 1:1; a
+ * ruby / 縦中横 / image maps every one of its flow code points to the WHOLE
+ * notation span (`｜漢字《かんじ》`, `[tate]A5[/tate]`, `【IMG:…】`); a paragraph
+ * break maps to its newline. Notation that produces no flow text (`《《`/`》》`,
+ * a consumed 【改ページ】) is simply not covered. Lets the Preview derive page
+ * source ranges, caret→page and image insertion points from the V2 layout
+ * instead of re-running the LEGACY paginator (Phase 5).
+ */
+export interface ManuscriptSourceMap {
+  rawStart: Int32Array;
+  rawEnd: Int32Array;
+}
+
+function recordRaw(state: AdapterState, text: string, rawBase: number): void {
+  let offset = 0;
+  for (const codePoint of text) {
+    state.rawStart.push(rawBase + offset);
+    offset += codePoint.length;
+    state.rawEnd.push(rawBase + offset);
+  }
+}
+
+function recordRawWhole(state: AdapterState, text: string, rawStart: number, rawEnd: number): void {
+  for (const _codePoint of text) {
+    void _codePoint;
+    state.rawStart.push(rawStart);
+    state.rawEnd.push(rawEnd);
+  }
 }
 
 // Dash: the same family legacy pagination/PageCard treat as one ―― run
@@ -80,7 +115,8 @@ function coreDecoration(decoration: TokenDecoration | undefined, options: Manusc
   return { decoration: { emphasis: "DOT" } };
 }
 
-function pushTextUnit(blockId: string, text: string, state: AdapterState, decoration: { decoration?: InlineDecoration }): void {
+function pushTextUnit(blockId: string, text: string, state: AdapterState, decoration: { decoration?: InlineDecoration }, rawBase: number): void {
+  recordRaw(state, text, rawBase);
   const start = state.cursor;
   state.cursor += Array.from(text).length;
   state.flow += text;
@@ -92,11 +128,12 @@ function pushLineText(
   text: string,
   state: AdapterState,
   options: ManuscriptAdapterOptions,
-  decoration: { decoration?: InlineDecoration }
+  decoration: { decoration?: InlineDecoration },
+  rawBase: number
 ): void {
   const maxCells = options.maxSemanticRunCells ?? 0;
   if (maxCells < 2 || !HAS_SEMANTIC_RUN.test(text)) {
-    pushTextUnit(blockId, text, state, decoration);
+    pushTextUnit(blockId, text, state, decoration, rawBase);
     return;
   }
   let last = 0;
@@ -104,14 +141,15 @@ function pushLineText(
     const length = Array.from(match[0]).length;
     if (length > maxCells) continue; // stays inside the surrounding TEXT unit
     const index = match.index ?? 0;
-    if (index > last) pushTextUnit(blockId, text.slice(last, index), state, decoration);
+    if (index > last) pushTextUnit(blockId, text.slice(last, index), state, decoration, rawBase + last);
+    recordRaw(state, match[0], rawBase + index);
     const start = state.cursor;
     state.cursor += length;
     state.flow += match[0];
     state.units.push({ kind: "SEMANTIC_RUN", span: { blockId, start, end: state.cursor }, runKind: match[0][0] === "…" ? "ELLIPSIS" : "DASH", length, ...decoration });
     last = index + match[0].length;
   }
-  if (last < text.length) pushTextUnit(blockId, text.slice(last), state, decoration);
+  if (last < text.length) pushTextUnit(blockId, text.slice(last), state, decoration, rawBase + last);
 }
 
 function pushPlainText(
@@ -119,14 +157,19 @@ function pushPlainText(
   text: string,
   state: AdapterState,
   options: ManuscriptAdapterOptions,
-  decoration: { decoration?: InlineDecoration }
+  decoration: { decoration?: InlineDecoration },
+  rawBase: number
 ): void {
   const parts = text.split("\n");
+  let offset = 0;
   parts.forEach((part, i) => {
     if (part.length > 0) {
-      pushLineText(blockId, part, state, options, decoration);
+      pushLineText(blockId, part, state, options, decoration, rawBase + offset);
     }
+    offset += part.length;
     if (i < parts.length - 1) {
+      recordRaw(state, "\n", rawBase + offset);
+      offset += 1;
       const start = state.cursor;
       state.cursor += 1;
       state.flow += "\n";
@@ -155,8 +198,10 @@ function pushRubyUnit(
   token: RubyToken,
   state: AdapterState,
   readingQueue: ReadingQueue,
-  decoration: { decoration?: InlineDecoration }
+  decoration: { decoration?: InlineDecoration },
+  raw: { start: number; end: number }
 ): void {
+  recordRawWhole(state, token.base, raw.start, raw.end);
   const start = state.cursor;
   state.cursor += Array.from(token.base).length;
   state.flow += token.base;
@@ -177,6 +222,8 @@ function pushRubyUnit(
 export interface ManuscriptComposition {
   units: LogicalUnit[];
   source: string;
+  /** Flow code point → raw manuscript offsets (covers `source`'s flow part only, not appended ruby readings). */
+  sourceMap: ManuscriptSourceMap;
 }
 
 /**
@@ -188,16 +235,18 @@ export function buildV2UnitsFromManuscript(
   content: string,
   options: ManuscriptAdapterOptions = {}
 ): ManuscriptComposition {
-  const tokens = tokenizeTategakiWithOffsets(content).map((t) => t.token);
-  const state: AdapterState = { cursor: 0, flow: "", units: [] };
+  const entries = tokenizeTategakiWithOffsets(content);
+  const state: AdapterState = { cursor: 0, flow: "", units: [], rawStart: [], rawEnd: [] };
   const readingQueue: ReadingQueue = [];
 
-  for (const token of tokens) {
+  for (const entry of entries) {
+    const token = entry.token;
     if (token.type === "text") {
-      pushPlainText(blockId, token.value, state, options, coreDecoration(token.decoration, options));
+      pushPlainText(blockId, token.value, state, options, coreDecoration(token.decoration, options), entry.start);
     } else if (token.type === "ruby") {
-      pushRubyUnit(blockId, token, state, readingQueue, coreDecoration(token.decoration, options));
+      pushRubyUnit(blockId, token, state, readingQueue, coreDecoration(token.decoration, options), entry);
     } else if (token.type === "tcy") {
+      recordRawWhole(state, token.value, entry.start, entry.end);
       const start = state.cursor;
       state.cursor += Array.from(token.value).length;
       state.flow += token.value;
@@ -212,6 +261,7 @@ export function buildV2UnitsFromManuscript(
         ...coreDecoration(token.decoration, options),
       });
     } else if (token.type === "image") {
+      recordRawWhole(state, IMAGE_MARKER_CHAR, entry.start, entry.end);
       const start = state.cursor;
       state.cursor += 1;
       state.flow += IMAGE_MARKER_CHAR;
@@ -237,5 +287,5 @@ export function buildV2UnitsFromManuscript(
     if (unit.kind === "RUBY") unit.readingSpan = { blockId, start, end };
   }
 
-  return { units: state.units, source };
+  return { units: state.units, source, sourceMap: { rawStart: Int32Array.from(state.rawStart), rawEnd: Int32Array.from(state.rawEnd) } };
 }
