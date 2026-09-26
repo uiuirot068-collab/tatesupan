@@ -252,3 +252,31 @@ Export hardening on the canonical plan: stale-bridge guard + explicit
 geometry contract (with product decision on caps/grayscale), furniture parity
 (folio extras, hidden nombre, web footer), consistent body/physical numbering in
 file names and warnings, and dropping the unused worker plan.
+
+---
+
+## Phase 3 — V2 export hardening (4c4874a)
+
+| Item | Change | Where |
+|---|---|---|
+| Stale-layout export guard | Every V2 composition is tagged with the exact input (content/settings/title/images) it was built from. Export snapshots the Editor's LIVE text (`getLatestContent`, not the debounced Preview prop) and waits — on the pipeline's own completion event, no sleep/timeout — for the layout of exactly that input. A newer edit/settings change rejects the pending export (`StaleCompositionError`); a failed composition rejects with its HOLD message. Equal inputs are never recomposed. | `v2Bridge/compositionRevision.ts`, `useV2PreviewAdapter.ts`, `PreviewPane.requireV2ExportPlan`, `TategakiEditor` |
+| Oversized-image clamp | IMAGE units are fitted (aspect kept, never upscaled) into the shared box, and never longer than one line — an image can no longer HOLD the whole document. Markers already inside the box are untouched. | `composeV2Document.capEditorImageUnits` |
+| Shared image sizing contract | One definition (90% text-frame width × 60% height) used by insertion, the LEGACY Preview overlay and V2. Export now matches the size the Preview already showed for over-size markers. | `src/lib/imageGeometry.ts` |
+| Export layer order | Image paint commands carry `refId`; the Editor's `imageLayerOrder` re-orders image commands back-to-front with the Preview's own key (`layerOrder[id] ?? token order`); text keeps its slots. | `exportPlan.applyImageLayerOrder`, `pdfGenerator`, publication `paintModel` |
+| Grayscale restoration | Images converted to 1-channel (or gray+alpha) PNG with the LEGACY DeviceGray luminance before PDF/JPG. Evidence: `utils/exportPdf.ts` (DeviceGray 正式仕様), compatibility matrix (grayscale = Freeze §2 requirement), LEGACY JPGs captured `filter: grayscale(100%)` images. | `exportPlan.grayscalePlanImages` |
+| Paint-plan reuse | Export plan cached per (layout object, font, layer order) — all immutable per revision; failed builds are never cached. | `exportPlan.ExportPlanCache` |
+| Unused Preview plan removed | Worker uses `composeV2Layout` (no PaintPlan); `composeV2Document` = layout + plan for tests/tools. | `composeV2Document.ts`, `v2Preview.worker.ts` |
+| Page-number helpers | `bodyPageNumber` / `physicalPageNumber` / `bodyPageCount`; every V2 export resolves pages from the SAME awaited layout it paints. "No selection" JPG/ZIP = every body page of the current layout. File names unchanged (body pages: body number; colophon: physical number). | `v2Bridge/pageIndex.ts` |
+| Running-head override fix | Editor `pageOverrides` are keyed by BODY page; Core applied them by PHYSICAL page → off by one after a mid-book colophon, and the colophon inherited a body override. Now re-resolved after composition with Core's own `composeHeaderForPage`. | `v2Bridge/pageFurniture.ts` |
+| Per-page folio hide | `pageOverrides[n].hideNombre` (Preview 表示/非表示 toggle) was dropped by V2; now removes that body page's folio in PDF/JPG. | `v2Bridge/pageFurniture.ts` |
+| Odd-page warning | Whole-book count = body pages of the current V2 layout (+ colophon) = the pages the PDF actually contains; LEGACY count only when not V2. | `PreviewPane.performDownloadPdf` |
+
+QA evidence: `src/lib/v2Bridge/exportHardening.test.ts` (25), full vitest vs Phase 2 (no new failures), build, `productionOddPageWarning` + `mobileSharedExport` E2E PASS on a loopback production build, and a real-browser check (edit → immediate PDF = new page count; red image → JPG 0 coloured pixels, PDF image `/DeviceGray`, no `/DeviceRGB`).
+
+### Still deferred after Phase 3
+
+- **Boundary image page**: an image right after a full page stays on that page in the Preview (LEGACY `appendTrailingImage`) but starts the next page in export (V2 images occupy a line). Needs a product rule for V2 image flow, then Preview page list → V2.
+- **Multiple images at one position** overlap in export (each centred independently) while the Preview flows them in a row.
+- **Height cap mismatch in one case**: V2 also caps at one line's extent; with very few chars/line an image is smaller in export than in the Preview overlay.
+- **Page furniture not in V2 export**: `nombreBottomMargin` (export uses marginBottom/2 — geometry decision), `nombreFontFamily` (only Shippori is embedded), hidden nombre (print-shop marker, bleed-area placement), Web閲覧用 footer branding (web JPG only). Classified: folio margin/font = publication-required (needs decision); hidden nombre = publication-required when enabled; web footer = web-only.
+- Colophon Preview is still LEGACY `ColophonPageCard`; Preview page list still LEGACY.
