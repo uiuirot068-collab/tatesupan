@@ -561,6 +561,12 @@ export default function TategakiEditor({
   // dependencies (excluding the always-stable useState setters, per the
   // ordinary react-hooks/exhaustive-deps convention) is correct for the
   // runtime that actually ships; the lint rule is suppressed accordingly.
+  const showToast = (message: string) => {
+    setToast(message);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
+  };
+
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleImageAdd = useCallback((record: ImageRecord) => {
     setImages((prev) => ({ ...prev, [record.id]: record.dataUrl }));
@@ -697,12 +703,6 @@ export default function TategakiEditor({
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, []);
-
-  const showToast = (message: string) => {
-    setToast(message);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
-  };
 
   const saveNow = () => {
     if (docId === null || loadedDocIdRef.current !== docId) return;
