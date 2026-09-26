@@ -483,57 +483,87 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
             </button>
           </div>
 
-          {/* TSP-LOOP-008 / TSP-LOOP-021 §1 / §5: 画像保存の説明。
-              「この端末で使うとき（A）」と「クラウド保存を使うとき（B）」を
-              はっきり分ける。72時間タイマーはBのクラウド一時コピーだけに
-              かかる。実機テスターが「72時間以内に触らないと画像が消える？」と
-              誤解したため、"何もしなくて大丈夫" を明示する。「ブラウザ保存だから
-              絶対に消えない」とは書かない。 */}
+          {/* 画像保存ガイド。初期状態では各説明を閉じ、必要な項目だけ読める
+              COLUMNSTAND系のコンパクトなアコーディオン構成にする。 */}
           <aside
             aria-labelledby="image-storage-note-title"
-            className="mx-auto mt-[26px] max-w-[760px] rounded-[14px] border border-[rgba(31,42,68,0.14)] border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.06)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.05)]"
+            className="mx-auto mt-[26px] max-w-[760px] border-y border-[rgba(31,42,68,0.14)] dark:border-[#2A3240]"
           >
-            <h3
-              id="image-storage-note-title"
-              className="mb-1 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
-            >
-              ◇ TateSpunは画像挿入が可能！
-            </h3>
-            <p className="mb-4 font-serif text-base text-ink/80 dark:text-[#B9C2D0]">
-              でも、画像はどこに保存される？
-            </p>
-
-            <div className="space-y-4 text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
-              <div>
-                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">A. この端末で使うとき</p>
-                <ul className="list-disc space-y-1 pl-5">
-                  <li>挿入した画像は、TateSpunがこの端末のブラウザに保存する作業データと一緒に保存され、作品にそのまま使われます。</li>
-                  <li>この端末内の画像には、下記の「クラウド一時コピーの72時間」は関係ありません。TateSpun側でこの端末の画像を72時間後に削除することはありません。</li>
-                  <li>ただし、ブラウザのデータ削除・別のブラウザ・別の端末・端末の故障や初期化などでは、この作業データを引き継げないことがあります。ブラウザ保存が永久に残ることを保証するものではありません。</li>
-                </ul>
-              </div>
-
-              <div>
-                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">B. クラウド保存を使うとき（会員）</p>
-                <ul className="list-disc space-y-1 pl-5">
-                  <li>別の端末でも作品を復元できるよう、画像の一時コピーがクラウドへアップロードされます。</li>
-                  <li>β版では、このクラウド上の一時コピーの寿命は72時間です。</li>
-                  <li>画像を含むクラウド保存に再度成功すると、期限はその時点から72時間に更新されます。</li>
-                </ul>
-              </div>
-
-              <p className="rounded-[10px] border border-l-[3px] border-l-accent bg-[rgba(198,175,99,0.1)] px-4 py-3 font-medium text-ink dark:border-[#2A3240] dark:border-l-[#C6AF63] dark:bg-[rgba(198,175,99,0.08)] dark:text-[#D4DBE7]">
-                72時間で削除されるのは、クラウド上の一時コピーです。原稿本文や、この端末の画像を72時間後に削除するという意味ではありません。この端末で作業を続けるだけなら、72時間以内に何かをする必要はありません。
+            <div className="py-4">
+              <p className="text-[10px] font-bold tracking-[0.18em] text-accent dark:text-[#C6AF63]">
+                IMAGE STORAGE GUIDE
               </p>
+              <h3
+                id="image-storage-note-title"
+                className="mt-1 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
+              >
+                画像の保存と、期限切れについて
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">
+                画像は「この端末に残る元画像」と「別端末で開くためのクラウド一時コピー」を分けて扱います。必要な項目だけ開いて確認できます。
+              </p>
+            </div>
 
-              <div>
-                <p className="mb-1 font-semibold text-ink dark:text-[#D4DBE7]">画像を読み込めなくなったとき</p>
-                <ul className="list-disc space-y-1 pl-5">
-                  <li>クラウド上の一時コピーが期限切れ・欠損になり、今のブラウザにも元画像がない場合は「⚠️画像切れ」としてお知らせします。</li>
-                  <li>プレビューの該当位置にはCaroadと再配置案内が出て、フッターから問題のあるページへ移動・画像の差し替えができます。</li>
-                  <li>画像切れがあるページを含む書き出しだけ停止します。画像切れのないページを単ページで書き出すことはできます。</li>
-                </ul>
-              </div>
+            <div className="border-t border-[rgba(31,42,68,0.12)] dark:border-[#2A3240]">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3.5 text-sm font-semibold text-ink marker:hidden dark:text-[#D4DBE7] [&::-webkit-details-marker]:hidden">
+                  <span>ブラウザでは常時保存</span>
+                  <span aria-hidden="true" className="ml-auto text-xs text-accent transition-transform group-open:rotate-180 dark:text-[#C6AF63]">▼</span>
+                </summary>
+                <div className="pb-4 pr-8 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+                  <p>挿入した画像は、この端末のブラウザ内に作業データとして保存されます。クラウド一時コピーの72時間制限は、この端末に保存された画像には適用されません。</p>
+                  <p className="mt-2">ただし、ブラウザのサイトデータ削除・別ブラウザへの移動・端末の故障や初期化などでは引き継げない場合があります。</p>
+                </div>
+              </details>
+            </div>
+
+            <div className="border-t border-[rgba(31,42,68,0.12)] dark:border-[#2A3240]">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3.5 text-sm font-semibold text-ink marker:hidden dark:text-[#D4DBE7] [&::-webkit-details-marker]:hidden">
+                  <span>クラウドでは72時間</span>
+                  <span aria-hidden="true" className="ml-auto text-xs text-accent transition-transform group-open:rotate-180 dark:text-[#C6AF63]">▼</span>
+                </summary>
+                <div className="pb-4 pr-8 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+                  <p>会員がクラウド保存すると、別端末でも作品を開けるよう画像の一時コピーをクラウドへ保存します。この一時コピーは72時間保持され、画像を含むクラウド保存に再度成功すると、その時点から72時間に更新されます。</p>
+                  <p className="mt-2 font-medium text-ink dark:text-[#D4DBE7]">72時間で整理されるのはクラウド上の一時コピーだけです。原稿本文や、この端末の画像を削除するという意味ではありません。</p>
+                </div>
+              </details>
+            </div>
+
+            <div className="border-t border-[rgba(31,42,68,0.12)] dark:border-[#2A3240]">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3.5 text-sm font-semibold text-ink marker:hidden dark:text-[#D4DBE7] [&::-webkit-details-marker]:hidden">
+                  <span>期限切れ・画像切れには警告</span>
+                  <span aria-hidden="true" className="ml-auto text-xs text-accent transition-transform group-open:rotate-180 dark:text-[#C6AF63]">▼</span>
+                </summary>
+                <div className="pb-4 pr-8 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+                  <p>クラウド上の一時コピーが期限切れ・欠損になり、今のブラウザにも元画像がない場合は「⚠️画像切れ」としてお知らせします。今のブラウザに元画像が残っている場合は、通常どおり編集・表示できます。</p>
+                </div>
+              </details>
+            </div>
+
+            <div className="border-t border-[rgba(31,42,68,0.12)] dark:border-[#2A3240]">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3.5 text-sm font-semibold text-ink marker:hidden dark:text-[#D4DBE7] [&::-webkit-details-marker]:hidden">
+                  <span>画像切れページを確認・同じ場所へ差し替え</span>
+                  <span aria-hidden="true" className="ml-auto text-xs text-accent transition-transform group-open:rotate-180 dark:text-[#C6AF63]">▼</span>
+                </summary>
+                <div className="pb-4 pr-8 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+                  <p>画像を読み込めないページはプレビューのフッターから一覧で確認できます。該当ページへ移動し、その場で画像を差し替えられます。ページ内の配置・サイズ・誌面上の位置関係はできるだけ維持します。</p>
+                </div>
+              </details>
+            </div>
+
+            <div className="border-t border-[rgba(31,42,68,0.12)] dark:border-[#2A3240]">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3.5 text-sm font-semibold text-ink marker:hidden dark:text-[#D4DBE7] [&::-webkit-details-marker]:hidden">
+                  <span>書き出しは該当ページだけ停止</span>
+                  <span aria-hidden="true" className="ml-auto text-xs text-accent transition-transform group-open:rotate-180 dark:text-[#C6AF63]">▼</span>
+                </summary>
+                <div className="pb-4 pr-8 text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">
+                  <p>画像切れがあるページを含むJPG・PDFの書き出しは停止します。一方、画像切れを含まないページだけを単ページで書き出す場合は、そのまま出力できます。</p>
+                </div>
+              </details>
             </div>
           </aside>
 
