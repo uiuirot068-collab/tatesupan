@@ -1,0 +1,38 @@
+[
+  {
+    "pages": 10,
+    "physical": 12,
+    "modelKB": 1246,
+    "modelCloneMs": 40,
+    "paintPlanMs": 410,
+    "pdfStartKB": 28674,
+    "pdfStartCloneMs": 522,
+    "mainThreadMs": 972,
+    "pdfWorkerMs": 4156,
+    "pdfKB": 5338
+  },
+  {
+    "pages": 100,
+    "physical": 112,
+    "modelKB": 12531,
+    "modelCloneMs": 281,
+    "paintPlanMs": 745,
+    "pdfStartKB": 183021,
+    "pdfStartCloneMs": 5221,
+    "mainThreadMs": 6247,
+    "pdfWorkerMs": 39464,
+    "pdfKB": 51280
+  },
+  {
+    "pages": 300,
+    "physical": 333,
+    "modelKB": 37791,
+    "modelCloneMs": 1511,
+    "paintPlanMs": 3701,
+    "pdfStartKB": 525612,
+    "pdfStartCloneMs": 17597,
+    "mainThreadMs": 22809,
+    "pdfWorkerMs": 114734,
+    "pdfKB": 153243
+  }
+]

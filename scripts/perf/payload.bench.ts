@@ -52,6 +52,7 @@ run("preview worker reply decomposition", () => {
       unitsKB: kb(bridge.units),
       sourceMapKB: kb(bridge.bodySourceMap),
       previewKB: kb(preview),
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drops `debug` from each unit
       previewNoDebugKB: kb({ ...preview, pages: preview.pages.map((p) => ({ ...p, columns: p.columns.map((c) => ({ ...c, lines: c.lines.map((l) => ({ ...l, units: l.units.map(({ debug: _d, ...u }) => u) })) })) })) }),
       pageSequenceKB: kb(bridge.document.pageSequence),
     };

@@ -11,6 +11,13 @@
 // correctness-level facts (layout completes, text persisted), never timings.
 // Works against pre- and post-Phase-7 builds (the compose message shape is
 // `{ type: "compose", input, requestId? }` in both).
+//
+// Phase 8 additions (all builds): reply deserialization time (the first
+// `event.data` access of a layout reply is where Chrome deserializes it),
+// React render counts per commit via a DevTools-style commit hook (no source
+// instrumentation; see `countRenders`), JS heap, caret jump, paste, and
+// layout latency on a fresh vs a reused worker. The editor surface (FULL or
+// the paged WINDOWED surface) is whatever the build was made with.
 import assert from "node:assert/strict";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { launchEditorSession, resolveE2eTarget } from "./helpers/editorSession.mjs";
@@ -26,7 +33,52 @@ const log = (line) => console.log(line);
 // Instrument before any app script runs.
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
   source: `(() => {
-    const perf = window.__tspPerf = { workers: 0, composePosts: [], composeReplies: [], longTasks: [], inputs: [] };
+    const perf = window.__tspPerf = { workers: 0, composePosts: [], composeReplies: [], longTasks: [], inputs: [], renders: [], renderCounting: false };
+    // Phase 8: DevTools-style commit hook. A function component rendered in a
+    // commit when its parent's children were reconciled (child list differs
+    // from the alternate's) and it carries React's PerformedWork flag (1) —
+    // the same rule React DevTools uses. Fibers are classified by their first
+    // host DOM node, so minified component names do not matter.
+    const classify = (fiber) => {
+      let node = fiber.child;
+      while (node && node.tag !== 5) node = node.child;
+      const el = node && node.stateNode;
+      if (!el || !el.getAttribute) return null;
+      if (el.hasAttribute("data-preview-spread")) return "PreviewSpread";
+      const cls = typeof el.className === "string" ? el.className : "";
+      if (cls.startsWith("unit ")) return "UnitBox";
+      if (cls === "page" || cls.startsWith("page ")) return "PreviewPage";
+      if (cls.includes("flex-col items-center gap-2 rounded-md p-1")) return "PageCard";
+      return null;
+    };
+    const walk = (fiber, counts) => {
+      for (let child = fiber.child; child; child = child.sibling) {
+        const prev = child.alternate;
+        if ((child.tag === 0 || child.tag === 15 || child.tag === 11) && (prev === null || (child.flags & 1) === 1)) {
+          const kind = classify(child);
+          if (kind) counts[kind] = (counts[kind] ?? 0) + 1;
+        }
+        if (prev === null || child.child !== prev.child) walk(child, counts);
+      }
+    };
+    window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      supportsFiber: true,
+      renderers: new Map(),
+      inject() { return 1; },
+      checkDCE() {},
+      onScheduleFiberRoot() {},
+      onCommitFiberUnmount() {},
+      onPostCommitFiberRoot() {},
+      setStrictMode() {},
+      onCommitFiberRoot(_id, root) {
+        if (!perf.renderCounting) return;
+        const current = root.current;
+        if (!current.alternate || current.child === current.alternate.child) return;
+        const counts = {};
+        walk(current, counts);
+        if (Object.keys(counts).length > 0) perf.renders.push({ t: performance.now(), counts });
+      },
+    };
     const NativeWorker = window.Worker;
     window.Worker = class extends NativeWorker {
       constructor(url, options) {
@@ -34,15 +86,21 @@ await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
         const isPreview = String(url).includes("v2Preview") || String(url).includes("Preview");
         this.__kind = isPreview ? "preview" : "other";
         perf.workers += 1;
+        this.__seq = perf.workers;
+        this.__composes = 0;
         this.addEventListener("message", (event) => {
-          if (event.data && (event.data.type === "complete" || event.data.type === "error") && ("bridge" in event.data || event.data.type === "error")) {
-            perf.composeReplies.push({ t: performance.now(), type: event.data.type, requestId: event.data.requestId, message: event.data.message });
+          const t0 = performance.now();
+          const data = event.data; // first access deserializes the reply on this thread
+          const deserializeMs = performance.now() - t0;
+          if (data && (data.type === "complete" || data.type === "error") && ("bridge" in data || "layout" in data || data.type === "error")) {
+            perf.composeReplies.push({ t: performance.now(), type: data.type, requestId: data.requestId, message: data.message, deserializeMs, worker: this.__seq });
           }
         });
       }
       postMessage(message, transfer) {
         if (message && message.type === "compose") {
-          perf.composePosts.push({ t: performance.now(), images: Object.keys(message.input?.images ?? {}).length });
+          this.__composes += 1;
+          perf.composePosts.push({ t: performance.now(), images: Object.keys(message.input?.images ?? {}).length, worker: this.__seq, firstOnWorker: this.__composes === 1 });
         }
         return super.postMessage(message, transfer);
       }
@@ -110,6 +168,43 @@ try {
   const afterOpen = await cdp.evaluate(`JSON.parse(JSON.stringify(window.__tspPerf))`);
   const pagesShown = await cdp.evaluate(`Number(document.querySelector('[data-preview-total-pages]')?.getAttribute('data-preview-total-pages') ?? -1)`);
   log(`opened ${PAGES}p document in ${openMs} ms; preview pages=${pagesShown}; workers=${afterOpen.workers}; compose posts=${afterOpen.composePosts.length}; images in first payload=${afterOpen.composePosts[0]?.images}`);
+  const surface = await cdp.evaluate(`document.querySelector('[data-editor-page-navigator]') ? "WINDOWED" : "FULL"`);
+  const heapMb = async () => {
+    await cdp.send("HeapProfiler.collectGarbage").catch(() => {});
+    const { metrics } = await cdp.send("Performance.getMetrics");
+    return Math.round((metrics.find((m) => m.name === "JSHeapUsedSize")?.value ?? 0) / 1048576);
+  };
+  await cdp.send("Performance.enable").catch(() => {});
+  const heapAfterOpenMb = await heapMb();
+  const mountedSpreads = () => cdp.evaluate(`document.querySelectorAll('[data-preview-spread-mounted="true"]').length`);
+  const sumRenders = (list) => list.reduce((acc, entry) => { for (const [k, v] of Object.entries(entry.counts)) acc[k] = (acc[k] ?? 0) + v; return acc; }, {});
+  log(`editor surface=${surface}; heap after open=${heapAfterOpenMb} MB`);
+  // WINDOWED mounts one 編集ページ; type at the manuscript's end like FULL by
+  // mounting the last one (the probe appends to the mounted textarea's end).
+  let editorPage = null; // WINDOWED: the page indicator after mounting the last page
+  if (surface === "WINDOWED") {
+    for (let i = 0; i < 50; i++) {
+      const moved = await cdp.evaluate(`(() => { const b = document.querySelector('button[aria-label="次の編集ページへ移動"]'); if (!b || b.disabled) return false; b.click(); return true; })()`);
+      if (!moved) break;
+      await sleep(300);
+    }
+    editorPage = await cdp.evaluate(`document.querySelector('[data-editor-page-indicator]')?.textContent.trim() ?? null`);
+    log(`WINDOWED: mounted the last 編集ページ (${editorPage})`);
+  }
+  // The canonical manuscript as saved (IndexedDB), independent of the surface.
+  const savedContent = async () => {
+    await sleep(2500);
+    await cdp.waitFor(`!!document.querySelector('[data-editor-save-status="saved"]')`, { timeoutMs: 60_000, label: "saved" });
+    return cdp.evaluate(`new Promise((resolve, reject) => {
+      const open = indexedDB.open("tategaki-editor-db");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const request = open.result.transaction("documents").objectStore("documents").get(${docId});
+        request.onsuccess = () => { open.result.close(); resolve(request.result.content); };
+        request.onerror = () => reject(request.error);
+      };
+    })`);
+  };
 
   const PROFILE = process.env.TATESPUN_PERF_PROFILE === "1";
   const snapshot = () => cdp.evaluate(`JSON.parse(JSON.stringify(window.__tspPerf))`);
@@ -138,10 +233,14 @@ try {
 
   // Scenario A — isolated edits on an idle page (the reuse case): one
   // keystroke, wait for its layout, idle 3 s; three times.
+  // Render counts are split at the layout reply: commits before it are the
+  // keystroke's own (content prop, not layout), commits after it the layout's.
   const isolated = [];
+  await cdp.evaluate(`window.__tspPerf.renderCounting = true`);
   for (let i = 0; i < 3; i++) {
     await sleep(3000);
     const before = await snapshot();
+    const spreadsMounted = await mountedSpreads();
     if (PROFILE && i === 0) {
       await cdp.send("Profiler.enable");
       await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
@@ -153,10 +252,18 @@ try {
       printProfile(profile, `CPU profile: ONE keystroke → next frame (${Math.round(frameMs)} ms)`);
     }
     await waitForReplies(before.composeReplies.length + 1);
+    await sleep(1000); // let the layout's commits and effects land
     const after = await snapshot();
     const post = after.composePosts.slice(before.composePosts.length).find((p) => p.t >= start);
     const reply = after.composeReplies.slice(before.composeReplies.length).at(-1);
+    const renders = after.renders.slice(before.renders.length);
+    const layoutTasks = reply ? after.longTasks.filter((task) => task.t >= reply.t - 5 && task.t < reply.t + 1000) : [];
     isolated.push({
+      spreadsMounted,
+      rendersBeforeLayout: sumRenders(renders.filter((entry) => !reply || entry.t < reply.t)),
+      rendersAfterLayout: sumRenders(renders.filter((entry) => reply && entry.t >= reply.t)),
+      replyDeserializeMs: reply ? Math.round(reply.deserializeMs) : null,
+      layoutLongTaskMs: Math.round(layoutTasks.reduce((sum, task) => sum + task.d, 0)),
       keystrokeFrameMs: Math.round(frameMs),
       inputToRequestMs: post ? Math.round(post.t - start) : null,
       requestToLayoutMs: post && reply ? Math.round(reply.t - post.t) : null,
@@ -193,23 +300,117 @@ try {
     longTaskTotalMs: Math.round(longTasks.reduce((sum, task) => sum + task.d, 0)),
     longTaskMaxMs: Math.round(Math.max(0, ...longTasks.map((task) => task.d))),
   };
-  const replies = afterBurst.composeReplies.slice(afterOpen.composeReplies.length);
+  await cdp.evaluate(`window.__tspPerf.renderCounting = false`);
+
+  // Correctness: the typed text is in the editor.
+  const tail = await cdp.evaluate(`document.querySelector('[data-demo-target="editor"]').value.slice(-11)`);
+  assert.equal(tail, "い".repeat(3) + "あ".repeat(8), "every keystroke reached the manuscript");
+  const savedAfterTyping = await savedContent();
+  assert.equal(savedAfterTyping, content + "い".repeat(3) + "あ".repeat(8), "the saved canonical manuscript is the original plus every keystroke");
+
+  // Worker reuse: request → layout for the first compose on a worker (font
+  // parse, cold caches) vs later ones on the same worker.
+  const latencyByFreshness = { fresh: [], reused: [] };
+  for (const post of afterBurst.composePosts) {
+    const reply = afterBurst.composeReplies.find((r) => r.worker === post.worker && r.t > post.t);
+    const nextPost = afterBurst.composePosts.find((p) => p.worker === post.worker && p.t > post.t);
+    if (!reply || (nextPost && nextPost.t < reply.t)) continue; // superseded on this worker
+    latencyByFreshness[post.firstOnWorker ? "fresh" : "reused"].push(Math.round(reply.t - post.t));
+  }
+
+  // Scenario C — caret jump to the start and back to the end (no edit).
+  await sleep(2000);
+  const frameAfter = (script) => cdp.evaluate(`new Promise((resolve) => {
+    const el = document.querySelector('[data-demo-target="editor"]');
+    const start = performance.now();
+    ${script}
+    requestAnimationFrame(() => setTimeout(() => resolve(performance.now() - start), 0));
+  })`);
+  const caretToStartMs = Math.round(await frameAfter(`el.focus(); el.setSelectionRange(0, 0); el.dispatchEvent(new Event('select', { bubbles: true }));`));
+  const caretToEndMs = Math.round(await frameAfter(`el.focus(); el.setSelectionRange(el.value.length, el.value.length); el.dispatchEvent(new Event('select', { bubbles: true }));`));
+
+  // Scenario D — a 5,000-character insertion at the start through the native
+  // editing path (Input.insertText: beforeinput/input like an IME commit;
+  // it does not fire the paste event).
+  await sleep(2000);
+  const PASTE = "貼り付けた文章。".repeat(625);
+  const beforePaste = await snapshot();
+  await cdp.evaluate(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); el.focus(); el.setSelectionRange(0, 0); })()`);
+  const pasteStarted = await cdp.evaluate(`performance.now()`);
+  await cdp.send("Input.insertText", { text: PASTE });
+  const pasteFrameMs = Math.round((await cdp.evaluate(`new Promise((resolve) => requestAnimationFrame(() => setTimeout(() => resolve(performance.now()), 0)))`)) - pasteStarted);
+  await cdp.waitFor(`window.__tspPerf.composeReplies.length > ${beforePaste.composeReplies.length}`, { timeoutMs: 180_000, label: "paste layout" });
+  const afterPaste = await snapshot();
+  const pasteReply = afterPaste.composeReplies.at(-1);
+  const pasteTasks = afterPaste.longTasks.filter((task) => task.t >= pasteStarted);
+  const head = await cdp.evaluate(`document.querySelector('[data-demo-target="editor"]').value.slice(0, ${PASTE.length})`);
+  assert.equal(head, PASTE, "the insertion reached the manuscript");
+  const savedAfterPaste = await savedContent();
+  const pasteAt = savedAfterPaste.indexOf(PASTE);
+  assert.ok(pasteAt >= 0 && savedAfterPaste.slice(0, pasteAt) + savedAfterPaste.slice(pasteAt + PASTE.length) === savedAfterTyping, "the saved manuscript is the typed one plus exactly the insertion");
+  const heapAfterEditsMb = await heapMb();
+
+  // Scenario E (TATESPUN_PERF_EXPORT=1) — "JPG ZIP" of every body page of the
+  // current layout. Records the main-thread long tasks while it runs and a
+  // SHA-256 per JPG entry, so two builds can be compared for identical output.
+  let exportResult = null;
+  if (process.env.TATESPUN_PERF_EXPORT === "1") {
+    await sleep(3000);
+    const doneBefore = session.downloads.filter((d) => d.state === "completed").length;
+    const exportStarted = await cdp.evaluate(`performance.now()`);
+    const wallStarted = Date.now();
+    await cdp.evaluate(`document.querySelector('[data-demo-target="export"]').click()`);
+    await cdp.waitFor(`!!document.querySelector('[data-export-menu-entry="jpg-zip"]')`, { label: "export menu" });
+    await cdp.evaluate(`document.querySelector('[data-export-menu-entry="jpg-zip"]').click()`);
+    const deadline = Date.now() + 600_000;
+    let download = null;
+    while (!download && Date.now() < deadline) {
+      download = session.downloads.filter((d) => d.state === "completed")[doneBefore] ?? null;
+      if (!download) await sleep(200);
+    }
+    assert.ok(download, "the ZIP export finished");
+    const wallMs = Date.now() - wallStarted;
+    const afterExport = await snapshot();
+    const tasks = afterExport.longTasks.filter((task) => task.t >= exportStarted);
+    const { default: JSZip } = await import("jszip");
+    const { createHash } = await import("node:crypto");
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const zip = await JSZip.loadAsync(readFileSync(download.filePath ?? join(session.downloadDir, download.name)));
+    const entries = {};
+    for (const name of Object.keys(zip.files).sort()) {
+      entries[name] = createHash("sha256").update(await zip.files[name].async("nodebuffer")).digest("hex").slice(0, 16);
+    }
+    exportResult = {
+      jpgs: Object.keys(entries).length,
+      wallMs,
+      longTaskCount: tasks.length,
+      longTaskTotalMs: Math.round(tasks.reduce((sum, task) => sum + task.d, 0)),
+      longTaskMaxMs: Math.round(Math.max(0, ...tasks.map((task) => task.d))),
+      entries,
+    };
+  }
+
   const result = {
     label: LABEL,
     pages: PAGES,
     chars: content.length,
-    open: { ms: openMs, previewPages: pagesShown, workers: afterOpen.workers, composePosts: afterOpen.composePosts.length, payloadImages: afterOpen.composePosts.map((p) => p.images) },
+    surface,
+    editorPage,
+    open: { ms: openMs, previewPages: pagesShown, workers: afterOpen.workers, composePosts: afterOpen.composePosts.length, payloadImages: afterOpen.composePosts.map((p) => p.images), replyDeserializeMs: Math.round(afterOpen.composeReplies[0]?.deserializeMs ?? -1) },
     isolated,
     burst,
+    latencyByFreshness,
+    caret: { toStartMs: caretToStartMs, toEndMs: caretToEndMs },
+    paste: { chars: PASTE.length, frameMs: pasteFrameMs, toLayoutMs: Math.round(pasteReply.t - pasteStarted), longTaskTotalMs: Math.round(pasteTasks.reduce((sum, task) => sum + task.d, 0)), longTaskMaxMs: Math.round(Math.max(0, ...pasteTasks.map((task) => task.d))) },
+    heapMb: { afterOpen: heapAfterOpenMb, afterEdits: heapAfterEditsMb },
+    export: exportResult,
   };
   console.log(JSON.stringify(result, null, 2));
   mkdirSync("scripts/perf/results", { recursive: true });
   writeFileSync(`scripts/perf/results/browser-${LABEL}-${PAGES}p.json`, JSON.stringify(result, null, 2));
 
-  // Correctness: the typed text is in the editor and the layout completed.
-  const tail = await cdp.evaluate(`document.querySelector('[data-demo-target="editor"]').value.slice(-11)`);
-  assert.equal(tail, "い".repeat(3) + "あ".repeat(8), "every keystroke reached the manuscript");
-  const errors = replies.filter((reply) => reply.type !== "complete");
+  const errors = afterPaste.composeReplies.slice(afterOpen.composeReplies.length).filter((reply) => reply.type !== "complete");
   if (errors.length > 0) log(`layout errors: ${JSON.stringify(errors.slice(0, 3))}`);
   assert.ok(errors.length === 0, "every layout completed");
   log("long manuscript perf: DONE");

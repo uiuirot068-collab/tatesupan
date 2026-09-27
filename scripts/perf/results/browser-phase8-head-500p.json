@@ -1,0 +1,126 @@
+{
+  "label": "phase8-head",
+  "pages": 500,
+  "chars": 236859,
+  "surface": "FULL",
+  "editorPages": 1,
+  "open": {
+    "ms": 4430,
+    "previewPages": 556,
+    "workers": 2,
+    "composePosts": 2,
+    "payloadImages": [
+      0,
+      2
+    ],
+    "replyDeserializeMs": 412
+  },
+  "isolated": [
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 1395,
+        "PageCard": 9,
+        "PreviewPage": 9,
+        "UnitBox": 3445
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 44
+      },
+      "replyDeserializeMs": 467,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 465,
+      "inputToRequestMs": 1018,
+      "requestToLayoutMs": 4075,
+      "inputToLayoutMs": 5093,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 558
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 45
+      },
+      "replyDeserializeMs": 369,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 403,
+      "inputToRequestMs": 758,
+      "requestToLayoutMs": 3228,
+      "inputToLayoutMs": 3985,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 558
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 46
+      },
+      "replyDeserializeMs": 527,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 418,
+      "inputToRequestMs": 721,
+      "requestToLayoutMs": 4570,
+      "inputToLayoutMs": 5291,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    }
+  ],
+  "burst": {
+    "keystrokes": 8,
+    "keystrokeFrameMsMedian": 577,
+    "requests": 8,
+    "workersCreated": 7,
+    "lastInputToFinalLayoutMs": 4492,
+    "longTaskCount": 13,
+    "longTaskTotalMs": 4991,
+    "longTaskMaxMs": 575
+  },
+  "latencyByFreshness": {
+    "fresh": [
+      3454,
+      3849
+    ],
+    "reused": [
+      4075,
+      3228,
+      4570
+    ]
+  },
+  "caret": {
+    "toStartMs": 4,
+    "toEndMs": 6
+  },
+  "paste": {
+    "chars": 5000,
+    "frameMs": 132,
+    "toLayoutMs": 5751,
+    "longTaskTotalMs": 1207,
+    "longTaskMaxMs": 492
+  },
+  "heapMb": {
+    "afterOpen": 71,
+    "afterEdits": 167
+  },
+  "export": null
+}
