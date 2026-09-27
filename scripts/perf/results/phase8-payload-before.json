@@ -1,0 +1,67 @@
+[
+  {
+    "pages": 10,
+    "physical": 12,
+    "legacyReplyKB": 3763,
+    "legacyCloneMs": 76.6,
+    "documentKB": 1299,
+    "modelKB": 1246,
+    "unitsKB": 17,
+    "sourceMapKB": 38,
+    "previewKB": 1463,
+    "previewNoDebugKB": 798,
+    "pageSequenceKB": 0
+  },
+  {
+    "pages": 50,
+    "physical": 56,
+    "legacyReplyKB": 18814,
+    "legacyCloneMs": 439.7,
+    "documentKB": 6528,
+    "modelKB": 6217,
+    "unitsKB": 85,
+    "sourceMapKB": 185,
+    "previewKB": 7315,
+    "previewNoDebugKB": 4001,
+    "pageSequenceKB": 1
+  },
+  {
+    "pages": 100,
+    "physical": 112,
+    "legacyReplyKB": 37949,
+    "legacyCloneMs": 737.7,
+    "documentKB": 13219,
+    "modelKB": 12531,
+    "unitsKB": 171,
+    "sourceMapKB": 371,
+    "previewKB": 14709,
+    "previewNoDebugKB": 8054,
+    "pageSequenceKB": 3
+  },
+  {
+    "pages": 300,
+    "physical": 333,
+    "legacyReplyKB": 114293,
+    "legacyCloneMs": 2311.3,
+    "documentKB": 39799,
+    "modelKB": 37791,
+    "unitsKB": 513,
+    "sourceMapKB": 1110,
+    "previewKB": 44242,
+    "previewNoDebugKB": 24283,
+    "pageSequenceKB": 8
+  },
+  {
+    "pages": 500,
+    "physical": 555,
+    "legacyReplyKB": 191275,
+    "legacyCloneMs": 3447.2,
+    "documentKB": 66763,
+    "modelKB": 63178,
+    "unitsKB": 855,
+    "sourceMapKB": 1850,
+    "previewKB": 73907,
+    "previewNoDebugKB": 40633,
+    "pageSequenceKB": 13
+  }
+]
