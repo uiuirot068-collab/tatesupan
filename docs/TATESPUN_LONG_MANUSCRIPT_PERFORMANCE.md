@@ -273,3 +273,203 @@ Browser (same session, side by side):
    latest" instead of terminate + recreate, once reply slimming makes compositions short. Decide
    from measurements.
 5. Move `buildPublicationPaintPlan` into the PDF/JPG worker.
+
+## 9. Phase 8: worker reply, lazy export model, rerenders, editor surface
+
+Measured 2026-09-27; the baseline is `67cc922` (Phase 7). The machine and method are as in §1.
+Three production builds were served side by side and measured in one sequential session:
+- `67cc922` FULL
+- Phase 8 FULL
+- Phase 8 WINDOWED (`NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED`)
+
+Raw JSON is in `scripts/perf/results/browser-phase8-{base,head,windowed}-{50,100,300,500}p.json`,
+`phase8-payload-{before,after}.json` and `phase8-export-stages.json`. The windowed editor
+evaluation is in `TATESPUN_WINDOWED_EDITOR_READINESS.md`.
+
+### 9.1 Method additions
+- `scripts/perf/payload.bench.ts`: decomposes the worker reply with `v8.serialize`, the
+  postMessage wire format, and times `structuredClone`. It is opt-in with `TATESPUN_PERF_PAYLOAD=1`.
+- `scripts/perf/exportStages.bench.ts`: measures the export stages: model clone, PaintPlan, the
+  PDF-worker start message clone, and the PDF render. It is opt-in with
+  `TATESPUN_PERF_EXPORT_STAGES=1` and needs `NODE_OPTIONS=--max-old-space-size=12288` at 300p.
+- `tests/e2e/longManuscriptPerf.e2e.mjs` now also records:
+  - reply deserialization: the first `event.data` access on the main thread
+  - React render counts per commit, split at the layout reply, through a DevTools-style commit
+    hook with no source instrumentation
+  - mounted spreads
+  - request → layout on a fresh vs a reused worker
+  - caret jump (start/end)
+  - a 5,000-character insertion (`Input.insertText`)
+  - JS heap after GC
+  - with `TATESPUN_PERF_EXPORT=1`, a full "JPG ZIP" export: main-thread long tasks and a SHA-256
+    per JPG
+- The probe asserts that the saved IndexedDB manuscript equals the original plus every keystroke
+  and the insertion. In WINDOWED it first mounts the last 編集ページ, so it types at the
+  manuscript end on both surfaces. The 300p/500p WINDOWED JSON files carry an `editorPages` field
+  from an earlier probe revision. It counts pages advanced + 1, not the total; the probe now
+  records the page indicator text (`editorPage`).
+
+### 9.2 Worker result audit (A–E classification)
+
+Documented in `src/lib/v2Bridge/previewWorkerProtocol.ts`.
+
+| data | consumer | class | after Phase 8 |
+|---|---|---|---|
+| preview body pages (paint geometry) | PageCard → PreviewPage | A Preview | every layout |
+| page model (`buildV2PreviewPageModel`) | page list, selection, caret, reorder, image pages | B page UI | every layout, built in the worker |
+| `pageSequence` | export page selection | B | every layout |
+| Publication `model` + `pageGeometry` | export PaintPlan | C export-only | **on export request only** |
+| per-unit `debug` paint info | PreviewRenderer debug mode | D diagnostics | **stripped** |
+| IMAGE unit data URLs in the preview | none (PageCard paints image overlays) | E derived | **placeholders** |
+| Core `document`, units, source map, layout settings | page model and model builders (in the worker) | E | **stay in the worker** |
+
+### 9.3 Worker payload before / after (Node, `v8.serialize` / `structuredClone`)
+
+| pages | before reply | after reply | removed (export model) | before clone | after clone | model clone on export |
+|---|---|---|---|---|---|---|
+| 10 | 3.7 MB | 0.8 MB (layout 12 KB + preview 0.8 MB) | 1.2 MB | 61 ms | 15 ms | 26 ms |
+| 50 | 18.3 MB | 4.0 MB (layout 58 KB + preview 3.9 MB) | 6.0 MB | 332 ms | 79 ms | 109 ms |
+| 100 | 36.9 MB | 8.0 MB (layout 117 KB + preview 7.9 MB) | 12.1 MB | 639 ms | 166 ms | 216 ms |
+| 300 | 111.2 MB | 24.3 MB (layout 350 KB + preview 24.0 MB) | 36.6 MB | 2,019 ms | 646 ms | 768 ms |
+| 500 | 186.7 MB | 40.7 MB (layout 583 KB + preview 40.1 MB) | 61.6 MB | 4,385 ms | 1,109 ms | 2,192 ms |
+
+- The reply is about 4.6× smaller at every size. What remains is almost all Preview paint
+  geometry (class A).
+- The per-unit debug info alone was about 45 % of the old paint document.
+
+### 9.4 Lazy export model
+
+The pipeline is: typing → worker → compact layout. On export:
+1. `awaitComposition(exact current input)` (the Phase 3 gate, unchanged).
+2. `publicationModel(layout, input)` fetches the model from the worker.
+3. The PaintPlan is built from it, followed by JPG/ZIP/PDF.
+
+Details:
+- The worker keeps the publication model of its last layout. If the export's `layoutId` matches,
+  it answers without composing again.
+- Otherwise the worker recomposes the export's exact input, and refuses a result whose page
+  sequence differs from the resolved layout. This covers a newer layout replacing the kept one,
+  or a replaced worker.
+- There is no second pagination path. The recomposition is the same `composeV2Layout` of the same
+  input, and it is checked.
+- Typing while an export is pending never terminates that worker. The new composition is queued
+  behind the export on the same worker, and the superseded reply is ignored.
+- A crash or dispose rejects every pending export.
+- `ExportPlanCache` is keyed on the layout object. A repeat export of an unchanged manuscript
+  reuses the plan and never asks for the model again.
+
+### 9.5 Browser before / after (sequential, one session)
+
+| pages | build | keystroke frame | reply deserialize | request → layout | per-layout PageCard / UnitBox renders | burst: requests / new workers / long tasks (total, max) | 5k insertion → layout | heap open / after edits |
+|---|---|---|---|---|---|---|---|---|
+| 50 | 67cc922 FULL | 102 ms | 166 ms | 504 ms | 9 / 3,645 | 1 / 0 / 320, 131 ms | 2,880 ms | 40 / 87 MB |
+| 50 | Phase 8 FULL | 93 ms | 29 ms | 287 ms | 1 / 242 | 1 / 0 / 74, 74 ms | 1,979 ms | 26 / 46 MB |
+| 50 | Phase 8 WINDOWED | 109 ms | 29 ms | 383 ms | 1 / 242 | 1 / 0 / 194, 84 ms | 2,566 ms | 26 / 41 MB |
+| 100 | 67cc922 FULL | 132 ms | 269 ms | 866 ms | 9 / 3,446 | 2 / 0 / 1,261, 286 ms | 2,851 ms | 59 / 143 MB |
+| 100 | Phase 8 FULL | 123 ms | 63 ms | 532 ms | 1 / 43 | 3 / 1 / 676, 103 ms | 2,507 ms | 31 / 61 MB |
+| 100 | Phase 8 WINDOWED | 119 ms | 61 ms | 545 ms | 1 / 43 | 1 / 0 / 621, 108 ms | 2,445 ms | 31 / 57 MB |
+| 300 | 67cc922 FULL | 286 ms | 1,063 ms | 3,087 ms | 9 / 3,449 | 8 / 7 / 2,837, 1,182 ms | 4,381 ms | 135 / 369 MB |
+| 300 | Phase 8 FULL | 279 ms | 213 ms | 1,654 ms | 1 / 45 | 8 / 7 / 1,796, 236 ms | 3,342 ms | 51 / 114 MB |
+| 300 | Phase 8 WINDOWED | 112 ms | 204 ms | 1,893 ms | 1 / 45 | 1 / 0 / 798, 231 ms | 5,730 ms | 51 / 112 MB |
+| 500 | 67cc922 FULL | 426 ms | 2,003 ms | 6,017 ms | 9 / 3,447 | 8 / 7 / 7,783, 2,419 ms | 7,497 ms | 212 / 592 MB |
+| 500 | Phase 8 FULL | 418 ms | 467 ms | 4,075 ms | 1 / 45 | 8 / 7 / 4,991, 575 ms | 5,751 ms | 71 / 167 MB |
+| 500 | Phase 8 WINDOWED | 103 ms | 423 ms | 3,141 ms | 1 / 45 | 1 / 0 / 1,271, 456 ms | 5,686 ms | 71 / 168 MB |
+
+- Each cell is one run; keystroke and request cells are the median of 3 isolated edits.
+- The 50p "242 UnitBox" is the edited page's glyph tree (a denser last page); the 100p+ fixture's
+  last page is short.
+- The 300p WINDOWED insertion → layout (5.7 s) is a single sample; at 500p both surfaces are equal.
+
+### 9.6 Preview rerender
+- Before: every layout reply re-rendered all mounted PageCards (9) and their whole glyph trees
+  (about 3,450 `UnitBox`). The reply is a fresh structured clone, and `PageCard`'s memo compared
+  `v2PreviewPage` by identity.
+- Now `samePaintPage` (`src/lib/v2Bridge/paintPageEquality.ts`) compares the paint data
+  structurally. Only the changed page re-renders: 1 PageCard, about 45 UnitBox. At 300p the
+  largest layout long task dropped from 1,182 ms to 236 ms.
+- `PreviewSpread` still renders on every PreviewPane commit, mounted or not (keystroke: 2 commits
+  × spreads in FULL, 1 × in WINDOWED). Unmounted spreads render `null` and their measure effect
+  does not re-run. The WINDOWED keystroke frame is flat from 50p (29 spreads, 109 ms) to 500p
+  (279 spreads, 103 ms), so these renders are not a measurable cost. **No change made**; no
+  blanket memoization.
+- Selection, images, warnings, overlays, mobile Preview and page order are unaffected. PageCard's
+  other props are compared as before, and a changed paint page always re-renders
+  (`paintPageEquality.test.ts`).
+
+### 9.7 Full editor input cost
+- The keystroke → next frame time of the FULL surface grows with manuscript size: 93 → 123 → 279 →
+  418 ms from 50p to 500p. It is the native textarea.
+- From about 300p it exceeds the 180 ms debounce, so every keystroke in a burst is a layout request.
+- There is a size-independent floor of about 100 ms on both surfaces, still unprofiled
+  (EditorPane per-keystroke work and the PreviewPane commits). Profile it next.
+
+### 9.8 Worker supersession
+- A fresh worker costs about 0.3 s more than a reused one at 50–100p. The cost is font parse and
+  cold caches: 561 vs 287 ms at 50p, 789–881 vs 532 ms at 100p. At 300–500p the difference is lost
+  in compose time: 1,913–2,170 vs 1,654 ms, and 3,454–3,849 vs 4,075 ms.
+- "Let it finish, then run the latest" would make the user wait for the rest of a stale
+  composition. On average that is half of 1.6–4 s at ≥300p, more than the ~0.3 s fresh-worker cost.
+- Superseding only happens when keystrokes are slower than the debounce, which is FULL at ≥300p.
+  WINDOWED removes it (1 request / 0 new workers per burst).
+- **No Core change.** The one Phase 8 change is that a pending export is never cancelled by
+  supersession (§9.4).
+
+### 9.9 Export main-thread cost
+
+Node, `exportStages.bench.ts`. It runs on the main thread in the browser unless noted.
+
+| pages | model clone (worker → main) | PaintPlan build | PDF-worker start message | its clone | main-thread total | PDF render (PDF worker) | PDF |
+|---|---|---|---|---|---|---|---|
+| 10 (12 physical) | 40 ms | 410 ms | 28 MB | 522 ms | 0.97 s | 4.2 s | 5.2 MB |
+| 100 (112) | 281 ms | 745 ms | 179 MB | 5,221 ms | 6.2 s | 39.5 s | 50 MB |
+| 300 (333) | 1,511 ms | 3,701 ms | 513 MB | 17,597 ms | 22.8 s | 114.7 s | 150 MB |
+
+- The largest main-thread cost of PDF export is posting the plan to the PDF worker: `postMessage`
+  serializes synchronously on the sender.
+- The plan is about 1.45 MB per page: 433 commands per page with nested per-glyph drawing
+  commands. The font is 11.3 MB of base64.
+- The fix is to build the PaintPlan inside the PDF/JPG worker from the publication model, which is
+  12.5 MB per 100p.
+- Browser "JPG ZIP" at 100p (120 JPGs) took 12.9–13.2 s wall on every build, with main-thread long
+  tasks of 1.5–1.8 s in total. The largest single task, about 1.2 s, is the plan build. Raster
+  yields between pages.
+- PDF export was not driven in the browser at long sizes in this phase.
+
+### 9.10 Output equivalence
+- The browser JPG ZIP of the same 100p manuscript (120 JPGs) has byte-identical entries on
+  `67cc922` FULL, Phase 8 FULL and Phase 8 WINDOWED, by SHA-256 per entry.
+- Unit tests check the lazily fetched publication model, including colophon, ruby, 傍点, ――/……
+  and images. It deep-equals a direct composition of the same input (`previewWorkerProtocol.test.ts`).
+- The live paint document equals the full one minus debug info and image URLs.
+- Every vitest config was run on `67cc922` and on Phase 8, and the regenerated QA files were
+  compared (54 files):
+  - 52 are identical, raw or after normalizing PDF CreationDate/ModDate/ID and timestamps.
+  - `zip-sample.zip` has identical entries; only the ZIP headers differ.
+  - `structural-colophon-final-product-qa.pdf` has two writers (§5). Regenerated per writer, it is
+    identical on both trees.
+- The failing test names are the same on both trees, except one publication test that timed out
+  under full-suite load (5.2 s vs the 5 s limit). It passes alone in 1.6 s.
+- E2E on the Phase 8 build: previewPageModel, imageWarningLifecycle, autosaveFlush,
+  mobileSharedExport and productionOddPageWarning pass. The desktop PDF is 164,289 bytes, the
+  same as Phase 6.1/7. editorInputIntegrity passes on both WINDOWED and FULL.
+
+### 9.11 Remaining bottlenecks (after Phase 8)
+1. **PDF export main thread.** The PaintPlan (≈1.45 MB/page) is serialized to the PDF worker:
+   5 s at 100p, 18 s at 300p.
+2. **FULL textarea keystroke** at ≥300p: 280–420 ms. WINDOWED fixes it but is not ready as the
+   default (readiness doc).
+3. **Preview paint geometry** is still 8 MB per 100 pages per layout (≈0.2 s deserialize at 300p,
+   0.45 s at 500p). A page-level diff would send only changed pages; `samePaintPage` shows most
+   pages are unchanged by an edit.
+4. **~100 ms size-independent keystroke floor**, not yet profiled.
+5. Compose time itself: 1.6 s at 300p, 3–4 s at 500p, per layout.
+
+### 9.12 Recommended next work
+1. Move `buildPublicationPaintPlan` into the PDF (and JPG) worker. Post the publication model
+   (and the font once, or have the worker load it) instead of the plan. Verify PDF equivalence
+   with the normalized comparison of §5.
+2. Send Preview page diffs (unchanged pages by reference to the previous layout) instead of the
+   whole paint document.
+3. Close the WINDOWED readiness gaps (IME and mobile human QA, selection/find model, E2E for
+   document switch and large paste). Then consider size-gated WINDOWED.
+4. Profile the ~100 ms keystroke floor.
