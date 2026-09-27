@@ -58,7 +58,7 @@ run("preview worker reply decomposition", () => {
     };
     // Phase 8 slim reply (only when the protocol module exists in this build).
     if (typeof workerProtocol.buildPreviewWorkerReply === "function") {
-      const reply = workerProtocol.buildPreviewWorkerReply(1, bridge, workerProtocol.buildLivePreviewDocument(bridge), content);
+      const reply = workerProtocol.buildPreviewWorkerReply(1, bridge, { kind: "full", document: workerProtocol.buildLivePreviewDocument(bridge) }, content);
       row.slimReplyKB = kb(reply);
       row.slimCloneMs = cloneMs(reply);
       row.slimLayoutKB = kb(reply.layout);

@@ -15,7 +15,7 @@
 // `rasterGenerator.ts` for Node/Vitest automated verification and QA
 // artifact generation -- this file contains ZERO runtime import of
 // `@napi-rs/canvas`, `Buffer`, `fs`, or `path`, and must never gain one.
-import type { PaintCommand, PaintPlan } from "./pdfGenerator";
+import type { PaintCommand, PaintPagePlan, PaintPlan } from "./pdfGenerator";
 import { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, mmToPx, ptToPx, computeLongSideResize } from "./rasterShared";
 import { WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE } from "../../core/settings/outputTypography";
 
@@ -278,6 +278,57 @@ export async function exportPaintPlanToBrowserJpgPages(
     const blob = await canvasToJpegBlob(targetCanvas, JPEG_QUALITY);
     results.push({ fileName: buildFileName(i + 1), blob, pixelWidth: targetCanvas.width, pixelHeight: targetCanvas.height });
     options.onProgress?.(i + 1, basePages.length);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  return results;
+}
+
+/**
+ * Phase 9: `exportPaintPlanToBrowserJpgPages` over pages produced on demand.
+ * Each page is built, painted, encoded and its canvases released before the
+ * next one, so neither the whole PaintPlan nor every page's canvas is held at
+ * once. Each page's canvas operations are the same, so each JPG is too.
+ */
+export async function exportPaintPagesToBrowserJpgPages(
+  pageCount: number,
+  pageAt: (index: number) => PaintPagePlan | Promise<PaintPagePlan>,
+  fontFamily: BrowserFontFamily | undefined,
+  buildFileName: (pageNumber: number) => string,
+  mode: JpgExportMode,
+  dpi: number = RASTER_DPI,
+  options: BrowserRasterProgressOptions = {}
+): Promise<BrowserJpgPageResult[]> {
+  if (typeof document === "undefined") {
+    throw new Error("exportPaintPagesToBrowserJpgPages: browser-only (no `document`) -- use rasterGenerator.ts (Node) instead");
+  }
+  if (fontFamily) await ensureFontReady(fontFamily);
+  const results: BrowserJpgPageResult[] = [];
+  for (let index = 0; index < pageCount; index += 1) {
+    await options.beforePage?.(index + 1, pageCount);
+    const page = await pageAt(index);
+    const widthPx = Math.max(1, Math.round(mmToPx(page.widthMm, dpi)));
+    const heightPx = Math.max(1, Math.round(mmToPx(page.heightMm, dpi)));
+    const canvas = document.createElement("canvas");
+    canvas.width = widthPx;
+    canvas.height = heightPx;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("exportPaintPagesToBrowserJpgPages: 2d context unavailable");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, widthPx, heightPx);
+    await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily, mode);
+    // Yield between painting and encoding, as the two-pass executor above
+    // does, so neither becomes one long main-thread task with the other.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const base: BrowserRasterPage = { canvas, pixelWidth: widthPx, pixelHeight: heightPx };
+    const targetCanvas = mode === "PRINT" ? toPrintCanvas(base) : canvas;
+    const blob = await canvasToJpegBlob(targetCanvas, JPEG_QUALITY);
+    results.push({ fileName: buildFileName(index + 1), blob, pixelWidth: targetCanvas.width, pixelHeight: targetCanvas.height });
+    // Release the backing stores now rather than at the next GC.
+    for (const used of new Set([canvas, targetCanvas])) {
+      used.width = 0;
+      used.height = 0;
+    }
+    options.onProgress?.(index + 1, pageCount);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   return results;

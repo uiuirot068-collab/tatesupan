@@ -17,31 +17,35 @@
  *    formula, so jsPDF embeds DeviceGray and the rasterizers draw gray.
  */
 import { encode } from "fast-png";
-import type { PaintCommand, PaintPlan } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import type { PaintCommand, PaintPagePlan, PaintPlan } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 
 type ImageCommand = Extract<PaintCommand, { op: "image" }>;
 
 export function applyImageLayerOrder(plan: PaintPlan, layerOrder: Record<string, number> | undefined): PaintPlan {
   if (!layerOrder || Object.keys(layerOrder).length === 0) return plan;
-  return plan.map((page) => {
-    const slots: number[] = [];
-    const images: Array<{ command: ImageCommand; tokenOrder: number }> = [];
-    page.commands.forEach((command, index) => {
-      if (command.op === "image" && command.refId !== undefined) {
-        slots.push(index);
-        images.push({ command, tokenOrder: images.length });
-      }
-    });
-    if (images.length < 2) return page;
-    const rank = (entry: { command: ImageCommand; tokenOrder: number }) => layerOrder[entry.command.refId!] ?? entry.tokenOrder;
-    const sorted = [...images].sort((a, b) => rank(a) - rank(b) || a.tokenOrder - b.tokenOrder);
-    if (sorted.every((entry, i) => entry === images[i])) return page;
-    const commands = page.commands.slice();
-    slots.forEach((slot, i) => {
-      commands[slot] = sorted[i].command;
-    });
-    return { ...page, commands };
+  return plan.map((page) => applyPageImageLayerOrder(page, layerOrder));
+}
+
+/** `applyImageLayerOrder` for one page (Phase 9: export builds and paints page by page). */
+export function applyPageImageLayerOrder(page: PaintPagePlan, layerOrder: Record<string, number> | undefined): PaintPagePlan {
+  if (!layerOrder || Object.keys(layerOrder).length === 0) return page;
+  const slots: number[] = [];
+  const images: Array<{ command: ImageCommand; tokenOrder: number }> = [];
+  page.commands.forEach((command, index) => {
+    if (command.op === "image" && command.refId !== undefined) {
+      slots.push(index);
+      images.push({ command, tokenOrder: images.length });
+    }
   });
+  if (images.length < 2) return page;
+  const rank = (entry: { command: ImageCommand; tokenOrder: number }) => layerOrder[entry.command.refId!] ?? entry.tokenOrder;
+  const sorted = [...images].sort((a, b) => rank(a) - rank(b) || a.tokenOrder - b.tokenOrder);
+  if (sorted.every((entry, i) => entry === images[i])) return page;
+  const commands = page.commands.slice();
+  slots.forEach((slot, i) => {
+    commands[slot] = sorted[i].command;
+  });
+  return { ...page, commands };
 }
 
 /**
@@ -70,6 +74,16 @@ export type RgbaDecoder = (bytes: Uint8Array, format: "JPEG" | "PNG") => Promise
 
 /** Replaces every image command's bytes with grayscale PNG bytes (each distinct image converted once). */
 export async function grayscalePlanImages(plan: PaintPlan, decode: RgbaDecoder): Promise<PaintPlan> {
+  const toGrayPage = createPageGrayscaler(decode);
+  return Promise.all(plan.map(toGrayPage));
+}
+
+/**
+ * Phase 9: `grayscalePlanImages` one page at a time. The returned function
+ * keeps one conversion per distinct image bytes object for its lifetime, so
+ * an image repeated on many pages is converted once.
+ */
+export function createPageGrayscaler(decode: RgbaDecoder): (page: PaintPagePlan) => Promise<PaintPagePlan> {
   const converted = new Map<Uint8Array, Promise<Uint8Array>>();
   const toGray = (command: ImageCommand) => {
     let pending = converted.get(command.bytes);
@@ -79,17 +93,15 @@ export async function grayscalePlanImages(plan: PaintPlan, decode: RgbaDecoder):
     }
     return pending;
   };
-  return Promise.all(
-    plan.map(async (page) => {
-      if (!page.commands.some((command) => command.op === "image")) return page;
-      const commands = await Promise.all(
-        page.commands.map(async (command): Promise<PaintCommand> =>
-          command.op === "image" ? { ...command, bytes: await toGray(command), format: "PNG" } : command
-        )
-      );
-      return { ...page, commands };
-    })
-  );
+  return async (page) => {
+    if (!page.commands.some((command) => command.op === "image")) return page;
+    const commands = await Promise.all(
+      page.commands.map(async (command): Promise<PaintCommand> =>
+        command.op === "image" ? { ...command, bytes: await toGray(command), format: "PNG" } : command
+      )
+    );
+    return { ...page, commands };
+  };
 }
 
 /** Browser decoder: the image's own pixels at native size, no scaling. */
@@ -99,6 +111,24 @@ export const decodeImageInBrowser: RgbaDecoder = async (bytes, format) => {
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("画像をグレースケールに変換できませんでした（2D context unavailable）。");
+    ctx.drawImage(bitmap, 0, 0);
+    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    return { data, width: bitmap.width, height: bitmap.height };
+  } finally {
+    bitmap.close();
+  }
+};
+
+/**
+ * Worker decoder (Phase 9 export worker): `decodeImageInBrowser` on an
+ * OffscreenCanvas — the same native-size draw and `getImageData` read.
+ */
+export const decodeImageInWorker: RgbaDecoder = async (bytes, format) => {
+  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: format === "PNG" ? "image/png" : "image/jpeg" }));
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("画像をグレースケールに変換できませんでした（2D context unavailable）。");
     ctx.drawImage(bitmap, 0, 0);

@@ -246,9 +246,10 @@ describe("expired-image placeholder is UI-only and never reaches publication out
   });
 
   it("the V2 export path builds pixels from the canonical PaintPlan, not from Preview DOM", () => {
-    const requirePlan = previewPane.slice(previewPane.indexOf("const requireV2ExportPlan"), previewPane.indexOf("const exportV2JpgPages"));
-    expect(requirePlan).toContain("buildPublicationPaintPlan(publication.model");
-    expect(requirePlan).not.toMatch(/pageElementsRef|capturePage|html-to-image|ensureExportMount/);
+    const jpg = previewPane.slice(previewPane.indexOf("const exportV2JpgPages"), previewPane.indexOf("const handleExportJpg = async"));
+    // Phase 9: pages are built by the export worker from the publication model.
+    expect(jpg).toContain("readPagesAhead(pages, physicalIndices)");
+    expect(jpg).not.toMatch(/pageElementsRef|capturePage|html-to-image|ensureExportMount/);
   });
 
   it("footer, modal and export block read the acknowledgment state; 通知解除 goes through the refusal rule", () => {

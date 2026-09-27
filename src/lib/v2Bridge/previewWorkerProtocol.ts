@@ -28,6 +28,12 @@
  * newer layout replaced it, or the worker was replaced), recomposes the SAME
  * exact input and checks the page sequence against the layout the export
  * already resolved.
+ *
+ * Phase 9: the model no longer has to cross to the main thread at all.
+ *  - PDF: the request carries a `MessagePort` whose other end belongs to
+ *    the export worker. The model goes worker → worker; the main thread only
+ *    gets a small acknowledgement (`delivered`).
+ *    JPG pages are built by the same export worker (exportWorkerProtocol.ts).
  */
 import type { PageSettings } from "../pageLayout";
 import type { V2LayoutResult } from "./composeV2Document";
@@ -35,6 +41,7 @@ import { buildV2PreviewDocument } from "./buildV2PreviewDocument";
 import { buildV2PreviewPageModel, type V2PreviewPageModel } from "./previewPageModel";
 import type { PhysicalPageRef } from "../../../typesetting-v2/core/layout/schema";
 import type { PaintDocument } from "../../../typesetting-v2/renderer/preview/paintModel";
+import { encodePreviewTransfer, type KeptPreview, type PreviewTransfer } from "./previewDelta";
 import type { PublicationDocument } from "../../../typesetting-v2/renderer/publication/paintModel";
 import type { PublicationPageGeometry } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 
@@ -65,18 +72,29 @@ export interface V2PublicationModel {
   pageSequence: PhysicalPageRef[];
 }
 
+/** The refusal prefix of every V2 browser export (HOLD / unresolved images). */
+export const V2_EXPORT_REFUSAL_PREFIX = "V2 Beta export";
+
 export interface PreviewWorkerLayoutReply {
   type: "complete";
   requestId: number;
   layout: V2PreviewLayout;
-  preview: PaintDocument;
+  /** Phase 9: a full snapshot, or only the pages that differ from the requester's base (previewDelta.ts). */
+  preview: PreviewTransfer;
 }
 
 export interface PreviewWorkerPublicationReply {
   type: "publication";
   requestId: number;
-  publication: V2PublicationModel;
+  /** Absent when the model was delivered to a port instead (`delivered: true`). */
+  publication?: V2PublicationModel;
+  delivered?: boolean;
 }
+
+/** What the Preview worker posts to an export port (Phase 9). */
+export type PublicationPortMessage =
+  | { ok: true; publication: V2PublicationModel }
+  | { ok: false; message: string };
 
 /** Keys that must never cross the boundary in a normal layout reply (architecture test). */
 export const EXPORT_ONLY_LAYOUT_KEYS = ["document", "model", "units", "source", "bodySourceMap", "colophonUnits", "colophonSource", "layoutSettings", "pageGeometry"] as const;
@@ -89,11 +107,33 @@ export const EXPORT_ONLY_LAYOUT_KEYS = ["document", "model", "units", "source", 
  */
 export function buildLivePreviewDocument(layout: V2LayoutResult): PaintDocument {
   const preview = buildV2PreviewDocument(layout, {});
-  for (const page of preview.pages) {
+  for (const page of [...preview.pages, ...(preview.colophonPages ?? [])]) {
+    // Phase 9: page-relative source positions. Line/unit ids and source spans
+    // carried absolute manuscript offsets, so one inserted character made
+    // every later page differ although it paints identically, and the delta
+    // transfer (previewDelta.ts) had to resend all of them. In the Editor
+    // they are only React keys and debug-mode labels (debug info is dropped
+    // here anyway); caret and selection mapping use the page model, which
+    // keeps absolute offsets.
+    let base = Infinity;
     for (const column of page.columns) {
       for (const line of column.lines) {
-        for (const unit of line.units) delete unit.debug;
+        for (const unit of line.units) base = Math.min(base, unit.sourceSpan.start);
       }
+    }
+    if (!Number.isFinite(base)) base = 0;
+    for (const column of page.columns) {
+      column.lines.forEach((line, lineIndex) => {
+        line.id = `line-${lineIndex}`;
+        line.units.forEach((unit, unitIndex) => {
+          delete unit.debug;
+          unit.id = `unit-${unitIndex}`;
+          // A new object: the span is shared with the Core document the page
+          // model and the export model are built from.
+          const span = unit.sourceSpan;
+          unit.sourceSpan = { ...span, start: span.start - base, end: span.end - base };
+        });
+      });
     }
   }
   return preview;
@@ -102,7 +142,7 @@ export function buildLivePreviewDocument(layout: V2LayoutResult): PaintDocument 
 export function buildPreviewWorkerReply(
   requestId: number,
   layout: V2LayoutResult,
-  preview: PaintDocument,
+  preview: PreviewTransfer,
   content: string
 ): PreviewWorkerLayoutReply {
   return {
@@ -122,8 +162,22 @@ export function publicationModelOf(layout: V2LayoutResult): V2PublicationModel {
 }
 
 export type PreviewWorkerRequest =
-  | { type: "compose"; requestId: number; input: PreviewWorkerInput }
-  | { type: "publication"; requestId: number; layoutId: number; pageSequence: PhysicalPageRef[]; input: PreviewWorkerInput };
+  | {
+      type: "compose";
+      requestId: number;
+      input: PreviewWorkerInput;
+      /** Phase 9: the layoutId of the Preview the main thread shows; absent = send a full snapshot. */
+      basePreviewLayoutId?: number;
+    }
+  | {
+      type: "publication";
+      requestId: number;
+      layoutId: number;
+      pageSequence: PhysicalPageRef[];
+      input: PreviewWorkerInput;
+      /** Phase 9: deliver the model here (the export worker's port) instead of in the reply. */
+      port?: MessagePort;
+    };
 
 /**
  * The worker's state machine, separate from `self` so it can be tested. It
@@ -134,6 +188,11 @@ export type PreviewWorkerRequest =
  */
 export class PreviewWorkerSession {
   private kept: { layoutId: number; publication: V2PublicationModel } | null = null;
+  /**
+   * Phase 9: the Preview documents this worker sent that the main thread may
+   * hold: the requester's current base and the latest one sent (at most two).
+   */
+  private sentPreviews: KeptPreview[] = [];
   /** Diagnostics (tests, benchmark). */
   recompositionsForExport = 0;
 
@@ -144,7 +203,10 @@ export class PreviewWorkerSession {
       const layout = await this.compose(message.input);
       const preview = buildLivePreviewDocument(layout);
       this.kept = { layoutId: message.requestId, publication: publicationModelOf(layout) };
-      return buildPreviewWorkerReply(message.requestId, layout, preview, message.input.content);
+      const base = message.basePreviewLayoutId === undefined ? null : this.sentPreviews.find((kept) => kept.layoutId === message.basePreviewLayoutId) ?? null;
+      const transfer = encodePreviewTransfer(preview, base);
+      this.sentPreviews = [...(base ? [base] : []), { layoutId: message.requestId, document: preview }];
+      return buildPreviewWorkerReply(message.requestId, layout, transfer, message.input.content);
     }
     let publication = this.kept?.layoutId === message.layoutId ? this.kept.publication : null;
     if (!publication) {

@@ -24,13 +24,17 @@
  * cancelled by typing: while one is pending, a newer composition is queued
  * behind it on the same worker instead of terminating the worker, and the
  * superseded composition's reply is ignored as before.
+ *
+ * Phase 9: `deliverPublication` sends the model to a `MessagePort` (the
+   * export worker's) instead of back here. It counts as a pending export for
+ * the rule above.
  */
 import { imageMarkerIds } from "../tategaki";
 import type { PhysicalPageRef } from "../../../typesetting-v2/core/layout/schema";
 import type { PreviewWorkerInput, V2PublicationModel } from "./previewWorkerProtocol";
 
 export interface PreviewWorkerLike {
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   terminate(): void;
   onmessage: ((event: MessageEvent) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
@@ -51,7 +55,7 @@ export class ReusablePreviewWorker {
   private worker: PreviewWorkerLike | null = null;
   private latestRequestId = 0;
   private inFlight: { id: number; deliver: (outcome: PreviewWorkerOutcome) => void } | null = null;
-  private publications = new Map<number, { resolve: (publication: V2PublicationModel) => void; reject: (error: Error) => void }>();
+  private publications = new Map<number, { resolve: (publication: V2PublicationModel | undefined) => void; reject: (error: Error) => void; delivery: boolean }>();
   /** Diagnostics for tests and the Phase 7 benchmark. */
   workersCreated = 0;
   requestsSent = 0;
@@ -59,10 +63,10 @@ export class ReusablePreviewWorker {
   constructor(private readonly createWorker: () => PreviewWorkerLike) {}
 
   /**
-   * Posts `{ type: "compose", requestId, input }`. `deliver` runs at most once,
+   * Posts `{ type: "compose", requestId, input, ...fields }` (Phase 9: `basePreviewLayoutId`). `deliver` runs at most once,
    * only for the latest request and only until the returned cancel is called.
    */
-  request(input: unknown, deliver: (outcome: PreviewWorkerOutcome) => void): () => void {
+  request(input: unknown, deliver: (outcome: PreviewWorkerOutcome) => void, fields?: Record<string, unknown>): () => void {
     const id = ++this.latestRequestId;
     if (this.inFlight) {
       // Busy with a superseded composition: replace the worker, unless an
@@ -81,7 +85,7 @@ export class ReusablePreviewWorker {
       },
     };
     this.requestsSent += 1;
-    worker.postMessage({ type: "compose", requestId: id, input });
+    worker.postMessage({ type: "compose", requestId: id, input, ...fields });
     return () => {
       active = false;
     };
@@ -93,12 +97,26 @@ export class ReusablePreviewWorker {
    * worker recomposes from them only if it no longer holds the layout.
    */
   requestPublication(layoutId: number, pageSequence: readonly PhysicalPageRef[], input: PreviewWorkerInput): Promise<V2PublicationModel> {
+    return this.postPublication({ layoutId, pageSequence, input }, false) as Promise<V2PublicationModel>;
+  }
+
+  /**
+   * Phase 9: posts the same model to `port` (transferred) instead of
+   * replying with it. Resolves once the worker has posted it there; rejects
+   * as `requestPublication` would (the port then gets `{ ok: false }`).
+   */
+  deliverPublication(layoutId: number, pageSequence: readonly PhysicalPageRef[], input: PreviewWorkerInput, port: MessagePort): Promise<void> {
+    return this.postPublication({ layoutId, pageSequence, input, port }, true).then(() => undefined);
+  }
+
+  private postPublication(fields: Record<string, unknown>, delivery: boolean): Promise<V2PublicationModel | undefined> {
     const id = ++this.latestRequestId;
     const worker = this.ensureWorker();
-    return new Promise<V2PublicationModel>((resolve, reject) => {
-      this.publications.set(id, { resolve, reject });
+    return new Promise<V2PublicationModel | undefined>((resolve, reject) => {
+      this.publications.set(id, { resolve, reject, delivery });
       this.requestsSent += 1;
-      worker.postMessage({ type: "publication", requestId: id, layoutId, pageSequence, input });
+      const port = fields.port as MessagePort | undefined;
+      worker.postMessage({ type: "publication", requestId: id, ...fields }, port ? [port] : undefined);
     });
   }
 
@@ -131,8 +149,9 @@ export class ReusablePreviewWorker {
     const publication = reply.requestId === undefined ? undefined : this.publications.get(reply.requestId);
     if (publication) {
       this.publications.delete(reply.requestId!);
-      if (reply.type === "publication" && reply.publication) publication.resolve(reply.publication as V2PublicationModel);
-      else publication.reject(new Error(reply.message ?? "V2 export: the publication model could not be built."));
+      if (reply.type === "publication" && (publication.delivery ? reply.delivered === true : reply.publication !== undefined)) {
+        publication.resolve(reply.publication as V2PublicationModel | undefined);
+      } else publication.reject(new Error(reply.message ?? "V2 export: the publication model could not be built."));
       return;
     }
     const inFlight = this.inFlight;

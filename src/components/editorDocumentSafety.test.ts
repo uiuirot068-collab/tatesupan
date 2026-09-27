@@ -85,9 +85,10 @@ describe("unmount cleanup", () => {
   });
 
   it("PreviewPane disposes its export coordinator on unmount; V2 PDF checks before starting a worker", () => {
-    expect(preview).toMatch(/exportCancellation\.activate\(\);\s*return \(\) => \{\s*exportCancellation\.dispose\(\);\s*v2PdfHandleRef\.current\?\.cancel\(\);/);
-    const pdf = body(preview, 'signal = beginExport("PDF", exportPlan.length);', "downloadBytes(bytes");
-    expect(pdf.indexOf("throwIfExportCancelled(signal);")).toBeLessThan(pdf.indexOf("startV2PdfWorker("));
+    expect(preview).toMatch(/exportCancellation\.activate\(\);\s*return \(\) => \{\s*exportCancellation\.dispose\(\);\s*v2PdfHandleRef\.current\?\.cancel\(\);\s*v2ExportWorker\.dispose\(\);/);
+    const pdf = body(preview, 'signal = beginExport("PDF", uniqueIndices.length);', "downloadBytes(bytes");
+    expect(pdf.indexOf("throwIfExportCancelled(signal);")).toBeGreaterThan(-1);
+    expect(pdf.indexOf("throwIfExportCancelled(signal);")).toBeLessThan(pdf.indexOf("v2ExportWorker.startPdf("));
     expect(pdf).toContain("await waitForExportPermission(signal);");
   });
 });

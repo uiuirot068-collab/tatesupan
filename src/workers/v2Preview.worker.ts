@@ -3,7 +3,7 @@
 import { loadV2BrowserMeasurementProvider } from "../lib/v2Bridge/browserMeasurementProvider";
 import { composeV2Layout } from "../lib/v2Bridge/composeV2Document";
 import { prepareImageResolver, type ImageResolutionCache } from "../lib/v2Bridge/imageResolverAdapter";
-import { PreviewWorkerSession, type PreviewWorkerRequest } from "../lib/v2Bridge/previewWorkerProtocol";
+import { PreviewWorkerSession, type PreviewWorkerRequest, type PublicationPortMessage } from "../lib/v2Bridge/previewWorkerProtocol";
 
 // Phase 7: this worker is reused across compositions (previewWorkerClient.ts),
 // so decoded images survive between them.
@@ -34,16 +34,29 @@ let queue: Promise<void> = Promise.resolve();
 self.onmessage = (event: MessageEvent<PreviewWorkerRequest>) => {
   const message = event.data;
   if (message.type !== "compose" && message.type !== "publication") return;
+  // Phase 9: a PDF export's model goes straight to the export worker's port;
+  // the main thread only hears that it was delivered.
+  const port = message.type === "publication" ? message.port : undefined;
   queue = queue
     .then(async () => {
-      self.postMessage(await session.handle(message));
+      const reply = await session.handle(message);
+      if (port && reply.type === "publication" && reply.publication) {
+        const delivered: PublicationPortMessage = { ok: true, publication: reply.publication };
+        port.postMessage(delivered);
+        port.close();
+        self.postMessage({ type: "publication", requestId: reply.requestId, delivered: true });
+        return;
+      }
+      self.postMessage(reply);
     })
     .catch((cause: unknown) => {
-      self.postMessage({
-        type: "error",
-        requestId: message.requestId,
-        message: cause instanceof Error ? cause.message : String(cause),
-      });
+      const text = cause instanceof Error ? cause.message : String(cause);
+      if (port) {
+        const failed: PublicationPortMessage = { ok: false, message: text };
+        port.postMessage(failed);
+        port.close();
+      }
+      self.postMessage({ type: "error", requestId: message.requestId, message: text });
     });
 };
 

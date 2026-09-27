@@ -830,6 +830,19 @@ export function buildPaintPlan(
   gposContext?: VerticalGposContext,
   yakumonoContext?: VerticalYakumonoAlignContext
 ): PaintPlan {
+  const source = paintPlanPageSource(doc, hasFont, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
+  return Array.from({ length: source.pageCount }, (_, physicalIndex) => source.pageAt(physicalIndex));
+}
+
+function paintPlanPageSource(
+  doc: PublicationDocument,
+  hasFont: boolean,
+  pageGeometry: PublicationPageGeometry | undefined,
+  baselineRatio: number,
+  outlineContext?: VerticalOutlineContext,
+  gposContext?: VerticalGposContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
+): PaintPlanPageSource {
   const colophonPageCount = doc.colophonPages?.length ?? 0;
   const bodyPageAt = (i: number) => buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, outlineContext, gposContext, yakumonoContext);
   // `physicalIndex` (Human Visual QA HOLD round 29): the SAME 0-based
@@ -843,11 +856,31 @@ export function buildPaintPlan(
     buildColophonPaintPage(doc.colophonPages![i], hasFont, pageGeometry, doc.bodyEmMm, doc.colophonPlacement, colophonPageCount, (physicalIndex + 1) % 2 === 1, outlineContext, doc.folioFontSizePt, doc.runningHeadFontSizePt);
 
   if (doc.pageSequence) {
-    return doc.pageSequence.map((ref, physicalIndex) => (ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index, physicalIndex)));
+    const sequence = doc.pageSequence;
+    return {
+      pageCount: sequence.length,
+      pageAt: (physicalIndex) => {
+        const ref = sequence[physicalIndex];
+        return ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index, physicalIndex);
+      },
+    };
   }
-  const bodyPlan = doc.pages.map((_, i) => bodyPageAt(i));
-  const colophonPlan = (doc.colophonPages ?? []).map((_, i) => colophonPageAt(i, doc.pages.length + i));
-  return [...bodyPlan, ...colophonPlan];
+  const bodyCount = doc.pages.length;
+  return {
+    pageCount: bodyCount + colophonPageCount,
+    pageAt: (physicalIndex) => (physicalIndex < bodyCount ? bodyPageAt(physicalIndex) : colophonPageAt(physicalIndex - bodyCount, physicalIndex)),
+  };
+}
+
+/**
+ * Phase 9: one physical page of the PaintPlan at a time. `pageAt(i)` is
+ * exactly `buildPaintPlan(...)[i]` (buildPaintPlan is `pageAt` over every
+ * index), so an exporter can build only the pages it outputs, in a worker,
+ * without holding the whole plan.
+ */
+export interface PaintPlanPageSource {
+  pageCount: number;
+  pageAt: (physicalIndex: number) => PaintPagePlan;
 }
 
 // Human Visual QA HOLD round 26: colophon pages are composed through
@@ -1357,26 +1390,40 @@ export async function renderPaintPlanToPdfAsync(
   fontResource?: PublicationFontResource,
   options: AsyncPdfRenderOptions = {}
 ): Promise<PublicationPdfResult> {
+  return renderPaintPagesToPdfAsync(plan.length, (index) => plan[index], fontResource, options);
+}
+
+/**
+ * Phase 9: `renderPaintPlanToPdfAsync` over pages produced on demand, so the
+ * export worker builds, paints and drops one page at a time instead of
+ * holding the whole plan. Same jsPDF calls in the same order.
+ */
+export async function renderPaintPagesToPdfAsync(
+  pageCount: number,
+  pageAt: (index: number) => PaintPagePlan | Promise<PaintPagePlan>,
+  fontResource?: PublicationFontResource,
+  options: AsyncPdfRenderOptions = {}
+): Promise<PublicationPdfResult> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
   if (fontResource) {
     pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
     pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
   }
-  for (let index = 0; index < plan.length; index += 1) {
-    await options.beforePage?.(index + 1, plan.length);
-    const page = plan[index];
+  for (let index = 0; index < pageCount; index += 1) {
+    await options.beforePage?.(index + 1, pageCount);
+    const page = await pageAt(index);
     const output = resolvePublicationPdfPageOutput(page.widthMm, page.heightMm, options.mode ?? "trim");
     pdf.addPage([output.widthMm, output.heightMm], "portrait");
     pdf.setPage(index + 2);
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
     paintPageCommands(pdf, page, output);
-    options.onProgress?.(index + 1, plan.length);
+    options.onProgress?.(index + 1, pageCount);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   pdf.deletePage(1);
   const arrayBuffer = pdf.output("arraybuffer") as ArrayBuffer;
-  return { bytes: new Uint8Array(arrayBuffer), pageCount: plan.length };
+  return { bytes: new Uint8Array(arrayBuffer), pageCount };
 }
 
 // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step 3):
@@ -1427,6 +1474,12 @@ export function findUnresolvedImageIssues(doc: PublicationDocument): string[] {
 // own exact, already-tested error-message wording (existing PDF tests
 // assert against `generatePublicationPdf`'s own exact prefix).
 export function buildPublicationPaintPlan(doc: PublicationDocument, fontResource: PublicationFontResource | undefined, pageGeometry: PublicationPageGeometry | undefined, refusalPrefix: string): PaintPlan {
+  const source = createPublicationPaintPlanBuilder(doc, fontResource, pageGeometry, refusalPrefix);
+  return Array.from({ length: source.pageCount }, (_, physicalIndex) => source.pageAt(physicalIndex));
+}
+
+/** The HOLD / unresolved-image pre-flight refusal every Publication export applies to the WHOLE document. */
+export function assertPublicationPaintable(doc: PublicationDocument, refusalPrefix: string): void {
   if (doc.hold) {
     throw new Error(`${refusalPrefix} for a HOLD document (${doc.holdReasons.join("; ")})`);
   }
@@ -1434,12 +1487,51 @@ export function buildPublicationPaintPlan(doc: PublicationDocument, fontResource
   if (imageIssues.length > 0) {
     throw new Error(`${refusalPrefix} with unresolved required image(s): ${imageIssues.join("; ")}`);
   }
+}
+
+/**
+ * The font-derived paint contexts `buildPublicationPaintPlan` needs. They
+ * depend only on the font, so a long-lived exporter (the Phase 9 export
+ * worker) prepares them once per font and reuses them for every document.
+ */
+export interface PublicationFontPaintContext {
+  fontResource: PublicationFontResource | undefined;
+  baselineRatio: number;
+  outlineContext?: VerticalOutlineContext;
+  gposContext?: VerticalGposContext;
+  yakumonoContext?: VerticalYakumonoAlignContext;
+}
+
+export function preparePublicationFontPaintContext(fontResource: PublicationFontResource | undefined): PublicationFontPaintContext {
   const baselineRatio = fontResource ? deriveBaselineRatioFromFont(fontResource) : FALLBACK_BASELINE_RATIO;
   const fontBytes = fontResource ? FontBinary.fromBase64(fontResource.base64) : undefined;
-  const outlineContext = fontBytes ? new VerticalOutlineContext(fontBytes) : undefined;
-  const gposContext = fontBytes ? new VerticalGposContext(fontBytes) : undefined;
-  const yakumonoContext = fontBytes ? new VerticalYakumonoAlignContext(fontBytes, baselineRatio) : undefined;
-  return buildPaintPlan(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
+  return {
+    fontResource,
+    baselineRatio,
+    outlineContext: fontBytes ? new VerticalOutlineContext(fontBytes) : undefined,
+    gposContext: fontBytes ? new VerticalGposContext(fontBytes) : undefined,
+    yakumonoContext: fontBytes ? new VerticalYakumonoAlignContext(fontBytes, baselineRatio) : undefined,
+  };
+}
+
+/**
+ * Phase 9: `buildPublicationPaintPlan` one page at a time — the same HOLD and
+ * unresolved-image refusal up front, then `pageAt(i)` equal to the full
+ * plan's page `i`.
+ */
+export function createPublicationPaintPlanBuilder(
+  doc: PublicationDocument,
+  fontResource: PublicationFontResource | undefined,
+  pageGeometry: PublicationPageGeometry | undefined,
+  refusalPrefix: string,
+  fontContext: PublicationFontPaintContext = preparePublicationFontPaintContext(fontResource)
+): PaintPlanPageSource {
+  assertPublicationPaintable(doc, refusalPrefix);
+  if (fontContext.fontResource !== fontResource) {
+    throw new Error(`${refusalPrefix}: the font paint context belongs to a different font`);
+  }
+  const { baselineRatio, outlineContext, gposContext, yakumonoContext } = fontContext;
+  return paintPlanPageSource(doc, !!fontResource, pageGeometry, baselineRatio, outlineContext, gposContext, yakumonoContext);
 }
 
 export function generatePublicationPdf(doc: PublicationDocument, fontResource?: PublicationFontResource, pageGeometry?: PublicationPageGeometry): PublicationPdfResult {

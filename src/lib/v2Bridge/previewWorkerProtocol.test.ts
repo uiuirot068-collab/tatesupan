@@ -59,7 +59,9 @@ describe("normal Preview layout reply excludes export-only data", () => {
     const reply = (await worker.handle({ type: "compose", requestId: 7, input: input(MANUSCRIPT, colophonSettings) })) as PreviewWorkerLayoutReply;
     expect(Object.keys(reply).sort()).toEqual(["layout", "preview", "requestId", "type"]);
     expect(Object.keys(reply.layout).sort()).toEqual(["layoutId", "pageModel", "pageSequence"]);
-    for (const part of [reply, reply.layout, reply.layout.pageModel, reply.preview]) {
+    expect(reply.preview.kind).toBe("full"); // Phase 9: the first layout is a full Preview snapshot
+    const preview = reply.preview.kind === "full" ? reply.preview.document : null;
+    for (const part of [reply, reply.layout, reply.layout.pageModel, preview!]) {
       for (const key of EXPORT_ONLY_LAYOUT_KEYS) expect(Object.keys(part)).not.toContain(key);
     }
     const json = JSON.stringify(reply, (_key, value) => (value instanceof Map ? [...value] : value));
@@ -78,12 +80,22 @@ describe("normal Preview layout reply excludes export-only data", () => {
     expect(replyBytes * 3).toBeLessThan(serialize(legacyReply).length);
   });
 
-  it("the live preview keeps every paint field the Editor renders (only debug info and image URLs differ)", () => {
+  it("the live preview keeps every paint field the Editor renders (only debug info, image URLs, and ids/source spans differ)", () => {
     const layout = composeFor(input(MANUSCRIPT));
     const full = buildV2PreviewDocument(layout, {});
     const live = buildLivePreviewDocument(layout);
-    const stripDebug = (value: typeof full) => JSON.parse(JSON.stringify(value, (key, v) => (key === "debug" ? undefined : v)));
-    expect(live).toEqual(stripDebug(full));
+    const paintOnly = (value: typeof full) => JSON.parse(JSON.stringify(value, (key, v) => (key === "debug" || key === "sourceSpan" || key === "id" ? undefined : v)));
+    expect(paintOnly(live)).toEqual(paintOnly(full));
+    // Phase 9: spans are page-relative (same lengths, first unit at 0) and ids positional.
+    live.pages.forEach((page, p) => {
+      const units = page.columns.flatMap((column) => column.lines.flatMap((line) => line.units));
+      const fullUnits = full.pages[p].columns.flatMap((column) => column.lines.flatMap((line) => line.units));
+      if (units.length === 0) return;
+      expect(Math.min(...units.map((unit) => unit.sourceSpan.start))).toBe(0);
+      const shift = Math.min(...fullUnits.map((unit) => unit.sourceSpan.start));
+      units.forEach((unit, i) => expect(unit.sourceSpan).toEqual({ ...fullUnits[i].sourceSpan, start: fullUnits[i].sourceSpan.start - shift, end: fullUnits[i].sourceSpan.end - shift }));
+      expect(page.columns[0].lines[0].id).toBe("line-0");
+    });
   });
 
   it("the page model in the reply equals the one the main thread used to build", async () => {
@@ -103,8 +115,8 @@ describe("export obtains the publication model of the exact layout it resolved",
     expect(composed).toHaveLength(1);
     expect(worker.recompositionsForExport).toBe(0);
     const direct = composeFor(input(MANUSCRIPT));
-    expect(reply.publication.model).toEqual(direct.model);
-    expect(reply.publication.pageGeometry).toEqual(direct.pageGeometry);
+    expect(reply.publication!.model).toEqual(direct.model);
+    expect(reply.publication!.pageGeometry).toEqual(direct.pageGeometry);
   });
 
   it("a newer layout replaced the kept one: the exact older input is recomposed, equal to its own composition", async () => {
@@ -115,13 +127,13 @@ describe("export obtains the publication model of the exact layout it resolved",
     const reply = (await worker.handle({ type: "publication", requestId: 3, layoutId: 1, pageSequence: olderReply.layout.pageSequence, input: older })) as PreviewWorkerPublicationReply;
     expect(worker.recompositionsForExport).toBe(1);
     expect(composed.at(-1)).toBe(MANUSCRIPT); // never the newer text
-    expect(reply.publication.model).toEqual(composeFor(older).model);
+    expect(reply.publication!.model).toEqual(composeFor(older).model);
   });
 
   it("a fresh worker (the old one was replaced) recomposes; a result that paginates differently is refused", async () => {
     const { worker } = session();
     const reply = (await worker.handle({ type: "publication", requestId: 1, layoutId: 99, pageSequence: composeFor(input(MANUSCRIPT)).document.pageSequence, input: input(MANUSCRIPT) })) as PreviewWorkerPublicationReply;
-    expect(reply.publication.model).toEqual(composeFor(input(MANUSCRIPT)).model);
+    expect(reply.publication!.model).toEqual(composeFor(input(MANUSCRIPT)).model);
     await expect(
       worker.handle({ type: "publication", requestId: 2, layoutId: 99, pageSequence: [{ kind: "body", index: 0 }], input: input(MANUSCRIPT) })
     ).rejects.toThrow("does not match");
@@ -134,7 +146,7 @@ describe("export obtains the publication model of the exact layout it resolved",
     const reply = (await worker.handle({ type: "publication", requestId: 6, layoutId: 5, pageSequence: layoutReply.layout.pageSequence, input: value })) as PreviewWorkerPublicationReply;
     const direct = composeFor(value);
     expect(direct.document.pageSequence.some((ref) => ref.kind === "colophon")).toBe(true);
-    expect(reply.publication.pageSequence).toEqual(direct.document.pageSequence);
-    expect(structuredClone(reply.publication.model)).toEqual(direct.model);
+    expect(reply.publication!.pageSequence).toEqual(direct.document.pageSequence);
+    expect(structuredClone(reply.publication!.model)).toEqual(direct.model);
   });
 });

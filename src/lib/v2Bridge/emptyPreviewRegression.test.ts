@@ -75,7 +75,7 @@ describe("empty manuscript Preview regression", () => {
     // composition and a crashed worker still surface as "V2 HOLD: <message>".
     const workerClient = source("src/lib/v2Bridge/previewWorkerClient.ts");
     expect(adapter).toContain("error: `V2 HOLD: ${message}`");
-    expect(adapter).toContain("if (!outcome.ok) {\n          fail(outcome.message);");
+    expect(adapter).toMatch(/if \(!outcome\.ok\) \{\s*fail\(outcome\.message\);/);
     expect(workerClient).toContain('inFlight.deliver({ ok: false, message: reply.message ?? "Preview worker failed" });');
     expect(workerClient).toContain('this.handleCrash(worker, event?.message || "Preview worker failed")');
     expect(previewPane).toContain("useV2Engine && v2Adapter.error");

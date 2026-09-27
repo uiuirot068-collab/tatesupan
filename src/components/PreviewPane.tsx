@@ -94,10 +94,8 @@ import {
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 import { bodyPageCount, bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
-import type { V2PreviewLayout } from "@/lib/v2Bridge/previewWorkerProtocol";
-import { applyImageLayerOrder, decodeImageInBrowser, ExportPlanCache, grayscalePlanImages } from "@/lib/v2Bridge/exportPlan";
+import { readPagesAhead, V2ExportWorkerClient, type ExportPageStream } from "@/lib/v2Bridge/exportWorkerClient";
 import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
-import type { PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
 
 import { imageMaxBoxForTextArea } from "@/lib/imageGeometry";
 import {
@@ -120,10 +118,9 @@ const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 const NO_LEGACY_PAGES: TategakiPage[] = [];
 const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
-import { loadV2PublicationFont, startV2PdfWorker, downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
-import { buildPublicationPaintPlan } from "../../typesetting-v2/renderer/publication/pdfGenerator";
-import { exportPaintPlanToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
+import { exportPaintPagesToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import {
@@ -458,6 +455,8 @@ const PreviewSpread = memo(function PreviewSpread({
 
 interface PreviewPaneProps {
   content: string;
+  /** Phase 9: the open document (TategakiEditor's work-session scope); a change forces a full Preview snapshot. */
+  documentKey?: string | null;
   /** 作品タイトル。書き出しファイル名の生成に使う（空なら既定のフォールバック名）。 */
   title?: string;
   settings: PageSettings;
@@ -539,6 +538,7 @@ interface PreviewPaneProps {
 
 function PreviewPane({
   content,
+  documentKey,
   title = "",
   settings,
   layout,
@@ -587,6 +587,7 @@ function PreviewPane({
     settings,
     title,
     images,
+    documentKey: documentKey ?? undefined,
   });
   // Phase 5: in V2 mode the Preview PAGE LIST comes from the canonical V2
   // layout (lib/v2Bridge/previewPageModel.ts) — page count, colophon slot,
@@ -906,7 +907,6 @@ function PreviewPane({
     if (!useV2Engine) return;
     supersedePendingCompositions({ content: getLatestContent?.() ?? content, settings, title, images });
   }, [useV2Engine, supersedePendingCompositions, getLatestContent, content, settings, title, images]);
-  const exportPlanCacheRef = useRef(new ExportPlanCache<[V2PreviewLayout, PublicationFontResource, Record<string, number>]>());
   const v2BodyPreviewPages = useMemo(() => {
     if (!v2Adapter.layout || !v2Adapter.preview) return [];
     return v2Adapter.layout.pageSequence
@@ -1452,6 +1452,11 @@ function PreviewPane({
   const [isExportCancelConfirmOpen, setIsExportCancelConfirmOpen] = useState(false);
   const [exportCancellation] = useState(() => new ExportCancellationCoordinator());
   const v2PdfHandleRef = useRef<WorkerPdfHandle | null>(null);
+  // Phase 9: one export worker per PreviewPane (exportWorkerProtocol.ts). It
+  // keeps its font and the last exported layout's model between exports.
+  const [v2ExportWorker] = useState(() => new V2ExportWorkerClient(
+    () => new Worker(new URL("../workers/v2Export.worker.ts", import.meta.url), { type: "module" })
+  ));
   // Phase 6.1: leaving the editor cancels an in-flight export — the V2 PDF
   // worker is terminated and no download fires after unmount. Every download
   // path waits at `waitForExportPermission(signal)` right before saving, so an
@@ -1462,8 +1467,9 @@ function PreviewPane({
     return () => {
       exportCancellation.dispose();
       v2PdfHandleRef.current?.cancel();
+      v2ExportWorker.dispose();
     };
-  }, [exportCancellation]);
+  }, [exportCancellation, v2ExportWorker]);
 
   const onExportActiveChangeRef = useRef(onExportActiveChange);
   useEffect(() => {
@@ -1617,26 +1623,20 @@ function PreviewPane({
 
   /**
    * Phase 3: the ONE entry point every V2 export uses. Waits for the layout
-   * composed from exactly the current source (never a stale one), then reuses
-   * or builds the export plan for (layout, font, layer order), with layer order
-   * and grayscale applied (exportPlan.ts). Page selection must use the returned
-   * `composed` layout so indices and pixels always come from the same revision.
+   * composed from exactly the current source (never a stale one). Page
+   * selection must use the returned `composed` layout so indices and pixels
+   * always come from the same revision.
    * Phase 8: the publication model is fetched from the worker for exactly
-   * that layout, only when a plan has to be built.
+   * that layout.
+   * Phase 9: no PaintPlan is built on this thread any more. The export
+   * worker receives the model from the Preview worker and builds each page
+   * (layer order and grayscale applied, exportWorkerProtocol.ts): PDF is
+   * written there too; JPG pages come back one at a time to be rasterized.
    */
-  const requireV2ExportPlan = async () => {
+  const requireV2ExportLayout = async () => {
     const input = currentCompositionInput();
     const composed = await v2Adapter.awaitComposition(input);
-    const font = await loadV2PublicationFont();
-    const layerOrder = imageLayerOrder ?? NO_IMAGE_LAYER_ORDER;
-    const plan = await exportPlanCacheRef.current.get([composed, font, layerOrder], async () => {
-      const publication = await v2Adapter.publicationModel(composed, input);
-      return grayscalePlanImages(
-        applyImageLayerOrder(buildPublicationPaintPlan(publication.model, font, publication.pageGeometry, "V2 Beta export"), layerOrder),
-        decodeImageInBrowser
-      );
-    });
-    return { composed, font, plan };
+    return { input, composed, layerOrder: imageLayerOrder ?? NO_IMAGE_LAYER_ORDER };
   };
 
   const exportV2JpgPages = async (
@@ -1644,19 +1644,31 @@ function PreviewPane({
     zipDownload: boolean
   ) => {
     let signal: AbortSignal | null = null;
+    let pages: ExportPageStream | null = null;
     try {
-      const { composed, plan } = await requireV2ExportPlan();
+      const { input, composed, layerOrder } = await requireV2ExportLayout();
       const selection = selectPages(composed.pageSequence);
       if (!selection) return;
       const { physicalIndices, filePageNumbers } = selection;
-      const exportPlan = physicalIndices.map((index) => plan[index]).filter((page) => page !== undefined);
-      if (exportPlan.length !== physicalIndices.length || exportPlan.length === 0) {
+      if (physicalIndices.length === 0 || physicalIndices.some((index) => composed.pageSequence[index] === undefined)) {
         throw new Error("V2 JPG export could not resolve the selected canonical pages.");
       }
-      signal = beginExport("画像", exportPlan.length);
+      signal = beginExport("画像", physicalIndices.length);
+      // Phase 9: pages are built in the export worker (model from the Preview
+      // worker, font there) and pulled one at a time; only rasterizing stays
+      // here, with the document's webfont.
+      // Unmounted while the layout was awaited: do not open the stream.
+      throwIfExportCancelled(signal);
+      pages = v2ExportWorker.openPages({
+        layout: composed,
+        deliverModel: (port) => v2Adapter.deliverPublication(composed, input, port),
+        layerOrder,
+      });
+      signal.addEventListener("abort", pages.close, { once: true });
       const mode = layout.paper.isPx ? "WEB" : "PRINT";
-      const output = await exportPaintPlanToBrowserJpgPages(
-        exportPlan,
+      const output = await exportPaintPagesToBrowserJpgPages(
+        physicalIndices.length,
+        readPagesAhead(pages, physicalIndices),
         "Shippori Mincho",
         (pageNumber) => buildPageJpgFileName(title, filePageNumbers[pageNumber - 1]),
         mode,
@@ -1684,6 +1696,7 @@ function PreviewPane({
         alert(error instanceof Error ? error.message : "V2 JPG export failed.");
       }
     } finally {
+      pages?.close();
       if (signal) finishExport(signal);
     }
   };
@@ -1934,25 +1947,31 @@ function PreviewPane({
       const perfStartedAt = performance.now();
       let perfPlanReadyAt = perfStartedAt;
       try {
-        const { composed, font, plan } = await requireV2ExportPlan();
+        const { input, composed, layerOrder } = await requireV2ExportLayout();
         perfPlanReadyAt = performance.now();
         const uniqueIndices = resolvePdfPhysicalIndices({
           pageSequence: composed.pageSequence,
-          planLength: plan.length,
+          planLength: composed.pageSequence.length,
           scope: pdfScope,
           bodyIndices: indices,
           includeColophon: includeColophonInPdf,
         });
-        const exportPlan = uniqueIndices.map((index) => plan[index]).filter((page) => page !== undefined);
-        if (exportPlan.length === 0 || exportPlan.length !== uniqueIndices.length) {
+        if (uniqueIndices.length === 0 || uniqueIndices.some((index) => composed.pageSequence[index] === undefined)) {
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
         }
-        signal = beginExport("PDF", exportPlan.length);
-        // Unmounted while the plan was prepared: do not start a worker.
+        signal = beginExport("PDF", uniqueIndices.length);
+        // Unmounted while the layout was awaited: do not start a worker.
         throwIfExportCancelled(signal);
         const perfWorkerStartedAt = performance.now();
-        const handle = startV2PdfWorker(exportPlan, font, pdfMode, ({ current, total }) => {
-          setExportProgress({ current, total });
+        // Phase 9: the export worker builds the pages; the model goes to it
+        // from the Preview worker, never through this thread.
+        const handle = v2ExportWorker.startPdf({
+          layout: composed,
+          deliverModel: (port) => v2Adapter.deliverPublication(composed, input, port),
+          physicalIndices: uniqueIndices,
+          layerOrder,
+          mode: pdfMode,
+          onProgress: ({ current, total }) => setExportProgress({ current, total }),
         });
         v2PdfHandleRef.current = handle;
         const cancelWorker = () => handle.cancel();
@@ -1971,7 +1990,7 @@ function PreviewPane({
             kind: "TateSpun PDF V2 perf audit",
             createdAt: new Date().toISOString(),
             mode: pdfMode,
-            pageCount: exportPlan.length,
+            pageCount: uniqueIndices.length,
             planMs: perfPlanReadyAt - perfStartedAt,
             workerMs: perfWorkerEndedAt - perfWorkerStartedAt,
             downloadTriggerMs: perfDownloadEndedAt - perfDownloadStartedAt,

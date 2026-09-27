@@ -45,7 +45,8 @@ describe("V2 layout worker: reused, trimmed payload, one debounce", () => {
 
   it("the worker echoes the request id and keeps a decode cache", () => {
     // Phase 8: the reply is built by previewWorkerProtocol (buildPreviewWorkerReply), echoing requestId.
-    expect(worker).toContain("self.postMessage(await session.handle(message));");
+    expect(worker).toContain("const reply = await session.handle(message);");
+    expect(worker).toContain("self.postMessage(reply);");
     expect(worker).toMatch(/type: "error",\s*requestId: message\.requestId,/);
     expect(worker).toContain("prepareImageResolver(input.images, imageCache)");
   });
@@ -61,10 +62,16 @@ describe("Phase 8: slim layout reply, export model on request", () => {
   it("the worker never posts the whole layout; export fetches the model of the exact awaited layout", () => {
     expect(worker).not.toMatch(/postMessage\(\{[^}]*\bbridge\b/);
     expect(adapter).toContain("workerClient.requestPublication(layout.layoutId, layout.pageSequence, workerPayload(wanted))");
-    const requirePlan = body(preview, "const requireV2ExportPlan = async () => {", "return { composed, font, plan };");
-    const awaited = requirePlan.indexOf("const composed = await v2Adapter.awaitComposition(input);");
-    expect(awaited).toBeGreaterThan(-1);
-    expect(requirePlan.indexOf("v2Adapter.publicationModel(composed, input)")).toBeGreaterThan(awaited);
+    expect(adapter).toContain("workerClient.deliverPublication(layout.layoutId, layout.pageSequence, workerPayload(wanted), port)");
+    const requireLayout = body(preview, "const requireV2ExportLayout = async () => {", "};");
+    expect(requireLayout).toContain("const composed = await v2Adapter.awaitComposition(input);");
+    // Phase 9: both export paths ask for the model of exactly that composed layout.
+    const jpg = body(preview, "const exportV2JpgPages = async (", "const handleExportJpg = async");
+    expect(jpg.indexOf("v2Adapter.deliverPublication(composed, input, port)")).toBeGreaterThan(jpg.indexOf("await requireV2ExportLayout()"));
+    expect(jpg).toContain("v2ExportWorker.openPages(");
+    expect(jpg).not.toContain("buildPublicationPaintPlan"); // no whole plan on this thread
+    const pdf = body(preview, "const runPdfExport = async (", "ensureExportMount(indices, includeColophonInPdf);");
+    expect(pdf.indexOf("v2Adapter.deliverPublication(composed, input, port)")).toBeGreaterThan(pdf.indexOf("await requireV2ExportLayout()"));
     expect(preview).toContain("const v2PageModel = useV2Engine && v2Adapter.layout ? v2Adapter.layout.pageModel : null;");
   });
 });

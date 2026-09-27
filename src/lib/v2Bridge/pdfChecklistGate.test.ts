@@ -57,7 +57,7 @@ describe("PDF pre-export Human Gate integration contract", () => {
     expect(request).toContain("void performDownloadPdf()");
     expect(request).not.toContain("beginExport(");
     expect(perform).toContain('beginExport("PDF"');
-    expect(perform).toContain("startV2PdfWorker");
+    expect(perform).toContain("v2ExportWorker.startPdf(");
     expect(perform).toContain("exportCustomPdf");
   });
 
