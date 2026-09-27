@@ -1249,6 +1249,7 @@ export default function TategakiEditor({
       {isSearchOpen && (
         <SearchReplaceModal
           content={content}
+          onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
           onReplace={(next) => {
             setContent(next);
             setIsSearchOpen(false);

@@ -2,11 +2,35 @@ import { useMemo, useState } from "react";
 
 interface SearchReplaceModalProps {
   content: string;
+  /**
+   * Phase 9: select a match in the editor (canonical offsets). The windowed
+   * editor mounts one 編集ページ, so browser find (Ctrl+F) cannot reach the
+   * rest of the manuscript; 前へ / 次へ here searches the whole canonical
+   * text on either editor surface.
+   */
+  onFind?: (start: number, end: number) => void;
   onReplace: (
     nextContent: string,
     replacements: readonly { deletedText: string; insertedText: string }[]
   ) => void;
   onClose: () => void;
+}
+
+/** Start offsets of every non-overlapping occurrence (the same matches `split`/replace-all count). */
+export function findMatchOffsets(content: string, searchText: string): number[] {
+  if (searchText === "") return [];
+  const offsets: number[] = [];
+  for (let at = content.indexOf(searchText); at !== -1; at = content.indexOf(searchText, at + searchText.length)) {
+    offsets.push(at);
+  }
+  return offsets;
+}
+
+/** The match index after `current` in direction `dir`, wrapping around. */
+export function stepMatchIndex(current: number, count: number, dir: 1 | -1): number {
+  if (count === 0) return -1;
+  if (current < 0) return dir === 1 ? 0 : count - 1;
+  return (current + dir + count) % count;
 }
 
 function escapeRegExp(value: string): string {
@@ -15,16 +39,23 @@ function escapeRegExp(value: string): string {
 
 export default function SearchReplaceModal({
   content,
+  onFind,
   onReplace,
   onClose,
 }: SearchReplaceModalProps) {
   const [searchText, setSearchText] = useState("");
   const [replaceText, setReplaceText] = useState("");
+  const [matchIndex, setMatchIndex] = useState(-1);
 
-  const matchCount = useMemo(() => {
-    if (searchText === "") return 0;
-    return content.split(searchText).length - 1;
-  }, [content, searchText]);
+  const matches = useMemo(() => findMatchOffsets(content, searchText), [content, searchText]);
+  const matchCount = matches.length;
+
+  const step = (dir: 1 | -1) => {
+    const next = stepMatchIndex(matchIndex, matchCount, dir);
+    if (next < 0 || !onFind) return;
+    setMatchIndex(next);
+    onFind(matches[next], matches[next] + searchText.length);
+  };
 
   const handleReplaceAll = () => {
     if (searchText === "") return;
@@ -56,7 +87,10 @@ export default function SearchReplaceModal({
         <input
           autoFocus
           value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            setMatchIndex(-1);
+          }}
           className="mb-3 w-full rounded border border-ink/20 bg-base px-3 py-2 text-sm text-ink outline-none focus:border-ink/60"
           placeholder="例: 山田"
         />
@@ -75,11 +109,34 @@ export default function SearchReplaceModal({
           {searchText === "" ? (
             "検索文字列を入力してください"
           ) : (
-            <span className="inline-block rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink">
-              {matchCount} 件見つかりました
+            <span className="inline-block rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-paper-ink" data-search-match-status="">
+              {matchIndex >= 0 && matchIndex < matchCount ? `${matchIndex + 1} / ${matchCount} 件目` : `${matchCount} 件見つかりました`}
             </span>
           )}
         </p>
+
+        {onFind && (
+          <div className="mb-4 flex justify-end gap-2">
+            <button
+              type="button"
+              data-search-step="prev"
+              onClick={() => step(-1)}
+              disabled={matchCount === 0}
+              className="rounded border border-ink/20 px-3 py-1.5 text-sm text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              前へ
+            </button>
+            <button
+              type="button"
+              data-search-step="next"
+              onClick={() => step(1)}
+              disabled={matchCount === 0}
+              className="rounded border border-ink/20 px-3 py-1.5 text-sm text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              次へ
+            </button>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button
