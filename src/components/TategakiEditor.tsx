@@ -1200,7 +1200,7 @@ export default function TategakiEditor({
                 : "md:w-[var(--preview-w)] md:flex-1"
           } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"} ${reviewBarEligible ? "md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""}`}
         >
-          <div className={`min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
+          <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
               content={previewContent}
               documentKey={workSessionScope}
@@ -1236,6 +1236,20 @@ export default function TategakiEditor({
               selected={selectedPages}
               onSelectedChange={setSelectedPages}
             />
+            {isSearchOpen && (
+              <div className="hidden md:block">
+                <SearchReplaceModal
+                  placement="preview"
+                  content={content}
+                  onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
+                  onReplace={(next) => {
+                    setContent(next);
+                    setIsSearchOpen(false);
+                  }}
+                  onClose={() => setIsSearchOpen(false)}
+                />
+              </div>
+            )}
           </div>
           {reviewBarEligible && (
             <div className="hidden md:block">
@@ -1247,15 +1261,18 @@ export default function TategakiEditor({
       </main>
 
       {isSearchOpen && (
-        <SearchReplaceModal
-          content={content}
-          onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
-          onReplace={(next) => {
-            setContent(next);
-            setIsSearchOpen(false);
-          }}
-          onClose={() => setIsSearchOpen(false)}
-        />
+        <div className="md:hidden">
+          <SearchReplaceModal
+            placement="screen"
+            content={content}
+            onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
+            onReplace={(next) => {
+              setContent(next);
+              setIsSearchOpen(false);
+            }}
+            onClose={() => setIsSearchOpen(false)}
+          />
+        </div>
       )}
 
       {isChecklistOpen && <ChecklistPanel onClose={() => setIsChecklistOpen(false)} />}

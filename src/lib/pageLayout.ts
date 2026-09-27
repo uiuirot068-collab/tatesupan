@@ -553,8 +553,10 @@ export interface MaxCapacityFromMarginsResult {
  * 内の computeRequiredTextAreaWidthMm のコメントで確認済み）。
  * これにより、ここで返した値をそのまま settings.charsPerLine /
  * linesPerColumn へ書き戻して computePageLayout に渡しても、追加の
- * clamp/downshiftは一切発生しない（derived value + 1 は逆に必ず
- * clampされ、これが「maximum」の証明になる）。
+ * clamp/downshiftは一切発生しない（1段組では derived value + 1 は逆に必ず
+ * clampされ、これが「maximum」の証明になる）。2段組の charsPerLine だけは
+ * 1段分の天地で算出する（上段・下段が用紙に収まる最大）。computePageLayout
+ * 側のclampは版面全高のままなので、2段組でもこの値がclampされることはない。
  */
 export function deriveMaxCapacityFromMargins(
   input: MaxCapacityFromMarginsInput
@@ -564,9 +566,19 @@ export function deriveMaxCapacityFromMargins(
   const linePitchMm = computeLinePitchMm(input.fontSizePt, input.lineHeightRatio);
 
   const textAreaWidthMm = computeTextAreaWidthMm(paper, input.marginGutter, input.marginOuter);
-  const textAreaHeightMm = Math.max(paper.heightMm - input.marginTop - input.marginBottom, 0);
+  // 縦書き2段組は上段・下段のスタックなので、1行が使える天地は1段分
+  // （computeColumnHeightMm）。1段組では版面高そのもの（従来と同一値）。
+  // Phase 9 Human QA: A5→2段で1行51字（版面全高）が導出され、上下の段が
+  // 用紙からはみ出していた。
+  const columnHeightMm = computeColumnHeightMm(
+    paper,
+    input.marginTop,
+    input.marginBottom,
+    input.columnCount,
+    input.columnGapMm
+  );
 
-  const charsPerLine = computeMaxCapacityChars(textAreaHeightMm, fontSizeMm);
+  const charsPerLine = computeMaxCapacityChars(columnHeightMm, fontSizeMm);
   const linesPerColumn = computeAutoLinesPerColumn(textAreaWidthMm, linePitchMm, input.columnCount);
 
   return {

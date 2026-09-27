@@ -55,6 +55,20 @@ export interface V2BridgeResult {
   colophonSource?: string;
   layoutSettings: PageCompositionSettings;
   pageGeometry: PublicationPageGeometry;
+  /** Paint-only placement: TateSpun 2段 stacks canonical columns top-to-bottom. */
+  columnStackDirection: "horizontal" | "vertical";
+  columnGapTicks: number;
+  /** The legacy 段 frame height (`computePageLayout().columnHeightMm`), in ticks. */
+  columnFrameTicks: number;
+}
+
+/** 2段 is a top/bottom stack of legacy-sized 段 frames (see renderer/columnStack.ts). */
+function editorColumnStack(settings: PageSettings) {
+  return {
+    columnStackDirection: settings.columnCount === 2 ? ("vertical" as const) : ("horizontal" as const),
+    columnGapTicks: mmToTicks(settings.columnGapMm),
+    columnFrameTicks: mmToTicks(computePageLayout(settings).columnHeightMm),
+  };
 }
 
 /**
@@ -104,6 +118,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   const pageGeometry = buildV2PageGeometry(input.settings);
   const folioSettings = buildV2FolioSettings(input.settings);
   const headerSettings = buildV2HeaderSettings(input.settings);
+  const columnStack = editorColumnStack(input.settings);
   const units = capEditorImageUnits(rawUnits, input.settings, layoutSettings.lineExtentTicks);
 
   const colophonEnabled = input.settings.colophon.enabled;
@@ -151,6 +166,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
     lineExtentTicks: layoutSettings.lineExtentTicks,
     columnExtentTicks: layoutSettings.columnExtentTicks,
     columnsPerPage: layoutSettings.columnsPerPage,
+    ...columnStack,
     measurementIdentity: document.version.measurementIdentity,
     paintFontIdentity: document.version.measurementIdentity,
     imageResolver: input.imageResolver,
@@ -182,5 +198,6 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
       : {}),
     layoutSettings,
     pageGeometry,
+    ...columnStack,
   };
 }

@@ -14,6 +14,8 @@ interface SearchReplaceModalProps {
     replacements: readonly { deletedText: string; insertedText: string }[]
   ) => void;
   onClose: () => void;
+  /** Desktop Preview uses a non-blocking pane panel; phone keeps the screen modal. */
+  placement?: "screen" | "preview";
 }
 
 /** Start offsets of every non-overlapping occurrence (the same matches `split`/replace-all count). */
@@ -42,6 +44,7 @@ export default function SearchReplaceModal({
   onFind,
   onReplace,
   onClose,
+  placement = "screen",
 }: SearchReplaceModalProps) {
   const [searchText, setSearchText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -49,6 +52,10 @@ export default function SearchReplaceModal({
 
   const matches = useMemo(() => findMatchOffsets(content, searchText), [content, searchText]);
   const matchCount = matches.length;
+  const activeOffset = matchIndex >= 0 && matchIndex < matchCount ? matches[matchIndex] : -1;
+  const activeContext = activeOffset >= 0
+    ? content.slice(Math.max(0, activeOffset - 16), Math.min(content.length, activeOffset + searchText.length + 16)).replace(/\s+/g, " ")
+    : "";
 
   const step = (dir: 1 | -1) => {
     const next = stepMatchIndex(matchIndex, matchCount, dir);
@@ -70,13 +77,17 @@ export default function SearchReplaceModal({
     );
   };
 
+  const panePlacement = placement === "preview";
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+      data-search-replace-placement={placement}
+      className={panePlacement
+        ? "pointer-events-none absolute inset-x-0 top-0 z-50 flex justify-center p-4"
+        : "fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"}
+      onClick={panePlacement ? undefined : onClose}
     >
       <div
-        className="w-full max-w-sm rounded-lg border border-ink/10 bg-base p-5 shadow-lg"
+        className="pointer-events-auto w-full max-w-sm rounded-lg border border-ink/10 bg-base p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold text-ink">置換</h2>
@@ -114,6 +125,12 @@ export default function SearchReplaceModal({
             </span>
           )}
         </p>
+
+        {activeContext && (
+          <p data-search-match-context="" className="mb-3 rounded border border-ink/10 bg-ink/[0.03] px-2 py-1.5 text-xs leading-relaxed text-ink/70">
+            …{activeContext}…
+          </p>
+        )}
 
         {onFind && (
           <div className="mb-4 flex justify-end gap-2">

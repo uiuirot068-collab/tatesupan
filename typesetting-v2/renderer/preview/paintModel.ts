@@ -36,6 +36,7 @@ import type { SourceSpan } from "../../core/source/span";
 import { tickToPx } from "./geometry";
 import { emphasisDotsForUnit, type EmphasisSide } from "../emphasisMarks";
 import { lastAtomExtentTicks } from "../lastAtomExtent";
+import { paintBodyExtentTicks, paintColumnPlacementTicks, type PaintColumnStackDirection } from "../columnStack";
 
 export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" | "UNKNOWN";
 
@@ -187,6 +188,11 @@ export interface PreviewRenderContext {
   lineExtentTicks: number;
   columnExtentTicks: number;
   columnsPerPage: number;
+  /** Editor 2段 is stacked top-to-bottom; omitted keeps historical horizontal Core fixtures. */
+  columnStackDirection?: PaintColumnStackDirection;
+  columnGapTicks?: number;
+  /** 段 frame height for the vertical stack (see ../columnStack.ts). */
+  columnFrameTicks?: number;
   nominalCellTicks: number;
   maxPages?: number;
   measurementIdentity: string;
@@ -403,6 +409,7 @@ function buildPaintLine(
   // before painting (STAGE-D-FIRST-LINE-INDENT-VISUAL-HOLD fix, carried
   // forward here as this foundation's own correct behavior from day one).
   const indentOffsetTicks = line.indentTick ?? 0;
+  const columnPlacement = paintColumnPlacementTicks(columnOrder, ctx);
   const isParagraphStartLine = line.indentTick !== undefined;
   const resolveImage = ctx.imageResolver ?? defaultPlaceholderImageResolver;
 
@@ -450,7 +457,7 @@ function buildPaintLine(
       kind,
       text,
       sourceSpan: placed.sourceSpan,
-      topPx: tickToPx(placed.yTick + indentOffsetTicks, ctx.scaleMultiplier),
+      topPx: tickToPx(columnPlacement.topTicks + placed.yTick + indentOffsetTicks, ctx.scaleMultiplier),
       heightPx,
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
@@ -494,7 +501,7 @@ function buildPaintColumn(
   return {
     id: column.id,
     order: columnIndex,
-    rightPx: tickToPx(columnIndex * ctx.columnExtentTicks, ctx.scaleMultiplier),
+    rightPx: tickToPx(paintColumnPlacementTicks(columnIndex, ctx).rightTicks, ctx.scaleMultiplier),
     widthPx: tickToPx(ctx.columnExtentTicks, ctx.scaleMultiplier),
     residualSpacePx: tickToPx(column.residualSpaceTick, ctx.scaleMultiplier),
     residualSpaceTick: column.residualSpaceTick,
@@ -509,11 +516,12 @@ function buildPaintPage(
   ctx: PreviewRenderContext,
   orientation: "vertical" | "horizontal" = "vertical"
 ): PaintPage {
+  const bodyExtent = paintBodyExtentTicks(ctx);
   return {
     id: page.id,
     order: page.order,
-    widthPx: tickToPx(ctx.columnsPerPage * ctx.columnExtentTicks, ctx.scaleMultiplier),
-    heightPx: tickToPx(ctx.lineExtentTicks, ctx.scaleMultiplier),
+    widthPx: tickToPx(bodyExtent.widthTicks, ctx.scaleMultiplier),
+    heightPx: tickToPx(bodyExtent.heightTicks, ctx.scaleMultiplier),
     manualBreakBefore,
     columns: page.columns.map((col, i) => buildPaintColumn(col, i, page.order, manualBreakBefore, lookup, ctx)),
     folio: page.folio,
@@ -570,5 +578,14 @@ export function buildColophonPaintPages(
   ctx: PreviewRenderContext
 ): PaintPage[] {
   const lookup = createPaintLookup(units, source);
-  return colophon.pages.map((page) => buildPaintPage(page, false, lookup, ctx, "horizontal"));
+  // The colophon is an isolated horizontal-writing block. TateSpun's body
+  // 2-column setting must not turn its canonical columns into the body's
+  // top/bottom stack; preserve the renderer's historical horizontal geometry.
+  const colophonContext: PreviewRenderContext = {
+    ...ctx,
+    columnStackDirection: "horizontal",
+    columnGapTicks: 0,
+    columnFrameTicks: undefined,
+  };
+  return colophon.pages.map((page) => buildPaintPage(page, false, lookup, colophonContext, "horizontal"));
 }
