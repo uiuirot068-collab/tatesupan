@@ -247,7 +247,7 @@ describe("expired-image placeholder is UI-only and never reaches publication out
 
   it("the V2 export path builds pixels from the canonical PaintPlan, not from Preview DOM", () => {
     const requirePlan = previewPane.slice(previewPane.indexOf("const requireV2ExportPlan"), previewPane.indexOf("const exportV2JpgPages"));
-    expect(requirePlan).toContain("buildPublicationPaintPlan(bridge.model");
+    expect(requirePlan).toContain("buildPublicationPaintPlan(publication.model");
     expect(requirePlan).not.toMatch(/pageElementsRef|capturePage|html-to-image|ensureExportMount/);
   });
 

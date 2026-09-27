@@ -18,8 +18,16 @@
  *
  * `referencedImages` trims the payload to the images the manuscript can
  * reference (same marker scan as the tokenizer).
+ *
+ * Phase 8: `requestPublication` asks the worker for one layout's export-only
+ * publication model (previewWorkerProtocol.ts). An export request is never
+ * cancelled by typing: while one is pending, a newer composition is queued
+ * behind it on the same worker instead of terminating the worker, and the
+ * superseded composition's reply is ignored as before.
  */
 import { imageMarkerIds } from "../tategaki";
+import type { PhysicalPageRef } from "../../../typesetting-v2/core/layout/schema";
+import type { PreviewWorkerInput, V2PublicationModel } from "./previewWorkerProtocol";
 
 export interface PreviewWorkerLike {
   postMessage(message: unknown): void;
@@ -29,7 +37,7 @@ export interface PreviewWorkerLike {
 }
 
 export interface PreviewWorkerReply {
-  type: "complete" | "error";
+  type: "complete" | "publication" | "error";
   requestId?: number;
   message?: string;
   [key: string]: unknown;
@@ -43,6 +51,7 @@ export class ReusablePreviewWorker {
   private worker: PreviewWorkerLike | null = null;
   private latestRequestId = 0;
   private inFlight: { id: number; deliver: (outcome: PreviewWorkerOutcome) => void } | null = null;
+  private publications = new Map<number, { resolve: (publication: V2PublicationModel) => void; reject: (error: Error) => void }>();
   /** Diagnostics for tests and the Phase 7 benchmark. */
   workersCreated = 0;
   requestsSent = 0;
@@ -55,7 +64,12 @@ export class ReusablePreviewWorker {
    */
   request(input: unknown, deliver: (outcome: PreviewWorkerOutcome) => void): () => void {
     const id = ++this.latestRequestId;
-    if (this.inFlight) this.discardWorker(); // busy with a superseded composition
+    if (this.inFlight) {
+      // Busy with a superseded composition: replace the worker, unless an
+      // export is waiting on it (then queue behind; the old reply is ignored).
+      if (this.publications.size === 0) this.discardWorker();
+      else this.inFlight = null;
+    }
     const worker = this.ensureWorker();
     let active = true;
     this.inFlight = {
@@ -73,10 +87,29 @@ export class ReusablePreviewWorker {
     };
   }
 
+  /**
+   * The export-only publication model of the layout `layoutId` (Phase 8).
+   * `input` and `pageSequence` are that layout's exact input and pages: the
+   * worker recomposes from them only if it no longer holds the layout.
+   */
+  requestPublication(layoutId: number, pageSequence: readonly PhysicalPageRef[], input: PreviewWorkerInput): Promise<V2PublicationModel> {
+    const id = ++this.latestRequestId;
+    const worker = this.ensureWorker();
+    return new Promise<V2PublicationModel>((resolve, reject) => {
+      this.publications.set(id, { resolve, reject });
+      this.requestsSent += 1;
+      worker.postMessage({ type: "publication", requestId: id, layoutId, pageSequence, input });
+    });
+  }
+
   dispose(): void {
     this.latestRequestId += 1;
     this.inFlight = null;
     this.discardWorker();
+  }
+
+  get pendingPublicationCount(): number {
+    return this.publications.size;
   }
 
   get isComposing(): boolean {
@@ -95,6 +128,13 @@ export class ReusablePreviewWorker {
 
   private handleReply(worker: PreviewWorkerLike, reply: PreviewWorkerReply): void {
     if (worker !== this.worker) return;
+    const publication = reply.requestId === undefined ? undefined : this.publications.get(reply.requestId);
+    if (publication) {
+      this.publications.delete(reply.requestId!);
+      if (reply.type === "publication" && reply.publication) publication.resolve(reply.publication as V2PublicationModel);
+      else publication.reject(new Error(reply.message ?? "V2 export: the publication model could not be built."));
+      return;
+    }
     const inFlight = this.inFlight;
     if (!inFlight || reply.requestId !== inFlight.id) return; // stale reply
     this.inFlight = null;
@@ -118,6 +158,9 @@ export class ReusablePreviewWorker {
     const worker = this.worker;
     this.worker = null;
     this.inFlight = null;
+    const publications = [...this.publications.values()];
+    this.publications.clear();
+    publications.forEach((publication) => publication.reject(new Error("V2 export: the Preview worker stopped.")));
     if (!worker) return;
     worker.onmessage = null;
     worker.onerror = null;

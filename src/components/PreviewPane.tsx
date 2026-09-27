@@ -93,9 +93,8 @@ import {
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 import { bodyPageCount, bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
-import { buildV2PreviewPageModel } from "@/lib/v2Bridge/previewPageModel";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
-import type { V2LayoutResult } from "@/lib/v2Bridge/composeV2Document";
+import type { V2PreviewLayout } from "@/lib/v2Bridge/previewWorkerProtocol";
 import { applyImageLayerOrder, decodeImageInBrowser, ExportPlanCache, grayscalePlanImages } from "@/lib/v2Bridge/exportPlan";
 import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
 import type { PublicationFontResource } from "../../typesetting-v2/renderer/publication/pdfGenerator";
@@ -596,10 +595,8 @@ function PreviewPane({
   // JPG/ZIP/PDF export. `listPages` / `listSourceRanges` are the LEGACY
   // paginator's values in LEGACY mode (unchanged), and also while the first V2
   // layout is still being composed or V2 failed (the V2 HOLD banner shows).
-  const v2PageModel = useMemo(
-    () => (useV2Engine && v2Adapter.bridge && v2Adapter.input ? buildV2PreviewPageModel(v2Adapter.bridge, v2Adapter.input.content) : null),
-    [useV2Engine, v2Adapter.bridge, v2Adapter.input]
-  );
+  // Phase 8: the worker builds the page model next to the layout it describes.
+  const v2PageModel = useV2Engine && v2Adapter.layout ? v2Adapter.layout.pageModel : null;
   // Phase 7: the LEGACY paginator (and its source ranges below) runs only
   // while something reads it: LEGACY mode (rollback), and in V2 mode until the
   // first V2 layout exists or while V2 is on HOLD. Once `v2PageModel` exists,
@@ -909,13 +906,13 @@ function PreviewPane({
     if (!useV2Engine) return;
     supersedePendingCompositions({ content: getLatestContent?.() ?? content, settings, title, images });
   }, [useV2Engine, supersedePendingCompositions, getLatestContent, content, settings, title, images]);
-  const exportPlanCacheRef = useRef(new ExportPlanCache<[V2LayoutResult, PublicationFontResource, Record<string, number>]>());
+  const exportPlanCacheRef = useRef(new ExportPlanCache<[V2PreviewLayout, PublicationFontResource, Record<string, number>]>());
   const v2BodyPreviewPages = useMemo(() => {
-    if (!v2Adapter.bridge || !v2Adapter.preview) return [];
-    return v2Adapter.bridge.document.pageSequence
+    if (!v2Adapter.layout || !v2Adapter.preview) return [];
+    return v2Adapter.layout.pageSequence
       .map((pageRef, physicalIndex) => pageRef.kind === "body" ? v2Adapter.preview?.pages[physicalIndex] : undefined)
       .filter((page): page is NonNullable<typeof page> => page !== undefined);
-  }, [v2Adapter.bridge, v2Adapter.preview]);
+  }, [v2Adapter.layout, v2Adapter.preview]);
   // TSP-LOOP-021 §2: which page's ⋮ menu is open (bodyIndex), or null. Lifted
   // here so opening one closes any other, and so an outside pointerdown /
   // Escape closes it. UI-only, never persisted.
@@ -1623,19 +1620,23 @@ function PreviewPane({
    * composed from exactly the current source (never a stale one), then reuses
    * or builds the export plan for (layout, font, layer order), with layer order
    * and grayscale applied (exportPlan.ts). Page selection must use the returned
-   * `bridge` so indices and pixels always come from the same revision.
+   * `composed` layout so indices and pixels always come from the same revision.
+   * Phase 8: the publication model is fetched from the worker for exactly
+   * that layout, only when a plan has to be built.
    */
   const requireV2ExportPlan = async () => {
-    const bridge = await v2Adapter.awaitComposition(currentCompositionInput());
+    const input = currentCompositionInput();
+    const composed = await v2Adapter.awaitComposition(input);
     const font = await loadV2PublicationFont();
     const layerOrder = imageLayerOrder ?? NO_IMAGE_LAYER_ORDER;
-    const plan = await exportPlanCacheRef.current.get([bridge, font, layerOrder], async () =>
-      grayscalePlanImages(
-        applyImageLayerOrder(buildPublicationPaintPlan(bridge.model, font, bridge.pageGeometry, "V2 Beta export"), layerOrder),
+    const plan = await exportPlanCacheRef.current.get([composed, font, layerOrder], async () => {
+      const publication = await v2Adapter.publicationModel(composed, input);
+      return grayscalePlanImages(
+        applyImageLayerOrder(buildPublicationPaintPlan(publication.model, font, publication.pageGeometry, "V2 Beta export"), layerOrder),
         decodeImageInBrowser
-      )
-    );
-    return { bridge, font, plan };
+      );
+    });
+    return { composed, font, plan };
   };
 
   const exportV2JpgPages = async (
@@ -1644,8 +1645,8 @@ function PreviewPane({
   ) => {
     let signal: AbortSignal | null = null;
     try {
-      const { bridge, plan } = await requireV2ExportPlan();
-      const selection = selectPages(bridge.document.pageSequence);
+      const { composed, plan } = await requireV2ExportPlan();
+      const selection = selectPages(composed.pageSequence);
       if (!selection) return;
       const { physicalIndices, filePageNumbers } = selection;
       const exportPlan = physicalIndices.map((index) => plan[index]).filter((page) => page !== undefined);
@@ -1902,7 +1903,7 @@ function PreviewPane({
     let bodyPageCountForWarning = pages.length;
     if (useV2Engine) {
       try {
-        bodyPageCountForWarning = bodyPageCount((await v2Adapter.awaitComposition(currentCompositionInput())).document.pageSequence);
+        bodyPageCountForWarning = bodyPageCount((await v2Adapter.awaitComposition(currentCompositionInput())).pageSequence);
       } catch (error: unknown) {
         alert(error instanceof Error ? error.message : "V2 PDF export failed.");
         return;
@@ -1933,10 +1934,10 @@ function PreviewPane({
       const perfStartedAt = performance.now();
       let perfPlanReadyAt = perfStartedAt;
       try {
-        const { bridge, font, plan } = await requireV2ExportPlan();
+        const { composed, font, plan } = await requireV2ExportPlan();
         perfPlanReadyAt = performance.now();
         const uniqueIndices = resolvePdfPhysicalIndices({
-          pageSequence: bridge.document.pageSequence,
+          pageSequence: composed.pageSequence,
           planLength: plan.length,
           scope: pdfScope,
           bodyIndices: indices,

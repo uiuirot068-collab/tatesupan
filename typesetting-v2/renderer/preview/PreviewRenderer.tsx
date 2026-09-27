@@ -201,13 +201,16 @@ function EmphasisDotMarks({ dots, fontSizePx, linePitchPx }: { dots: EmphasisDot
 
 function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode }) {
   const rubyLane = rubyLaneGeometry(fontSizePx, linePitchPx);
+  // DEBUG mode only (`unit.debug` is absent in the Editor's live Preview reply).
   const debugText =
-    `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug.yTick} ${unit.heightIsApproximate ? "~h" : ""}` +
-    (unit.semanticRunKind
-      ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${
-          unit.semanticRunKind === "DASH" ? "one native vertical shaping run" : "native-glyph"
-        }`
-      : "");
+    mode !== "debug"
+      ? ""
+      : `${unit.kind} [${unit.sourceSpan.start},${unit.sourceSpan.end}) y=${unit.debug?.yTick ?? "?"} ${unit.heightIsApproximate ? "~h" : ""}` +
+        (unit.semanticRunKind
+          ? ` runKind=${unit.semanticRunKind} runBoxTop=${unit.topPx.toFixed(1)}px runBoxHeight=${unit.heightPx.toFixed(1)}px paintStrategy=${
+              unit.semanticRunKind === "DASH" ? "one native vertical shaping run" : "native-glyph"
+            }`
+          : "");
   // P3-O09-RUBY-ANNOTATION-ANCHOR-HOLD: debug-only, human-readable trace of
   // the body run's own start/end alongside the annotation's, so a future
   // anchor discrepancy can be diagnosed from this tooltip alone.

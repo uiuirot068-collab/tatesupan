@@ -115,6 +115,59 @@ describe("ReusablePreviewWorker", () => {
   });
 });
 
+describe("ReusablePreviewWorker: export publication requests (Phase 8)", () => {
+  const input = { content: "本文", settings: {} as never, title: "T", images: {} };
+  const sequence = [{ kind: "body" as const, index: 0 }];
+
+  it("asks the worker for one layout's publication model and resolves with it", async () => {
+    const { client, workers, request } = setup();
+    request({ content: "本文" });
+    const layoutId = workers[0].lastRequestId;
+    workers[0].reply({ type: "complete", requestId: layoutId });
+    const pending = client.requestPublication(layoutId, sequence, input);
+    const message = workers[0].posted.at(-1) as unknown as Record<string, unknown>;
+    expect(message).toMatchObject({ type: "publication", layoutId, pageSequence: sequence, input });
+    workers[0].reply({ type: "publication", requestId: message.requestId as number, publication: { model: "M" } });
+    await expect(pending).resolves.toEqual({ model: "M" });
+    expect(client.pendingPublicationCount).toBe(0);
+  });
+
+  it("typing during an export never terminates the worker the export is waiting on", async () => {
+    const { client, workers, outcomes, request } = setup();
+    request({ content: "v1" });
+    workers[0].reply({ type: "complete", requestId: 1 });
+    const pending = client.requestPublication(1, sequence, input);
+    const publicationId = workers[0].lastRequestId;
+    request({ content: "v2" }); // composing while the export waits
+    request({ content: "v3" }); // supersedes v2: queued behind, not terminated
+    expect(workers[0].terminated).toBe(false);
+    expect(client.workersCreated).toBe(1);
+    workers[0].reply({ type: "publication", requestId: publicationId, publication: { model: "for v1" } });
+    await expect(pending).resolves.toEqual({ model: "for v1" });
+    workers[0].reply({ type: "complete", requestId: publicationId + 1, value: "v2" }); // superseded: ignored
+    workers[0].reply({ type: "complete", requestId: publicationId + 2, value: "v3" });
+    expect(outcomes.map((o) => (o.ok ? o.reply.value : null))).toEqual([undefined, "v3"]);
+    // With no export pending, a superseded composition replaces the worker again (Phase 7).
+    request({ content: "v4" });
+    request({ content: "v5" });
+    expect(workers[0].terminated).toBe(true);
+  });
+
+  it("a publication error rejects that export only; a crash or dispose rejects every pending export", async () => {
+    const { client, workers } = setup();
+    const failing = client.requestPublication(1, sequence, input);
+    workers[0].reply({ type: "error", requestId: workers[0].lastRequestId, message: "mismatch" });
+    await expect(failing).rejects.toThrow("mismatch");
+    expect(workers[0].terminated).toBe(false);
+    const crashed = client.requestPublication(1, sequence, input);
+    workers[0].crash();
+    await expect(crashed).rejects.toThrow("stopped");
+    const disposed = client.requestPublication(1, sequence, input);
+    client.dispose();
+    await expect(disposed).rejects.toThrow("stopped");
+  });
+});
+
 describe("referencedImages: the worker receives only this manuscript's images", () => {
   const pool: Record<string, string> = {};
   for (let i = 0; i < 100; i++) pool[`img${i}`] = `data:image/png;base64,${i}`;

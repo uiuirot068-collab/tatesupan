@@ -113,7 +113,10 @@ export interface PaintPlacedUnit {
   // centres are px from this unit's own `topPx`; the renderer only adds the
   // shared cross-axis lane. Absent == no 傍点.
   emphasisDots?: EmphasisDotsPaint;
-  debug: PaintDebugInfo;
+  // Read only by the renderer's DEBUG mode. `buildPaintDocument` always sets
+  // it; the Editor's live Preview worker drops it before postMessage (it is
+  // about 45 % of the paint document's structured-clone size, Phase 8).
+  debug?: PaintDebugInfo;
 }
 
 export interface EmphasisDotsPaint {
