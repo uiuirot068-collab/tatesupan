@@ -1,0 +1,49 @@
+{
+  "fontBytesKB": 8474,
+  "fontStringCloneMs": 4.5,
+  "fontBytesCloneMs": 3.7,
+  "rows": [
+    {
+      "pages": 10,
+      "physical": 12,
+      "modelKB": 1246,
+      "modelBodyPagesKB": 1246,
+      "modelColophonKB": 0,
+      "modelOtherKB": 1,
+      "modelCloneMs": 26.5,
+      "planPageAvgKB": 1448,
+      "planPageBuildAvgMs": 2.6,
+      "planPageCloneAvgMs": 24.7,
+      "planBuildTotalMs": 31,
+      "planCloneTotalMs": 296
+    },
+    {
+      "pages": 100,
+      "physical": 112,
+      "modelKB": 12531,
+      "modelBodyPagesKB": 12528,
+      "modelColophonKB": 0,
+      "modelOtherKB": 3,
+      "modelCloneMs": 208.3,
+      "planPageAvgKB": 1533,
+      "planPageBuildAvgMs": 3.7,
+      "planPageCloneAvgMs": 28,
+      "planBuildTotalMs": 409,
+      "planCloneTotalMs": 3132
+    },
+    {
+      "pages": 300,
+      "physical": 333,
+      "modelKB": 37791,
+      "modelBodyPagesKB": 37782,
+      "modelColophonKB": 0,
+      "modelOtherKB": 8,
+      "modelCloneMs": 871.5,
+      "planPageAvgKB": 1544,
+      "planPageBuildAvgMs": 3.3,
+      "planPageCloneAvgMs": 27.2,
+      "planBuildTotalMs": 1083,
+      "planCloneTotalMs": 9048
+    }
+  ]
+}

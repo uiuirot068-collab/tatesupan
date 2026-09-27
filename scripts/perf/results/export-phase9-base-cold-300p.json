@@ -1,0 +1,34 @@
+{
+  "label": "phase9-base-cold",
+  "pages": 300,
+  "previewPages": 310,
+  "note": "Reconstructed from the probe log: the run was aborted before it wrote its JSON (300p PDF).",
+  "results": [
+    {
+      "kind": "jpg",
+      "wallMs": 3737,
+      "longTaskCount": 2,
+      "longTaskTotalMs": 2789,
+      "longTaskMaxMs": 2407,
+      "maxHeartbeatGapMs": 2460,
+      "heapAfterMb": 689,
+      "bytes": 266238,
+      "sha": "3bb7ecb20ed9fa88"
+    },
+    {
+      "kind": "zip",
+      "wallMs": 271177,
+      "longTaskCount": 244,
+      "longTaskTotalMs": 94092,
+      "longTaskMaxMs": 1518,
+      "maxHeartbeatGapMs": 1589,
+      "heapAfterMb": 689,
+      "jpgs": 310,
+      "entriesSha": "db87dfc17e090f0c"
+    },
+    {
+      "kind": "pdf",
+      "failed": "no download within 20 min (probe without crash/dialog detection; see pdfretry file)"
+    }
+  ]
+}

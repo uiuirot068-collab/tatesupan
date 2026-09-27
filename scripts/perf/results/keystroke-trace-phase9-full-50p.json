@@ -1,0 +1,215 @@
+{
+  "label": "phase9-full",
+  "pages": 50,
+  "surface": "FULL",
+  "idleFrameMs": 2,
+  "results": [
+    {
+      "mode": "probe",
+      "frameMs": 99,
+      "windowMs": 99.1,
+      "mainBusyMs": 94.8,
+      "idleMs": 4.4,
+      "byKind": {
+        "composite": 49.8,
+        "layout": 29.3,
+        "paint": 5.5,
+        "event:input": 4.5,
+        "script": 2.9,
+        "style": 2.2,
+        "rAF": 0.4,
+        "timer": 0.1,
+        "event:selectionchange": 0
+      },
+      "renderingByEvent": {
+        "Layerize": 46.3,
+        "Layout": 29.3,
+        "PrePaint": 3.9,
+        "Commit": 3.4,
+        "Paint": 1.6
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 2.2,
+        "(anon)@2su1ootem9gwi.js": 0.5,
+        "tM@2-lqsb8cw7v4d.js": 0.2,
+        "?": 0.1,
+        "(anon)@2-lqsb8cw7v4d.js": 0.1
+      }
+    },
+    {
+      "mode": "native",
+      "frameMs": 125,
+      "windowMs": 125.3,
+      "mainBusyMs": 117.4,
+      "idleMs": 7.9,
+      "byKind": {
+        "composite": 107.8,
+        "paint": 2.3,
+        "style": 1.7,
+        "event:input": 1.5,
+        "event:textInput": 1.4,
+        "script": 1.3,
+        "layout": 0.5,
+        "event:selectionchange": 0.4,
+        "rAF": 0.2,
+        "event:beforeinput": 0.2,
+        "timer": 0.2,
+        "event:focusin": 0.1,
+        "event:focus": 0,
+        "event:DOMFocusIn": 0
+      },
+      "renderingByEvent": {
+        "Layerize": 99.6,
+        "Commit": 8.1,
+        "Paint": 2,
+        "Layout": 0.5,
+        "PrePaint": 0.3
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 1.6,
+        "O@2su1ootem9gwi.js": 1.2,
+        "t@2-lqsb8cw7v4d.js": 0.2,
+        "?": 0.1,
+        "tM@2-lqsb8cw7v4d.js": 0.1,
+        "(anon)@2-lqsb8cw7v4d.js": 0,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "probe",
+      "frameMs": 89,
+      "windowMs": 88.6,
+      "mainBusyMs": 86.9,
+      "idleMs": 1.6,
+      "byKind": {
+        "composite": 49.5,
+        "layout": 27.5,
+        "paint": 5.2,
+        "event:input": 1.7,
+        "style": 1.2,
+        "script": 0.9,
+        "event:selectionchange": 0.7,
+        "rAF": 0.2,
+        "timer": 0.1
+      },
+      "renderingByEvent": {
+        "Layerize": 46.7,
+        "Layout": 27.5,
+        "PrePaint": 3.8,
+        "Commit": 2.8,
+        "Paint": 1.4
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 0.8,
+        "tM@2-lqsb8cw7v4d.js": 0.1,
+        "?": 0.1,
+        "(anon)@2-lqsb8cw7v4d.js": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "native",
+      "frameMs": 135,
+      "windowMs": 134.9,
+      "mainBusyMs": 126.7,
+      "idleMs": 8.2,
+      "byKind": {
+        "composite": 115.7,
+        "paint": 2.6,
+        "style": 2.1,
+        "event:input": 2.1,
+        "event:textInput": 1.6,
+        "script": 1,
+        "layout": 0.5,
+        "event:selectionchange": 0.4,
+        "rAF": 0.3,
+        "event:beforeinput": 0.2,
+        "timer": 0.1
+      },
+      "renderingByEvent": {
+        "Layerize": 107.5,
+        "Commit": 8.2,
+        "Paint": 2.2,
+        "Layout": 0.5,
+        "PrePaint": 0.4
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 2,
+        "O@2su1ootem9gwi.js": 0.9,
+        "tM@2-lqsb8cw7v4d.js": 0.1,
+        "t@2-lqsb8cw7v4d.js": 0.1,
+        "?": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0,
+        "(anon)@2-lqsb8cw7v4d.js": 0
+      }
+    },
+    {
+      "mode": "probe-preview-hidden",
+      "frameMs": 45,
+      "windowMs": 45.1,
+      "mainBusyMs": 43,
+      "idleMs": 2.2,
+      "byKind": {
+        "layout": 33.3,
+        "paint": 4.7,
+        "event:input": 2.5,
+        "script": 1.1,
+        "style": 0.4,
+        "composite": 0.4,
+        "event:selectionchange": 0.3,
+        "rAF": 0.2,
+        "timer": 0.1
+      },
+      "renderingByEvent": {
+        "Layout": 33.3,
+        "PrePaint": 3.8,
+        "Paint": 0.8,
+        "Commit": 0.2,
+        "Layerize": 0.2
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 1,
+        "tM@2-lqsb8cw7v4d.js": 0.1,
+        "?": 0,
+        "(anon)@2-lqsb8cw7v4d.js": 0,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "native-preview-hidden",
+      "frameMs": 21,
+      "windowMs": 20.6,
+      "mainBusyMs": 7.7,
+      "idleMs": 12.9,
+      "byKind": {
+        "event:textInput": 1.4,
+        "paint": 1.4,
+        "composite": 1.1,
+        "event:input": 1.1,
+        "script": 0.9,
+        "style": 0.5,
+        "layout": 0.4,
+        "rAF": 0.3,
+        "timer": 0.3,
+        "event:selectionchange": 0.2,
+        "event:beforeinput": 0.1
+      },
+      "renderingByEvent": {
+        "Paint": 0.9,
+        "Layerize": 0.6,
+        "Commit": 0.6,
+        "PrePaint": 0.5,
+        "Layout": 0.4
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 1.1,
+        "O@2su1ootem9gwi.js": 0.8,
+        "?": 0.2,
+        "tM@2-lqsb8cw7v4d.js": 0.1,
+        "t@2-lqsb8cw7v4d.js": 0.1,
+        "(anon)@2-lqsb8cw7v4d.js": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    }
+  ]
+}

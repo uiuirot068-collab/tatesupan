@@ -1,0 +1,11 @@
+{
+  "label": "phase9-base-pdfretry",
+  "pages": 300,
+  "previewPages": 310,
+  "results": [
+    {
+      "kind": "pdf",
+      "failed": "pdf export finished within 600000 ms (last progress: 書き出し中 (310/310)...)"
+    }
+  ]
+}

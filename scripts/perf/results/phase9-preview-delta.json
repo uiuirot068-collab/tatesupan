@@ -1,0 +1,54 @@
+[
+  {
+    "pages": 50,
+    "physical": 56,
+    "kind": "delta",
+    "pagesSent": 1,
+    "pagesReused": 55,
+    "fullReplyKB": 3790,
+    "deltaReplyKB": 127,
+    "fullCloneMs": 65.5,
+    "deltaCloneMs": 1.6,
+    "workerEncodeMs": 35.3,
+    "mainApplyMs": 0.2
+  },
+  {
+    "pages": 100,
+    "physical": 112,
+    "kind": "delta",
+    "pagesSent": 1,
+    "pagesReused": 111,
+    "fullReplyKB": 7593,
+    "deltaReplyKB": 186,
+    "fullCloneMs": 139.6,
+    "deltaCloneMs": 1.6,
+    "workerEncodeMs": 56.5,
+    "mainApplyMs": 0
+  },
+  {
+    "pages": 300,
+    "physical": 333,
+    "kind": "delta",
+    "pagesSent": 1,
+    "pagesReused": 332,
+    "fullReplyKB": 22900,
+    "deltaReplyKB": 421,
+    "fullCloneMs": 453,
+    "deltaCloneMs": 2.9,
+    "workerEncodeMs": 154.6,
+    "mainApplyMs": 0.1
+  },
+  {
+    "pages": 500,
+    "physical": 555,
+    "kind": "delta",
+    "pagesSent": 1,
+    "pagesReused": 554,
+    "fullReplyKB": 38361,
+    "deltaReplyKB": 655,
+    "fullCloneMs": 825.4,
+    "deltaCloneMs": 5.3,
+    "workerEncodeMs": 254.3,
+    "mainApplyMs": 0.1
+  }
+]

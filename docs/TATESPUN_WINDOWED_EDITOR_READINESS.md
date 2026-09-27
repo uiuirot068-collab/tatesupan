@@ -1,4 +1,4 @@
-# TateSpun Windowed (Paged) Editor Readiness (Phase 8)
+# TateSpun Windowed (Paged) Editor Readiness (Phase 8, updated in Phase 9)
 
 Measured 2026-09-27 on branch `tsp-post-beta-typography-phase1`. Performance numbers and method
 are in `TATESPUN_LONG_MANUSCRIPT_PERFORMANCE.md` §9. **Verdict: not ready to be the default.** It
@@ -52,19 +52,43 @@ a behavioural difference; **GAP** = missing or not verified.
 | typing at a page boundary | PARTIAL | Text at the end of page K belongs to page K+1's start. After one keystroke there, the editor remounts page K+1 with the caret after the new character. The text is correct, but the view jumps. |
 | IME / composition | OK (automated) / human QA needed | `editorInputIntegrity.e2e` cases 6–7 (synthetic composition). IME commit that crosses the page target is reconciled in `handleCompositionEnd`. Real Japanese IME candidate windows were not tested on this surface in Phase 8. |
 | selection | PARTIAL | Ctrl/Cmd+A selects the mounted page only. Whole-manuscript selection needs the explicit 「全文を選択」 action. A drag selection cannot cross 編集ページ. |
-| clipboard | PARTIAL | Copy/cut of the whole manuscript only via 「全文を選択」. Paste inside a page works, and the page boundary is recomputed. Paste larger than a page (>55k) was not measured. |
-| undo / redo | PARTIAL | Application-level history (`undoModel.ts`, 51 unit tests; E2E case 9), not the browser's native stack. It works across 編集ページ, but granularity differs from FULL. |
+| clipboard | PARTIAL → **OK (app-level)** | Phase 9, `windowedLongDocument.e2e`: after 「全文を選択」 the copy event carries the whole canonical manuscript (130,080 characters while 30,075 were mounted). Ctrl+A → copy still copies the mounted page only (by design, see the module doc). |
+| undo / redo | PARTIAL | Application-level history (`undoModel.ts`, 51 unit tests; E2E case 9), not the browser's native stack. It works across 編集ページ, but granularity differs from FULL. Phase 9: one Ctrl+Z removes a whole 70,000-character insertion (E2E). |
 | caret / source offsets | OK | `offsetModel` (20) and `paginationModel` (66) unit tests; `moveSelectionToGlobal` for Preview/Writing Check jumps. |
 | ruby / 傍点 notation | OK (data) / PARTIAL (view) | Canonical text is never split. A boundary is only a hard cut inside a paragraph longer than ~15k characters, and then a 《》 span can show across two 編集ページ. |
 | page jump (Preview click, Writing Check) | OK | `pagedEditorBoundaryAndPreviewLanding` (14 tests); `descriptionCheck.e2e` lands on candidates in WINDOWED. |
 | mobile | GAP | `descriptionCheck.e2e` covers 390/770 px layouts. Soft keyboard, touch selection handles and the page navigator on phones were not verified. |
 | accessibility | PARTIAL | The textarea's label names the page (「編集ページ n / N」), the indicator is `aria-live`, and the navigator buttons are labelled. Screen readers and browser find (Ctrl+F) only reach the mounted page. |
-| browser find / spellcheck | GAP | Mounted page only; no in-app find across 編集ページ. |
-| large paste | PARTIAL | 5,000 characters verified at 50–500p. Very large pastes are not verified. |
-| document switch | GAP (for this surface) | Phase 6 flush-on-switch is surface-independent (`EditorPane`), and `PagedEditor` re-anchors on external `content`. No WINDOWED-specific switch E2E exists. |
+| browser find / spellcheck | PARTIAL (Phase 9) | Browser find (Ctrl+F) and spellcheck still reach the mounted page only. **App-level equivalent:** the 置換 dialog has 前へ / 次へ, which searches the whole canonical manuscript and selects the match on any 編集ページ (`SearchReplaceModal` `onFind` → `navigateToGlobalOffset`; the same on FULL). E2E: a word that exists only on the last 編集ページ is found from 編集ページ 2 / 3 and selected. |
+| large paste | **OK (Phase 9)** | `windowedLongDocument.e2e`: 70,000 characters (more than the 55k hard page maximum) inserted mid-page. Saved = before + exactly the insertion; 編集ページ 3 → 4 (boundaries recomputed); one Ctrl+Z removes it. Headless Chrome has no clipboard, so the text went through `Input.insertText` (the IME-commit editing path), not a real paste event. |
+| document switch | **OK (Phase 9)** | `windowedLongDocument.e2e`: A → B → A through the route (`history.pushState ?id=`, the same `useSearchParams` change as `router.push`; the editor and Preview stay mounted), inside the 1.5 s autosave debounce. Each document's typing reaches only its own record, and the Preview shows the new document's page count. The first layout after a switch is a full Preview snapshot (never a delta against the other document). Behaviour: the paged editor re-anchors at the previous caret offset clamped to the new document, so B opened on its last 編集ページ; FULL likewise leaves the caret at the end of the new value. Passes on FULL too. |
 | autosave / Preview / export | OK | They read the canonical `content`, the same as FULL. ZIP export JPGs are byte-identical between FULL and WINDOWED builds (100p, 120 JPGs). |
 
-## Recommendation
+## Phase 9 update
+
+Verified in Phase 9 (performance doc §10). No editor surface change beyond the 置換 dialog's
+前へ / 次へ.
+- Document switch, large paste with undo, 「全文を選択」 copy, and cross-page find all have E2E
+  coverage: `tests/e2e/windowedLongDocument.e2e.mjs`, run on WINDOWED and FULL builds.
+- `editorInputIntegrity.e2e` passes on WINDOWED and FULL.
+- The ~100 ms keystroke floor on both surfaces is Blink `Layerize` of the mounted Preview, not
+  editor code (performance doc §10.8). So WINDOWED cannot go below it either.
+
+**Readiness classification: B — NEEDS HUMAN QA ONLY**, for an **optional, manual opt-in beta
+toggle**. What remains open is human verification, not a functional gap:
+
+1. A real Japanese IME on desktop and on a phone, including composition across the page target
+   and the page-end jump.
+2. Phone soft keyboard, touch selection handles and the page navigator.
+3. Whether users accept the page-scoped Ctrl+A, drag selection and browser find, with
+   「全文を選択」 and 置換 前へ / 次へ as the explicit whole-manuscript equivalents. This is UX
+   copy, not code.
+
+Recommended rollout: a user-visible opt-in (e.g. 「長編モード（β）」 in settings, default off),
+suggested but not forced for manuscripts of more than one 編集ページ (≈100 文庫 pages). Do not
+switch users automatically by size yet. Revisit automatic gating after the Human QA above.
+
+## Recommendation (Phase 8)
 
 Do not make WINDOWED the default in Phase 8. The measurements support it as the surface for long
 manuscripts: it is the only change that fixes the keystroke frame and burst coalescing at 300+

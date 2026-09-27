@@ -1,4 +1,4 @@
-# TateSpun Long Manuscript Performance (Phase 7)
+# TateSpun Long Manuscript Performance (Phases 7–9)
 
 Measured 2026-09-27 on branch `tsp-post-beta-typography-phase1`. The baseline is `60f9b66`
 (Phase 6.1). Architecture context is in `TATESPUN_EDITOR_STATE_ARCHITECTURE.md` and
@@ -473,3 +473,287 @@ Node, `exportStages.bench.ts`. It runs on the main thread in the browser unless 
 3. Close the WINDOWED readiness gaps (IME and mobile human QA, selection/find model, E2E for
    document switch and large paste). Then consider size-gated WINDOWED.
 4. Profile the ~100 ms keystroke floor.
+
+## 10. Phase 9: export worker, Preview delta, windowed hardening
+
+Measured 2026-09-27; the baseline is `a997dcd` (Phase 8). The machine and method are as in §1.
+The `a997dcd` and Phase 9 production builds were served side by side (FULL, and a Phase 9
+WINDOWED build). Raw results are in `scripts/perf/results/`:
+- `export-phase9-*`
+- `browser-phase9-{base,head}-{100,300,500}p.json`
+- `phase9-export-transfer.json`
+- `phase9-preview-delta.json`
+- `phase9-layout-phases.json`
+- `keystroke-trace-phase9-{full,windowed}-50p.json`
+
+The two first 300p export runs aborted before writing JSON; their files were reconstructed from
+the probe logs and say so.
+
+### 10.1 Method additions
+- `tests/e2e/exportWorkerPerf.e2e.mjs` runs exports through the real UI: 全ページ PDF (continuing
+  past the odd-page warning), the same PDF again, JPG of page 1, and JPG ZIP. For each export it
+  records:
+  - wall time
+  - main-thread long tasks
+  - the largest gap between 50 ms heartbeat timers
+  - JS heap
+  - output hashes: the PDF after removing CreationDate/ModDate/ID, the ZIP per entry
+  The fixture has an opaque colour PNG twice and a semi-transparent PNG stacked on it with an
+  explicit layer order, plus ruby, 傍点 and ――/……. The probe fails an export on an `alert()`, on a
+  renderer crash (`Inspector.targetCrashed`) or after `TATESPUN_PERF_EXPORT_TIMEOUT_MS` (10 min),
+  and records it as `failed`.
+- `scripts/perf/exportTransfer.bench.ts`: the size and clone cost of the publication model, of one
+  PaintPlan page, and of the font.
+- `scripts/perf/previewDelta.bench.ts`: a full vs a delta Preview reply for a one-character edit
+  in the middle of the manuscript.
+- `scripts/perf/layoutPhases.bench.ts`: the share of worker time per layout stage, from an
+  inspector CPU profile.
+- `tests/e2e/keystrokeTrace.e2e.mjs`: a Chrome performance trace (devtools.timeline) of single
+  keystrokes. Main-thread time is split by event: input dispatch, script, style, layout, paint,
+  Layerize, commit, and idle. The last two keystrokes run with the Preview spreads hidden, as a
+  diagnostic.
+- `tests/e2e/longManuscriptPerf.e2e.mjs` now also records, per layout reply, the Preview transfer
+  kind and the number of pages sent.
+
+### 10.2 What crosses a thread boundary during export (Node)
+
+| pages | publication model | model clone | one PaintPlan page | page build | page clone |
+|---|---|---|---|---|---|
+| 10 (12 physical) | 1.2 MB | 27 ms | 1.45 MB | 2.6 ms | 25 ms |
+| 100 (112) | 12.5 MB | 208 ms | 1.53 MB | 3.7 ms | 28 ms |
+| 300 (333) | 37.8 MB | 872 ms | 1.54 MB | 3.3 ms | 27 ms |
+
+- The model is body pages only: 99.9 % of its bytes. No section is export-format-specific, so a
+  compact second representation would not help. No second model was made.
+- A built page clones about 8× slower than it builds, because of its nested per-glyph drawing
+  commands. So pages must be built on the thread that paints them, never shipped whole.
+- Font: cloning the 8.5 MB font (as bytes or as the base64 string) takes 4–5 ms, so it was never
+  the transfer problem. Preparing it on a thread is the cost: base64 encode 555 ms plus paint
+  contexts 203 ms (Node).
+
+### 10.3 Export worker architecture
+
+`src/lib/v2Bridge/exportWorkerProtocol.ts`, `exportWorkerClient.ts` and `src/workers/v2Export.worker.ts`.
+
+```
+main thread   awaitComposition(exact input) → layout (Phase 3 gate, unchanged)
+              page scope, warnings/blocks, progress UI, download
+      │ job: physical page indices, layer order, PDF mode (a few hundred bytes)
+      ▼
+export worker (one per PreviewPane, reused)
+      font: fetched here once per worker lifetime; paint contexts prepared once
+      model: arrives on a MessagePort from the Preview worker
+             (worker → worker; the main thread gets a small "delivered" ack)
+      per page: createPublicationPaintPlanBuilder.pageAt(i) → layer order → grayscale
+      PDF: renderPaintPagesToPdfAsync → bytes transferred to the main thread
+      JPG: each built page is returned on request (one ahead) to the main-thread rasterizer
+```
+
+- **Same pages.** `buildPaintPlan` itself is now `pageAt` over every index, so a page built alone
+  equals the whole plan's page (tested in any order, including colophon, ruby, 傍点, dashes,
+  ellipses and images). The HOLD / unresolved-image refusal runs on the whole document first, with
+  the Phase 8 message (`assertPublicationPaintable`).
+- **Only the pages exported are built.** The plan is never held whole on either thread; each page
+  is built, painted and dropped.
+- **Model reuse.** The worker keeps the last exported layout's model. A repeat export of the same
+  layout (compared by identity, i.e. the exact input) sends no model. The Preview worker keeps
+  answering from its kept layout, or recomposes and checks the page sequence (Phase 8).
+- **Cancel / unmount.** Cancelling a PDF terminates the export worker, as the PDF worker was
+  terminated before. An error, a crash or a model delivery that never happens (the Preview worker
+  stopped) fails the export and discards the worker. Unmount disposes it and rejects what is
+  pending (Phase 6.1 contract, `editorDocumentSafety`). Pause/resume still reach the PDF loop.
+- **Grayscale in the worker** decodes on an `OffscreenCanvas` (`decodeImageInWorker`), the same
+  native-size draw + `getImageData` as the main-thread decoder. Output hashes below are identical.
+- **JPG/ZIP stays rasterized on the main thread** with the document's webfont: a worker
+  `OffscreenCanvas` would need a separately loaded webfont, which risks glyph drift. The worker
+  builds each page and the main thread pulls them one ahead (`readPagesAhead`). So the main thread
+  never clones the model (0.9 s at 300p) or prepares the font (~0.75 s). It also no longer keeps
+  every page's canvas until the end: each page is painted, encoded and released
+  (`exportPaintPagesToBrowserJpgPages`), with a yield between painting and encoding as before.
+- No SharedArrayBuffer and no cross-origin isolation.
+
+### 10.4 Export before / after (browser, same session)
+
+100 pages (104 physical), each export run cold (first export of the session); long tasks are main-thread:
+
+| export | a997dcd wall / long tasks (max) | Phase 9 wall / long tasks (max) | heap after |
+|---|---|---|---|
+| 全ページ PDF | 25.6 s / 1,026 ms (974) | 24.0 s / **0 ms** | 244 → **30 MB** |
+| same PDF again | 25.1 s / 1,208 ms (1,155) | 24.4 s / **0 ms** | |
+| JPG, page 1 | 2.7 s / 1,809 ms (1,110) | 1.3 s / **84 ms** | |
+| JPG ZIP, 104 JPGs | 8.4 s / 66 ms | 8.7 s / **0 ms** | |
+
+300 pages (310 physical):
+
+| export | a997dcd | Phase 9 |
+|---|---|---|
+| JPG, page 1 | 3.7 s / 2,789 ms (2,407) | 1.8 s / **263 ms** (210) |
+| JPG ZIP, 310 JPGs | **271 s** / 94,092 ms of long tasks (max 1,518), heap 689 MB | **24.7 s** / 57 ms, heap 47 MB |
+| 全ページ PDF | **NOT MEASURED** | **NOT MEASURED** |
+
+- The Phase 9 ZIP without the one-page lookahead took 10.6 s at 100p and 28.2 s at 300p. The
+  lookahead overlaps the worker's build and transfer with painting.
+- The 300p ZIP on `a997dcd` held all 310 base canvases until encoding; the long tasks are
+  allocation/GC pressure. Streaming fixed it.
+- **300p PDF: not measured on either build.** The first attempt crashed the renderer about one
+  minute in (a Chrome crash dump; no dialog). The probe was then hardened (crash/dialog detection,
+  10-minute limit) and retried once per build. Both builds painted 310/310 pages, but the PDF did
+  not arrive within 10 minutes. The time is in jsPDF's final `output("arraybuffer")` of a
+  ~150 MB document (or its hand-off), identical on both builds. This is a pre-existing limit, not
+  a Phase 9 regression (§10.11). In Node, a 300p PDF needs a 12 GB heap (§9.9).
+
+### 10.5 Output equivalence
+
+- Browser, every run on both builds: PDF normalized SHA `450a847227bf2e09` (104 pages, 50,386,645
+  bytes); JPG page 1 `3bb7ecb20ed9fa88`; ZIP entries identical (`79e8a950…` at 100p, `db87dfc1…`
+  at 300p).
+- The fixture exercises layer order (a reordered pair), grayscale of opaque and alpha PNGs, ruby,
+  傍点 and ――/……
+- Unit (`exportWorker.test.ts`): the worker PDF for selected pages with a layer order that really
+  moves images is byte-equal, after date/ID normalization, to the Phase 8 path (whole plan → layer
+  order → grayscale → selection) in `bleed` mode. Worker JPG pages deep-equal the Phase 8 plan
+  pages, colophon included.
+- E2E: the desktop PDF is still 164,289 bytes (mobileSharedExport, productionOddPageWarning).
+- Every vitest config was run on `a997dcd` and on Phase 9, and the regenerated tracked QA files
+  (53) were compared: 10 are byte-identical and 43 are identical after normalizing PDF
+  CreationDate/ModDate/ID; `zip-sample.zip` has identical entries. None differ.
+
+### 10.6 Preview delta design
+
+`src/lib/v2Bridge/previewDelta.ts`.
+- **Request.** A compose request carries `basePreviewLayoutId`: the layout the main thread shows.
+  It is omitted after a HOLD, on the first layout and on a **document switch** (`documentKey`,
+  TategakiEditor's work-session scope).
+- **Worker.** It keeps the Preview documents it sent that the requester can still hold (its
+  base and the latest sent; at most two). Each new page that is structurally equal to a base page
+  (same index, or same distance from the end after an insertion or removal) is sent as that
+  index. Other pages are sent in full.
+- **Full snapshot** when there is no base, the page or font size changed (settings that change
+  every page), or nothing would be reused.
+- **Main thread.** It rebuilds the document from its base; reused pages keep their object
+  identity, so PageCard skips them by identity. A delta whose base is not the Preview it holds
+  is rejected, and the adapter immediately asks again for a full snapshot of the same input.
+  Page-count changes, manual page breaks, reordering and images need no special case:
+  correctness only depends on structural equality (`previewDelta.test.ts`).
+- **Page-relative source positions.** Before the change, line and unit ids and unit
+  `sourceSpan`s carried absolute manuscript offsets, so one inserted character changed every
+  later page although it painted identically. The first delta still sent half the book. In the
+  Editor these fields are only React keys and debug labels (debug info is already dropped), and
+  caret/selection mapping uses the page model, which keeps absolute offsets. `buildLivePreviewDocument`
+  now makes ids positional and spans relative to the page. Normalizing costs about 9 ms at 300p
+  over Phase 8's live document (175 vs 166 ms).
+
+### 10.7 Preview payload before / after
+
+Node, one character inserted mid-manuscript:
+
+| pages | full reply | delta reply | pages sent | clone full → delta | worker encode | main apply |
+|---|---|---|---|---|---|---|
+| 50 | 3.8 MB | 127 KB | 1 of 56 | 66 → 1.6 ms | 35 ms | 0.2 ms |
+| 100 | 7.6 MB | 186 KB | 1 of 112 | 140 → 1.6 ms | 57 ms | 0.1 ms |
+| 300 | 22.9 MB | 421 KB | 1 of 333 | 453 → 2.9 ms | 155 ms | 0.1 ms |
+| 500 | 38.4 MB | 655 KB | 1 of 555 | 825 → 5.3 ms | 254 ms | 0.1 ms |
+
+The remaining reply is the page model (sent every layout, as in Phase 8).
+
+Browser (median of 3 isolated keystrokes at the manuscript end, FULL):
+
+| | 100p a997dcd → Phase 9 | 300p | 500p |
+|---|---|---|---|
+| Preview pages per reply | 112 → **1** | 334 → **1** | 556 → **1** |
+| reply deserialize (main) | 55 → **0 ms** | 171 → **1 ms** | 379 → **1 ms** |
+| request → layout | 528 → 430 ms | 1,425 → 1,967 ms | 2,614 → 2,461 ms |
+| keystroke → next frame | 122 → 112 ms | 245 → 285 ms | 400 → 396 ms |
+| heap after edits | 54 → 47 MB | 111 → 109 MB | 167 → 161 MB |
+
+- Request → layout now includes the worker's page comparison (150–250 ms at 300–500p), which the
+  deserialize saving roughly offsets. The single 300p sample was slower; 100p and 500p were faster.
+- The first layout after a document switch is a full snapshot; the next edit in the same document
+  is a delta (windowedLongDocument E2E, both surfaces).
+
+### 10.8 Keystroke floor profile
+
+Trace of single keystrokes at 50p (the floor does not depend on size), FULL and WINDOWED alike:
+
+| keystroke path | window | main busy | Layerize | Layout | script (React, handlers) | input dispatch |
+|---|---|---|---|---|---|---|
+| value setter + `input` event (Phase 7/8 probe) | 89–105 ms | 87–103 ms | 46–56 ms | 27–36 ms | 1–3 ms | 2–6 ms |
+| native `Input.insertText` | 117–153 ms | 110–133 ms | 94–114 ms | ≤1 ms | 1 ms | 3–5 ms |
+| setter, Preview spreads hidden | 45–49 ms | 43–47 ms | 0.2 ms | 33–35 ms | — | — |
+| native, Preview spreads hidden | 21–28 ms | 8–9 ms | 0.3–0.6 ms | ≤0.4 ms | — | — |
+
+- **Owner: Blink `Layerize`.** Compositing re-assigns the page's paint chunks to layers after any
+  paint change, and the mounted Preview spreads (hundreds of glyph boxes each) dominate the chunk
+  count. It does not depend on manuscript size, which explains the flat floor on both surfaces.
+- It is not React, autosave, IndexedDB, selection work or syntax parsing: all script in the
+  window totals 1–3 ms.
+- The probe path's extra 30 ms is Layout forced by assigning the whole textarea value. That is a
+  probe artifact; native input does not do it.
+- **Not changed in Phase 9.** A fix changes Preview paint structure (fewer paint-property nodes
+  per glyph, or skipping off-screen spreads, e.g. `content-visibility` with explicit intrinsic
+  sizes, which interacts with the spread height measurement). Either needs visual QA of vertical
+  typography. It is recorded as next work.
+- The trace was taken in headless Chrome with `--disable-gpu`. Layerize runs on the main thread
+  with GPU raster too, but its size on real hardware needs a check.
+
+### 10.9 Layout phase profile (Node, worker work for one layout)
+
+| stage | 300p | 500p |
+|---|---|---|
+| Core compose (line breaking, pagination) | 1,135 ms (67 %) | 2,243 ms (70 %) |
+| Preview paint document (live) | 236 ms (14 %) | 429 ms (13 %) |
+| delta encode (worst case: every page equal) | 234 ms (14 %) | 290 ms (9 %) |
+| Publication model (export only, built every layout) | 63 ms (4 %) | 134 ms (4 %) |
+| page model | 20 ms (1 %) | 80 ms (3 %) |
+| adapter (tokenize + units) | 9 ms (0.5 %) | 15 ms (0.5 %) |
+
+- Core composition is the owner. Not optimized in this phase (no pagination or Core change).
+- Building the Publication model lazily on export would save 4 %; it is later work.
+- One profiled run per size; Core compose varies ±20 % between runs on this machine.
+
+### 10.10 Correctness safeguards
+- New tests:
+  - `src/lib/v2Bridge/exportWorker.test.ts` covers:
+    - the per-page builder
+    - worker PDF and JPG-page equivalence
+    - font loaded once, and retried after a failure
+    - refusals: no model, HOLD, pages out of range
+    - cancellation between pages
+    - the client (model delivery once per layout, port transfer, cancel → terminate, late
+      replies ignored, delivery failure, error/crash, one export at a time, dispose)
+    - the page stream and its lookahead
+    - Preview-worker port delivery
+  - `src/lib/v2Bridge/previewDelta.test.ts` covers:
+    - full then delta
+    - unchanged pages omitted and reused by identity
+    - inserted/removed pages
+    - reordering and images
+    - full snapshot on settings change
+    - no base or an unknown base
+    - stale delta rejected
+    - worker keeps at most two sent Previews
+- Updated contracts, where the asserted behaviour is the same:
+  - `editorDocumentSafety`: unmount disposes the export worker; cancel is checked before the
+    worker starts
+  - `pdfChecklistGate`
+  - `longManuscriptPerformanceContract`
+  - `imageRecovery`
+  - `emptyPreviewRegression`
+  - `previewWorkerProtocol` (live document with page-relative spans)
+- E2E on the Phase 9 build (all pass): previewPageModel, imageWarningLifecycle, autosaveFlush,
+  mobileSharedExport, productionOddPageWarning, editorInputIntegrity (WINDOWED and FULL), and
+  windowedLongDocument (WINDOWED and FULL).
+- Every vitest config: the failing test names are the same on `a997dcd` and Phase 9 (116 lines,
+  all pre-existing; the only difference is the worktree path inside one test's name).
+  `src/lib/v2Bridge` passes in full (317 tests).
+
+### 10.11 Remaining bottlenecks (after Phase 9)
+1. **PDF at ≥300 pages does not complete in the browser** on either build: jsPDF's final
+   assembly of a ~150 MB document. The next step is an incremental PDF writer (streaming the
+   output in page chunks) or splitting very long books, decided from a measurement of
+   `pdf.output` memory.
+2. **Keystroke floor ~100 ms**: Blink Layerize of the mounted Preview (§10.8).
+3. **Core composition**: 1.1 s at 300p, 2.2 s at 500p per layout.
+4. FULL textarea keystroke at ≥300p (Phase 8); WINDOWED avoids it.
+5. The worker's delta comparison adds 150–250 ms at 300–500p per layout. Hashing pages once per
+   layout could cut it if needed.

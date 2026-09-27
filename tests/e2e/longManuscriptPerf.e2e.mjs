@@ -93,7 +93,11 @@ await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
           const data = event.data; // first access deserializes the reply on this thread
           const deserializeMs = performance.now() - t0;
           if (data && (data.type === "complete" || data.type === "error") && ("bridge" in data || "layout" in data || data.type === "error")) {
-            perf.composeReplies.push({ t: performance.now(), type: data.type, requestId: data.requestId, message: data.message, deserializeMs, worker: this.__seq });
+            // Phase 9: Preview pages carried by the reply (a delta sends only changed pages; older builds always send all).
+            const pv = data.preview;
+            const previewKind = !pv ? null : pv.kind ?? "legacy-full";
+            const pagesSent = !pv ? null : pv.kind === "delta" ? [...pv.pages, ...(pv.colophonPages ?? [])].filter((slot) => typeof slot !== "number").length : (pv.document ?? pv).pages.length;
+            perf.composeReplies.push({ t: performance.now(), type: data.type, requestId: data.requestId, message: data.message, deserializeMs, worker: this.__seq, previewKind, pagesSent });
           }
         });
       }
@@ -263,6 +267,8 @@ try {
       rendersBeforeLayout: sumRenders(renders.filter((entry) => !reply || entry.t < reply.t)),
       rendersAfterLayout: sumRenders(renders.filter((entry) => reply && entry.t >= reply.t)),
       replyDeserializeMs: reply ? Math.round(reply.deserializeMs) : null,
+      previewKind: reply?.previewKind ?? null,
+      previewPagesSent: reply?.pagesSent ?? null,
       layoutLongTaskMs: Math.round(layoutTasks.reduce((sum, task) => sum + task.d, 0)),
       keystrokeFrameMs: Math.round(frameMs),
       inputToRequestMs: post ? Math.round(post.t - start) : null,

@@ -1,0 +1,26 @@
+[
+  {
+    "pages": 300,
+    "workerTotalMs": 1696,
+    "adapter (tokenize + units)": "9 ms (0.5%)",
+    "Core compose (line breaking, pagination)": "1135 ms (66.9%)",
+    "Publication model (export only)": "63 ms (3.7%)",
+    "compose, other": "0 ms",
+    "Preview paint document": "236 ms (13.9%)",
+    "of which: raw paint document (before live normalization)": "92 ms",
+    "page model": "20 ms (1.2%)",
+    "delta encode (worst case: all pages equal)": "234 ms (13.8%)"
+  },
+  {
+    "pages": 500,
+    "workerTotalMs": 3190,
+    "adapter (tokenize + units)": "15 ms (0.5%)",
+    "Core compose (line breaking, pagination)": "2243 ms (70.3%)",
+    "Publication model (export only)": "134 ms (4.2%)",
+    "compose, other": "0 ms",
+    "Preview paint document": "429 ms (13.4%)",
+    "of which: raw paint document (before live normalization)": "249 ms",
+    "page model": "80 ms (2.5%)",
+    "delta encode (worst case: all pages equal)": "290 ms (9.1%)"
+  }
+]

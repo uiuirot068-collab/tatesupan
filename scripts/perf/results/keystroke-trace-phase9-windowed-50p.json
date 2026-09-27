@@ -1,0 +1,207 @@
+{
+  "label": "phase9-windowed",
+  "pages": 50,
+  "surface": "WINDOWED",
+  "idleFrameMs": 4,
+  "results": [
+    {
+      "mode": "probe",
+      "frameMs": 102,
+      "windowMs": 101.5,
+      "mainBusyMs": 98.5,
+      "idleMs": 3,
+      "byKind": {
+        "composite": 54,
+        "layout": 28.5,
+        "paint": 6.2,
+        "event:input": 5.9,
+        "style": 1.5,
+        "script": 1.2,
+        "event:selectionchange": 0.9,
+        "timer": 0.1,
+        "rAF": 0.1
+      },
+      "renderingByEvent": {
+        "Layerize": 51.4,
+        "Layout": 28.5,
+        "PrePaint": 4.3,
+        "Commit": 2.6,
+        "Paint": 1.9
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 1.1,
+        "?": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0.1
+      }
+    },
+    {
+      "mode": "native",
+      "frameMs": 132,
+      "windowMs": 131.6,
+      "mainBusyMs": 118.4,
+      "idleMs": 13.2,
+      "byKind": {
+        "composite": 106.2,
+        "paint": 3.7,
+        "event:input": 2.4,
+        "style": 1.7,
+        "event:textInput": 1.4,
+        "script": 1.1,
+        "layout": 0.8,
+        "event:selectionchange": 0.3,
+        "event:beforeinput": 0.3,
+        "timer": 0.2,
+        "event:focusin": 0.1,
+        "rAF": 0.1,
+        "event:scroll": 0.1,
+        "event:scrollend": 0,
+        "event:focus": 0,
+        "event:DOMFocusIn": 0
+      },
+      "renderingByEvent": {
+        "Layerize": 100.4,
+        "Commit": 5.8,
+        "Paint": 3.3,
+        "Layout": 0.8,
+        "PrePaint": 0.3
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 2.4,
+        "O@2su1ootem9gwi.js": 1,
+        "r@0tjl1tav351bh.js": 0.3,
+        "?": 0.2,
+        "fD@2su1ootem9gwi.js": 0,
+        "(anon)@2su1ootem9gwi.js": 0,
+        "fF@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "probe",
+      "frameMs": 96,
+      "windowMs": 96.2,
+      "mainBusyMs": 91.7,
+      "idleMs": 4.5,
+      "byKind": {
+        "composite": 50.9,
+        "layout": 29.7,
+        "paint": 5.2,
+        "event:input": 2.2,
+        "script": 1.2,
+        "style": 1.2,
+        "event:selectionchange": 1.2,
+        "timer": 0.1,
+        "rAF": 0.1
+      },
+      "renderingByEvent": {
+        "Layerize": 46.8,
+        "Layout": 29.7,
+        "Commit": 4.1,
+        "PrePaint": 3.8,
+        "Paint": 1.4
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 1.2,
+        "?": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "native",
+      "frameMs": 121,
+      "windowMs": 120.7,
+      "mainBusyMs": 110.7,
+      "idleMs": 10.1,
+      "byKind": {
+        "composite": 101.3,
+        "paint": 2.7,
+        "event:input": 1.4,
+        "style": 1.4,
+        "event:textInput": 1.3,
+        "script": 1,
+        "layout": 1,
+        "event:selectionchange": 0.3,
+        "timer": 0.2,
+        "event:beforeinput": 0.1,
+        "rAF": 0.1
+      },
+      "renderingByEvent": {
+        "Layerize": 94.5,
+        "Commit": 6.8,
+        "Paint": 2.3,
+        "Layout": 1,
+        "PrePaint": 0.4
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 1.4,
+        "O@2su1ootem9gwi.js": 1,
+        "?": 0.1,
+        "r@0tjl1tav351bh.js": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "probe-preview-hidden",
+      "frameMs": 49,
+      "windowMs": 49.2,
+      "mainBusyMs": 46.8,
+      "idleMs": 2.3,
+      "byKind": {
+        "layout": 35,
+        "paint": 5.2,
+        "event:input": 4.1,
+        "script": 1.1,
+        "composite": 0.4,
+        "style": 0.4,
+        "event:selectionchange": 0.4,
+        "timer": 0.1,
+        "rAF": 0.1
+      },
+      "renderingByEvent": {
+        "Layout": 35,
+        "PrePaint": 4.4,
+        "Paint": 0.9,
+        "Commit": 0.2,
+        "Layerize": 0.2
+      },
+      "topScripts": {
+        "O@2su1ootem9gwi.js": 1,
+        "?": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0
+      }
+    },
+    {
+      "mode": "native-preview-hidden",
+      "frameMs": 28,
+      "windowMs": 28,
+      "mainBusyMs": 8.5,
+      "idleMs": 19.5,
+      "byKind": {
+        "event:input": 2.3,
+        "script": 1.9,
+        "event:textInput": 1.4,
+        "paint": 1,
+        "composite": 0.6,
+        "style": 0.5,
+        "layout": 0.3,
+        "event:selectionchange": 0.2,
+        "rAF": 0.1,
+        "event:beforeinput": 0.1,
+        "timer": 0.1
+      },
+      "renderingByEvent": {
+        "Paint": 0.6,
+        "PrePaint": 0.3,
+        "Layout": 0.3,
+        "Commit": 0.3,
+        "Layerize": 0.3
+      },
+      "topScripts": {
+        "fI@2su1ootem9gwi.js": 2.2,
+        "O@2su1ootem9gwi.js": 1.8,
+        "?": 0.2,
+        "r@0tjl1tav351bh.js": 0.1,
+        "(anon)@2su1ootem9gwi.js": 0.1
+      }
+    }
+  ]
+}

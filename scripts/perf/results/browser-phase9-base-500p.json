@@ -1,0 +1,132 @@
+{
+  "label": "phase9-base",
+  "pages": 500,
+  "chars": 236859,
+  "surface": "FULL",
+  "editorPage": null,
+  "open": {
+    "ms": 3332,
+    "previewPages": 556,
+    "workers": 2,
+    "composePosts": 2,
+    "payloadImages": [
+      0,
+      2
+    ],
+    "replyDeserializeMs": 274
+  },
+  "isolated": [
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 1396,
+        "PageCard": 9,
+        "PreviewPage": 9,
+        "UnitBox": 3445
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 44
+      },
+      "replyDeserializeMs": 292,
+      "previewKind": "legacy-full",
+      "previewPagesSent": 556,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 400,
+      "inputToRequestMs": 694,
+      "requestToLayoutMs": 2478,
+      "inputToLayoutMs": 3172,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 558
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 45
+      },
+      "replyDeserializeMs": 403,
+      "previewKind": "legacy-full",
+      "previewPagesSent": 556,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 406,
+      "inputToRequestMs": 700,
+      "requestToLayoutMs": 2614,
+      "inputToLayoutMs": 3314,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    },
+    {
+      "spreadsMounted": 5,
+      "rendersBeforeLayout": {
+        "PreviewSpread": 558
+      },
+      "rendersAfterLayout": {
+        "PreviewSpread": 279,
+        "PageCard": 1,
+        "PreviewPage": 1,
+        "UnitBox": 46
+      },
+      "replyDeserializeMs": 379,
+      "previewKind": "legacy-full",
+      "previewPagesSent": 556,
+      "layoutLongTaskMs": 0,
+      "keystrokeFrameMs": 376,
+      "inputToRequestMs": 664,
+      "requestToLayoutMs": 2623,
+      "inputToLayoutMs": 3287,
+      "workersCreated": 0,
+      "requests": 1,
+      "payloadImages": 2,
+      "replyType": "complete"
+    }
+  ],
+  "burst": {
+    "keystrokes": 8,
+    "keystrokeFrameMsMedian": 361,
+    "requests": 8,
+    "workersCreated": 7,
+    "lastInputToFinalLayoutMs": 3268,
+    "longTaskCount": 9,
+    "longTaskTotalMs": 2986,
+    "longTaskMaxMs": 349
+  },
+  "latencyByFreshness": {
+    "fresh": [
+      2495,
+      2698
+    ],
+    "reused": [
+      2478,
+      2614,
+      2623
+    ]
+  },
+  "caret": {
+    "toStartMs": 8,
+    "toEndMs": 6
+  },
+  "paste": {
+    "chars": 5000,
+    "frameMs": 124,
+    "toLayoutMs": 4493,
+    "longTaskTotalMs": 1032,
+    "longTaskMaxMs": 451
+  },
+  "heapMb": {
+    "afterOpen": 70,
+    "afterEdits": 167
+  },
+  "export": null
+}
