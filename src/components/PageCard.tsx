@@ -31,6 +31,7 @@ import {
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { fitImageToBox, imageMaxBoxForTextArea } from "@/lib/imageGeometry";
+import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -1278,7 +1279,9 @@ function arePageCardPropsEqual(prev: PageCardProps, next: PageCardProps): boolea
   const otherEqual =
     prev.chromeScale === next.chromeScale &&
     prev.v2PreviewEnabled === next.v2PreviewEnabled &&
-    prev.v2PreviewPage === next.v2PreviewPage &&
+    // Phase 8: every layout reply is a new object; an unchanged page (same
+    // paint data) renders identically, so its glyph tree is not rebuilt.
+    samePaintPage(prev.v2PreviewPage, next.v2PreviewPage) &&
     prev.v2PreviewFontSizePx === next.v2PreviewFontSizePx;
 
   const equal =
