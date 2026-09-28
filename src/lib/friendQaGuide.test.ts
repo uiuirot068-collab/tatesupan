@@ -9,7 +9,7 @@ describe("FRIEND QA guide-book canonical seed", () => {
       "［▶設定］［▶オプション］［▶メモ］［▶ヘルプ］",
     );
     expect(SAMPLE_PROJECT.content).toContain(
-      "［元に戻す］［やり直す］［改ページ挿入］［置換］",
+      "［元に戻す］［やり直す］［改ページ挿入］［検索・置換］",
     );
     expect(SAMPLE_PROJECT.content).not.toContain(
       "①ページ設定／②ノンブル・柱／③メモ／④ヘルプ",

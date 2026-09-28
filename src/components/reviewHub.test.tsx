@@ -268,7 +268,7 @@ describe("B2 Human QA: the Editor title action row stays ONE row at 768-905px (p
     // `@container` comment and reviewLayout.e2e.mjs's manuscriptHeightUnaffectedByRail.
     expect(row).toContain("md:gap-2 md:@max-[905px]:gap-1"); // desktop gap unchanged, tablet/rail-narrowed tighter
     for (const action of ["undo", "redo", "page-break", "replace"]) expect(row).toContain(`data-editor-action="${action}"`);
-    expect((row.match(/md:px-3 md:py-1 md:@max-\[905px\]:px-2/g) ?? []).length).toBeGreaterThanOrEqual(2); // 改ページ挿入 / 置換
+    expect((row.match(/md:px-3 md:py-1 md:@max-\[905px\]:px-2/g) ?? []).length).toBeGreaterThanOrEqual(2); // 改ページ挿入 / 検索・置換
   });
 
   it("shows 元に戻す / やり直す as icon-only in that range, still labelled for assistive tech and tooltips", () => {

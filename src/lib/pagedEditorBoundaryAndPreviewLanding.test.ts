@@ -83,7 +83,8 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic ca
       editor.indexOf("const moveSelectionToGlobal ="),
       editor.indexOf("const replaceRangeGlobal =")
     );
-    expect(moveSelection).toContain('{ scrollHint: "upper" }');
+    // 検索・置換 repair: a non-empty range additionally picks the page of its last character.
+    expect(moveSelection).toContain('{ scrollHint: "upper", affinity: start < end ? "backward" : "forward" }');
 
     const compositionEnd = editor.slice(
       editor.indexOf("const handleCompositionEnd ="),

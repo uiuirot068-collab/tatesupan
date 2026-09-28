@@ -315,7 +315,7 @@ try {
   for (const step of steps) log(`  ${step.dir} → ${step.status}: editor selected in ${step.selectMs} ms, Preview shows it ${step.previewFollowMs === null ? "NOT within 20 s" : `after ${step.previewFollowMs} ms`}, editor focused=${step.editorFocused}`);
   results.searchPreviewFollow = steps.every((s) => s.previewFollowMs !== null) ? "PASS" : "FAIL";
   results.searchPanelShot = await screenshot(`b1-search-panel-${surf}.png`, await cdp.evaluate(`(() => { const r = document.querySelector('main')?.getBoundingClientRect(); return r && { x: r.x, y: r.y, width: Math.min(r.width, 1280), height: Math.min(r.height, 900) }; })()`));
-  await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="preview"] button')].find((b) => b.textContent.trim() === 'キャンセル').click()`);
+  await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="preview"] button')].find((b) => b.textContent.trim() === '閉じる').click()`);
   await cdp.waitFor(`!document.querySelector('[data-search-replace-placement]')`, { label: "search closed" });
   assert.ok((await previewTotal()) > 0, "Preview still lists pages after closing");
   log(`B1 desktop search: PASS (panel in Preview, editor uncovered; Preview follow ${results.searchPreviewFollow})`);
@@ -330,7 +330,7 @@ try {
     pane: document.querySelector('[data-search-replace-placement="preview"]')?.getBoundingClientRect().width ?? 0,
   }))()`);
   assert.ok(phone.screen > 0 && phone.pane === 0, `phone uses the screen modal only (${JSON.stringify(phone)})`);
-  await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="screen"] button')].find((b) => b.textContent.trim() === 'キャンセル').click()`);
+  await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="screen"] button')].find((b) => b.textContent.trim() === '閉じる').click()`);
   await session.setViewport(1280, 900);
   await sleep(800);
   log("B1 phone search: PASS (screen modal, pane panel hidden)");
@@ -479,7 +479,7 @@ try {
     }
     perf.searchJump = { selectMs: jumpSelectMs, previewFollowMs: jumpPreviewMs };
     log(`  search jump to the far end: editor selected in ${jumpSelectMs} ms; Preview shows it ${jumpPreviewMs === null ? "NOT within 30 s" : `after ${jumpPreviewMs} ms`}`);
-    await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="preview"] button')].find((b) => b.textContent.trim() === 'キャンセル').click()`);
+    await cdp.evaluate(`[...document.querySelectorAll('[data-search-replace-placement="preview"] button')].find((b) => b.textContent.trim() === '閉じる').click()`);
     // Document switch (route change, editor stays mounted) long → short → long.
     await sleep(3000);
     // WINDOWED re-anchors at the previous caret offset clamped to the new

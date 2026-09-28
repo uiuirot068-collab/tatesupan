@@ -169,3 +169,150 @@ Notes
 3. Product decision on capacity-mode 2段 frame math and on migrating stored 2段 `charsPerLine`.
 4. Keep WINDOWED opt-in until it has FULL-equivalent features **and** Human QA; this repair does not change
    that.
+
+---
+
+## 検索・置換 Human-QA repair (2026-09-28)
+
+Follow-up on Human QA item 4. WINDOWED long-manuscript input, 全文を選択, A5/2段, JPG and PDF were PASS on
+the tester's machine; **検索・置換 was UX FAIL**.
+
+### What failed
+
+- The feature was labelled only 「置換」, so it did not read as a search tool.
+- 「次へ」 advanced the counter (`3 / 2646件目`) and the snippet, but the editor did not visibly move to the
+  match, so it was unclear where the match was.
+- The only practical replace action was 「すべて置換」; there was no way to replace just the current match.
+
+### Root cause
+
+- **FULL:** `navigateToGlobalOffset` calls `el.focus()` **before** `el.setSelectionRange()`. A real mouse
+  click on 次へ blurs the textarea. `focus()` then scrolls to the OLD caret, and Chrome does not scroll for
+  the programmatic selection that follows.
+  - Reproduced headless with real mouse events at HEAD 95d37d3: the selected text was correct (`瑠璃色壱`),
+    but `scrollTop` stayed at 58724 while the match line was at 11885.
+  - The Phase 9 E2E missed this because it pressed the button with a synthetic `element.click()`, which
+    never blurs the editor.
+- **WINDOWED** already scrolled correctly through `PagedEditor.moveSelectionToGlobal` (`scrollHint: "upper"`).
+  It had one edge case: a non-empty range ending exactly at an 編集ページ boundary mounted the NEXT page
+  (forward affinity on `end`), so the selection clamped to offset 0 there.
+- The dialog had no single-match replace, and no labels saying that search alone is allowed.
+
+### UX changes
+
+- Toolbar button and dialog title: 「置換」 → **「検索・置換」**. The guide-book sample text is updated to match.
+- Fields:
+  - 「検索する文字列」
+  - 「置換後の文字列（検索だけなら空欄のまま）」. An empty replacement never blocks 前へ / 次へ.
+- 前へ / 次へ (and Enter / Shift+Enter in the search field) select the match in the editor **and** scroll
+  it into the upper part of the textarea, with the editor focused:
+  - FULL: `EditorPane.revealSearchMatch` runs focus without scrolling, then select, then
+    `scrollCaretNearUpperView`. This is the helper PagedEditor already used, now exported.
+  - WINDOWED: switches 編集ページ, then scrolls and selects. A non-empty range now maps to the page of its
+    last character, and a jump ends an explicit 全文を選択.
+- The count (`n / N 件目`), the snippet and Preview follow are unchanged. The panel stays inside the Preview
+  pane on desktop; phones keep the screen modal.
+- New **「選択箇所を置換」**:
+  - Replaces only the active match as one edit. WINDOWED uses `replaceRangeGlobal`, so it is undoable.
+    FULL follows the page-break insertion path and is not counted as written text.
+  - The dialog then activates the next match once the new manuscript has committed. It never lands on text
+    it just inserted (e.g. 山 → 山田), and it wraps.
+  - Disabled until a match is active.
+- **「すべて置換」**: unchanged behaviour (whole manuscript, closes the panel), except the replacement is
+  now literal. `$&` / `$1` in the replacement string were previously interpreted by `String.replace`.
+- **0 件**: status shows 「0 件」; 前へ / 次へ / 選択箇所を置換 / すべて置換 are disabled and no snippet is shown.
+- A search-text change resets the active match to none, so a stale range cannot be replaced; the next 次へ
+  goes to match 1. Nothing jumps while typing, which would steal focus from the field.
+- 「キャンセル」 → 「閉じる」, since the panel is also used for search only. Escape also closes it.
+- One search implementation: `src/lib/searchReplaceNavigation.ts` (pure, UTF-16 canonical offsets).
+  FULL and WINDOWED only differ in how `EditorPaneHandle.revealSearchMatch` and `replaceSearchMatch`
+  apply a range. IME: FULL ignores a reveal mid-composition; WINDOWED defers it to `compositionend`, as before.
+
+### Files
+
+- `src/lib/searchReplaceNavigation.ts` (new): find, step, reducer, view, single-replace plan, literal replace-all.
+- `src/components/SearchReplaceModal.tsx`: UI, 選択箇所を置換, post-replace reveal.
+- `src/components/EditorPane.tsx`: `revealSearchMatch` / `replaceSearchMatch` handle methods and the toolbar label.
+- `src/components/PagedEditor.tsx`: `scrollCaretNearUpperView` exported; range affinity; 全文を選択 reset
+  on a jump.
+- `src/components/TategakiEditor.tsx`: wiring for both placements.
+- `src/constants/sampleData.ts`: guide-book label ［検索・置換］.
+- Tests:
+  - New: `src/lib/searchReplaceNavigation.test.ts`, `src/components/searchReplaceUx.test.tsx`,
+    `tests/e2e/searchReplaceNavigation.e2e.mjs`.
+  - Updated: `src/lib/friendQaGuide.test.ts` and `src/components/reviewHub.test.tsx` (label),
+    `src/lib/pagedEditorBoundaryAndPreviewLanding.test.ts` (affinity), `tests/e2e/phase9HumanQaRepair.e2e.mjs`
+    (閉じる).
+
+### Tests
+
+- `src/lib/searchReplaceNavigation.test.ts` (17): count, 次へ index, last→first wrap, 前へ reverse wrap,
+  search-only with an empty replacement, 0 件 disabled state, query change resets the index, stale index
+  after an edit, 選択箇所を置換 (only the active match changes; the next match is consistent; wrap and finish;
+  no self-loop with 山→山田; stale range refused; astral characters and line breaks), すべて置換 (whole
+  manuscript; literal `$&`), and WINDOWED page mapping (a match on another 編集ページ; a boundary-ending
+  range stays on its own page).
+- `src/components/searchReplaceUx.test.tsx` (8):
+  - Naming and disabled buttons, via static render.
+  - Desktop pane vs phone modal placement (mobile regression).
+  - Wiring contract: no surface-specific search in the dialog; FULL does select → scroll; WINDOWED goes
+    through `moveSelectionToGlobal` with backward affinity and IME deferral; 選択箇所を置換 is an undoable
+    WINDOWED edit.
+- Scoped suites:
+  - components: 300 pass / 3 fail. The failures are in `desktopReviewBar` and `readAloudDockCard` and are
+    the same 3 at baseline 04cfda0.
+  - src/lib: the failing set is identical to baseline (25 pre-existing).
+  - editorPagination 75, windowedEditor 45, hooks 22, constants 7: all pass.
+- `npx tsc --noEmit`: clean.
+
+### Browser QA (static export, headless Chrome, 1280×900, real mouse events)
+
+`tests/e2e/searchReplaceNavigation.e2e.mjs` uses a 120k-character manuscript with 5 matches (WINDOWED: 3
+編集ページ). **PASS on both FULL and WINDOWED builds.**
+
+| check | FULL | WINDOWED |
+|---|---|---|
+| 検索・置換 opens in the Preview pane, editor uncovered | PASS | PASS |
+| `5 件見つかりました` with an empty replacement | PASS | PASS |
+| 次へ ×3, 前へ ×3 (wraps to 5), 次へ (wraps to 1): match selected, **inside the visible textarea area**, editor focused, snippet updated | PASS | PASS |
+| other 編集ページ reached (1/3 → 2/3 → 3/3) | n/a | PASS |
+| Enter = 次へ | PASS | PASS |
+| 選択箇所を置換: only 弐 changed (saved manuscript: 4 × 瑠璃色, length −1); next match 参 selected and visible; a 2nd press moves on to 肆 | PASS | PASS |
+| undo of 選択箇所を置換 | (FULL: not undoable, same as 改ページ挿入 / すべて置換) | PASS |
+| 0 件: all four action buttons disabled, no snippet; query change resets to `N 件見つかりました` | PASS | PASS |
+| すべて置換: saved manuscript has 0 × 瑠璃色, 5 × 群青; reopening and searching finds 5 | PASS | PASS |
+| 閉じる → click the editor → typing works | PASS | PASS |
+| phone 390×844: screen modal only, title 検索・置換, 次へ works | PASS | PASS |
+
+The toolbar row was measured at 320–1280 px. The button is 42 → 78 px wide, with no row overflow, one line,
+and no horizontal page scroll at any width (same as base).
+
+Regression E2E on the same builds:
+
+- `phase9HumanQaRepair.e2e.mjs`: PASS on FULL and WINDOWED. Covers search Preview follow, phone modal,
+  A5/2段 Preview, colophon, and the 300k-character manuscript. The search jump to the far end takes 441 ms
+  on FULL and 170 ms on WINDOWED.
+- `windowedLongDocument.e2e.mjs`: PASS on FULL and WINDOWED. Covers the document switch, 70k insertion +
+  undo, 全文を選択 copy, and cross-page find.
+- `editorInputIntegrity.e2e.mjs`: PASS. Covers the input/undo matrix.
+- `headerTabletDensity.e2e.mjs`: FAIL at 906×720 on **both** base and new builds. This is the known
+  pre-existing assertion.
+- PDF / JPG / ノンブル / 奥付 code paths are untouched by this change.
+
+### Build
+
+- `npm run build` stops at the prebuild canonical-Supabase guard, because this worktree has no `.env.local`
+  (checks 1 and 3). This is an environment guard, not a code failure.
+- `npx next build` passes for FULL and for `NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED`.
+
+### Human QA still required
+
+1. On the tester's machine, real Chrome with the 30万字 manuscript: 次へ / 前へ visibly land on the match in
+   FULL and WINDOWED, including a jump to another 編集ページ. Check that the selection highlight is
+   noticeable enough.
+2. 選択箇所を置換 feel: moving on to the next match automatically, and the focus moving to the editor
+   (typing right after a jump overwrites the selected match, as in any editor).
+3. FULL: 選択箇所を置換 / すべて置換 are not undoable with 元に戻す, which is pre-existing for すべて置換.
+   Decide whether that is acceptable. WINDOWED 選択箇所を置換 is undoable.
+4. Phone: the screen modal covers the editor, so the jump is only visible after 閉じる (unchanged design).
+5. Guide page `/guide` still titles the card 「置換機能」 (marketing copy; not changed here).

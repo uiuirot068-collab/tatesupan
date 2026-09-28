@@ -4,7 +4,7 @@ import { countVisualLength, insertPageBreakMarker, PAGE_BREAK_MARKER } from "@/l
 import { ensureLongtaskObserver, getEditorProbeMode, isPerfDebugEnabled, perfMark, perfSpan } from "@/lib/perfDebug";
 import DiagnosticShadowEditor from "./DiagnosticShadowEditor";
 import WindowedEditorProbe from "./WindowedEditorProbe";
-import PagedEditor, { type PagedEditorHandle } from "./PagedEditor";
+import PagedEditor, { scrollCaretNearUpperView, type PagedEditorHandle } from "./PagedEditor";
 import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
@@ -157,6 +157,10 @@ export interface EditorPaneHandle {
    * otherwise. Never mutates `content`.
    */
   navigateToGlobalOffset(start: number, end: number): void;
+  /** 検索・置換: select `[start, end)` and scroll it into the visible area (switching 編集ページ on WINDOWED). */
+  revealSearchMatch(start: number, end: number): void;
+  /** 検索・置換 選択箇所を置換: replace exactly `[start, end)` with `text` as one edit. */
+  replaceSearchMatch(start: number, end: number, text: string): void;
 }
 
 function EditorPaneInner(
@@ -554,7 +558,47 @@ function EditorPaneInner(
     navigateToGlobalOffset(issue.start, issue.end);
   };
 
-  useImperativeHandle(ref, (): EditorPaneHandle => ({ navigateToGlobalOffset }), [navigateToGlobalOffset]);
+  /**
+   * 検索・置換 前へ / 次へ: select `[start, end)` AND scroll it into view on
+   * either surface. The FULL branch differs from `navigateToGlobalOffset`
+   * on purpose: `focus()` before `setSelectionRange` reveals the OLD caret
+   * and Chrome does not scroll for the programmatic selection that follows
+   * (Human QA: 次へ counted up but the editor stayed where it was).
+   */
+  const revealSearchMatch = (start: number, end: number) => {
+    if (isWindowed) {
+      navigateToGlobalOffset(start, end);
+      return;
+    }
+    if (isComposingRef.current) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    const s = Math.min(start, el.value.length);
+    const e = Math.min(end, el.value.length);
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(s, e);
+    scrollCaretNearUpperView(el, s);
+    reportCursorIndex();
+  };
+
+  /** 選択箇所を置換: one edit replacing exactly `[start, end)`; like page-break insertion it is not counted as written text. */
+  const replaceSearchMatch = (start: number, end: number, text: string) => {
+    if (isComposingRef.current) return;
+    if (isWindowed) {
+      pagedEditorRef.current?.replaceRangeGlobal(start, end, text);
+      return;
+    }
+    const next = content.slice(0, start) + text + content.slice(end);
+    inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
+    onContentChange(next);
+  };
+
+  // No deps: the handlers close over this render's `content`, so the handle
+  // is refreshed on every commit (as it already was with per-render deps).
+  useImperativeHandle(
+    ref,
+    (): EditorPaneHandle => ({ navigateToGlobalOffset, revealSearchMatch, replaceSearchMatch })
+  );
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
   const applyAutomatedTextChange = (next: string) => {
@@ -826,9 +870,10 @@ function EditorPaneInner(
             type="button"
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
+            title="原稿全体を検索し、必要なら置換します"
             className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
           >
-            置換
+            検索・置換
           </button>
           {focusMode && (
             <button

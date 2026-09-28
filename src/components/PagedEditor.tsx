@@ -238,7 +238,7 @@ function measureCaretOffsetTop(el: HTMLTextAreaElement, localOffset: number): nu
  * exact). A small margin above the target keeps a bit of preceding context
  * visible "when practical" per the task's own requirement.
  */
-function scrollCaretNearUpperView(el: HTMLTextAreaElement, localOffset: number): void {
+export function scrollCaretNearUpperView(el: HTMLTextAreaElement, localOffset: number): void {
   const caretTop = measureCaretOffsetTop(el, localOffset);
   const margin = Math.min(caretTop, Math.round(el.clientHeight * 0.15));
   el.scrollTop = Math.max(0, caretTop - margin);
@@ -915,7 +915,14 @@ function PagedEditorInner(
       pendingJumpRef.current = { kind: "global", start, end };
       return;
     }
-    switchToPageForOffset(end, pages, { start, end }, { scrollHint: "upper" });
+    // A jump to a specific range ends an explicit 全文を選択 (like goToPage).
+    setAllSelected(false);
+    // A non-empty range belongs to the page holding its LAST character, so a
+    // match ending exactly at an 編集ページ boundary stays on its own page
+    // (forward affinity on `end` would mount the next page and clamp the
+    // selection to its offset 0). Collapsed carets (a Preview click) keep the
+    // app-wide forward convention.
+    switchToPageForOffset(end, pages, { start, end }, { scrollHint: "upper", affinity: start < end ? "backward" : "forward" });
     reportCaret(end);
   };
 

@@ -261,6 +261,14 @@ export default function TategakiEditor({
     setMobileView("editor");
     editorPaneRef.current?.navigateToGlobalOffset(start, end);
   }, []);
+  // 検索・置換: the whole-manuscript search lives in SearchReplaceModal; the
+  // editor surface (FULL or WINDOWED) only reveals / replaces the range.
+  const revealSearchMatch = useCallback((start: number, end: number) => {
+    editorPaneRef.current?.revealSearchMatch(start, end);
+  }, []);
+  const replaceSearchMatch = useCallback((start: number, end: number, text: string) => {
+    editorPaneRef.current?.replaceSearchMatch(start, end, text);
+  }, []);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: cursorIndex advances on every
   // keystroke same as content, so it must be debounced the same way before
   // reaching PreviewPane -- otherwise React.memo's prop comparison would
@@ -1241,7 +1249,8 @@ export default function TategakiEditor({
                 <SearchReplaceModal
                   placement="preview"
                   content={content}
-                  onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
+                  onFind={revealSearchMatch}
+                  onReplaceOne={replaceSearchMatch}
                   onReplace={(next) => {
                     setContent(next);
                     setIsSearchOpen(false);
@@ -1265,7 +1274,8 @@ export default function TategakiEditor({
           <SearchReplaceModal
             placement="screen"
             content={content}
-            onFind={(start, end) => editorPaneRef.current?.navigateToGlobalOffset(start, end)}
+            onFind={revealSearchMatch}
+            onReplaceOne={replaceSearchMatch}
             onReplace={(next) => {
               setContent(next);
               setIsSearchOpen(false);
