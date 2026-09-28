@@ -103,9 +103,18 @@ const SEMANTIC_RUN_IDENTITY_CHAR: Record<SemanticRunKind, string> = {
   TWO_DOT_LEADER: "‥",
 };
 
+// `Array.from(text)[0]` without expanding the whole string: Array.from walks
+// the same string iterator, so its first element is the iterator's first
+// code point (undefined for ""). Called once per composed line, where `text`
+// can be the remainder of a very long paragraph.
+function firstCodePointOrUndefined(text: string): string | undefined {
+  for (const codePoint of text) return codePoint;
+  return undefined;
+}
+
 function firstVisibleCharFor(unit: LogicalUnit): string | undefined {
-  if (unit.kind === "TEXT") return Array.from(unit.text)[0];
-  if (unit.kind === "TCY") return Array.from(unit.displayText)[0];
+  if (unit.kind === "TEXT") return firstCodePointOrUndefined(unit.text);
+  if (unit.kind === "TCY") return firstCodePointOrUndefined(unit.displayText);
   if (unit.kind === "SEMANTIC_RUN") return SEMANTIC_RUN_IDENTITY_CHAR[unit.runKind];
   return undefined;
 }
@@ -126,6 +135,9 @@ interface CompositionAtom {
   sourceSpan: SourceSpan;
   advanceTick: GeometryTick;
   owner: LogicalUnit;
+  // literalTextForAtom(owner, sourceSpan), resolved once in computeAtoms —
+  // both the pair-advance pass and ruby overhang read it from here.
+  literalText: string | undefined;
 }
 
 // One visual "cell" for Natural Pitch purposes. A grapheme cluster inside a
@@ -186,12 +198,24 @@ function rubyReadingTextForAtom(owner: LogicalUnit & { kind: "RUBY" }, atomSpan:
 // break markers never expose a classifiable literal character at their
 // boundary here — a disclosed limitation, not an approximation: their
 // adjacency simply contributes no overhang allowance, below).
-function literalTextForAtom(owner: LogicalUnit, atomSpan: SourceSpan): string | undefined {
+//
+// `codePointsByOwner` memoizes each owner's code-point expansion for one
+// computeAtoms pass: every atom of a TEXT unit slices the same owner, and
+// re-expanding a long paragraph per atom made atom preparation quadratic.
+function literalTextForAtom(
+  owner: LogicalUnit,
+  atomSpan: SourceSpan,
+  codePointsByOwner: Map<LogicalUnit, string[]>
+): string | undefined {
+  if (owner.kind !== "TEXT" && owner.kind !== "TCY") return undefined;
+  let codePoints = codePointsByOwner.get(owner);
+  if (!codePoints) {
+    codePoints = Array.from(owner.kind === "TEXT" ? owner.text : owner.displayText);
+    codePointsByOwner.set(owner, codePoints);
+  }
   const relStart = atomSpan.start - owner.span.start;
   const relEnd = atomSpan.end - owner.span.start;
-  if (owner.kind === "TEXT") return Array.from(owner.text).slice(relStart, relEnd).join("");
-  if (owner.kind === "TCY") return Array.from(owner.displayText).slice(relStart, relEnd).join("");
-  return undefined;
+  return codePoints.slice(relStart, relEnd).join("");
 }
 
 function firstCodePointOf(text: string): string {
@@ -222,7 +246,7 @@ function adjacentOverhangAllowance(
 ): GeometryTick {
   const neighbor = atoms[neighborIndex];
   if (!neighbor) return 0;
-  const text = literalTextForAtom(neighbor.owner, neighbor.sourceSpan);
+  const text = neighbor.literalText;
   if (text === undefined || text.length === 0) return 0;
   const char = side === "before" ? lastCodePointOf(text) : firstCodePointOf(text);
   const cls = ruleSet.characterClassFor(char);
@@ -352,6 +376,7 @@ function computeAtoms(
   const owners = indexBoundaryOwners(units, boundaries);
 
   const perCellAdvance = measurement.naturalAdvanceTick(settings.bodyFontRef, settings.bodyFontSizePt, "");
+  const codePointsByOwner = new Map<LogicalUnit, string[]>();
   const atoms: CompositionAtom[] = [];
   for (let i = 0; i < boundaries.length - 1; i++) {
     const start = boundaries[i];
@@ -364,23 +389,25 @@ function computeAtoms(
       );
     }
     const sourceSpan = { blockId, start, end };
+    const literalText = literalTextForAtom(owner, sourceSpan, codePointsByOwner);
     if (owner.kind === "IMAGE") {
       const advanceTick = advanceTickFor(owner, end - start, perCellAdvance, measurement);
       if (advanceTick <= 0) {
         return { atoms, unresolvedImageSpan: sourceSpan };
       }
-      atoms.push({ sourceSpan, advanceTick, owner });
+      atoms.push({ sourceSpan, advanceTick, owner, literalText });
       continue;
     }
     atoms.push({
       sourceSpan,
       advanceTick: advanceTickFor(owner, end - start, perCellAdvance, measurement),
       owner,
+      literalText,
     });
   }
   for (let i = 0; i < atoms.length - 1; i++) {
-    const leftText = literalTextForAtom(atoms[i].owner, atoms[i].sourceSpan);
-    const rightText = literalTextForAtom(atoms[i + 1].owner, atoms[i + 1].sourceSpan);
+    const leftText = atoms[i].literalText;
+    const rightText = atoms[i + 1].literalText;
     if (leftText === undefined || rightText === undefined) continue;
     const pair = `${lastCodePointOf(leftText)}${firstCodePointOf(rightText)}`;
     const ratio = ruleSet.pairAdvanceRatio.get(pair);
@@ -421,7 +448,10 @@ function legalityForOpportunity(opportunity: BreakOpportunity): BoundaryLegality
  * colocated PARAGRAPH_FORCED, which wins over the first ordinary candidate.
  */
 function indexBoundaryLegalities(opportunities: BreakOpportunity[]): Map<number, BoundaryLegality> {
-  const indexed = new Map<number, { legality: BoundaryLegality; priority: number }>();
+  // Priorities are tracked beside the result (no per-offset entry object and
+  // no second Map copy); same first-wins / higher-priority-wins rule.
+  const legalities = new Map<number, BoundaryLegality>();
+  const priorities = new Map<number, number>();
   for (const opportunity of opportunities) {
     const priority = opportunity.reason === "MANUAL_FORCED"
       ? 2
@@ -429,12 +459,13 @@ function indexBoundaryLegalities(opportunities: BreakOpportunity[]): Map<number,
         ? 1
         : 0;
     const offset = opportunity.position.start;
-    const existing = indexed.get(offset);
-    if (!existing || priority > existing.priority) {
-      indexed.set(offset, { legality: legalityForOpportunity(opportunity), priority });
+    const existing = priorities.get(offset);
+    if (existing === undefined || priority > existing) {
+      legalities.set(offset, legalityForOpportunity(opportunity));
+      priorities.set(offset, priority);
     }
   }
-  return new Map(Array.from(indexed, ([offset, entry]) => [offset, entry.legality]));
+  return legalities;
 }
 
 export interface PreparedLineComposition {

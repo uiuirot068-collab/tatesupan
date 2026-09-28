@@ -1,0 +1,40 @@
+{
+  "label": "baseline",
+  "fixture": "normal",
+  "surface": "FULL",
+  "chars": 303999,
+  "openMs": 2032,
+  "moveToEndMs": 1,
+  "pagesShown": 625,
+  "finalPages": 625,
+  "results": {
+    "endInsert": {
+      "inputToRequestMs": 468,
+      "inputToLayoutMs": 3360,
+      "inputToPreviewPaintedMs": 3376,
+      "layouts": 1,
+      "replyType": "complete"
+    },
+    "longParagraphInsert": {
+      "inputToRequestMs": 454,
+      "inputToLayoutMs": 3239,
+      "inputToPreviewPaintedMs": 3306,
+      "layouts": 1,
+      "replyType": "complete"
+    },
+    "enterInLongParagraph": {
+      "inputToRequestMs": 423,
+      "inputToLayoutMs": 3501,
+      "inputToPreviewPaintedMs": 3572,
+      "layouts": 1,
+      "replyType": "complete"
+    },
+    "undoEnter": {
+      "inputToRequestMs": 412,
+      "inputToLayoutMs": 3247,
+      "inputToPreviewPaintedMs": 3317,
+      "layouts": 1,
+      "replyType": "complete"
+    }
+  }
+}

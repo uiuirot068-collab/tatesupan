@@ -1,0 +1,106 @@
+{
+  "label": "core-lp-optimized",
+  "node": "v24.18.0",
+  "rows": [
+    {
+      "name": "single-5000",
+      "chars": 5001,
+      "ms": 16,
+      "pages": 9,
+      "lines": 136,
+      "units": 1,
+      "arrayFromStringCalls": 20004,
+      "codePointsMaterialized": 40004
+    },
+    {
+      "name": "split-5000",
+      "chars": 5067,
+      "ms": 13.8,
+      "pages": 11,
+      "lines": 167,
+      "units": 67,
+      "arrayFromStringCalls": 20235,
+      "codePointsMaterialized": 59901
+    },
+    {
+      "name": "single-10000",
+      "chars": 10001,
+      "ms": 20.8,
+      "pages": 17,
+      "lines": 271,
+      "units": 1,
+      "arrayFromStringCalls": 40004,
+      "codePointsMaterialized": 80004
+    },
+    {
+      "name": "split-10000",
+      "chars": 10133,
+      "ms": 23.5,
+      "pages": 21,
+      "lines": 333,
+      "units": 133,
+      "arrayFromStringCalls": 40466,
+      "codePointsMaterialized": 120098
+    },
+    {
+      "name": "single-20000",
+      "chars": 20001,
+      "ms": 67.8,
+      "pages": 34,
+      "lines": 542,
+      "units": 1,
+      "arrayFromStringCalls": 80004,
+      "codePointsMaterialized": 160004
+    },
+    {
+      "name": "split-20000",
+      "chars": 20267,
+      "ms": 44.3,
+      "pages": 42,
+      "lines": 667,
+      "units": 267,
+      "arrayFromStringCalls": 80935,
+      "codePointsMaterialized": 240801
+    },
+    {
+      "name": "single-50000",
+      "chars": 50001,
+      "ms": 124,
+      "pages": 85,
+      "lines": 1355,
+      "units": 1,
+      "arrayFromStringCalls": 200004,
+      "codePointsMaterialized": 400004
+    },
+    {
+      "name": "split-50000",
+      "chars": 50667,
+      "ms": 103.4,
+      "pages": 105,
+      "lines": 1667,
+      "units": 667,
+      "arrayFromStringCalls": 202335,
+      "codePointsMaterialized": 602601
+    },
+    {
+      "name": "300k-normal",
+      "chars": 303999,
+      "ms": 883.5,
+      "pages": 625,
+      "lines": 10000,
+      "units": 3999,
+      "arrayFromStringCalls": 1213997,
+      "codePointsMaterialized": 3617395
+    },
+    {
+      "name": "300k-with-20k-paragraph",
+      "chars": 303735,
+      "ms": 973.9,
+      "pages": 618,
+      "lines": 9875,
+      "units": 3735,
+      "arrayFromStringCalls": 1213073,
+      "codePointsMaterialized": 3616307
+    }
+  ]
+}

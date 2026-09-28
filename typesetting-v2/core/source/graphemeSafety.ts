@@ -27,6 +27,21 @@ export function codePointSlice(text: string, start: number, end: number): string
   return toCodePointArray(text).slice(start, end).join("");
 }
 
+// `codePointSlice(text, start, codePointLength(text))` — everything from
+// code point `start` on — without expanding the whole string: walks `start`
+// code points (the same unit the string iterator steps by: a valid surrogate
+// pair is one code point, a lone surrogate is one) and returns the native
+// UTF-16 suffix. Cost is O(start), not O(text), which is what keeps cutting a
+// line off the front of a very long paragraph linear.
+export function codePointSuffix(text: string, start: number): string {
+  if (start < 0) return codePointSlice(text, start, codePointLength(text)); // negative slice semantics; unused by Core
+  let index = 0;
+  for (let consumed = 0; consumed < start && index < text.length; consumed++) {
+    index += (text.codePointAt(index) as number) > 0xffff ? 2 : 1;
+  }
+  return text.slice(index);
+}
+
 export class GraphemeSafetyError extends Error {
   constructor(message: string) {
     super(message);
@@ -49,13 +64,18 @@ export class GraphemeSegmentationUnavailableError extends GraphemeSafetyError {
 
 type SegmenterFactory = () => Intl.Segmenter;
 
+let defaultSegmenter: Intl.Segmenter | undefined;
+
 function defaultSegmenterFactory(): Intl.Segmenter {
   if (typeof Intl === "undefined" || !("Segmenter" in Intl)) {
     throw new GraphemeSegmentationUnavailableError(
       "GRAPHEME_SEGMENTATION_UNAVAILABLE: Intl.Segmenter (grapheme granularity) is not available in this runtime, so grapheme-cluster boundaries cannot be validated. Refusing to guess (INV-010/INV-011)."
     );
   }
-  return new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  // One shared instance: a grapheme Segmenter holds no per-call state, and
+  // constructing one per TEXT unit was a measurable share of long layouts.
+  defaultSegmenter ??= new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  return defaultSegmenter;
 }
 
 let segmenterFactory: SegmenterFactory = defaultSegmenterFactory;
@@ -77,7 +97,7 @@ function graphemeBoundaryOffsets(text: string): Set<number> {
   const boundaries = new Set<number>([0]);
   let offset = 0;
   for (const { segment } of segmenter.segment(text)) {
-    offset += codePointLength(segment);
+    offset += segment.length === 1 ? 1 : codePointLength(segment); // one UTF-16 unit is one code point
     boundaries.add(offset);
   }
   return boundaries;

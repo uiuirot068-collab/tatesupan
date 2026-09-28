@@ -5,7 +5,7 @@
 // the Natural-Pitch Line Composer's job, a later Loop). No remaining-width,
 // GeometryTick-accumulation, or page-filling logic exists anywhere here.
 
-import { codePointSlice, graphemeBoundaries } from "../source/graphemeSafety";
+import { graphemeBoundaries } from "../source/graphemeSafety";
 import type { SourceSpan } from "../source/span";
 import { DEFAULT_CLASS, type CharacterClass, type RuleSetVersion } from "../rules/characterClass";
 import type { LogicalUnit, SemanticRunKind, TextUnit } from "../units";
@@ -84,10 +84,14 @@ function deriveTextUnitInternalOpportunities(
   trace?: TraceRecorder
 ): BreakOpportunity[] {
   const boundaries = graphemeBoundaries(unit.text);
+  // Expanded to code points ONCE per unit: slicing each grapheme atom out of
+  // the whole text (`codePointSlice`) re-expanded it per boundary, which made
+  // one long paragraph quadratic. Same half-open code-point ranges as before.
+  const codePoints = Array.from(unit.text);
   const opportunities: BreakOpportunity[] = [];
   for (let i = 1; i < boundaries.length - 1; i++) {
-    const leftAtom = codePointSlice(unit.text, boundaries[i - 1], boundaries[i]);
-    const rightAtom = codePointSlice(unit.text, boundaries[i], boundaries[i + 1]);
+    const leftAtom = codePoints.slice(boundaries[i - 1], boundaries[i]).join("");
+    const rightAtom = codePoints.slice(boundaries[i], boundaries[i + 1]).join("");
     const leftClass = ruleSet.characterClassFor(lastCodePoint(leftAtom));
     const rightClass = ruleSet.characterClassFor(firstCodePoint(rightAtom));
     const reason = classifyOrdinaryBoundary(leftClass, rightClass);

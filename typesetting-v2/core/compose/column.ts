@@ -3,7 +3,7 @@
 // (INV-004: never stretched to absorb it).
 
 import type { GeometryTick } from "../geometry/tick";
-import { codePointSlice } from "../source/graphemeSafety";
+import { codePointSuffix } from "../source/graphemeSafety";
 import type { RuleSetVersion } from "../rules/characterClass";
 import type { MeasurementFacts } from "../measurement/facts";
 import type { LogicalUnit } from "../units";
@@ -47,12 +47,37 @@ export interface ColumnCompositionResult {
 // every other kind is always consumed whole or not at all (JUKUGO-ruby
 // cross-line splitting is ruby-placement territory, P3-L11+, not exercised
 // by this Loop).
-function sliceUnitsFrom(units: LogicalUnit[], offset: number): LogicalUnit[] {
+//
+// Fast path (`startOrdered`): when span.start never decreases along `units`
+// and every span is well-formed, every unit from the first one starting
+// AFTER `offset` onward is kept unchanged by the rules below (its end is
+// past `offset`, it cannot be the separator newline at `offset`, and no
+// MANUAL_BREAK there can start at `offset`). Only the short front whose
+// start is <= `offset` is examined; the untouched tail is copied as-is.
+// Without the precondition the whole array is examined, exactly as before.
+// The returned flag says whether the result is still start-ordered, so a
+// column carries the fast path from line to line. This keeps each line's cost
+// proportional to what it consumed, instead of to the remaining document.
+function sliceUnitsFrom(
+  units: LogicalUnit[],
+  offset: number,
+  startOrdered: boolean
+): { units: LogicalUnit[]; startOrdered: boolean } {
+  let frontEnd = units.length;
+  if (startOrdered) {
+    frontEnd = 0;
+    while (frontEnd < units.length && units[frontEnd].span.start <= offset) frontEnd++;
+  }
   const result: LogicalUnit[] = [];
-  const manualBreakAtOffset = units.some(
-    (unit) => unit.kind === "MANUAL_BREAK" && unit.span.start === offset
-  );
-  for (const unit of units) {
+  let manualBreakAtOffset = false;
+  for (let i = 0; i < frontEnd; i++) {
+    if (units[i].kind === "MANUAL_BREAK" && units[i].span.start === offset) {
+      manualBreakAtOffset = true;
+      break;
+    }
+  }
+  for (let i = 0; i < frontEnd; i++) {
+    const unit = units[i];
     if (unit.span.end <= offset) continue; // fully consumed
     // A UI-inserted marker is isolated on its own source line. Once its
     // MANUAL_BREAK closes the page, the immediately following separator
@@ -70,7 +95,7 @@ function sliceUnitsFrom(units: LogicalUnit[], offset: number): LogicalUnit[] {
     }
     if (unit.kind === "TEXT") {
       const relativeStart = offset - unit.span.start;
-      const remainingText = codePointSlice(unit.text, relativeStart, Array.from(unit.text).length);
+      const remainingText = codePointSuffix(unit.text, relativeStart);
       result.push({
         kind: "TEXT",
         span: { blockId: unit.span.blockId, start: offset, end: unit.span.end },
@@ -81,7 +106,31 @@ function sliceUnitsFrom(units: LogicalUnit[], offset: number): LogicalUnit[] {
       result.push(unit);
     }
   }
-  return result;
+  if (!startOrdered) return { units: result, startOrdered: false };
+  // Front starts are all <= offset < every tail start, and a re-sliced TEXT
+  // span [offset, end) has end > offset, so the result stays start-ordered
+  // exactly when its (short) front does.
+  let frontOrdered = true;
+  for (let i = 1; i < result.length; i++) {
+    if (result[i].span.start < result[i - 1].span.start) {
+      frontOrdered = false;
+      break;
+    }
+  }
+  return {
+    units: frontEnd === units.length ? result : result.concat(units.slice(frontEnd)),
+    startOrdered: frontOrdered,
+  };
+}
+
+// sliceUnitsFrom's fast-path precondition, checked once per column.
+function isStartOrdered(units: LogicalUnit[]): boolean {
+  for (let i = 0; i < units.length; i++) {
+    const span = units[i].span;
+    if (span.end < span.start) return false;
+    if (i > 0 && span.start < units[i - 1].span.start) return false;
+  }
+  return true;
 }
 
 export function composeColumn(
@@ -100,6 +149,7 @@ export function composeColumn(
   let hold: LineCompositionHold | undefined;
   let forcedBreak = false;
   let currentIsParagraphStart = isParagraphStart;
+  let remainingStartOrdered = isStartOrdered(units);
 
   while (remaining.length > 0 && usedColumnTick + settings.linePitchTicks <= settings.columnExtentTicks) {
     const lineResult = composeLine(
@@ -119,7 +169,9 @@ export function composeColumn(
     if (lineResult.line.placedUnits.length === 0) break; // no progress possible — avoid an infinite loop
     lines.push({ ...lineResult.line, order: lines.length });
     usedColumnTick += settings.linePitchTicks;
-    remaining = sliceUnitsFrom(remaining, lineResult.consumedThroughOffset);
+    const sliced = sliceUnitsFrom(remaining, lineResult.consumedThroughOffset, remainingStartOrdered);
+    remaining = sliced.units;
+    remainingStartOrdered = sliced.startOrdered;
     // Human Product Decision A/B: a PARAGRAPH_FORCED cut makes the NEXT line
     // a fresh paragraph start; every other cut — ordinary/kinsoku OR
     // MANUAL_FORCED (page-closing) — means the paragraph-start flag has

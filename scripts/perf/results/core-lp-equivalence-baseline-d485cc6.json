@@ -1,0 +1,3030 @@
+{
+ "01-normal@default": {
+  "summary": {
+   "chars": 6521,
+   "pages": 13,
+   "colophonPages": 0,
+   "columns": 13,
+   "lines": 202,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "1db6a18e294cb301167106d3",
+   "documentTrace": "a801d5f58f5fdc4f18ecf8a8",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c99bdbc4787123dd5aad07ac",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "79fa3b63564f46c7081f2d59",
+   "fastPaintPlan": "a2376d942f4dc0460e8ea1b4",
+   "fontPaintPlanPdfJpg": "aaa459adb4f921e818286d5e",
+   "previewDocument": "6bd31845a478d606303c54cf",
+   "livePreviewDocument": "f3fc872b8b3a86588bad4963",
+   "previewPageModel": "638cccb4e5234ccbfaed285a"
+  },
+  "composeMs": 139
+ },
+ "01-normal@bunko": {
+  "summary": {
+   "chars": 6521,
+   "pages": 13,
+   "colophonPages": 0,
+   "columns": 13,
+   "lines": 202,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "1db6a18e294cb301167106d3",
+   "documentTrace": "a801d5f58f5fdc4f18ecf8a8",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c99bdbc4787123dd5aad07ac",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "79fa3b63564f46c7081f2d59",
+   "fastPaintPlan": "a2376d942f4dc0460e8ea1b4",
+   "fontPaintPlanPdfJpg": "aaa459adb4f921e818286d5e",
+   "previewDocument": "6bd31845a478d606303c54cf",
+   "livePreviewDocument": "f3fc872b8b3a86588bad4963",
+   "previewPageModel": "638cccb4e5234ccbfaed285a"
+  },
+  "composeMs": 57
+ },
+ "01-normal@a5_1": {
+  "summary": {
+   "chars": 6521,
+   "pages": 9,
+   "colophonPages": 0,
+   "columns": 9,
+   "lines": 160,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "5cc4014510406331243da0cc",
+   "documentTrace": "cc9145cd520a8393379ba6ae",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "558c8319894e52e1168a481e",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "9110f2f1267a98c96942e286",
+   "fastPaintPlan": "ff2afe71026da1fa2acc189a",
+   "fontPaintPlanPdfJpg": "fe7a7098ec28d848198202d0",
+   "previewDocument": "60198a8ef56f61db53127192",
+   "livePreviewDocument": "f96fbc6e70e1e4440c0ff464",
+   "previewPageModel": "dff5ccfc89fa9c2e29702131"
+  },
+  "composeMs": 58
+ },
+ "01-normal@a5_2": {
+  "summary": {
+   "chars": 6521,
+   "pages": 8,
+   "colophonPages": 0,
+   "columns": 15,
+   "lines": 294,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e40f8da3c800ae8a6c2d2c07",
+   "documentTrace": "d8d9315a6a030ff95d0cdd64",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f2752253e09a7bc3bf588d8e",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "4a3f2c9c2bf6f7cafa4e168c",
+   "fastPaintPlan": "b6072b2d0ef4b165a74b99ea",
+   "fontPaintPlanPdfJpg": "a5fe0ac2c2fc2bcd6c8a71ab",
+   "previewDocument": "e2b499f93a52a76aec0f672c",
+   "livePreviewDocument": "edeb46f928d582d3c4f72e4d",
+   "previewPageModel": "3038beb112ae82503d4ea5a0"
+  },
+  "composeMs": 110
+ },
+ "01-normal@shinsho": {
+  "summary": {
+   "chars": 6521,
+   "pages": 12,
+   "colophonPages": 0,
+   "columns": 12,
+   "lines": 160,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "a10012f5ac802aa4cc9c321e",
+   "documentTrace": "ee9e0fc90cde495c29fad6e2",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "feb3cb3b32882aa6657be362",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "9bc500f274dbabaf6a68c09a",
+   "fastPaintPlan": "7475dbfcc24784025a923b84",
+   "fontPaintPlanPdfJpg": "d3715258b5b5349cbe3e0ba8",
+   "previewDocument": "fb634715f3c4963b00c9a2cd",
+   "livePreviewDocument": "07492cdfb41d1789b1b6f8da",
+   "previewPageModel": "b6e66cd0f357de70d517dcfc"
+  },
+  "composeMs": 59
+ },
+ "01-normal@b6": {
+  "summary": {
+   "chars": 6521,
+   "pages": 9,
+   "colophonPages": 0,
+   "columns": 9,
+   "lines": 160,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "07dd2dd301a87713609947cc",
+   "documentTrace": "6100d2ff2f9a56e271f0293c",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "72ce04334b688cb559554241",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "d9f489b47296b9f62b455c1d",
+   "fastPaintPlan": "2e3ab59a5bbc1a8352e51221",
+   "fontPaintPlanPdfJpg": "f9f8b2015f936bd04678ea39",
+   "previewDocument": "3508d06dda64e28b1699a61e",
+   "livePreviewDocument": "901fddea70f8556119486bc5",
+   "previewPageModel": "be38d99833f7955312d18921"
+  },
+  "composeMs": 74
+ },
+ "01-normal@a6": {
+  "summary": {
+   "chars": 6521,
+   "pages": 16,
+   "colophonPages": 0,
+   "columns": 16,
+   "lines": 219,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "3e5c37c65253644f88a42e4f",
+   "documentTrace": "e3b874a7bf71aecc96e9a1a9",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "ec4cf98d7b3c2ba4b789e382",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "44ac7e22cae005b133dc02e2",
+   "fastPaintPlan": "7246b16012bac1ca1c02d664",
+   "fontPaintPlanPdfJpg": "f7f529ab4c71aa4c578aaa68",
+   "previewDocument": "6f727a495269b01100adc54a",
+   "livePreviewDocument": "abda0dbb7cfda6cf531749c6",
+   "previewPageModel": "912b532eb49c276a565768fd"
+  },
+  "composeMs": 54
+ },
+ "01-normal@a5_2+colophon": {
+  "summary": {
+   "chars": 6521,
+   "pages": 8,
+   "colophonPages": 1,
+   "columns": 15,
+   "lines": 294,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e40f8da3c800ae8a6c2d2c07",
+   "documentTrace": "dc5f00b075f21a8c0b3eb16b",
+   "documentColophon": "79af6d955936be8466b9d801",
+   "documentRest": "237129f3bbe7d39d3b78a0c0",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "d58fc2f564ad3c6d41d266ab",
+   "publicationModel": "4504eb5902557f755d6d50a4",
+   "fastPaintPlan": "b60fd55bbc311cf8f33b25b6",
+   "fontPaintPlanPdfJpg": "658aec0158271276205ae7fb",
+   "previewDocument": "694fb41ab36f8e3678b33177",
+   "livePreviewDocument": "1d015e48b0609b2a2b280d3b",
+   "previewPageModel": "a559fe69a5e4f67ed898f5da"
+  },
+  "composeMs": 80
+ },
+ "01-normal@default+colophon": {
+  "summary": {
+   "chars": 6521,
+   "pages": 13,
+   "colophonPages": 1,
+   "columns": 13,
+   "lines": 202,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "1db6a18e294cb301167106d3",
+   "documentTrace": "cf39e9ccd925f3e666a40d90",
+   "documentColophon": "acf6dafbfac9b640536b4197",
+   "documentRest": "ce1e732b6b4ca01f7711ad45",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "d58fc2f564ad3c6d41d266ab",
+   "publicationModel": "f629a9c49c7c8e9204798e27",
+   "fastPaintPlan": "cc9081e3d814adb00b007c5f",
+   "fontPaintPlanPdfJpg": "212cc9c123efae8d2aab8e4c",
+   "previewDocument": "bede4fc0da592095a48d80eb",
+   "livePreviewDocument": "744a4fb2c7842207de317fa5",
+   "previewPageModel": "61cdf4c3e9a30c5aa4d899e4"
+  },
+  "composeMs": 59
+ },
+ "01-normal@default+nombreHidden": {
+  "summary": {
+   "chars": 6521,
+   "pages": 13,
+   "colophonPages": 0,
+   "columns": 13,
+   "lines": 202,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0e52d2ca9daa96c4ca03e3ee",
+   "documentTrace": "a801d5f58f5fdc4f18ecf8a8",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c99bdbc4787123dd5aad07ac",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "97952d78f4f610e24792b218",
+   "fastPaintPlan": "fd9a04643845ac7c2c9e3d0e",
+   "fontPaintPlanPdfJpg": "d790e751b68d8b2fd2a7f023",
+   "previewDocument": "f4a5292efac864b697629f02",
+   "livePreviewDocument": "554237f43da28a76a0246f27",
+   "previewPageModel": "638cccb4e5234ccbfaed285a"
+  },
+  "composeMs": 55
+ },
+ "01-normal@default+hashira+overrides": {
+  "summary": {
+   "chars": 6521,
+   "pages": 13,
+   "colophonPages": 0,
+   "columns": 13,
+   "lines": 202,
+   "placed": 6521,
+   "units": 119,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "4215d8e1be037b9a765a37e9",
+   "documentTrace": "a801d5f58f5fdc4f18ecf8a8",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c99bdbc4787123dd5aad07ac",
+   "units": "a20564f3318f00f3fade0c93",
+   "source": "4cc0d58688b0426cf8a5ed4d",
+   "publicationModel": "13d7918d0ca0e5cdb013b710",
+   "fastPaintPlan": "5de1a7ccdbf78f34fdad2e50",
+   "fontPaintPlanPdfJpg": "5967e7398b49062818cbb136",
+   "previewDocument": "f98eb27d40ba8c893a4ca851",
+   "livePreviewDocument": "a1e18507bd1115d1806795e7",
+   "previewPageModel": "638cccb4e5234ccbfaed285a"
+  },
+  "composeMs": 52
+ },
+ "02-single-20k@default": {
+  "summary": {
+   "chars": 20001,
+   "pages": 34,
+   "colophonPages": 0,
+   "columns": 34,
+   "lines": 542,
+   "placed": 20001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "b0e2e771e8e84bb4d3ba2415",
+   "documentTrace": "74d1c23c86d4bcbad95bd0ae",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "cc8c3e888c0a5c1806ab48d8",
+   "units": "4c1594e8b6cb86e107f87246",
+   "source": "7e618643e2810bf50a81502f",
+   "publicationModel": "9038dc300f2283bf7eb42c50",
+   "fastPaintPlan": "43f0a64cb8e0fc3e515b8785",
+   "fontPaintPlanPdfJpg": "c355559149ab3fc7c3bb75e1",
+   "previewDocument": "f895c7663a19f0a479e493d9",
+   "livePreviewDocument": "d63172c604455713fda45b24",
+   "previewPageModel": "4071e8425b11582218d0aca1"
+  },
+  "composeMs": 17583
+ },
+ "02-single-20k@a5_2": {
+  "summary": {
+   "chars": 20001,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 43,
+   "lines": 846,
+   "placed": 20001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "73ec8e783422c69ab8b93435",
+   "documentTrace": "6a2ca3104ac6d809cf260f34",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "4156cc50fea9ab5774c646c3",
+   "units": "4c1594e8b6cb86e107f87246",
+   "source": "7e618643e2810bf50a81502f",
+   "publicationModel": "b9d63cc235c39673ea09ceca",
+   "fastPaintPlan": "9d873c1198f71ff89e95ab57",
+   "fontPaintPlanPdfJpg": "86f3cc5376c96ec12022646a",
+   "previewDocument": "13c97aa2550c8a34d766b8f0",
+   "livePreviewDocument": "8ac9b66712a4909c033ec8cd",
+   "previewPageModel": "bcd4b928ec822904d851759e"
+  },
+  "composeMs": 21760
+ },
+ "02-single-20k@shinsho": {
+  "summary": {
+   "chars": 20001,
+   "pages": 29,
+   "colophonPages": 0,
+   "columns": 29,
+   "lines": 401,
+   "placed": 20001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "adc869a0f81bb9e6c0d45c25",
+   "documentTrace": "aeeaac8ea959a6c935bc5ba6",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a82b71bfbae6798f1d2a9a1a",
+   "units": "4c1594e8b6cb86e107f87246",
+   "source": "7e618643e2810bf50a81502f",
+   "publicationModel": "3af7db12d3b4bb1755c53174",
+   "fastPaintPlan": "b8921baccfb4df68e520dc4a",
+   "fontPaintPlanPdfJpg": "32cf6f80df9a52bf299a9c0f",
+   "previewDocument": "eef02aef191f712adf07d9d4",
+   "livePreviewDocument": "9bc8ae3fdcdc2a923bc4766f",
+   "previewPageModel": "23c0db7ed05e95087c64ca4b"
+  },
+  "composeMs": 19527
+ },
+ "03-300k@default": {
+  "summary": {
+   "chars": 303999,
+   "pages": 625,
+   "colophonPages": 0,
+   "columns": 625,
+   "lines": 10000,
+   "placed": 303999,
+   "units": 3999,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c44839d097bc534463a958f4",
+   "documentTrace": "bb18115ccaf1f0d64a5a33fe",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "db7f175ace7e3347dfe63c89",
+   "units": "ab9311ada6d37280736da01a",
+   "source": "3e486a0b631e56317f46e331",
+   "publicationModel": "1d5e35610bf38e463cc57b85",
+   "fastPaintPlan": "ed395fd417ce5129960b69f8",
+   "fontPaintPlanPdfJpg": "c2543c9476185ae270763208",
+   "previewDocument": "af7659ac3e070b67de84dead",
+   "livePreviewDocument": "45e77ec02c942a77192b8e22",
+   "previewPageModel": "8166c9c18205576f2fd0f43c"
+  },
+  "composeMs": 3084
+ },
+ "03b-300k-with-20k-paragraph@default": {
+  "summary": {
+   "chars": 303735,
+   "pages": 618,
+   "colophonPages": 0,
+   "columns": 618,
+   "lines": 9875,
+   "placed": 303735,
+   "units": 3735,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "9bf17ed0784ef463899eaa35",
+   "documentTrace": "c7e75d34b6594c465b73a534",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "b0ea17ae764e0341bffe3107",
+   "units": "3c361480f63eee4cbd840ddc",
+   "source": "258856500071f81d3dd4ef14",
+   "publicationModel": "f20fa8e0fa83ed7e7a6fdbf6",
+   "fastPaintPlan": "456223dfc9582ee31589dac6",
+   "fontPaintPlanPdfJpg": "5cd304eaaf864ce9b35d1870",
+   "previewDocument": "dd7194b84e71e4097e249231",
+   "livePreviewDocument": "41c3e179954cd43f15a11247",
+   "previewPageModel": "e0e3f8d852734f76e268cc94"
+  },
+  "composeMs": 24820
+ },
+ "03b-300k-with-20k-paragraph@a5_2": {
+  "summary": {
+   "chars": 303735,
+   "pages": 348,
+   "colophonPages": 0,
+   "columns": 696,
+   "lines": 13914,
+   "placed": 303735,
+   "units": 3735,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8727d852febf88c219b12446",
+   "documentTrace": "ca0cb4dc09994170c5f16ae0",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "e8e945421284c07f865205e3",
+   "units": "3c361480f63eee4cbd840ddc",
+   "source": "258856500071f81d3dd4ef14",
+   "publicationModel": "fc065efa1289dbd5ab9989a3",
+   "fastPaintPlan": "133c822471703a30a717bac3",
+   "fontPaintPlanPdfJpg": "1261b2d666926aa9ba3c4f25",
+   "previewDocument": "38b017ea86c9f2e263ee84fb",
+   "livePreviewDocument": "537923aa448b8cd79df7c47f",
+   "previewPageModel": "25aa64a02ed2d420a45ba699"
+  },
+  "composeMs": 25525
+ },
+ "04-punctuation@default": {
+  "summary": {
+   "chars": 6960,
+   "pages": 14,
+   "colophonPages": 0,
+   "columns": 14,
+   "lines": 210,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c00178f4f91a50ad111d995d",
+   "documentTrace": "be2784c9ac5e296b19890689",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "94ea414b5c2b4f91a0bcef44",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "9197598d9446aa4abd01271c",
+   "fastPaintPlan": "b22b2cf4854208451efdd228",
+   "fontPaintPlanPdfJpg": "791f5805787f2bf1bc1b1238",
+   "previewDocument": "fef7c613013d6f4f71eb411d",
+   "livePreviewDocument": "cc7b51f449b0779f005ab600",
+   "previewPageModel": "78d101237a70faf6bc619085"
+  },
+  "composeMs": 69
+ },
+ "04-punctuation@bunko": {
+  "summary": {
+   "chars": 6960,
+   "pages": 14,
+   "colophonPages": 0,
+   "columns": 14,
+   "lines": 210,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c00178f4f91a50ad111d995d",
+   "documentTrace": "be2784c9ac5e296b19890689",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "94ea414b5c2b4f91a0bcef44",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "9197598d9446aa4abd01271c",
+   "fastPaintPlan": "b22b2cf4854208451efdd228",
+   "fontPaintPlanPdfJpg": "791f5805787f2bf1bc1b1238",
+   "previewDocument": "fef7c613013d6f4f71eb411d",
+   "livePreviewDocument": "cc7b51f449b0779f005ab600",
+   "previewPageModel": "78d101237a70faf6bc619085"
+  },
+  "composeMs": 92
+ },
+ "04-punctuation@a5_1": {
+  "summary": {
+   "chars": 6960,
+   "pages": 8,
+   "colophonPages": 0,
+   "columns": 8,
+   "lines": 140,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f3ef65c8fc3356b400299da1",
+   "documentTrace": "d42b2bbeb58a761910afb667",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f386ef4f3ff1de61c671d84c",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "31e80b4f18e85ecd617a0ab6",
+   "fastPaintPlan": "777233afcd6d769b21712cd0",
+   "fontPaintPlanPdfJpg": "fc9b874e9e08bec7cca06004",
+   "previewDocument": "f416994ab793e1bd2f3ed793",
+   "livePreviewDocument": "21c6dbf6ba5cecd80d438010",
+   "previewPageModel": "4fad3815638c2f30fd1632a9"
+  },
+  "composeMs": 38
+ },
+ "04-punctuation@a5_2": {
+  "summary": {
+   "chars": 6960,
+   "pages": 9,
+   "colophonPages": 0,
+   "columns": 17,
+   "lines": 330,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "557c1baec4d826d91dd615c8",
+   "documentTrace": "e9531e67e258da4be2c27a69",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "9b7aa5d26a0c75893e46dfc0",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "f2fadfdba566f960f6133442",
+   "fastPaintPlan": "77ba315cdd11a72dfb2ff21c",
+   "fontPaintPlanPdfJpg": "92335dae5bd4d9ce80dc48ae",
+   "previewDocument": "25a05da7ab7959c3aaae2ad9",
+   "livePreviewDocument": "e41d4702004bc3173f86be23",
+   "previewPageModel": "0c438f4114624b45ff93d2ed"
+  },
+  "composeMs": 45
+ },
+ "04-punctuation@shinsho": {
+  "summary": {
+   "chars": 6960,
+   "pages": 10,
+   "colophonPages": 0,
+   "columns": 10,
+   "lines": 140,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "036fd2d676f2879e80e8f283",
+   "documentTrace": "e9cc3e5116ca0f71668cc5e2",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f7fbc56be9921536f7b0460c",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "e9054429aece76c095450c01",
+   "fastPaintPlan": "3c62366d9cd4a298a47f6391",
+   "fontPaintPlanPdfJpg": "da5d17b3cc495f071cf61e47",
+   "previewDocument": "d021d44d96a2ae0f018a756f",
+   "livePreviewDocument": "1e986a6581dcefe2ab85a039",
+   "previewPageModel": "48660947cf9d963e7bff46c8"
+  },
+  "composeMs": 96
+ },
+ "04-punctuation@b6": {
+  "summary": {
+   "chars": 6960,
+   "pages": 10,
+   "colophonPages": 0,
+   "columns": 10,
+   "lines": 177,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e49affdb866f00afb19080a9",
+   "documentTrace": "755565d4f164c954f34e448e",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "6884ff27ce984c1fa3e8d196",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "cd373e0962ff61dee45a0b42",
+   "fastPaintPlan": "346422347dbeeaeabda600b0",
+   "fontPaintPlanPdfJpg": "8d8f4cfea0cdac484fb8f130",
+   "previewDocument": "83d5b4f4dba0491d679bad85",
+   "livePreviewDocument": "0365e23e4155f3ce0e072668",
+   "previewPageModel": "4791dd70b65e28f5cb7b066c"
+  },
+  "composeMs": 76
+ },
+ "04-punctuation@a6": {
+  "summary": {
+   "chars": 6960,
+   "pages": 15,
+   "colophonPages": 0,
+   "columns": 15,
+   "lines": 210,
+   "placed": 6750,
+   "units": 481,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0ee3625a896a479153948249",
+   "documentTrace": "85cabee0a0b9b3c9858a2fb0",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "8808669b1fcf50576298d01d",
+   "units": "5256eb58a9b51ce10195e89d",
+   "source": "667dced1bbc91794d7df89b5",
+   "publicationModel": "b952081661d1626b0475a502",
+   "fastPaintPlan": "84902a5b5f0423b7da0ee5a9",
+   "fontPaintPlanPdfJpg": "8617d5ffde81ed68687f2173",
+   "previewDocument": "26fe133c58dde92ee95af768",
+   "livePreviewDocument": "fa27e50a924dfd00935f184c",
+   "previewPageModel": "a0e377994ceb23ebf6bb384e"
+  },
+  "composeMs": 55
+ },
+ "05-ruby@default": {
+  "summary": {
+   "chars": 4720,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 62,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "fcefe14d4ceca042e6c1c3f1",
+   "documentTrace": "33fb47f5a9168945737f610b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "d92f4273a5540f565fd3a95c",
+   "fastPaintPlan": "fc4030159d9e4bfb88bf5960",
+   "fontPaintPlanPdfJpg": "bdfb13d1b8ddb2317705b17a",
+   "previewDocument": "2e38738f6247164f75b8b510",
+   "livePreviewDocument": "64914150660a64810233c466",
+   "previewPageModel": "077435c5af9c7af87455a109"
+  },
+  "composeMs": 45
+ },
+ "05-ruby@bunko": {
+  "summary": {
+   "chars": 4720,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 62,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "fcefe14d4ceca042e6c1c3f1",
+   "documentTrace": "33fb47f5a9168945737f610b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "d92f4273a5540f565fd3a95c",
+   "fastPaintPlan": "fc4030159d9e4bfb88bf5960",
+   "fontPaintPlanPdfJpg": "bdfb13d1b8ddb2317705b17a",
+   "previewDocument": "2e38738f6247164f75b8b510",
+   "livePreviewDocument": "64914150660a64810233c466",
+   "previewPageModel": "077435c5af9c7af87455a109"
+  },
+  "composeMs": 15
+ },
+ "05-ruby@a5_1": {
+  "summary": {
+   "chars": 4720,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 54,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "86c7d3d3bcd2b60461713dbd",
+   "documentTrace": "fa08851bb764b98a25d5fc70",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "de988ba70841dad38d83ff48",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "1c02ef1036e44d5ebde74fa2",
+   "fastPaintPlan": "8b2d9b27c1fe549f36555b9e",
+   "fontPaintPlanPdfJpg": "ee20aa1542b2fa069d05f210",
+   "previewDocument": "008779be3d921cd76eb0c4c3",
+   "livePreviewDocument": "8caa738ca0d26959fb57a4b0",
+   "previewPageModel": "e4254c2fa6a2e8dfaf2c422c"
+  },
+  "composeMs": 12
+ },
+ "05-ruby@a5_2": {
+  "summary": {
+   "chars": 4720,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 6,
+   "lines": 110,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e078f29435bbf6e975fff53f",
+   "documentTrace": "8cddb2a693a4300a0f12fc08",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a0340dde2d9e7c5d8abc59eb",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "0db6e549bc496b6aaa2eb20d",
+   "fastPaintPlan": "91c852d532f38fae10704a07",
+   "fontPaintPlanPdfJpg": "d932b29b23a93437548ded03",
+   "previewDocument": "e5f93249840565e830f59401",
+   "livePreviewDocument": "cf7db606882bb920c4990f42",
+   "previewPageModel": "6cd5e09da42dd4d086e62afd"
+  },
+  "composeMs": 21
+ },
+ "05-ruby@shinsho": {
+  "summary": {
+   "chars": 4720,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 53,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "6f5797a5c0985b38f63c8cc0",
+   "documentTrace": "6c7520eb757c1c52e593aad8",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0d0ad94c43aeccb6c5b29dd0",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "ce9a395c9d9a80b8dba0744d",
+   "fastPaintPlan": "0f0c582375b0aeae4e669791",
+   "fontPaintPlanPdfJpg": "a12431955e2680ca2ede058f",
+   "previewDocument": "dab9d423047bb5bbe043d276",
+   "livePreviewDocument": "80954703404d14637e064950",
+   "previewPageModel": "91df5b7bf1a2fc14ab67e199"
+  },
+  "composeMs": 11
+ },
+ "05-ruby@b6": {
+  "summary": {
+   "chars": 4720,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 55,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "b5dc31cfb4e124c415680d79",
+   "documentTrace": "899262a0de2e551605e1ba1b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "4318af6aaf145cc288b98e86",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "a158579896adcf27eae9606e",
+   "fastPaintPlan": "4a6b79540efffacc5e3fbed3",
+   "fontPaintPlanPdfJpg": "a12879c0ece663ee6f413402",
+   "previewDocument": "b5952ebd136ba184a76ecd38",
+   "livePreviewDocument": "a72c1f94ced7e1e313a678e5",
+   "previewPageModel": "974f231fe6091b739753a8ee"
+  },
+  "composeMs": 10
+ },
+ "05-ruby@a6": {
+  "summary": {
+   "chars": 4720,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 64,
+   "placed": 1290,
+   "units": 730,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "64664b750c1c953cff684948",
+   "documentTrace": "1a6e7effc8db146ab32c372f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "364fce63294ed86b6a5950ad",
+   "units": "4727eb281d0d4e80ea173fe1",
+   "source": "9b83b5fdefb873ea87df5254",
+   "publicationModel": "611cb4d14de094e89a9fc0f0",
+   "fastPaintPlan": "a3133c96bb3254730727ca6e",
+   "fontPaintPlanPdfJpg": "927dbb991b5d4b974ba00ec8",
+   "previewDocument": "918ba5346d55de1fa798c480",
+   "livePreviewDocument": "22f675f95c23e59dd135a8b3",
+   "previewPageModel": "6f54d14def239d887dd1b1f7"
+  },
+  "composeMs": 11
+ },
+ "06-bouten@default": {
+  "summary": {
+   "chars": 2690,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 52,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "134879d607bcf95a24984100",
+   "documentTrace": "19e24f63dc4803b1a50634e0",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "86f64fa774011e1d51229896",
+   "fastPaintPlan": "1da0512e34e695e081f1fca8",
+   "fontPaintPlanPdfJpg": "31701017fc533bc7a9c091d5",
+   "previewDocument": "5cc1ec279035ef0253258152",
+   "livePreviewDocument": "4a279130c95a90678db301f9",
+   "previewPageModel": "186e17e145bc138af9be3b95"
+  },
+  "composeMs": 17
+ },
+ "06-bouten@bunko": {
+  "summary": {
+   "chars": 2690,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 52,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "134879d607bcf95a24984100",
+   "documentTrace": "19e24f63dc4803b1a50634e0",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "86f64fa774011e1d51229896",
+   "fastPaintPlan": "1da0512e34e695e081f1fca8",
+   "fontPaintPlanPdfJpg": "31701017fc533bc7a9c091d5",
+   "previewDocument": "5cc1ec279035ef0253258152",
+   "livePreviewDocument": "4a279130c95a90678db301f9",
+   "previewPageModel": "186e17e145bc138af9be3b95"
+  },
+  "composeMs": 139
+ },
+ "06-bouten@a5_1": {
+  "summary": {
+   "chars": 2690,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 47,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "ea92f5b409048fd8e71555b5",
+   "documentTrace": "914dcabb9749a29bf204d440",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "de988ba70841dad38d83ff48",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "d4ad4c673746aebc7e167325",
+   "fastPaintPlan": "a41ee1b493950b730e07bc59",
+   "fontPaintPlanPdfJpg": "b8f2d5fa7e7577dce2715bc7",
+   "previewDocument": "ce122a6d2c3c431a5f368374",
+   "livePreviewDocument": "cd439d506fca9a2e287993d3",
+   "previewPageModel": "5b4ab4ba639ba9489f344a29"
+  },
+  "composeMs": 17
+ },
+ "06-bouten@a5_2": {
+  "summary": {
+   "chars": 2690,
+   "pages": 2,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 64,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8964303ba10f2ebee7514734",
+   "documentTrace": "435090ae01be22bad8ba9706",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "8c552819f7306cffa3b7c25c",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "b4613bfef0ffba69768bda38",
+   "fastPaintPlan": "6a3af5a5340e9927df94b09d",
+   "fontPaintPlanPdfJpg": "4f244eabb8f7c6fcf3031952",
+   "previewDocument": "7de7d190f0ac3a7ce2cb1d56",
+   "livePreviewDocument": "e0005b9158e8e45119dabb99",
+   "previewPageModel": "2e5b840b5d6509c9dc64fb63"
+  },
+  "composeMs": 16
+ },
+ "06-bouten@shinsho": {
+  "summary": {
+   "chars": 2690,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 47,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "a354f06866ca812333cffa41",
+   "documentTrace": "b3ea01ce46b610164d8aeb12",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0d0ad94c43aeccb6c5b29dd0",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "87f09b016ea58ea72790e6d0",
+   "fastPaintPlan": "b4b553acafde0d0c77e346aa",
+   "fontPaintPlanPdfJpg": "a889d8202aa9424675cdab57",
+   "previewDocument": "61a83391c8e49aa4ac7e4e6d",
+   "livePreviewDocument": "69201ac8c4553208423547d8",
+   "previewPageModel": "6d93adf12a06e0865c326cde"
+  },
+  "composeMs": 13
+ },
+ "06-bouten@b6": {
+  "summary": {
+   "chars": 2690,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 48,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "d3a79d09e287d18ff096eeec",
+   "documentTrace": "4632f8d72ca8516072cd9d48",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "280394ac73562a966690cad2",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "6bc2e946c14181db9e5389d7",
+   "fastPaintPlan": "f0915f27e11e54e8bec807ba",
+   "fontPaintPlanPdfJpg": "73346dc70bbd6047531dfe22",
+   "previewDocument": "480451d0a212abec5b86d18f",
+   "livePreviewDocument": "193b5ca271cbbdb9c0fd8ba1",
+   "previewPageModel": "5106772d21e545f344e9f10e"
+  },
+  "composeMs": 16
+ },
+ "06-bouten@a6": {
+  "summary": {
+   "chars": 2690,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 53,
+   "placed": 1360,
+   "units": 520,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "ab0bfcd68e085928bb1748a7",
+   "documentTrace": "a5c1f0a7d81d46169b1f36be",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "91fa3f0369cd594a686b7505",
+   "units": "71aa6b91d8cf22c80ff33eac",
+   "source": "79c3b51ddc6e527f1724d0b6",
+   "publicationModel": "f5a69a4a6c92a8cecd47b74f",
+   "fastPaintPlan": "bf85e60f312bbe0c147b437e",
+   "fontPaintPlanPdfJpg": "b2af4f3e8af950c7c86f9d3b",
+   "previewDocument": "de3e68c2235075ecdfc9a624",
+   "livePreviewDocument": "cd01606ceec7ebb8fb5d314d",
+   "previewPageModel": "9111ea78717e122c1dd6e64b"
+  },
+  "composeMs": 16
+ },
+ "07-tcy@default": {
+  "summary": {
+   "chars": 4860,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 56,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "fbd1b3851e1b88aa95bb4086",
+   "documentTrace": "2bfc626992b2ee3ec6574fc4",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "0184a394592608aae169e5ab",
+   "fastPaintPlan": "65502c3aa314b7c292a42f7e",
+   "fontPaintPlanPdfJpg": "38946fbe989dc67cb4cdeea8",
+   "previewDocument": "4d268f6bad22ff5d249b9de2",
+   "livePreviewDocument": "9f7b83c603e2e693b37e5166",
+   "previewPageModel": "b7930c19f31d7424cd273056"
+  },
+  "composeMs": 21
+ },
+ "07-tcy@bunko": {
+  "summary": {
+   "chars": 4860,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 56,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "fbd1b3851e1b88aa95bb4086",
+   "documentTrace": "2bfc626992b2ee3ec6574fc4",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "0184a394592608aae169e5ab",
+   "fastPaintPlan": "65502c3aa314b7c292a42f7e",
+   "fontPaintPlanPdfJpg": "38946fbe989dc67cb4cdeea8",
+   "previewDocument": "4d268f6bad22ff5d249b9de2",
+   "livePreviewDocument": "9f7b83c603e2e693b37e5166",
+   "previewPageModel": "b7930c19f31d7424cd273056"
+  },
+  "composeMs": 23
+ },
+ "07-tcy@a5_1": {
+  "summary": {
+   "chars": 4860,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 49,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "09f2e97c72132cd4753d3c89",
+   "documentTrace": "1829833c2ff7cfd68c73ef0b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "de988ba70841dad38d83ff48",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "484f49d2cda208c68e9f974b",
+   "fastPaintPlan": "37431b6e7b2cae49cf1cda44",
+   "fontPaintPlanPdfJpg": "c93f0701f2e9d45bbd5cc066",
+   "previewDocument": "1705dc179981feb240ace340",
+   "livePreviewDocument": "7d98a99f9a72d8041b192f1e",
+   "previewPageModel": "0e0993e3717dc9cf61142fe0"
+  },
+  "composeMs": 20
+ },
+ "07-tcy@a5_2": {
+  "summary": {
+   "chars": 4860,
+   "pages": 2,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 70,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "303ffee48d04494b9a31f5c6",
+   "documentTrace": "818bbd51f1f8cc1237c3534f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "8c552819f7306cffa3b7c25c",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "f63f39744f1b66a0813c668e",
+   "fastPaintPlan": "179add92cd57938e5b912cf4",
+   "fontPaintPlanPdfJpg": "eec328ad00d9ebb67462425a",
+   "previewDocument": "bbc5250df74feeac6685ec5f",
+   "livePreviewDocument": "e2d7b15d2396cfa68d20c525",
+   "previewPageModel": "2af8dc0f373477549ac186c1"
+  },
+  "composeMs": 33
+ },
+ "07-tcy@shinsho": {
+  "summary": {
+   "chars": 4860,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 49,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "073b670a6143f8b8cd57b832",
+   "documentTrace": "988bc93949cfb9ef926a11a3",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0d0ad94c43aeccb6c5b29dd0",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "d3b4624cde930c5dea0d1fca",
+   "fastPaintPlan": "2199d5282173784f526ba4e5",
+   "fontPaintPlanPdfJpg": "b35ad6526cafd9b3902c0eee",
+   "previewDocument": "e527df88c440053ad2386582",
+   "livePreviewDocument": "ad1fb949a39c5d5a08933e59",
+   "previewPageModel": "7a2be775249a4526030ce0bf"
+  },
+  "composeMs": 29
+ },
+ "07-tcy@b6": {
+  "summary": {
+   "chars": 4860,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 50,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "256ade1257fd7f768589ce04",
+   "documentTrace": "7b1877aef774376fa94b3576",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "280394ac73562a966690cad2",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "4cbeba365065a341a22967ed",
+   "fastPaintPlan": "3ba26dd5713509d27903c3fe",
+   "fontPaintPlanPdfJpg": "6f1f82996477eef338b258d9",
+   "previewDocument": "e93414f2be0bbd68a9c65f20",
+   "livePreviewDocument": "b548b212762464bf757282be",
+   "previewPageModel": "43c5176e3031d8a911c94b3a"
+  },
+  "composeMs": 15
+ },
+ "07-tcy@a6": {
+  "summary": {
+   "chars": 4860,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 57,
+   "placed": 1640,
+   "units": 1041,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "eb6724025fe8f9cdf64e8767",
+   "documentTrace": "789cd1bb61e7739ee575f36b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "364fce63294ed86b6a5950ad",
+   "units": "bb34de30dd27d9865fa6f422",
+   "source": "00a3b422eeda1cf9113f8d99",
+   "publicationModel": "ecad6dd4ab6c0baf2853e202",
+   "fastPaintPlan": "1fd3a77ccdd72454c3824919",
+   "fontPaintPlanPdfJpg": "a52961aa41705d8aceec3bb4",
+   "previewDocument": "982a2feabf8d17c251c714d6",
+   "livePreviewDocument": "31ef34ce5f41c9f1dd00ddad",
+   "previewPageModel": "a8a31874e79099ebcae9c4e5"
+  },
+  "composeMs": 17
+ },
+ "08-latin@default": {
+  "summary": {
+   "chars": 6540,
+   "pages": 12,
+   "colophonPages": 0,
+   "columns": 12,
+   "lines": 190,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "646016ccfd4630a1f70319cb",
+   "documentTrace": "084409f991e6534dd61c8cac",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "23ed84ee5370a4e43fdeae9d",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "cd4c6da040c6c34b6ce09a03",
+   "fastPaintPlan": "12c0785ba3dc3c10de513e53",
+   "fontPaintPlanPdfJpg": "8a9d6350f5cf3e10cf73fea2",
+   "previewDocument": "dc741e5b0de0912929ff95d7",
+   "livePreviewDocument": "2da8217f636bac67c9b2ee4a",
+   "previewPageModel": "408b685c37c6db4c3b97518e"
+  },
+  "composeMs": 60
+ },
+ "08-latin@bunko": {
+  "summary": {
+   "chars": 6540,
+   "pages": 12,
+   "colophonPages": 0,
+   "columns": 12,
+   "lines": 190,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "646016ccfd4630a1f70319cb",
+   "documentTrace": "084409f991e6534dd61c8cac",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "23ed84ee5370a4e43fdeae9d",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "cd4c6da040c6c34b6ce09a03",
+   "fastPaintPlan": "12c0785ba3dc3c10de513e53",
+   "fontPaintPlanPdfJpg": "8a9d6350f5cf3e10cf73fea2",
+   "previewDocument": "dc741e5b0de0912929ff95d7",
+   "livePreviewDocument": "2da8217f636bac67c9b2ee4a",
+   "previewPageModel": "408b685c37c6db4c3b97518e"
+  },
+  "composeMs": 74
+ },
+ "08-latin@a5_1": {
+  "summary": {
+   "chars": 6540,
+   "pages": 8,
+   "colophonPages": 0,
+   "columns": 8,
+   "lines": 136,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e6a9553f1e6932fc304e2cfd",
+   "documentTrace": "cea621e7cf1ef4c676a11319",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f386ef4f3ff1de61c671d84c",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "8df762851b37fc65df2a36b9",
+   "fastPaintPlan": "1ab7a2607ac42b4215ea09dd",
+   "fontPaintPlanPdfJpg": "915520b4a3d165552292160d",
+   "previewDocument": "354a985613870a6ea2dd141b",
+   "livePreviewDocument": "da82e99ce19a32ac1cacc3b1",
+   "previewPageModel": "b3c996a00fbb2c16b1583b6f"
+  },
+  "composeMs": 90
+ },
+ "08-latin@a5_2": {
+  "summary": {
+   "chars": 6540,
+   "pages": 7,
+   "colophonPages": 0,
+   "columns": 14,
+   "lines": 274,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "2e26cbf1a9976bf6bb636fd8",
+   "documentTrace": "42e22ca1afaf98ad4bf299d0",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "e8361788ea73f612dc3dd4fe",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "f4c27c426b2c9300239acf84",
+   "fastPaintPlan": "4d90b47214024c9e3a872ccd",
+   "fontPaintPlanPdfJpg": "82d24c0752842a4488819d38",
+   "previewDocument": "a9eb84bb5075b043e1ab64f5",
+   "livePreviewDocument": "4bba68e84a2c2a9ba0f22104",
+   "previewPageModel": "08e1f9c698be539eb5d73b48"
+  },
+  "composeMs": 58
+ },
+ "08-latin@shinsho": {
+  "summary": {
+   "chars": 6540,
+   "pages": 10,
+   "colophonPages": 0,
+   "columns": 10,
+   "lines": 134,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "90643f3ca5f7d75099973394",
+   "documentTrace": "082aa333aa186093b2d92ced",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f7fbc56be9921536f7b0460c",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "14856d2d0af6ae33bea4d094",
+   "fastPaintPlan": "7baa6b9bf59efee7a050168f",
+   "fontPaintPlanPdfJpg": "e5f9bb2c3c706bcc6eec48b7",
+   "previewDocument": "2079da2b23e2d9a524ba64bb",
+   "livePreviewDocument": "9f413c69c2147dda13643040",
+   "previewPageModel": "0c0e3997bf1e10f33b822906"
+  },
+  "composeMs": 38
+ },
+ "08-latin@b6": {
+  "summary": {
+   "chars": 6540,
+   "pages": 8,
+   "colophonPages": 0,
+   "columns": 8,
+   "lines": 139,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8a8441405eb9afec44b6c142",
+   "documentTrace": "7c33d6ca462ad68d13825951",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a5b3fa6a0696b49fcb587d37",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "9f364699d9dbf295b1b18338",
+   "fastPaintPlan": "4d81362214d712326c94a1a0",
+   "fontPaintPlanPdfJpg": "488146ed398d23dedca135c5",
+   "previewDocument": "6517e46cbdf2f61638022e9c",
+   "livePreviewDocument": "ec81a66bf386b9744c1ef90f",
+   "previewPageModel": "1d96e7b41d05146b290706ef"
+  },
+  "composeMs": 44
+ },
+ "08-latin@a6": {
+  "summary": {
+   "chars": 6540,
+   "pages": 14,
+   "colophonPages": 0,
+   "columns": 14,
+   "lines": 196,
+   "placed": 6470,
+   "units": 201,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "5a3be5fd2c9c2b59f32eee2c",
+   "documentTrace": "cd9f1434763c48a5004a9428",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c9dbe17a6a42ee9bc11ec54e",
+   "units": "9f1f0d1900bd7d0d41231fc4",
+   "source": "00f755fd894603b0f8d03a77",
+   "publicationModel": "a23d4a59807acfdee316db14",
+   "fastPaintPlan": "6ec6e94f87bcd780ba572d3e",
+   "fontPaintPlanPdfJpg": "784f53566fa5241596013e8e",
+   "previewDocument": "b0dc404d5c9a24132671294f",
+   "livePreviewDocument": "b6725a1f3778b4e45bc77276",
+   "previewPageModel": "10d44ee539210d0c1096730e"
+  },
+  "composeMs": 34
+ },
+ "09-pagebreak@default": {
+  "summary": {
+   "chars": 10089,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 304,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "eb80b8c2e9ae004f8e2bdb1e",
+   "documentTrace": "c328da7739325501a878006f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "d56a50343300a31e00bde0de",
+   "fastPaintPlan": "bc18f9db87fda0f4b1b71ab8",
+   "fontPaintPlanPdfJpg": "c6841ef2a6ec59290c76cc44",
+   "previewDocument": "16fb0588f1ca930d213d0e8d",
+   "livePreviewDocument": "871619d3f0e5b1600012dfcb",
+   "previewPageModel": "7c75594443825317915b2b0c"
+  },
+  "composeMs": 921
+ },
+ "09-pagebreak@bunko": {
+  "summary": {
+   "chars": 10089,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 304,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "eb80b8c2e9ae004f8e2bdb1e",
+   "documentTrace": "c328da7739325501a878006f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "d56a50343300a31e00bde0de",
+   "fastPaintPlan": "bc18f9db87fda0f4b1b71ab8",
+   "fontPaintPlanPdfJpg": "c6841ef2a6ec59290c76cc44",
+   "previewDocument": "16fb0588f1ca930d213d0e8d",
+   "livePreviewDocument": "871619d3f0e5b1600012dfcb",
+   "previewPageModel": "7c75594443825317915b2b0c"
+  },
+  "composeMs": 1207
+ },
+ "09-pagebreak@a5_1": {
+  "summary": {
+   "chars": 10089,
+   "pages": 15,
+   "colophonPages": 0,
+   "columns": 15,
+   "lines": 239,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "dbfa862f72c4463abfb52456",
+   "documentTrace": "7716190a5c98c7fc052dd767",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "132fb321f687cd7144bbd9db",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "c8dcea50ec25de6ef5986622",
+   "fastPaintPlan": "b8f581940e1a4324f6fcfaf3",
+   "fontPaintPlanPdfJpg": "2b80c3ca6ba4870c7bce87cf",
+   "previewDocument": "d1362868eeb5daa025c679e0",
+   "livePreviewDocument": "c1bee98ae3df35ba838830c4",
+   "previewPageModel": "d08eef80df3bccaa2d083832"
+  },
+  "composeMs": 1023
+ },
+ "09-pagebreak@a5_2": {
+  "summary": {
+   "chars": 10089,
+   "pages": 14,
+   "colophonPages": 0,
+   "columns": 25,
+   "lines": 449,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0acd7d8c0cd36af8ae87590b",
+   "documentTrace": "1a0830b2784744d7240423dc",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "ca1c6c603a2534e0c3c9b43a",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "b229a1c93b71a002a0587cc8",
+   "fastPaintPlan": "00ee368b85ce30f18b3dd8a3",
+   "fontPaintPlanPdfJpg": "83221886a5a5e3b85b133df1",
+   "previewDocument": "bab3dc4280d69d8f44375fc6",
+   "livePreviewDocument": "a253785c3d9eb398283294ac",
+   "previewPageModel": "19acd3119e205686df6c91b4"
+  },
+  "composeMs": 783
+ },
+ "09-pagebreak@shinsho": {
+  "summary": {
+   "chars": 10089,
+   "pages": 20,
+   "colophonPages": 0,
+   "columns": 20,
+   "lines": 238,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "9b4f84da05a2a294ea24b262",
+   "documentTrace": "dfabb82bfe1d723a9381bc1b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "51e826bd25d7aec6c6ff8fe3",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "d58e9598428596933d50e733",
+   "fastPaintPlan": "4a4b6362a06b2d4d5cac2fb1",
+   "fontPaintPlanPdfJpg": "6762b1d10c72c5b73f3dc37c",
+   "previewDocument": "47fd82d22d3955f819d591aa",
+   "livePreviewDocument": "abf2c6827a1ee2af6a257169",
+   "previewPageModel": "5f285b90857f86a57eadb15a"
+  },
+  "composeMs": 761
+ },
+ "09-pagebreak@b6": {
+  "summary": {
+   "chars": 10089,
+   "pages": 16,
+   "colophonPages": 0,
+   "columns": 16,
+   "lines": 242,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0c638f2c62275c3857664c3d",
+   "documentTrace": "5cc70ea06ea1e591b3c00996",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a88da5e6c8dbe9440655122c",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "55f80065bdee046591c40563",
+   "fastPaintPlan": "802e2a111e9990ed97d7ff80",
+   "fontPaintPlanPdfJpg": "bf8cfb1f775883de88e9a0ed",
+   "previewDocument": "f3c239525d7f829a860bd051",
+   "livePreviewDocument": "af939e666f8e787aea3fa66f",
+   "previewPageModel": "d2209d36637419a23e9f8f83"
+  },
+  "composeMs": 836
+ },
+ "09-pagebreak@a6": {
+  "summary": {
+   "chars": 10089,
+   "pages": 26,
+   "colophonPages": 0,
+   "columns": 26,
+   "lines": 327,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f288ab25d6f02e91f79dfc01",
+   "documentTrace": "e1e6d38a77d17c56614dafe6",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "3ae5385eada004ce0345126b",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "4870134a981676cf190bd814",
+   "fastPaintPlan": "68bd47c8634a53a5e0c8a69c",
+   "fontPaintPlanPdfJpg": "52ca15dc9c0d69352027f92f",
+   "previewDocument": "82027a084e825dfb604c8e60",
+   "livePreviewDocument": "7987afbb512dd323333eff72",
+   "previewPageModel": "88451e024f6294d2c26e16c9"
+  },
+  "composeMs": 1560
+ },
+ "09-pagebreak@a5_2+colophon": {
+  "summary": {
+   "chars": 10089,
+   "pages": 14,
+   "colophonPages": 1,
+   "columns": 25,
+   "lines": 449,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0acd7d8c0cd36af8ae87590b",
+   "documentTrace": "18aba52d0ea577e95f9bc926",
+   "documentColophon": "a1f52925658a3fb7cb82381f",
+   "documentRest": "5e7e42dd75332586b368b177",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "428a99f2a37e13ca43126e2d",
+   "publicationModel": "6db02d400483b9a276d5d715",
+   "fastPaintPlan": "573863f4898465ed91b5f927",
+   "fontPaintPlanPdfJpg": "3f09898dda5d414489bc8a8e",
+   "previewDocument": "7203ff93a1db9dc0d8a0d650",
+   "livePreviewDocument": "1e9685f25efe3a2cce9798b6",
+   "previewPageModel": "508f2e771f5eb1124921f29e"
+  },
+  "composeMs": 1043
+ },
+ "09-pagebreak@default+colophon": {
+  "summary": {
+   "chars": 10089,
+   "pages": 22,
+   "colophonPages": 1,
+   "columns": 22,
+   "lines": 304,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "eb80b8c2e9ae004f8e2bdb1e",
+   "documentTrace": "20b68cd3a3faa2e6907ba81c",
+   "documentColophon": "5930b15e5650c012cdb5cb66",
+   "documentRest": "b9b2d6561e11aa6697598738",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "428a99f2a37e13ca43126e2d",
+   "publicationModel": "5d0ec736166413e94d5671cb",
+   "fastPaintPlan": "d4082dd0ec8e66ebd6d451bf",
+   "fontPaintPlanPdfJpg": "7739d99e707ffac468f1b17d",
+   "previewDocument": "37bff41151c508882071f8c9",
+   "livePreviewDocument": "40b7c96148a20f4fcfe47c3f",
+   "previewPageModel": "3d9b271e185e81f4d3c482e1"
+  },
+  "composeMs": 1485
+ },
+ "09-pagebreak@default+nombreHidden": {
+  "summary": {
+   "chars": 10089,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 304,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "77775dc41b8a4a9ef000c7d3",
+   "documentTrace": "c328da7739325501a878006f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "299f5a7c30bfe3dad8a1dc41",
+   "fastPaintPlan": "bf1ff2fb1ddef207463d5ddd",
+   "fontPaintPlanPdfJpg": "62cf24f9f3c207deecb0d3fd",
+   "previewDocument": "31f0016bbf95e9dc100a6e3d",
+   "livePreviewDocument": "ebde695963d04b7701d1302d",
+   "previewPageModel": "7c75594443825317915b2b0c"
+  },
+  "composeMs": 1074
+ },
+ "09-pagebreak@default+hashira+overrides": {
+  "summary": {
+   "chars": 10089,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 304,
+   "placed": 10062,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "dffb022fdc9ddc9d34a46778",
+   "documentTrace": "c328da7739325501a878006f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "b9e4cc4bf81475d5dea0ad61",
+   "source": "8ddaac52a0daf07e0cfe50d8",
+   "publicationModel": "1b86c222daf6de6c82c819c5",
+   "fastPaintPlan": "9c0eb29a9bc4d46faa0bc9ee",
+   "fontPaintPlanPdfJpg": "e3629f8d7a335d96a4aa9e94",
+   "previewDocument": "476469618c4f000861ad3b9a",
+   "livePreviewDocument": "2647384dc248059a49699555",
+   "previewPageModel": "7c75594443825317915b2b0c"
+  },
+  "composeMs": 1095
+ },
+ "10-images@default": {
+  "summary": {
+   "chars": 10681,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 321,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c21ac88fdeb4abbf678a3f73",
+   "documentTrace": "c60d125d6871f0c7ebb7732a",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "d6ea481de92ef78c841bd1a0",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "945249181f7072cc1456ad73",
+   "fastPaintPlan": "2236c7f0d3f572ac4e2d4844",
+   "fontPaintPlanPdfJpg": "692a10345093886599646973",
+   "previewDocument": "4de19a7d8787536bd676972f",
+   "livePreviewDocument": "70789830cc3ff676f766dd0c",
+   "previewPageModel": "5d020168008e52840debc07e"
+  },
+  "composeMs": 1817
+ },
+ "10-images@bunko": {
+  "summary": {
+   "chars": 10681,
+   "pages": 22,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 321,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c21ac88fdeb4abbf678a3f73",
+   "documentTrace": "c60d125d6871f0c7ebb7732a",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0ecf3c4d20373aa9ba6d10d2",
+   "units": "d6ea481de92ef78c841bd1a0",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "945249181f7072cc1456ad73",
+   "fastPaintPlan": "2236c7f0d3f572ac4e2d4844",
+   "fontPaintPlanPdfJpg": "692a10345093886599646973",
+   "previewDocument": "4de19a7d8787536bd676972f",
+   "livePreviewDocument": "70789830cc3ff676f766dd0c",
+   "previewPageModel": "5d020168008e52840debc07e"
+  },
+  "composeMs": 1254
+ },
+ "10-images@a5_1": {
+  "summary": {
+   "chars": 10681,
+   "pages": 15,
+   "colophonPages": 0,
+   "columns": 15,
+   "lines": 253,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "3d7c4b1785287a2a1772dfd8",
+   "documentTrace": "dfb1df310629d2e1b479e192",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "132fb321f687cd7144bbd9db",
+   "units": "1adf5ac669eceeebeffc5695",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "6ac8a8a4aa850d575cbf33e3",
+   "fastPaintPlan": "b2122e5c4a124571818a71e4",
+   "fontPaintPlanPdfJpg": "e692c999a418b2d11da8e90c",
+   "previewDocument": "f6c0ef253769a455c2aa6cf3",
+   "livePreviewDocument": "094041f8dc3056e6bf6b9130",
+   "previewPageModel": "82b7e16e6d325422b7edacb5"
+  },
+  "composeMs": 1363
+ },
+ "10-images@a5_2": {
+  "summary": {
+   "chars": 10681,
+   "pages": 14,
+   "colophonPages": 0,
+   "columns": 26,
+   "lines": 474,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f82ef3b8d9be9e32abf9c530",
+   "documentTrace": "f66c3e2c8a0ed757c508eeb2",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "ca1c6c603a2534e0c3c9b43a",
+   "units": "1e73926dceafa93c7233f6db",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "d23dad724026f82452065603",
+   "fastPaintPlan": "70c2ea28ef25ea85e459bae6",
+   "fontPaintPlanPdfJpg": "de0e1bbae832b1356f979631",
+   "previewDocument": "361a7ea25dbd5c47dd700da8",
+   "livePreviewDocument": "233989425d68214a486f6ce1",
+   "previewPageModel": "2580e6ddb00fd8694d20d074"
+  },
+  "composeMs": 850
+ },
+ "10-images@shinsho": {
+  "summary": {
+   "chars": 10681,
+   "pages": 20,
+   "colophonPages": 0,
+   "columns": 20,
+   "lines": 251,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "b2eaef633f3e955aab1d9fe9",
+   "documentTrace": "bbaa8aba07727d2d58c83b81",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "51e826bd25d7aec6c6ff8fe3",
+   "units": "e8688edad34656ee228f9567",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "fed5b1cebfea60faeaa431f2",
+   "fastPaintPlan": "a7af4d8dd44ccd70e476f46b",
+   "fontPaintPlanPdfJpg": "0dbd9607125945609654bbeb",
+   "previewDocument": "52d3446106eeb6deca4248d1",
+   "livePreviewDocument": "039821d548d38d5e6b4a53dc",
+   "previewPageModel": "a0bd962ef8b481f97cb82d38"
+  },
+  "composeMs": 949
+ },
+ "10-images@b6": {
+  "summary": {
+   "chars": 10681,
+   "pages": 16,
+   "colophonPages": 0,
+   "columns": 16,
+   "lines": 256,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "ac7f5f4eabea4df4d9d3e234",
+   "documentTrace": "2751dcb163786b994a483523",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a88da5e6c8dbe9440655122c",
+   "units": "2351aad696620bb13ffe7b92",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "4c2b2faaad70c76ed617c975",
+   "fastPaintPlan": "bc222e3428dab298466a6c38",
+   "fontPaintPlanPdfJpg": "2978c4e63c1ac687f44e2072",
+   "previewDocument": "4448961f9c090b8143c24461",
+   "livePreviewDocument": "9dc6214207487c610d754455",
+   "previewPageModel": "54617e183e7ca86cd9e8287e"
+  },
+  "composeMs": 1414
+ },
+ "10-images@a6": {
+  "summary": {
+   "chars": 10681,
+   "pages": 27,
+   "colophonPages": 0,
+   "columns": 27,
+   "lines": 344,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "b91cace3bca6dfae5d672ddb",
+   "documentTrace": "f7c95c31ff79a64221ef4354",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "14333c0b757f540521c5cf12",
+   "units": "d6ea481de92ef78c841bd1a0",
+   "source": "cbe657ae27a18c53a83d4a0d",
+   "publicationModel": "6fa7a620ad278926be62e34a",
+   "fastPaintPlan": "1ed559c3539536d9a5d05187",
+   "fontPaintPlanPdfJpg": "2de99c09ec4fbaa0a415c6fa",
+   "previewDocument": "077c1eea72909d60a8701736",
+   "livePreviewDocument": "f86bcb7addf7c060795fa393",
+   "previewPageModel": "a56388c1557070a1c54039cb"
+  },
+  "composeMs": 1017
+ },
+ "10-images@a5_2+colophon": {
+  "summary": {
+   "chars": 10681,
+   "pages": 14,
+   "colophonPages": 1,
+   "columns": 26,
+   "lines": 474,
+   "placed": 10569,
+   "units": 139,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f82ef3b8d9be9e32abf9c530",
+   "documentTrace": "68366887b4878291d93a77b8",
+   "documentColophon": "a1f52925658a3fb7cb82381f",
+   "documentRest": "5e7e42dd75332586b368b177",
+   "units": "1e73926dceafa93c7233f6db",
+   "source": "3c13cbe4eda38729f896753a",
+   "publicationModel": "c25e6a8842bd44dcbb297334",
+   "fastPaintPlan": "3cd478bf676c0e154f4a376e",
+   "fontPaintPlanPdfJpg": "2787bb812e7b6442c9b003f0",
+   "previewDocument": "bed14111b720242dd8e0851b",
+   "livePreviewDocument": "6dff71a6db22593b714338ac",
+   "previewPageModel": "fb658e480642e85ef8e0ea56"
+  },
+  "composeMs": 829
+ },
+ "15-colophon-only-text@a5_2+colophon": {
+  "summary": {
+   "chars": 200,
+   "pages": 1,
+   "colophonPages": 1,
+   "columns": 1,
+   "lines": 9,
+   "placed": 200,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "dfbb7ad1c9ed1908af22aa58",
+   "documentTrace": "aef24dae432d90cfa6d82eca",
+   "documentColophon": "0b27ed6eba009a7194697a7d",
+   "documentRest": "ca1fc17e9a61c480c0919982",
+   "units": "039df9481c584b19a997ca63",
+   "source": "8279cd47f66a7b21012f613a",
+   "publicationModel": "cb33550275637d6067e27fee",
+   "fastPaintPlan": "444a8207b7415e4250b95922",
+   "fontPaintPlanPdfJpg": "6cdc7c9513cc87b424a5bef4",
+   "previewDocument": "946f403c3222de621177d42f",
+   "livePreviewDocument": "0538909a1267c719c715c9a5",
+   "previewPageModel": "be01319c05e7c960cf2a61ff"
+  },
+  "composeMs": 3
+ },
+ "15-colophon-only-text@default+colophon": {
+  "summary": {
+   "chars": 200,
+   "pages": 1,
+   "colophonPages": 1,
+   "columns": 1,
+   "lines": 6,
+   "placed": 200,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "95b8b067cb51e30c84e0d834",
+   "documentTrace": "d284f0f436ca79fcc169e2f2",
+   "documentColophon": "69f307f74a0dc74792c92634",
+   "documentRest": "49687308ab7792433d8dd47d",
+   "units": "039df9481c584b19a997ca63",
+   "source": "8279cd47f66a7b21012f613a",
+   "publicationModel": "d1ebbb6790b7be9eaf048f37",
+   "fastPaintPlan": "0fb530747cb049358142f906",
+   "fontPaintPlanPdfJpg": "8b5fd3dc92b93de1be47bdef",
+   "previewDocument": "25fe23c98884f5bacf602269",
+   "livePreviewDocument": "185dfac9e9133c6575691c56",
+   "previewPageModel": "be01319c05e7c960cf2a61ff"
+  },
+  "composeMs": 3
+ },
+ "15-colophon-only-text@default+nombreHidden": {
+  "summary": {
+   "chars": 200,
+   "pages": 1,
+   "colophonPages": 0,
+   "columns": 1,
+   "lines": 6,
+   "placed": 200,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "667fa45e83e51c46c8d35af8",
+   "documentTrace": "65a5e1dbe4cbcc24c98f6288",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "dbe6fc3175e8d4563e4d526c",
+   "units": "039df9481c584b19a997ca63",
+   "source": "ff23f085f65c17af26bf9d72",
+   "publicationModel": "be1ef1f7729ba491bedc22fc",
+   "fastPaintPlan": "250ddaa640b998c5a8d95e54",
+   "fontPaintPlanPdfJpg": "37433af8a16bffc3912af2ad",
+   "previewDocument": "a02e3fa9a605f2d540bf72aa",
+   "livePreviewDocument": "2d385f51b51b94267dba3422",
+   "previewPageModel": "f3ae41ac13b9ff0b65ddaea8"
+  },
+  "composeMs": 24
+ },
+ "15-colophon-only-text@default+hashira+overrides": {
+  "summary": {
+   "chars": 200,
+   "pages": 1,
+   "colophonPages": 0,
+   "columns": 1,
+   "lines": 6,
+   "placed": 200,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8a1e815cd30cc4e54f7b83a5",
+   "documentTrace": "65a5e1dbe4cbcc24c98f6288",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "dbe6fc3175e8d4563e4d526c",
+   "units": "039df9481c584b19a997ca63",
+   "source": "ff23f085f65c17af26bf9d72",
+   "publicationModel": "6cf756a337122f0513655af4",
+   "fastPaintPlan": "eddfa55e333bc29869f53675",
+   "fontPaintPlanPdfJpg": "bb4637fbebfeedbe0f3c368b",
+   "previewDocument": "f1b5f510a64ea0d84e5d028c",
+   "livePreviewDocument": "c3da094e12682b4e8fe75631",
+   "previewPageModel": "f3ae41ac13b9ff0b65ddaea8"
+  },
+  "composeMs": 2
+ },
+ "18-paragraph-boundary-sweep-default@default": {
+  "summary": {
+   "chars": 6364,
+   "pages": 13,
+   "colophonPages": 0,
+   "columns": 13,
+   "lines": 196,
+   "placed": 6364,
+   "units": 59,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "ce9c7f787d2cc749097e4381",
+   "documentTrace": "41ecab07fc74debe56759991",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c99bdbc4787123dd5aad07ac",
+   "units": "71937b2f83e86fe81ff7581c",
+   "source": "06c57d62a30e6118aa9f2b77",
+   "publicationModel": "9c34a3c63b1389fb67f87fa8",
+   "fastPaintPlan": "61b77bb5121cc4c9e0dc8293",
+   "fontPaintPlanPdfJpg": "c4db5cc0f2027a59a08bb75a",
+   "previewDocument": "dcb0fc8ea4451f37088c6441",
+   "livePreviewDocument": "e8562ebcc453e76278640246",
+   "previewPageModel": "83e0571089faf9cff836516e"
+  },
+  "composeMs": 255
+ },
+ "18-paragraph-boundary-sweep-default@default+colophon": {
+  "summary": {
+   "chars": 6364,
+   "pages": 13,
+   "colophonPages": 1,
+   "columns": 13,
+   "lines": 196,
+   "placed": 6364,
+   "units": 59,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "ce9c7f787d2cc749097e4381",
+   "documentTrace": "3bb7e361a8a0b30445f19b66",
+   "documentColophon": "acf6dafbfac9b640536b4197",
+   "documentRest": "ce1e732b6b4ca01f7711ad45",
+   "units": "71937b2f83e86fe81ff7581c",
+   "source": "d3b1804555ac15fbc85ad4a5",
+   "publicationModel": "1dc2e457bbed7663eab9ccbb",
+   "fastPaintPlan": "e284a57f7446f38d30aaa036",
+   "fontPaintPlanPdfJpg": "1bd40c3703708ecc179b636f",
+   "previewDocument": "4be5fc251831f9d884be1299",
+   "livePreviewDocument": "532322a43505f69c1f1db2b2",
+   "previewPageModel": "c27bcc0ebaed22454ca72a03"
+  },
+  "composeMs": 242
+ },
+ "18-paragraph-boundary-sweep-a5_2@a5_2": {
+  "summary": {
+   "chars": 9914,
+   "pages": 11,
+   "colophonPages": 0,
+   "columns": 22,
+   "lines": 436,
+   "placed": 9914,
+   "units": 59,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "66c6a5a1e269fc6b87db0b83",
+   "documentTrace": "aecd0112b14190a87d09e2b5",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "652fb5071fafa85e916f3185",
+   "units": "6de0df22417ece3db0224d4f",
+   "source": "4bab1b98b9c69284cd161b62",
+   "publicationModel": "03b93c9ab85841198d24f158",
+   "fastPaintPlan": "7f0a9040f586824a9e618d6f",
+   "fontPaintPlanPdfJpg": "f7f168fa0a7feb4400b8fc9d",
+   "previewDocument": "b2323cb1d2dc1816eeaccf5a",
+   "livePreviewDocument": "1b1b75eeb3b420b82c3da6ad",
+   "previewPageModel": "6cc06901d4e757047db07a63"
+  },
+  "composeMs": 463
+ },
+ "19-long-continuous-mixed@default": {
+  "summary": {
+   "chars": 20004,
+   "pages": 29,
+   "colophonPages": 0,
+   "columns": 29,
+   "lines": 458,
+   "placed": 16097,
+   "units": 1262,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8b11e96328223c2ab3d731fb",
+   "documentTrace": "b2cb0b2b87ec4d7f91b27a9f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "6c3a7fc30f93606aff1cd7d1",
+   "units": "31ff18cbdc0d7cde04afbd35",
+   "source": "9aeaa58a1c0903644b5d5da9",
+   "publicationModel": "6a3183913fc5619e33e485c6",
+   "fastPaintPlan": "ba03450feadd31cb008ca931",
+   "fontPaintPlanPdfJpg": "daab8c24f8ecd76e3f11bed9",
+   "previewDocument": "e530c218c8e5926cfe84c75e",
+   "livePreviewDocument": "92020dee461655bdb28abc0f",
+   "previewPageModel": "9a06deb97038335b8052c680"
+  },
+  "composeMs": 278
+ },
+ "19-long-continuous-mixed@a5_2": {
+  "summary": {
+   "chars": 20004,
+   "pages": 18,
+   "colophonPages": 0,
+   "columns": 36,
+   "lines": 701,
+   "placed": 16097,
+   "units": 1262,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f6ef0c41df2a47ef57199b11",
+   "documentTrace": "803f7595ec985e2d6f0a5992",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "49ebe0654782271e2aa06791",
+   "units": "31ff18cbdc0d7cde04afbd35",
+   "source": "9aeaa58a1c0903644b5d5da9",
+   "publicationModel": "936d8d3ac4bcfe70b525aa51",
+   "fastPaintPlan": "e40b0b26b148713e1bf72809",
+   "fontPaintPlanPdfJpg": "6e37f5591b7c66ee55779f65",
+   "previewDocument": "f1e46014970eefb470c0f57d",
+   "livePreviewDocument": "51a8cdb9afb6112d2df25fac",
+   "previewPageModel": "a2d557d2624faeb25f8fedf6"
+  },
+  "composeMs": 281
+ },
+ "19-long-continuous-mixed@shinsho": {
+  "summary": {
+   "chars": 20004,
+   "pages": 25,
+   "colophonPages": 0,
+   "columns": 25,
+   "lines": 337,
+   "placed": 16097,
+   "units": 1262,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "0a4c331214567163571b429f",
+   "documentTrace": "eb2090afcb4959b6fe082fca",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "47ffbb6931f2c06b73331c07",
+   "units": "31ff18cbdc0d7cde04afbd35",
+   "source": "9aeaa58a1c0903644b5d5da9",
+   "publicationModel": "83918b1161888d3cbe940458",
+   "fastPaintPlan": "2caa73dd0dc1a716c4c042e8",
+   "fontPaintPlanPdfJpg": "3f307632ec5b4b1ff8b6647d",
+   "previewDocument": "e006953fddb8a583d8b1b2eb",
+   "livePreviewDocument": "226f5a093255e7afa54bf38a",
+   "previewPageModel": "292cede5201770b0a50f0c7f"
+  },
+  "composeMs": 292
+ },
+ "19b-long-continuous-mixed-in-document@default": {
+  "summary": {
+   "chars": 25217,
+   "pages": 43,
+   "colophonPages": 0,
+   "columns": 43,
+   "lines": 684,
+   "placed": 22897,
+   "units": 993,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "45b281bd2613da2046492582",
+   "documentTrace": "bca44314e384c4740962e13f",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "572715ef7d37b212d0db3ed9",
+   "units": "88cfc85ebb55ab2ccd5604c0",
+   "source": "14eef9aa821900bafbfd2372",
+   "publicationModel": "efb7baf93c15f36249e8229a",
+   "fastPaintPlan": "fd3c6de722a392a9acd61cc7",
+   "fontPaintPlanPdfJpg": "622f3ff8de976fe29a1021cd",
+   "previewDocument": "cf698d832dd0ab726adf57a9",
+   "livePreviewDocument": "02695380a0154f74886eb5dc",
+   "previewPageModel": "1cd08696a55cae6d8833ab36"
+  },
+  "composeMs": 385
+ },
+ "19b-long-continuous-mixed-in-document@a5_1": {
+  "summary": {
+   "chars": 25217,
+   "pages": 28,
+   "colophonPages": 0,
+   "columns": 28,
+   "lines": 530,
+   "placed": 22897,
+   "units": 993,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "6974cda25c7a2dc0fc2016ad",
+   "documentTrace": "ab9e004f61017120a78c422e",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "f671f3543448f376ab71c8ec",
+   "units": "88cfc85ebb55ab2ccd5604c0",
+   "source": "14eef9aa821900bafbfd2372",
+   "publicationModel": "4cb2270f7f7a03f8a4654fd0",
+   "fastPaintPlan": "b10af67011b78d4ecd0f9ed7",
+   "fontPaintPlanPdfJpg": "429fdb7cc375a8bbe2653c14",
+   "previewDocument": "4f108ef268b656444d8d893b",
+   "livePreviewDocument": "5defe3c70f33c9eda0aec3f0",
+   "previewPageModel": "c923c0097588e85e0ae8dcff"
+  },
+  "composeMs": 236
+ },
+ "19c-kinsoku-run@default": {
+  "summary": {
+   "chars": 681,
+   "pages": 1,
+   "colophonPages": 0,
+   "columns": 1,
+   "lines": 6,
+   "placed": 200,
+   "units": 1,
+   "errors": [
+    "{\"sourceSpan\":{\"blockId\":\"body\",\"start\":200,\"end\":201},\"message\":\"NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT\",\"severity\":\"BLOCKS_HOLD\"}"
+   ],
+   "hold": true
+  },
+  "hashes": {
+   "documentPages": "7644bc2d4a31e3b6732c50d9",
+   "documentTrace": "8b5e6a947bd6ba737a2416b6",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "8d7732f8ddea8ea78a3fe038",
+   "units": "bcee57269a6b197ffc213412",
+   "source": "322ef187f2bdae0cfa0d9c02",
+   "publicationModel": "b58275207dc0a7b65ac78c24",
+   "fastPaintPlan": "a1d07ceb3092673d8602feff",
+   "fontPaintPlanPdfJpg": "REFUSED:EQ for a HOLD document (NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT)",
+   "previewDocument": "48e82f2b55a4009bf163e4f8",
+   "livePreviewDocument": "2a3133a9c47469126cfe1c59",
+   "previewPageModel": "805165f68ebb6415e6a9c4ec"
+  },
+  "composeMs": 21
+ },
+ "19c-kinsoku-run@a5_2": {
+  "summary": {
+   "chars": 681,
+   "pages": 1,
+   "colophonPages": 0,
+   "columns": 1,
+   "lines": 9,
+   "placed": 200,
+   "units": 1,
+   "errors": [
+    "{\"sourceSpan\":{\"blockId\":\"body\",\"start\":200,\"end\":201},\"message\":\"NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT\",\"severity\":\"BLOCKS_HOLD\"}"
+   ],
+   "hold": true
+  },
+  "hashes": {
+   "documentPages": "9579b7f5d11613889aa49edd",
+   "documentTrace": "2853a298856043862cdc0154",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "039b40a3116f9460e368380a",
+   "units": "bcee57269a6b197ffc213412",
+   "source": "322ef187f2bdae0cfa0d9c02",
+   "publicationModel": "1dd23a6c3938f11bbe789782",
+   "fastPaintPlan": "a26c8162c523e43d9c04fbd5",
+   "fontPaintPlanPdfJpg": "REFUSED:EQ for a HOLD document (NO_LEGAL_BREAK_BOUNDARY_WITHIN_EXTENT)",
+   "previewDocument": "e5a1b4ac640f86116534ee08",
+   "livePreviewDocument": "fd9ae4e2149110de466e9691",
+   "previewPageModel": "805165f68ebb6415e6a9c4ec"
+  },
+  "composeMs": 19
+ },
+ "20-surrogate-emoji@default": {
+  "summary": {
+   "chars": 3620,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 63,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f1b978456e807cbb12da2fc8",
+   "documentTrace": "119e4dc8c30badfb92d210d1",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "0475fe9852213959e6971380",
+   "fastPaintPlan": "ca35a19f43e744430de053b2",
+   "fontPaintPlanPdfJpg": "db9ad0ba21ee85202009d96e",
+   "previewDocument": "853f8f36243f4a4c7210b9e7",
+   "livePreviewDocument": "dad0a4f7fa0ac1aaf7c71718",
+   "previewPageModel": "a6c9d1b91a8e58b560e930ce"
+  },
+  "composeMs": 193
+ },
+ "20-surrogate-emoji@bunko": {
+  "summary": {
+   "chars": 3620,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 63,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f1b978456e807cbb12da2fc8",
+   "documentTrace": "119e4dc8c30badfb92d210d1",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2ebd7d0b589577a08bfe645",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "0475fe9852213959e6971380",
+   "fastPaintPlan": "ca35a19f43e744430de053b2",
+   "fontPaintPlanPdfJpg": "db9ad0ba21ee85202009d96e",
+   "previewDocument": "853f8f36243f4a4c7210b9e7",
+   "livePreviewDocument": "dad0a4f7fa0ac1aaf7c71718",
+   "previewPageModel": "a6c9d1b91a8e58b560e930ce"
+  },
+  "composeMs": 229
+ },
+ "20-surrogate-emoji@a5_1": {
+  "summary": {
+   "chars": 3620,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 52,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "128ee0e978f0e634f8eb0351",
+   "documentTrace": "c819d446e544722770d5682c",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "de988ba70841dad38d83ff48",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "4a58de70489090d4941c90ec",
+   "fastPaintPlan": "b7ecc278dfd1fc3382925df9",
+   "fontPaintPlanPdfJpg": "5b432d7918b0cbd1850662b2",
+   "previewDocument": "18e527e44ee6cdbdaf643042",
+   "livePreviewDocument": "fb69c25e3afb0b5730ba9fb1",
+   "previewPageModel": "7cbd993cea0ec3e522895260"
+  },
+  "composeMs": 164
+ },
+ "20-surrogate-emoji@a5_2": {
+  "summary": {
+   "chars": 3620,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 6,
+   "lines": 106,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e925f632a0daf0ef0f10cb1b",
+   "documentTrace": "5ecd5d32b7739b119a0fd287",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a0340dde2d9e7c5d8abc59eb",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "deb0f6f2cee43322b7643206",
+   "fastPaintPlan": "af562d5951e79753c5973c16",
+   "fontPaintPlanPdfJpg": "02436cc91ad0814dd21019e5",
+   "previewDocument": "8678bab9bea3b59293e23dbd",
+   "livePreviewDocument": "e3862bede9472c47c4c7b123",
+   "previewPageModel": "cde9bf838664951219173c21"
+  },
+  "composeMs": 175
+ },
+ "20-surrogate-emoji@shinsho": {
+  "summary": {
+   "chars": 3620,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 52,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "01435553fc0776aeceeec632",
+   "documentTrace": "33bfdd14ea0b373abf33f361",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "0d0ad94c43aeccb6c5b29dd0",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "57687692ce900edcb306da51",
+   "fastPaintPlan": "4fa76508997523f593b91ae5",
+   "fontPaintPlanPdfJpg": "f5131713e565272c8a1837e7",
+   "previewDocument": "ff7ad5f2d4a62ca9a525be79",
+   "livePreviewDocument": "92ec9890d679b379a03f3b55",
+   "previewPageModel": "b6b7a97e40b7be9168052053"
+  },
+  "composeMs": 157
+ },
+ "20-surrogate-emoji@b6": {
+  "summary": {
+   "chars": 3620,
+   "pages": 3,
+   "colophonPages": 0,
+   "columns": 3,
+   "lines": 54,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "d46629b7814a14e648947e44",
+   "documentTrace": "37484b1dafbd934434564e41",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "280394ac73562a966690cad2",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "7b5671de2dcb36dd729bb22a",
+   "fastPaintPlan": "a9164a1346424fdbb7159a16",
+   "fontPaintPlanPdfJpg": "8670ebe418542fa268ffe08d",
+   "previewDocument": "cb48575f8183eacca494751f",
+   "livePreviewDocument": "85a0e9ec61bac6d7549b16f9",
+   "previewPageModel": "178c5372dfc0282784a2c52b"
+  },
+  "composeMs": 161
+ },
+ "20-surrogate-emoji@a6": {
+  "summary": {
+   "chars": 3620,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 66,
+   "placed": 2100,
+   "units": 41,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "c34df517ad7b73099c5b445f",
+   "documentTrace": "ef83b245ff739b7c497b9933",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "364fce63294ed86b6a5950ad",
+   "units": "9dd63ecdef693148657e152e",
+   "source": "199bd5264d7d2f12368a70e5",
+   "publicationModel": "b637c3d40b236d0dfb9e7954",
+   "fastPaintPlan": "141f9e3a98ca9acc44429c87",
+   "fontPaintPlanPdfJpg": "aa9d2bc8336bbc6e51cc8511",
+   "previewDocument": "2cde7b240d2b1bd1c6c5f1a9",
+   "livePreviewDocument": "b28d670134d8382620b3b88c",
+   "previewPageModel": "e3653cfa2b3802606942b668"
+  },
+  "composeMs": 166
+ },
+ "21-dash-ellipsis@default": {
+  "summary": {
+   "chars": 2500,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 72,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8e79792a300972271dbf0ea4",
+   "documentTrace": "5b2361f8c4d0c25d90793249",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2279b28215b2cf2ed27e22a",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "f936daab58401bcbb1950ab9",
+   "fastPaintPlan": "ad3ecec9ae0864d61aa34f5f",
+   "fontPaintPlanPdfJpg": "a6745a1af7523c2fecfc4f05",
+   "previewDocument": "e07be1225432a36112862245",
+   "livePreviewDocument": "0210b1298eabe01234b670b8",
+   "previewPageModel": "9075f5754e0a172fcb6f7ce8"
+  },
+  "composeMs": 42
+ },
+ "21-dash-ellipsis@bunko": {
+  "summary": {
+   "chars": 2500,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 72,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "8e79792a300972271dbf0ea4",
+   "documentTrace": "5b2361f8c4d0c25d90793249",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c2279b28215b2cf2ed27e22a",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "f936daab58401bcbb1950ab9",
+   "fastPaintPlan": "ad3ecec9ae0864d61aa34f5f",
+   "fontPaintPlanPdfJpg": "a6745a1af7523c2fecfc4f05",
+   "previewDocument": "e07be1225432a36112862245",
+   "livePreviewDocument": "0210b1298eabe01234b670b8",
+   "previewPageModel": "9075f5754e0a172fcb6f7ce8"
+  },
+  "composeMs": 32
+ },
+ "21-dash-ellipsis@a5_1": {
+  "summary": {
+   "chars": 2500,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 59,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "a3b55ed2a3c3a9c7c5036c7f",
+   "documentTrace": "407765d26eafa9794845be10",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "c7b4e97a428889f52cd064f9",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "a600d9bfa78ff24992e1e2c5",
+   "fastPaintPlan": "f36001613fe0ec314fed8147",
+   "fontPaintPlanPdfJpg": "abfc83f92b078dae14c38589",
+   "previewDocument": "3578ead569a6bf81f704d747",
+   "livePreviewDocument": "02d3eb67248d1083c8312940",
+   "previewPageModel": "d7168f8c55780a1e887205c8"
+  },
+  "composeMs": 17
+ },
+ "21-dash-ellipsis@a5_2": {
+  "summary": {
+   "chars": 2500,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 7,
+   "lines": 121,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "e396f507affd918b4f3dd69a",
+   "documentTrace": "bc18dc8275089ff270f3541e",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "5973cf7b8021be34db4dfbab",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "fa203b3a80960943a58cab56",
+   "fastPaintPlan": "5492fc919f1f1dab16b76602",
+   "fontPaintPlanPdfJpg": "06f5aa7688095a6b5373e0d6",
+   "previewDocument": "b6662a01f30698851eb4764e",
+   "livePreviewDocument": "a71d25359a0d578630bd8be2",
+   "previewPageModel": "4b6504a0f50d4bfeeb9fcd53"
+  },
+  "composeMs": 23
+ },
+ "21-dash-ellipsis@shinsho": {
+  "summary": {
+   "chars": 2500,
+   "pages": 5,
+   "colophonPages": 0,
+   "columns": 5,
+   "lines": 58,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "807afa254ea2bb02d9e771f2",
+   "documentTrace": "afa240cd89e7a2dc3a8f75cf",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "b123dc628c39f53e4d5c0fa8",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "781f836ce6a67d4929fb34dd",
+   "fastPaintPlan": "dfb6f740bd676dedaf78ca6e",
+   "fontPaintPlanPdfJpg": "0ee7b48b708cf68b49019d51",
+   "previewDocument": "0cb1e8424266b8778c8b5b43",
+   "livePreviewDocument": "750c34587ff5186f0742f397",
+   "previewPageModel": "3155bc71cd6259ae68c3f6b3"
+  },
+  "composeMs": 18
+ },
+ "21-dash-ellipsis@b6": {
+  "summary": {
+   "chars": 2500,
+   "pages": 4,
+   "colophonPages": 0,
+   "columns": 4,
+   "lines": 60,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "4c1e2c23491f9e9fe10b1b19",
+   "documentTrace": "e3bc0c7d764142027221887e",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "4318af6aaf145cc288b98e86",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "eeb42052e4b35f17518538e6",
+   "fastPaintPlan": "e722323f415488f3712dcd16",
+   "fontPaintPlanPdfJpg": "138b450d8474a69297efd1a5",
+   "previewDocument": "54f71822495c15bfc74e4da0",
+   "livePreviewDocument": "0f214789691e878437bc47fb",
+   "previewPageModel": "7aca7044cc18bb564ac4029a"
+  },
+  "composeMs": 23
+ },
+ "21-dash-ellipsis@a6": {
+  "summary": {
+   "chars": 2500,
+   "pages": 6,
+   "colophonPages": 0,
+   "columns": 6,
+   "lines": 74,
+   "placed": 1860,
+   "units": 660,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "abe024ad474d9e33690b8f38",
+   "documentTrace": "fb19aaae2fafa538b831b72e",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "358841f3c9119e19f4b6a1dd",
+   "units": "2dbc3a44385d02725af2bd6e",
+   "source": "58c8b5f81bcc7e4d5c205b08",
+   "publicationModel": "3416bc499e73c9a71b8f2662",
+   "fastPaintPlan": "874580ee99501f65e3ee9cf2",
+   "fontPaintPlanPdfJpg": "8c25f371e9243ce6a09fcf20",
+   "previewDocument": "f7df17f64440b911039ac155",
+   "livePreviewDocument": "f5f53debe757ff5ce5cd3ba7",
+   "previewPageModel": "46a75b9f5f8db38d0bb307e5"
+  },
+  "composeMs": 12
+ },
+ "22-single-5k@default": {
+  "summary": {
+   "chars": 5001,
+   "pages": 9,
+   "colophonPages": 0,
+   "columns": 9,
+   "lines": 136,
+   "placed": 5001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "054dd1d9a9ebbcd1323539f9",
+   "documentTrace": "d54d3fc7c8fec5704e955937",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "ba05167c45263183334e9f52",
+   "units": "2c2bb98ab1c424f2365bd2cc",
+   "source": "eea76446bef0ebfe0b35b039",
+   "publicationModel": "5348bad57858ff061b731f12",
+   "fastPaintPlan": "915a42b0686e8dbe512709bc",
+   "fontPaintPlanPdfJpg": "0e8053b4f47bf62112417378",
+   "previewDocument": "525bc788dad92381405444f7",
+   "livePreviewDocument": "73980cd749e5d95a5052dcb9",
+   "previewPageModel": "1d392af273f83f96f6cd4ba4"
+  },
+  "composeMs": 834
+ },
+ "22-single-5k@a5_2": {
+  "summary": {
+   "chars": 5001,
+   "pages": 6,
+   "colophonPages": 0,
+   "columns": 11,
+   "lines": 212,
+   "placed": 5001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "6b5d284bd24a3f9f606981c3",
+   "documentTrace": "cf59cdd9248bb5f75c6a6d06",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a2ceea2479f7e7c97053222e",
+   "units": "2c2bb98ab1c424f2365bd2cc",
+   "source": "eea76446bef0ebfe0b35b039",
+   "publicationModel": "5af32f2fd3cd7b97ae5ff9d8",
+   "fastPaintPlan": "248c57d36b405a1c2faa4c24",
+   "fontPaintPlanPdfJpg": "a7cfcfe887c1d1a17ef8b820",
+   "previewDocument": "9905b4e48b7380cce8367eb8",
+   "livePreviewDocument": "835488f551d2c9c8161e22c5",
+   "previewPageModel": "ac1606e466e68c3ba1cb09c7"
+  },
+  "composeMs": 878
+ },
+ "22-single-50k@default": {
+  "summary": {
+   "chars": 50001,
+   "pages": 85,
+   "colophonPages": 0,
+   "columns": 85,
+   "lines": 1355,
+   "placed": 50001,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "aa446559fd94ab030fe2a383",
+   "documentTrace": "c89781f692235c207bc8e42b",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "a0b1869fa601cfb2a2306c16",
+   "units": "a69aba039ccca232863e0268",
+   "source": "d34534063ed5ca0ee7bedd66",
+   "publicationModel": "c502560bbcfb3b78ce73a273",
+   "fastPaintPlan": "0abf1f2e8189d9f2e0c44922",
+   "fontPaintPlanPdfJpg": "4e2ccf96d1a85cd456249f34",
+   "previewDocument": "f22cec11462d597acb9df77f",
+   "livePreviewDocument": "d2e0c6e05a0044a6f153aba0",
+   "previewPageModel": "b515ad8daf5aedb92e521be6"
+  },
+  "composeMs": 157369
+ },
+ "23-split-20k@default": {
+  "summary": {
+   "chars": 20267,
+   "pages": 42,
+   "colophonPages": 0,
+   "columns": 42,
+   "lines": 667,
+   "placed": 20267,
+   "units": 267,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "f052e8740b7e2e40218b6d20",
+   "documentTrace": "1defb7fca0af376e21be21b3",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "87fd2e150648a9a5f5700460",
+   "units": "6ac6a829a3ccd9553fe8a9c9",
+   "source": "b2192b1f7a03f1eb6b381425",
+   "publicationModel": "1e97776e31d1d64bf0837330",
+   "fastPaintPlan": "25ec200994443fde5e22903f",
+   "fontPaintPlanPdfJpg": "070b8142833bbeda38679832",
+   "previewDocument": "87ce03ca61e24eeac20db373",
+   "livePreviewDocument": "3fa2aea65da71513bf7fdaa8",
+   "previewPageModel": "098617080c60ff691590e28e"
+  },
+  "composeMs": 197
+ },
+ "23-split-20k@a5_2": {
+  "summary": {
+   "chars": 20267,
+   "pages": 24,
+   "colophonPages": 0,
+   "columns": 47,
+   "lines": 934,
+   "placed": 20267,
+   "units": 267,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "da848f4d9b620605b8344e93",
+   "documentTrace": "88ac1c2585201fb7115388b4",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "96dd3d63f53618177f6a474e",
+   "units": "6ac6a829a3ccd9553fe8a9c9",
+   "source": "b2192b1f7a03f1eb6b381425",
+   "publicationModel": "95d013765cc20a1971fbcced",
+   "fastPaintPlan": "15accdcafff9a721e6831e7f",
+   "fontPaintPlanPdfJpg": "43905450ac908911a531ad5c",
+   "previewDocument": "53ba0e49003f827054a621f4",
+   "livePreviewDocument": "d58b13e51070c109829a0cec",
+   "previewPageModel": "c0834bdbe875ce74d8ac1b34"
+  },
+  "composeMs": 179
+ },
+ "24-empty-and-tiny@default": {
+  "summary": {
+   "chars": 0,
+   "pages": 0,
+   "colophonPages": 0,
+   "columns": 0,
+   "lines": 0,
+   "placed": 0,
+   "units": 0,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "4f53cda18c2baa0c0354bb5f",
+   "documentTrace": "b5f28ebf06204dce08cff93a",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "5d769d21c6ba44fdbd4cb84e",
+   "units": "4f53cda18c2baa0c0354bb5f",
+   "source": "c2c3cbc546780263f2e4c391",
+   "publicationModel": "8577c6e50826f0459938f317",
+   "fastPaintPlan": "4f53cda18c2baa0c0354bb5f",
+   "fontPaintPlanPdfJpg": "e3b0c44298fc1c149afbf4c8",
+   "previewDocument": "7faf6153556f07c3e0261291",
+   "livePreviewDocument": "7faf6153556f07c3e0261291",
+   "previewPageModel": "0ad388f5d6980bb9ab8b1d07"
+  },
+  "composeMs": 0
+ },
+ "24b-tiny@default": {
+  "summary": {
+   "chars": 1,
+   "pages": 1,
+   "colophonPages": 0,
+   "columns": 1,
+   "lines": 1,
+   "placed": 1,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "12df73981afc77ad81bdbed2",
+   "documentTrace": "c7dec6ebab98db3df9c52338",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "dbe6fc3175e8d4563e4d526c",
+   "units": "669651f25f63d32ca3d0e791",
+   "source": "3eb7290a1414479f0f522b32",
+   "publicationModel": "7ac2969698fd515675faf7b3",
+   "fastPaintPlan": "91d261b2fce756c454c77840",
+   "fontPaintPlanPdfJpg": "376bb7ce60dcf9a62e27f729",
+   "previewDocument": "fd20709d7ed3e243e6651665",
+   "livePreviewDocument": "1365b7f78de5c12315f5c1d0",
+   "previewPageModel": "5f9ba1340e4327a72031437f"
+  },
+  "composeMs": 0
+ },
+ "24b-tiny@a5_2+colophon": {
+  "summary": {
+   "chars": 1,
+   "pages": 1,
+   "colophonPages": 1,
+   "columns": 1,
+   "lines": 1,
+   "placed": 1,
+   "units": 1,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "a81d01b4de01c74b8ad32f16",
+   "documentTrace": "f22326235fae1b267270261d",
+   "documentColophon": "0b27ed6eba009a7194697a7d",
+   "documentRest": "ca1fc17e9a61c480c0919982",
+   "units": "669651f25f63d32ca3d0e791",
+   "source": "d4bf76a81e27d2be6a257bbe",
+   "publicationModel": "4ec8cc98fe13e0f24c567780",
+   "fastPaintPlan": "91eb37786c80207135b62d19",
+   "fontPaintPlanPdfJpg": "e1bb8317e1121a3b20831b3a",
+   "previewDocument": "70436d1ba1b70fea407b36e0",
+   "livePreviewDocument": "0606006dfe9113ab4255275c",
+   "previewPageModel": "ec25159ebcc36566e09b9dcf"
+  },
+  "composeMs": 1
+ },
+ "25-crlf-and-blank-lines@default": {
+  "summary": {
+   "chars": 884,
+   "pages": 2,
+   "colophonPages": 0,
+   "columns": 2,
+   "lines": 27,
+   "placed": 835,
+   "units": 21,
+   "errors": [],
+   "hold": false
+  },
+  "hashes": {
+   "documentPages": "b13b76378125934821a48e44",
+   "documentTrace": "f18502b657e2dba715337214",
+   "documentColophon": "74234e98afe7498fb5daf1f3",
+   "documentRest": "90ae2f4cb5299081c6e9621c",
+   "units": "8d341bdd8af31d2bd2dafab1",
+   "source": "91c2b3f82138d4edfe99a6d6",
+   "publicationModel": "e9e045bd0429ba2cb8764001",
+   "fastPaintPlan": "2682ef77b3c956c32f9f542f",
+   "fontPaintPlanPdfJpg": "4a243ea0d829ad09a902ff87",
+   "previewDocument": "73bb75a8e9c9c2eb326cf213",
+   "livePreviewDocument": "73d6c11d78dd44c07f8f0d60",
+   "previewPageModel": "7e7a6db26da6aaa2cafcb51a"
+  },
+  "composeMs": 27
+ }
+}
