@@ -85,10 +85,45 @@ describe("検索・置換 editor wiring (one search, two surfaces)", () => {
     expect(move).toContain("setAllSelected(false)");
   });
 
-  it("選択箇所を置換 is one undoable edit on WINDOWED and never counted as written text on FULL", () => {
-    const body = pane.slice(pane.indexOf("const replaceSearchMatch"), pane.indexOf("useImperativeHandle(\n"));
+  it("選択箇所を置換 and すべて置換 are ONE undoable body edit on both surfaces, never counted as written text", () => {
+    const body = pane.slice(pane.indexOf("const applySearchEdit"), pane.indexOf("useImperativeHandle(\n"));
+    // WINDOWED: PagedEditor's atomic, undoable range edit.
     expect(body).toContain("pagedEditorRef.current?.replaceRangeGlobal(start, end, text)");
-    expect(body).toContain("syncTextInputActivityState(inputActivityStateRef.current, next)");
+    // FULL: the native editing command, i.e. the same history Ctrl+Z / 元に戻す (execCommand("undo")) use —
+    // never a controlled-value assignment, which wipes that history (Human QA: Ctrl+Z did not revert the body).
+    expect(body).toContain('document.execCommand("insertText", false, text)');
+    expect(body).toContain('document.execCommand("delete")');
+    expect(body.indexOf("el.focus({ preventScroll: true })")).toBeLessThan(body.indexOf('document.execCommand("insertText"'));
+    expect(body).toContain("const replaceSearchMatch = (start: number, end: number, text: string) => applySearchEdit(start, end, text);");
+    // すべて置換: WINDOWED = one atomic range edit; FULL = a checkpoint (a native command is O(span × document)).
+    const whole = pane.slice(pane.indexOf("const replaceWholeText"), pane.indexOf("const commitFullCheckpointText"));
+    expect(whole).toContain("const range = minimalReplacementRange(content, next);");
+    expect(whole).toMatch(/if \(isWindowed\) \{\s*applySearchEdit\(range\.start, range\.end, range\.text\);/);
+    expect(whole).toContain("history.redo = [];");
+    expect(whole).toContain("commitFullCheckpointText(next, range.start)");
+    // The checkpoint only applies while the textarea holds exactly its text, and is consulted before native history
+    // by the keyboard shortcuts and by 元に戻す / やり直す.
+    const apply = pane.slice(pane.indexOf("const applyFullReplaceCheckpoint"), pane.indexOf("const runHistory"));
+    expect(apply).toContain("if (!top || el.value !== top.after) return false;");
+    expect(apply).toContain("if (!top || el.value !== top.before) return false;");
+    const run = pane.slice(pane.indexOf("const runHistory"), pane.indexOf("const runHistory") + 400);
+    expect(run.indexOf("applyFullReplaceCheckpoint(command)")).toBeLessThan(run.indexOf("runNativeHistory(command)"));
+    expect(pane).toMatch(/if \(applyFullReplaceCheckpoint\(key === "y" \|\| event\.shiftKey \? "redo" : "undo"\)\) event\.preventDefault\(\);/);
+    expect(pane).toContain("if (isSearchEdit) {");
+    expect(pane).toMatch(/if \(isSearchEdit\) \{[\s\S]{0,200}syncTextInputActivityState\(inputActivityStateRef\.current, next\)/);
+    const editor = read("src/components/TategakiEditor.tsx");
+    expect(editor).not.toMatch(/onReplace=\{\(next\) => \{\s*setContent\(next\)/);
+    expect(editor.match(/onReplace=\{\(next\) => \{\s*replaceWholeText\(next\);\s*setIsSearchOpen\(false\);/g)).toHaveLength(2);
+  });
+
+  it("/guide and its Help section use the current name 検索・置換 and say search alone works", () => {
+    const guide = read("src/app/guide/page.tsx");
+    expect(guide).toContain('title: "検索・置換"');
+    expect(guide).not.toContain("置換機能");
+    const help = read("public/docs/help.md");
+    expect(help).toContain("## 検索・置換 <!-- help-id: replace -->");
+    expect(help).toContain("検索だけなら「置換後の文字列」は空欄のままで構いません");
+    expect(help).not.toContain("1件ずつの確認・スキップはありません");
   });
 
   it("FULL reuses PagedEditor's own caret-scroll helper (no second scroll mechanism)", () => {

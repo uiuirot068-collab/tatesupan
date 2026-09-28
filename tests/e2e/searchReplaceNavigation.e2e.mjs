@@ -14,7 +14,10 @@
 // wrap, the match selected AND inside the editor's visible area, WINDOWED
 // 編集ページ switching, snippet, 選択箇所を置換 (one match, then the next is
 // active), 0 件 disabled state, query change resets the index, すべて置換 over
-// the whole manuscript, close → the editor takes input again, phone modal.
+// the whole manuscript, close → the editor takes input again, phone modal,
+// undo/redo: Ctrl+Z right after 選択箇所を置換 (typed replacement in the panel)
+// reverts the BODY, Ctrl+Y redoes it, 元に戻す, one Ctrl+Z / Ctrl+Y for すべて置換,
+// and the /guide label.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -71,6 +74,14 @@ const setInput = (selector, value) => cdp.evaluate(`(() => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
   input.dispatchEvent(new Event('input', { bubbles: true }));
 })()`);
+/** A real Ctrl+<key> on the focused element; `command` is the editing command Chrome binds to it. */
+async function pressCtrl(key, command) {
+  const code = `Key${key.toUpperCase()}`;
+  const vk = key.toUpperCase().charCodeAt(0);
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key, code, modifiers: 2, windowsVirtualKeyCode: vk, commands: [command] });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, modifiers: 2, windowsVirtualKeyCode: vk });
+  await sleep(300);
+}
 const isDisabled = (selector) => cdp.evaluate(`!!document.querySelector(${JSON.stringify(selector)})?.disabled`);
 const status = () => cdp.evaluate(`document.querySelector('[data-search-match-status]')?.textContent.trim() ?? null`);
 const snippet = () => cdp.evaluate(`document.querySelector('[data-search-match-context]')?.textContent ?? ""`);
@@ -217,7 +228,13 @@ try {
   await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 5 件目'`, { label: "back to 2" });
 
   // ------------------------------------------------ 選択箇所を置換
-  await setInput(`${panelSel("preview")} [data-replace-input]`, "群青");
+  // Type the replacement for real, so the panel input has its OWN native
+  // undo history (Human QA: Ctrl+Z after 選択箇所を置換 undid this input
+  // instead of the body replacement).
+  await realClick(`${panelSel("preview")} [data-replace-input]`);
+  await cdp.send("Input.insertText", { text: "群" });
+  await cdp.send("Input.insertText", { text: "青" });
+  assert.equal(await cdp.evaluate(`document.querySelector('${panelSel("preview")} [data-replace-input]').value`), "群青", "search panel input takes ordinary typing");
   await realClick(`${panelSel("preview")} [data-search-action="replace-one"]`);
   await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 4 件目'`, { timeoutMs: 30_000, label: "after replace-one: 2 / 4" });
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "瑠璃色参"; })()`, { timeoutMs: 30_000, label: "next match selected after replace-one" });
@@ -232,19 +249,30 @@ try {
   log(`選択箇所を置換: PASS (弐 → 群青弐; next = 瑠璃色参, visible=${afterOne.visible})`);
   results.shotAfterReplaceOne = await screenshot(`search-replace-one-${surf}.png`);
 
+  // Ctrl+Z right after 選択箇所を置換 reverts the BODY (not the panel input), Ctrl+Y redoes it.
+  results.focusAfterReplaceOne = await cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target') ?? document.activeElement?.tagName`);
+  await pressCtrl("z", "undo");
+  const dbUndoOne = await savedDocWhere((doc) => doc === CONTENT, "Ctrl+Z restores the manuscript before 選択箇所を置換");
+  assert.equal(count(dbUndoOne, "瑠璃色"), 5);
+  assert.equal(await cdp.evaluate(`document.querySelector('${panelSel("preview")} [data-replace-input]').value`), "群青", "Ctrl+Z did not go to the panel input");
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.includes('/ 5 件目')`, { label: "panel sees 5 matches after undo" });
+  await pressCtrl("y", "redo");
+  const dbRedoOne = await savedDocWhere((doc) => doc === dbAfterOne, "Ctrl+Y re-applies 選択箇所を置換");
+  assert.equal(count(dbRedoOne, "群青弐"), 1);
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 4 件目'`, { label: "panel back to 2 / 4 after redo" });
+  log(`選択箇所を置換 undo/redo (Ctrl+Z / Ctrl+Y, focus=${results.focusAfterReplaceOne}): PASS`);
+
   // A second 選択箇所を置換 moves on (no same-position loop).
   await realClick(`${panelSel("preview")} [data-search-action="replace-one"]`);
   await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 3 件目'`, { timeoutMs: 30_000, label: "after 2nd replace-one: 2 / 3" });
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "瑠璃色肆"; })()`, { timeoutMs: 30_000, label: "肆 selected" });
 
-  // Undo of 選択箇所を置換 (WINDOWED keeps it as one undoable edit).
-  if (surf === "WINDOWED") {
-    await realClick('[data-editor-action="undo"]');
-    await sleep(800);
-    await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.includes('/ 4 件目') || document.querySelector('[data-search-match-status]')?.textContent.includes('4 件')`, { timeoutMs: 20_000, label: "undo restores one match" });
-    results.windowedUndo = await status();
-    log(`  WINDOWED undo after 選択箇所を置換: status ${results.windowedUndo}`);
-  }
+  // The toolbar 元に戻す reverts the 2nd 選択箇所を置換 on both surfaces.
+  await realClick('[data-editor-action="undo"]');
+  await savedDocWhere((doc) => doc === dbAfterOne, "元に戻す reverts the 2nd 選択箇所を置換");
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.includes('/ 4 件目')`, { timeoutMs: 20_000, label: "undo restores one match" });
+  results.toolbarUndo = await status();
+  log(`  元に戻す after the 2nd 選択箇所を置換: status ${results.toolbarUndo}`);
 
   // ------------------------------------------------ 0 件 and query reset
   await setInput(`${panelSel("preview")} [data-search-input]`, "存在しない語");
@@ -254,7 +282,7 @@ try {
   }
   assert.equal(await snippet(), "", "no stale snippet at 0 件");
   await setInput(`${panelSel("preview")} [data-search-input]`, "瑠璃色");
-  const remaining = surf === "WINDOWED" ? 4 : 3;
+  const remaining = 4;
   await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '${remaining} 件見つかりました'`, { label: "query change resets the index" });
   assert.equal(await isDisabled(`${panelSel("preview")} [data-search-action="replace-one"]`), true, "no stale active match after a query change");
   await realClick(`${panelSel("preview")} [data-search-step="next"]`);
@@ -267,6 +295,13 @@ try {
   const dbAfterAll = await savedDocWhere((doc) => !doc.includes("瑠璃色"), "replace-all saved");
   assert.equal(count(dbAfterAll, "瑠璃色"), 0, "すべて置換 left no match anywhere in the manuscript");
   assert.equal(count(dbAfterAll, "群青"), 5, "all five places now read 群青");
+  // ONE Ctrl+Z reverts the whole すべて置換; Ctrl+Y applies it again.
+  results.focusAfterReplaceAll = await cdp.evaluate(`document.activeElement?.getAttribute('data-demo-target') ?? document.activeElement?.tagName`);
+  await pressCtrl("z", "undo");
+  await savedDocWhere((doc) => doc === dbAfterOne, "one Ctrl+Z restores the whole manuscript before すべて置換");
+  await pressCtrl("y", "redo");
+  await savedDocWhere((doc) => doc === dbAfterAll, "Ctrl+Y re-applies すべて置換");
+  log(`すべて置換 undo/redo (one Ctrl+Z / Ctrl+Y, focus=${results.focusAfterReplaceAll}): PASS`);
   // Whole-manuscript search confirms it too (WINDOWED only mounts one page).
   await realClick('[data-editor-action="replace"]');
   await cdp.waitFor(`!!document.querySelector('${panelSel("preview")} [data-search-input]')`, { label: "panel reopened" });
@@ -304,6 +339,13 @@ try {
   await realClick(`${panelSel("screen")} [data-search-action="close"]`);
   await cdp.waitFor(`!document.querySelector('[data-search-replace-placement]')`, { label: "phone closed" });
   log("phone modal: PASS");
+
+  // ------------------------------------------------ /guide uses the current name
+  await session.setViewport(1280, 900);
+  await cdp.send("Page.navigate", { url: target.url("/guide") });
+  await cdp.waitFor(`document.body?.innerText.includes('検索・置換')`, { timeoutMs: 30_000, label: "/guide shows 検索・置換" });
+  assert.equal(await cdp.evaluate(`document.body.innerText.includes('置換機能')`), false, "/guide no longer says 置換機能");
+  log("/guide label: PASS");
 
   results.status = "PASS";
   log(`SEARCH NAVIGATION E2E (${surf}): PASS`);

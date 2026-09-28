@@ -9,6 +9,7 @@ import { isWindowedEditorEnabled } from "@/lib/editorSurfaceRollout";
 import { applyBulkFix, applyFix, filterIgnored, runWritingCheck, type WritingCheckConfig, type WritingDiagnostic } from "@/lib/writingCheckEngine";
 import { resolvePostFixCaretTarget, WRITING_CHECK_POST_FIX_NAVIGATION } from "@/lib/writingCheckPostFixNavigation";
 import { resolveTextareaDeletion, type TextareaDeletionSnapshot } from "@/lib/editorInputIntegrity";
+import { minimalReplacementRange } from "@/lib/searchReplaceNavigation";
 import { useWritingCheckEnabled } from "@/hooks/useWritingCheckEnabled";
 import { useWritingCheckDictionary } from "@/hooks/useWritingCheckDictionary";
 import { useWritingCheckNgWords } from "@/hooks/useWritingCheckNgWords";
@@ -148,6 +149,14 @@ interface EditorPaneProps {
   reviewBarNode?: HTMLDivElement | null;
 }
 
+/** One FULL すべて置換: the manuscript before and after, and where to put the caret. */
+interface FullReplaceCheckpoint {
+  before: string;
+  after: string;
+  caret: number;
+}
+const FULL_REPLACE_HISTORY_LIMIT = 20;
+
 export interface EditorPaneHandle {
   /**
    * TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 Phase 6: navigates the
@@ -161,6 +170,8 @@ export interface EditorPaneHandle {
   revealSearchMatch(start: number, end: number): void;
   /** 検索・置換 選択箇所を置換: replace exactly `[start, end)` with `text` as one edit. */
   replaceSearchMatch(start: number, end: number, text: string): void;
+  /** 検索・置換 すべて置換: commit `next` as ONE undoable body edit on either surface. */
+  replaceWholeText(next: string): void;
 }
 
 function EditorPaneInner(
@@ -234,6 +245,19 @@ function EditorPaneInner(
   const pagedEditorRef = useRef<PagedEditorHandle>(null);
   const inputActivityStateRef = useRef(createTextInputActivityState(content));
   const deletionSnapshotRef = useRef<TextareaDeletionSnapshot | null>(null);
+  /** True only while a 検索・置換 native edit command runs (FULL): its input event is synced, not counted as writing. */
+  const searchEditInFlightRef = useRef(false);
+  /**
+   * FULL すべて置換 checkpoints. A manuscript-wide replacement cannot go
+   * through a native editing command: Chrome's insertText cost grows with
+   * the edited span AND the document (≈42 s for a 300k-character
+   * manuscript, measured), so it is committed as a controlled value and
+   * recorded here instead. Ctrl/Cmd+Z / Ctrl+Y / Ctrl+Shift+Z and 元に戻す /
+   * やり直す consult this BEFORE the native history, but only while the
+   * textarea holds exactly the checkpoint's text, so edits made after the
+   * replacement (native steps) are undone first, in order.
+   */
+  const fullReplaceHistoryRef = useRef<{ undo: FullReplaceCheckpoint[]; redo: FullReplaceCheckpoint[] }>({ undo: [], redo: [] });
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: `useDeferredValue` only lowers this
   // recompute's scheduler priority -- it cannot interrupt `countVisualLength`
   // (which re-tokenizes the WHOLE manuscript) mid-call, so on a 260k-char
@@ -309,11 +333,34 @@ function EditorPaneInner(
   // clears the browser's own undo stack -- see WindowedEditor.tsx's module
   // doc), so the toolbar buttons must route to the windowed editor's own
   // application-level undo/redo instead of `execCommand` while it's mounted.
+  /** FULL: undo/redo a すべて置換 checkpoint when the textarea is exactly at it; false = let native history handle the key. */
+  const applyFullReplaceCheckpoint = (command: "undo" | "redo"): boolean => {
+    if (isWindowed || isComposingRef.current) return false;
+    const el = textareaRef.current;
+    if (!el) return false;
+    const history = fullReplaceHistoryRef.current;
+    if (command === "undo") {
+      const top = history.undo.at(-1);
+      if (!top || el.value !== top.after) return false;
+      history.undo = history.undo.slice(0, -1);
+      history.redo = [...history.redo, top];
+      commitFullCheckpointText(top.before, top.caret);
+      return true;
+    }
+    const top = history.redo.at(-1);
+    if (!top || el.value !== top.before) return false;
+    history.redo = history.redo.slice(0, -1);
+    history.undo = [...history.undo, top];
+    commitFullCheckpointText(top.after, top.caret);
+    return true;
+  };
+
   const runHistory = (command: "undo" | "redo") => {
     if (isWindowed) {
       pagedEditorRef.current?.runHistory(command);
       return;
     }
+    if (applyFullReplaceCheckpoint(command)) return;
     runNativeHistory(command);
   };
 
@@ -581,23 +628,87 @@ function EditorPaneInner(
     reportCursorIndex();
   };
 
-  /** 選択箇所を置換: one edit replacing exactly `[start, end)`; like page-break insertion it is not counted as written text. */
-  const replaceSearchMatch = (start: number, end: number, text: string) => {
+  /**
+   * 検索・置換's one body edit: replace `[start, end)` with `text` as ONE
+   * undoable step, never counted as written text.
+   *
+   * WINDOWED: PagedEditor's atomic `replaceRangeGlobal` (its own undo model).
+   * FULL: the browser's native `insertText` / `delete` command on the
+   * textarea, so the edit lands on the SAME native history Ctrl/Cmd+Z and
+   * 元に戻す / やり直す (`runNativeHistory`) use. Assigning a new controlled
+   * `value` instead (the previous approach) wipes that history, which left
+   * Ctrl+Z with nothing to undo in the body (Human QA).
+   */
+  const applySearchEdit = (start: number, end: number, text: string) => {
     if (isComposingRef.current) return;
+    if (start === end && text === "") return;
     if (isWindowed) {
       pagedEditorRef.current?.replaceRangeGlobal(start, end, text);
       return;
     }
-    const next = content.slice(0, start) + text + content.slice(end);
-    inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
-    onContentChange(next);
+    const el = textareaRef.current;
+    if (!el) return;
+    const expected = el.value.slice(0, start) + text + el.value.slice(end);
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(start, end);
+    deletionSnapshotRef.current = null;
+    searchEditInFlightRef.current = true;
+    let applied = false;
+    try {
+      applied = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
+    } finally {
+      searchEditInFlightRef.current = false;
+    }
+    if (!applied || el.value !== expected) {
+      // No native editing command (or an unexpected result): still commit the
+      // exact text, even though this fallback cannot be undone natively.
+      inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, expected);
+      onContentChange(expected);
+    }
+  };
+
+  /** 選択箇所を置換: exactly the active match. */
+  const replaceSearchMatch = (start: number, end: number, text: string) => applySearchEdit(start, end, text);
+
+  /**
+   * すべて置換 as ONE undo step on both surfaces. WINDOWED: one atomic range
+   * edit over first..last changed character. FULL: a checkpoint (see
+   * `fullReplaceHistoryRef`) -- a native command would take tens of seconds.
+   */
+  const replaceWholeText = (next: string) => {
+    if (isComposingRef.current || next === content) return;
+    const range = minimalReplacementRange(content, next);
+    if (isWindowed) {
+      applySearchEdit(range.start, range.end, range.text);
+      return;
+    }
+    const history = fullReplaceHistoryRef.current;
+    history.undo = [...history.undo, { before: content, after: next, caret: range.start }].slice(-FULL_REPLACE_HISTORY_LIMIT);
+    history.redo = [];
+    commitFullCheckpointText(next, range.start);
+  };
+
+  /** Commits a checkpoint's text (never counted as writing) and keeps the editor focused so the next Ctrl+Z lands here. */
+  const commitFullCheckpointText = (text: string, caret: number) => {
+    const el = textareaRef.current;
+    deletionSnapshotRef.current = null;
+    inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, text);
+    onContentChange(text);
+    el?.focus({ preventScroll: true });
+    // The controlled value is only in the DOM after React commits.
+    requestAnimationFrame(() => {
+      if (!el || el.value !== text) return;
+      el.setSelectionRange(caret, caret);
+      scrollCaretNearUpperView(el, caret);
+      reportCursorIndex();
+    });
   };
 
   // No deps: the handlers close over this render's `content`, so the handle
   // is refreshed on every commit (as it already was with per-render deps).
   useImperativeHandle(
     ref,
-    (): EditorPaneHandle => ({ navigateToGlobalOffset, revealSearchMatch, replaceSearchMatch })
+    (): EditorPaneHandle => ({ navigateToGlobalOffset, revealSearchMatch, replaceSearchMatch, replaceWholeText })
   );
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */
@@ -1055,6 +1166,11 @@ function EditorPaneInner(
             // offset 0) must never describe the next physical key.
             deletionSnapshotRef.current = null;
             logNativeEvent("keydown", event.currentTarget);
+            // すべて置換 checkpoints take Ctrl/Cmd+Z, Ctrl+Y, Ctrl/Cmd+Shift+Z first.
+            const key = event.key.toLowerCase();
+            if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === "z" || key === "y")) {
+              if (applyFullReplaceCheckpoint(key === "y" || event.shiftKey ? "redo" : "undo")) event.preventDefault();
+            }
           }}
           // Explicit fallbacks preserve selection-aware Cut/Paste accounting
           // in browsers that do not expose InputEvent.inputType reliably.
@@ -1065,7 +1181,8 @@ function EditorPaneInner(
             const snapshot = deletionSnapshotRef.current;
             deletionSnapshotRef.current = null;
             let next = e.target.value;
-            if (!isComposingRef.current && snapshot) {
+            const isSearchEdit = searchEditInFlightRef.current;
+            if (!isComposingRef.current && snapshot && !isSearchEdit) {
               const rejectedLength = next.length;
               const resolution = resolveTextareaDeletion(snapshot, next);
               if (resolution.repaired) {
@@ -1085,11 +1202,17 @@ function EditorPaneInner(
             // Any edit that isn't exactly the automated fix's own output
             // ends the one-step undo window (see `undoState`'s own doc).
             if (undoState && next !== undoState.after) setUndoState(null);
-            const endActivitySpan = perfSpan("EditorPane:applyTextInputChange");
-            const transition = applyTextInputChange(inputActivityStateRef.current, next);
-            endActivitySpan();
-            inputActivityStateRef.current = transition.state;
-            onRecordActivity(transition.delta);
+            if (isSearchEdit) {
+              // 検索・置換 is a structural edit like 改ページ挿入: sync, never count it as writing.
+              inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, next);
+            } else {
+              if (!snapshot?.inputType.startsWith("history")) fullReplaceHistoryRef.current.redo = [];
+              const endActivitySpan = perfSpan("EditorPane:applyTextInputChange");
+              const transition = applyTextInputChange(inputActivityStateRef.current, next);
+              endActivitySpan();
+              inputActivityStateRef.current = transition.state;
+              onRecordActivity(transition.delta);
+            }
             perfMark("EditorPane:onContentChange:call");
             onContentChange(next);
             perfMark("EditorPane:onChange:end");

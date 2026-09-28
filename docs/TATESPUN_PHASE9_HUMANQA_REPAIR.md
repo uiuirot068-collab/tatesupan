@@ -316,3 +316,112 @@ Regression E2E on the same builds:
    Decide whether that is acceptable. WINDOWED 選択箇所を置換 is undoable.
 4. Phone: the screen modal covers the editor, so the jump is only visible after 閉じる (unchanged design).
 5. Guide page `/guide` still titles the card 「置換機能」 (marketing copy; not changed here).
+
+---
+
+## 検索・置換 undo repair (2026-09-28, follow-up)
+
+Human QA on 53fb4f3: jump PASS, 選択箇所を置換 PASS, **FULL undo FAIL**. After 選択箇所を置換, Ctrl+Z left the body
+replaced and instead undid the text typed into the panel's input fields.
+
+### Root cause
+
+FULL undo is the textarea's **native** history (Ctrl/Cmd+Z, and 元に戻す / やり直す via `execCommand("undo"/"redo")`).
+Both replacement paths committed the new manuscript as a new controlled `value`:
+
+- 選択箇所を置換 used `onContentChange`.
+- すべて置換 used `TategakiEditor` `setContent`.
+
+That leaves nothing the native history can revert (verified: after a programmatic value change, native undo is a
+no-op). WINDOWED 選択箇所を置換 was already undoable (`replaceRangeGlobal`), but WINDOWED すべて置換 also went
+through `setContent` and reset PagedEditor's undo history.
+
+### Fix
+
+- **選択箇所を置換, FULL:**
+  - Selects the match and runs the native `insertText`, or `delete` for an empty replacement.
+  - The edit is one step on the same native history as typing, so Ctrl+Z / Ctrl+Y / 元に戻す / やり直す revert and
+    re-apply it, interleaved correctly with typing.
+  - It is not counted as written text: `searchEditInFlightRef` syncs the activity state instead.
+  - Cost is 4–10 ms in a 302k-character textarea (measured).
+- **すべて置換, FULL:** a native command is not viable. Chrome's `insertText` cost grows with the edited span AND
+  the document; for a 302k-character manuscript, measured in isolation:
+  - one command over the whole span: 29–51 s
+  - chunked at the caret (merges into one undo step, but no faster): 42–46 s
+  - even a 1,000-character span: 220 ms
+
+  So it is committed as a controlled value and recorded as a **checkpoint** `{before, after}` (last 20):
+  - Ctrl/Cmd+Z, Ctrl+Y, Ctrl/Cmd+Shift+Z and 元に戻す / やり直す consult the checkpoint **before** native history,
+    and only while the textarea holds exactly the checkpoint text.
+  - Typing after a すべて置換 is therefore undone first (native), then the next Ctrl+Z reverts the whole すべて置換
+    in one step.
+  - A new non-history edit clears checkpoint redo.
+  - 302k characters: すべて置換 0.7 s (was 51 s with the native attempt), undo 0.6 s.
+- **すべて置換, WINDOWED:** now one atomic `replaceRangeGlobal` over the first..last changed character
+  (`minimalReplacementRange`, never splitting a surrogate pair). It is undoable in one step, keeps manual
+  編集ページ boundaries outside that span, and takes 0.23 s at 302k.
+- Focus is in the editor after both operations, so the next Ctrl+Z lands on the body. The panel inputs keep their
+  own ordinary input undo while focused.
+- Unchanged: jump, scroll, selection, auto-advance to the next match, snippet, `n / N 件目`, Preview follow,
+  mobile modal, and すべて置換 closing the panel.
+- `/guide` card 「置換機能」 → 「検索・置換」, with a body that says search alone works. Its linked Help section
+  (`public/docs/help.md#replace`) now uses the current UI labels, explains search-only use and 選択箇所を置換, and
+  says that すべて置換 is undone in one step. It no longer claims one-at-a-time replacement is unavailable.
+
+### Known limits
+
+- FULL: native undo steps recorded **before** a すべて置換 can no longer be reached after it (the programmatic
+  value change ends them). This is the same pre-existing behavior as 改ページ挿入 on FULL.
+- FULL: after the checkpoint redo of a すべて置換, a native redo of a later 選択箇所を置換 is a no-op.
+
+### Tests
+
+- `src/lib/searchReplaceNavigation.test.ts`: +3 for `minimalReplacementRange`:
+  - reproduces the replace-all result exactly, spanning only first..last change
+  - single replacement, deletion, and no change
+  - surrogate pairs at both edges
+- `src/components/searchReplaceUx.test.tsx`: the wiring contract now covers:
+  - FULL uses native `insertText` / `delete` and is not counted as writing
+  - WINDOWED uses `replaceRangeGlobal`
+  - the FULL すべて置換 checkpoint is value-guarded and consulted before native history by the keys and by
+    元に戻す / やり直す
+  - `TategakiEditor` no longer uses `setContent` for すべて置換
+  - the /guide and Help labels
+- `tests/e2e/searchReplaceNavigation.e2e.mjs`, run with real mouse and real keyboard (Ctrl+Z / Ctrl+Y with the
+  bound editing command):
+  - the replacement is typed into the panel for real
+  - 選択箇所を置換, then Ctrl+Z: the saved manuscript equals the original, and the panel input is untouched
+  - Ctrl+Y re-applies it
+  - 元に戻す reverts a 2nd 選択箇所を置換
+  - すべて置換, then one Ctrl+Z: exact pre-replace manuscript; Ctrl+Y re-applies it
+  - the /guide label
+  - Against the 53fb4f3 FULL build it FAILS at "Ctrl+Z restores the manuscript before 選択箇所を置換",
+    reproducing the Human QA report. With the fix it PASSES on FULL and WINDOWED.
+- 302k-character probe (FULL and WINDOWED), all PASS:
+  - empty-replacement 選択箇所を置換, then Ctrl+Z
+  - すべて置換 → type → Ctrl+Z (typing) → Ctrl+Z (whole すべて置換)
+  - Ctrl+Y, 元に戻す, やり直す
+
+### Regression and build
+
+- `searchReplaceNavigation`, `windowedLongDocument` and `phase9HumanQaRepair` (A5/2段, colophon, 300k manuscript,
+  search Preview follow, phone modal): PASS on FULL and WINDOWED static builds.
+- `editorInputIntegrity` (starts its own WINDOWED dev server): PASS.
+- Vitest:
+  - components: 301 pass / 3 fail. The 3 failures are pre-existing (desktopReviewBar, readAloudDockCard), same as
+    baseline.
+  - src/lib: the failing set is identical to baseline.
+  - editorSessionActivity: 2 pre-existing isolation-contract failures, same at baseline 04cfda0.
+  - editorPagination, windowedEditor, hooks, constants: all pass.
+- `npx tsc --noEmit`: clean.
+- `npx next build`: PASS for FULL and WINDOWED.
+- `npm run build`: stops at the canonical-Supabase guard, because this worktree has no `.env.local`.
+
+### Human QA still required
+
+1. FULL on the real machine, with real IME and a 30万字 manuscript:
+   - 選択箇所を置換, then Ctrl+Z and Ctrl+Y (and 元に戻す / やり直す)
+   - すべて置換, then one Ctrl+Z
+   - typing between operations
+2. Confirm that the FULL limit above (history from before a すべて置換 is not reachable after it) is acceptable.
+3. macOS Cmd+Z / Cmd+Shift+Z (headless QA ran on Windows key bindings only).

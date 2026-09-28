@@ -4,6 +4,7 @@ import {
   deriveSearchReplaceView,
   findMatchOffsets,
   planActiveReplace,
+  minimalReplacementRange,
   replaceAllMatches,
   searchReplaceReducer,
   stepMatchIndex,
@@ -212,5 +213,42 @@ describe("WINDOWED: a match on another 編集ページ", () => {
     expect(editorPageForGlobalOffset(pages, boundary, "forward")).toBe(1);
     expect(editorPageForGlobalOffset(pages, boundary, "backward")).toBe(0);
     expect(globalToEditorPageLocal(pages[0], start)).toBe(pages[0].length - 2);
+  });
+});
+
+describe("すべて置換 as ONE undoable edit (minimalReplacementRange)", () => {
+  const apply = (before: string, r: { start: number; end: number; text: string }) => before.slice(0, r.start) + r.text + before.slice(r.end);
+
+  it("spans only first..last changed character and reproduces the replace-all result exactly", () => {
+    const before = `前書き。${TEXT}後書き。`;
+    const { nextContent } = replaceAllMatches(before, "瑠璃色", "群青");
+    const range = minimalReplacementRange(before, nextContent);
+    expect(apply(before, range)).toBe(nextContent);
+    expect(range.start).toBe(before.indexOf("瑠璃色"));
+    expect(range.end).toBe(before.lastIndexOf("瑠璃色") + 3);
+    expect(before.slice(0, range.start)).toBe("前書き。");
+  });
+
+  it("handles a single replacement, deletion (empty replacement) and no change", () => {
+    const one = planActiveReplace(TEXT, searchReplaceReducer(search("瑠璃色", "群青"), { type: "activate", index: 1 }), 6)!;
+    const r1 = minimalReplacementRange(TEXT, one.nextContent);
+    expect(apply(TEXT, r1)).toBe(one.nextContent);
+    expect(r1.end - r1.start).toBeLessThanOrEqual(3);
+    const deleted = replaceAllMatches(TEXT, "瑠璃色", "").nextContent;
+    const r2 = minimalReplacementRange(TEXT, deleted);
+    expect(apply(TEXT, r2)).toBe(deleted);
+    expect(minimalReplacementRange(TEXT, TEXT)).toEqual({ start: TEXT.length, end: TEXT.length, text: "" });
+  });
+
+  it("never splits a surrogate pair at either edge", () => {
+    // 𠮷 (D842 DFB7) → 𠮟 (D842 DF9F): same high surrogate, different low one.
+    const before = "a𠮷b";
+    const after = "a𠮟b";
+    const range = minimalReplacementRange(before, after);
+    expect(range).toEqual({ start: 1, end: 3, text: "𠮟" });
+    expect(apply(before, range)).toBe(after);
+    // Shared low surrogate at the suffix edge: 𠀋 (D840 DC0B) → 𡀋 (D844 DC0B).
+    const r2 = minimalReplacementRange("x𠀋", "x𡀋");
+    expect(r2).toEqual({ start: 1, end: 3, text: "𡀋" });
   });
 });

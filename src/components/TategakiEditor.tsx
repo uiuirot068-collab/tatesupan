@@ -269,6 +269,12 @@ export default function TategakiEditor({
   const replaceSearchMatch = useCallback((start: number, end: number, text: string) => {
     editorPaneRef.current?.replaceSearchMatch(start, end, text);
   }, []);
+  // すべて置換 goes through the editor too, so it is ONE undoable body edit
+  // (Ctrl+Z / 元に戻す) on both surfaces instead of a history-wiping setContent.
+  const replaceWholeText = useCallback((next: string) => {
+    if (editorPaneRef.current) editorPaneRef.current.replaceWholeText(next);
+    else setContent(next);
+  }, []);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: cursorIndex advances on every
   // keystroke same as content, so it must be debounced the same way before
   // reaching PreviewPane -- otherwise React.memo's prop comparison would
@@ -1252,7 +1258,7 @@ export default function TategakiEditor({
                   onFind={revealSearchMatch}
                   onReplaceOne={replaceSearchMatch}
                   onReplace={(next) => {
-                    setContent(next);
+                    replaceWholeText(next);
                     setIsSearchOpen(false);
                   }}
                   onClose={() => setIsSearchOpen(false)}
@@ -1277,7 +1283,7 @@ export default function TategakiEditor({
             onFind={revealSearchMatch}
             onReplaceOne={replaceSearchMatch}
             onReplace={(next) => {
-              setContent(next);
+              replaceWholeText(next);
               setIsSearchOpen(false);
             }}
             onClose={() => setIsSearchOpen(false)}

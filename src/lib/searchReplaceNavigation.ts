@@ -144,3 +144,33 @@ export function replaceAllMatches(content: string, searchText: string, replaceTe
   const nextContent = content.replace(new RegExp(escapeRegExp(searchText), "g"), () => replaceText);
   return { nextContent, count };
 }
+
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
+/**
+ * The single contiguous edit turning `before` into `after`: replace
+ * `before[start, end)` with `text`. すべて置換 applies its whole result as
+ * this ONE edit, so a single 元に戻す / Ctrl+Z reverts the whole operation on
+ * both editor surfaces while everything outside the first..last match stays
+ * untouched (WINDOWED keeps its manual 編集ページ boundaries there). The range
+ * never splits a surrogate pair.
+ */
+export function minimalReplacementRange(before: string, after: string): { start: number; end: number; text: string } {
+  const max = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < max && before.charCodeAt(prefix) === after.charCodeAt(prefix)) prefix += 1;
+  // The shared prefix is identical in both strings: never end it on a high surrogate.
+  if (prefix > 0 && isHighSurrogate(before.charCodeAt(prefix - 1))) prefix -= 1;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before.charCodeAt(before.length - 1 - suffix) === after.charCodeAt(after.length - 1 - suffix)
+  ) {
+    suffix += 1;
+  }
+  // …nor start the shared suffix on a low surrogate.
+  if (suffix > 0 && isLowSurrogate(before.charCodeAt(before.length - suffix))) suffix -= 1;
+  return { start: prefix, end: before.length - suffix, text: after.slice(prefix, after.length - suffix) };
+}
