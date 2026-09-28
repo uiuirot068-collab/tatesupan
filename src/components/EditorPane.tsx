@@ -1139,7 +1139,12 @@ function EditorPaneInner(
           </div>
         )}
         {writingCheckEnabled && (
-          <div className={`pointer-events-none absolute inset-0 ${analysisCurrent ? "visible" : "invisible"}`}>
+          // Hides stale underlines while a re-check is pending. With no
+          // issues the overlay paints nothing either way, so it stays
+          // `visible`: toggling it on every edit forced two full-page
+          // compositor updates (~100 ms each on a 300k-character Preview)
+          // that delayed the Preview's compose request.
+          <div className={`pointer-events-none absolute inset-0 ${analysisCurrent || writingIssuesForAnalysis.length === 0 ? "visible" : "invisible"}`}>
             <WritingCheckOverlay
               textareaRef={textareaRef}
               text={analysis.text}

@@ -1298,7 +1298,12 @@ function PagedEditorInner(
             <DescriptionMarkOverlay textareaRef={textareaRef} text={pageText} marks={pageLocalDescriptionMarks} />
           </div>
         )}
-        {showWritingCheck && (
+        {/* Stays mounted while the check is enabled: a stale analysis
+            already yields no `pageLocalIssues`, so the overlay paints nothing
+            until the re-check lands. Unmounting/remounting it on every edit
+            forced two full-page compositor updates (~100 ms each with a
+            300k-character Preview) that delayed the compose request. */}
+        {writingCheck?.enabled && (
           <div className="pointer-events-none absolute inset-0">
             <WritingCheckOverlay textareaRef={textareaRef} text={pageText} issues={pageLocalIssues} />
           </div>

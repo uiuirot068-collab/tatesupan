@@ -1,0 +1,340 @@
+{
+  "label": "exp-cv",
+  "fixture": "normal",
+  "surface": "FULL",
+  "chars": 303999,
+  "repeat": 1,
+  "openMs": 3268,
+  "moveToEndMs": 0,
+  "pagesShown": 625,
+  "finalPages": 625,
+  "middleLength": 304000,
+  "results": {
+    "insertMiddle": {
+      "median": {
+        "inputToRequestMs": 445,
+        "requestToReplyMs": 1501,
+        "inputToReplyMs": 1946,
+        "inputToPaintedMs": 2103,
+        "longTaskMs": 104,
+        "mainBusyMs": null,
+        "traceTaskMs": 283
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 445,
+          "requestToReplyMs": 1501,
+          "inputToReplyMs": 1946,
+          "inputToPaintedMs": 2103,
+          "longTaskMs": 104,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 283,
+          "traceSelfMs": {
+            "Layerize": 122,
+            "FunctionCall": 57.6,
+            "RunTask": 31.5,
+            "Commit": 19.3,
+            "Layout": 16,
+            "UpdateLayoutTree": 11.5,
+            "Paint": 11,
+            "PrePaint": 6.4,
+            "EventDispatch": 4.5,
+            "IntersectionObserverController::computeIntersections": 1.4
+          }
+        }
+      ]
+    },
+    "backspaceMiddle": {
+      "median": {
+        "inputToRequestMs": 510,
+        "requestToReplyMs": 1167,
+        "inputToReplyMs": 1678,
+        "inputToPaintedMs": 1800,
+        "longTaskMs": 258,
+        "mainBusyMs": null,
+        "traceTaskMs": 484
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 510,
+          "requestToReplyMs": 1167,
+          "inputToReplyMs": 1678,
+          "inputToPaintedMs": 1800,
+          "longTaskMs": 258,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 484,
+          "traceSelfMs": {
+            "Layerize": 322.5,
+            "FunctionCall": 67.8,
+            "Commit": 46.7,
+            "RunTask": 19.2,
+            "Paint": 10.2,
+            "EventDispatch": 5.9,
+            "Layout": 4.3,
+            "UpdateLayoutTree": 3.2,
+            "PrePaint": 1.9,
+            "IntersectionObserverController::computeIntersections": 1.1
+          }
+        }
+      ]
+    },
+    "insertMiddleAgain": {
+      "median": {
+        "inputToRequestMs": 528,
+        "requestToReplyMs": 1446,
+        "inputToReplyMs": 1974,
+        "inputToPaintedMs": 2110,
+        "longTaskMs": 302,
+        "mainBusyMs": null,
+        "traceTaskMs": 527
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 528,
+          "requestToReplyMs": 1446,
+          "inputToReplyMs": 1974,
+          "inputToPaintedMs": 2110,
+          "longTaskMs": 302,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 527,
+          "traceSelfMs": {
+            "Layerize": 329.2,
+            "FunctionCall": 50.6,
+            "Commit": 43.4,
+            "RunTask": 40.2,
+            "Paint": 22,
+            "V8.GC_MC_INCREMENTAL_EMBEDDER_TRACING": 7.6,
+            "V8.GC_SCAVENGER_SCAVENGE_PARALLEL": 4.8,
+            "Layout": 4.3,
+            "UpdateLayoutTree": 4.1,
+            "EventDispatch": 3.8,
+            "V8.GC_MARK_COMPACTOR": 2.9,
+            "V8.GC_HEAP_EMBEDDER_TRACING_EPILOGUE": 2.2,
+            "V8.GC_MC_INCREMENTAL": 1.7,
+            "PrePaint": 1.3
+          }
+        }
+      ]
+    },
+    "undoInsert": {
+      "median": {
+        "inputToRequestMs": 484,
+        "requestToReplyMs": 1364,
+        "inputToReplyMs": 1848,
+        "inputToPaintedMs": 1975,
+        "longTaskMs": 119,
+        "mainBusyMs": null,
+        "traceTaskMs": 323
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 484,
+          "requestToReplyMs": 1364,
+          "inputToReplyMs": 1848,
+          "inputToPaintedMs": 1975,
+          "longTaskMs": 119,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 323,
+          "traceSelfMs": {
+            "Layerize": 200.1,
+            "FunctionCall": 49.8,
+            "Commit": 34.1,
+            "RunTask": 16.1,
+            "Paint": 7.7,
+            "EventDispatch": 4.4,
+            "Layout": 3.6,
+            "UpdateLayoutTree": 3.4,
+            "PrePaint": 1.8
+          }
+        }
+      ]
+    },
+    "redoInsert": {
+      "median": {
+        "inputToRequestMs": 461,
+        "requestToReplyMs": 1357,
+        "inputToReplyMs": 1818,
+        "inputToPaintedMs": 1948,
+        "longTaskMs": 127,
+        "mainBusyMs": null,
+        "traceTaskMs": 323
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 461,
+          "requestToReplyMs": 1357,
+          "inputToReplyMs": 1818,
+          "inputToPaintedMs": 1948,
+          "longTaskMs": 127,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 323,
+          "traceSelfMs": {
+            "Layerize": 204.5,
+            "FunctionCall": 45.1,
+            "Commit": 38.9,
+            "RunTask": 9.5,
+            "Paint": 7,
+            "Layout": 5,
+            "EventDispatch": 4.8,
+            "UpdateLayoutTree": 4.5,
+            "PrePaint": 1.9
+          }
+        }
+      ]
+    },
+    "enterMiddle": {
+      "median": {
+        "inputToRequestMs": 486,
+        "requestToReplyMs": 1449,
+        "inputToReplyMs": 1936,
+        "inputToPaintedMs": 1971,
+        "longTaskMs": 248,
+        "mainBusyMs": null,
+        "traceTaskMs": 471
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 486,
+          "requestToReplyMs": 1449,
+          "inputToReplyMs": 1936,
+          "inputToPaintedMs": 1971,
+          "longTaskMs": 248,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 471,
+          "traceSelfMs": {
+            "Layerize": 314.6,
+            "Commit": 50.4,
+            "FunctionCall": 46.1,
+            "RunTask": 24.2,
+            "Paint": 15.6,
+            "Layout": 6.1,
+            "EventDispatch": 5,
+            "UpdateLayoutTree": 3.3,
+            "PrePaint": 2.5,
+            "IntersectionObserverController::computeIntersections": 1.1
+          }
+        }
+      ]
+    },
+    "undoEnter": {
+      "median": {
+        "inputToRequestMs": 481,
+        "requestToReplyMs": 1410,
+        "inputToReplyMs": 1890,
+        "inputToPaintedMs": 1924,
+        "longTaskMs": 130,
+        "mainBusyMs": null,
+        "traceTaskMs": 336
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 481,
+          "requestToReplyMs": 1410,
+          "inputToReplyMs": 1890,
+          "inputToPaintedMs": 1924,
+          "longTaskMs": 130,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 336,
+          "traceSelfMs": {
+            "Layerize": 208.5,
+            "FunctionCall": 49,
+            "Commit": 38.2,
+            "Paint": 11.2,
+            "RunTask": 10.7,
+            "Layout": 3.9,
+            "UpdateLayoutTree": 3.7,
+            "EventDispatch": 3.7,
+            "PrePaint": 2.4,
+            "V8.GC_SCAVENGER_SCAVENGE_PARALLEL": 1.6
+          }
+        }
+      ]
+    },
+    "insertEnd": {
+      "median": {
+        "inputToRequestMs": 525,
+        "requestToReplyMs": 1143,
+        "inputToReplyMs": 1668,
+        "inputToPaintedMs": 1731,
+        "longTaskMs": 313,
+        "mainBusyMs": null,
+        "traceTaskMs": 511
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 525,
+          "requestToReplyMs": 1143,
+          "inputToReplyMs": 1668,
+          "inputToPaintedMs": 1731,
+          "longTaskMs": 313,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 511,
+          "traceSelfMs": {
+            "Layerize": 324.1,
+            "RunTask": 72,
+            "FunctionCall": 51.3,
+            "Commit": 34.2,
+            "Paint": 11.3,
+            "UpdateLayoutTree": 6,
+            "Layout": 5.5,
+            "EventDispatch": 3.6,
+            "PrePaint": 1.2
+          }
+        }
+      ]
+    },
+    "backspaceEnd": {
+      "median": {
+        "inputToRequestMs": 460,
+        "requestToReplyMs": 1402,
+        "inputToReplyMs": 1862,
+        "inputToPaintedMs": 1928,
+        "longTaskMs": 117,
+        "mainBusyMs": null,
+        "traceTaskMs": 293
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 460,
+          "requestToReplyMs": 1402,
+          "inputToReplyMs": 1862,
+          "inputToPaintedMs": 1928,
+          "longTaskMs": 117,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete",
+          "traceTaskMs": 293,
+          "traceSelfMs": {
+            "Layerize": 142.6,
+            "FunctionCall": 83.7,
+            "Commit": 30.3,
+            "RunTask": 11.7,
+            "Paint": 5.8,
+            "Layout": 4.5,
+            "EventDispatch": 4.3,
+            "V8.GC_SCAVENGER_SCAVENGE_PARALLEL": 2.5,
+            "UpdateLayoutTree": 2.1,
+            "PrePaint": 1.8,
+            "IntersectionObserverController::computeIntersections": 1.4
+          }
+        }
+      ]
+    }
+  }
+}

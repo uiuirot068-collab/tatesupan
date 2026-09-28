@@ -1,0 +1,487 @@
+{
+  "label": "baseline",
+  "fixture": "longtail",
+  "surface": "WINDOWED",
+  "chars": 303735,
+  "repeat": 3,
+  "openMs": 2898,
+  "moveToEndMs": 553,
+  "pagesShown": 618,
+  "finalPages": 618,
+  "middleLength": 50008,
+  "results": {
+    "insertMiddle": {
+      "median": {
+        "inputToRequestMs": 619,
+        "requestToReplyMs": 1362,
+        "inputToReplyMs": 2075,
+        "inputToPaintedMs": 2097,
+        "longTaskMs": 140,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 817,
+          "requestToReplyMs": 1362,
+          "inputToReplyMs": 2178,
+          "inputToPaintedMs": 2320,
+          "longTaskMs": 565,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 603,
+          "requestToReplyMs": 1260,
+          "inputToReplyMs": 1863,
+          "inputToPaintedMs": 2004,
+          "longTaskMs": 111,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 619,
+          "requestToReplyMs": 1456,
+          "inputToReplyMs": 2075,
+          "inputToPaintedMs": 2097,
+          "longTaskMs": 140,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "backspaceMiddle": {
+      "median": {
+        "inputToRequestMs": 520,
+        "requestToReplyMs": 1206,
+        "inputToReplyMs": 1725,
+        "inputToPaintedMs": 1859,
+        "longTaskMs": 107,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 520,
+          "requestToReplyMs": 1206,
+          "inputToReplyMs": 1725,
+          "inputToPaintedMs": 1859,
+          "longTaskMs": 107,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 509,
+          "requestToReplyMs": 1206,
+          "inputToReplyMs": 1714,
+          "inputToPaintedMs": 1845,
+          "longTaskMs": 106,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 527,
+          "requestToReplyMs": 1232,
+          "inputToReplyMs": 1759,
+          "inputToPaintedMs": 1885,
+          "longTaskMs": 107,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "insertMiddleAgain": {
+      "median": {
+        "inputToRequestMs": 461,
+        "requestToReplyMs": 1387,
+        "inputToReplyMs": 1842,
+        "inputToPaintedMs": 1983,
+        "longTaskMs": 111,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 466,
+          "requestToReplyMs": 1225,
+          "inputToReplyMs": 1691,
+          "inputToPaintedMs": 1839,
+          "longTaskMs": 107,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 461,
+          "requestToReplyMs": 1612,
+          "inputToReplyMs": 2074,
+          "inputToPaintedMs": 2214,
+          "longTaskMs": 111,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 456,
+          "requestToReplyMs": 1387,
+          "inputToReplyMs": 1842,
+          "inputToPaintedMs": 1983,
+          "longTaskMs": 115,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "undoInsert": {
+      "median": {
+        "inputToRequestMs": 520,
+        "requestToReplyMs": 1208,
+        "inputToReplyMs": 1751,
+        "inputToPaintedMs": 1768,
+        "longTaskMs": 311,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 481,
+          "requestToReplyMs": 1208,
+          "inputToReplyMs": 1689,
+          "inputToPaintedMs": 1705,
+          "longTaskMs": 370,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 553,
+          "requestToReplyMs": 1198,
+          "inputToReplyMs": 1751,
+          "inputToPaintedMs": 1768,
+          "longTaskMs": 311,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 520,
+          "requestToReplyMs": 1487,
+          "inputToReplyMs": 2007,
+          "inputToPaintedMs": 2022,
+          "longTaskMs": 303,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "redoInsert": {
+      "median": {
+        "inputToRequestMs": 526,
+        "requestToReplyMs": 1216,
+        "inputToReplyMs": 1742,
+        "inputToPaintedMs": 1751,
+        "longTaskMs": 305,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 539,
+          "requestToReplyMs": 1458,
+          "inputToReplyMs": 1997,
+          "inputToPaintedMs": 2005,
+          "longTaskMs": 327,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 514,
+          "requestToReplyMs": 1188,
+          "inputToReplyMs": 1702,
+          "inputToPaintedMs": 1723,
+          "longTaskMs": 305,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 526,
+          "requestToReplyMs": 1216,
+          "inputToReplyMs": 1742,
+          "inputToPaintedMs": 1751,
+          "longTaskMs": 305,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "enterMiddle": {
+      "median": {
+        "inputToRequestMs": 531,
+        "requestToReplyMs": 1723,
+        "inputToReplyMs": 2185,
+        "inputToPaintedMs": 2200,
+        "longTaskMs": 172,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 544,
+          "requestToReplyMs": 1962,
+          "inputToReplyMs": 2506,
+          "inputToPaintedMs": 2518,
+          "longTaskMs": 304,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 461,
+          "requestToReplyMs": 1723,
+          "inputToReplyMs": 2185,
+          "inputToPaintedMs": 2200,
+          "longTaskMs": 112,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 531,
+          "requestToReplyMs": 1474,
+          "inputToReplyMs": 2005,
+          "inputToPaintedMs": 2023,
+          "longTaskMs": 172,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "undoEnter": {
+      "median": {
+        "inputToRequestMs": 526,
+        "requestToReplyMs": 1677,
+        "inputToReplyMs": 2203,
+        "inputToPaintedMs": 2219,
+        "longTaskMs": 370,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 519,
+          "requestToReplyMs": 1708,
+          "inputToReplyMs": 2227,
+          "inputToPaintedMs": 2243,
+          "longTaskMs": 433,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 526,
+          "requestToReplyMs": 1677,
+          "inputToReplyMs": 2203,
+          "inputToPaintedMs": 2219,
+          "longTaskMs": 300,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 549,
+          "requestToReplyMs": 1471,
+          "inputToReplyMs": 2019,
+          "inputToPaintedMs": 2067,
+          "longTaskMs": 370,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "insertEnd": {
+      "median": {
+        "inputToRequestMs": 416,
+        "requestToReplyMs": 1206,
+        "inputToReplyMs": 1737,
+        "inputToPaintedMs": 1807,
+        "longTaskMs": 57,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 762,
+          "requestToReplyMs": 1116,
+          "inputToReplyMs": 1878,
+          "inputToPaintedMs": 1944,
+          "longTaskMs": 505,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 416,
+          "requestToReplyMs": 1321,
+          "inputToReplyMs": 1737,
+          "inputToPaintedMs": 1807,
+          "longTaskMs": 57,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 412,
+          "requestToReplyMs": 1206,
+          "inputToReplyMs": 1618,
+          "inputToPaintedMs": 1684,
+          "longTaskMs": 57,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "backspaceEnd": {
+      "median": {
+        "inputToRequestMs": 430,
+        "requestToReplyMs": 1182,
+        "inputToReplyMs": 1610,
+        "inputToPaintedMs": 1632,
+        "longTaskMs": 60,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 435,
+          "requestToReplyMs": 1093,
+          "inputToReplyMs": 1529,
+          "inputToPaintedMs": 1613,
+          "longTaskMs": 57,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 428,
+          "requestToReplyMs": 1182,
+          "inputToReplyMs": 1610,
+          "inputToPaintedMs": 1632,
+          "longTaskMs": 63,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 430,
+          "requestToReplyMs": 1529,
+          "inputToReplyMs": 1958,
+          "inputToPaintedMs": 2028,
+          "longTaskMs": 60,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "insertLongParagraph": {
+      "median": {
+        "inputToRequestMs": 777,
+        "requestToReplyMs": 1186,
+        "inputToReplyMs": 1962,
+        "inputToPaintedMs": 1979,
+        "longTaskMs": 184,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 994,
+          "requestToReplyMs": 1360,
+          "inputToReplyMs": 2354,
+          "inputToPaintedMs": 2370,
+          "longTaskMs": 744,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 777,
+          "requestToReplyMs": 1186,
+          "inputToReplyMs": 1962,
+          "inputToPaintedMs": 1979,
+          "longTaskMs": 184,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 772,
+          "requestToReplyMs": 1107,
+          "inputToReplyMs": 1879,
+          "inputToPaintedMs": 1900,
+          "longTaskMs": 0,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    },
+    "backspaceLongParagraph": {
+      "median": {
+        "inputToRequestMs": 797,
+        "requestToReplyMs": 1273,
+        "inputToReplyMs": 2106,
+        "inputToPaintedMs": 2124,
+        "longTaskMs": 163,
+        "mainBusyMs": null,
+        "traceTaskMs": null
+      },
+      "runs": [
+        {
+          "inputToRequestMs": 797,
+          "requestToReplyMs": 1136,
+          "inputToReplyMs": 1933,
+          "inputToPaintedMs": 2016,
+          "longTaskMs": 163,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 864,
+          "requestToReplyMs": 1273,
+          "inputToReplyMs": 2137,
+          "inputToPaintedMs": 2153,
+          "longTaskMs": 357,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        },
+        {
+          "inputToRequestMs": 794,
+          "requestToReplyMs": 1312,
+          "inputToReplyMs": 2106,
+          "inputToPaintedMs": 2124,
+          "longTaskMs": 157,
+          "posts": 1,
+          "delta": true,
+          "replyType": "complete"
+        }
+      ]
+    }
+  }
+}

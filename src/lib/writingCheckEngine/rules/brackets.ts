@@ -20,11 +20,35 @@ const BRACKET_CLOSE_TO_OPEN: Record<string, string> = Object.fromEntries(
   Object.entries(BRACKET_OPEN_TO_CLOSE).map(([open, close]) => [close, open])
 );
 
+/** 「」『』（）［］【】 — exactly the keys of the two maps above. */
+function isBracketCodeUnit(code: number): boolean {
+  switch (code) {
+    case 0x300c: // 「
+    case 0x300d: // 」
+    case 0x300e: // 『
+    case 0x300f: // 』
+    case 0xff08: // （
+    case 0xff09: // ）
+    case 0xff3b: // ［
+    case 0xff3d: // ］
+    case 0x3010: // 【
+    case 0x3011: // 】
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function checkBrackets(text: string): WritingDiagnostic[] {
   const issues: WritingDiagnostic[] = [];
   const stack: Array<{ char: string; expect: string; index: number }> = [];
 
   for (let i = 0; i < text.length; i += 1) {
+    // Main-thread Preview performance: reject every non-bracket code unit by
+    // its number first. `text[i]` allocates a one-character string for each
+    // non-Latin-1 code unit, which made this rule ~28 ms of the ~30 ms whole
+    // writing check on a 300k-character manuscript, once per edit.
+    if (!isBracketCodeUnit(text.charCodeAt(i))) continue;
     const ch = text[i];
     const close = BRACKET_OPEN_TO_CLOSE[ch];
     if (close !== undefined) {

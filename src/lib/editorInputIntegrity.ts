@@ -43,7 +43,8 @@ function nextCodePointEnd(text: string, caret: number): number {
   return caret + 1;
 }
 
-function graphemeRangeAt(
+/** The extended grapheme cluster a Backspace (`backward`) or Delete (`forward`) at `caret` would remove. */
+export function graphemeRangeAt(
   text: string,
   caret: number,
   direction: "backward" | "forward"
@@ -52,9 +53,20 @@ function graphemeRangeAt(
   const probe = direction === "backward" ? caret - 1 : caret;
   if (probe < 0 || probe >= text.length) return null;
 
-  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
+  // Segment only the line holding `probe`, never the whole manuscript (a
+  // Backspace at the end of a 300k-character text used to walk every
+  // grapheme before it). UAX #29 always breaks after LF (GB4) and before LF
+  // unless it follows CR (GB3/GB5), so `windowStart` (just after the previous
+  // LF) and `windowEnd` (just after the next LF, which keeps a CR LF pair
+  // together) are real boundaries and every cluster between them is the same
+  // as in a whole-text segmentation.
+  // (lastIndexOf clamps a negative fromIndex to 0, so probe 0 is special-cased.)
+  const windowStart = probe === 0 ? 0 : text.lastIndexOf("\n", probe - 1) + 1;
+  const nextLineFeed = text.indexOf("\n", probe);
+  const windowEnd = nextLineFeed === -1 ? text.length : nextLineFeed + 1;
+  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text.slice(windowStart, windowEnd));
   for (const part of segments) {
-    const start = part.index;
+    const start = windowStart + part.index;
     const end = start + part.segment.length;
     if (start <= probe && probe < end) return { start, end };
   }
