@@ -1,0 +1,104 @@
+{
+  "label": "final-after-windowed-r2",
+  "surface": "WINDOWED",
+  "chars": 291292,
+  "repeat": 7,
+  "results": {
+    "insertBeginning": {
+      "median": 71,
+      "samples": [
+        72,
+        66,
+        72,
+        106,
+        69,
+        65,
+        71
+      ]
+    },
+    "insertMiddle": {
+      "median": 155,
+      "samples": [
+        72,
+        143,
+        169,
+        145,
+        162,
+        155,
+        160
+      ]
+    },
+    "enterMiddle": {
+      "median": 166,
+      "samples": [
+        165,
+        164,
+        167,
+        149,
+        169,
+        178,
+        166
+      ]
+    },
+    "backspaceMiddle": {
+      "median": 172,
+      "samples": [
+        170,
+        172,
+        170,
+        173,
+        175,
+        173,
+        155
+      ]
+    },
+    "undo": {
+      "median": 241,
+      "samples": [
+        226,
+        224,
+        246,
+        247,
+        243,
+        232,
+        241
+      ]
+    },
+    "redo": {
+      "median": 238,
+      "samples": [
+        245,
+        230,
+        233,
+        328,
+        238,
+        241,
+        223
+      ]
+    },
+    "insertEnd": {
+      "median": 69,
+      "samples": [
+        166,
+        68,
+        65,
+        72,
+        69,
+        69,
+        73
+      ]
+    },
+    "searchNext": {
+      "median": 71,
+      "samples": [
+        131,
+        59,
+        58,
+        105,
+        60,
+        71,
+        85
+      ]
+    }
+  }
+}

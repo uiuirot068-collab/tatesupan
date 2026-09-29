@@ -1,0 +1,104 @@
+{
+  "label": "final-baseline-windowed-r2",
+  "surface": "WINDOWED",
+  "chars": 291292,
+  "repeat": 7,
+  "results": {
+    "insertBeginning": {
+      "median": 65,
+      "samples": [
+        73,
+        66,
+        63,
+        65,
+        62,
+        65,
+        71
+      ]
+    },
+    "insertMiddle": {
+      "median": 162,
+      "samples": [
+        92,
+        153,
+        172,
+        152,
+        166,
+        191,
+        162
+      ]
+    },
+    "enterMiddle": {
+      "median": 166,
+      "samples": [
+        174,
+        164,
+        170,
+        159,
+        166,
+        177,
+        161
+      ]
+    },
+    "backspaceMiddle": {
+      "median": 164,
+      "samples": [
+        178,
+        170,
+        164,
+        164,
+        162,
+        165,
+        162
+      ]
+    },
+    "undo": {
+      "median": 238,
+      "samples": [
+        221,
+        227,
+        243,
+        238,
+        266,
+        238,
+        235
+      ]
+    },
+    "redo": {
+      "median": 244,
+      "samples": [
+        223,
+        234,
+        243,
+        254,
+        244,
+        257,
+        251
+      ]
+    },
+    "insertEnd": {
+      "median": 71,
+      "samples": [
+        217,
+        70,
+        67,
+        90,
+        68,
+        72,
+        71
+      ]
+    },
+    "searchNext": {
+      "median": 60,
+      "samples": [
+        131,
+        59,
+        76,
+        60,
+        58,
+        61,
+        58
+      ]
+    }
+  }
+}

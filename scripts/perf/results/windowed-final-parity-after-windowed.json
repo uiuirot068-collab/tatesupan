@@ -1,0 +1,444 @@
+{
+  "surface": "WINDOWED",
+  "ctrlA": {
+    "type": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "enter": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "backspace": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "delete": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "paste": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "ime": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "cut": {
+      "stateAfterCtrlA": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "clickLeaves_ctrlA": {
+      "engaged": true,
+      "afterClickPressed": false,
+      "onlyOneCharAdded": true
+    },
+    "clickLeaves_button": {
+      "engaged": true,
+      "afterClickPressed": false,
+      "onlyOneCharAdded": true
+    },
+    "escAndStaleGuard": {
+      "afterEsc": {
+        "pressed": false,
+        "label": "全文を選択"
+      },
+      "twice": {
+        "pressed": true,
+        "label": "全文選択中　解除"
+      },
+      "afterClick": {
+        "pressed": false,
+        "label": "全文を選択"
+      },
+      "onlyOneCharAdded": true
+    }
+  },
+  "inputs": {
+    "title": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "search": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "replace": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "memo": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "settings": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "manuscriptUnchanged": true
+  },
+  "mobile": {
+    "320x568": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 211,
+        "navHeight": 37,
+        "toggle": {
+          "w": 51,
+          "h": 28,
+          "x": 245,
+          "y": 284
+        },
+        "expanded": "false",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 24,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 140,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 172,
+          "y": 284
+        },
+        "split": null,
+        "progress": null
+      },
+      "navigation": [
+        "編集ページ 2 / 6",
+        "編集ページ 1 / 6"
+      ],
+      "expanded": {
+        "overflow": false,
+        "editorHeight": 181,
+        "navHeight": 68,
+        "toggle": {
+          "w": 62,
+          "h": 28,
+          "x": 239,
+          "y": 284
+        },
+        "expanded": "true",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 19,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 134,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 166,
+          "y": 284
+        },
+        "split": {
+          "w": 80,
+          "h": 27,
+          "x": 93,
+          "y": 316
+        },
+        "progress": {
+          "w": 51,
+          "h": 15,
+          "x": 177,
+          "y": 321
+        }
+      },
+      "collapsedByKeyboard": true,
+      "selectAllWhileCollapsed": true,
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "360x640": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 283,
+        "navHeight": 37,
+        "toggle": {
+          "w": 51,
+          "h": 28,
+          "x": 265,
+          "y": 284
+        },
+        "expanded": "false",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 44,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 160,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 192,
+          "y": 284
+        },
+        "split": null,
+        "progress": null
+      },
+      "navigation": [
+        "編集ページ 2 / 6",
+        "編集ページ 1 / 6"
+      ],
+      "expanded": {
+        "overflow": false,
+        "editorHeight": 253,
+        "navHeight": 68,
+        "toggle": {
+          "w": 62,
+          "h": 28,
+          "x": 259,
+          "y": 284
+        },
+        "expanded": "true",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 39,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 154,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 186,
+          "y": 284
+        },
+        "split": {
+          "w": 80,
+          "h": 27,
+          "x": 113,
+          "y": 316
+        },
+        "progress": {
+          "w": 51,
+          "h": 15,
+          "x": 197,
+          "y": 321
+        }
+      },
+      "collapsedByKeyboard": true,
+      "selectAllWhileCollapsed": true,
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "390x844": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 487,
+        "navHeight": 37,
+        "toggle": {
+          "w": 51,
+          "h": 28,
+          "x": 280,
+          "y": 284
+        },
+        "expanded": "false",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 59,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 175,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 207,
+          "y": 284
+        },
+        "split": null,
+        "progress": null
+      },
+      "navigation": [
+        "編集ページ 2 / 6",
+        "編集ページ 1 / 6"
+      ],
+      "expanded": {
+        "overflow": false,
+        "editorHeight": 457,
+        "navHeight": 68,
+        "toggle": {
+          "w": 62,
+          "h": 28,
+          "x": 274,
+          "y": 284
+        },
+        "expanded": "true",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 54,
+          "y": 284
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 169,
+          "y": 284
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 69,
+          "h": 27,
+          "x": 201,
+          "y": 284
+        },
+        "split": {
+          "w": 80,
+          "h": 27,
+          "x": 88,
+          "y": 316
+        },
+        "progress": {
+          "w": 130,
+          "h": 15,
+          "x": 172,
+          "y": 321
+        }
+      },
+      "collapsedByKeyboard": true,
+      "selectAllWhileCollapsed": true,
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "768x1024": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 593,
+        "navHeight": 83,
+        "toggle": null,
+        "expanded": "false",
+        "prev": {
+          "w": 28,
+          "h": 28,
+          "x": 74,
+          "y": 287
+        },
+        "next": {
+          "w": 28,
+          "h": 28,
+          "x": 213,
+          "y": 287
+        },
+        "indicator": "編集ページ 1 / 6",
+        "indicatorVisible": true,
+        "selectAll": {
+          "w": 73,
+          "h": 25,
+          "x": 253,
+          "y": 289
+        },
+        "split": {
+          "w": 84,
+          "h": 25,
+          "x": 158,
+          "y": 319
+        },
+        "progress": {
+          "w": 318,
+          "h": 13,
+          "x": 41,
+          "y": 348
+        }
+      },
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "surface": "FULL",
+  "ctrlA": {
+    "type": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "enter": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "backspace": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "delete": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "paste": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "ime": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    },
+    "cut": {
+      "stateAfterCtrlA": null,
+      "mountedSelected": true,
+      "result": true,
+      "undoRestores": true,
+      "redoReapplies": true
+    }
+  },
+  "inputs": {
+    "title": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "search": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "replace": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "memo": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "settings": {
+      "fieldSelected": true,
+      "editorWholeSelection": false
+    },
+    "manuscriptUnchanged": true
+  },
+  "mobile": {
+    "320x568": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 248,
+        "navHeight": 0,
+        "toggle": null,
+        "expanded": null,
+        "prev": null,
+        "next": null,
+        "indicator": null,
+        "indicatorVisible": false,
+        "selectAll": null,
+        "split": null,
+        "progress": null
+      },
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "360x640": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 320,
+        "navHeight": 0,
+        "toggle": null,
+        "expanded": null,
+        "prev": null,
+        "next": null,
+        "indicator": null,
+        "indicatorVisible": false,
+        "selectAll": null,
+        "split": null,
+        "progress": null
+      },
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "390x844": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 524,
+        "navHeight": 0,
+        "toggle": null,
+        "expanded": null,
+        "prev": null,
+        "next": null,
+        "indicator": null,
+        "indicatorVisible": false,
+        "selectAll": null,
+        "split": null,
+        "progress": null
+      },
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    },
+    "768x1024": {
+      "initial": {
+        "overflow": false,
+        "editorHeight": 676,
+        "navHeight": 0,
+        "toggle": null,
+        "expanded": null,
+        "prev": null,
+        "next": null,
+        "indicator": null,
+        "indicatorVisible": false,
+        "selectAll": null,
+        "split": null,
+        "progress": null
+      },
+      "searchOverflow": false,
+      "exportMenu": {
+        "opened": true,
+        "overflow": false
+      }
+    }
+  }
+}

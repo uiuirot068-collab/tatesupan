@@ -7,16 +7,16 @@ const source = (path: string) => readFileSync(resolve(path), "utf8");
 describe("TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §C/§D: Ctrl+A and explicit full-manuscript selection", () => {
   const editor = source("src/components/PagedEditor.tsx");
 
-  it("no longer intercepts Ctrl/Cmd+A to select the whole manuscript", () => {
-    // The keydown handler must not branch on the "a" key at all anymore --
-    // only undo (z) and redo (y / shift+z) remain intercepted.
+  it("Ctrl/Cmd+A in the editor selects the whole manuscript through the SAME action as 全文を選択 (product decision 2026-09-29, superseding §C's page-only Ctrl+A)", () => {
     const handler = editor.slice(editor.indexOf("const handleKeyDown ="), editor.indexOf("const handleSelect ="));
-    expect(handler).not.toMatch(/key === "a"/);
+    expect(handler).toMatch(/key === "a" && !event\.shiftKey && !event\.altKey\) \{\s*event\.preventDefault\(\);\s*selectEntireManuscript\(\);/);
+    // Still inside the not-composing guard, and undo/redo stay intercepted.
+    expect(handler.indexOf('key === "a"')).toBeGreaterThan(handler.indexOf("!event.nativeEvent.isComposing"));
     expect(handler).toContain('key === "z"');
     expect(handler).toContain('key === "y"');
   });
 
-  it("exposes an explicit 全文を選択 action as the only way into full-manuscript selection", () => {
+  it("exposes 全文を選択 as the explicit (button) way into full-manuscript selection", () => {
     expect(editor).toContain("const selectEntireManuscript = ()");
     expect(editor).toContain("const deselectEntireManuscript = ()");
     expect(editor).toContain("全文を選択");

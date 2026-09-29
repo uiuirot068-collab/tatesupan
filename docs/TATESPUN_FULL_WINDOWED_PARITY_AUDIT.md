@@ -216,7 +216,20 @@ were updated to the new call strings. Each keeps the same checked arguments plus
 5. **FULL-side F-01** (改ページ挿入 cannot be undone on FULL). This matters only if FULL remains the
    default.
 
-## 8. Readiness
+## 8. Update 2026-09-29: decisions applied
+
+The open decisions in §7 were made. Details and verification are in
+`TATESPUN_WINDOWED_DEFAULT_READINESS.md`.
+
+| ID | decision | result |
+|---|---|---|
+| G-03 Ctrl+A | whole manuscript (FULL semantics), through the existing 「全文を選択」 action; inputs keep their own select-all | **CLOSED.** Parity `longCtrlASemantics`: Ctrl+A then type keeps 1 char on both surfaces. |
+| G-04 cross-page selection | not provided. Specified way: 全文を選択 / Ctrl+A, or 前のページとつなぐ. Wording added to /howto. | **SPECIFIED (by design)** |
+| G-07 undo granularity | WINDOWED batching is the specification | **SPECIFIED (by design)** |
+| G-09 phone height | the navigator collapses on phones (starts collapsed): 320×568 goes from 181 to 211 px | **CLOSED** |
+| exit rule | Ctrl+A's own keyup cleared 全文選択 through the old one-shot guard, so the rule became "全文選択 lasts while the mounted page stays fully selected". A click inside the selection collapses it only through a late `selectionchange` that React's `onSelect` misses, so a native listener ends it (verified: a click after Ctrl+A, after the button and after a double Ctrl+A all end it) | **IMPLEMENTED** |
+
+## 9. Readiness (as of 6200dc2; superseded by the readiness doc)
 
 **WINDOWED DEFAULT READY: CONDITIONAL.** After these fixes there is no known P0. Save, restore,
 export, the Preview and search/replace are identical on both surfaces. The two P1 differences

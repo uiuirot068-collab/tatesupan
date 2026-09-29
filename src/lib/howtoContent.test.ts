@@ -54,6 +54,11 @@ describe("Editor Page explanation (req #10)", () => {
     expect(EDITOR_PAGE_EXPLANATION_BODY).toContain("前のページとつなぐ");
   });
 
+  it("names the way to operate on the whole manuscript across 編集ページ (全文を選択 / Ctrl+A), as a how-to, not a limitation", () => {
+    expect(EDITOR_PAGE_EXPLANATION_BODY).toContain("編集ページをまたいで原稿全体を操作するときは、「全文を選択」または Ctrl+A を使います。");
+    for (const negative of ["制限", "未完成", "できません"]) expect(EDITOR_PAGE_EXPLANATION_BODY).not.toContain(negative);
+  });
+
   it("never leaks internal implementation terminology", () => {
     const forbidden = ["forcedBoundaries", "joinedRanges", "WINDOWED", "FULL"];
     for (const term of forbidden) {

@@ -34,19 +34,22 @@
  * full-document shadow textarea (Phase 8; Phase 14's "no second 300k
  * editable DOM").
  *
- * SELECTION: TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §C/§D -- Ctrl/Cmd+A is
- * native, unintercepted browser "select all" over the MOUNTED page only
- * (matching what's actually visible/editable, and ordinary user
- * expectation of the shortcut). Selecting the WHOLE canonical manuscript
- * (for Copy/Cut/typed-replacement) is instead an explicit, separate
- * "全文を選択" action (see `selectEntireManuscript`) -- `allSelectedRef`
- * (and the `isFullManuscriptSelected` state mirroring it for the button's
- * own label) is now ONLY ever set by that action, never by Ctrl+A.
+ * SELECTION: the WHOLE canonical manuscript (for Copy/Cut/typed-replacement)
+ * is selected by the 「全文を選択」 action or by Ctrl/Cmd+A in the editor --
+ * both call `selectEntireManuscript`, so they are one state
+ * (`allSelectedRef`, mirrored into `isFullManuscriptSelected` for the
+ * button's label). This matches the single-textarea (FULL) editor, where
+ * Ctrl+A covers the whole manuscript (product decision, 2026-09-29; it
+ * replaces TSP-010 §C's page-only Ctrl+A). An ordinary drag/Shift selection
+ * stays within the mounted 編集ページ: operating on text across pages goes
+ * through 全文を選択 / Ctrl+A, or 前のページとつなぐ
+ * (docs/TATESPUN_WINDOWED_DEFAULT_READINESS.md).
  */
 
 import {
   forwardRef,
   useEffect,
+  useId,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -303,7 +306,6 @@ function PagedEditorInner(
     allSelectedRef.current = value;
     setIsFullManuscriptSelected(value);
   };
-  const justSetAllSelectedRef = useRef(false);
   const contentRef = useRef(content);
   useEffect(() => {
     contentRef.current = content;
@@ -336,6 +338,13 @@ function PagedEditorInner(
   // `forcedBoundaries`, and kept in sync with edits the same way (via
   // `adjustJoinedRanges` inside `commitCanonical`).
   const [joinedRanges, setJoinedRanges] = useState<JoinedEditorPageRange[]>([]);
+
+  // Phones only (< md): whether the 編集ページ navigator shows its secondary
+  // tools (ここで区切る / 前のページとつなぐ / progress). Starts collapsed to
+  // give the manuscript its height; ←/→, the page indicator and 全文を選択 are
+  // always in the row. Session-only UI state, never persisted.
+  const [pageToolsExpanded, setPageToolsExpanded] = useState(false);
+  const pageToolsId = useId();
 
   // TSP-EDITOR-MANUAL-SPLIT-AND-BACKSPACE-HOTFIX-012B §C: the textarea's own
   // live selection, in GLOBAL (canonical) offsets, purely so
@@ -833,11 +842,26 @@ function PagedEditorInner(
   const selectEntireManuscript = () => {
     if (isComposingRef.current) return;
     setAllSelected(true);
-    justSetAllSelectedRef.current = true;
     const el = textareaRef.current;
     el?.focus({ preventScroll: true });
     el?.setSelectionRange(0, el.value.length);
   };
+
+  // A click INSIDE the full-page selection collapses it only after `click`
+  // (a late native `selectionchange`, which React's onSelect does not report),
+  // so neither onClick nor onSelect sees it: end 全文選択 from the native event.
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const el = textareaRef.current;
+      if (!allSelectedRef.current || !el || document.activeElement !== el) return;
+      if (el.selectionStart !== 0 || el.selectionEnd !== el.value.length) {
+        allSelectedRef.current = false;
+        setIsFullManuscriptSelected(false);
+      }
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
 
   const deselectEntireManuscript = () => {
     setAllSelected(false);
@@ -852,6 +876,16 @@ function PagedEditorInner(
     const isMod = event.ctrlKey || event.metaKey;
     if (isMod && !event.nativeEvent.isComposing) {
       const key = event.key.toLowerCase();
+      // Product decision (docs/TATESPUN_WINDOWED_DEFAULT_READINESS.md): Ctrl/Cmd+A
+      // in the editor selects the WHOLE manuscript, as in the single-textarea
+      // (FULL) editor -- the same state as the 「全文を選択」 action. Only this
+      // textarea's own keydown is handled, so Ctrl+A in the search, settings
+      // and other inputs keeps the browser's own field select-all.
+      if (key === "a" && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        selectEntireManuscript();
+        return;
+      }
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         runHistory("undo");
@@ -871,11 +905,12 @@ function PagedEditorInner(
 
   const handleSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
-    if (justSetAllSelectedRef.current) {
-      justSetAllSelectedRef.current = false;
-    } else {
-      setAllSelected(false);
-    }
+    // 全文選択 lasts exactly while the mounted page stays fully selected: any
+    // click / arrow / drag that changes that ends it. (A one-shot "ignore the
+    // next select event" guard used to live here; it failed for Ctrl+A, whose
+    // own keyup reaches this handler after the select event, and it could go
+    // stale when the page was already fully selected.)
+    if (el.selectionStart !== 0 || el.selectionEnd !== el.value.length) setAllSelected(false);
     // §C: the ONE place a genuinely non-collapsed selection can appear (a
     // user drag-select) -- captures the true range, unlike `reportCaret`
     // (used everywhere else, always with a single already-collapsed
@@ -1294,17 +1329,16 @@ function PagedEditorInner(
         >
           <span aria-hidden="true">→</span>
         </button>
-        {/* TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: Ctrl/Cmd+A only ever
-            selects the mounted page now (native browser behaviour); this is
-            the sole entry point for the explicit full-canonical-manuscript
-            selection Copy/Cut/replace need. Unmounted pages have no DOM to
-            visually select, so the active state is announced in the label
-            itself instead of relying on a native highlight spanning pages
-            it can't reach. */}
+        {/* 全文を選択 (also Ctrl/Cmd+A in the editor): the whole-manuscript
+            selection Copy/Cut/replace use across 編集ページ. Unmounted pages
+            have no DOM to visually select, so the active state is announced
+            in the label itself instead of a native highlight spanning pages
+            it can't reach. Stays in the row on phones too (never folded). */}
         <button
           type="button"
           aria-pressed={isFullManuscriptSelected}
           data-editor-select-all=""
+          title={isFullManuscriptSelected ? "全文の選択を解除します（Esc）" : "原稿全体を選択します（Ctrl+A）。編集ページをまたいで操作するときに使います。"}
           onClick={isFullManuscriptSelected ? deselectEntireManuscript : selectEntireManuscript}
           className={`whitespace-nowrap rounded-full border px-1.5 py-1 text-[11px] font-medium sm:px-2 ${
             isFullManuscriptSelected
@@ -1314,6 +1348,24 @@ function PagedEditorInner(
         >
           {isFullManuscriptSelected ? "全文選択中　解除" : "全文を選択"}
         </button>
+        {/* Phones (< md) only: folds the less frequent page tools below into
+            this one row to give the manuscript its height back (320×568:
+            181 → FULL-like height). Session-only UI state, never persisted;
+            desktop/tablet never render the toggle and always show the tools. */}
+        <button
+          type="button"
+          data-editor-page-tools-toggle=""
+          aria-expanded={pageToolsExpanded}
+          aria-controls={pageToolsId}
+          aria-label={pageToolsExpanded ? "編集ページの操作を閉じる" : "編集ページの操作（ここで区切る・前のページとつなぐ・文字数）を開く"}
+          onClick={() => setPageToolsExpanded((open) => !open)}
+          className="inline-flex min-h-7 items-center gap-0.5 whitespace-nowrap rounded-full border border-ink/20 px-2 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:hidden"
+        >
+          {!pageToolsExpanded && isWaitingForBoundary && <span aria-hidden="true" className="text-amber-600">●</span>}
+          {pageToolsExpanded ? "閉じる" : "操作"}
+          <span aria-hidden="true">{pageToolsExpanded ? "▴" : "▾"}</span>
+        </button>
+        <span id={pageToolsId} data-editor-page-tools="" data-expanded={pageToolsExpanded ? "true" : "false"} className={`contents ${pageToolsExpanded ? "" : "max-md:hidden"}`}>
         <button
           type="button"
           data-editor-force-split=""
@@ -1371,6 +1423,7 @@ function PagedEditorInner(
             <span className="min-[375px]:hidden">{compactProgressLabel}</span>
             <span className="hidden min-[375px]:inline">{progressLabel}</span>
           </span>
+        </span>
         </span>
       </div>
 
