@@ -64,7 +64,9 @@ describe("TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E: forced boundaries stay mea
   const editor = source("src/components/PagedEditor.tsx");
 
   it("computeEditorPages is called with the current forcedBoundaries state, not recomputed from scratch each time", () => {
-    expect(editor).toMatch(/computeEditorPages\(content, \{ forcedBoundaries, joinedRanges \}\)/);
+    expect(editor).toMatch(/paginate\(content, \{ forcedBoundaries, joinedRanges \}\)/);
+    // `paginate` is computeEditorPages behind a single-entry identity cache (one pagination per transaction).
+    expect(editor).toContain("const result = computeEditorPages(text, state);");
   });
 
   it("commitCanonical adjusts forcedBoundaries via adjustForcedBoundaries, gated on non-empty so the common case (no manual split yet) stays a single length check", () => {

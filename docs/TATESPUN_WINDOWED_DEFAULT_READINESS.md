@@ -27,8 +27,10 @@ Implementation, all in `PagedEditor.tsx`:
 - Because only that textarea's `keydown` is handled, **Ctrl+A in any other field keeps the browser's
   own field select-all**: search, replace, title, memo and settings inputs. Nothing global binds
   Ctrl+A (`useShortcuts` has only S, +, - and 0).
-- The exit rule is now simply: **全文選択 lasts exactly while the mounted page stays fully
-  selected.** A click, an arrow key, a drag or Esc ends it.
+- The exit rule: **全文選択 lasts while the mounted page stays fully selected.** A click, an arrow
+  key, a drag or Esc ends it. Since the real-OS IME fix (§8a) a selection move that no pointer or
+  navigation key made (an IME/TSF's own, or a phone's selection-handle drag) ends it only if no IME
+  key or composition follows within 300 ms.
   - This replaces a one-shot "ignore the next select event" guard. That guard failed for Ctrl+A,
     because the shortcut's own `keyup` reached the selection handler after the `select` event.
   - Under that rule, a click **inside** the selection collapses it only through a late native
@@ -190,16 +192,64 @@ All checks used production static builds, run in the same session.
 - **Unchanged:** no schema, migration, Core, Preview, PDF/JPG, colophon, ノンブル or image-lifecycle
   change; FULL behaviour unchanged.
 
+## 8a. Real-OS IME transaction model (after Human QA on `f937777`)
+
+Windows real-OS Human QA on `f937777` FAILED two items, although every headless E2E passed:
+
+1. 全文選択 (300k) + IME commit: sometimes "ページが応答しません"; otherwise about one 編集ページ of
+   old text stayed next to the committed text. One undo restored and redo re-applied.
+2. A ~30k selection from the start of 編集ページ 8/8 + IME: the replacement was right, but the page
+   count dropped (8 → 7) and the caret / view did not follow to the committed text.
+
+Headless models of real-OS orderings (`windowedWholeReplace` `model-*`, `seq-*`,
+`range-last-merge`) reproduced both on `f937777`:
+
+- a selection move before the IME key's keydown ended 全文選択, leaving 291k old characters;
+- an IME deletion of the selection before compositionstart was committed on its own: two undo steps,
+  or a deleted page (a partial commit) when uncancelable and the composition was canceled;
+- after a page-count-changing replacement, the caret stayed at the OS's old page-local offset.
+
+The model now, in `PagedEditor.tsx`:
+
+- **An IME key (keyCode 229 / Process) over 全文選択 opens the whole transaction** (pre-phase),
+  before any IME effect. Membership never depends on the native selection or value.
+- **Only the user's own selection gesture ends 全文選択 at once** (pointer down on the textarea, a
+  navigation key). Any other selection move ends it only if no IME transaction starts within 300 ms.
+- **An IME deletion before compositionstart is absorbed** (prevented, or mirrored when uncancelable),
+  never committed alone. The composition that follows commits once. A canceled composition leaves
+  the manuscript unchanged. With no composition at all (a soft-keyboard Backspace), it deletes the
+  whole manuscript once.
+- **The whole replacement text is the IME's committed string only** (compositionend data, else its
+  last update). The textarea's value is never read for it. After the commit, the textarea is checked
+  against the manuscript's page again once the IME has finished.
+- **No page-local commit from a diverged textarea:** an edit whose textarea did not hold the
+  manuscript's page when it began is refused and the page is restored.
+- **Page follow:** the caret is placed right after the committed text, computed from the edit, on the
+  page that now holds it. This holds even when the replacement changes the page's start, end or the
+  page count. The caret is scrolled into view and re-applied after the IME has finished, unless the
+  user acted meanwhile.
+- **One pagination per transaction:** the render reuses the pagination the commit computed.
+
+Headless profile (300k, 全文選択 + IME conversion + commit): 1 commit, 1 pagination, 0 long tasks,
+about 30–70 ms from commit to the next frame. The real-OS freeze did not reproduce headless, so its
+cause is not proven. Capture a real-OS trace with `?perfDebug=1`: run
+`__tspPerfDebug.getReport({})` in the console. It records every keydown / keyup / beforeinput / input
+/ composition / selectionchange with lengths and state flags only, never text.
+
 ## 9. Human QA still required
 
-1. **Real OS Japanese IME on WINDOWED:** ordinary text, conversion while 全文選択 is active, and
-   conversion near an 編集ページ boundary.
+1. **Real OS Japanese IME on WINDOWED** (re-run, it failed on `f937777`): conversion while 全文選択
+   is active (300k), a ~30k selection replaced from the start of the last 編集ページ (the page count
+   drops), ordinary text, and conversion near an 編集ページ boundary. On any failure, attach the
+   `?perfDebug=1` trace.
 2. **A real phone** (touch and soft keyboard): the collapsed navigator (toggle, ←/→), touch text
-   selection, and typing with the keyboard open.
+   selection (including dragging the selection handles after 全文を選択), Backspace over 全文選択,
+   and typing with the keyboard open.
 
 ## 10. Readiness
 
-**WINDOWED DEFAULT READY: YES (pending the 2 Human QA items in §9).**
+**WINDOWED DEFAULT READY: NO until the real-OS IME Human QA (§9.1) passes on the §8a fix.** The
+automated gates pass (§8, §8a).
 
 Against the criteria:
 
@@ -216,5 +266,6 @@ Against the criteria:
   does not occur on WINDOWED.
 - **AI QA:** PASS.
 
-The only residue is real-device IME and touch behaviour, which a headless browser cannot judge.
-The default was **not** switched in this step.
+The residue is real-device IME and touch behaviour, which a headless browser cannot judge. The
+real-OS IME check found two failures on `f937777` (§8a), and they must pass again on the fix. The
+default was **not** switched in this step.

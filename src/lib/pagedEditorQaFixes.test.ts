@@ -51,8 +51,14 @@ describe("TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: page-switch selection 
       editor.indexOf("const finishComposition ="),
       editor.indexOf("const handleChange =")
     );
-    expect(compositionEnd).toContain("computeEditorPages(nextCanonical, nextState)");
-    expect(compositionEnd).toContain("editorPageForGlobalOffset(nextPages, globalCaret)");
-    expect(compositionEnd).toContain("switchToPageForOffset(globalCaret, nextPages, undefined, { focus: keepFocus })");
+    expect(compositionEnd).toContain("const nextPages = paginate(nextCanonical, nextState);");
+    expect(compositionEnd).toContain("editorPageForGlobalOffset(nextPages, globalCaret, affinity)");
+    // Human QA 2: a large replacement that changes the page count (joins the
+    // page before) still lands the caret right after the committed text, on
+    // its page, scrolled into view -- and re-applied after the IME has finished.
+    expect(compositionEnd).toContain("const globalCaret = edit.rangeStart + edit.insertedText.length;");
+    expect(compositionEnd).toMatch(/const resliced =\s*targetIndex !== safePageIndex \|\|\s*targetPage\.start !== currentPage\.start \|\|\s*nextCanonical\.slice\(targetPage\.start, targetPage\.end\) !== finalPageText;/);
+    expect(compositionEnd).toMatch(/switchToPageForOffset\(globalCaret, nextPages, undefined, \{\s*focus: keepFocus,\s*affinity,\s*scrollHint: "upper",\s*nextContent: nextCanonical,\s*\}\)/);
+    expect(compositionEnd).toContain("scheduleImeSettle(globalCaret, affinity, true)");
   });
 });

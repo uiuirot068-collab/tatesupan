@@ -91,7 +91,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic ca
       editor.indexOf("const handleChange =")
     );
     expect(compositionEnd).toMatch(
-      /switchToPageForOffset\(\s*pendingJump\.end,\s*computeEditorPages\(contentRef\.current, \{ forcedBoundaries, joinedRanges \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/
+      /switchToPageForOffset\(\s*pendingJump\.end,\s*paginate\(contentRef\.current, \{ forcedBoundaries, joinedRanges \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/
     );
   });
 

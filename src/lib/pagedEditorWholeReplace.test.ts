@@ -26,27 +26,84 @@ describe("an IME composition (one transaction; see compositionTransaction.test.t
   const finish = between("const finishComposition =", "const handleChange =");
   const change = between("const handleChange =", "const deleteAcrossBoundaryBackward =");
 
-  it("is recognised as 全文選択 from 全文選択 itself, not the DOM selection the IME may already have moved", () => {
-    expect(begin).toContain("whole: allSelectedRef.current,");
+  it("is recognised as 全文選択 from 全文選択 itself (or its IME pre-phase), not the DOM selection the IME may already have moved", () => {
+    expect(begin).toContain("whole: allSelectedRef.current || pre !== null,");
     expect(begin).toContain("baseCanonical: content,");
     expect(begin).not.toContain("el.selectionStart === 0 && el.selectionEnd === el.value.length");
   });
 
-  it("an IME keydown over 全文選択 keeps it through the IME's own selection move before compositionstart", () => {
+  it("an IME keydown over 全文選択 opens the transaction's pre-composition phase, whatever the DOM selection", () => {
     const keyDown = between("const handleKeyDown =", "const handleSelect =");
-    expect(keyDown).toMatch(/wholeInputArmedRef\.current =\s*allSelectedRef\.current &&\s*!isComposingRef\.current &&\s*\(event\.key === "Process" \|\| event\.nativeEvent\.keyCode === 229\);/);
-    const listener = between("const onSelectionChange = () => {", 'document.addEventListener("selectionchange"');
-    expect(listener).toContain("wholeInputArmedRef.current || isComposingRef.current");
-    const select = between("const handleSelect =", "const handleKeyUp =");
-    expect(select).toContain("!wholeInputArmedRef.current &&");
-    expect(select).toContain("!isComposingRef.current &&");
+    expect(keyDown).toContain('const imeKey = event.key === "Process" || event.nativeEvent.keyCode === 229;');
+    expect(keyDown).toMatch(/if \(allSelectedRef\.current && !isComposingRef\.current && !wholeImePreRef\.current\) \{\s*wholeImePreRef\.current = \{ absorbed: false \};/);
+    // The composition takes the pre-phase over.
+    expect(begin).toMatch(/const pre = wholeImePreRef\.current;\s*wholeImePreRef\.current = null;/);
   });
 
-  it("the arming ends at pointerdown, blur and the composition -- NOT at keyup (a real-OS keyup can precede compositionstart)", () => {
-    expect(between("const handleKeyUp =", "const disarmWholeInput =")).not.toContain("wholeInputArmedRef.current = false;");
-    expect(editor).toContain("onPointerDown={disarmWholeInput}");
-    expect(between("const handleBlur =", "const handleCompositionStart =")).toContain("wholeInputArmedRef.current = false;");
-    expect(begin).toContain("wholeInputArmedRef.current = false;");
+  it("only the user's own selection gesture (pointer / navigation key) may end 全文選択 -- never a selection move the IME/TSF makes, in any order", () => {
+    const listener = between("const onSelectionChange = () => {", 'document.addEventListener("selectionchange"');
+    expect(listener).toContain("endWholeSelectionIfLeft(el);");
+    expect(between("const handleSelect =", "const handleKeyUp =")).toContain("endWholeSelectionIfLeft(el);");
+    const rule = between("const endWholeSelectionIfLeft =", "useEffect(() => {\n    const onSelectionChange");
+    // Never while an IME transaction (pre-phase or composition) is open.
+    expect(rule).toContain("if (!allSelectedRef.current || wholeImePreRef.current || isComposingRef.current) return;");
+    // A move nobody gestured (the IME/TSF's -- or a phone's selection-handle
+    // drag, which sends no pointer event) ends 全文選択 only if no IME
+    // transaction has started SELECTION_DRIFT_MS later.
+    expect(rule).toContain("}, SELECTION_DRIFT_MS);");
+    expect(rule).toContain("if (wholeImePreRef.current || compositionTxnRef.current || isComposingRef.current) return;");
+    const keyDown = between("const handleKeyDown =", "const handleSelect =");
+    // Every keydown clears the gesture; only a navigation key sets it again.
+    expect(keyDown).toContain("selectionGestureRef.current = false;");
+    expect(keyDown).toContain("SELECTION_GESTURE_KEYS.has(event.key)) selectionGestureRef.current = true;");
+    expect(editor).toContain('const SELECTION_GESTURE_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);');
+    expect(between("const handlePointerDown =", "const handleBlur =")).toContain("selectionGestureRef.current = true;");
+    expect(editor).toContain("onPointerDown={handlePointerDown}");
+    // Entering 全文選択 forgets an earlier gesture; so does the composition.
+    expect(between("const selectEntireManuscript =", "useEffect(() => {\n    const onSelectionChange")).toContain("selectionGestureRef.current = false;");
+    expect(begin).toContain("selectionGestureRef.current = false;");
+  });
+
+  it("the pre-phase ends at a non-IME key, pointerdown, blur or the composition -- NOT at keyup (a real-OS keyup can precede compositionstart)", () => {
+    expect(between("const handleKeyUp =", "const handlePointerDown =")).not.toContain("endWholeImePre");
+    expect(between("const handleKeyDown =", "const handleSelect =")).toMatch(/\} else if \(!IME_NEUTRAL_KEYS\.has\(event\.key\)\) \{\s*endWholeImePre\("keydown"\);/);
+    expect(between("const handlePointerDown =", "const handleBlur =")).toContain('endWholeImePre("pointer");');
+    expect(between("const handleBlur =", "const handleCompositionStart =")).toContain('endWholeImePre("blur");');
+  });
+
+  it("an IME deletion before compositionstart is absorbed (cancelable or not), never committed on its own", () => {
+    const handler = between("const handleBeforeInputNative =", "useEffect(() => {\n    const el = textareaRef.current;");
+    expect(handler).toMatch(/if \(wholeImePreRef\.current && inputType\.startsWith\("delete"\)\) \{[\s\S]*?if \(nativeEvent\.cancelable\) nativeEvent\.preventDefault\(\);[\s\S]*?return;\s*\}/);
+    // An uncancelable one reaches `input`: mirrored, not committed.
+    expect(change).toMatch(/if \(wholeImePreRef\.current\) \{[\s\S]*?setCompositionText\(nextPageText\);\s*return;\s*\}/);
+    expect(change.indexOf("if (wholeImePreRef.current) {")).toBeLessThan(change.indexOf("const pendingWhole = pendingWholeInsertRef.current;"));
+  });
+
+  it("an absorbed deletion with NO composition after it (a soft-keyboard Backspace) deletes the whole manuscript once", () => {
+    const end = between("const endWholeImePre =", "const armWholeImePreWindow =");
+    expect(end).toMatch(/if \(!pre\.absorbed\) return;\s*setCompositionText\(null\);\s*replaceWholeDocument\("", \{ focus: reason !== "blur" \}\);/);
+    expect(between("const armWholeImePreWindow =", "useLayoutEffect(() => {\n    latestHandlersRef")).toContain("WHOLE_IME_PRE_WINDOW_MS");
+  });
+
+  it("never commits from a textarea that no longer held the manuscript's page when the edit began", () => {
+    expect(change).toMatch(/if \(pending && pending\.beforeText !== pageTextRef\.current\) \{[\s\S]*?el\.value = pageTextRef\.current;[\s\S]*?return;\s*\}/);
+    // pageTextRef is the page React just committed (a layout effect, not a passive one).
+    expect(editor).toMatch(/useLayoutEffect\(\(\) => \{\s*pageTextRef\.current = pageText;\s*\}\);/);
+  });
+
+  it("re-applies the committed caret (and the manuscript's page) after the IME has finished, unless the user acted", () => {
+    const settle = between("const runImeSettle =", "const reanchorForExternalContent =");
+    expect(settle).toContain("if (el.value !== pageText) {");
+    expect(settle).toContain("el.setSelectionRange(local, local);");
+    expect(finish).toContain('if (keepFocus) scheduleImeSettle(outcome.text.length, "backward", true);');
+    for (const [from, to] of [
+      ["const handleKeyDown =", "const handleSelect ="],
+      ["const handlePointerDown =", "const handleBlur ="],
+      ["const handleBlur =", "const handleCompositionStart ="],
+    ]) {
+      expect(between(from, to)).toContain("cancelImeSettle();");
+    }
+    expect(begin).toContain("cancelImeSettle();");
   });
 
   it("commits nothing while composing, page-local or 全文選択: the textarea mirrors the IME", () => {

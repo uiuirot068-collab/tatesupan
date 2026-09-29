@@ -32,11 +32,14 @@ describe("Ctrl/Cmd+A = 全文選択", () => {
 
   it("全文選択 lasts exactly while the mounted page stays fully selected (Ctrl+A's own keyup must not end it)", () => {
     const select = between("const handleSelect =", "const handleBlur =");
-    // Ends only when the page is no longer fully selected, and never for an
-    // IME key's own selection move or a composition's caret.
-    expect(select).toMatch(
-      /allSelectedRef\.current &&\s*!wholeInputArmedRef\.current &&\s*!isComposingRef\.current &&\s*\(el\.selectionStart !== 0 \|\| el\.selectionEnd !== el\.value\.length\)\s*\)\s*\{\s*setAllSelected\(false\);/
-    );
+    expect(select).toContain("endWholeSelectionIfLeft(el);");
+    // Ends only when the page is no longer fully selected: at once for the
+    // user's own selection gesture, and for a move nobody gestured only when no
+    // IME transaction follows -- never an IME's move or a composition's caret.
+    const rule = between("const endWholeSelectionIfLeft =", "useEffect(() => {\n    const onSelectionChange");
+    expect(rule).toContain("if (!allSelectedRef.current || wholeImePreRef.current || isComposingRef.current) return;");
+    expect(rule).toContain("if (el.selectionStart === 0 && el.selectionEnd === el.value.length) return;");
+    expect(rule).toMatch(/if \(selectionGestureRef\.current\) \{\s*allSelectedRef\.current = false;\s*setIsFullManuscriptSelected\(false\);\s*return;\s*\}/);
     expect(editor).not.toContain("justSetAllSelectedRef");
   });
 
@@ -45,7 +48,8 @@ describe("Ctrl/Cmd+A = 全文選択", () => {
     expect(effect).toContain("onSelectionChange");
     const handler = between("const onSelectionChange = () => {", 'document.addEventListener("selectionchange"');
     expect(handler).toContain("document.activeElement !== el");
-    expect(handler).toContain("el.selectionStart !== 0 || el.selectionEnd !== el.value.length");
+    // The same rule as onSelect (a click is a pointer gesture: it ends 全文選択 at once).
+    expect(handler).toContain("endWholeSelectionIfLeft(el);");
   });
 
   it("the 全文を選択 button names the shortcut", () => {

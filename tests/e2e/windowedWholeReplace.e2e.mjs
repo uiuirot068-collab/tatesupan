@@ -6,9 +6,19 @@
 //     a real IME (keyCode 229 keyDowns, several compositionupdates, commit);
 //   - `model-*` rows additionally model an IME/TSF that narrows the native
 //     selection before compositionstart, cancels the composition, delivers
-//     the IME key's keyup before compositionstart, or never delivers
-//     compositionend -- automation models of the real-OS failure, never a
-//     substitute for the real-OS Human QA;
+//     the IME key's keyup before compositionstart, never delivers
+//     compositionend, moves the selection before the IME key's keydown
+//     (its selectionchange first), deletes the page text itself before
+//     compositionstart (cancelable, or not and then canceled), or deletes
+//     with no composition at all (a soft-keyboard Backspace) -- automation
+//     models of the real-OS failure, never a substitute for the real-OS
+//     Human QA;
+//   - `seq-*`: compositionend leaves the OLD page text in the textarea and
+//     the user keeps typing (a key, a second IME word): no old text, ever;
+//   - `range-last-merge`: a ~30k+ IME replacement from the start of the LAST
+//     編集ページ joins it to the page before (the page count drops), with the
+//     OS moving the caret back after compositionend (modelled): the caret
+//     lands right after the committed text, on its page, visibly;
 //   - each whole row also checks that 全文選択 can be entered again afterwards;
 //   - `range-*` rows: an ordinary ~30k in-page selection (no 全文選択) replaced
 //     by an IME composition (normal / compositionend lost): exact result, one
@@ -135,6 +145,66 @@ const SCENARIOS = [
     await imeCommit("電話");
     await key("Shift", "ShiftLeft", 16);
   }, "電話"],
+  // The IME/TSF moves the native selection BEFORE the IME key's keydown even
+  // reaches the page (its selectionchange is handled first): no key, no
+  // pointer -- 全文選択 must survive a selection move nobody made.
+  ["model-selectionchange-first", async () => {
+    await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.setSelectionRange(el.value.length, el.value.length); })()`);
+    await sleep(150);
+    await imeKey("KeyD", "ｄ");
+    await imeKey("KeyE", "で");
+    await imeCommit("で");
+  }, "で"],
+  // The IME/TSF deletes the (whole-page) native selection itself, as an
+  // ordinary non-composition deletion, BEFORE compositionstart. It is part of
+  // the IME's replacement: never a separate commit of an empty manuscript.
+  ["model-predelete", async () => {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await cdp.evaluate(`document.execCommand("delete")`);
+    await cdp.send("Input.imeSetComposition", { text: "ｄ", selectionStart: 1, selectionEnd: 1 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await imeKey("KeyE", "で");
+    await imeCommit("で");
+  }, "で"],
+  // The same, with a deletion that cannot be canceled (the DOM really loses
+  // the page before compositionstart), then the composition is canceled: the
+  // manuscript must be exactly as it was -- no empty or partial commit.
+  ["model-predelete-uncancelable-cancel", async () => {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.setRangeText("", 0, el.value.length, "end"); el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" })); })()`);
+    await cdp.send("Input.imeSetComposition", { text: "ｄ", selectionStart: 1, selectionEnd: 1 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await imeKey("Escape", "");
+  }, null /* unchanged */],
+  // A soft-keyboard Backspace (Android: keyCode 229, a deletion, no
+  // composition) over 全文選択 still deletes the WHOLE manuscript, once.
+  ["model-soft-backspace", async () => {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Unidentified", code: "", windowsVirtualKeyCode: 229 });
+    await cdp.evaluate(`document.execCommand("delete")`);
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Unidentified", code: "", windowsVirtualKeyCode: 229 });
+    await sleep(500);
+  }, ""],
+];
+
+// 全文選択 + an IME that leaves the OLD page text in the textarea (it composed
+// at a collapsed caret after the page, so compositionend's DOM value is
+// "old page + committed text"), and the user keeps writing: an ordinary key,
+// then a second IME word. No old text may ever reach the manuscript.
+const SEQUENCES = [
+  ["seq-residue-then-typing", async () => {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "d", code: "KeyD", windowsVirtualKeyCode: 68 });
+    await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.setSelectionRange(el.value.length, el.value.length); })()`);
+    await sleep(120);
+    await cdp.send("Input.imeSetComposition", { text: "ｄ", selectionStart: 1, selectionEnd: 1 });
+    await imeKey("KeyE", "で");
+    await imeCommit("で");
+    await frame();
+    await typeChar("x");
+    await imeKey("KeyW", "わ");
+    await imeKey("Space", "話");
+    await imeCommit("話");
+  }, "でx話", 3],
 ];
 
 // An ordinary in-page selection (no 全文選択) of ~30k characters replaced by
@@ -219,14 +289,22 @@ try {
         await key("Shift", "ShiftLeft", 16);
       }, "電話"],
     ];
-    for (const [name, act, typed] of RANGE_SCENARIOS) {
+    // `range-handle-drag`: 全文選択 first, then the selection is narrowed with
+    // no pointer event and no key (a phone's selection-handle drag): once no
+    // IME follows, it is an ordinary selection and the IME replaces ONLY it.
+    RANGE_SCENARIOS.push(["range-handle-drag", RANGE_SCENARIOS[0][1], "電話", { wholeFirst: true }]);
+    for (const [name, act, typed, options] of RANGE_SCENARIOS) {
       if (ONLY && !ONLY.has(name)) continue;
       const id = await openDocument(LONG);
       await realClick(EDITOR);
       const pageText = (await editorState()).value;
       const pageStart = LONG.indexOf(pageText);
+      if (options?.wholeFirst) {
+        await ctrlA();
+        await sleep(300);
+      }
       await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.focus(); el.setSelectionRange(${RANGE_START}, ${RANGE_END}); })()`);
-      await sleep(300);
+      await sleep(options?.wholeFirst ? 700 : 300);
       const selected = await editorState();
       const expected = LONG.slice(0, pageStart + RANGE_START) + typed + LONG.slice(pageStart + RANGE_END);
       const row = { engaged: pageStart >= 0 && !selected.whole && selected.start === RANGE_START && selected.end === RANGE_END, pagesBefore: selected.indicator };
@@ -249,6 +327,79 @@ try {
       log(`${name}: ${JSON.stringify(row)}`);
       if (!(row.engaged && row.editorShowsTyped && row.savedExact && row.undoExact && row.redoExact && row.reselectWorks)) failures.push(name);
     }
+    for (const [name, act, expected, undoSteps] of SEQUENCES) {
+      if (ONLY && !ONLY.has(name)) continue;
+      const id = await openDocument(LONG);
+      await realClick(EDITOR);
+      await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.focus(); const at = Math.floor(el.value.length / 2); el.setSelectionRange(at, at); })()`);
+      await ctrlA();
+      await sleep(300);
+      const row = { engaged: (await editorState()).whole };
+      row.actMs = await timed(act);
+      const shown = await editorState();
+      row.editorShowsExpected = shown.value === expected;
+      const after = await saved(id);
+      row.savedExact = after === expected;
+      row.oldTextLeft = leftover(after, expected);
+      let text = after;
+      for (let i = 0; i < undoSteps; i++) {
+        await undo();
+        await frame();
+        text = await saved(id);
+      }
+      row.undoStepsRestore = text === LONG;
+      report.rows[name] = row;
+      log(`${name}: ${JSON.stringify(row)}`);
+      if (!(row.engaged && row.editorShowsExpected && row.savedExact && row.undoStepsRestore)) failures.push(name);
+    }
+
+    // An ordinary ~30k selection from the start of the LAST 編集ページ replaced
+    // by an IME: the page shrinks enough to join the page before it (the page
+    // count drops). The caret must land right after the committed text, on the
+    // 編集ページ that now holds it, visibly -- also when the OS/IME moves the
+    // native caret back to its own old offset after compositionend (modelled).
+    if (!ONLY || ONLY.has("range-last-merge")) {
+      const id = await openDocument(LONG);
+      for (let guard = 0; guard < 20; guard++) {
+        if (!(await realClick('button[aria-label="次の編集ページへ移動"]'))) break;
+        await sleep(250);
+      }
+      const before = await editorState();
+      const pageText = before.value;
+      const pageStart = LONG.lastIndexOf(pageText);
+      const selEnd = Math.max(1, pageText.length - 2_000);
+      await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.focus(); el.setSelectionRange(0, ${selEnd}); })()`);
+      await sleep(300);
+      await cdp.evaluate(`window.addEventListener("compositionend", (e) => { const el = e.target; const pos = el.selectionEnd; setTimeout(() => el.setSelectionRange(pos, pos), 0); }, { capture: true, once: true })`);
+      const typed = "電話";
+      const expected = LONG.slice(0, pageStart) + typed + LONG.slice(pageStart + selEnd);
+      const row = { pagesBefore: before.indicator, selected: selEnd };
+      row.actMs = await timed(async () => { await imeKey("KeyD", "ｄ"); await imeKey("Space", typed); await imeCommit(typed); });
+      await sleep(400);
+      const shown = await editorState();
+      const caretGlobal = pageStart + typed.length;
+      const mountedStart = expected.lastIndexOf(shown.value);
+      row.pagesAfter = shown.indicator;
+      row.pageCountDropped = Number(shown.indicator?.split("/")[1]) === Number(before.indicator?.split("/")[1]) - 1;
+      row.caretAfterTyped = mountedStart >= 0 && shown.start === caretGlobal - mountedStart && shown.end === shown.start;
+      row.caretVisible = await cdp.evaluate(`(() => {
+        const el = document.querySelector('${EDITOR}'); const style = getComputedStyle(el);
+        const m = document.createElement("textarea"); m.style.position = "absolute"; m.style.visibility = "hidden"; m.style.height = "0px"; m.style.overflow = "hidden";
+        for (const p of ["fontFamily","fontSize","fontWeight","letterSpacing","lineHeight","paddingTop","paddingRight","paddingBottom","paddingLeft","borderTopWidth","borderRightWidth","borderBottomWidth","borderLeftWidth","boxSizing","width","whiteSpace","wordBreak"]) m.style[p] = style[p];
+        document.body.appendChild(m); m.value = el.value.slice(0, el.selectionStart); const top = m.scrollHeight; m.remove();
+        return top >= el.scrollTop && top <= el.scrollTop + el.clientHeight;
+      })()`);
+      const after = await saved(id);
+      row.savedExact = after === expected;
+      row.undoMs = await timed(undo);
+      row.undoExact = (await saved(id)) === LONG;
+      row.redoMs = await timed(redo);
+      row.redoExact = (await saved(id)) === expected;
+      report.rows["range-last-merge"] = row;
+      log(`range-last-merge: ${JSON.stringify(row)}`);
+      if (!(row.pageCountDropped && row.caretAfterTyped && row.caretVisible && row.savedExact && row.undoExact && row.redoExact)) failures.push("range-last-merge");
+    }
+
     if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2) + "\n");
     assert.deepEqual(failures, [], `whole-manuscript replacement rows failed: ${failures.join(", ")}`);
     log("PASS windowed whole replace");
