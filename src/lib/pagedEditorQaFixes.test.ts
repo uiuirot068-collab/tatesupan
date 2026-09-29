@@ -33,7 +33,7 @@ describe("TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §C/§D: Ctrl+A and explicit fu
   it("keeps Copy/Cut/typed-replacement full-document semantics gated on the SAME allSelectedRef the explicit action sets", () => {
     expect(editor).toContain("if (!allSelectedRef.current) return;"); // handleCopy
     expect(editor).toMatch(/if \(allSelectedRef\.current\) \{[\s\S]{0,120}replaceWholeDocument\(""\)/); // handleCut
-    expect(editor).toMatch(/allSelectedRef\.current && !isComposingRef\.current/); // handleBeforeInputNative
+    expect(editor).toMatch(/allSelectedRef\.current &&\s*!isComposingRef\.current/); // handleBeforeInputNative
   });
 });
 

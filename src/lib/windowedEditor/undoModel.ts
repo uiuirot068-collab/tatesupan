@@ -39,6 +39,8 @@ export interface EditOp {
   mergeable: boolean;
   /** Clock time (ms) this op was last extended by a merge; used for the batch timeout. */
   updatedAt: number;
+  /** See `RawEdit.extendableByTyping`. */
+  extendableByTyping?: boolean;
 }
 
 export interface UndoHistory {
@@ -78,20 +80,29 @@ export interface RawEdit {
   insertedText: string;
   /** Never merged with a neighboring edit (paste, IME composition, selection replace, automated fix, ...). */
   atomic?: boolean;
+  /**
+   * A replacement typed over a selection (a WINDOWED 全文選択 replaced by one
+   * typed character): never merged INTO the previous op, but ordinary typing
+   * that continues at its end still extends it, as a native textarea groups
+   * typing over a selection -- so one undo restores the replaced text.
+   */
+  extendableByTyping?: boolean;
   /** Injectable clock, for deterministic tests. Defaults to `Date.now()`. */
   now?: number;
 }
 
 function tryMerge(top: EditOp, edit: RawEdit, now: number): EditOp | null {
-  if (edit.atomic || !top.mergeable) return null;
+  if (edit.atomic || edit.extendableByTyping || !top.mergeable) return null;
   if (now - top.updatedAt > BATCH_TIMEOUT_MS) return null;
-  if (top.insertedText.length + top.removedText.length >= MAX_BATCH_CHARS) return null;
+  // The text a typing replacement removed is restored as one piece; only what was typed counts toward the cap.
+  const batchSize = top.extendableByTyping ? top.insertedText.length : top.insertedText.length + top.removedText.length;
+  if (batchSize >= MAX_BATCH_CHARS) return null;
 
   // Pure forward insertion (ordinary typing): the new op's start must land
   // exactly where the batch's own insertion left off, and neither side may
   // carry a deletion (a replace is always atomic; see `computeRawEditFromBeforeInput`).
   if (
-    top.removedText === "" &&
+    (top.removedText === "" || top.extendableByTyping) &&
     edit.removedText === "" &&
     edit.insertedText.length === 1 &&
     edit.insertedText !== "\n" &&
@@ -150,6 +161,7 @@ export function pushEdit(history: UndoHistory, edit: RawEdit): UndoHistory {
     insertedText: edit.insertedText,
     mergeable: !edit.atomic,
     updatedAt: now,
+    ...(edit.extendableByTyping && !edit.atomic ? { extendableByTyping: true } : {}),
   };
   let nextStack = history.undoStack.concat(op);
   if (nextStack.length > MAX_HISTORY_ENTRIES) {

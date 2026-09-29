@@ -290,6 +290,18 @@ function PagedEditorInner(
   const compositionSnapshotRef = useRef<BeforeInputEditSnapshot | null>(null);
   /** Set while an IME composition that began over an explicit 全文選択 is in progress: the manuscript it replaces. */
   const compositionWholeSelectionRef = useRef<{ canonical: string } | null>(null);
+  // While a 全文選択 composition is in progress, the textarea shows what the
+  // IME has made of the mounted page; `content` stays the untouched
+  // manuscript until compositionend replaces it ONCE. Mirroring the DOM here
+  // keeps React from restoring the controlled value under the IME.
+  const [wholeCompositionText, setWholeCompositionText] = useState<string | null>(null);
+  // Set by an IME keydown (keyCode 229) over 全文選択: the IME may move or
+  // shrink the native selection before compositionstart, and that must not
+  // end 全文選択 (it did, leaving the rest of the manuscript behind).
+  const wholeInputArmedRef = useRef(false);
+  // A 全文選択 edit whose beforeinput could not be canceled: its text, which
+  // the following input event commits instead of the page's own DOM value.
+  const pendingWholeInsertRef = useRef<string | null>(null);
   const pendingBeforeInputRef = useRef<BeforeInputEditSnapshot | null>(null);
   const undoHistoryRef = useRef<UndoHistory>(createUndoHistory());
   // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: application-level "select the
@@ -378,6 +390,8 @@ function PagedEditorInner(
   const safePageIndex = clampPageIndex(currentPageIndex, pageCount);
   const currentPage: EditorPage = pages[safePageIndex];
   const pageText = content.slice(currentPage.start, currentPage.end);
+  // What the textarea shows: the mounted page, or the IME's text during a 全文選択 composition.
+  const displayedPageText = wholeCompositionText ?? pageText;
   useEffect(() => {
     pageTextRef.current = pageText;
   });
@@ -478,7 +492,7 @@ function PagedEditorInner(
     if (pending.focus !== false) el?.focus({ preventScroll: true });
     el?.setSelectionRange(pending.start, pending.end);
     if (el && pending.scrollHint === "upper") scrollCaretNearUpperView(el, pending.start);
-  }, [currentPageIndex, pageText]);
+  }, [currentPageIndex, pageText, wholeCompositionText]);
 
   /** Re-anchors the current page (and invalidates undo history) after a `content` change this component did NOT itself produce. Never called mid-composition (deferred to compositionend instead). */
   const reanchorForExternalContent = (newContent: string) => {
@@ -552,6 +566,24 @@ function PagedEditorInner(
     const el = event.currentTarget;
     let nextPageText = el.value;
 
+    // A 全文選択 composition only mirrors the IME's view of the mounted page;
+    // the manuscript is replaced once, at compositionend. Committing each
+    // update instead re-paginated the shortened manuscript and re-sliced the
+    // textarea under the IME.
+    if (isComposingRef.current && compositionWholeSelectionRef.current) {
+      setWholeCompositionText(nextPageText);
+      onNativeChangeCommitted?.(el);
+      return;
+    }
+    const pendingWhole = pendingWholeInsertRef.current;
+    if (pendingWhole !== null && !isComposingRef.current) {
+      pendingWholeInsertRef.current = null;
+      pendingBeforeInputRef.current = null;
+      replaceWholeDocument(pendingWhole);
+      onNativeChangeCommitted?.(el);
+      return;
+    }
+
     const pending = pendingBeforeInputRef.current;
     pendingBeforeInputRef.current = null;
     if (!isComposingRef.current && pending) {
@@ -583,15 +615,8 @@ function PagedEditorInner(
       : null;
     if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
 
-    // A composition over an explicit 全文選択 has already replaced the whole
-    // manuscript (as a single full-document textarea's would): the textarea
-    // IS the manuscript until it ends. Keeping the other pages here would
-    // re-slice the mounted page -- and rewrite the textarea under the IME.
-    const wholeComposition = isComposingRef.current && compositionWholeSelectionRef.current !== null;
-    const nextCanonical = wholeComposition
-      ? nextPageText
-      : content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
-    const globalCaret = wholeComposition ? el.selectionStart : editorPageLocalToGlobal(currentPage, el.selectionStart);
+    const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
+    const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
 
     const nextState = commitCanonical(
       nextCanonical,
@@ -622,10 +647,20 @@ function PagedEditorInner(
   };
 
   /** Replaces the WHOLE canonical document with `typed` (or removes it, for Delete/Backspace/Cut) while explicit full-manuscript selection is active, as ONE atomic undo step. */
-  const replaceWholeDocument = (typed: string) => {
+  const replaceWholeDocument = (typed: string, options?: { typedCharacter?: boolean }) => {
     const removedText = content;
     setAllSelected(false);
-    undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: 0, removedText, insertedText: typed, atomic: true });
+    wholeInputArmedRef.current = false;
+    // One typed character stays extendable by the typing that follows it, so
+    // Ctrl+A → "abc" is still ONE undo step back to the manuscript.
+    const extendableByTyping = options?.typedCharacter === true;
+    undoHistoryRef.current = pushEdit(undoHistoryRef.current, {
+      rangeStart: 0,
+      removedText,
+      insertedText: typed,
+      atomic: !extendableByTyping,
+      extendableByTyping,
+    });
     const nextState = commitCanonical(typed, {
       editStart: 0,
       editEnd: content.length,
@@ -715,10 +750,26 @@ function PagedEditorInner(
    */
   const handleBeforeInputNative = (el: HTMLTextAreaElement, nativeEvent: InputEvent) => {
     const inputType = nativeEvent.inputType ?? "";
+    // IME text is replaced at compositionend (handleCompositionStart/End), never here.
+    const compositionInput = inputType.includes("Composition");
 
-    if (allSelectedRef.current && !isComposingRef.current && (inputType.startsWith("insert") || inputType.startsWith("delete"))) {
-      nativeEvent.preventDefault();
-      replaceWholeDocument(inputType.startsWith("insert") ? insertedTextOf(nativeEvent) : "");
+    if (
+      allSelectedRef.current &&
+      !isComposingRef.current &&
+      !compositionInput &&
+      (inputType.startsWith("insert") || inputType.startsWith("delete"))
+    ) {
+      wholeInputArmedRef.current = false;
+      const typed = inputType.startsWith("insert") ? insertedTextOf(nativeEvent) : "";
+      const typedCharacter = inputType === "insertText" && typed.length === 1 && typed !== "\n";
+      if (nativeEvent.cancelable) {
+        nativeEvent.preventDefault();
+        replaceWholeDocument(typed, { typedCharacter });
+      } else {
+        // The browser will edit the mounted page anyway; its input event
+        // commits `typed` as the whole manuscript, never that page's value.
+        pendingWholeInsertRef.current = typed;
+      }
       onNativeBeforeInput?.(el, inputType);
       return;
     }
@@ -853,7 +904,7 @@ function PagedEditorInner(
   useEffect(() => {
     const onSelectionChange = () => {
       const el = textareaRef.current;
-      if (!allSelectedRef.current || !el || document.activeElement !== el) return;
+      if (!allSelectedRef.current || wholeInputArmedRef.current || !el || document.activeElement !== el) return;
       if (el.selectionStart !== 0 || el.selectionEnd !== el.value.length) {
         allSelectedRef.current = false;
         setIsFullManuscriptSelected(false);
@@ -873,6 +924,12 @@ function PagedEditorInner(
     // has no matching input event to consume its snapshot. The next physical
     // key always starts a new transaction.
     pendingBeforeInputRef.current = null;
+    wholeInputArmedRef.current =
+      allSelectedRef.current &&
+      !isComposingRef.current &&
+      (event.key === "Process" || event.nativeEvent.keyCode === 229) &&
+      el.selectionStart === 0 &&
+      el.selectionEnd === el.value.length;
     const isMod = event.ctrlKey || event.metaKey;
     if (isMod && !event.nativeEvent.isComposing) {
       const key = event.key.toLowerCase();
@@ -909,8 +966,9 @@ function PagedEditorInner(
     // click / arrow / drag that changes that ends it. (A one-shot "ignore the
     // next select event" guard used to live here; it failed for Ctrl+A, whose
     // own keyup reaches this handler after the select event, and it could go
-    // stale when the page was already fully selected.)
-    if (el.selectionStart !== 0 || el.selectionEnd !== el.value.length) setAllSelected(false);
+    // stale when the page was already fully selected.) An IME key's own
+    // selection move before compositionstart does not count (`wholeInputArmedRef`).
+    if (!wholeInputArmedRef.current && (el.selectionStart !== 0 || el.selectionEnd !== el.value.length)) setAllSelected(false);
     // §C: the ONE place a genuinely non-collapsed selection can appear (a
     // user drag-select) -- captures the true range, unlike `reportCaret`
     // (used everywhere else, always with a single already-collapsed
@@ -921,8 +979,19 @@ function PagedEditorInner(
     reportCaretRange(globalStart, globalEnd);
   };
 
+  const handleKeyUp = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // By its keyup an IME key has started its composition, or never will.
+    wholeInputArmedRef.current = false;
+    handleSelect(event);
+  };
+
+  const disarmWholeInput = () => {
+    wholeInputArmedRef.current = false;
+  };
+
   const handleBlur = () => {
     pendingBeforeInputRef.current = null;
+    wholeInputArmedRef.current = false;
     undoHistoryRef.current = flushBatch(undoHistoryRef.current);
   };
 
@@ -934,8 +1003,11 @@ function PagedEditorInner(
     // over an explicit 全文選択 (and the manuscript it replaces) so
     // `handleCompositionEnd` commits it as a whole-manuscript replacement,
     // the same result a single full-document textarea (FULL) produces.
-    compositionWholeSelectionRef.current =
-      allSelectedRef.current && el.selectionStart === 0 && el.selectionEnd === el.value.length ? { canonical: content } : null;
+    // Decided by 全文選択 itself, not the DOM selection: the IME may already
+    // have moved or narrowed it (a page-local composition then left the
+    // rest of the manuscript behind).
+    compositionWholeSelectionRef.current = allSelectedRef.current ? { canonical: content } : null;
+    wholeInputArmedRef.current = false;
     compositionSnapshotRef.current = {
       beforeText: el.value,
       selectionStart: el.selectionStart,
@@ -955,26 +1027,30 @@ function PagedEditorInner(
     const wholeSelection = compositionWholeSelectionRef.current;
     compositionWholeSelectionRef.current = null;
     onNativeCompositionEnd?.(el);
+    // Read before this composition's own commit below, which is not external.
+    const pendingJump = pendingJumpRef.current;
+    pendingJumpRef.current = null;
+    const externalChangePending = pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current;
 
-    if (wholeSelection && snapshot && snapshot.beforeText !== finalPageText) {
-      // The composed text replaces the WHOLE manuscript, as ONE undo step back
-      // to the manuscript the composition started from (intermediate
-      // composition commits never reach the undo history).
-      setAllSelected(false);
-      undoHistoryRef.current = pushEdit(undoHistoryRef.current, {
-        rangeStart: 0,
-        removedText: wholeSelection.canonical,
-        insertedText: finalPageText,
-        atomic: true,
-      });
-      const nextState = commitCanonical(finalPageText, { editStart: 0, editEnd: content.length, insertedLength: finalPageText.length });
-      const caret = el.selectionStart;
-      const landed = switchToPageForOffset(caret, computeEditorPages(finalPageText, nextState), undefined, { nextContent: finalPageText });
-      // During the composition the (now shorter) manuscript only CLAMPED the
-      // page index at render; store the page actually shown, or later growth
-      // would jump back to the old index.
-      setCurrentPageIndex(landed);
-      reportCaret(caret);
+    if (wholeSelection) {
+      setWholeCompositionText(null);
+      // The IME's committed string replaces the WHOLE manuscript (still
+      // untouched: nothing was committed during the composition) as ONE
+      // atomic undo step. Never the mounted page's value: it keeps whatever
+      // part of the page the IME's own selection did not cover.
+      let typed = event.data ?? "";
+      if (!typed && snapshot) {
+        const diff = commonPrefixSuffixDiff(snapshot.beforeText, finalPageText);
+        typed = finalPageText.slice(diff.editStart, diff.editStart + diff.insertedLength);
+      }
+      if (typed) {
+        replaceWholeDocument(typed);
+      } else {
+        // Canceled: the manuscript is unchanged. The textarea returns to the
+        // mounted page (React re-assigns it), still wholly selected.
+        setAllSelected(true);
+        pendingSelectionRef.current = { start: 0, end: pageText.length };
+      }
     } else if (snapshot && snapshot.beforeText !== finalPageText) {
       const rawEdit = computeRawEditFromBeforeInput(snapshot, finalPageText, currentPage.start);
       if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
@@ -1011,16 +1087,16 @@ function PagedEditorInner(
       }
     }
 
-    const pendingJump = pendingJumpRef.current;
-    pendingJumpRef.current = null;
     if (pendingJump?.kind === "global") {
+      // Its offsets describe the manuscript a 全文選択 composition just replaced.
+      if (wholeSelection && lastOwnContentRef.current !== contentRef.current) return;
       switchToPageForOffset(
         pendingJump.end,
         computeEditorPages(contentRef.current, { forcedBoundaries, joinedRanges }),
         pendingJump,
         { scrollHint: "upper" }
       );
-    } else if (pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current) {
+    } else if (externalChangePending) {
       reanchorForExternalContent(contentRef.current);
     }
   };
@@ -1430,12 +1506,12 @@ function PagedEditorInner(
       <div className="relative min-h-0 flex-1">
         {pageLocalGhostRanges.length > 0 && (
           <div className="pointer-events-none absolute inset-0">
-            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={pageText} marks={pageLocalGhostRanges} />
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={displayedPageText} marks={wholeCompositionText === null ? pageLocalGhostRanges : []} />
           </div>
         )}
         {showDescriptionMarks && (
           <div className="pointer-events-none absolute inset-0">
-            <DescriptionMarkOverlay textareaRef={textareaRef} text={pageText} marks={pageLocalDescriptionMarks} />
+            <DescriptionMarkOverlay textareaRef={textareaRef} text={displayedPageText} marks={wholeCompositionText === null ? pageLocalDescriptionMarks : []} />
           </div>
         )}
         {/* Stays mounted while the check is enabled: a stale analysis
@@ -1445,7 +1521,7 @@ function PagedEditorInner(
             300k-character Preview) that delayed the compose request. */}
         {writingCheck?.enabled && (
           <div className="pointer-events-none absolute inset-0">
-            <WritingCheckOverlay textareaRef={textareaRef} text={pageText} issues={pageLocalIssues} />
+            <WritingCheckOverlay textareaRef={textareaRef} text={displayedPageText} issues={wholeCompositionText === null ? pageLocalIssues : []} />
           </div>
         )}
         <textarea
@@ -1453,15 +1529,16 @@ function PagedEditorInner(
           data-demo-target="editor"
           data-editor-surface="paged"
           aria-label={`原稿本文（編集ページ ${safePageIndex + 1} / ${pageCount}）`}
-          value={pageText}
+          value={displayedPageText}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onCopy={handleCopy}
           onCut={handleCut}
           onChange={handleChange}
           onSelect={handleSelect}
+          onPointerDown={disarmWholeInput}
           onClick={handleSelect}
-          onKeyUp={handleSelect}
+          onKeyUp={handleKeyUp}
           onBlur={handleBlur}
           onCompositionStart={handleCompositionStart}
           onCompositionUpdate={(event) => onNativeKeyDown?.(event.currentTarget)}

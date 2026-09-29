@@ -26,28 +26,14 @@ describe("全文選択 replacements insert what a native textarea would", () => 
 
   it("the whole-document beforeinput path uses it", () => {
     const handler = between("const handleBeforeInputNative =", "useEffect(() => {\n    const el = textareaRef.current;");
-    expect(handler).toContain("replaceWholeDocument(inputType.startsWith(\"insert\") ? insertedTextOf(nativeEvent) : \"\")");
+    expect(handler).toContain('const typed = inputType.startsWith("insert") ? insertedTextOf(nativeEvent) : "";');
+    expect(handler).toContain("replaceWholeDocument(typed, { typedCharacter });");
   });
 });
 
-describe("an IME composition over 全文選択 replaces the whole manuscript (multi-page)", () => {
-  it("compositionstart records the manuscript only when the explicit whole selection covers the mounted page", () => {
-    const start = between("const handleCompositionStart =", "const handleCompositionEnd =");
-    expect(start).toContain("allSelectedRef.current && el.selectionStart === 0 && el.selectionEnd === el.value.length ? { canonical: content } : null");
-  });
-
-  it("while composing, the textarea IS the manuscript (no re-slicing of the mounted page under the IME)", () => {
-    const change = between("const handleChange =", "const replaceWholeDocument =");
-    expect(change).toContain("isComposingRef.current && compositionWholeSelectionRef.current !== null");
-    expect(change).toMatch(/wholeComposition\s*\?\s*nextPageText/);
-  });
-
-  it("compositionend commits it as ONE atomic undo step back to the original manuscript and stores the landed page", () => {
-    const end = between("const handleCompositionEnd =", "const moveSelectionToGlobal =");
-    expect(end).toMatch(/removedText: wholeSelection\.canonical,\s*insertedText: finalPageText,\s*atomic: true/);
-    expect(end).toContain("setCurrentPageIndex(landed)");
-  });
-});
+// The IME-over-全文選択 contracts moved to pagedEditorWholeReplace.test.ts
+// (atomic whole-manuscript replacement: decided by 全文選択 itself, nothing
+// committed until compositionend).
 
 describe("caret placement after an edit React has not committed yet", () => {
   const switcher = between("const switchToPageForOffset =", "// Applies a pending cross-page selection");
