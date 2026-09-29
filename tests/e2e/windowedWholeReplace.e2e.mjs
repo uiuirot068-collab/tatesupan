@@ -5,9 +5,14 @@
 //     Enter, Backspace, Delete, paste, cut, and an IME composition driven like
 //     a real IME (keyCode 229 keyDowns, several compositionupdates, commit);
 //   - `model-*` rows additionally model an IME/TSF that narrows the native
-//     selection before compositionstart, or cancels the composition --
-//     automation models of the real-OS failure, never a substitute for the
-//     real-OS Human QA;
+//     selection before compositionstart, cancels the composition, delivers
+//     the IME key's keyup before compositionstart, or never delivers
+//     compositionend -- automation models of the real-OS failure, never a
+//     substitute for the real-OS Human QA;
+//   - each whole row also checks that 全文選択 can be entered again afterwards;
+//   - `range-*` rows: an ordinary ~30k in-page selection (no 全文選択) replaced
+//     by an IME composition (normal / compositionend lost): exact result, one
+//     undo, one redo -- the page is never re-sliced under the IME;
 //   - each row checks: exact saved text (no old text left), 編集ページ count,
 //     Preview page count, one undo = the exact original, one redo = the exact
 //     replacement, reload = the saved text, and the time each step takes.
@@ -107,7 +112,35 @@ const SCENARIOS = [
     await imeKey("KeyD", "ｄ");
     await imeKey("Escape", ""); // an empty composition update: the IME's cancel
   }, null /* unchanged */],
+  // A real-OS order: the IME key's keyup arrives BEFORE compositionstart, and
+  // the IME has already collapsed the native selection (its selectionchange
+  // lands in between). 全文選択 must survive both.
+  ["model-keyup-first", async () => {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "d", code: "KeyD", windowsVirtualKeyCode: 68 });
+    await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.setSelectionRange(el.value.length, el.value.length); })()`);
+    await sleep(120);
+    await cdp.send("Input.imeSetComposition", { text: "ｄ", selectionStart: 1, selectionEnd: 1 });
+    await imeKey("KeyE", "で");
+    await imeCommit("で");
+  }, "で"],
+  // compositionend never reaches the editor (Blink can drop a composition
+  // without it). The next ordinary key must finish the transaction with the
+  // IME's text -- not leave the editor "composing" with Ctrl+A / 全文を選択 /
+  // Ctrl+Z dead (the real-OS Human-QA symptom).
+  ["model-lost-compositionend", async () => {
+    await cdp.evaluate(`window.addEventListener("compositionend", (e) => e.stopImmediatePropagation(), { capture: true, once: true })`);
+    await imeKey("KeyD", "ｄ");
+    await imeKey("Space", "電話");
+    await imeCommit("電話");
+    await key("Shift", "ShiftLeft", 16);
+  }, "電話"],
 ];
+
+// An ordinary in-page selection (no 全文選択) of ~30k characters replaced by
+// an IME: the page must not be re-sliced under the IME; ONE commit, ONE undo.
+const RANGE_START = 10_000;
+const RANGE_END = 40_000;
 
 try {
   await session.setViewport(1280, 900);
@@ -149,6 +182,18 @@ try {
         row.undoExact = expectedRaw === null ? undone === LONG : undone === LONG;
         row.pagesAfterUndo = undoneShown.indicator;
         if (expectedRaw !== null) row.previewRestored = await previewSettled(`n === ${opened.previewPages}`);
+        // 全文選択 stays usable after the edit and its undo (it used to stay dead).
+        // A canceled composition keeps it on: leave it first (the button toggles).
+        if ((await editorState()).whole) {
+          await key("Escape", "Escape", 27);
+          await sleep(100);
+        }
+        if (via === "ctrlA") await ctrlA();
+        else await realClick("[data-editor-select-all]");
+        await sleep(200);
+        const reselected = await editorState();
+        row.reselectWorks = reselected.whole && reselected.start === 0 && reselected.end === reselected.length;
+        await key("Escape", "Escape", 27);
         row.redoMs = await timed(redo);
         const redone = await saved(id);
         row.redoExact = redone === expected;
@@ -160,9 +205,49 @@ try {
         row.reloadExact = reloaded === expected && (expected.length > 60_000 || reloadedShown.value === expected);
         report.rows[rowName] = row;
         log(`${rowName}: ${JSON.stringify(row)}`);
-        const ok = row.engaged && row.editorShowsExpected && row.savedExact && row.undoExact && row.redoExact && row.reloadExact && row.previewUpdated !== false && row.previewRestored !== false;
+        const ok = row.engaged && row.editorShowsExpected && row.savedExact && row.undoExact && row.reselectWorks && row.redoExact && row.reloadExact && row.previewUpdated !== false && row.previewRestored !== false;
         if (!ok) failures.push(rowName);
       }
+    }
+    const RANGE_SCENARIOS = [
+      ["range-ime", async () => { await imeKey("KeyD", "ｄ"); await imeKey("KeyE", "で"); await imeKey("KeyN", "でn"); await imeKey("KeyW", "でんw"); await imeKey("KeyA", "でんわ"); await imeKey("Space", "電話"); await imeCommit("電話"); }, "電話"],
+      ["range-ime-lost-end", async () => {
+        await cdp.evaluate(`window.addEventListener("compositionend", (e) => e.stopImmediatePropagation(), { capture: true, once: true })`);
+        await imeKey("KeyD", "ｄ");
+        await imeKey("Space", "電話");
+        await imeCommit("電話");
+        await key("Shift", "ShiftLeft", 16);
+      }, "電話"],
+    ];
+    for (const [name, act, typed] of RANGE_SCENARIOS) {
+      if (ONLY && !ONLY.has(name)) continue;
+      const id = await openDocument(LONG);
+      await realClick(EDITOR);
+      const pageText = (await editorState()).value;
+      const pageStart = LONG.indexOf(pageText);
+      await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.focus(); el.setSelectionRange(${RANGE_START}, ${RANGE_END}); })()`);
+      await sleep(300);
+      const selected = await editorState();
+      const expected = LONG.slice(0, pageStart + RANGE_START) + typed + LONG.slice(pageStart + RANGE_END);
+      const row = { engaged: pageStart >= 0 && !selected.whole && selected.start === RANGE_START && selected.end === RANGE_END, pagesBefore: selected.indicator };
+      row.actMs = await timed(act);
+      const shown = await editorState();
+      row.editorShowsTyped = shown.value.includes(typed) && !shown.whole;
+      row.pagesAfter = shown.indicator;
+      const after = await saved(id);
+      row.savedExact = after === expected;
+      row.lengthDelta = after === null ? null : after.length - expected.length;
+      row.undoMs = await timed(undo);
+      row.undoExact = (await saved(id)) === LONG;
+      row.redoMs = await timed(redo);
+      row.redoExact = (await saved(id)) === expected;
+      await ctrlA();
+      await sleep(200);
+      const reselected = await editorState();
+      row.reselectWorks = reselected.whole && reselected.start === 0 && reselected.end === reselected.length;
+      report.rows[name] = row;
+      log(`${name}: ${JSON.stringify(row)}`);
+      if (!(row.engaged && row.editorShowsTyped && row.savedExact && row.undoExact && row.redoExact && row.reselectWorks)) failures.push(name);
     }
     if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2) + "\n");
     assert.deepEqual(failures, [], `whole-manuscript replacement rows failed: ${failures.join(", ")}`);

@@ -79,7 +79,9 @@ import {
   type BeforeInputEditSnapshot,
   type UndoHistory,
 } from "@/lib/windowedEditor/undoModel";
+import { decideCompositionOutcome, type CompositionBase } from "@/lib/windowedEditor/compositionTransaction";
 import { resolveTextareaDeletion } from "@/lib/editorInputIntegrity";
+import { perfMark } from "@/lib/perfDebug";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
 import { marksForPage } from "@/lib/descriptionMarkSegments";
@@ -287,17 +289,22 @@ function PagedEditorInner(
 ) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
-  const compositionSnapshotRef = useRef<BeforeInputEditSnapshot | null>(null);
-  /** Set while an IME composition that began over an explicit 全文選択 is in progress: the manuscript it replaces. */
-  const compositionWholeSelectionRef = useRef<{ canonical: string } | null>(null);
-  // While a 全文選択 composition is in progress, the textarea shows what the
-  // IME has made of the mounted page; `content` stays the untouched
-  // manuscript until compositionend replaces it ONCE. Mirroring the DOM here
-  // keeps React from restoring the controlled value under the IME.
-  const [wholeCompositionText, setWholeCompositionText] = useState<string | null>(null);
-  // Set by an IME keydown (keyCode 229) over 全文選択: the IME may move or
-  // shrink the native selection before compositionstart, and that must not
-  // end 全文選択 (it did, leaving the rest of the manuscript behind).
+  // The IME composition in progress, as ONE transaction (see
+  // `compositionTransaction.ts`): what it began on, and the IME's latest
+  // string. Nothing is committed to `content` until it ends -- committing each
+  // update re-paginated the manuscript and re-sliced the mounted page under
+  // the IME (a large selection shrinks the page), corrupting the text and undo.
+  const compositionTxnRef = useRef<(CompositionBase & { lastData: string | null }) | null>(null);
+  // While a composition is in progress the textarea shows the IME's view of
+  // the mounted page; `content` stays untouched until the composition ends.
+  // Mirroring the DOM here keeps React from restoring the controlled value
+  // under the IME (which silently drops the composition in Blink).
+  const [compositionText, setCompositionText] = useState<string | null>(null);
+  // Set by an IME keydown (keyCode 229) over 全文選択 and held until the
+  // composition starts or a non-IME action (pointer, another key, blur): the
+  // IME may move or shrink the native selection before compositionstart --
+  // on a real OS even after the key's own keyup -- and that must not end
+  // 全文選択 (it did, leaving the rest of the manuscript behind).
   const wholeInputArmedRef = useRef(false);
   // A 全文選択 edit whose beforeinput could not be canceled: its text, which
   // the following input event commits instead of the page's own DOM value.
@@ -390,8 +397,8 @@ function PagedEditorInner(
   const safePageIndex = clampPageIndex(currentPageIndex, pageCount);
   const currentPage: EditorPage = pages[safePageIndex];
   const pageText = content.slice(currentPage.start, currentPage.end);
-  // What the textarea shows: the mounted page, or the IME's text during a 全文選択 composition.
-  const displayedPageText = wholeCompositionText ?? pageText;
+  // What the textarea shows: the mounted page, or the IME's view of it during a composition.
+  const displayedPageText = compositionText ?? pageText;
   useEffect(() => {
     pageTextRef.current = pageText;
   });
@@ -492,7 +499,7 @@ function PagedEditorInner(
     if (pending.focus !== false) el?.focus({ preventScroll: true });
     el?.setSelectionRange(pending.start, pending.end);
     if (el && pending.scrollHint === "upper") scrollCaretNearUpperView(el, pending.start);
-  }, [currentPageIndex, pageText, wholeCompositionText]);
+  }, [currentPageIndex, pageText, compositionText]);
 
   /** Re-anchors the current page (and invalidates undo history) after a `content` change this component did NOT itself produce. Never called mid-composition (deferred to compositionend instead). */
   const reanchorForExternalContent = (newContent: string) => {
@@ -562,92 +569,8 @@ function PagedEditorInner(
     return { forcedBoundaries: nextForcedBoundaries, joinedRanges: nextJoinedRanges };
   };
 
-  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const el = event.currentTarget;
-    let nextPageText = el.value;
-
-    // A 全文選択 composition only mirrors the IME's view of the mounted page;
-    // the manuscript is replaced once, at compositionend. Committing each
-    // update instead re-paginated the shortened manuscript and re-sliced the
-    // textarea under the IME.
-    if (isComposingRef.current && compositionWholeSelectionRef.current) {
-      setWholeCompositionText(nextPageText);
-      onNativeChangeCommitted?.(el);
-      return;
-    }
-    const pendingWhole = pendingWholeInsertRef.current;
-    if (pendingWhole !== null && !isComposingRef.current) {
-      pendingWholeInsertRef.current = null;
-      pendingBeforeInputRef.current = null;
-      replaceWholeDocument(pendingWhole);
-      onNativeChangeCommitted?.(el);
-      return;
-    }
-
-    const pending = pendingBeforeInputRef.current;
-    pendingBeforeInputRef.current = null;
-    if (!isComposingRef.current && pending) {
-      const rejectedLength = nextPageText.length;
-      const resolution = resolveTextareaDeletion(pending, nextPageText);
-      if (resolution.repaired) {
-        nextPageText = resolution.text;
-        // React's next controlled commit echoes this repaired value. Restore
-        // the caret immediately as well so a queued key-repeat/IME event sees
-        // the repaired transaction boundary, never the corrupted DOM range.
-        el.value = nextPageText;
-        el.setSelectionRange(resolution.selectionStart, resolution.selectionEnd);
-        onNativeIntegrityRepair?.(el, {
-          inputType: pending.inputType,
-          beforeLength: pending.beforeText.length,
-          rejectedLength,
-          repairedLength: nextPageText.length,
-        });
-      }
-    }
-    const rawEdit = !isComposingRef.current
-      ? pending
-        ? computeRawEditFromBeforeInput(pending, nextPageText, currentPage.start)
-        : computeRawEditFromBeforeInput(
-            { beforeText: pageTextRef.current, selectionStart: 0, selectionEnd: 0, inputType: "" },
-            nextPageText,
-            currentPage.start
-          )
-      : null;
-    if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
-
-    const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
-    const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
-
-    const nextState = commitCanonical(
-      nextCanonical,
-      rawEdit
-        ? {
-            editStart: rawEdit.rangeStart,
-            editEnd: rawEdit.rangeStart + rawEdit.removedText.length,
-            insertedLength: rawEdit.insertedText.length,
-          }
-        : undefined
-    );
-    reportCaret(globalCaret);
-    onNativeChangeCommitted?.(el);
-
-    if (isComposingRef.current) return;
-
-    // The edit may have moved where THIS page's own boundary falls (e.g. a
-    // newline landing near the split threshold); reconcile immediately so
-    // the caret never silently drifts onto a page the user isn't looking
-    // at. Almost always a no-op switch (see the module doc: an edit can
-    // only ever move ITS OWN page's `end`, never an earlier page).
-    const nextPages = computeEditorPages(nextCanonical, nextState);
-    const navigationAffinity = pending?.inputType === "deleteContentBackward" ? "backward" : "forward";
-    const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret, navigationAffinity);
-    if (targetIndex !== safePageIndex) {
-      switchToPageForOffset(globalCaret, nextPages, undefined, { affinity: navigationAffinity });
-    }
-  };
-
   /** Replaces the WHOLE canonical document with `typed` (or removes it, for Delete/Backspace/Cut) while explicit full-manuscript selection is active, as ONE atomic undo step. */
-  const replaceWholeDocument = (typed: string, options?: { typedCharacter?: boolean }) => {
+  const replaceWholeDocument = (typed: string, options?: { typedCharacter?: boolean; focus?: boolean }) => {
     const removedText = content;
     setAllSelected(false);
     wholeInputArmedRef.current = false;
@@ -667,8 +590,234 @@ function PagedEditorInner(
       insertedLength: typed.length,
     });
     const newPages = computeEditorPages(typed, nextState);
-    switchToPageForOffset(typed.length, newPages, undefined, { nextContent: typed });
+    switchToPageForOffset(typed.length, newPages, undefined, { nextContent: typed, focus: options?.focus });
     reportCaret(typed.length);
+  };
+
+  /**
+   * Opens the composition transaction: what the IME is about to edit, captured
+   * before it touches the page. Membership in 全文選択 is decided by 全文選択
+   * itself, not the DOM selection -- the IME may already have moved or
+   * narrowed that (a page-local composition then left the rest of the
+   * manuscript behind). Normally at compositionstart; `beforeinput`/`input`/
+   * compositionupdate open it when an IME skipped compositionstart, and a
+   * compositionstart over a still-open transaction first finishes that one.
+   */
+  const beginComposition = (
+    el: HTMLTextAreaElement,
+    source: string,
+    before?: { beforeText: string; selectionStart: number; selectionEnd: number }
+  ) => {
+    if (compositionTxnRef.current) finishComposition(el, null, `restart:${source}`);
+    isComposingRef.current = true;
+    wholeInputArmedRef.current = false;
+    pendingBeforeInputRef.current = null;
+    // A clamped selection: `before` may come from the last reported caret.
+    const beforeText = before?.beforeText ?? el.value;
+    const clamp = (offset: number) => Math.max(0, Math.min(beforeText.length, offset));
+    compositionTxnRef.current = {
+      baseCanonical: content,
+      pageStart: currentPage.start,
+      pageEnd: currentPage.end,
+      beforeText,
+      selectionStart: clamp(before?.selectionStart ?? el.selectionStart),
+      selectionEnd: clamp(before?.selectionEnd ?? el.selectionEnd),
+      whole: allSelectedRef.current,
+      lastData: null,
+    };
+    perfMark("PagedEditor:ime:begin", {
+      source,
+      whole: allSelectedRef.current,
+      page: currentPage.index,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+      pageLength: beforeText.length,
+    });
+    onNativeCompositionStart?.(el);
+  };
+
+  /**
+   * Closes the composition transaction with ONE commit (or none), whatever
+   * ended it: compositionend (`data` = its committed string), or a recovery
+   * signal when compositionend never arrived (`data` null: the IME's last
+   * compositionupdate string stands in). Idempotent -- a late compositionend
+   * after a recovery finds no transaction and does nothing.
+   */
+  const finishComposition = (el: HTMLTextAreaElement, data: string | null, reason: string) => {
+    const txn = compositionTxnRef.current;
+    if (!txn) return;
+    compositionTxnRef.current = null;
+    isComposingRef.current = false;
+    wholeInputArmedRef.current = false;
+    const finalPageText = el.value;
+    // Finishing on blur must not pull focus back from wherever it went.
+    const keepFocus = reason !== "blur";
+    setCompositionText(null);
+    onNativeCompositionEnd?.(el);
+    // Read before this composition's own commit below, which is not external.
+    const pendingJump = pendingJumpRef.current;
+    pendingJumpRef.current = null;
+    const externalChangePending = pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current;
+
+    const outcome = decideCompositionOutcome(txn, content, finalPageText, data ?? txn.lastData, el.selectionStart);
+    perfMark("PagedEditor:ime:finish", {
+      reason,
+      outcome: outcome.kind,
+      detail: "reason" in outcome ? outcome.reason : null,
+      whole: txn.whole,
+      dataLength: (data ?? txn.lastData)?.length ?? null,
+      finalLength: finalPageText.length,
+    });
+    // Puts the textarea back on the unchanged mounted page. React would too
+    // (the value prop returns to `pageText`), but only if that prop differs
+    // from what it last rendered -- the DOM may have moved on without an input.
+    const restoreMountedPage = () => {
+      if (el.value !== pageText) el.value = pageText;
+    };
+
+    if (outcome.kind === "whole-replace") {
+      // ONE atomic undo step back to the whole manuscript.
+      replaceWholeDocument(outcome.text, { focus: keepFocus });
+    } else if (outcome.kind === "whole-unchanged") {
+      // Canceled, or the IME's text is unknown: never a page-local or guessed
+      // replacement. The manuscript and 全文選択 stay as they were.
+      restoreMountedPage();
+      setAllSelected(true);
+      el.setSelectionRange(0, pageText.length);
+      pendingSelectionRef.current = { start: 0, end: pageText.length, focus: keepFocus };
+    } else if (outcome.kind === "discard") {
+      // The manuscript changed under the composition: keep it as it is now.
+      restoreMountedPage();
+    } else if (outcome.kind === "page-commit") {
+      const { nextCanonical, edit } = outcome;
+      undoHistoryRef.current = pushEdit(undoHistoryRef.current, edit);
+      const globalCaret = editorPageLocalToGlobal(currentPage, outcome.caretLocal);
+      const nextState = commitCanonical(nextCanonical, {
+        editStart: edit.rangeStart,
+        editEnd: edit.rangeStart + edit.removedText.length,
+        insertedLength: edit.insertedText.length,
+      });
+      reportCaret(globalCaret);
+
+      // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §B: an IME composition can
+      // ALSO push this page past its target size, exactly like ordinary
+      // typing (see `handleChange`'s identical reconciliation, which this
+      // path was previously missing entirely). When that happens, this
+      // page's own `end` moves EARLIER (a new page boundary now falls
+      // partway through what used to be one page -- see the module doc),
+      // so the just-composed text -- and the caret the IME left there --
+      // silently end up on the NEXT page while `currentPageIndex` still
+      // pointed at this one. The next render's now-shorter `pageText`
+      // slice then made the browser clamp the stale caret to that
+      // truncated length, landing it at this page's end instead of near
+      // the start of the (correct) next page.
+      const nextPages = computeEditorPages(nextCanonical, nextState);
+      const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
+      if (targetIndex !== safePageIndex) {
+        switchToPageForOffset(globalCaret, nextPages, undefined, { focus: keepFocus });
+      }
+    }
+
+    if (pendingJump?.kind === "global") {
+      // Its offsets describe the manuscript a 全文選択 composition just replaced.
+      if (outcome.kind === "whole-replace") return;
+      switchToPageForOffset(
+        pendingJump.end,
+        computeEditorPages(contentRef.current, { forcedBoundaries, joinedRanges }),
+        pendingJump,
+        { scrollHint: "upper" }
+      );
+    } else if (externalChangePending) {
+      reanchorForExternalContent(contentRef.current);
+    }
+  };
+
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    let nextPageText = el.value;
+
+    // A composition only mirrors the IME's view of the mounted page; the
+    // manuscript is changed once, when it ends. A composing input without a
+    // compositionstart (an IME that skipped it) begins the transaction from
+    // the page as it was before this input.
+    if (!compositionTxnRef.current && (event.nativeEvent as InputEvent).isComposing) {
+      beginComposition(el, "input", {
+        beforeText: pageTextRef.current,
+        selectionStart: globalToEditorPageLocal(currentPage, globalCaretRangeRef.current.start),
+        selectionEnd: globalToEditorPageLocal(currentPage, globalCaretRangeRef.current.end),
+      });
+    }
+    if (compositionTxnRef.current) {
+      pendingBeforeInputRef.current = null;
+      setCompositionText(nextPageText);
+      onNativeChangeCommitted?.(el);
+      return;
+    }
+    const pendingWhole = pendingWholeInsertRef.current;
+    if (pendingWhole !== null) {
+      pendingWholeInsertRef.current = null;
+      pendingBeforeInputRef.current = null;
+      replaceWholeDocument(pendingWhole);
+      onNativeChangeCommitted?.(el);
+      return;
+    }
+
+    const pending = pendingBeforeInputRef.current;
+    pendingBeforeInputRef.current = null;
+    if (pending) {
+      const rejectedLength = nextPageText.length;
+      const resolution = resolveTextareaDeletion(pending, nextPageText);
+      if (resolution.repaired) {
+        nextPageText = resolution.text;
+        // React's next controlled commit echoes this repaired value. Restore
+        // the caret immediately as well so a queued key-repeat/IME event sees
+        // the repaired transaction boundary, never the corrupted DOM range.
+        el.value = nextPageText;
+        el.setSelectionRange(resolution.selectionStart, resolution.selectionEnd);
+        onNativeIntegrityRepair?.(el, {
+          inputType: pending.inputType,
+          beforeLength: pending.beforeText.length,
+          rejectedLength,
+          repairedLength: nextPageText.length,
+        });
+      }
+    }
+    const rawEdit = pending
+      ? computeRawEditFromBeforeInput(pending, nextPageText, currentPage.start)
+      : computeRawEditFromBeforeInput(
+          { beforeText: pageTextRef.current, selectionStart: 0, selectionEnd: 0, inputType: "" },
+          nextPageText,
+          currentPage.start
+        );
+    if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
+
+    const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
+    const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
+
+    const nextState = commitCanonical(
+      nextCanonical,
+      rawEdit
+        ? {
+            editStart: rawEdit.rangeStart,
+            editEnd: rawEdit.rangeStart + rawEdit.removedText.length,
+            insertedLength: rawEdit.insertedText.length,
+          }
+        : undefined
+    );
+    reportCaret(globalCaret);
+    onNativeChangeCommitted?.(el);
+
+    // The edit may have moved where THIS page's own boundary falls (e.g. a
+    // newline landing near the split threshold); reconcile immediately so
+    // the caret never silently drifts onto a page the user isn't looking
+    // at. Almost always a no-op switch (see the module doc: an edit can
+    // only ever move ITS OWN page's `end`, never an earlier page).
+    const nextPages = computeEditorPages(nextCanonical, nextState);
+    const navigationAffinity = pending?.inputType === "deleteContentBackward" ? "backward" : "forward";
+    const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret, navigationAffinity);
+    if (targetIndex !== safePageIndex) {
+      switchToPageForOffset(globalCaret, nextPages, undefined, { affinity: navigationAffinity });
+    }
   };
 
   /**
@@ -750,13 +899,19 @@ function PagedEditorInner(
    */
   const handleBeforeInputNative = (el: HTMLTextAreaElement, nativeEvent: InputEvent) => {
     const inputType = nativeEvent.inputType ?? "";
-    // IME text is replaced at compositionend (handleCompositionStart/End), never here.
-    const compositionInput = inputType.includes("Composition");
+    // IME text is committed when the composition ends, never here. A
+    // composition beforeinput without a compositionstart (an IME that skipped
+    // it) begins the transaction while the page is still unedited.
+    if (inputType.includes("Composition") || nativeEvent.isComposing) {
+      if (!compositionTxnRef.current) beginComposition(el, "beforeinput");
+      pendingBeforeInputRef.current = null;
+      onNativeBeforeInput?.(el, inputType);
+      return;
+    }
 
     if (
       allSelectedRef.current &&
       !isComposingRef.current &&
-      !compositionInput &&
       (inputType.startsWith("insert") || inputType.startsWith("delete"))
     ) {
       wholeInputArmedRef.current = false;
@@ -904,7 +1059,7 @@ function PagedEditorInner(
   useEffect(() => {
     const onSelectionChange = () => {
       const el = textareaRef.current;
-      if (!allSelectedRef.current || wholeInputArmedRef.current || !el || document.activeElement !== el) return;
+      if (!allSelectedRef.current || wholeInputArmedRef.current || isComposingRef.current || !el || document.activeElement !== el) return;
       if (el.selectionStart !== 0 || el.selectionEnd !== el.value.length) {
         allSelectedRef.current = false;
         setIsFullManuscriptSelected(false);
@@ -920,16 +1075,24 @@ function PagedEditorInner(
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
+    // Blink marks every keydown during a composition `isComposing`. One that
+    // is not, while a transaction is still open, means the composition ended
+    // without a compositionend (Blink dropped it): finish it now, or the
+    // editor stays "composing" -- Ctrl+A, 全文を選択 and undo all refuse to run.
+    if (compositionTxnRef.current && !event.nativeEvent.isComposing) {
+      finishComposition(el, null, "keydown");
+    }
     // A no-op beforeinput (Backspace at document start, Delete at its end)
     // has no matching input event to consume its snapshot. The next physical
     // key always starts a new transaction.
     pendingBeforeInputRef.current = null;
+    // Deliberately NOT tied to the DOM selection still covering the page: a
+    // real-OS IME may already have moved it, and the async selectionchange
+    // reporting that must not end 全文選択 either.
     wholeInputArmedRef.current =
       allSelectedRef.current &&
       !isComposingRef.current &&
-      (event.key === "Process" || event.nativeEvent.keyCode === 229) &&
-      el.selectionStart === 0 &&
-      el.selectionEnd === el.value.length;
+      (event.key === "Process" || event.nativeEvent.keyCode === 229);
     const isMod = event.ctrlKey || event.metaKey;
     if (isMod && !event.nativeEvent.isComposing) {
       const key = event.key.toLowerCase();
@@ -967,8 +1130,16 @@ function PagedEditorInner(
     // next select event" guard used to live here; it failed for Ctrl+A, whose
     // own keyup reaches this handler after the select event, and it could go
     // stale when the page was already fully selected.) An IME key's own
-    // selection move before compositionstart does not count (`wholeInputArmedRef`).
-    if (!wholeInputArmedRef.current && (el.selectionStart !== 0 || el.selectionEnd !== el.value.length)) setAllSelected(false);
+    // selection move before compositionstart does not count (`wholeInputArmedRef`),
+    // nor does the composition's own caret (its transaction decides the result).
+    if (
+      allSelectedRef.current &&
+      !wholeInputArmedRef.current &&
+      !isComposingRef.current &&
+      (el.selectionStart !== 0 || el.selectionEnd !== el.value.length)
+    ) {
+      setAllSelected(false);
+    }
     // §C: the ONE place a genuinely non-collapsed selection can appear (a
     // user drag-select) -- captures the true range, unlike `reportCaret`
     // (used everywhere else, always with a single already-collapsed
@@ -980,8 +1151,10 @@ function PagedEditorInner(
   };
 
   const handleKeyUp = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // By its keyup an IME key has started its composition, or never will.
-    wholeInputArmedRef.current = false;
+    // Does NOT disarm `wholeInputArmedRef`: on a real OS the IME key's keyup
+    // can arrive before its compositionstart, after the IME has already moved
+    // the selection -- disarming here ended 全文選択 and the composition then
+    // replaced only the mounted page.
     handleSelect(event);
   };
 
@@ -989,116 +1162,37 @@ function PagedEditorInner(
     wholeInputArmedRef.current = false;
   };
 
-  const handleBlur = () => {
+  const handleBlur = (event: React.FocusEvent<HTMLTextAreaElement>) => {
     pendingBeforeInputRef.current = null;
     wholeInputArmedRef.current = false;
+    // Blink finishes a composition (compositionend) before the blur; a
+    // transaction still open here never got it. Finish it so a click on
+    // 全文を選択 / a toolbar button acts on a settled editor.
+    if (compositionTxnRef.current) finishComposition(event.currentTarget, null, "blur");
     undoHistoryRef.current = flushBatch(undoHistoryRef.current);
   };
 
   const handleCompositionStart = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
-    isComposingRef.current = true;
+    beginComposition(event.currentTarget, "compositionstart");
+  };
+
+  const handleCompositionUpdate = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
-    // An IME composition cannot be redirected like a beforeinput: natively it
-    // only replaces the mounted page's selection. Remember that it started
-    // over an explicit 全文選択 (and the manuscript it replaces) so
-    // `handleCompositionEnd` commits it as a whole-manuscript replacement,
-    // the same result a single full-document textarea (FULL) produces.
-    // Decided by 全文選択 itself, not the DOM selection: the IME may already
-    // have moved or narrowed it (a page-local composition then left the
-    // rest of the manuscript behind).
-    compositionWholeSelectionRef.current = allSelectedRef.current ? { canonical: content } : null;
-    wholeInputArmedRef.current = false;
-    compositionSnapshotRef.current = {
-      beforeText: el.value,
-      selectionStart: el.selectionStart,
-      selectionEnd: el.selectionEnd,
-      inputType: "insertFromComposition",
-    };
-    pendingBeforeInputRef.current = null;
-    onNativeCompositionStart?.(el);
+    if (!compositionTxnRef.current) beginComposition(el, "compositionupdate");
+    // The IME's whole current string: what a composition that never gets its
+    // compositionend commits (the text the user sees).
+    if (compositionTxnRef.current) compositionTxnRef.current.lastData = event.data ?? null;
+    onNativeKeyDown?.(el);
   };
 
   const handleCompositionEnd = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
-    isComposingRef.current = false;
     const el = event.currentTarget;
-    const finalPageText = el.value;
-    const snapshot = compositionSnapshotRef.current;
-    compositionSnapshotRef.current = null;
-    const wholeSelection = compositionWholeSelectionRef.current;
-    compositionWholeSelectionRef.current = null;
-    onNativeCompositionEnd?.(el);
-    // Read before this composition's own commit below, which is not external.
-    const pendingJump = pendingJumpRef.current;
-    pendingJumpRef.current = null;
-    const externalChangePending = pendingJump?.kind === "external" || contentRef.current !== lastOwnContentRef.current;
-
-    if (wholeSelection) {
-      setWholeCompositionText(null);
-      // The IME's committed string replaces the WHOLE manuscript (still
-      // untouched: nothing was committed during the composition) as ONE
-      // atomic undo step. Never the mounted page's value: it keeps whatever
-      // part of the page the IME's own selection did not cover.
-      let typed = event.data ?? "";
-      if (!typed && snapshot) {
-        const diff = commonPrefixSuffixDiff(snapshot.beforeText, finalPageText);
-        typed = finalPageText.slice(diff.editStart, diff.editStart + diff.insertedLength);
-      }
-      if (typed) {
-        replaceWholeDocument(typed);
-      } else {
-        // Canceled: the manuscript is unchanged. The textarea returns to the
-        // mounted page (React re-assigns it), still wholly selected.
-        setAllSelected(true);
-        pendingSelectionRef.current = { start: 0, end: pageText.length };
-      }
-    } else if (snapshot && snapshot.beforeText !== finalPageText) {
-      const rawEdit = computeRawEditFromBeforeInput(snapshot, finalPageText, currentPage.start);
-      if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
-      const nextCanonical = content.slice(0, currentPage.start) + finalPageText + content.slice(currentPage.end);
-      const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
-      const nextState = commitCanonical(
-        nextCanonical,
-        rawEdit
-          ? {
-              editStart: rawEdit.rangeStart,
-              editEnd: rawEdit.rangeStart + rawEdit.removedText.length,
-              insertedLength: rawEdit.insertedText.length,
-            }
-          : undefined
-      );
-      reportCaret(globalCaret);
-
-      // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §B: an IME composition can
-      // ALSO push this page past its target size, exactly like ordinary
-      // typing (see `handleChange`'s identical reconciliation, which this
-      // path was previously missing entirely). When that happens, this
-      // page's own `end` moves EARLIER (a new page boundary now falls
-      // partway through what used to be one page -- see the module doc),
-      // so the just-composed text -- and the caret the IME left there --
-      // silently end up on the NEXT page while `currentPageIndex` still
-      // pointed at this one. The next render's now-shorter `pageText`
-      // slice then made the browser clamp the stale caret to that
-      // truncated length, landing it at this page's end instead of near
-      // the start of the (correct) next page.
-      const nextPages = computeEditorPages(nextCanonical, nextState);
-      const targetIndex = editorPageForGlobalOffset(nextPages, globalCaret);
-      if (targetIndex !== safePageIndex) {
-        switchToPageForOffset(globalCaret, nextPages);
-      }
+    if (!compositionTxnRef.current) {
+      // Already finished by a recovery signal (or never begun): nothing to commit.
+      perfMark("PagedEditor:ime:stray-compositionend", { dataLength: event.data?.length ?? 0 });
+      return;
     }
-
-    if (pendingJump?.kind === "global") {
-      // Its offsets describe the manuscript a 全文選択 composition just replaced.
-      if (wholeSelection && lastOwnContentRef.current !== contentRef.current) return;
-      switchToPageForOffset(
-        pendingJump.end,
-        computeEditorPages(contentRef.current, { forcedBoundaries, joinedRanges }),
-        pendingJump,
-        { scrollHint: "upper" }
-      );
-    } else if (externalChangePending) {
-      reanchorForExternalContent(contentRef.current);
-    }
+    finishComposition(el, event.data ?? "", "compositionend");
   };
 
   /**
@@ -1506,12 +1600,12 @@ function PagedEditorInner(
       <div className="relative min-h-0 flex-1">
         {pageLocalGhostRanges.length > 0 && (
           <div className="pointer-events-none absolute inset-0">
-            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={displayedPageText} marks={wholeCompositionText === null ? pageLocalGhostRanges : []} />
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={displayedPageText} marks={compositionText === null ? pageLocalGhostRanges : []} />
           </div>
         )}
         {showDescriptionMarks && (
           <div className="pointer-events-none absolute inset-0">
-            <DescriptionMarkOverlay textareaRef={textareaRef} text={displayedPageText} marks={wholeCompositionText === null ? pageLocalDescriptionMarks : []} />
+            <DescriptionMarkOverlay textareaRef={textareaRef} text={displayedPageText} marks={compositionText === null ? pageLocalDescriptionMarks : []} />
           </div>
         )}
         {/* Stays mounted while the check is enabled: a stale analysis
@@ -1521,7 +1615,7 @@ function PagedEditorInner(
             300k-character Preview) that delayed the compose request. */}
         {writingCheck?.enabled && (
           <div className="pointer-events-none absolute inset-0">
-            <WritingCheckOverlay textareaRef={textareaRef} text={displayedPageText} issues={wholeCompositionText === null ? pageLocalIssues : []} />
+            <WritingCheckOverlay textareaRef={textareaRef} text={displayedPageText} issues={compositionText === null ? pageLocalIssues : []} />
           </div>
         )}
         <textarea
@@ -1541,7 +1635,7 @@ function PagedEditorInner(
           onKeyUp={handleKeyUp}
           onBlur={handleBlur}
           onCompositionStart={handleCompositionStart}
-          onCompositionUpdate={(event) => onNativeKeyDown?.(event.currentTarget)}
+          onCompositionUpdate={handleCompositionUpdate}
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           spellCheck={false}

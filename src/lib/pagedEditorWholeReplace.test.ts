@@ -21,54 +21,64 @@ import { createUndoHistory, pushEdit, redo, undo } from "@/lib/windowedEditor/un
 const editor = readFileSync(resolve("src/components/PagedEditor.tsx"), "utf8");
 const between = (start: string, end: string) => editor.slice(editor.indexOf(start), editor.indexOf(end, editor.indexOf(start)));
 
-describe("an IME composition over 全文選択", () => {
-  const start = between("const handleCompositionStart =", "const handleCompositionEnd =");
-  const end = between("const handleCompositionEnd =", "const moveSelectionToGlobal =");
-  const change = between("const handleChange =", "const replaceWholeDocument =");
+describe("an IME composition (one transaction; see compositionTransaction.test.ts for its outcomes)", () => {
+  const begin = between("const beginComposition =", "const finishComposition =");
+  const finish = between("const finishComposition =", "const handleChange =");
+  const change = between("const handleChange =", "const deleteAcrossBoundaryBackward =");
 
-  it("is recognised from 全文選択 itself, not the DOM selection the IME may already have moved", () => {
-    expect(start).toContain("compositionWholeSelectionRef.current = allSelectedRef.current ? { canonical: content } : null;");
-    expect(start).not.toContain("el.selectionStart === 0 && el.selectionEnd === el.value.length ? { canonical");
+  it("is recognised as 全文選択 from 全文選択 itself, not the DOM selection the IME may already have moved", () => {
+    expect(begin).toContain("whole: allSelectedRef.current,");
+    expect(begin).toContain("baseCanonical: content,");
+    expect(begin).not.toContain("el.selectionStart === 0 && el.selectionEnd === el.value.length");
   });
 
   it("an IME keydown over 全文選択 keeps it through the IME's own selection move before compositionstart", () => {
     const keyDown = between("const handleKeyDown =", "const handleSelect =");
-    expect(keyDown).toMatch(/wholeInputArmedRef\.current =\s*allSelectedRef\.current &&\s*!isComposingRef\.current &&\s*\(event\.key === "Process" \|\| event\.nativeEvent\.keyCode === 229\)/);
+    expect(keyDown).toMatch(/wholeInputArmedRef\.current =\s*allSelectedRef\.current &&\s*!isComposingRef\.current &&\s*\(event\.key === "Process" \|\| event\.nativeEvent\.keyCode === 229\);/);
     const listener = between("const onSelectionChange = () => {", 'document.addEventListener("selectionchange"');
-    expect(listener).toContain("wholeInputArmedRef.current");
+    expect(listener).toContain("wholeInputArmedRef.current || isComposingRef.current");
     const select = between("const handleSelect =", "const handleKeyUp =");
     expect(select).toContain("!wholeInputArmedRef.current &&");
+    expect(select).toContain("!isComposingRef.current &&");
   });
 
-  it("the arming ends at keyup, pointerdown, blur and compositionstart", () => {
-    expect(between("const handleKeyUp =", "const disarmWholeInput =")).toContain("wholeInputArmedRef.current = false;");
+  it("the arming ends at pointerdown, blur and the composition -- NOT at keyup (a real-OS keyup can precede compositionstart)", () => {
+    expect(between("const handleKeyUp =", "const disarmWholeInput =")).not.toContain("wholeInputArmedRef.current = false;");
     expect(editor).toContain("onPointerDown={disarmWholeInput}");
     expect(between("const handleBlur =", "const handleCompositionStart =")).toContain("wholeInputArmedRef.current = false;");
-    expect(start).toContain("wholeInputArmedRef.current = false;");
+    expect(begin).toContain("wholeInputArmedRef.current = false;");
   });
 
-  it("commits nothing while composing: the textarea mirrors the IME, the manuscript stays whole", () => {
-    expect(change).toMatch(/if \(isComposingRef\.current && compositionWholeSelectionRef\.current\) \{\s*setWholeCompositionText\(nextPageText\);\s*onNativeChangeCommitted\?\.\(el\);\s*return;\s*\}/);
+  it("commits nothing while composing, page-local or 全文選択: the textarea mirrors the IME", () => {
+    expect(change).toMatch(/if \(compositionTxnRef\.current\) \{\s*pendingBeforeInputRef\.current = null;\s*setCompositionText\(nextPageText\);\s*onNativeChangeCommitted\?\.\(el\);\s*return;\s*\}/);
     expect(editor).toContain("value={displayedPageText}");
-    expect(editor).toContain("const displayedPageText = wholeCompositionText ?? pageText;");
+    expect(editor).toContain("const displayedPageText = compositionText ?? pageText;");
   });
 
-  it("compositionend replaces the whole manuscript ONCE with the committed string, never the page's DOM value", () => {
-    expect(end).toContain("setWholeCompositionText(null);");
-    expect(end).toContain('let typed = event.data ?? "";');
-    expect(end).toContain("replaceWholeDocument(typed);");
-    expect(end).not.toContain("insertedText: finalPageText");
+  it("finishes ONCE with the IME's string (compositionend data, else its last compositionupdate), never the page's DOM value", () => {
+    expect(finish).toContain("decideCompositionOutcome(txn, content, finalPageText, data ?? txn.lastData, el.selectionStart)");
+    expect(finish).toContain("replaceWholeDocument(outcome.text, { focus: keepFocus });");
+    expect(between("const handleCompositionEnd =", "const moveSelectionToGlobal =")).toContain('finishComposition(el, event.data ?? "", "compositionend");');
+    expect(between("const handleCompositionUpdate =", "const handleCompositionEnd =")).toContain("compositionTxnRef.current.lastData = event.data ?? null;");
   });
 
-  it("a canceled composition leaves the manuscript and 全文選択 as they were", () => {
-    expect(end).toMatch(/\} else \{[\s\S]*?setAllSelected\(true\);\s*pendingSelectionRef\.current = \{ start: 0, end: pageText\.length \};/);
+  it("a canceled or unknown composition leaves the manuscript and 全文選択 as they were", () => {
+    expect(finish).toMatch(/outcome\.kind === "whole-unchanged"\) \{[\s\S]*?restoreMountedPage\(\);\s*setAllSelected\(true\);/);
+  });
+
+  it("recovers when compositionend never arrives: a non-composing keydown, blur, or a new composition finishes it", () => {
+    expect(between("const handleKeyDown =", "const handleSelect =")).toMatch(/if \(compositionTxnRef\.current && !event\.nativeEvent\.isComposing\) \{\s*finishComposition\(el, null, "keydown"\);/);
+    expect(between("const handleBlur =", "const handleCompositionStart =")).toContain('finishComposition(event.currentTarget, null, "blur")');
+    expect(begin).toContain("if (compositionTxnRef.current) finishComposition(el, null, `restart:${source}`);");
+    // A late compositionend after a recovery commits nothing.
+    expect(between("const handleCompositionEnd =", "const moveSelectionToGlobal =")).toMatch(/if \(!compositionTxnRef\.current\) \{[\s\S]*?return;\s*\}/);
   });
 
   it("its own commit is not mistaken for an external content change (which reset the undo history)", () => {
-    const readAt = end.indexOf("const externalChangePending =");
+    const readAt = finish.indexOf("const externalChangePending =");
     expect(readAt).toBeGreaterThan(-1);
-    expect(readAt).toBeLessThan(end.indexOf("if (wholeSelection) {"));
-    expect(end).toContain("} else if (externalChangePending) {");
+    expect(readAt).toBeLessThan(finish.indexOf('if (outcome.kind === "whole-replace") {'));
+    expect(finish).toContain("} else if (externalChangePending) {");
   });
 });
 
@@ -76,14 +86,14 @@ describe("typed / deleted / pasted input over 全文選択", () => {
   const handler = between("const handleBeforeInputNative =", "useEffect(() => {\n    const el = textareaRef.current;");
 
   it("leaves IME input types to the composition path", () => {
-    expect(handler).toContain('const compositionInput = inputType.includes("Composition");');
-    expect(handler).toMatch(/allSelectedRef\.current &&\s*!isComposingRef\.current &&\s*!compositionInput &&/);
+    expect(handler).toMatch(/if \(inputType\.includes\("Composition"\) \|\| nativeEvent\.isComposing\) \{\s*if \(!compositionTxnRef\.current\) beginComposition\(el, "beforeinput"\);[\s\S]*?return;\s*\}/);
+    expect(handler).toMatch(/allSelectedRef\.current &&\s*!isComposingRef\.current &&\s*\(inputType\.startsWith\("insert"\)/);
   });
 
   it("an uncancelable beforeinput commits its own text at input, never the page's DOM value", () => {
     expect(handler).toMatch(/if \(nativeEvent\.cancelable\) \{\s*nativeEvent\.preventDefault\(\);\s*replaceWholeDocument\(typed, \{ typedCharacter \}\);\s*\} else \{[\s\S]*?pendingWholeInsertRef\.current = typed;/);
-    const change = between("const handleChange =", "const replaceWholeDocument =");
-    expect(change).toMatch(/const pendingWhole = pendingWholeInsertRef\.current;\s*if \(pendingWhole !== null && !isComposingRef\.current\) \{[\s\S]*?replaceWholeDocument\(pendingWhole\);/);
+    const change = between("const handleChange =", "const deleteAcrossBoundaryBackward =");
+    expect(change).toMatch(/const pendingWhole = pendingWholeInsertRef\.current;\s*if \(pendingWhole !== null\) \{[\s\S]*?replaceWholeDocument\(pendingWhole\);/);
   });
 });
 

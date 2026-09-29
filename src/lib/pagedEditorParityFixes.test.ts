@@ -45,7 +45,7 @@ describe("caret placement after an edit React has not committed yet", () => {
 
   it("every same-page editing path passes the post-edit text", () => {
     for (const call of [
-      "switchToPageForOffset(typed.length, newPages, undefined, { nextContent: typed })",
+      "switchToPageForOffset(typed.length, newPages, undefined, { nextContent: typed, focus: options?.focus })",
       "{ affinity: \"backward\", nextContent: nextCanonical }",
       "{ start: result.selectionStart, end: result.selectionEnd }, { nextContent: result.canonicalText })",
       "switchToPageForOffset(globalCaret, newPages, undefined, { nextContent: nextCanonical })",

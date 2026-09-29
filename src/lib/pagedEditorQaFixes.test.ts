@@ -46,12 +46,13 @@ describe("TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: page-switch selection 
   });
 
   it("reconciles the editor page after an IME composition, exactly like it already does after ordinary typing", () => {
+    // The composition's ONE commit lives in finishComposition (compositionend or its recovery).
     const compositionEnd = editor.slice(
-      editor.indexOf("const handleCompositionEnd ="),
-      editor.indexOf("const moveSelectionToGlobal =")
+      editor.indexOf("const finishComposition ="),
+      editor.indexOf("const handleChange =")
     );
     expect(compositionEnd).toContain("computeEditorPages(nextCanonical, nextState)");
     expect(compositionEnd).toContain("editorPageForGlobalOffset(nextPages, globalCaret)");
-    expect(compositionEnd).toContain("switchToPageForOffset(globalCaret, nextPages)");
+    expect(compositionEnd).toContain("switchToPageForOffset(globalCaret, nextPages, undefined, { focus: keepFocus })");
   });
 });

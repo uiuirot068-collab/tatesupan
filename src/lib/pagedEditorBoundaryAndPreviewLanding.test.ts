@@ -87,8 +87,8 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §B: deterministic ca
     expect(moveSelection).toContain('{ scrollHint: "upper", affinity: start < end ? "backward" : "forward" }');
 
     const compositionEnd = editor.slice(
-      editor.indexOf("const handleCompositionEnd ="),
-      editor.indexOf("const moveSelectionToGlobal =")
+      editor.indexOf("const finishComposition ="),
+      editor.indexOf("const handleChange =")
     );
     expect(compositionEnd).toMatch(
       /switchToPageForOffset\(\s*pendingJump\.end,\s*computeEditorPages\(contentRef\.current, \{ forcedBoundaries, joinedRanges \}\),\s*pendingJump,\s*\{ scrollHint: "upper" \}\s*\)/

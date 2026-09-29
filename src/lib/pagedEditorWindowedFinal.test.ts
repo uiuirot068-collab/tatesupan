@@ -32,7 +32,11 @@ describe("Ctrl/Cmd+A = 全文選択", () => {
 
   it("全文選択 lasts exactly while the mounted page stays fully selected (Ctrl+A's own keyup must not end it)", () => {
     const select = between("const handleSelect =", "const handleBlur =");
-    expect(select).toContain("if (!wholeInputArmedRef.current && (el.selectionStart !== 0 || el.selectionEnd !== el.value.length)) setAllSelected(false);");
+    // Ends only when the page is no longer fully selected, and never for an
+    // IME key's own selection move or a composition's caret.
+    expect(select).toMatch(
+      /allSelectedRef\.current &&\s*!wholeInputArmedRef\.current &&\s*!isComposingRef\.current &&\s*\(el\.selectionStart !== 0 \|\| el\.selectionEnd !== el\.value\.length\)\s*\)\s*\{\s*setAllSelected\(false\);/
+    );
     expect(editor).not.toContain("justSetAllSelectedRef");
   });
 
