@@ -39,13 +39,13 @@ export default function EditorOptionsDrawer({
   };
   const flatOptionClass = "border-b border-ink/10 pb-3";
   const groupedOptionClass = "rounded-xl border border-ink/15 bg-base p-3";
-  const buttonClass = "rounded border border-ink/20 px-3 py-2 text-left text-sm font-medium text-ink/75 hover:bg-ink/5";
+  const buttonClass = "rounded border border-ink/20 bg-ink/[0.04] px-3 py-2 text-left text-sm font-medium text-ink/85 hover:border-ink/35 hover:bg-ink/[0.08]";
 
   return (
     <div className="fixed inset-0 z-[75] bg-black/35" onMouseDown={onClose}>
       <aside aria-label="オプション" className="ml-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-base shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-          <div><p className="text-[10px] tracking-[0.16em] text-ink/45">EDITOR OPTIONS</p><h2 className="text-base font-bold">オプション</h2></div>
+          <div><p className="text-[10px] tracking-[0.16em] text-ink/45">EDITOR OPTIONS</p><h2 className="text-base font-bold text-ink">オプション</h2></div>
           <button type="button" onClick={onClose} aria-label="オプションを閉じる" className="rounded p-2 text-xl text-ink/55 hover:bg-ink/5">×</button>
         </header>
         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">

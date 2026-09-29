@@ -118,7 +118,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
         >
           <div aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-ink/15" />
           <div className="flex flex-none items-start justify-between gap-3 px-4 pt-2">
-            <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold">
+            <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold text-ink">
               {REVIEW_HUB_HEADING}
             </h2>
             <ReviewHubFooterPinNote />
@@ -149,7 +149,7 @@ export function ReviewHubPanel({ open, onClose, sections, maxHeightPx = null, sh
       className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-[min(22rem,45vh)] overflow-y-auto rounded-lg border border-ink/15 bg-base p-4 text-sm text-ink shadow-lg md:left-2 md:right-auto md:w-[22rem] md:max-w-[calc(100%-1rem)]"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold">
+        <h2 id={REVIEW_HUB_HEADING_ID} className="text-base font-bold text-ink">
           {REVIEW_HUB_HEADING}
         </h2>
         <ReviewHubFooterPinNote />

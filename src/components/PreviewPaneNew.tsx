@@ -272,7 +272,7 @@ export default function PreviewPaneNew({
       {confirmOpen && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/35 p-4" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="v2-export-cancel-title" className="w-full max-w-sm rounded-xl bg-base p-5 shadow-2xl">
-            <h2 id="v2-export-cancel-title" className="text-base font-bold">書き出しを中断しますか？</h2>
+            <h2 id="v2-export-cancel-title" className="text-base font-bold text-ink">書き出しを中断しますか？</h2>
             <p className="mt-2 text-sm text-ink/65">確認中は次のページ処理を開始しません。未完成ファイルは保存されません。</p>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={continueExport} className="rounded border border-ink/20 px-4 py-2 text-sm">書き出しを続ける</button>
