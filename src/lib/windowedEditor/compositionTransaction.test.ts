@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compositionEdit, decideCompositionOutcome, type CompositionBase } from "./compositionTransaction";
+import { compositionEdit, decideCompositionOutcome, decideWholeInputOutcome, type CompositionBase } from "./compositionTransaction";
 import { createUndoHistory, pushEdit, redo, undo } from "./undoModel";
 
 const para = (i: number) => `　第${i}段落。春の宵、窓辺に置いた硝子の瓶が淡い光を返していた。\n`;
@@ -99,6 +99,48 @@ describe("decideCompositionOutcome: page-local (large in-page selection)", () =>
   it("discards on an external change or a page that is not the manuscript's slice", () => {
     expect(decideCompositionOutcome(base(), "changed", PAGE + "a", "a", 1)).toEqual({ kind: "discard", reason: "external-change" });
     expect(decideCompositionOutcome(base({ beforeText: "other" }), MANUSCRIPT, "othera", "a", 6)).toEqual({ kind: "discard", reason: "stale-page" });
+  });
+});
+
+describe("decideWholeInputOutcome: 全文選択's empty IME receptacle", () => {
+  const whole = (overrides: Partial<Parameters<typeof decideWholeInputOutcome>[0]> = {}) =>
+    decideWholeInputOutcome({
+      baseCanonical: MANUSCRIPT,
+      currentCanonical: MANUSCRIPT,
+      startValue: "",
+      receptacleValue: "テスト",
+      data: "テスト",
+      source: "compositionend",
+      ...overrides,
+    });
+
+  it("replaces the whole manuscript with the IME's committed string when the receptacle holds exactly it", () => {
+    expect(whole()).toEqual({ kind: "whole-replace", text: "テスト", source: "compositionend" });
+    expect(whole({ data: "電話", receptacleValue: "電話", source: "compositionupdate" })).toEqual({ kind: "whole-replace", text: "電話", source: "compositionupdate" });
+  });
+
+  it("the real-OS failure: a composition that swallowed ~39k characters of old page text is refused, the manuscript unchanged", () => {
+    const swallowed = "x" + PAGE.slice(10_968);
+    // Even when the IME reports that same string as its data: the receptacle
+    // never held page text, so the provenance check is exact.
+    expect(whole({ data: swallowed, receptacleValue: "x" })).toMatchObject({ kind: "whole-unchanged", reason: "receptacle-mismatch" });
+    expect(whole({ data: "x", receptacleValue: swallowed })).toMatchObject({ kind: "whole-unchanged", reason: "receptacle-mismatch" });
+  });
+
+  it("is not a size limit: a long legitimate string (a registered phrase, a prediction) is accepted when it is exactly the receptacle's", () => {
+    const phrase = "東京都千代田区千代田一丁目一番一号　株式会社縦書き出版　編集部御中".repeat(40);
+    expect(whole({ data: phrase, receptacleValue: phrase })).toMatchObject({ kind: "whole-replace", text: phrase });
+  });
+
+  it("fails safe: unknown, canceled, a receptacle that was not empty, or an external change", () => {
+    expect(whole({ data: null, source: "none" })).toMatchObject({ kind: "whole-unchanged", reason: "unknown-text" });
+    expect(whole({ data: "", receptacleValue: "" })).toMatchObject({ kind: "whole-unchanged", reason: "canceled" });
+    expect(whole({ startValue: "前" })).toMatchObject({ kind: "whole-unchanged", reason: "receptacle-not-empty" });
+    expect(whole({ currentCanonical: MANUSCRIPT + "x" })).toMatchObject({ kind: "whole-unchanged", reason: "external-change" });
+  });
+
+  it("normalizes CRLF like a textarea value", () => {
+    expect(whole({ data: "a\r\nb", receptacleValue: "a\nb" })).toMatchObject({ kind: "whole-replace", text: "a\nb" });
   });
 });
 

@@ -37,6 +37,55 @@ export type CompositionOutcome =
   | { kind: "discard"; reason: "external-change" | "stale-page" };
 
 /**
+ * 全文選択's IME receptacle (see PagedEditor): while 全文選択 is on, input goes
+ * to a separate textarea that starts EMPTY and never holds manuscript text, so
+ * the IME composes over nothing. (On the mounted page's own textarea a real
+ * Windows IME composed over the page selection INCLUDING old text: its
+ * compositionupdate data was ~39k characters of old page -- no event carried
+ * the user's string.) Where the committed string came from, for the trace:
+ */
+export type WholeInputPayloadSource = "compositionend" | "compositionupdate" | "beforeinput" | "none";
+
+export type WholeInputOutcome =
+  | { kind: "whole-replace"; text: string; source: WholeInputPayloadSource }
+  /** The manuscript is left exactly as it is. */
+  | {
+      kind: "whole-unchanged";
+      reason: "canceled" | "unknown-text" | "receptacle-mismatch" | "receptacle-not-empty" | "external-change";
+      source: WholeInputPayloadSource;
+    };
+
+/**
+ * Decides the ONE whole-manuscript commit of a receptacle transaction, from
+ * the IME's (or the input's) own string only -- never the page's DOM value.
+ * The provenance check is exact, not a size limit: the receptacle was empty
+ * when the transaction began and received only this input, so it must hold
+ * exactly the committed string. Anything else (a composition that swallowed
+ * other text, a string never seen, a canceled composition, a manuscript that
+ * changed meanwhile) changes nothing.
+ */
+export function decideWholeInputOutcome(input: {
+  baseCanonical: string;
+  currentCanonical: string;
+  /** The receptacle's value when the transaction began (must be ""). */
+  startValue: string;
+  /** The receptacle's value now. */
+  receptacleValue: string;
+  data: string | null;
+  source: WholeInputPayloadSource;
+}): WholeInputOutcome {
+  const { source } = input;
+  if (input.currentCanonical !== input.baseCanonical) return { kind: "whole-unchanged", reason: "external-change", source };
+  if (input.startValue !== "") return { kind: "whole-unchanged", reason: "receptacle-not-empty", source };
+  if (input.data === null || source === "none") return { kind: "whole-unchanged", reason: "unknown-text", source };
+  // A textarea value never holds CR (see insertedTextOf in PagedEditor).
+  const text = input.data.replace(/\r\n?/g, "\n");
+  if (text === "") return { kind: "whole-unchanged", reason: "canceled", source };
+  if (input.receptacleValue.replace(/\r\n?/g, "\n") !== text) return { kind: "whole-unchanged", reason: "receptacle-mismatch", source };
+  return { kind: "whole-replace", text, source };
+}
+
+/**
  * The exact splice that turns `beforeText` into `finalText`, in canonical
  * offsets. Uses the composition's starting selection when the text around it
  * is intact (the IME replaced exactly that selection), otherwise the

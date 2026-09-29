@@ -139,6 +139,57 @@ describe("an IME composition (one transaction; see compositionTransaction.test.t
   });
 });
 
+describe("全文選択's EMPTY IME receptacle (real-OS Windows IME composed over the page selection, old text included)", () => {
+  const enter = between("const selectEntireManuscript =", "const exitWholeToPage =");
+  const finishWhole = between("const finishWholeInput =", "const handleWholeInputKeyDown =");
+
+  it("Ctrl+A and 全文を選択 enter it the same way: the canonical state, then focus in the EMPTY receptacle -- the page's native selection is not used", () => {
+    expect(enter).toContain("setAllSelected(true);");
+    expect(enter).toMatch(/if \(!wholeInputTxnRef\.current\) input\.value = "";\s*input\.focus\(\{ preventScroll: true \}\);/);
+    expect(enter).not.toContain("setSelectionRange");
+    expect(between("const handleKeyDown =", "const handleSelect =")).toContain("selectEntireManuscript();");
+    expect(editor).toContain("onClick={isFullManuscriptSelected ? deselectEntireManuscript : selectEntireManuscript}");
+  });
+
+  it("the committed string is the IME's own (compositionend, else its last update), checked exactly against the receptacle -- never the page's value", () => {
+    expect(finishWhole).toContain("decideWholeInputOutcome({");
+    expect(finishWhole).toContain("receptacleValue,");
+    expect(finishWhole).not.toContain("textareaRef");
+    expect(finishWhole).not.toContain("pageText");
+    expect(finishWhole).toContain("payloadSource: outcome.source,");
+    expect(between("const handleWholeInputCompositionEnd =", "const handleWholeInputPaste =")).toContain('finishWholeInput(event.data ?? "", "compositionend", "compositionend");');
+    expect(between("const handleWholeInputCompositionUpdate =", "const handleWholeInputCompositionEnd =")).toContain("wholeInputTxnRef.current.lastData = event.data ?? null;");
+  });
+
+  it("commits once (whole-replace) or not at all; 全文選択 stays when nothing changes", () => {
+    expect(finishWhole).toMatch(/if \(outcome\.kind === "whole-replace"\) \{[\s\S]*?replaceWholeDocument\(outcome\.text, \{ focus: keepFocus \}\);[\s\S]*?return;\s*\}/);
+    expect(finishWhole.match(/replaceWholeDocument\(/g)).toHaveLength(1);
+  });
+
+  it("typing, Enter, paste, Backspace / Delete, cut and copy over 全文選択 act on the whole manuscript from the receptacle", () => {
+    expect(between("const handleWholeInputBeforeInput =", "useEffect(() => {\n    const el = wholeInputRef.current;")).toMatch(/nativeEvent\.preventDefault\(\);\s*commitWholeInput\(typed, "beforeinput", \{ typedCharacter \}\);/);
+    expect(between("const handleWholeInputKeyDown =", "const handleWholeInputBeforeInput =")).toMatch(/event\.key === "Backspace" \|\| event\.key === "Delete"\)\) \{\s*event\.preventDefault\(\);\s*commitWholeInput\("", "beforeinput"\);/);
+    expect(between("const handleWholeInputPaste =", "const handleWholeInputCopy =")).toContain("commitWholeInput(");
+    expect(between("const handleWholeInputCopy =", "const handleWholeInputCut =")).toContain('event.clipboardData.setData("text/plain", content);');
+    expect(between("const handleWholeInputCut =", "const handleWholeInputBlur =")).toContain('commitWholeInput("", "beforeinput");');
+    // Copy / Cut on an EMPTY textarea stay enabled.
+    expect(editor).toContain('el.addEventListener("beforecopy", enableClipboard);');
+    expect(editor).toContain('el.addEventListener("beforecut", enableClipboard);');
+  });
+
+  it("the page's textarea taking focus ends 全文選択; while it is on, an unfocused page input is refused", () => {
+    expect(editor).toContain("onFocus={handlePageFocus}");
+    expect(between("const handlePageFocus =", "/**")).toContain("setAllSelected(false);");
+    expect(between("const handleChange =", "const deleteAcrossBoundaryBackward =")).toMatch(/if \(allSelectedRef\.current && document\.activeElement !== el\) \{[\s\S]*?el\.value = pageTextRef\.current;\s*return;\s*\}/);
+  });
+
+  it("the page shows 全文選択 with the held-selection highlight, and the receptacle is labelled and 16px (no iOS zoom)", () => {
+    expect(editor).toContain("isFullManuscriptSelected ? wholePageMark : pageLocalGhostRanges");
+    expect(editor).toContain('aria-label="全文選択中の入力欄（入力すると原稿全体を置き換えます）"');
+    expect(editor).toMatch(/border-accent bg-base px-2 py-2 text-base/);
+  });
+});
+
 describe("typed / deleted / pasted input over 全文選択", () => {
   const handler = between("const handleBeforeInputNative =", "useEffect(() => {\n    const el = textareaRef.current;");
 

@@ -79,7 +79,12 @@ import {
   type BeforeInputEditSnapshot,
   type UndoHistory,
 } from "@/lib/windowedEditor/undoModel";
-import { decideCompositionOutcome, type CompositionBase } from "@/lib/windowedEditor/compositionTransaction";
+import {
+  decideCompositionOutcome,
+  decideWholeInputOutcome,
+  type CompositionBase,
+  type WholeInputPayloadSource,
+} from "@/lib/windowedEditor/compositionTransaction";
 import { resolveTextareaDeletion } from "@/lib/editorInputIntegrity";
 import { perfMark, perfSpan } from "@/lib/perfDebug";
 import WritingCheckOverlay from "./WritingCheckOverlay";
@@ -391,6 +396,19 @@ function PagedEditorInner(
     runImeSettle: (caret: number, affinity: "forward" | "backward", reveal: boolean) => void;
     endWholeImePre: (reason: string) => void;
   } | null>(null);
+  // 全文選択's IME receptacle: while 全文選択 is on, input (typing, IME,
+  // paste, deletion, copy / cut) goes to this separate textarea, which starts
+  // EMPTY and never holds manuscript text -- the page's own textarea holds a
+  // whole 編集ページ, and a real Windows IME composed over that selection
+  // INCLUDING old text (its compositionupdate data was ~39k old characters; no
+  // event carried the user's string). The IME composes over nothing here, and
+  // the committed string is checked against the receptacle exactly
+  // (`decideWholeInputOutcome`). The page's native selection is not used for
+  // 全文選択 at all; the page is shown with the held-selection highlight.
+  const wholeInputRef = useRef<HTMLTextAreaElement>(null);
+  const wholeInputTxnRef = useRef<{ baseCanonical: string; startValue: string; lastData: string | null } | null>(null);
+  // A receptacle input whose beforeinput could not be canceled: its own text.
+  const pendingWholeInputInsertRef = useRef<string | null>(null);
   // A 全文選択 edit whose beforeinput could not be canceled: its text, which
   // the following input event commits instead of the page's own DOM value.
   const pendingWholeInsertRef = useRef<string | null>(null);
@@ -835,7 +853,14 @@ function PagedEditorInner(
       outcome: outcome.kind,
       detail: "reason" in outcome ? outcome.reason : null,
       whole: txn.whole,
+      // Where the committed string came from: compositionend's data, else the
+      // last compositionupdate's (a recovery), else none. Never the DOM.
+      payloadSource: data !== null ? "compositionend" : txn.lastData !== null ? "compositionupdate" : "none",
       dataLength: (data ?? txn.lastData)?.length ?? null,
+      compositionendDataLength: data?.length ?? null,
+      lastUpdateDataLength: txn.lastData?.length ?? null,
+      beforePageLength: txn.beforeText.length,
+      beforeSelection: txn.selectionEnd - txn.selectionStart,
       finalLength: finalPageText.length,
     });
     // Puts the textarea back on the unchanged mounted page. React would too
@@ -858,8 +883,7 @@ function PagedEditorInner(
       // replacement. The manuscript and 全文選択 stay as they were.
       restoreMountedPage();
       setAllSelected(true);
-      el.setSelectionRange(0, pageText.length);
-      pendingSelectionRef.current = { start: 0, end: pageText.length, focus: keepFocus };
+      if (keepFocus) wholeInputRef.current?.focus({ preventScroll: true });
     } else if (outcome.kind === "discard") {
       // The manuscript changed under the composition: keep it as it is now.
       restoreMountedPage();
@@ -937,6 +961,7 @@ function PagedEditorInner(
     let nextPageText = el.value;
     perfMark("PagedEditor:trace:input", {
       inputType: (event.nativeEvent as InputEvent).inputType ?? "",
+      dataLength: (event.nativeEvent as InputEvent).data?.length ?? null,
       isComposing: (event.nativeEvent as InputEvent).isComposing ?? false,
       whole: allSelectedRef.current,
       pre: wholeImePreRef.current !== null,
@@ -983,6 +1008,14 @@ function PagedEditorInner(
       pendingBeforeInputRef.current = null;
       replaceWholeDocument(pendingWhole);
       onNativeChangeCommitted?.(el);
+      return;
+    }
+    // 全文選択 takes its input in the receptacle; the page's textarea changing
+    // without focus meanwhile is never the user's edit: refused, page restored.
+    if (allSelectedRef.current && document.activeElement !== el) {
+      perfMark("PagedEditor:dom-diverged", { inputType: "unfocused-during-whole", domLength: nextPageText.length, pageLength: pageTextRef.current.length });
+      pendingBeforeInputRef.current = null;
+      el.value = pageTextRef.current;
       return;
     }
 
@@ -1329,9 +1362,252 @@ function PagedEditorInner(
     // the 全文を選択 button) must not end it through a later selection move.
     selectionGestureRef.current = false;
     setAllSelected(true);
-    const el = textareaRef.current;
-    el?.focus({ preventScroll: true });
-    el?.setSelectionRange(0, el.value.length);
+    // Input now goes to the EMPTY receptacle (never the page's own textarea,
+    // whose native selection is left alone): see `wholeInputRef`. Focused in
+    // this same event, so a phone's soft keyboard opens (or stays) with it.
+    const input = wholeInputRef.current;
+    if (input) {
+      if (!wholeInputTxnRef.current) input.value = "";
+      input.focus({ preventScroll: true });
+    }
+    perfMark("PagedEditor:whole-input:enter", { page: safePageIndex, pageLength: pageText.length });
+  };
+
+  /** Leaves 全文選択 back to ordinary editing on the mounted page (its own caret, as it was). */
+  const exitWholeToPage = (reason: string) => {
+    perfMark("PagedEditor:whole-input:exit", { reason });
+    setAllSelected(false);
+    const input = wholeInputRef.current;
+    if (input && !wholeInputTxnRef.current) input.value = "";
+    textareaRef.current?.focus({ preventScroll: true });
+  };
+
+  /** ONE whole-manuscript commit from the receptacle (typed / pasted / deleted / cut text), then back to the page. */
+  const commitWholeInput = (text: string, source: WholeInputPayloadSource, options?: { typedCharacter?: boolean }) => {
+    perfMark("PagedEditor:whole-input:commit", { source, committedLength: text.length });
+    const input = wholeInputRef.current;
+    if (input) input.value = "";
+    replaceWholeDocument(text, { typedCharacter: options?.typedCharacter, focus: true });
+  };
+
+  const openWholeInputTxn = (el: HTMLTextAreaElement, source: string) => {
+    wholeInputTxnRef.current = { baseCanonical: content, startValue: el.value, lastData: null };
+    isComposingRef.current = true;
+    cancelImeSettle();
+    perfMark("PagedEditor:whole-input:begin", { source, startLength: el.value.length });
+  };
+
+  /**
+   * Closes a receptacle composition with ONE commit or none, whatever ended
+   * it: compositionend (`data`), or a recovery (keydown / blur / a new
+   * composition) with the last compositionupdate's data. The payload is the
+   * IME's string only, verified against the receptacle (`decideWholeInputOutcome`);
+   * the page's textarea is never read.
+   */
+  const finishWholeInput = (data: string | null, source: WholeInputPayloadSource, reason: string) => {
+    const txn = wholeInputTxnRef.current;
+    if (!txn) return;
+    wholeInputTxnRef.current = null;
+    isComposingRef.current = false;
+    const input = wholeInputRef.current;
+    const receptacleValue = input?.value ?? "";
+    const outcome = decideWholeInputOutcome({
+      baseCanonical: txn.baseCanonical,
+      currentCanonical: content,
+      startValue: txn.startValue,
+      receptacleValue,
+      data,
+      source,
+    });
+    perfMark("PagedEditor:whole-input:finish", {
+      reason,
+      outcome: outcome.kind,
+      detail: outcome.kind === "whole-unchanged" ? outcome.reason : null,
+      payloadSource: outcome.source,
+      dataLength: data?.length ?? null,
+      lastUpdateDataLength: txn.lastData?.length ?? null,
+      receptacleLength: receptacleValue.length,
+      committedLength: outcome.kind === "whole-replace" ? outcome.text.length : null,
+    });
+    const keepFocus = reason !== "blur";
+    if (outcome.kind === "whole-replace") {
+      if (input) input.value = "";
+      replaceWholeDocument(outcome.text, { focus: keepFocus });
+      if (keepFocus) scheduleImeSettle(outcome.text.length, "backward", true);
+      return;
+    }
+    // Nothing changes: 全文選択 stays, the receptacle is empty again.
+    if (input) input.value = "";
+    if (keepFocus && allSelectedRef.current) input?.focus({ preventScroll: true });
+  };
+
+  const handleWholeInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    const composing = event.nativeEvent.isComposing;
+    perfMark("PagedEditor:trace:whole-input:keydown", {
+      key: event.key.length === 1 ? "char" : event.key,
+      keyCode: event.nativeEvent.keyCode,
+      isComposing: composing,
+      txn: wholeInputTxnRef.current !== null,
+      length: el.value.length,
+    });
+    // A non-composing key while a composition is still open: it ended without
+    // compositionend. Its last update is the payload (still verified).
+    const txn = wholeInputTxnRef.current;
+    if (txn && !composing) finishWholeInput(txn.lastData, txn.lastData !== null ? "compositionupdate" : "none", "keydown");
+    if (composing) return;
+    cancelImeSettle();
+    const isMod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    if (isMod && key === "a" && !event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      return;
+    }
+    if (isMod && (key === "z" || key === "y")) {
+      event.preventDefault();
+      exitWholeToPage("history");
+      runHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      exitWholeToPage("escape");
+      return;
+    }
+    // Backspace / Delete over 全文選択: the whole manuscript, once. Handled at
+    // the key (an empty textarea may send no beforeinput for them).
+    if (!isMod && !event.altKey && (event.key === "Backspace" || event.key === "Delete")) {
+      event.preventDefault();
+      commitWholeInput("", "beforeinput");
+      return;
+    }
+    if (SELECTION_GESTURE_KEYS.has(event.key)) {
+      event.preventDefault();
+      exitWholeToPage("navigation");
+    }
+  };
+
+  const handleWholeInputBeforeInput = (el: HTMLTextAreaElement, nativeEvent: InputEvent) => {
+    const inputType = nativeEvent.inputType ?? "";
+    perfMark("PagedEditor:trace:whole-input:beforeinput", {
+      inputType,
+      cancelable: nativeEvent.cancelable,
+      isComposing: nativeEvent.isComposing,
+      dataLength: nativeEvent.data?.length ?? null,
+      txn: wholeInputTxnRef.current !== null,
+      length: el.value.length,
+    });
+    // The IME writes into the empty receptacle; its string is taken at the end.
+    if (inputType.includes("Composition") || nativeEvent.isComposing) {
+      if (!wholeInputTxnRef.current) openWholeInputTxn(el, "beforeinput");
+      return;
+    }
+    if (!inputType.startsWith("insert") && !inputType.startsWith("delete")) {
+      if (nativeEvent.cancelable) nativeEvent.preventDefault();
+      return;
+    }
+    const typed = inputType.startsWith("insert") ? insertedTextOf(nativeEvent) : "";
+    const typedCharacter = inputType === "insertText" && typed.length === 1 && typed !== "\n";
+    if (nativeEvent.cancelable) {
+      nativeEvent.preventDefault();
+      commitWholeInput(typed, "beforeinput", { typedCharacter });
+    } else {
+      pendingWholeInputInsertRef.current = typed;
+    }
+  };
+
+  useEffect(() => {
+    const el = wholeInputRef.current;
+    if (!el) return;
+    const onBeforeInput = (event: Event) => handleWholeInputBeforeInput(el, event as InputEvent);
+    // Copy / Cut act on an EMPTY textarea here: canceling beforecopy /
+    // beforecut keeps Blink's Copy / Cut commands enabled (keyboard and
+    // context menu), so the copy / cut events below still fire.
+    const enableClipboard = (event: Event) => event.preventDefault();
+    el.addEventListener("beforeinput", onBeforeInput);
+    el.addEventListener("beforecopy", enableClipboard);
+    el.addEventListener("beforecut", enableClipboard);
+    return () => {
+      el.removeEventListener("beforeinput", onBeforeInput);
+      el.removeEventListener("beforecopy", enableClipboard);
+      el.removeEventListener("beforecut", enableClipboard);
+    };
+  });
+
+  const handleWholeInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    perfMark("PagedEditor:trace:whole-input:input", {
+      inputType: (event.nativeEvent as InputEvent).inputType ?? "",
+      isComposing: (event.nativeEvent as InputEvent).isComposing ?? false,
+      dataLength: (event.nativeEvent as InputEvent).data?.length ?? null,
+      txn: wholeInputTxnRef.current !== null,
+      length: el.value.length,
+    });
+    if (!wholeInputTxnRef.current && (event.nativeEvent as InputEvent).isComposing) openWholeInputTxn(el, "input");
+    if (wholeInputTxnRef.current) return; // the IME's own view; decided at its end
+    const pending = pendingWholeInputInsertRef.current;
+    pendingWholeInputInsertRef.current = null;
+    if (pending !== null) {
+      commitWholeInput(pending, "beforeinput");
+      return;
+    }
+    // An input whose text is unknown: nothing changes.
+    perfMark("PagedEditor:whole-input:finish", { reason: "input", outcome: "whole-unchanged", detail: "unknown-text", payloadSource: "none" });
+    el.value = "";
+  };
+
+  const handleWholeInputCompositionStart = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    const txn = wholeInputTxnRef.current;
+    perfMark("PagedEditor:trace:whole-input:compositionstart", { dataLength: event.data?.length ?? null, txn: txn !== null, length: el.value.length });
+    if (txn) finishWholeInput(txn.lastData, txn.lastData !== null ? "compositionupdate" : "none", "restart");
+    openWholeInputTxn(el, "compositionstart");
+  };
+
+  const handleWholeInputCompositionUpdate = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    perfMark("PagedEditor:trace:whole-input:compositionupdate", { dataLength: event.data?.length ?? null, txn: wholeInputTxnRef.current !== null, length: el.value.length });
+    if (!wholeInputTxnRef.current) openWholeInputTxn(el, "compositionupdate");
+    if (wholeInputTxnRef.current) wholeInputTxnRef.current.lastData = event.data ?? null;
+  };
+
+  const handleWholeInputCompositionEnd = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    perfMark("PagedEditor:trace:whole-input:compositionend", { dataLength: event.data?.length ?? null, txn: wholeInputTxnRef.current !== null, length: el.value.length });
+    if (!wholeInputTxnRef.current) {
+      // Already finished by a recovery: nothing to commit.
+      el.value = "";
+      return;
+    }
+    finishWholeInput(event.data ?? "", "compositionend", "compositionend");
+  };
+
+  const handleWholeInputPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    commitWholeInput(event.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n"), "beforeinput");
+  };
+
+  const handleWholeInputCopy = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", content);
+  };
+
+  const handleWholeInputCut = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", content);
+    commitWholeInput("", "beforeinput");
+  };
+
+  const handleWholeInputBlur = () => {
+    const txn = wholeInputTxnRef.current;
+    if (txn) finishWholeInput(txn.lastData, txn.lastData !== null ? "compositionupdate" : "none", "blur");
+  };
+
+  /** The page's own textarea taking focus (a click / tap on it, Tab) ends 全文選択: ordinary editing resumes there. */
+  const handlePageFocus = () => {
+    if (!allSelectedRef.current) return;
+    perfMark("PagedEditor:whole-input:exit", { reason: "page-focus" });
+    setAllSelected(false);
   };
 
   /**
@@ -1345,6 +1621,10 @@ function PagedEditorInner(
    * below is registered once).
    */
   const endWholeSelectionIfLeft = (el: HTMLTextAreaElement) => {
+    // 全文選択 takes its input in the receptacle, and the page taking focus
+    // ends it (`handlePageFocus`): an unfocused page's own selection (it is not
+    // used for 全文選択) never counts.
+    if (typeof document !== "undefined" && document.activeElement !== el) return;
     if (!allSelectedRef.current || wholeImePreRef.current || isComposingRef.current) return;
     if (el.selectionStart === 0 && el.selectionEnd === el.value.length) return;
     if (selectionGestureRef.current) {
@@ -1356,6 +1636,7 @@ function PagedEditorInner(
     setTimeout(() => {
       const current = textareaRef.current;
       if (selectionDriftTokenRef.current !== token || !current || !allSelectedRef.current) return;
+      if (document.activeElement !== current) return;
       if (wholeImePreRef.current || compositionTxnRef.current || isComposingRef.current) return;
       if (current.selectionStart === 0 && current.selectionEnd === current.value.length) return;
       perfMark("PagedEditor:selection-drift:end-whole", { start: current.selectionStart, end: current.selectionEnd, length: current.value.length });
@@ -1806,6 +2087,8 @@ function PagedEditorInner(
     ? "段落の区切りで編集ページが切り替わります。最大約5.5万字で自動的に切り替わります。"
     : "最大約5.5万字で自動的に切り替わります";
 
+  const wholePageMark = useMemo(() => [{ start: 0, end: pageText.length }], [pageText.length]);
+
   const showWritingCheck = Boolean(writingCheck?.enabled && writingCheck.analysisText === content);
   const pageLocalIssues = useMemo(() => {
     if (!showWritingCheck || !writingCheck) return [];
@@ -1957,9 +2240,11 @@ function PagedEditorInner(
       </div>
 
       <div className="relative min-h-0 flex-1">
-        {pageLocalGhostRanges.length > 0 && (
+        {(pageLocalGhostRanges.length > 0 || isFullManuscriptSelected) && (
           <div className="pointer-events-none absolute inset-0">
-            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={displayedPageText} marks={compositionText === null ? pageLocalGhostRanges : []} />
+            {/* 全文選択 shows the mounted page with the held-selection
+                highlight: the page's native selection is not used for it. */}
+            <DescriptionMarkOverlay variant="held" textareaRef={textareaRef} text={displayedPageText} marks={compositionText !== null ? [] : isFullManuscriptSelected ? wholePageMark : pageLocalGhostRanges} />
           </div>
         )}
         {showDescriptionMarks && (
@@ -1993,12 +2278,45 @@ function PagedEditorInner(
           onClick={handleSelect}
           onKeyUp={handleKeyUp}
           onBlur={handleBlur}
+          onFocus={handlePageFocus}
           onCompositionStart={handleCompositionStart}
           onCompositionUpdate={handleCompositionUpdate}
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           spellCheck={false}
           className={className ?? "absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"}
+        />
+        {/* 全文選択's IME receptacle (see `wholeInputRef`): always mounted so
+            全文選択 can focus it inside the same key / tap event, shown only
+            while 全文選択 is on. Never holds manuscript text. 16px text: iOS
+            does not zoom into it on focus. */}
+        <textarea
+          ref={wholeInputRef}
+          data-editor-whole-input=""
+          data-active={isFullManuscriptSelected ? "true" : "false"}
+          aria-hidden={!isFullManuscriptSelected}
+          tabIndex={isFullManuscriptSelected ? 0 : -1}
+          aria-label="全文選択中の入力欄（入力すると原稿全体を置き換えます）"
+          placeholder="全文選択中：入力すると原稿全体を置き換えます（Escで解除）"
+          rows={1}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          onKeyDown={handleWholeInputKeyDown}
+          onChange={handleWholeInputChange}
+          onPaste={handleWholeInputPaste}
+          onCopy={handleWholeInputCopy}
+          onCut={handleWholeInputCut}
+          onBlur={handleWholeInputBlur}
+          onCompositionStart={handleWholeInputCompositionStart}
+          onCompositionUpdate={handleWholeInputCompositionUpdate}
+          onCompositionEnd={handleWholeInputCompositionEnd}
+          className={
+            isFullManuscriptSelected
+              ? "absolute left-2 right-2 top-2 z-10 h-10 resize-none overflow-hidden rounded border border-accent bg-base px-2 py-2 text-base leading-snug text-ink shadow-sm outline-none placeholder:text-[13px] placeholder:text-ink/60"
+              : "pointer-events-none absolute left-0 top-0 h-px w-px resize-none overflow-hidden border-0 p-0 opacity-0"
+          }
         />
       </div>
     </div>

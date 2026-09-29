@@ -1,6 +1,8 @@
 // Explicit-run E2E: a WINDOWED 全文選択 (Ctrl/Cmd+A or the 全文を選択 button)
 // followed by ANY edit replaces the WHOLE canonical manuscript as ONE
-// transaction, on a ~300k-character manuscript (6 編集ページ):
+// transaction, on a ~300k-character manuscript (6 編集ページ). 全文選択 takes
+// its input in an EMPTY receptacle (never the page's textarea, never any
+// manuscript text) and shows the page with the held highlight:
 //   - typed key(s) through real keyDown events (not only Input.insertText),
 //     Enter, Backspace, Delete, paste, cut, and an IME composition driven like
 //     a real IME (keyCode 229 keyDowns, several compositionupdates, commit);
@@ -73,7 +75,10 @@ async function imeCommit(text) {
   await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
 }
 const frame = () => cdp.evaluate(`new Promise((resolve) => requestAnimationFrame(() => setTimeout(() => resolve(true), 0)))`);
-const editorState = () => cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); const b = document.querySelector('[data-editor-select-all]'); return { value: el.value, length: el.value.length, start: el.selectionStart, end: el.selectionEnd, indicator: document.querySelector('[data-editor-page-indicator]')?.textContent.trim() ?? null, whole: b?.getAttribute('aria-pressed') === 'true', previewPages: Number(document.querySelector('[data-preview-total-pages]')?.getAttribute('data-preview-total-pages') ?? 0) }; })()`);
+const editorState = () => cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); const b = document.querySelector('[data-editor-select-all]'); const r = document.querySelector('[data-editor-whole-input]'); return { value: el.value, length: el.value.length, start: el.selectionStart, end: el.selectionEnd, indicator: document.querySelector('[data-editor-page-indicator]')?.textContent.trim() ?? null, whole: b?.getAttribute('aria-pressed') === 'true', receptacleFocused: document.activeElement === r, receptacleLength: r ? r.value.length : -1, heldHighlight: !!document.querySelector('[data-held-selection-overlay] [data-held-selection]'), previewPages: Number(document.querySelector('[data-preview-total-pages]')?.getAttribute('data-preview-total-pages') ?? 0) }; })()`);
+// 全文選択 as the editor shows it now: the state, the EMPTY IME receptacle
+// focused (it never holds manuscript text), and the page's held highlight.
+const wholeEngaged = (state) => state.whole && state.receptacleFocused && state.receptacleLength === 0 && state.heldHighlight;
 async function timed(fn) {
   const t0 = performance.now();
   await fn();
@@ -176,14 +181,38 @@ const SCENARIOS = [
     await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Process", code: "KeyD", windowsVirtualKeyCode: 229 });
     await imeKey("Escape", "");
   }, null /* unchanged */],
-  // A soft-keyboard Backspace (Android: keyCode 229, a deletion, no
-  // composition) over 全文選択 still deletes the WHOLE manuscript, once.
+  // A soft-keyboard Backspace over 全文選択: the receptacle is empty, and an
+  // Android keyboard sends a plain Backspace key for an empty field (nothing
+  // for its IME to delete). It deletes the WHOLE manuscript, once.
   ["model-soft-backspace", async () => {
-    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Unidentified", code: "", windowsVirtualKeyCode: 229 });
-    await cdp.evaluate(`document.execCommand("delete")`);
-    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Unidentified", code: "", windowsVirtualKeyCode: 229 });
-    await sleep(500);
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await sleep(300);
   }, ""],
+  // The real-OS failure (Windows IME composing over the page's selection,
+  // old text included) cannot happen by construction: mid-composition, the
+  // page's textarea is untouched and unfocused, and the receptacle holds
+  // exactly the IME's string -- nothing of the manuscript.
+  ["receptacle-isolation", async () => {
+    const probe = () => cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); const r = document.querySelector('[data-editor-whole-input]'); return { page: el.value, receptacle: r.value, receptacleFocused: document.activeElement === r }; })()`);
+    const before = await probe();
+    await imeKey("KeyD", "ｄ");
+    await imeKey("KeyE", "で");
+    await imeKey("Space", "出");
+    const mid = await probe();
+    if (mid.page !== before.page) throw new Error("the page textarea changed during a 全文選択 composition");
+    if (mid.receptacle !== "出" || !mid.receptacleFocused) throw new Error(`the receptacle holds ${mid.receptacle.length} characters (focused: ${mid.receptacleFocused}), not only the composition`);
+    await imeCommit("出");
+  }, "出"],
+  // Copy over 全文選択 (the receptacle is empty): the clipboard gets the WHOLE
+  // manuscript; nothing changes and 全文選択 stays.
+  ["copy", async () => {
+    await cdp.evaluate(`navigator.clipboard.writeText("")`);
+    await key("c", "KeyC", 67, { modifiers: 2, commands: ["copy"] });
+    await sleep(200);
+    const copied = await cdp.evaluate(`navigator.clipboard.readText()`);
+    if (copied !== LONG) throw new Error(`copy: clipboard holds ${copied.length} characters, not the manuscript's ${LONG.length}`);
+  }, null /* unchanged */],
 ];
 
 // 全文選択 + an IME that leaves the OLD page text in the textarea (it composed
@@ -236,11 +265,11 @@ try {
         else await realClick("[data-editor-select-all]");
         await sleep(300);
         const selected = await editorState();
-        const row = { engaged: selected.whole && selected.start === 0 && selected.end === selected.length, pagesBefore: opened.indicator, previewBefore: opened.previewPages };
+        const row = { engaged: wholeEngaged(selected) && selected.value === opened.value, pagesBefore: opened.indicator, previewBefore: opened.previewPages };
         row.actMs = await timed(act);
         const shown = await editorState();
         // A canceled composition leaves 全文選択 (and its full-page selection) as it was.
-    row.editorShowsExpected = expectedRaw === null ? shown.whole && shown.start === 0 && shown.end === shown.length : shown.value === expected;
+        row.editorShowsExpected = expectedRaw === null ? wholeEngaged(shown) && shown.value === opened.value : shown.value === expected && !shown.whole;
         row.pagesAfter = shown.indicator;
         const after = await saved(id);
         row.savedExact = after === expected;
@@ -262,7 +291,7 @@ try {
         else await realClick("[data-editor-select-all]");
         await sleep(200);
         const reselected = await editorState();
-        row.reselectWorks = reselected.whole && reselected.start === 0 && reselected.end === reselected.length;
+        row.reselectWorks = wholeEngaged(reselected);
         await key("Escape", "Escape", 27);
         row.redoMs = await timed(redo);
         const redone = await saved(id);
@@ -322,7 +351,7 @@ try {
       await ctrlA();
       await sleep(200);
       const reselected = await editorState();
-      row.reselectWorks = reselected.whole && reselected.start === 0 && reselected.end === reselected.length;
+      row.reselectWorks = wholeEngaged(reselected);
       report.rows[name] = row;
       log(`${name}: ${JSON.stringify(row)}`);
       if (!(row.engaged && row.editorShowsTyped && row.savedExact && row.undoExact && row.redoExact && row.reselectWorks)) failures.push(name);
@@ -334,7 +363,7 @@ try {
       await cdp.evaluate(`(() => { const el = document.querySelector('${EDITOR}'); el.focus(); const at = Math.floor(el.value.length / 2); el.setSelectionRange(at, at); })()`);
       await ctrlA();
       await sleep(300);
-      const row = { engaged: (await editorState()).whole };
+      const row = { engaged: wholeEngaged(await editorState()) };
       row.actMs = await timed(act);
       const shown = await editorState();
       row.editorShowsExpected = shown.value === expected;

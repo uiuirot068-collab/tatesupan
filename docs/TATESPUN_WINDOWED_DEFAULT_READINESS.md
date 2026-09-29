@@ -230,6 +230,32 @@ The model now, in `PagedEditor.tsx`:
   user acted meanwhile.
 - **One pagination per transaction:** the render reuses the pagination the commit computed.
 
+**Real-OS trace (Windows, a pre-`cede6e4` build), 2026-09-29:** 全文選択 over a 50,003-character
+編集ページ. After the first IME key the page textarea held 39,036 characters with the caret at 1. The
+transaction was finished by **blur**; no compositionend arrived. The EditorPane
+`native:compositionend` mark is emitted by the finish itself. The committed payload was the IME's
+own **compositionupdate data: 39,036 characters**. The IME had composed over the page's native
+selection, **old text included**, so no event carried the user's string. The page DOM was never the
+source. This also explains the "ページが応答しません": the IME was converting a ~39k-character
+composition.
+
+**全文選択 no longer uses the page's native selection.** Ctrl+A and 全文を選択 (one code path) set
+the canonical 全文選択 state, show the page with the held-selection highlight, and move focus to an
+**empty IME receptacle**. The receptacle is a separate, labelled textarea at the top of the editor,
+with 16 px text so iOS does not zoom on focus, and it never holds manuscript text.
+
+- Typing, Enter, paste, Backspace / Delete, cut and copy act on the whole manuscript from there.
+  Copy and cut stay enabled on the empty field through beforecopy / beforecut.
+- An IME composes over nothing. The whole replacement is its committed string only:
+  compositionend data, or the last compositionupdate data on a recovery.
+- That string is checked exactly against the receptacle, not against a size limit. The receptacle
+  started empty and received only this composition, so it must hold exactly that string.
+- Unknown, canceled or mismatching input changes nothing, and 全文選択 stays.
+- The trace records `payloadSource` (compositionend / compositionupdate / beforeinput / none) and
+  every length.
+- Focusing the page (a click or tap), Esc or a navigation key returns to ordinary editing.
+- FULL is unchanged.
+
 Headless profile (300k, 全文選択 + IME conversion + commit): 1 commit, 1 pagination, 0 long tasks,
 about 30–70 ms from commit to the next frame. The real-OS freeze did not reproduce headless, so its
 cause is not proven. Capture a real-OS trace with `?perfDebug=1`: run
