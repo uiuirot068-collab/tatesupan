@@ -1,0 +1,88 @@
+{
+  "label": "after-full",
+  "surface": "FULL",
+  "chars": 291292,
+  "repeat": 5,
+  "results": {
+    "insertBeginning": {
+      "median": 75,
+      "samples": [
+        77,
+        75,
+        72,
+        67,
+        82
+      ]
+    },
+    "insertMiddle": {
+      "median": 256,
+      "samples": [
+        154,
+        317,
+        256,
+        248,
+        285
+      ]
+    },
+    "enterMiddle": {
+      "median": 220,
+      "samples": [
+        199,
+        220,
+        242,
+        287,
+        191
+      ]
+    },
+    "backspaceMiddle": {
+      "median": 214,
+      "samples": [
+        189,
+        214,
+        178,
+        285,
+        218
+      ]
+    },
+    "undo": {
+      "median": 198,
+      "samples": [
+        206,
+        184,
+        203,
+        198,
+        185
+      ]
+    },
+    "redo": {
+      "median": 186,
+      "samples": [
+        232,
+        184,
+        182,
+        186,
+        192
+      ]
+    },
+    "insertEnd": {
+      "median": 429,
+      "samples": [
+        465,
+        432,
+        415,
+        429,
+        393
+      ]
+    },
+    "searchNext": {
+      "median": 66,
+      "samples": [
+        88,
+        72,
+        62,
+        66,
+        66
+      ]
+    }
+  }
+}

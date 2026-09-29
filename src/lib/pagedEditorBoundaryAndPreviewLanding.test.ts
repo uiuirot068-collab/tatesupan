@@ -47,7 +47,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §E/§F: Backspace/De
     );
     expect(backward).toContain("isLowSurrogate(prevCode)");
     expect(backward).toContain("isHighSurrogate(content.charCodeAt(globalCaret - 2))");
-    expect(backward).toContain('switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward" })');
+    expect(backward).toContain('switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward", nextContent: nextCanonical })');
     expect(backward).toContain("reportCaret(deleteFrom)");
 
     const forward = editor.slice(
@@ -56,7 +56,7 @@ describe("TSP-EDITOR-PAGE-BOUNDARY-AND-PREVIEW-LANDING-012 §E/§F: Backspace/De
     );
     expect(forward).toContain("isHighSurrogate(nextCode)");
     expect(forward).toContain("isLowSurrogate(content.charCodeAt(globalCaret + 1))");
-    expect(forward).toContain("switchToPageForOffset(globalCaret, newPages)");
+    expect(forward).toContain("switchToPageForOffset(globalCaret, newPages, undefined, { nextContent: nextCanonical })");
     expect(forward).toContain("reportCaret(globalCaret)");
   });
 

@@ -1,0 +1,198 @@
+{
+  "surface": "WINDOWED",
+  "scenarios": {
+    "typingBurst": {
+      "result": "。あいう",
+      "undosToOriginal": 1,
+      "redosToEdited": 1,
+      "caretAfterUndo": [
+        29,
+        29
+      ],
+      "caretAfterRedo": [
+        32,
+        32
+      ]
+    },
+    "typingWithPauses": {
+      "result": "。かきく",
+      "undosToOriginal": 3
+    },
+    "enter": {
+      "inserted": 1,
+      "newlineAt": 6,
+      "caret": [
+        7,
+        7
+      ],
+      "undosToOriginal": 1,
+      "redosToEdited": 1,
+      "caretAfterUndo": [
+        6,
+        6
+      ]
+    },
+    "backspace3": {
+      "removed": 3,
+      "text": "　一行目の本文\n　二",
+      "caret": null,
+      "undosToOriginal": 1
+    },
+    "delete2": {
+      "removed": 2,
+      "text": "\n　目の本文",
+      "undosToOriginal": 1
+    },
+    "selectionReplaceByTyping": {
+      "text": "　Xの本文です。",
+      "undosToOriginal": 1
+    },
+    "imeComposition": {
+      "result": "す。漢字",
+      "undosToOriginal": 1
+    },
+    "pasteAtCaret": {
+      "supported": true,
+      "result": "貼付テキスト",
+      "undosToOriginal": 1
+    },
+    "copyCutWithinPage": {
+      "copied": "一行目",
+      "cut": "一行目",
+      "removed": 3,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionTypeChar": {
+      "saved": "X",
+      "expected": "X",
+      "matchesFullSemantics": true,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionEnter": {
+      "saved": "\n",
+      "expected": "\n",
+      "matchesFullSemantics": true,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionBackspace": {
+      "saved": "",
+      "expected": "",
+      "matchesFullSemantics": true,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionPaste": {
+      "saved": "丸ごと貼付",
+      "expected": "丸ごと貼付",
+      "matchesFullSemantics": true,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionIme": {
+      "saved": "変換",
+      "expected": "変換",
+      "matchesFullSemantics": true,
+      "undosToOriginal": 1
+    },
+    "wholeSelectionCopy": {
+      "copiedWhole": true,
+      "copiedLength": 29
+    },
+    "pageBreakButton": {
+      "markerInserted": true,
+      "caret": [
+        13,
+        13
+      ],
+      "ctrlZUndosToOriginal": 1,
+      "toolbarUndoRestores": null,
+      "saved": "no marker"
+    },
+    "toolbarUndoRedo": {
+      "undone": true,
+      "redone": true,
+      "caretAfterToolbarUndo": [
+        29,
+        29
+      ]
+    },
+    "writingCheckFix": {
+      "bulkFixClicked": true,
+      "fixedOk": true,
+      "ctrlZAfterFix": "no-op"
+    },
+    "longCtrlASemantics": {
+      "selectedLength": 49986,
+      "mountedLength": 49986,
+      "manuscriptLength": 173092,
+      "afterTypingLength": 123107,
+      "replacedWhole": false
+    },
+    "longWholeSelectionTypeChar": {
+      "savedLength": 1,
+      "savedHead": "X",
+      "matchesFullSemantics": true,
+      "oneUndoRestores": true
+    },
+    "longWholeSelectionEnter": {
+      "savedLength": 1,
+      "savedHead": "\n",
+      "matchesFullSemantics": true,
+      "oneUndoRestores": true
+    },
+    "longWholeSelectionPaste": {
+      "savedLength": 5,
+      "savedHead": "丸ごと貼付",
+      "matchesFullSemantics": true,
+      "oneUndoRestores": true
+    },
+    "longWholeSelectionIme": {
+      "savedLength": 2,
+      "savedHead": "変換",
+      "matchesFullSemantics": true,
+      "oneUndoRestores": true
+    },
+    "longWholeSelectionCut": {
+      "savedLength": 0,
+      "savedHead": "",
+      "matchesFullSemantics": true,
+      "oneUndoRestores": true
+    },
+    "longWholeSelectionCopy": {
+      "copiedWhole": true,
+      "copiedLength": 173092,
+      "manuscriptLength": 173092
+    },
+    "longEndEditAndCrossPageUndo": {
+      "bothApplied": true,
+      "undoneToOriginal": true,
+      "undoneLengthDelta": 0
+    },
+    "longPageBoundaryBackspace": {
+      "removedOneChar": true,
+      "indicator": "編集ページ 1 / 4"
+    },
+    "reloadAfterAutosave": {
+      "restored": true,
+      "editorShowsRestored": true,
+      "caretAfterReload": [
+        0,
+        0
+      ]
+    },
+    "reloadInsideDebounce": {
+      "restored": false,
+      "savedTail": "目です。"
+    },
+    "longReopenPosition": {
+      "indicator": "編集ページ 1 / 4",
+      "caret": [
+        0,
+        0
+      ],
+      "scroll": {
+        "scrollTop": 0,
+        "scrollHeight": 34589
+      },
+      "docId": 781030
+    }
+  }
+}

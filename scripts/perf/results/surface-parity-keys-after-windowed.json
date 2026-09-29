@@ -1,0 +1,10 @@
+{
+  "surface": "WINDOWED",
+  "scenarios": {
+    "typingRealKeys": {
+      "result": "。abc",
+      "undosToOriginal": 1,
+      "redosToEdited": 1
+    }
+  }
+}

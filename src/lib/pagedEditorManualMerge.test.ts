@@ -432,12 +432,12 @@ describe("PagedEditor.tsx: caret auto-scroll on explicit split/join actions (TSP
 
   it("ここで区切る requests the upper-view scroll hint", () => {
     const fn = editor.slice(editor.indexOf("const forceSplitAtCaret ="), editor.indexOf("/**\n   * TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D, extended by"));
-    expect(fn).toContain('switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper" });');
+    expect(fn).toContain('switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper", nextContent: content });');
   });
 
   it("前のページとつなぐ (full or partial) requests the upper-view scroll hint using the preserved global caret", () => {
     const fn = editor.slice(editor.indexOf("const mergeWithPreviousPage ="), editor.indexOf("useImperativeHandle("));
-    expect(fn).toContain('switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper" });');
+    expect(fn).toContain('switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper", nextContent: content });');
   });
 
   it("reuses the existing scrollCaretNearUpperView/measureCaretOffsetTop helpers rather than a second scroll mechanism", () => {

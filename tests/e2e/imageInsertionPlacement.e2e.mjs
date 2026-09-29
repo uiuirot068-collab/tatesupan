@@ -94,16 +94,20 @@ const profile = mkdtempSync(join(tmpdir(), "tatespun-image-placement-"));
 
 try {
   const appPort = await freePort();
-  const baseUrl = `http://127.0.0.1:${appPort}`;
-  const nextBin = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
-  nextProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(appPort)], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-  nextProcess.stdout.on("data", (chunk) => { nextOutput += chunk; });
-  nextProcess.stderr.on("data", (chunk) => { nextOutput += chunk; });
-  const pageDeadline = Date.now() + 60_000;
-  while (Date.now() < pageDeadline) {
-    if (nextProcess.exitCode !== null) throw new Error(`Next dev exited.\n${nextOutput}`);
-    try { if ((await fetch(baseUrl)).ok) break; } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 250));
+  // Optional: an already-running build instead of this test's own `next dev`.
+  const configuredBaseUrl = process.env.TATESPUN_E2E_BASE_URL?.trim().replace(/\/+$/, "");
+  const baseUrl = configuredBaseUrl || `http://127.0.0.1:${appPort}`;
+  if (!configuredBaseUrl) {
+    const nextBin = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
+    nextProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(appPort)], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    nextProcess.stdout.on("data", (chunk) => { nextOutput += chunk; });
+    nextProcess.stderr.on("data", (chunk) => { nextOutput += chunk; });
+    const pageDeadline = Date.now() + 60_000;
+    while (Date.now() < pageDeadline) {
+      if (nextProcess.exitCode !== null) throw new Error(`Next dev exited.\n${nextOutput}`);
+      try { if ((await fetch(baseUrl)).ok) break; } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
 
   const debugPort = await freePort();

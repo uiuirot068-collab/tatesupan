@@ -244,6 +244,20 @@ export function scrollCaretNearUpperView(el: HTMLTextAreaElement, localOffset: n
   el.scrollTop = Math.max(0, caretTop - margin);
 }
 
+/**
+ * The text an `insert*` beforeinput would insert. `data` is null for a line
+ * break (Enter) and may be null for paste/drop, whose text is in
+ * `dataTransfer` -- falling back to "" there replaced a 全文選択 manuscript
+ * with NOTHING on Enter, where a native textarea (FULL) leaves one line break.
+ */
+function insertedTextOf(event: InputEvent): string {
+  if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") return "\n";
+  const text = event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+  // A textarea value never holds CR: a native paste of Windows CRLF text
+  // arrives as LF, so this bypass of the native insert must match it.
+  return text.replace(/\r\n?/g, "\n");
+}
+
 /** Rounds a remaining/length character count for the progress indicator: exact under 100 (small counts read oddly rounded to 0), nearest 100 above that. */
 function roundForDisplay(value: number): number {
   return value < 100 ? value : Math.round(value / 100) * 100;
@@ -271,6 +285,8 @@ function PagedEditorInner(
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
   const compositionSnapshotRef = useRef<BeforeInputEditSnapshot | null>(null);
+  /** Set while an IME composition that began over an explicit 全文選択 is in progress: the manuscript it replaces. */
+  const compositionWholeSelectionRef = useRef<{ canonical: string } | null>(null);
   const pendingBeforeInputRef = useRef<BeforeInputEditSnapshot | null>(null);
   const undoHistoryRef = useRef<UndoHistory>(createUndoHistory());
   // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §D: application-level "select the
@@ -329,6 +345,9 @@ function PagedEditorInner(
   // `reportCaret` (every programmatic caret placement elsewhere already
   // calls it with a single collapsed offset).
   const [globalCaretRange, setGlobalCaretRange] = useState(() => ({ start: content.length, end: content.length }));
+  // The same range, readable synchronously (re-anchoring runs in an effect,
+  // after React has already replaced the textarea's value and moved its caret).
+  const globalCaretRangeRef = useRef(globalCaretRange);
 
   const [currentPageIndex, setCurrentPageIndex] = useState(() => {
     const pages = computeEditorPages(content);
@@ -354,10 +373,13 @@ function PagedEditorInner(
     pageTextRef.current = pageText;
   });
 
-  const reportCaret = (globalCaret: number) => {
-    setGlobalCaretRange({ start: globalCaret, end: globalCaret });
-    onCursorIndexChange?.(globalCaret);
+  const reportCaretRange = (start: number, end: number, options?: { notify?: boolean }) => {
+    const range = { start, end };
+    globalCaretRangeRef.current = range;
+    setGlobalCaretRange(range);
+    if (options?.notify !== false) onCursorIndexChange?.(start);
   };
+  const reportCaret = (globalCaret: number) => reportCaretRange(globalCaret, globalCaret);
 
   // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §A/§B: a selection to apply once
   // the textarea's DOM `value` actually reflects the page we just switched
@@ -372,7 +394,7 @@ function PagedEditorInner(
   // clamp/reset selection on a full value replacement). The
   // `useLayoutEffect` below is tied to React's own commit for `pageText`,
   // so it is GUARANTEED to run after the new value is in the DOM.
-  const pendingSelectionRef = useRef<{ start: number; end: number; scrollHint?: "upper" } | null>(null);
+  const pendingSelectionRef = useRef<{ start: number; end: number; scrollHint?: "upper"; focus?: boolean } | null>(null);
 
   /**
    * Switches the mounted page (if needed) so `globalOffset` is visible, then
@@ -390,7 +412,21 @@ function PagedEditorInner(
     globalOffset: number,
     latestPages: EditorPage[],
     selectLocal?: { start: number; end: number },
-    options?: { scrollHint?: "upper"; affinity?: "forward" | "backward" }
+    options?: {
+      scrollHint?: "upper";
+      affinity?: "forward" | "backward";
+      /**
+       * The canonical text `latestPages` describes, when this call follows an
+       * edit (or a split/join that re-slices the mounted page) React has not
+       * committed yet. If the mounted page's DOM value is
+       * still the pre-edit text, the selection waits for the layout effect
+       * below: applying it now would be clobbered when React assigns the new
+       * value (the browser moves the caret to the END of an assigned value).
+       */
+      nextContent?: string;
+      /** False: place the selection without moving focus into the editor (re-anchoring on document open). */
+      focus?: boolean;
+    }
   ) => {
     const targetIndex = editorPageForGlobalOffset(latestPages, globalOffset, options?.affinity ?? "forward");
     const targetPage = latestPages[targetIndex];
@@ -398,17 +434,26 @@ function PagedEditorInner(
       ? globalToEditorPageLocal(targetPage, selectLocal.start)
       : globalToEditorPageLocal(targetPage, globalOffset);
     const localEnd = selectLocal ? globalToEditorPageLocal(targetPage, selectLocal.end) : localStart;
+    const focus = options?.focus ?? true;
 
-    if (targetIndex === safePageIndex) {
+    const mountedValue = textareaRef.current?.value;
+    const staleSamePage =
+      targetIndex === safePageIndex &&
+      options?.nextContent !== undefined &&
+      mountedValue !== undefined &&
+      mountedValue !== options.nextContent.slice(targetPage.start, targetPage.end);
+    if (staleSamePage) {
+      pendingSelectionRef.current = { start: localStart, end: localEnd, scrollHint: options?.scrollHint, focus };
+    } else if (targetIndex === safePageIndex) {
       // Already the mounted page: its DOM value already matches, so apply
       // immediately -- `setCurrentPageIndex` with an unchanged value is a
       // React no-op render, which the layout effect below would never see.
       const el = textareaRef.current;
-      el?.focus({ preventScroll: true });
+      if (focus) el?.focus({ preventScroll: true });
       el?.setSelectionRange(localStart, localEnd);
       if (el && options?.scrollHint === "upper") scrollCaretNearUpperView(el, localStart);
     } else {
-      pendingSelectionRef.current = { start: localStart, end: localEnd, scrollHint: options?.scrollHint };
+      pendingSelectionRef.current = { start: localStart, end: localEnd, scrollHint: options?.scrollHint, focus };
       setCurrentPageIndex(targetIndex);
     }
     return targetIndex;
@@ -421,20 +466,28 @@ function PagedEditorInner(
     if (!pending) return;
     pendingSelectionRef.current = null;
     const el = textareaRef.current;
-    el?.focus({ preventScroll: true });
+    if (pending.focus !== false) el?.focus({ preventScroll: true });
     el?.setSelectionRange(pending.start, pending.end);
     if (el && pending.scrollHint === "upper") scrollCaretNearUpperView(el, pending.start);
   }, [currentPageIndex, pageText]);
 
   /** Re-anchors the current page (and invalidates undo history) after a `content` change this component did NOT itself produce. Never called mid-composition (deferred to compositionend instead). */
   const reanchorForExternalContent = (newContent: string) => {
-    const priorGlobalCaret = editorPageLocalToGlobal(currentPage, textareaRef.current?.selectionStart ?? 0);
+    // The caret as last REPORTED, not the textarea's live selection: this runs
+    // after React has already committed the new text, and assigning a value
+    // moves the browser caret to its END -- which used to open a multi-page
+    // manuscript on 編集ページ 2 (the end of page 1 belongs to page 2).
+    const priorGlobalCaret = globalCaretRangeRef.current.start;
     const clampedCaret = Math.max(0, Math.min(newContent.length, priorGlobalCaret));
     const newPages = computeEditorPages(newContent);
     lastOwnContentRef.current = newContent;
     undoHistoryRef.current = createUndoHistory();
     setAllSelected(false);
-    switchToPageForOffset(clampedCaret, newPages);
+    // Loading or switching a document must not pull focus into the editor
+    // (FULL does not either); an editor that already has focus keeps it.
+    const hadFocus = typeof document !== "undefined" && document.activeElement === textareaRef.current;
+    switchToPageForOffset(clampedCaret, newPages, undefined, { focus: hadFocus });
+    reportCaretRange(clampedCaret, clampedCaret, { notify: false });
   };
 
   useEffect(() => {
@@ -521,8 +574,15 @@ function PagedEditorInner(
       : null;
     if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
 
-    const nextCanonical = content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
-    const globalCaret = editorPageLocalToGlobal(currentPage, el.selectionStart);
+    // A composition over an explicit 全文選択 has already replaced the whole
+    // manuscript (as a single full-document textarea's would): the textarea
+    // IS the manuscript until it ends. Keeping the other pages here would
+    // re-slice the mounted page -- and rewrite the textarea under the IME.
+    const wholeComposition = isComposingRef.current && compositionWholeSelectionRef.current !== null;
+    const nextCanonical = wholeComposition
+      ? nextPageText
+      : content.slice(0, currentPage.start) + nextPageText + content.slice(currentPage.end);
+    const globalCaret = wholeComposition ? el.selectionStart : editorPageLocalToGlobal(currentPage, el.selectionStart);
 
     const nextState = commitCanonical(
       nextCanonical,
@@ -563,7 +623,7 @@ function PagedEditorInner(
       insertedLength: typed.length,
     });
     const newPages = computeEditorPages(typed, nextState);
-    switchToPageForOffset(typed.length, newPages);
+    switchToPageForOffset(typed.length, newPages, undefined, { nextContent: typed });
     reportCaret(typed.length);
   };
 
@@ -605,7 +665,7 @@ function PagedEditorInner(
       setForcedBoundaries(nextState.forcedBoundaries);
     }
     const newPages = computeEditorPages(nextCanonical, nextState);
-    switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward" });
+    switchToPageForOffset(deleteFrom, newPages, undefined, { affinity: "backward", nextContent: nextCanonical });
     reportCaret(deleteFrom);
     return true;
   };
@@ -634,7 +694,7 @@ function PagedEditorInner(
       insertedLength: 0,
     });
     const newPages = computeEditorPages(nextCanonical, nextState);
-    switchToPageForOffset(globalCaret, newPages);
+    switchToPageForOffset(globalCaret, newPages, undefined, { nextContent: nextCanonical });
     reportCaret(globalCaret);
     return true;
   };
@@ -649,7 +709,7 @@ function PagedEditorInner(
 
     if (allSelectedRef.current && !isComposingRef.current && (inputType.startsWith("insert") || inputType.startsWith("delete"))) {
       nativeEvent.preventDefault();
-      replaceWholeDocument(inputType.startsWith("insert") ? nativeEvent.data ?? "" : "");
+      replaceWholeDocument(inputType.startsWith("insert") ? insertedTextOf(nativeEvent) : "");
       onNativeBeforeInput?.(el, inputType);
       return;
     }
@@ -758,7 +818,7 @@ function PagedEditorInner(
         : undefined
     );
     const newPages = computeEditorPages(result.canonicalText, nextState);
-    switchToPageForOffset(result.selectionEnd, newPages, { start: result.selectionStart, end: result.selectionEnd });
+    switchToPageForOffset(result.selectionEnd, newPages, { start: result.selectionStart, end: result.selectionEnd }, { nextContent: result.canonicalText });
     reportCaret(result.selectionEnd);
   };
 
@@ -823,8 +883,7 @@ function PagedEditorInner(
     // is selected.
     const globalStart = editorPageLocalToGlobal(currentPage, el.selectionStart);
     const globalEnd = editorPageLocalToGlobal(currentPage, el.selectionEnd);
-    setGlobalCaretRange({ start: globalStart, end: globalEnd });
-    onCursorIndexChange?.(globalStart);
+    reportCaretRange(globalStart, globalEnd);
   };
 
   const handleBlur = () => {
@@ -835,6 +894,13 @@ function PagedEditorInner(
   const handleCompositionStart = (event: React.CompositionEvent<HTMLTextAreaElement>) => {
     isComposingRef.current = true;
     const el = event.currentTarget;
+    // An IME composition cannot be redirected like a beforeinput: natively it
+    // only replaces the mounted page's selection. Remember that it started
+    // over an explicit 全文選択 (and the manuscript it replaces) so
+    // `handleCompositionEnd` commits it as a whole-manuscript replacement,
+    // the same result a single full-document textarea (FULL) produces.
+    compositionWholeSelectionRef.current =
+      allSelectedRef.current && el.selectionStart === 0 && el.selectionEnd === el.value.length ? { canonical: content } : null;
     compositionSnapshotRef.current = {
       beforeText: el.value,
       selectionStart: el.selectionStart,
@@ -851,9 +917,30 @@ function PagedEditorInner(
     const finalPageText = el.value;
     const snapshot = compositionSnapshotRef.current;
     compositionSnapshotRef.current = null;
+    const wholeSelection = compositionWholeSelectionRef.current;
+    compositionWholeSelectionRef.current = null;
     onNativeCompositionEnd?.(el);
 
-    if (snapshot && snapshot.beforeText !== finalPageText) {
+    if (wholeSelection && snapshot && snapshot.beforeText !== finalPageText) {
+      // The composed text replaces the WHOLE manuscript, as ONE undo step back
+      // to the manuscript the composition started from (intermediate
+      // composition commits never reach the undo history).
+      setAllSelected(false);
+      undoHistoryRef.current = pushEdit(undoHistoryRef.current, {
+        rangeStart: 0,
+        removedText: wholeSelection.canonical,
+        insertedText: finalPageText,
+        atomic: true,
+      });
+      const nextState = commitCanonical(finalPageText, { editStart: 0, editEnd: content.length, insertedLength: finalPageText.length });
+      const caret = el.selectionStart;
+      const landed = switchToPageForOffset(caret, computeEditorPages(finalPageText, nextState), undefined, { nextContent: finalPageText });
+      // During the composition the (now shorter) manuscript only CLAMPED the
+      // page index at render; store the page actually shown, or later growth
+      // would jump back to the old index.
+      setCurrentPageIndex(landed);
+      reportCaret(caret);
+    } else if (snapshot && snapshot.beforeText !== finalPageText) {
       const rawEdit = computeRawEditFromBeforeInput(snapshot, finalPageText, currentPage.start);
       if (rawEdit) undoHistoryRef.current = pushEdit(undoHistoryRef.current, rawEdit);
       const nextCanonical = content.slice(0, currentPage.start) + finalPageText + content.slice(currentPage.end);
@@ -939,7 +1026,7 @@ function PagedEditorInner(
       insertedLength: text.length,
     });
     const newPages = computeEditorPages(nextCanonical, nextState);
-    switchToPageForOffset(globalCaret, newPages);
+    switchToPageForOffset(globalCaret, newPages, undefined, { nextContent: nextCanonical });
     reportCaret(globalCaret);
   };
 
@@ -1028,7 +1115,7 @@ function PagedEditorInner(
     // use (`scrollCaretNearUpperView`, invoked by `switchToPageForOffset`
     // itself) so the caret is immediately visible after an explicit layout
     // action instead of the user having to search the page for it.
-    switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper" });
+    switchToPageForOffset(forcedOffset, newPages, undefined, { scrollHint: "upper", nextContent: content });
     reportCaret(forcedOffset);
   };
 
@@ -1112,7 +1199,7 @@ function PagedEditorInner(
     // `switchToPageForOffset` finds whichever page now actually contains it
     // (the shrunk current page, or the expanded previous page) and the
     // upper-view scroll hint makes it immediately visible either way.
-    switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper" });
+    switchToPageForOffset(selectionStart, newPages, undefined, { scrollHint: "upper", nextContent: content });
     reportCaret(selectionStart);
   };
 
@@ -1328,7 +1415,7 @@ function PagedEditorInner(
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           spellCheck={false}
-          className={className ?? "absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none"}
+          className={className ?? "absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent p-4 font-mono text-sm leading-relaxed text-ink outline-none placeholder:text-ink/40"}
         />
       </div>
     </div>

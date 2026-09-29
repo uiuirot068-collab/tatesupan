@@ -1,0 +1,10 @@
+{
+  "surface": "FULL",
+  "scenarios": {
+    "typingRealKeys": {
+      "result": "。abc",
+      "undosToOriginal": 3,
+      "redosToEdited": 3
+    }
+  }
+}

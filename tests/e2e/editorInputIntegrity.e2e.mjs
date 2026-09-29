@@ -160,17 +160,23 @@ let browserOutput = "";
 try {
   const appPort = await freePort();
   const debugPort = await freePort();
-  const baseUrl = `http://127.0.0.1:${appPort}`;
-  const nextBin = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
-  nextProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(appPort)], {
-    cwd: ROOT,
-    env: { ...process.env, NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE: EDITOR_SURFACE },
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  nextProcess.stdout.on("data", (chunk) => { nextOutput += chunk; });
-  nextProcess.stderr.on("data", (chunk) => { nextOutput += chunk; });
-  await waitForPage(`${baseUrl}/editor?demo=1`, nextProcess, () => nextOutput);
+  // Optional: an already-running build (e.g. a static production build made with
+  // the matching NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE; set TATESPUN_E2E_EDITOR_SURFACE
+  // to the same surface). Unset: this test starts its own `next dev`, as before.
+  const configuredBaseUrl = process.env.TATESPUN_E2E_BASE_URL?.trim().replace(/\/+$/, "");
+  const baseUrl = configuredBaseUrl || `http://127.0.0.1:${appPort}`;
+  if (!configuredBaseUrl) {
+    const nextBin = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
+    nextProcess = spawn(process.execPath, [nextBin, "dev", "-p", String(appPort)], {
+      cwd: ROOT,
+      env: { ...process.env, NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE: EDITOR_SURFACE },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    nextProcess.stdout.on("data", (chunk) => { nextOutput += chunk; });
+    nextProcess.stderr.on("data", (chunk) => { nextOutput += chunk; });
+    await waitForPage(`${baseUrl}/editor?demo=1`, nextProcess, () => nextOutput);
+  }
 
   browserProcess = spawn(findBrowser(), [
     "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run",
