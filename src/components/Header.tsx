@@ -100,7 +100,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
   return (
     <header
       data-app-header={isHome ? 'home' : 'editor'}
-      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm dark:bg-[#171C26] dark:border-[#2A3240] dark:shadow-none flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : TABLET_COMPACT_SHELL}`}
+      className={`mx-0 my-0 px-3 py-2 sm:px-6 sm:pt-2 sm:pb-2.5 bg-[#fbf9f4] border-b border-[#17243a]/15 sm:border-t-[3px] sm:border-t-[#17243a] dark:bg-[#141A24] dark:border-[#2A3240] sm:dark:border-t-[#C6AF63] flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : TABLET_COMPACT_SHELL}`}
     >
       {isHome && (
         <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">

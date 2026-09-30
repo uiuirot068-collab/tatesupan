@@ -926,12 +926,13 @@ function EditorPaneInner(
     <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-base">
       <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 px-2 py-1.5 md:gap-2 md:px-4 md:py-3">
         <div className={`flex min-w-0 items-center gap-2 ${focusMode ? "max-md:hidden" : ""}`}>
+          <span aria-hidden="true" data-editor-pane-chip="" className="hidden shrink-0 bg-ink px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-[#faf8f2] dark:text-[#11151d] @min-[520px]:inline-block">MANUSCRIPT</span>
           <input
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder="ドキュメント・タイトル名"
             data-demo-target="title"
-            className="min-w-0 flex-1 bg-transparent text-base font-bold text-ink outline-none placeholder:text-ink/40 md:text-lg"
+            className="min-w-0 flex-1 bg-transparent font-serif text-base font-semibold tracking-[0.03em] text-ink outline-none placeholder:text-ink/40 md:text-lg"
           />
           <span
             data-editor-character-count=""

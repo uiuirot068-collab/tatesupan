@@ -1152,7 +1152,7 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-ink/10 md:border-t-[3px] md:border-t-ink bg-base shadow-sm md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             ref={editorPaneRef}
@@ -1212,9 +1212,9 @@ export default function TategakiEditor({
               : focusMode
                 ? "md:w-[38%] md:max-w-[480px]"
                 : "md:w-[var(--preview-w)] md:flex-1"
-          } ${reviewBarEligible ? "md:overflow-visible md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"} ${reviewBarEligible ? "md:rounded-2xl md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""}`}
+          } ${reviewBarEligible ? "md:overflow-visible md:rounded-lg md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""} ${mobileView === "preview" ? "flex h-full flex-1 flex-col" : sharedExport.previewExportStaged ? PREVIEW_EXPORT_STAGE_CLASS : "max-md:hidden"} ${reviewBarEligible ? "md:rounded-lg md:border md:border-ink/10 md:bg-base md:shadow-sm" : ""}`}
         >
-          <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-2xl md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
+          <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-lg md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
               content={previewContent}
               documentKey={workSessionScope}

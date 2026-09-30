@@ -111,6 +111,60 @@ const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
   rakutenUrl: process.env.NEXT_PUBLIC_RAKUTEN_AFFILIATE_URL,
 });
 
+// Phase 3: one table of contents, in reading order, for the desktop side
+// rail (same chapters and names the hero menu already lists).
+const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] = [
+  { group: "よく使う操作", items: [{ href: "#quick-reference", label: "操作と場所の早見表" }] },
+  {
+    group: "まずは知ってほしい５つの機能",
+    items: [
+      { href: "#my-check", label: "マイチェック" },
+      { href: "#writing-check", label: "文章チェックβ" },
+      { href: "#body-notation", label: "本文記法" },
+      { href: "#work-counter", label: "作業カウンター" },
+      { href: "#varied-use", label: "多様な使い方" },
+    ],
+  },
+  {
+    group: "文章見直しツール",
+    items: [
+      { href: "#review-writing-check", label: "文章チェックβ" },
+      { href: "#review-work-counter", label: "作業カウンター" },
+      { href: "#review-read-aloud", label: "音読β" },
+      { href: "#review-description-check", label: "描写語・修飾表現チェックβ" },
+    ],
+  },
+  {
+    group: "便利な小技10選β版",
+    items: [
+      { href: "#settings", label: "設定" },
+      { href: "#preview", label: "プレビュー機能" },
+      { href: "#four-buttons", label: "便利な４ボタン" },
+      { href: "#memo", label: "メモ機能" },
+      { href: "#focus-mode", label: "集中モード" },
+      { href: "#folio-header", label: "ノンブル・柱" },
+      { href: "#image-insert", label: "画像挿入機能" },
+      { href: "#colophon", label: "奥付機能" },
+      { href: "#dark-mode", label: "ダークモード" },
+      { href: "#export", label: "多機能書き出し" },
+    ],
+  },
+  { group: "困ったとき", items: [{ href: "#faq", label: "FAQ" }, { href: "#report", label: "困ったとき" }] },
+];
+
+// Phase 3: the operations people look for most, and where each one lives
+// (the same places each chapter's 「場所」 line gives), linking to the chapter.
+const HOWTO_QUICK_REFERENCE: { task: string; where: string; href: string }[] = [
+  { task: "用紙・フォント・余白を変える", where: "テキストエディター直上→▶設定", href: "#settings" },
+  { task: "ルビ・縦中横・改ページを入れる", where: "タイトル下／ヘルプの中", href: "#body-notation" },
+  { task: "本の形で確かめる", where: "プレビュー（ズーム50％・100％・200％）", href: "#preview" },
+  { task: "元に戻す・改ページ・検索・置換", where: "テキストエディター直上の４ボタン", href: "#four-buttons" },
+  { task: "文章を見直す", where: "「見直し」→文章チェックβ・作業カウンター など", href: "#review-tools" },
+  { task: "挿絵を入れる", where: "プレビュー画面→ページ上［…］内", href: "#image-insert" },
+  { task: "奥付を入れる", where: "▶オプション→奥付（縦）、奥付（横）", href: "#colophon" },
+  { task: "PDF・JPGで書き出す", where: "プレビュー画面左側「書き出し▼」", href: "#export" },
+];
+
 export default function HowToPage() {
   const [fiveOpen, setFiveOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
@@ -119,6 +173,59 @@ export default function HowToPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [logs, setLogs] = useState<UpdateLogEntry[]>(FALLBACK_LOGS);
   const [visibleLogCount, setVisibleLogCount] = useState(8);
+  const [activeTocHref, setActiveTocHref] = useState<string | null>(null);
+  const [allTipsOpen, setAllTipsOpen] = useState(false);
+
+  // Phase 3: tips chapters are collapsible. Any in-page link (hero menu,
+  // rail, quick reference, a shared #hash URL) opens the chapter it points
+  // at before the browser scrolls to it.
+  useEffect(() => {
+    const openTarget = (hash: string) => {
+      if (!hash || hash.length < 2) return;
+      const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+      const details = target?.closest("details");
+      if (details && !details.open) details.open = true;
+    };
+    const onClick = (event: MouseEvent) => {
+      const link = (event.target as Element | null)?.closest?.('a[href^="#"]');
+      if (link) openTarget(link.getAttribute("href") ?? "");
+    };
+    const onHash = () => {
+      openTarget(window.location.hash);
+      document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+    };
+    if (window.location.hash) onHash();
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("hashchange", onHash);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("hashchange", onHash);
+    };
+  }, []);
+
+  // Phase 3: the side rail marks the chapter being read.
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const ids = HOWTO_TOC.flatMap((group) => group.items.map((item) => item.href.slice(1)));
+    const targets = ids.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveTocHref(`#${visible[0].target.id}`);
+      },
+      { rootMargin: "-120px 0px -60% 0px" }
+    );
+    targets.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const toggleAllTips = () => {
+    const next = !allTipsOpen;
+    document.querySelectorAll<HTMLDetailsElement>("details.tip").forEach((el) => {
+      el.open = next;
+    });
+    setAllTipsOpen(next);
+  };
 
   useEffect(() => {
     // Browser-only query-param read for the internal `?labels=1` review mode
@@ -165,6 +272,10 @@ export default function HowToPage() {
               <span className="howto-label">HOW TO</span>
               <strong>TateSpun</strong>
             </div>
+            <p className="hero-copy" data-copy-id="TEXT_HERO_BODY_01">
+              色々出来るTateSpun<br />是非知ってもらいたい機能を<br />こちらのページにまとめました。
+              <br />ブラウザだけで動作し、原稿はあなたのものです。
+            </p>
             <div className="hero-pills">
               <Link className="pill dark" href="/" data-copy-id="TEXT_HERO_CHIP_01">
                 本棚に戻る
@@ -173,6 +284,24 @@ export default function HowToPage() {
                 デモを見る
               </Link>
             </div>
+            {/* Phase 3: where to start. Three chapters in reading order on one
+                thread, so a first-time reader knows what to read first. */}
+            <div className="start-path-block">
+              <p className="howto-chip">Start Here</p>
+              <p className="start-path-title">はじめての方は、この順番で。</p>
+              <ol className="start-path">
+                <li><a href="#five-features"><span className="start-no" aria-hidden="true">01</span><b>まずは知ってほしい５つの機能</b><small>最初に読むならここから</small></a></li>
+                <li><a href="#review-tools"><span className="start-no" aria-hidden="true">02</span><b>文章見直しツール</b><small>書けたら、見直しに</small></a></li>
+                <li><a href="#tips"><span className="start-no" aria-hidden="true">03</span><b>便利な小技10選β版</b><small>必要になったときに</small></a></li>
+              </ol>
+              <p className="start-path-help">困ったときは <a href="#faq">FAQ</a> ／ <a href="#report">困ったとき</a> へ。</p>
+            </div>
+          </div>
+          <div className="hero-right">
+            <div className="hero-visual">
+              <img src={asset(HOWTO_IMAGES.hero.file)} alt={HOWTO_IMAGES.hero.alt} />
+            </div>
+            <p className="howto-chip hero-index-chip">Contents</p>
             <nav className="hero-index" aria-label="ページ案内">
               <button
                 type="button"
@@ -243,16 +372,6 @@ export default function HowToPage() {
               <a className="hero-simple-link" href="#devlog" data-copy-id="TEXT_HERO_MENU_05">更新・デバック</a>
             </nav>
           </div>
-          <div className="hero-right">
-            <div className="hero-visual">
-              <img src={asset(HOWTO_IMAGES.hero.file)} alt={HOWTO_IMAGES.hero.alt} />
-            </div>
-            <p className="hero-copy" data-copy-id="TEXT_HERO_BODY_01">
-              色々出来るTateSpun<br />是非知ってもらいたい機能を<br />こちらのページにまとめました。
-              <br />ブラウザだけで動作し、原稿はあなたのものです。
-            </p>
-            <div className="scroll-arrow" aria-hidden="true">↓</div>
-          </div>
         </section>
 
         <header className="guide-header">
@@ -285,8 +404,42 @@ export default function HowToPage() {
           </div>
         </header>
 
+        <div className="howto-layout">
+          <nav className="howto-rail" aria-label="目次">
+            <p className="howto-chip">Contents</p>
+            {HOWTO_TOC.map((group) => (
+              <div key={group.group} className="rail-group">
+                <p className="rail-group-title">{group.group}</p>
+                <ul>
+                  {group.items.map((item) => (
+                    <li key={item.href}>
+                      <a href={item.href} aria-current={activeTocHref === item.href ? "location" : undefined}>{item.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
+          <div className="howto-flow">
+        <section className="quick-ref" id="quick-reference" aria-labelledby="quick-reference-title">
+          <p className="howto-chip">Quick Reference</p>
+          <h2 id="quick-reference-title">よく使う操作と、その場所</h2>
+          <p className="section-hint">やりたいことから探せます。項目を選ぶと、くわしい説明の章へ移動します。</p>
+          <ol className="quick-ref-list">
+            {HOWTO_QUICK_REFERENCE.map((row) => (
+              <li key={row.href}>
+                <a href={row.href}>
+                  <b>{row.task}</b>
+                  <span>{row.where}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+
         <section className="intro" id="five-features">
           <div className="intro-title">
+            <p className="howto-chip">Chapter 1 · Essentials</p>
             <span aria-hidden="true"></span>
             <b data-copy-id="TEXT_INTRO_TITLE">まずは知ってほしい<br />５つの機能</b>
           </div>
@@ -319,8 +472,8 @@ export default function HowToPage() {
           </div>
         </section>
 
-        <section className="chapter" id="my-check">
-          <h2 data-copy-id="TEXT_SECTION_01_TITLE">1. 完成前マイチェックリスト＋PDF書き出し前チェック</h2>
+        <section className="chapter essential" id="my-check">
+          <h2 data-eyebrow="ESSENTIAL 01 / 05" data-copy-id="TEXT_SECTION_01_TITLE">1. 完成前マイチェックリスト＋PDF書き出し前チェック</h2>
           <div className="subhead" data-copy-id="TEXT_SECTION_01_SUBTITLE">場所：▶オプション→完成前チェックリスト</div>
           <div className="chapter-grid">
             <div className="image-frame">
@@ -350,8 +503,8 @@ export default function HowToPage() {
           </div>
         </section>
 
-        <section className="chapter" id="writing-check">
-          <h2 data-copy-id="TEXT_SECTION_02_TITLE">2. 文章チェックβ</h2>
+        <section className="chapter essential" id="writing-check">
+          <h2 data-eyebrow="ESSENTIAL 02 / 05" data-copy-id="TEXT_SECTION_02_TITLE">2. 文章チェックβ</h2>
           <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：「見直し」→文章チェックβ</div>
           <div className="chapter-grid">
             <div className="image-frame">
@@ -380,8 +533,8 @@ export default function HowToPage() {
           </div>
         </section>
 
-        <section className="chapter" id="body-notation">
-          <h2 data-copy-id="TEXT_SECTION_03_TITLE">3. ルビ・縦中横・改ページの本文記法</h2>
+        <section className="chapter essential" id="body-notation">
+          <h2 data-eyebrow="ESSENTIAL 03 / 05" data-copy-id="TEXT_SECTION_03_TITLE">3. ルビ・縦中横・改ページの本文記法</h2>
           <div className="subhead" data-copy-id="TEXT_SECTION_03_SUBTITLE">場所：タイトル下／ヘルプの中</div>
           <div className="chapter-grid">
             <div className="image-frame">
@@ -404,8 +557,8 @@ export default function HowToPage() {
           </div>
         </section>
 
-        <section className="chapter" id="work-counter">
-          <h2 data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウンター</h2>
+        <section className="chapter essential" id="work-counter">
+          <h2 data-eyebrow="ESSENTIAL 04 / 05" data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウンター</h2>
           <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：「見直し」→作業カウンター</div>
           <div className="chapter-grid">
             <div className="image-frame">
@@ -428,8 +581,8 @@ export default function HowToPage() {
           </div>
         </section>
 
-        <section className="chapter" id="varied-use">
-          <h2 data-copy-id="TEXT_SECTION_05_TITLE">5. 「ここで書かなくてもいい」原稿持ち込み運用</h2>
+        <section className="chapter essential" id="varied-use">
+          <h2 data-eyebrow="ESSENTIAL 05 / 05" data-copy-id="TEXT_SECTION_05_TITLE">5. 「ここで書かなくてもいい」原稿持ち込み運用</h2>
           <div className="subhead" data-copy-id="TEXT_SECTION_05_SUBTITLE">場所：▶オプション→TXT出入力</div>
           <div className="chapter-grid">
             <div className="image-frame">
@@ -461,6 +614,7 @@ export default function HowToPage() {
         </section>
 
         <section className="review-tools-guide" id="review-tools">
+          <p className="howto-chip">Chapter 2 · Review</p>
           <h2 data-copy-id="TEXT_REVIEW_TOOLS_TITLE">文章見直し<br />ツール</h2>
           <p className="review-tools-lead" data-copy-id="TEXT_REVIEW_TOOLS_LEAD">
             エディターの「見直し」には、原稿を書きながら確認したい機能をまとめています。PCではプレビュー下の見直しバー、モバイルではエディター下の1行バーから開けます。
@@ -566,7 +720,12 @@ export default function HowToPage() {
         </section>
 
         <section className="tips-index" id="tips">
+          <p className="howto-chip">Chapter 3 · Tips</p>
           <h2 data-copy-id="TEXT_TIPS_TITLE">便利な小技 10選β版</h2>
+          <p className="section-hint">各項目は、見出しを押すとひらきます。</p>
+          <button type="button" className="tips-toggle-all" aria-pressed={allTipsOpen} onClick={toggleAllTips}>
+            {allTipsOpen ? "10項目をすべて閉じる" : "10項目をすべてひらく"}
+          </button>
           <ol>
             <li><a href="#settings">設定</a></li>
             <li><a href="#preview">プレビュー機能</a></li>
@@ -581,9 +740,12 @@ export default function HowToPage() {
           </ol>
         </section>
 
-        <section className="chapter" id="settings">
-          <h2 data-copy-id="TEXT_SECTION_06_TITLE">1. 本の見た目を細かく調整「設定」</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_06_SUBTITLE">場所：テキストエディター直上→▶設定</div>
+        <details className="chapter tip" id="settings">
+          <summary className="tip-summary" data-eyebrow="TIPS 01 / 10">
+            <h2 data-copy-id="TEXT_SECTION_06_TITLE">1. 本の見た目を細かく調整「設定」</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_06_SUBTITLE">場所：テキストエディター直上→▶設定</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.settings.file)} alt={HOWTO_IMAGES.settings.alt} loading="lazy" />
@@ -597,11 +759,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="preview">
-          <h2 data-copy-id="TEXT_SECTION_07_TITLE">2. 色々見られるプレビュー機能</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_07_SUBTITLE">場所：テキストタイトル入力欄の下</div>
+        <details className="chapter tip" id="preview">
+          <summary className="tip-summary" data-eyebrow="TIPS 02 / 10">
+            <h2 data-copy-id="TEXT_SECTION_07_TITLE">2. 色々見られるプレビュー機能</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_07_SUBTITLE">場所：テキストタイトル入力欄の下</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.preview.file)} alt={HOWTO_IMAGES.preview.alt} loading="lazy" />
@@ -621,11 +786,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="four-buttons">
-          <h2 data-copy-id="TEXT_SECTION_08_TITLE">3. タイトル下の便利な４ボタン</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_08_SUBTITLE">場所：テキストエディター直上</div>
+        <details className="chapter tip" id="four-buttons">
+          <summary className="tip-summary" data-eyebrow="TIPS 03 / 10">
+            <h2 data-copy-id="TEXT_SECTION_08_TITLE">3. タイトル下の便利な４ボタン</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_08_SUBTITLE">場所：テキストエディター直上</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.fourButtons.file)} alt={HOWTO_IMAGES.fourButtons.alt} loading="lazy" />
@@ -640,11 +808,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="memo">
-          <h2 data-copy-id="TEXT_SECTION_09_TITLE">4. 本文には入れない作業を残す「メモ機能」</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_09_SUBTITLE">場所：テキストタイトル入力欄の下→▶メモ</div>
+        <details className="chapter tip" id="memo">
+          <summary className="tip-summary" data-eyebrow="TIPS 04 / 10">
+            <h2 data-copy-id="TEXT_SECTION_09_TITLE">4. 本文には入れない作業を残す「メモ機能」</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_09_SUBTITLE">場所：テキストタイトル入力欄の下→▶メモ</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.memo.file)} alt={HOWTO_IMAGES.memo.alt} loading="lazy" />
@@ -657,11 +828,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="focus-mode">
-          <h2 data-copy-id="TEXT_SECTION_10_TITLE">5. “書くときだけ”余計なUIを消す「集中モード」</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_10_SUBTITLE">場所：ヘッダー「集中モード」</div>
+        <details className="chapter tip" id="focus-mode">
+          <summary className="tip-summary" data-eyebrow="TIPS 05 / 10">
+            <h2 data-copy-id="TEXT_SECTION_10_TITLE">5. “書くときだけ”余計なUIを消す「集中モード」</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_10_SUBTITLE">場所：ヘッダー「集中モード」</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.focusMode.file)} alt={HOWTO_IMAGES.focusMode.alt} loading="lazy" />
@@ -674,11 +848,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="folio-header">
-          <h2 data-copy-id="TEXT_SECTION_11_TITLE">6. 本に合わせて変えられるノンブル・柱</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_11_SUBTITLE">場所：▶設定→ページ・ノンブル・柱</div>
+        <details className="chapter tip" id="folio-header">
+          <summary className="tip-summary" data-eyebrow="TIPS 06 / 10">
+            <h2 data-copy-id="TEXT_SECTION_11_TITLE">6. 本に合わせて変えられるノンブル・柱</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_11_SUBTITLE">場所：▶設定→ページ・ノンブル・柱</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.folioHeader.file)} alt={HOWTO_IMAGES.folioHeader.alt} loading="lazy" />
@@ -692,11 +869,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="image-insert">
-          <h2 data-copy-id="TEXT_SECTION_12_TITLE">7. 挿絵を挿入できる「画像挿入機能」</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_12_SUBTITLE">場所：プレビュー画面→ページ上［…］内</div>
+        <details className="chapter tip" id="image-insert">
+          <summary className="tip-summary" data-eyebrow="TIPS 07 / 10">
+            <h2 data-copy-id="TEXT_SECTION_12_TITLE">7. 挿絵を挿入できる「画像挿入機能」</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_12_SUBTITLE">場所：プレビュー画面→ページ上［…］内</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.imageInsert.file)} alt={HOWTO_IMAGES.imageInsert.alt} loading="lazy" />
@@ -716,11 +896,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="colophon">
-          <h2 data-copy-id="TEXT_SECTION_13_TITLE">8. 横書きの奥付が配置できる「奥付機能」</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_13_SUBTITLE">場所：▶オプション→奥付（縦）、奥付（横）</div>
+        <details className="chapter tip" id="colophon">
+          <summary className="tip-summary" data-eyebrow="TIPS 08 / 10">
+            <h2 data-copy-id="TEXT_SECTION_13_TITLE">8. 横書きの奥付が配置できる「奥付機能」</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_13_SUBTITLE">場所：▶オプション→奥付（縦）、奥付（横）</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.colophon.file)} alt={HOWTO_IMAGES.colophon.alt} loading="lazy" />
@@ -734,11 +917,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="dark-mode">
-          <h2 data-copy-id="TEXT_SECTION_14_TITLE">9. 目の疲れにはダークモードを使おう</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_14_SUBTITLE">場所：ヘッダー「画面モード」</div>
+        <details className="chapter tip" id="dark-mode">
+          <summary className="tip-summary" data-eyebrow="TIPS 09 / 10">
+            <h2 data-copy-id="TEXT_SECTION_14_TITLE">9. 目の疲れにはダークモードを使おう</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_14_SUBTITLE">場所：ヘッダー「画面モード」</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.darkMode.file)} alt={HOWTO_IMAGES.darkMode.alt} loading="lazy" />
@@ -751,11 +937,14 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="chapter" id="export">
-          <h2 data-copy-id="TEXT_SECTION_15_TITLE">10. 多機能書き出し・書き出し中断</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_15_SUBTITLE">場所：プレビュー画面左側「書き出し▼」</div>
+        <details className="chapter tip" id="export">
+          <summary className="tip-summary" data-eyebrow="TIPS 10 / 10">
+            <h2 data-copy-id="TEXT_SECTION_15_TITLE">10. 多機能書き出し・書き出し中断</h2>
+            <div className="subhead" data-copy-id="TEXT_SECTION_15_SUBTITLE">場所：プレビュー画面左側「書き出し▼」</div>
+            <span className="tip-toggle" aria-hidden="true"></span>
+          </summary>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.exportMenu.file)} alt={HOWTO_IMAGES.exportMenu.alt} loading="lazy" />
@@ -777,49 +966,51 @@ export default function HowToPage() {
               </div>
             </div>
           </div>
-        </section>
+        </details>
 
         <section className="faq" id="faq">
+          <p className="howto-chip">Questions</p>
           <h2 data-copy-id="TEXT_FAQ_TITLE">FAQ</h2>
+          <p className="section-hint">質問をタップすると、答えがひらきます。</p>
 
-          <div className="faq-item">
-            <div className="faq-q">600dpiでPDFを書き出す必要はありますか？</div>
+          <details className="faq-item">
+            <summary className="faq-q">600dpiでPDFを書き出す必要はありますか？</summary>
             <div className="faq-text" data-copy-id="TEXT_FAQ_PDF_DPI">
               <p><strong>いいえ。TateSpunのPDF出力は、600dpiなどの固定解像度に依存していません。</strong></p>
               <p>本文文字は埋め込みフォントと文字の配置情報を中心に保持し、一部の縦組み字形やトンボなどはベクターデータ（線や輪郭を座標として保持するデータ）としてPDFへ出力します。ページサイズもmm・pt単位の実寸座標で保持されるため、本文文字やトンボの品質は「300dpi」「600dpi」といった画像解像度によって決まるものではありません。</p>
               <p>なお、原稿内に写真やイラストなどの画像を使用する場合は、その画像自体には実効解像度（元画像のピクセル数と、紙面上で使用する大きさから決まるppi）が関係します。印刷所から画像解像度の指定がある場合は、その指定をご確認ください。</p>
               <p>また、印刷所からPDF/Xなど特定のPDF形式を指定されている場合は、印刷所の入稿仕様を優先してください。</p>
             </div>
-          </div>
+          </details>
 
-          <div className="faq-item">
-            <div className="faq-q">縦組みで、かぎ括弧の文末の「。」「、」や全角の「！？」「？！」の位置がずれます。</div>
+          <details className="faq-item">
+            <summary className="faq-q">縦組みで、かぎ括弧の文末の「。」「、」や全角の「！？」「？！」の位置がずれます。</summary>
             <div className="faq-text" data-copy-id="TEXT_FAQ_VERTICAL_PUNCTUATION">
               <p>現在（2026年9月時点）のβ版では、縦組みの約物（句読点・かぎ括弧・感嘆符などの記号）の組版に一部既知の制限があります。</p>
               <p>たとえば「明日も、同じ場所で。」のように、閉じかぎ括弧「」」の直前へ「。」「、」を置いた場合、句読点の位置や文字間隔が不自然になることがあります。</p>
               <p>また、全角の連続記号「！？」「？！」などは、縦組み時の配置によって一部の記号がずれて見える場合があります。</p>
               <p>β版では、気になる場合は「閉じかぎ括弧直前の句点を省く」「全角の！？・？！を半角の!?・?!に置き換える」などの方法をご検討ください。これらは今後の組版改善対象です。</p>
             </div>
-          </div>
+          </details>
 
-          <div className="faq-item">
-            <div className="faq-q">印刷所のパソコンにTateSpunと同じフォントがなくても大丈夫ですか？</div>
+          <details className="faq-item">
+            <summary className="faq-q">印刷所のパソコンにTateSpunと同じフォントがなくても大丈夫ですか？</summary>
             <div className="faq-text" data-copy-id="TEXT_FAQ_FONT_EMBEDDING">
               <p>はい。TateSpunのPDFでは、使用するフォントをPDF内に埋め込んで出力します。そのため、PDFを開く側のパソコンに同じフォントがインストールされていなくても、基本的にはPDF内のフォント情報を使って同じ文字を表示できます。</p>
               <p>現在TateSpunで使用しているShippori Minchoは、SIL Open Font License 1.1のフォントで、PDFへのフォント埋め込みが認められています。</p>
               <p>ただし、印刷所によってPDF/Xなど独自の入稿形式が指定されている場合があります。最終入稿前には、利用する印刷所の入稿仕様もあわせてご確認ください。</p>
             </div>
-          </div>
+          </details>
 
-          <div className="faq-item">
-            <div className="faq-q">不具合があったら？</div>
+          <details className="faq-item">
+            <summary className="faq-q">不具合があったら？</summary>
             <div className="faq-text" data-copy-id="TEXT_FAQ_LEAD">
               <p>エディター内のβ版フィードバック（「報告」ボタン）から送信できます。</p>
               <p>いただいたご報告は真摯に受け止めますが、即時の実装・修正や、すべての内容への対応をお約束するものではありません。</p>
               <p>報告時には、不具合の原因調査のため、ユーザーの利用環境に関する情報を自動で取得します。機種・ブラウザ等に依存するエラーかどうかを調べるために活用しますので、あらかじめご了承ください。</p>
               <p>お名前・住所などの個人情報は書き込まないようお願いいたします。自動で取得するのはブラウザ・端末・表示環境等の情報であり、お名前や住所・所在地を取得するものではありません。作品本文・作品タイトル・ドキュメントIDも自動送信しない設定になっていますので、ご安心ください。</p>
             </div>
-          </div>
+          </details>
         </section>
 
         <section className="greeting" id="report">
@@ -851,6 +1042,9 @@ export default function HowToPage() {
             </div>
           </div>
         </section>
+
+          </div>
+        </div>
 
         <section className="support-footer" id="support-tatespun" aria-labelledby="support-tatespun-title">
           <h2 id="support-tatespun-title" data-copy-id="TEXT_SUPPORT_TITLE">{SUPPORT_HEADING}</h2>

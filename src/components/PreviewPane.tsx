@@ -2582,8 +2582,8 @@ function PreviewPane({
       data-preview-frame-mode={integratedFrame ? "integrated" : "standalone"}
       className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-base ${
         integratedFrame
-          ? "rounded-t-2xl border border-b-0 border-ink/10 shadow-none"
-          : "rounded-2xl border border-ink/10 shadow-sm"
+          ? "rounded-t-lg border border-b-0 border-ink/10 shadow-none"
+          : "rounded-lg border border-ink/10 shadow-sm"
       }`}
     >
       {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
@@ -2606,7 +2606,7 @@ function PreviewPane({
               <span aria-hidden="true">▶</span>
             </button>
           )}
-          <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60">プレビュー</span>
+          <span className="flex-shrink-0 whitespace-nowrap text-sm text-ink/60"><span aria-hidden="true" data-editor-pane-chip="" className="mr-2 hidden bg-ink/80 px-1.5 py-0.5 align-[1px] text-[9px] font-bold tracking-[0.2em] text-[#faf8f2] dark:text-[#11151d] xl:inline-block">PROOF</span>プレビュー</span>
           <span className="flex flex-shrink-0 items-center gap-1.5">
             <button
               type="button"

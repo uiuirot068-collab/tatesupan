@@ -1,23 +1,29 @@
 /*
- * TSP-HOWTO-BETA-016 — styling for /howto, adapted from the approved
- * docs/howto (Draft v3.4) static mockup. Every rule is scoped under
+ * TSP-HOWTO-BETA-016 — styling for /howto. Every rule is scoped under
  * `.howto-page` (the route's single wrapper element) instead of `:root` /
  * `body`, so nothing here leaks into the rest of the app when this route's
  * JS chunk stays loaded during client-side navigation.
+ *
+ * Phase 3: rebuilt on the same "folio" system as the Home and the Editor --
+ * paper / ink / gold tokens (light + dark), inverted ink chips for English
+ * labels, serif headings, hairlines instead of boxes, large gold numerals,
+ * a "start here" thread, a quick-reference index, a desktop side rail, and
+ * collapsible tips / FAQ. The copy itself is unchanged.
  */
 
 .howto-page {
-  --bg: #f3eee4;
-  --paper: #fffdf8;
-  --text: #25211d;
-  --muted: #7b7369;
-  --line: #ddd5c9;
-  --gold: #c89542;
-  --gold-dark: #a8742c;
-  --sub: #e8e2d8;
-  --slot: #f6f1e9;
-  --dark: #28241f;
-  --max: 960px;
+  --bg: #f4f0e7;
+  --paper: #fbf9f4;
+  --text: #17243a;
+  --muted: #566078;
+  --line: rgba(23, 36, 58, .16);
+  --line-soft: rgba(23, 36, 58, .09);
+  --gold: #b5994d;
+  --gold-text: #7a5f2c;
+  --night: #17243a;
+  --night-text: #f4f0e7;
+  --slot: #f1ece1;
+  --max: 1180px;
 
   min-height: 100dvh;
   background: var(--bg);
@@ -27,221 +33,328 @@
   line-height: 1.85;
   letter-spacing: .015em;
 }
+
+html[data-theme="dark"] .howto-page {
+  --bg: #10151d;
+  --paper: #141a24;
+  --text: #e4dfd3;
+  --muted: #a3acbc;
+  --line: rgba(228, 223, 211, .16);
+  --line-soft: rgba(228, 223, 211, .08);
+  --gold: #c6af63;
+  --gold-text: #d9c28a;
+  --night: #0b1018;
+  --night-text: #e4dfd3;
+  --slot: #1a212c;
+}
+
 .howto-page * { box-sizing: border-box; }
 .howto-page a { color: inherit; }
+.howto-page :where(a, button, summary):focus-visible { outline: 2px solid color-mix(in srgb, var(--text) 72%, transparent); outline-offset: 3px; }
 
-.howto-page .manual { width: min(var(--max), calc(100% - 36px)); margin: 0 auto 80px; background: var(--paper); padding: 0 64px 0; box-shadow: 0 12px 44px rgba(70,57,39,.08); }
-.howto-page .hero { min-height: 720px; display: grid; grid-template-columns: 36% 64%; gap: 38px; align-items: center; border-bottom: 1px solid var(--line); }
-.howto-page .hero-left { align-self: stretch; display: flex; flex-direction: column; justify-content: center; padding-right: 30px; border-right: 1px solid var(--line); }
-.howto-page .hero-brand .howto-label { display: block; font: 800 23px/1 Georgia, serif; letter-spacing: .04em; }
-.howto-page .hero-brand strong { display: block; margin-top: 5px; font: 800 34px/1 Georgia, serif; }
-.howto-page .hero-pills { display: grid; gap: 10px; margin: 30px 0 34px; }
-.howto-page .pill { width: max-content; padding: 7px 18px; border-radius: 999px; color: #fff; text-decoration: none; font-size: 13px; font-weight: 700; }
-.howto-page .pill.dark { background: #111; }
-.howto-page .pill.gold { background: var(--gold); }
-.howto-page .hero-index { display: grid; gap: 0; }
-.howto-page .hero-menu-block { border-top: 1px solid var(--line); padding: 10px 0; }
-.howto-page .hero-menu-block:nth-child(2) { border-bottom: 1px solid var(--line); }
-.howto-page .hero-menu-row { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 10px; align-items: start; }
-.howto-page .accordion-toggle { width: 26px; height: 32px; padding: 7px 4px; border: 0; background: transparent; color: var(--text); cursor: pointer; }
-.howto-page .accordion-toggle:hover { background: #f3ede4; }
-.howto-page .hamburger { width: 18px; display: grid; gap: 4px; }
-.howto-page .hamburger i { display: block; width: 18px; height: 1px; background: currentColor; }
-.howto-page .hero-menu-title { display: block; text-decoration: none; font-size: 15px; font-weight: 700; line-height: 1.5; word-break: keep-all; }
+/* Shared pieces ----------------------------------------------------------- */
+.howto-page .howto-chip { display: inline-block; width: max-content; margin: 0; padding: 4px 8px 3px; background: var(--text); color: var(--bg); font-size: 10px; font-weight: 700; letter-spacing: .2em; line-height: 1.2; text-transform: uppercase; }
+.howto-page .section-hint { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+.howto-page .manual { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; background: var(--paper); padding: 0 56px 1px; border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); }
+
+/* Hero ---------------------------------------------------------------------- */
+.howto-page .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 56px; align-items: start; padding: 64px 0 56px; border-bottom: 1px solid var(--line); }
+.howto-page .hero-brand .howto-label { display: inline-block; padding: 4px 9px 3px; background: var(--text); color: var(--bg); font: 700 11px/1.2 system-ui, sans-serif; letter-spacing: .24em; }
+.howto-page .hero-brand strong { display: block; margin-top: 14px; font-family: var(--font-serif), Georgia, serif; font-size: clamp(44px, 6vw, 76px); font-weight: 500; letter-spacing: .03em; line-height: 1; }
+.howto-page .hero-copy { max-width: 440px; margin: 26px 0 0; font-family: var(--font-serif), serif; font-size: 16px; line-height: 2; color: color-mix(in srgb, var(--text) 82%, transparent); }
+.howto-page .hero-pills { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 0; }
+.howto-page .pill { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: .04em; transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease; }
+.howto-page .pill.dark { border: 1px solid var(--text); color: var(--text); background: transparent; }
+.howto-page .pill.dark:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.howto-page .pill.gold { border: 1px solid var(--gold); background: var(--gold); color: #11151d; box-shadow: 4px 4px 0 var(--text); }
+.howto-page .pill.gold:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--text); }
+
+.howto-page .start-path-block { margin-top: 44px; padding-top: 26px; border-top: 1px solid var(--line); }
+.howto-page .start-path-title { margin: 12px 0 14px; font-family: var(--font-serif), serif; font-size: 20px; letter-spacing: .04em; }
+.howto-page .start-path { margin: 0; padding: 0; list-style: none; }
+.howto-page .start-path li { position: relative; }
+.howto-page .start-path li:not(:last-child)::before { position: absolute; top: 48px; bottom: 2px; left: 21px; width: 1px; background: var(--line); content: ""; }
+.howto-page .start-path a { display: grid; grid-template-columns: 58px minmax(0, 1fr); column-gap: 10px; padding: 8px 8px 16px 0; text-decoration: none; transition: background-color .18s ease; }
+.howto-page .start-path a:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.howto-page .start-no { grid-row: span 2; color: var(--gold); font-family: var(--font-serif), Georgia, serif; font-size: 38px; line-height: 1; }
+.howto-page .start-path b { padding-top: 3px; font-size: 16px; line-height: 1.5; }
+.howto-page .start-path small { color: var(--muted); font-size: 12px; }
+.howto-page .start-path-help { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.howto-page .start-path-help a { color: var(--text); font-weight: 700; }
+
+.howto-page .hero-visual { position: relative; display: flex; justify-content: center; align-items: center; min-height: 280px; padding: 24px; border: 1px solid var(--line); background: var(--slot); }
+.howto-page .hero-visual::before { position: absolute; inset: 6px; border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent); content: ""; pointer-events: none; }
+.howto-page .hero-visual img { display: block; max-width: 100%; max-height: 320px; height: auto; object-fit: contain; }
+.howto-page .hero-index-chip { margin-top: 32px; }
+.howto-page .hero-index { display: grid; gap: 0; margin-top: 10px; border-top: 1px solid var(--line); }
+.howto-page .hero-menu-block { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.howto-page .hero-menu-row { display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 8px; align-items: center; }
+.howto-page .accordion-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+.howto-page .accordion-toggle:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.howto-page .hamburger { width: 14px; display: grid; gap: 3px; }
+.howto-page .hamburger i { display: block; width: 14px; height: 1px; background: currentColor; }
+.howto-page .hero-menu-title { display: block; text-decoration: none; font-size: 14px; font-weight: 700; line-height: 1.5; word-break: keep-all; }
 .howto-page .hero-menu-title:hover { text-decoration: underline; }
-.howto-page .hero-submenu { margin: 10px 0 4px 37px; padding-left: 22px; }
+.howto-page .hero-submenu { margin: 8px 0 4px 40px; padding-left: 20px; }
 .howto-page .hero-submenu[hidden] { display: none; }
-.howto-page .hero-submenu li { margin: 5px 0; font-size: 14px; line-height: 1.5; }
+.howto-page .hero-submenu li { margin: 4px 0; font-size: 13px; line-height: 1.5; }
+.howto-page .hero-submenu li::marker { color: var(--gold); }
 .howto-page .hero-submenu a { text-decoration: none; }
 .howto-page .hero-submenu a:hover { text-decoration: underline; }
-.howto-page .hero-simple-link { display: block; padding: 9px 0 9px 37px; text-decoration: none; font-size: 15px; font-weight: 700; color: var(--text); background: none; }
+.howto-page .hero-simple-link { display: block; width: 100%; padding: 10px 0 10px 40px; border: 0; border-bottom: 1px solid var(--line); text-align: left; text-decoration: none; font: inherit; font-size: 14px; font-weight: 700; line-height: 1.5; color: var(--text); background: none; cursor: pointer; }
 .howto-page .hero-simple-link:hover { text-decoration: underline; }
-.howto-page .hero-right { text-align: center; }
-.howto-page .hero-visual { display: flex; justify-content: center; align-items: center; min-height: 360px; padding: 20px; border: 1px solid var(--line); background: #fff9ee; }
-.howto-page .hero-visual img { display: block; max-width: 100%; height: auto; object-fit: contain; }
-.howto-page .hero-copy { max-width: 400px; margin: 28px auto 0; font-size: 15px; }
-.howto-page .scroll-arrow { margin-top: 32px; font-size: 32px; }
+.howto-page .hero-index > .hero-simple-link:first-child { color: var(--gold-text); }
 
-/* TSP-RC-HOWTO-HEADER-CORRECTION-002: reverted to the original single-row
-   "brand + nav side by side" layout at standard/desktop width (previous
-   attempt forced flex-direction: column at EVERY width, which Human QA
-   rejected). Root cause of the original character-by-character collapse was
-   simply a missing `word-break: keep-all` on the nav items -- their
-   existing `<br />`-per-item wording/structure is unchanged and was never
-   the problem. `.guide-logo`'s `min-width` is trimmed from the original
-   210px to 150px (close to its real ~144px content width) only to give the
-   nav grid a bit more breathing room in the "desktop but not full-width"
-   zone; at genuinely wide viewports this is visually a no-op. Mobile-only
-   overrides (brand row + nav row, 2-column nav grid) are in the existing
-   `max-width: 760px` query below -- not applied at standard width. */
-.howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 110px; margin: 0 -64px; padding: 0 64px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: rgba(255,253,248,.97); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); }
+/* Sticky guide bar ------------------------------------------------------ */
+.howto-page .guide-header { position: sticky; top: 0; z-index: 50; min-height: 64px; margin: 0 -56px; padding: 0 56px; display: flex; justify-content: space-between; align-items: center; gap: 28px; background: var(--paper); border-top: 3px solid var(--text); border-bottom: 1px solid var(--line); }
+html[data-theme="dark"] .howto-page .guide-header { border-top-color: var(--gold); }
 .howto-page .guide-logo { display: flex; align-items: center; gap: 10px; min-width: 150px; text-decoration: none; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; font: inherit; text-align: left; }
-.howto-page .guide-cat { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+.howto-page .guide-cat { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
+html[data-theme="dark"] .howto-page .guide-cat { filter: brightness(0) invert(1); opacity: .85; }
 .howto-page .guide-logo span, .howto-page .guide-logo b { display: block; }
-.howto-page .guide-logo span { font-size: 11px; }
-.howto-page .guide-logo b { font: 700 17px Georgia, serif; }
-.howto-page .guide-links { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; flex: 1; max-width: 680px; }
-/* The missing rule: without it, a nav item's Japanese text wrapped
-   character-by-character the moment its 1fr column got narrower than the
-   text itself. keep-all only allows breaking at an existing `<br />`/word
-   boundary, never mid-character; overflow-wrap: normal keeps that the ONLY
-   way a line can end (no last-resort mid-word break either). min-width: 0
-   lets a grid column actually shrink to that boundary instead of forcing
-   the row to overflow. */
-.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; min-width: 0; padding: 10px 9px; border: 0; background: none; text-decoration: none; font: inherit; font-size: 13px; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; word-break: keep-all; overflow-wrap: normal; }
-.howto-page .guide-links a:hover, .howto-page .guide-links button:hover { background: #faf6ee; }
-.howto-page .guide-links a span { font-size: 12px; color: var(--muted); }
-.howto-page .guide-links button.help-cta { font-weight: 700; color: var(--gold-dark); }
+.howto-page .guide-logo span { font-size: 10px; font-weight: 700; letter-spacing: .2em; color: var(--muted); }
+.howto-page .guide-logo b { font-family: var(--font-serif), Georgia, serif; font-size: 18px; font-weight: 500; line-height: 1.1; }
+.howto-page .guide-links { display: grid; grid-template-columns: repeat(5,1fr); gap: 0; flex: 1; max-width: 700px; }
+/* keep-all: a nav item's Japanese text only breaks at its <br /> or a word
+   boundary, never mid-character, however narrow its 1fr column gets. */
+.howto-page .guide-links a, .howto-page .guide-links button { display: block; width: 100%; min-width: 0; padding: 9px 10px; border: 0; border-left: 1px solid var(--line-soft); background: none; text-decoration: none; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; word-break: keep-all; overflow-wrap: normal; }
+.howto-page .guide-links a:hover, .howto-page .guide-links button:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.howto-page .guide-links a span { font-size: 11px; color: var(--muted); }
+.howto-page .guide-links button.help-cta { color: var(--gold-text); font-weight: 700; }
 
-.howto-page .intro { display: grid; grid-template-columns: 29% 71%; gap: 38px; padding: 70px 0 105px; }
-.howto-page .intro-title { display: flex; align-items: flex-start; gap: 12px; }
-.howto-page .intro-title > span { width: 4px; min-height: 48px; background: #222; }
-.howto-page .intro-title b { font-size: 16px; }
-.howto-page .intro-copy p { margin: 0 0 9px; font-size: 14px; }
-.howto-page .intro-copy a { text-decoration: none; }
-.howto-page .intro-copy a:hover { text-decoration: underline; }
+/* Body layout: a side rail on wide screens ------------------------------- */
+.howto-page .howto-layout { display: block; }
+.howto-page .howto-rail { display: none; }
+.howto-page .howto-flow { min-width: 0; }
+@media (min-width: 1100px) {
+  .howto-page .howto-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 48px; }
+  .howto-page .howto-rail { position: sticky; top: 84px; display: block; align-self: start; max-height: calc(100dvh - 100px); overflow-y: auto; scrollbar-width: thin; padding: 28px 20px 24px 0; border-right: 1px dashed var(--line); font-size: 12px; line-height: 1.5; }
+  .howto-page .rail-group { margin-top: 12px; }
+  .howto-page .rail-group-title { margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 700; }
+  .howto-page .rail-group ul { margin: 0; padding: 0; list-style: none; border-left: 1px solid var(--line); }
+  .howto-page .rail-group a { display: block; margin-left: -1px; padding: 2px 0 2px 10px; border-left: 2px solid transparent; text-decoration: none; color: color-mix(in srgb, var(--text) 75%, transparent); }
+  .howto-page .rail-group a:hover { color: var(--text); }
+  .howto-page .rail-group a[aria-current] { border-left-color: var(--gold); color: var(--text); font-weight: 700; }
+}
 
-/* TSP-RC-HOWTO-FINALIZE-003: spans both .intro grid columns (title + copy)
-   full-width instead of being squeezed into the 29% title column; the video
-   itself is intrinsically responsive (max-width: 100%, height: auto) so it
-   never causes horizontal overflow at any viewport. */
+/* Quick reference -------------------------------------------------------- */
+.howto-page .quick-ref { padding: 56px 0 64px; border-bottom: 1px solid var(--line); scroll-margin-top: 90px; }
+.howto-page .quick-ref h2 { margin: 14px 0 0; font-family: var(--font-serif), serif; font-size: clamp(22px, 3vw, 28px); font-weight: 500; letter-spacing: .05em; }
+.howto-page .quick-ref-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; margin: 22px 0 0; padding: 0; list-style: none; counter-reset: qref; border-top: 1px solid var(--line); }
+.howto-page .quick-ref-list li { counter-increment: qref; border-bottom: 1px solid var(--line); }
+.howto-page .quick-ref-list a { position: relative; display: grid; grid-template-columns: 30px minmax(0,1fr) 16px; column-gap: 8px; padding: 12px 4px; text-decoration: none; transition: background-color .18s ease; }
+.howto-page .quick-ref-list a::before { grid-row: span 2; padding-top: 3px; color: var(--gold); content: counter(qref, decimal-leading-zero); font: 600 11px/1.4 var(--font-geist-mono), ui-monospace, monospace; }
+.howto-page .quick-ref-list a::after { grid-column: 3; grid-row: 1 / span 2; align-self: center; color: var(--gold); content: "→"; font-size: 13px; transition: transform .18s ease; }
+.howto-page .quick-ref-list a:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.howto-page .quick-ref-list a:hover::after { transform: translateX(3px); }
+.howto-page .quick-ref-list b { font-size: 14px; line-height: 1.5; }
+.howto-page .quick-ref-list span { grid-column: 2; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* Chapter 1 intro (five features + video) --------------------------------- */
+.howto-page .intro { display: grid; grid-template-columns: minmax(0, 32%) minmax(0, 1fr); gap: 20px 40px; padding: 64px 0 72px; scroll-margin-top: 90px; }
+.howto-page .intro-title { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.howto-page .intro-title > span { display: none; }
+.howto-page .intro-title b { font-family: var(--font-serif), serif; font-size: clamp(22px, 2.4vw, 27px); word-break: keep-all; font-weight: 500; line-height: 1.45; letter-spacing: .05em; }
+.howto-page .intro-copy { counter-reset: intro; border-top: 1px solid var(--line); }
+.howto-page .intro-copy p { margin: 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.howto-page .intro-copy a { display: block; padding: 11px 4px; text-decoration: none; font-weight: 600; transition: background-color .18s ease; }
+.howto-page .intro-copy a:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+
+/* The guide video spans both intro columns and is intrinsically responsive. */
 .howto-page .guide-video-block { grid-column: 1 / -1; margin-top: 24px; }
-.howto-page .guide-video-intro { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
-/* TSP-RC-HOWTO-VIDEO-REPLACE-004: matches the replacement video's native
-   1980x1020 (was 960x708 for the prior source). */
+.howto-page .guide-video-intro { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+/* Matches the video's native 1980x1020. */
 .howto-page .guide-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 1980 / 1020; background: #000; border: 1px solid var(--line); }
 
-.howto-page .chapter { padding-bottom: 94px; scroll-margin-top: 125px; }
-.howto-page .chapter > h2 { width: 74%; margin: 0 auto 8px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
-.howto-page .subhead { width: 55%; margin: 0 auto 40px; padding: 4px 12px; text-align: center; border-radius: 999px; background: var(--sub); font-size: 12px; color: #4d4841; }
-.howto-page .chapter-grid { display: grid; grid-template-columns: 43% 57%; gap: 36px; align-items: start; }
-.howto-page .chapter-copy { display: grid; gap: 22px; }
-.howto-page .copy-block { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-.howto-page .copy-block:last-child { border-bottom: 0; }
-.howto-page .chapter-copy h3 { margin: 0 0 10px; font-size: 16px; }
+/* Chapters ------------------------------------------------------------------ */
+.howto-page .chapter { display: block; padding: 0 0 72px; scroll-margin-top: 90px; }
+.howto-page .chapter.essential { padding-top: 40px; border-top: 1px solid var(--line); }
+.howto-page .chapter > h2, .howto-page .tip-summary h2 { margin: 0; font-family: var(--font-serif), serif; font-size: clamp(20px, 2.6vw, 26px); font-weight: 500; line-height: 1.5; letter-spacing: .04em; }
+.howto-page .chapter > h2[data-eyebrow]::before, .howto-page .tip-summary[data-eyebrow]::before { display: block; margin-bottom: 8px; color: var(--gold-text); content: attr(data-eyebrow); font: 700 10px/1.2 var(--font-geist-mono), ui-monospace, monospace; letter-spacing: .2em; }
+.howto-page .subhead { display: inline-block; margin: 12px 0 28px; padding: 3px 10px 3px 9px; border-left: 3px solid var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); font-size: 12px; font-weight: 600; color: color-mix(in srgb, var(--text) 85%, transparent); }
+.howto-page .chapter-grid { display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr); gap: 36px; align-items: start; }
+.howto-page .chapter-copy { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.howto-page .copy-block { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 16px; padding: 16px 0 18px; border-bottom: 1px solid var(--line); }
+.howto-page .chapter-copy h3 { margin: 0; color: var(--gold-text); font-size: 12px; font-weight: 700; line-height: 1.6; letter-spacing: .06em; }
+.howto-page .chapter-copy > .copy-body { padding-top: 16px; }
 .howto-page .copy-body { font-size: 14px; }
 .howto-page .copy-body p { margin: 0 0 11px; }
-.howto-page .copy-body ul { margin: 8px 0 0; padding-left: 1.5em; }
-.howto-page .copy-body code { padding: 2px 5px; background: #eee8dd; font-family: Consolas, monospace; }
+.howto-page .copy-body ul { margin: 8px 0 0; padding-left: 1.4em; }
+.howto-page .copy-body li::marker { color: var(--gold); }
+.howto-page .copy-body code { padding: 2px 5px; background: color-mix(in srgb, var(--text) 7%, transparent); font-family: Consolas, monospace; }
+.howto-page .copy-body small { color: var(--muted); }
 
-.howto-page .image-frame { padding: 20px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--slot); min-height: 200px; }
-.howto-page .image-frame img { display: block; max-width: 100%; height: auto; }
+.howto-page .image-frame { position: relative; padding: 18px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--slot); min-height: 200px; }
+.howto-page .image-frame::before { position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--gold) 25%, transparent); content: ""; pointer-events: none; }
+.howto-page .image-frame img { position: relative; display: block; max-width: 100%; height: auto; }
+/* Dark theme: illustrations are black line art and the screenshots are the
+   light UI, so their mats stay paper-coloured. */
+html[data-theme="dark"] .howto-page .hero-visual,
+html[data-theme="dark"] .howto-page .image-frame { background: #ece6d8; border-color: rgba(228, 223, 211, .3); }
 
-.howto-page .review-tools-guide { padding: 0 0 94px; scroll-margin-top: 125px; }
-.howto-page .review-tools-guide > h2 { width: 74%; margin: 0 auto 20px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; font-weight: 700; line-height: 1.5; }
-.howto-page .review-tools-lead { max-width: 760px; margin: 0 auto 22px; font-size: 14px; line-height: 1.9; }
-.howto-page .review-tools-usage { max-width: 760px; margin: 0 auto 22px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--sub); }
-.howto-page .review-tools-usage h3 { margin: 0 0 8px; font-size: 15px; }
-.howto-page .review-tools-usage p { margin: 0; font-size: 14px; line-height: 1.8; }
-.howto-page .review-tool-sections { display: grid; gap: 28px; max-width: 760px; margin: 0 auto; }
-.howto-page .review-tool-section { min-width: 0; }
-.howto-page .review-tool-section > h3 { margin: 0; padding: 9px 16px; background: var(--gold); color: #fff; font-size: 15px; font-weight: 700; line-height: 1.5; }
-.howto-page .review-tool-copy { padding: 20px 22px 22px; border: 1px solid var(--line); border-top: 0; background: var(--paper); font-size: 13px; line-height: 1.85; }
-.howto-page .review-tool-copy h4 { margin: 20px 0 7px; font-size: 14px; }
+/* Tips: collapsible chapters ------------------------------------------------- */
+.howto-page details.tip { padding: 0; border-bottom: 1px solid var(--line); }
+.howto-page .tip-summary { position: relative; display: block; padding: 20px 56px 20px 0; cursor: pointer; list-style: none; transition: background-color .18s ease; }
+.howto-page .tip-summary::-webkit-details-marker { display: none; }
+.howto-page .tip-summary:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.howto-page .tip-summary .subhead { margin: 10px 0 0; }
+.howto-page .tip-toggle { position: absolute; top: 50%; right: 8px; display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); transform: translateY(-50%); }
+.howto-page .tip-toggle::before { content: "＋"; font-size: 14px; line-height: 1; }
+.howto-page details.tip[open] .tip-toggle::before { content: "－"; }
+.howto-page details.tip[open] > .chapter-grid { padding: 8px 0 40px; }
+
+/* Chapter 2: review tools -------------------------------------------------- */
+.howto-page .review-tools-guide { padding: 64px 0 72px; border-top: 1px solid var(--line); scroll-margin-top: 90px; }
+.howto-page .review-tools-guide > h2 { margin: 14px 0 18px; font-family: var(--font-serif), serif; font-size: clamp(24px, 3vw, 30px); font-weight: 500; line-height: 1.45; letter-spacing: .05em; }
+.howto-page .review-tools-lead { max-width: 760px; margin: 0 0 22px; font-size: 14px; line-height: 1.9; }
+.howto-page .review-tools-usage { max-width: 760px; margin: 0 0 32px; padding: 14px 18px; border-left: 3px solid var(--gold); background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.howto-page .review-tools-usage h3 { margin: 0 0 6px; font-size: 14px; }
+.howto-page .review-tools-usage p { margin: 0; font-size: 13px; line-height: 1.8; }
+.howto-page .review-tool-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 36px; counter-reset: rtool; }
+.howto-page .review-tool-section { min-width: 0; padding: 20px 0 26px; border-top: 1px solid var(--line); counter-increment: rtool; scroll-margin-top: 90px; }
+.howto-page .review-tool-section > h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; font-family: var(--font-serif), serif; font-size: 19px; font-weight: 500; line-height: 1.5; }
+.howto-page .review-tool-section > h3::before { color: var(--gold); content: counter(rtool, decimal-leading-zero); font-family: var(--font-serif), Georgia, serif; font-size: 28px; line-height: 1; }
+.howto-page .review-tool-copy { font-size: 13px; line-height: 1.85; }
+.howto-page .review-tool-copy h4 { margin: 18px 0 6px; font-size: 13px; color: var(--gold-text); }
 .howto-page .review-tool-copy h4:first-child { margin-top: 0; }
 .howto-page .review-tool-copy p { margin: 0 0 12px; }
 .howto-page .review-tool-copy p:last-child { margin-bottom: 0; }
-.howto-page .review-tool-copy ul { margin: 8px 0 14px; padding-left: 1.5em; }
+.howto-page .review-tool-copy ul { margin: 8px 0 14px; padding-left: 1.4em; }
 .howto-page .review-tool-copy li { margin: 5px 0; }
+.howto-page .review-tool-copy li::marker { color: var(--gold); }
 
-.howto-page .tips-index { padding: 0 0 94px; scroll-margin-top: 125px; }
-.howto-page .tips-index > h2 { width: 74%; margin: 0 auto 24px; padding: 8px 17px; text-align: center; color: #fff; background: var(--gold); font-size: 16px; }
-.howto-page .tips-index ol { columns: 2; gap: 40px; max-width: 680px; margin: 0 auto; padding-left: 2em; }
-.howto-page .tips-index li { margin: 8px 0; font-size: 14px; break-inside: avoid; }
-.howto-page .tips-index a { text-decoration: none; }
-.howto-page .tips-index a:hover { text-decoration: underline; }
+/* Chapter 3: tips index ------------------------------------------------------ */
+.howto-page .tips-index { padding: 64px 0 28px; border-top: 1px solid var(--line); scroll-margin-top: 90px; }
+.howto-page .tips-index > h2 { margin: 14px 0 0; font-family: var(--font-serif), serif; font-size: clamp(24px, 3vw, 30px); font-weight: 500; letter-spacing: .05em; }
+.howto-page .tips-index ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: 22px 0 0; padding: 0; list-style: none; counter-reset: tip; border-top: 1px solid var(--line); }
+.howto-page .tips-index li { counter-increment: tip; border-bottom: 1px solid var(--line); font-size: 13px; }
+.howto-page .tips-index li + li { border-left: 1px solid var(--line-soft); }
+.howto-page .tips-index li:nth-child(5n+1) { border-left: 0; }
+.howto-page .tips-index a { display: block; padding: 10px 10px 12px; text-decoration: none; font-weight: 600; line-height: 1.5; }
+.howto-page .tips-index a::before { display: block; color: var(--gold); content: counter(tip, decimal-leading-zero); font-family: var(--font-serif), Georgia, serif; font-size: 22px; font-weight: 400; line-height: 1.2; }
+.howto-page .tips-index a:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.howto-page .tips-toggle-all { margin-top: 18px; min-height: 40px; padding: 0 16px; border: 1px solid var(--text); background: transparent; color: var(--text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.howto-page .tips-toggle-all:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 
-.howto-page .faq { padding: 20px 0 70px; text-align: center; scroll-margin-top: 125px; }
-.howto-page .faq > h2 { margin: 0 0 18px; font: 800 36px/1.2 "Yu Gothic", sans-serif; }
-.howto-page .faq-item { max-width: 720px; margin: 0 auto; text-align: left; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 24px 0; }
-.howto-page .faq-q { margin: 0 0 16px; font-size: 21px; font-weight: 700; }
-.howto-page .faq-text { font-size: 14px; }
+/* FAQ ----------------------------------------------------------------------- */
+.howto-page .faq { padding: 72px 0 64px; border-top: 1px solid var(--line); scroll-margin-top: 90px; }
+.howto-page .faq > h2 { margin: 14px 0 0; font-family: var(--font-serif), Georgia, serif; font-size: clamp(30px, 4vw, 40px); font-weight: 500; line-height: 1.2; letter-spacing: .06em; }
+.howto-page .faq-item { border-bottom: 1px solid var(--line); }
+.howto-page .faq > .section-hint + .faq-item { margin-top: 22px; border-top: 1px solid var(--line); }
+.howto-page .faq-q { position: relative; display: block; padding: 18px 48px 18px 40px; font-size: 16px; font-weight: 700; line-height: 1.6; cursor: pointer; list-style: none; }
+.howto-page .faq-q::-webkit-details-marker { display: none; }
+.howto-page .faq-q::before { position: absolute; top: 15px; left: 4px; color: var(--gold); content: "Q"; font-family: var(--font-serif), Georgia, serif; font-size: 22px; font-weight: 400; }
+.howto-page .faq-q::after { position: absolute; top: 18px; right: 8px; content: "＋"; }
+.howto-page .faq-item[open] > .faq-q::after { content: "－"; }
+.howto-page .faq-q:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.howto-page .faq-text { padding: 0 8px 22px 40px; font-size: 14px; }
 .howto-page .faq-text p { margin: 0 0 12px; }
 
-.howto-page .greeting { padding: 30px 0 60px; max-width: 680px; margin: 0 auto; }
-.howto-page .greeting h2 { font-size: 22px; margin: 0 0 18px; }
+/* Help / greeting ------------------------------------------------------------- */
+.howto-page .greeting { max-width: 720px; padding: 56px 0 64px; border-top: 1px solid var(--line); scroll-margin-top: 90px; }
+.howto-page .greeting h2 { margin: 0 0 18px; font-family: var(--font-serif), serif; font-size: 24px; font-weight: 500; letter-spacing: .05em; }
 .howto-page .greeting p { font-size: 14px; margin: 0 0 12px; }
-.howto-page .contact-block { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+.howto-page .contact-block { margin-top: 30px; padding: 20px 0 0; border-top: 1px dashed var(--line); }
 .howto-page .contact-block h3 { font-size: 15px; margin: 0 0 10px; }
-.howto-page .contact-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
-.howto-page .contact-actions button { padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; }
-.howto-page .contact-actions button:hover { background: var(--sub); }
-.howto-page .contact-actions button.primary { background: var(--gold); border-color: var(--gold); color: #fff; }
-.howto-page .contact-actions button.primary:hover { background: var(--gold-dark); }
+.howto-page .contact-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.howto-page .contact-actions button { min-height: 44px; padding: 0 20px; border: 1px solid var(--text); background: transparent; font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; }
+.howto-page .contact-actions button:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.howto-page .contact-actions button.primary { border-color: var(--gold); background: var(--gold); color: #11151d; box-shadow: 4px 4px 0 var(--text); }
+.howto-page .contact-actions button.primary:hover { background: var(--gold); }
 
-.howto-page .devlog { margin: 0 -64px; padding: 60px 64px 70px; background: var(--dark); color: #f6f0e7; scroll-margin-top: 110px; }
+/* Dev log: an ink band ------------------------------------------------------- */
+.howto-page .devlog { margin: 0 -56px; padding: 60px 56px 70px; background: var(--night); color: var(--night-text); scroll-margin-top: 80px; }
+html[data-theme="dark"] .howto-page .devlog { border-top: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); }
 .howto-page .devlog-heading { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: end; margin-bottom: 30px; }
-.howto-page .devlog-heading span { font-size: 11px; letter-spacing: .15em; color: #bfb7ac; }
-.howto-page .devlog-heading h2 { margin: 4px 0 0; font-size: 22px; }
-.howto-page .devlog-heading p { font-size: 13px; color: #bdb5aa; }
+.howto-page .devlog-heading span { font-size: 11px; letter-spacing: .2em; color: #c9c1b3; }
+.howto-page .devlog-heading h2 { margin: 4px 0 0; font-family: var(--font-serif), serif; font-size: 24px; font-weight: 500; letter-spacing: .05em; }
+.howto-page .devlog-heading p { font-size: 13px; color: #c9c1b3; }
 .howto-page .log-list { display: grid; }
-.howto-page .log-row { display: grid; grid-template-columns: 95px 92px 1fr; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid #4c463f; font-size: 13px; }
-.howto-page .log-row:last-child { border-bottom: 1px solid #4c463f; }
-.howto-page .log-date { color: #bdb5ab; }
-.howto-page .log-type { width: max-content; padding: 5px 10px; border-radius: 4px; background: #eeeae4; color: #625c55; font-size: 11px; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .04em; }
+.howto-page .log-row { display: grid; grid-template-columns: 95px 92px 1fr; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid rgba(244, 240, 231, .16); font-size: 13px; }
+.howto-page .log-row:last-child { border-bottom: 1px solid rgba(244, 240, 231, .16); }
+.howto-page .log-date { color: #c9c1b3; font-variant-numeric: tabular-nums; }
+.howto-page .log-type { width: max-content; padding: 4px 8px 3px; background: var(--night-text); color: var(--night); font-size: 10px; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: .16em; }
 .howto-page .log-title { font-weight: 700; }
-.howto-page .log-body { margin-top: 2px; color: #aaa197; }
-.howto-page .more-logs { width: 100%; margin-top: 18px; padding: 10px; border: 1px solid #5e564d; background: transparent; color: white; cursor: pointer; }
+.howto-page .log-body { margin-top: 2px; color: #bdb6aa; }
+.howto-page .more-logs { width: 100%; min-height: 44px; margin-top: 18px; padding: 10px; border: 1px solid rgba(244, 240, 231, .4); background: transparent; color: var(--night-text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.howto-page .more-logs:hover { background: rgba(244, 240, 231, .06); }
+.howto-page .devlog :where(a, button):focus-visible { outline-color: rgba(244, 240, 231, .85); }
 
-/* TSP-RC-AFFILIATE-FOOTER-001: a modest bordered card, matching .contact-
-   block's existing visual language -- not banner/intrusive-ad styling.
-   .affiliate-actions wraps so Amazon/Rakuten (equal weight, same class)
-   stack cleanly at any width down to 320px with no horizontal overflow. */
-.howto-page .affiliate-footer { max-width: 680px; margin: 40px auto 60px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
-.howto-page .affiliate-footer h2 { margin: 0 0 8px; font-size: 18px; }
+/* Shopping links (config-gated): a modest ruled block, never ad styling.
+   .affiliate-actions wraps, so both links stack cleanly down to 320px. */
+.howto-page .affiliate-footer { max-width: 720px; margin: 40px auto 60px; padding: 22px 0 0; border-top: 1px solid var(--line); }
+.howto-page .affiliate-footer h2 { margin: 0 0 8px; font-family: var(--font-serif), serif; font-size: 18px; font-weight: 500; }
 .howto-page .affiliate-lead { margin: 0 0 16px; font-size: 14px; }
 .howto-page .affiliate-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-.howto-page .affiliate-button { display: inline-block; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--sub); font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
-.howto-page .affiliate-button:hover, .howto-page .affiliate-button:focus-visible { background: var(--gold); color: #fff; border-color: var(--gold); }
-.howto-page .affiliate-button:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 2px; }
+.howto-page .affiliate-button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border: 1px solid var(--line); background: transparent; font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
+.howto-page .affiliate-button:hover, .howto-page .affiliate-button:focus-visible { border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
 .howto-page .affiliate-disclosure { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
-/* TSP-SUPPORT-LINKS-001: same modest bordered-card language as
-   .affiliate-footer, but a distinct, unconditional section (SpunTales-wide
-   FANBOX/OFUSE support, not the config-gated Amazon/Rakuten shopping
-   links) so the two never share markup or compliance wording rules.
-   .support-actions wraps for no horizontal overflow down to 320px. */
-.howto-page .support-footer { max-width: 680px; margin: 40px auto 72px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); text-align: center; }
-.howto-page .support-footer h2 { margin: 0 0 8px; font-size: 18px; }
-.howto-page .support-lead { margin: 0 0 16px; font-size: 14px; }
+/* SpunTales support (unconditional, distinct from the shopping links). */
+.howto-page .support-footer { max-width: 720px; margin: 0 auto; padding: 56px 0 64px; border-top: 1px solid var(--line); text-align: center; }
+.howto-page .support-footer h2 { margin: 0 0 8px; font-family: var(--font-serif), serif; font-size: 20px; font-weight: 500; letter-spacing: .04em; }
+.howto-page .support-lead { margin: 0 0 18px; font-size: 14px; }
 .howto-page .support-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 14px; }
-.howto-page .support-button { display: inline-block; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--sub); font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
-.howto-page .support-button:hover, .howto-page .support-button:focus-visible { background: var(--gold); color: #fff; border-color: var(--gold); }
-.howto-page .support-button:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 2px; }
+.howto-page .support-button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 1px solid color-mix(in srgb, var(--text) 35%, transparent); border-radius: 999px; background: transparent; font-size: 13px; font-weight: 700; color: var(--text); text-decoration: none; text-align: center; }
+.howto-page .support-button:hover, .howto-page .support-button:focus-visible { border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
 .howto-page .support-note { margin: 0; font-size: 11px; color: var(--muted); }
 
 .howto-page.show-copy-ids [data-copy-id] { position: relative; outline: 1px dashed rgba(86,113,150,.26); outline-offset: 3px; }
 .howto-page.show-copy-ids [data-copy-id]::before { content: "【" attr(data-copy-id) "】"; display: block; width: max-content; max-width: 100%; margin: 0 0 4px; padding: 2px 5px; border-radius: 3px; background: #eef4fb; color: #3e658d; font: 10px/1.4 Consolas, monospace; letter-spacing: 0; white-space: normal; word-break: break-all; }
 
+@media (max-width: 1099px) {
+  .howto-page .manual { padding: 0 40px 1px; }
+  .howto-page .guide-header { margin: 0 -40px; padding: 0 40px; }
+  .howto-page .devlog { margin: 0 -40px; padding: 56px 40px 64px; }
+}
+
+@media (max-width: 900px) {
+  .howto-page .hero { grid-template-columns: 1fr; gap: 40px; padding: 48px 0; }
+  .howto-page .hero-right { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
+  .howto-page .hero-visual { grid-row: span 2; min-height: 220px; }
+  .howto-page .hero-index-chip { margin-top: 0; }
+  .howto-page .review-tool-sections { grid-template-columns: 1fr; }
+  .howto-page .tips-index ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .howto-page .tips-index li:nth-child(n) { border-left: 0; }
+  .howto-page .tips-index li:nth-child(2n) { border-left: 1px solid var(--line-soft); }
+}
+
 @media (max-width: 760px) {
-  .howto-page .manual { width: 100%; margin: 0; padding: 0 22px; }
-  .howto-page .hero { grid-template-columns: 1fr; min-height: auto; padding: 55px 0; }
-  .howto-page .hero-left { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 36px; }
-  .howto-page .hero-right { padding-top: 36px; }
-  /* TSP-RC-HOWTO-HEADER-CORRECTION-002: mobile/narrow ONLY -- switch to a
-     brand row + nav row stack (row 1 = .guide-logo, row 2 = .guide-links;
-     the header has exactly these two children) so the nav grid gets the
-     FULL header width instead of squeezing beside the logo, and drop the
-     nav grid from 4 columns to 2 so each item's own column is roughly
-     double the width. Combined with the base rule's word-break: keep-all,
-     each item's original two `<br />`-separated lines comfortably fit
-     without any further character-level wrapping at 320px and up --
-     verified this stays within the original font-size/padding (11px /
-     7px 5px), no additional shrinking needed. This 2-row structure is
-     scoped to this query only; standard/desktop width (above) keeps the
-     original single-row side-by-side layout. */
-  .howto-page .guide-header { flex-direction: column; align-items: stretch; gap: 6px; margin: 0 -22px; padding: 9px 22px; min-height: 0; }
-  .howto-page .guide-cat { width: 36px; height: 36px; }
-  .howto-page .guide-links { grid-template-columns: repeat(2,1fr); max-width: none; gap: 4px; }
-  .howto-page .guide-links a, .howto-page .guide-links button { font-size: 11px; padding: 7px 5px; }
-  .howto-page .intro { grid-template-columns: 1fr; gap: 22px; }
-  .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 22px; }
-  .howto-page .chapter > h2 { width: 100%; }
-  .howto-page .subhead { width: 90%; }
-  .howto-page .tips-index ol { columns: 1; }
-  .howto-page .review-tools-guide > h2 { width: 100%; }
-  .howto-page .review-tool-copy { padding: 17px 16px 19px; }
-  .howto-page .devlog { margin: 0 -22px; padding: 48px 22px 58px; }
-  .howto-page .devlog-heading { grid-template-columns: 1fr; }
+  .howto-page .manual { width: 100%; margin: 0; padding: 0 18px 1px; border: 0; }
+  .howto-page .hero { padding: 36px 0 40px; }
+  .howto-page .hero-right { grid-template-columns: 1fr; }
+  .howto-page .hero-visual { grid-row: auto; min-height: 0; }
+  .howto-page .hero-index-chip { margin-top: 28px; }
+  /* Narrow: brand row + a 2-column nav row, so each item keeps its own
+     <br />-separated two lines without character-level wrapping. */
+  .howto-page .guide-header { flex-direction: column; align-items: stretch; gap: 4px; margin: 0 -18px; padding: 6px 18px 8px; min-height: 0; }
+  .howto-page .guide-cat { width: 30px; height: 30px; }
+  .howto-page .guide-links { grid-template-columns: repeat(3,1fr); max-width: none; gap: 0; border-top: 1px solid var(--line-soft); }
+  .howto-page .guide-links a, .howto-page .guide-links button { font-size: 11px; padding: 5px 6px; }
+  .howto-page .guide-links > :nth-child(3n+1) { border-left: 0; }
+  /* anchors land below the taller two-row sticky bar */
+  .howto-page .chapter, .howto-page .quick-ref, .howto-page .intro, .howto-page .review-tools-guide, .howto-page .review-tool-section, .howto-page .tips-index, .howto-page .faq, .howto-page .greeting { scroll-margin-top: 150px; }
+  .howto-page .quick-ref { padding: 40px 0 48px; }
+  .howto-page .quick-ref-list { grid-template-columns: 1fr; }
+  .howto-page .intro { grid-template-columns: 1fr; gap: 18px; padding: 48px 0 56px; }
+  .howto-page .chapter-grid { grid-template-columns: 1fr; gap: 20px; }
+  .howto-page .copy-block { grid-template-columns: 1fr; gap: 6px; }
+  .howto-page .tip-summary { padding-right: 48px; }
+  .howto-page .review-tools-guide, .howto-page .tips-index, .howto-page .faq { padding-top: 48px; }
+  .howto-page .faq-q { padding-left: 32px; font-size: 15px; }
+  .howto-page .faq-text { padding-left: 32px; }
+  .howto-page .devlog { margin: 0 -18px; padding: 48px 18px 58px; }
   .howto-page .log-row { grid-template-columns: 1fr; gap: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .howto-page .pill,
+  .howto-page .start-path a,
+  .howto-page .quick-ref-list a,
+  .howto-page .quick-ref-list a::after,
+  .howto-page .intro-copy a,
+  .howto-page .tip-summary { transition: none; }
+  .howto-page .pill.gold:hover,
+  .howto-page .quick-ref-list a:hover::after { transform: none; }
 }

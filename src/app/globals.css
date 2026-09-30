@@ -206,6 +206,8 @@ body {
 html:not([data-theme="dark"]) [data-nonempty-shell] > header {
   margin: 0;
   border: 0;
+  /* Phase 3: the masthead's ink top rule is kept inside the shell too. */
+  border-top: 3px solid #17243a;
   border-bottom: 1px solid rgba(31, 42, 68, 0.08);
   border-radius: 0;
   background: transparent;
@@ -220,6 +222,7 @@ html:not([data-theme="dark"]) [data-nonempty-shell] > header {
 html[data-theme="dark"] [data-nonempty-shell] > header {
   margin: 0;
   border: 0;
+  border-top: 3px solid #c6af63;
   border-bottom: 1px solid #2a3240;
   border-radius: 0;
   background: #11151d;
@@ -307,4 +310,26 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
 }
 .tsp-update-history-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* Phase 3: the Editor's four panel doors (設定 / オプション / メモ / ヘルプ)
+   read as one numbered, ruled index when the manuscript pane is wide --
+   decoration only (the numbers are hidden from assistive tech), no size or
+   behaviour change, nothing near the textarea. */
+@container (min-width: 520px) {
+  [data-editor-secondary-row] { counter-reset: editor-door; }
+  [data-editor-secondary-row] > button { counter-increment: editor-door; }
+  [data-editor-secondary-row] > button + button {
+    border-radius: 0;
+    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+  [data-editor-secondary-row] > button::before {
+    margin-right: .5em;
+    color: #9a7f3c;
+    content: counter(editor-door, decimal-leading-zero);
+    content: counter(editor-door, decimal-leading-zero) / "";
+    font: 600 10px/1 var(--font-geist-mono), ui-monospace, monospace;
+    letter-spacing: .06em;
+  }
+  html[data-theme="dark"] [data-editor-secondary-row] > button::before { color: #c6af63; }
 }

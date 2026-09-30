@@ -105,6 +105,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     error: string | null;
   } | null>(null);
   const [cloudPlan, setCloudPlan] = useState<CloudPlan | null>(null);
+  // Phase 3: on phones, a small dock (次の一冊 / 続きを書く) appears once the
+  // shelf's own actions have scrolled out of view.
+  const [dockVisible, setDockVisible] = useState(false);
   // TSP-LOOP-007: クラウド作品ごとの一時挿絵の期限/欠損状態（軽量・1クエリ）。
   const [cloudImageMetas, setCloudImageMetas] = useState<Map<string, ProjectCloudImageMeta>>(
     new Map()
@@ -234,52 +237,97 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     documents !== undefined &&
     (localProjectCount > 0 ||
       (!!user && cloudIsResolved && visibleCloudResult.projects.length > 0));
+  useEffect(() => {
+    if (!isNonEmptyVisual || typeof IntersectionObserver === "undefined") return;
+    const actions = document.querySelector("[data-home-returning-actions]");
+    if (!actions) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setDockVisible(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+    });
+    observer.observe(actions);
+    return () => observer.disconnect();
+  }, [isNonEmptyVisual]);
   const outerClassName = isNonEmptyVisual
     ? "home-v2-shell flex min-h-dvh flex-col px-0 min-[641px]:px-[29px] min-[921px]:px-[82px]"
     : "home-v2-shell flex min-h-dvh flex-col";
   const nonEmptyShellClassName =
     "flex min-h-dvh w-full max-w-[1160px] flex-1 flex-col mx-auto bg-[rgba(250,248,242,0.78)] text-[#17243a] shadow-[0_0_0_1px_rgba(31,42,68,0.05),0_26px_90px_rgba(31,42,68,0.12)] backdrop-blur-[2px] dark:bg-[rgba(16,21,29,0.9)] dark:text-[#E4DFD3] dark:shadow-none";
 
+  // Phase 3: the four steps from manuscript to book, drawn as one thread
+  // with large numerals (the same four steps the brand panel always listed).
+  const bookSteps: { title: string; body: string }[] = [
+    { title: "原稿を持ち込む", body: "ここで書きはじめても、他のアプリの原稿をTXTで読み込んでも。" },
+    { title: "本の形で確認する", body: "縦組みのプレビューで、ページの見え方をそのまま確かめます。" },
+    { title: "PDF / JPGで持ち帰る", body: "書き出しはブラウザ内で処理します。出力ファイルはあなたのものです。" },
+    { title: "入稿前に確認する", body: "完成前チェックで、入稿前の見落としを一つずつ確かめます。" },
+  ];
+  const renderSteps = (compact: boolean) => (
+    <ol className={`home-p3-thread ${compact ? "home-p3-thread-compact" : ""}`}>
+      {bookSteps.map((step, index) => (
+        <li key={step.title} className="home-p3-step">
+          <span aria-hidden="true" className="home-p3-step-no">{String(index + 1).padStart(2, "0")}</span>
+          <strong className="home-p3-step-title">{step.title}</strong>
+          {!compact && <span className="home-p3-step-body">{step.body}</span>}
+        </li>
+      ))}
+    </ol>
+  );
+
   const renderBrandPanel = (mode: "onboarding" | "informational") => {
     const onboarding = mode === "onboarding";
-    return (
-      <section
-        data-home-brand-panel={mode}
-        className={`w-full overflow-hidden ${onboarding ? "home-v2-hero max-w-[980px] px-6 py-10 sm:px-12 sm:py-14 lg:px-16 lg:py-16" : "home-v2-about px-5 py-14 sm:px-[clamp(24px,6vw,72px)] sm:py-16"}`}
-        aria-labelledby={`tatespun-home-title-${mode}`}
-      >
-        <div className={`relative z-[1] grid items-center ${onboarding ? "grid-cols-1 gap-8 min-[720px]:grid-cols-[minmax(0,1fr)_minmax(220px,290px)] min-[720px]:gap-12" : "grid-cols-[minmax(0,1fr)_80px] gap-5 sm:grid-cols-[minmax(0,1fr)_112px]"}`}>
-          <div>
-            <div className="mb-5 flex items-center gap-4">
-              <p className="home-v2-kicker">MANUSCRIPT TO BOOK</p>
-              {onboarding && <span className="home-v2-seal" aria-hidden="true">縦<br />組</span>}
-            </div>
-            <h1 id={`tatespun-home-title-${mode}`} className={`home-v2-title ${onboarding ? "font-serif text-[clamp(28px,3.4vw,34px)] leading-[1.32]" : "font-serif text-[clamp(26px,4vw,40px)] leading-tight"} font-medium tracking-[0.035em]`}>
-              {onboarding ? <><span className="block whitespace-nowrap">どこで綴っても、</span><span className="block whitespace-nowrap">ひとつの本になる。</span></> : "どこで綴っても、ひとつの本になる。"}
-            </h1>
-            {!onboarding && <p className="mt-3 text-sm text-ink/70 dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>}
-            {onboarding && <p className="mt-5 max-w-xl font-serif text-base leading-8 text-ink/70 dark:text-[#B9C2D0]">書きかけの原稿をひらいて、縦組みで確かめる。<br className="hidden sm:block" />物語が紙の本になる、その直前までを静かに支えます。</p>}
-            <ol className="home-v2-process mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[11px] font-medium text-ink/65 sm:text-xs dark:text-[#AEB7C6]">
-              <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
-            </ol>
-            {onboarding && (
-              <div data-home-onboarding-actions="" className="mt-7 grid max-w-2xl gap-5">
-                <button type="button" onClick={handleCreate} disabled={creating} className="home-v2-primary w-fit rounded-sm bg-ink px-8 py-3.5 text-sm font-semibold tracking-[0.04em] text-base transition-all hover:opacity-95 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">最初の一冊を書きはじめる <span aria-hidden="true">→</span></button>
-                <div className="grid border-t border-[color:var(--home-line)] sm:grid-cols-2 sm:gap-6">
-                  <Link data-home-demo-card="" href="/editor?demo=1" className="home-v2-choice group block px-1 py-4 text-ink dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">TRY · 03 MIN</span><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">デモを始める →</span></Link>
+    if (onboarding) {
+      return (
+        // Phase 3 (state A): a full-bleed ink cover. The first view says what
+        // TateSpun is in one line, makes the first book the one strong action,
+        // and keeps Demo / HOW TO as two equal, quieter doors.
+        <section
+          data-home-brand-panel={mode}
+          className="home-p3-cover w-full"
+          aria-labelledby={`tatespun-home-title-${mode}`}
+        >
+          <div className="relative mx-auto grid w-full max-w-[1160px] grid-cols-1 gap-10 px-5 pt-12 pb-14 sm:px-10 sm:pt-16 sm:pb-20 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(200px,260px)] min-[900px]:gap-16">
+            <div className="min-w-0">
+              <p className="home-p3-chip home-p3-chip-invert">Manuscript to Book</p>
+              <h1 id={`tatespun-home-title-${mode}`} className="home-p3-cover-title mt-6 font-serif font-medium">
+                <span className="block">どこで綴っても、</span><span className="block">ひとつの本になる。</span>
+              </h1>
+              <p className="home-p3-cover-lead mt-6 max-w-xl font-serif">書きかけの原稿をひらいて、縦組みで確かめる。<br className="hidden sm:block" />物語が紙の本になる、その直前までを静かに支えます。</p>
+              <div data-home-onboarding-actions="" className="mt-9 grid max-w-2xl gap-7">
+                <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta home-p3-cta-gold w-fit">最初の一冊を書きはじめる <span aria-hidden="true">→</span></button>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Link data-home-demo-card="" href="/editor?demo=1" className="home-p3-ticket group"><span className="home-p3-ticket-kicker">Try · 3 min</span><strong className="block font-serif text-[15px] font-medium">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed opacity-75">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="home-p3-ticket-cta">デモを始める →</span></Link>
                   {/* TSP-HOWTO-BETA-016B: a first-time user needs two equally
-                      obvious paths — try the demo, or read HOW TO — not a
-                      demo block plus a small text link. Same visual family
-                      as the Demo card above, not a 4th quick-action card
-                      (that grid is restored to its original 3 cards). */}
-                  <Link data-home-howto-card="" href="/howto" className="home-v2-choice group block px-1 py-4 text-ink dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">READ · GUIDE</span><strong className="block text-sm">TateSpunの使い方を見る</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">原稿を持ち込んで、本の形を確認し、書き出すまでの流れを画像つきで紹介します。</span><span data-home-howto-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">HOW TOを見る →</span></Link>
+                      obvious paths — try the demo, or read HOW TO — in the
+                      same visual family, side by side. */}
+                  <Link data-home-howto-card="" href="/howto" className="home-p3-ticket group"><span className="home-p3-ticket-kicker">Read · Guide</span><strong className="block font-serif text-[15px] font-medium">TateSpunの使い方を見る</strong><span className="mt-1 block text-xs leading-relaxed opacity-75">原稿を持ち込んで、本の形を確認し、書き出すまでの流れを画像つきで紹介します。</span><span data-home-howto-cta="" className="home-p3-ticket-cta">HOW TOを見る →</span></Link>
                 </div>
               </div>
-            )}
-            {!onboarding && <p className="mt-3 max-w-3xl text-[10px] leading-4 text-ink/50 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>}
+            </div>
+            <div className="relative hidden items-end justify-end gap-6 min-[900px]:flex" aria-hidden="true">
+              <p className="home-p3-cover-vertical font-serif">一冊目は、ここから。</p>
+              <Image src={withBasePath("/caroad_main1.png")} alt="" width={384} height={578} priority className="h-auto w-[170px]" />
+            </div>
           </div>
-          <div className={`relative ${onboarding ? "max-[719px]:hidden" : ""}`}>
-            <Image src={withBasePath("/caroad_main1.png")} alt="縦書きWebエディタ" width={384} height={578} priority={onboarding} className={`relative h-auto w-full ${onboarding ? "max-w-[270px] justify-self-center min-[720px]:justify-self-end" : "max-w-[112px] justify-self-end"}`} />
+        </section>
+      );
+    }
+    return (
+      // Phase 3 (state B): the brand as a quiet colophon below the shelf.
+      <section
+        data-home-brand-panel={mode}
+        className="home-v2-about w-full overflow-hidden px-5 py-14 sm:px-[clamp(24px,6vw,72px)] sm:py-16"
+        aria-labelledby={`tatespun-home-title-${mode}`}
+      >
+        <div className="relative z-[1] grid grid-cols-[minmax(0,1fr)_80px] items-center gap-5 sm:grid-cols-[minmax(0,1fr)_112px]">
+          <div>
+            <p className="home-p3-chip">Manuscript to Book</p>
+            <h2 id={`tatespun-home-title-${mode}`} className="home-v2-title mt-4 font-serif text-[clamp(26px,4vw,40px)] font-medium leading-tight tracking-[0.035em]">どこで綴っても、ひとつの本になる。</h2>
+            <p className="mt-3 text-sm text-ink/70 dark:text-[#AEB7C6]">小説同人誌のための縦組み・入稿準備Webエディタ</p>
+            <div className="mt-6">{renderSteps(true)}</div>
+            <p className="mt-5 max-w-3xl text-[11px] leading-5 text-ink/55 dark:text-[#939DAF]">他のアプリの原稿もTXTで持ち込めます。プレビューと書き出しはブラウザ内で処理し、原稿や画像をAI・外部サービスへ無断送信しません。出力ファイルはあなたのものです。</p>
+          </div>
+          <div className="relative">
+            <Image src={withBasePath("/caroad_main1.png")} alt="縦書きWebエディタ" width={384} height={578} className="relative h-auto w-full max-w-[112px] justify-self-end" />
           </div>
         </div>
       </section>
@@ -293,44 +341,68 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       <main
         className={
           isNonEmptyVisual
-            ? "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-4 py-10"
-            : "mx-auto flex min-h-0 w-full max-w-[1160px] flex-1 flex-col items-center px-4 py-8 sm:py-12"
+            ? "mx-auto flex min-h-0 w-full max-w-[1040px] flex-1 flex-col px-4 pt-8 pb-10 sm:px-6 sm:pt-10"
+            : "flex min-h-0 w-full flex-1 flex-col items-center"
         }
       >
         {isNonEmptyVisual ? (
           <section data-home-returning-bookshelf="" className="w-full" aria-label="本棚">
-            {/* The shelf IS the first view for a returning writer: a quiet
-                editorial header (English label + serif title + the shelf's
-                own count), one primary action to add the next book, and the
-                rest as secondary. */}
-            <div className="home-v2-shelf-head relative mb-6 pb-6">
+            {/* Phase 3 (state B): the shelf is the emotional lead. A large
+                title with the shelf's own count (and a row of spines that
+                grows with it), one primary action, and the last work written
+                in -- one tap back into it -- beside it. */}
+            <div className="home-v2-shelf-head relative pb-6">
               <span aria-hidden="true" className="home-v2-watermark">BOOKSHELF</span>
-              <p className="home-v2-label">Your Bookshelf</p>
-              <div className="mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
-                <div>
-                  <h1 className="font-serif text-[clamp(28px,4.2vw,40px)] font-medium leading-tight tracking-[0.04em] text-ink dark:text-[#E4DFD3]">あなたの本棚</h1>
+              <div className="grid grid-cols-1 gap-8 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] min-[900px]:items-end">
+                <div className="min-w-0">
+                  <p className="home-p3-chip">Your Bookshelf</p>
+                  <h1 className="mt-4 font-serif text-[clamp(34px,5.4vw,56px)] font-medium leading-[1.12] tracking-[0.05em] text-ink dark:text-[#E4DFD3]">あなたの本棚</h1>
                   {recentDocuments.length > 0 && (
-                    <p data-home-shelf-meta="" className="mt-2 text-xs text-ink/60 dark:text-[#939DAF]">
-                      <span className="font-serif text-base tabular-nums text-ink dark:text-[#E4DFD3]">{recentDocuments.length}</span>
-                      <span className="ml-0.5">冊</span>
-                      <span aria-hidden="true" className="mx-2 text-ink/25">／</span>
-                      最後に書いた日 <span className="tabular-nums">{formatShelfDate(recentDocuments[0].updatedAt)}</span>
-                    </p>
+                    <div data-home-shelf-meta="" className="mt-4 flex flex-wrap items-end gap-x-5 gap-y-2">
+                      <p className="flex items-baseline gap-1 text-ink dark:text-[#E4DFD3]">
+                        <span className="home-p3-count font-serif tabular-nums">{recentDocuments.length}</span>
+                        <span className="font-serif text-[16px]">冊</span>
+                      </p>
+                      <span aria-hidden="true" className="home-p3-meter">
+                        {recentDocuments.slice(0, 24).map((doc, index) => (
+                          <i key={doc.id} style={{ height: `${16 + ((index * 7) % 10)}px` }} data-tone={index % 4} />
+                        ))}
+                        <i data-next="" />
+                      </span>
+                      <p className="pb-1 text-xs text-ink/60 dark:text-[#939DAF]">
+                        最後に書いた日 <span className="tabular-nums">{formatShelfDate(recentDocuments[0].updatedAt)}</span>
+                      </p>
+                    </div>
                   )}
+                  <div data-home-returning-actions="" className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-3">
+                    <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta mr-3 inline-flex items-center gap-2">
+                      <span aria-hidden="true" className="text-base leading-none">＋</span>次の一冊を書く
+                    </button>
+                    <Link href="/editor?demo=1" className="home-v2-quiet-link">おためしデモ</Link>
+                    <button type="button" onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }} disabled={!documents || documents.length < 2} className="home-v2-quiet-link">総集編を編成する</button>
+                    <Link data-home-howto-top-action="" href="/howto" className="home-v2-quiet-link">TateSpun How to →</Link>
+                  </div>
                 </div>
-                <p className="max-w-xs font-serif text-sm leading-7 text-ink/60 dark:text-[#AEB7C6]">一冊ずつ、背表紙が増えていく。<br />続きは、いつでもこの棚から。</p>
-              </div>
-              <div data-home-returning-actions="" className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-3">
-                <button type="button" onClick={handleCreate} disabled={creating} className="home-v2-primary inline-flex items-center gap-2 rounded-sm bg-ink px-6 py-3 text-sm font-semibold tracking-[0.04em] text-base transition-all disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">
-                  <span aria-hidden="true" className="text-base leading-none">＋</span>次の一冊を書く
-                </button>
-                <span aria-hidden="true" className="mx-2 hidden h-6 w-px bg-ink/15 sm:block dark:bg-[#3A4658]" />
-                <Link href="/editor?demo=1" className="home-v2-quiet-link">おためしデモ</Link>
-                <button type="button" onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }} disabled={!documents || documents.length < 2} className="home-v2-quiet-link">総集編を編成する</button>
-                <Link data-home-howto-top-action="" href="/howto" className="home-v2-quiet-link">TateSpun How to →</Link>
+                {recentDocuments[0] && (
+                  <button
+                    type="button"
+                    data-home-continue=""
+                    onClick={() => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${recentDocuments[0].id}`)}
+                    className="home-p3-continue group"
+                  >
+                    <span className="home-p3-chip">Continue</span>
+                    <span className="mt-3 block font-serif text-[13px] text-ink/60 dark:text-[#AEB7C6]">いちばん最近の作品</span>
+                    <span className="mt-1 block truncate font-serif text-[clamp(22px,2.6vw,28px)] font-medium leading-snug text-ink dark:text-[#E4DFD3]">{recentDocuments[0].title || "無題のドキュメント"}</span>
+                    <span className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--home-line)] pt-3">
+                      <span className="text-[11px] tabular-nums text-ink/55 dark:text-[#939DAF]">{formatShelfDate(recentDocuments[0].updatedAt)}</span>
+                      <span className="home-p3-continue-cta">続きを書く <span aria-hidden="true">→</span></span>
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+            <div className="mt-5 mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div
                 className="flex w-fit max-w-full flex-wrap rounded-full border border-ink/12 bg-ink/[0.025] p-0.5"
                 role="tablist"
@@ -370,35 +442,31 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               </p>
             </div>
 
+            {/* The shelf on a mat: the books are the content, set on a
+                framed paper ground (no heavy card), with the next book's
+                empty spine waiting at its end. */}
             <div
               role="tabpanel"
-              className="home-v2-shelf-stage px-1 pt-5 pb-7 sm:px-4"
+              aria-label={activeBookshelfTab === "cloud" ? "クラウドの本棚" : "このブラウザの本棚"}
+              className="home-p3-mat px-2 pt-2 pb-7 sm:px-6"
             >
-              <div className="flex items-start justify-between gap-4 pb-1">
-                <div className="grid gap-1">
-                  <span className="home-v2-label">Books</span>
-                  <strong className="font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]">
-                    {activeBookshelfTab === "cloud" ? "クラウドの本棚" : "このブラウザの本棚"}
-                  </strong>
-                </div>
-                {/* The next book's place on the shelf: adding a work reads as
-                    putting one more spine on it (same action as 次の一冊を書く). */}
-                {activeBookshelfTab === "local" && (
-                  <button
-                    type="button"
-                    data-home-next-book=""
-                    onClick={handleCreate}
-                    disabled={creating}
-                    title="本棚に次の一冊を加える（新しい作品を作成）"
-                    className="home-v2-next-spine"
-                  >
-                    <span aria-hidden="true" className="text-lg leading-none">＋</span>
-                    <span className="home-v2-next-spine-label">次の一冊</span>
-                  </button>
-                )}
-              </div>
+              {/* The next book's place on the shelf: adding a work reads as
+                  putting one more spine on it (same action as 次の一冊を書く). */}
+              {activeBookshelfTab === "local" && (
+                <button
+                  type="button"
+                  data-home-next-book=""
+                  onClick={handleCreate}
+                  disabled={creating}
+                  title="本棚に次の一冊を加える（新しい作品を作成）"
+                  className="home-v2-next-spine home-p3-slot mt-3 mb-1 sm:absolute sm:top-4 sm:right-6 sm:z-20 sm:m-0"
+                >
+                  <span aria-hidden="true" className="text-lg leading-none">＋</span>
+                  <span className="home-v2-next-spine-label">次の一冊</span>
+                </button>
+              )}
 
-              <div className="mt-3">
+              <div>
                 {activeBookshelfTab === "local" && (
                   <>
                     {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
@@ -416,32 +484,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                           collapsible
                         />
                         <p className="mt-1 text-center font-serif text-sm text-ink/55 dark:text-[#939DAF]">
-                          作品はこの本棚から、いつでも続きを開けます。
+                          一冊ずつ、背表紙が増えていく。続きは、いつでもこの棚から。
                         </p>
                       </>
-                    )}
-                    {/* The works last written in, as a quiet index line (the
-                        shelf above stays the place to browse / manage them). */}
-                    {recentDocuments.length > 0 && (
-                      <div data-home-recent="" className="mx-auto mt-8 max-w-[760px]">
-                        <p className="home-v2-label">Recently</p>
-                        <ol className="mt-2 border-t border-ink/12 dark:border-[#2A3240]">
-                          {recentDocuments.slice(0, 3).map((doc, index) => (
-                            <li key={doc.id} className="border-b border-ink/12 dark:border-[#2A3240]">
-                              <button
-                                type="button"
-                                onClick={() => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${doc.id}`)}
-                                className="home-v2-index-row group"
-                              >
-                                <span className="home-v2-index-no">{String(index + 1).padStart(2, "0")}</span>
-                                <span className="min-w-0 flex-1 truncate text-left font-serif text-[15px] text-ink dark:text-[#D4DBE7]">{doc.title || "無題のドキュメント"}</span>
-                                <span className="shrink-0 text-[11px] tabular-nums text-ink/50 dark:text-[#939DAF]">{formatShelfDate(doc.updatedAt)}</span>
-                                <span aria-hidden="true" className="home-v2-index-arrow">続きを書く →</span>
-                              </button>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
                     )}
                   </>
                 )}
@@ -474,25 +519,83 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 )}
               </div>
             </div>
+
+            {/* The works written in most recently after the one above, as a
+                quiet numbered index (the shelf stays the place to manage). */}
+            {activeBookshelfTab === "local" && recentDocuments.length > 1 && (
+              <div data-home-recent="" className="mt-10">
+                <p className="home-v2-label">Recently</p>
+                <ol className="mt-3 grid border-t border-ink/12 sm:grid-cols-3 sm:border-t-0 dark:border-[#2A3240]">
+                  {recentDocuments.slice(1, 4).map((doc, index) => (
+                    <li key={doc.id} className="border-b border-ink/12 sm:border-t sm:border-b-0 dark:border-[#2A3240] sm:[&+li]:border-l">
+                      <button
+                        type="button"
+                        onClick={() => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${doc.id}`)}
+                        className="home-v2-index-row group"
+                      >
+                        <span className="home-v2-index-no">{String(index + 2).padStart(2, "0")}</span>
+                        <span className="min-w-0 flex-1 truncate text-left font-serif text-[15px] text-ink dark:text-[#D4DBE7]">{doc.title || "無題のドキュメント"}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-ink/50 dark:text-[#939DAF]">{formatShelfDate(doc.updatedAt)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </section>
         ) : (
           <section data-home-empty-onboarding="" className="w-full" aria-label="最初の一冊">
-            {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
+            {documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
             {documents !== undefined && (
               <>
                 {renderBrandPanel("onboarding")}
-                <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="mx-auto mt-12 w-full max-w-[820px] border-t border-ink/10 pt-12 dark:border-[#2A3240] sm:mt-16 sm:pt-14">
-                  <div className="px-2 sm:px-7">
-                    <p className="home-v2-label">Your Bookshelf</p>
-                    <h2 id="empty-bookshelf-title" className="mt-2 font-serif text-[clamp(24px,3vw,30px)] font-medium tracking-[0.04em] text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
-                    <p className="mt-2 font-serif text-sm leading-7 text-ink/60 dark:text-[#AEB7C6]">まだ空いている棚は、次の一冊のための場所です。</p>
+                {/* The empty shelf, framed on a mat with a vertical title:
+                    not "nothing here yet" but room that is waiting. */}
+                <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="home-p3-sided mx-auto mt-16 w-full max-w-[1040px] px-4 sm:mt-20 sm:px-6">
+                  <div className="home-p3-side">
+                    <p className="home-p3-chip">Your Bookshelf</p>
+                    <h2 id="empty-bookshelf-title" className="home-p3-side-title font-serif font-medium text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
                   </div>
-                  <div className="relative z-10 mt-1">
-                    <Bookshelf
-                      documents={documents}
-                      onOpen={(id) => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${id}`)}
-                      showEmptyState
-                    />
+                  <div className="min-w-0">
+                    <p className="font-serif text-[15px] leading-8 text-ink/70 dark:text-[#AEB7C6]">まだ空いている棚は、次の一冊のための場所です。<br />書きはじめた作品は、ここに一冊ずつ並んでいきます。</p>
+                    <div className="home-p3-mat relative mt-5 px-2 pt-4 pb-6 sm:px-6">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          data-home-next-book=""
+                          onClick={handleCreate}
+                          disabled={creating}
+                          title="本棚に最初の一冊を加える（新しい作品を作成）"
+                          className="home-v2-next-spine home-p3-slot"
+                        >
+                          <span aria-hidden="true" className="text-lg leading-none">＋</span>
+                          <span className="home-v2-next-spine-label">最初の一冊</span>
+                        </button>
+                      </div>
+                      <div className="relative z-10 sm:-mt-10">
+                        <Bookshelf
+                          documents={documents}
+                          onOpen={(id) => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${id}`)}
+                          showEmptyState
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* How a manuscript becomes a book: four numbered steps on
+                    one thread, so a first-time visitor sees the whole path. */}
+                <section data-home-first-steps="" aria-labelledby="first-steps-title" className="home-p3-sided mx-auto mt-20 w-full max-w-[1040px] px-4 sm:px-6">
+                  <div className="home-p3-side">
+                    <p className="home-p3-chip">How it works</p>
+                    <h2 id="first-steps-title" className="home-p3-side-title font-serif font-medium text-ink dark:text-[#D4DBE7]">本になるまで</h2>
+                  </div>
+                  <div className="min-w-0">
+                    {renderSteps(false)}
+                    <div className="mt-8 flex flex-wrap items-center gap-x-2 gap-y-3">
+                      <Link href="/editor?demo=1" className="home-p3-pill">デモで試す →</Link>
+                      <Link href="/howto" className="home-p3-pill">HOW TOで読む →</Link>
+                    </div>
                   </div>
                 </section>
               </>
@@ -506,19 +609,19 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           data-nonempty-shellと同じmax-widthをここでも明示している。 */}
       <div className="mx-auto w-full max-w-[1160px]">
         <section
-          className="home-v2-section-rule px-4 pt-[58px] pb-[72px] sm:px-[clamp(20px,5vw,62px)] sm:pt-[72px] sm:pb-[96px]"
+          className="home-v2-section-rule home-p3-sided mt-16 px-4 pt-[58px] pb-[72px] sm:mt-20 sm:px-6 sm:pt-[72px] sm:pb-[96px] min-[1100px]:px-[60px]"
           aria-labelledby="quick-actions-title"
         >
-          <div className="mx-auto mb-7 max-w-[760px]">
-            <p className="home-v2-label">From the Shelf</p>
-            <h2 id="quick-actions-title" className="mt-2 font-serif text-[clamp(24px,3vw,30px)] font-medium tracking-[0.04em] text-ink dark:text-[#D4DBE7]">
+          <div className="home-p3-side">
+            <p className="home-p3-chip">From the Shelf</p>
+            <h2 id="quick-actions-title" className="home-p3-side-title font-serif font-medium text-ink dark:text-[#D4DBE7]">
               本棚からできること
             </h2>
           </div>
-
+          <div className="min-w-0">
           {/* A numbered index, not a row of cards: three actions separated by
               hairlines (same actions, handlers and disabled rules as before). */}
-          <div className="home-v2-action-index mx-auto grid max-w-[760px] grid-cols-1 sm:grid-cols-3">
+          <div className="home-v2-action-index grid grid-cols-1 sm:grid-cols-3">
             <button
               type="button"
               onClick={handleCreate}
@@ -561,13 +664,13 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               COLUMNSTAND系のコンパクトなアコーディオン構成にする。 */}
           <aside
             aria-labelledby="image-storage-note-title"
-            className="mx-auto mt-16 max-w-[760px] border-b border-[rgba(31,42,68,0.14)] dark:border-[#2A3240]"
+            className="mt-16 border-b border-[rgba(31,42,68,0.14)] dark:border-[#2A3240]"
           >
             <div className="py-4">
-              <p className="home-v2-label">Image Storage Guide</p>
+              <p className="home-p3-chip">Image Storage Guide</p>
               <h3
                 id="image-storage-note-title"
-                className="mt-1 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
+                className="mt-3 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
               >
                 画像の保存と、期限切れについて
               </h3>
@@ -643,7 +746,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               免責文ではなく、友達口調のリマインド）。イラストは受領済み。 */}
           <aside
             aria-labelledby="backup-reminder-title"
-            className="mx-auto mt-8 flex max-w-[760px] items-center gap-5 border-l-2 border-[color:var(--home-gold)] py-2 pl-5 sm:gap-7 sm:pl-7"
+            className="mt-8 flex items-center gap-5 border-l-2 border-[color:var(--home-gold)] py-2 pl-5 sm:gap-7 sm:pl-7"
           >
             <Image
               src={withBasePath("/help/backup-caroad.png")}
@@ -664,6 +767,23 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               </p>
             </div>
           </aside>
+          </div>
+        </section>
+
+        {/* Phase 3: one closing band in ink -- the page ends on the next
+            book, the same action as the first view. */}
+        <section data-home-closing="" className="home-p3-closing" aria-labelledby="home-closing-title">
+          <div className="mx-auto flex max-w-[960px] flex-col items-start gap-6 px-5 py-14 sm:flex-row sm:items-center sm:justify-between sm:px-10 sm:py-16">
+            <div>
+              <p className="home-p3-chip home-p3-chip-invert">{isNonEmptyVisual ? "Next Book" : "First Book"}</p>
+              <h2 id="home-closing-title" className="mt-4 font-serif text-[clamp(24px,3.6vw,36px)] font-medium tracking-[0.05em]">
+                {isNonEmptyVisual ? "次の一冊を、この棚に。" : "最初の一冊を、この棚に。"}
+              </h2>
+            </div>
+            <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta home-p3-cta-gold shrink-0">
+              {isNonEmptyVisual ? "次の一冊を書く" : "最初の一冊を書きはじめる"} <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </section>
 
         {isNonEmptyVisual ? renderBrandPanel("informational") : <section
@@ -672,7 +792,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
         >
           <div className="grid grid-cols-1 items-center gap-[30px] min-[921px]:grid-cols-[1fr_180px]">
             <div className="text-center min-[921px]:text-left">
-              <p className="home-v2-label mb-2">TateSpun</p>
+              <p className="home-p3-chip mb-2">TateSpun</p>
               <h2 className="mt-1 text-balance font-serif text-3xl font-medium text-ink dark:text-[#D4DBE7]">書く場所は、静かでいい。</h2>
               <p className="mt-2.5 text-sm text-ink/55 dark:text-[#939DAF]">
                 TateSpunは、縦書きで書く・整える・本にするための道具です。
@@ -706,7 +826,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           aria-labelledby="tatespun-product-policy-title"
         >
           <div className="mx-auto max-w-3xl">
-            <p className="home-v2-label">Development Policy</p>
+            <p className="home-p3-chip">Development Policy</p>
             <h2 id="tatespun-product-policy-title" className="mt-2 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">
               TateSpunは、使いながら育てています。
             </h2>
@@ -733,7 +853,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           className="border-t border-[rgba(31,42,68,0.14)] px-[18px] py-[42px] text-center sm:px-[clamp(24px,6vw,72px)] dark:border-[#2A3240]"
           aria-labelledby="support-links-title"
         >
-          <p className="home-v2-label justify-center">Support</p>
+          <p className="home-p3-chip">Support</p>
           <h2 id="support-links-title" className="mt-2 font-serif text-xl font-medium text-ink dark:text-[#D4DBE7]">
             {SUPPORT_HEADING}
           </h2>
@@ -822,6 +942,18 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
         </div>
       ) : (
         homeContent
+      )}
+
+      {isNonEmptyVisual && (
+        <nav data-home-dock="" data-visible={dockVisible ? "" : undefined} aria-label="本棚の操作" aria-hidden={!dockVisible} inert={!dockVisible} className="home-p3-dock">
+          {recentDocuments[0] && (
+            <button type="button" onClick={() => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${recentDocuments[0].id}`)} className="home-p3-dock-continue">
+              <span className="block text-[10px] tracking-[0.18em] opacity-70">CONTINUE</span>
+              <span className="block truncate font-serif text-sm">{recentDocuments[0].title || "無題のドキュメント"}</span>
+            </button>
+          )}
+          <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-dock-create">＋ 次の一冊</button>
+        </nav>
       )}
 
       {pendingDoc && (
