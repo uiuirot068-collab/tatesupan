@@ -277,6 +277,10 @@ export interface PublicationDocument {
   colophonFontSizePt?: number;
   /** CSS family selected for the colophon. Empty string means follow body. */
   colophonFontFamily?: string;
+  /** Raw, pre-composition colophon content for Preview/Publication wrap parity. */
+  colophonRows?: Array<{ label: string; value: string }>;
+  colophonFreeText?: string;
+  colophonTitleFallback?: string;
 }
 
 interface PaintLookup {
@@ -529,6 +533,9 @@ export function buildPublicationDocument(
     templateId?: "standard" | "center" | "minimal" | "classic";
     fontSizePt?: number | null;
     fontFamily?: string;
+    rows?: Array<{ label: string; value: string }>;
+    freeText?: string;
+    titleFallback?: string;
   }
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
@@ -573,6 +580,13 @@ export function buildPublicationDocument(
       : {}),
     ...(typeof colophonVisual?.fontFamily === "string"
       ? { colophonFontFamily: colophonVisual.fontFamily }
+      : {}),
+    ...(colophonVisual?.rows ? { colophonRows: colophonVisual.rows.map((row) => ({ ...row })) } : {}),
+    ...(typeof colophonVisual?.freeText === "string"
+      ? { colophonFreeText: colophonVisual.freeText }
+      : {}),
+    ...(typeof colophonVisual?.titleFallback === "string"
+      ? { colophonTitleFallback: colophonVisual.titleFallback }
       : {}),
   };
 }
