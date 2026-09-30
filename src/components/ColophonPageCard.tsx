@@ -34,7 +34,7 @@ import { ColophonTemplateContent } from "./ColophonTemplateContent";
  * 本文ページと同じ構造で持つため、既存の capture pipeline
  * （exportCapture / exportImage / exportPdf）がそのまま本文ページと同様に扱える。
  */
-interface ColophonPageCardProps {
+export interface ColophonPageCardProps {
   settings: PageSettings;
   layout: PageLayout;
   colophon: ColophonSettings;
@@ -47,6 +47,8 @@ interface ColophonPageCardProps {
   physicalPageNumber: number;
   /** 1ページに収まらないかどうかを呼び出し側へ通知する（警告表示用）。 */
   onOverflowChange?: (overflowing: boolean) => void;
+  /** QA/rollout marker only; does not change page geometry or appearance. */
+  rendererSource?: "legacy" | "v2";
 }
 
 export default function ColophonPageCard({
@@ -56,6 +58,7 @@ export default function ColophonPageCard({
   title,
   physicalPageNumber,
   onOverflowChange,
+  rendererSource = "legacy",
 }: ColophonPageCardProps) {
   const { paper } = layout;
   const bleedMm = paper.isPx ? 0 : BLEED_MM;
@@ -211,6 +214,7 @@ export default function ColophonPageCard({
       <div
         data-page-card="true"
         data-colophon-page="true"
+        data-colophon-renderer={rendererSource}
         data-is-px-page={paper.isPx ? "true" : undefined}
         className="page-card shrink-0 overflow-hidden border border-gray-200 bg-paper shadow-md dark:border-gray-700 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
         style={sheetStyle}
