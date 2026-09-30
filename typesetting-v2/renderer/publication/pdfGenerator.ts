@@ -869,8 +869,10 @@ function paintPlanPageSource(
       doc.runningHeadFontSizePt,
       doc.colophonTemplateId ?? "standard",
       doc.colophonFontSizePt,
-      doc.label,
-      doc.colophonFontFamily
+      doc.colophonTitleFallback ?? doc.label,
+      doc.colophonFontFamily,
+      doc.colophonRows,
+      doc.colophonFreeText
     );
 
   if (doc.pageSequence) {
@@ -1003,7 +1005,9 @@ function buildColophonPaintPage(
   templateId: "standard" | "center" | "minimal" | "classic" = "standard",
   colophonFontSizePt?: number,
   titleFallback: string = "",
-  colophonFontFamily?: string
+  colophonFontFamily?: string,
+  rawRows?: Array<{ label: string; value: string }>,
+  rawFreeText?: string
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1082,17 +1086,20 @@ function buildColophonPaintPage(
     }
     contentAreaBottomMm = Math.max(contentAreaBottomMm, contentAreaTopMm);
 
-    const rows: { id: string; label: string; value: string }[] = [];
-    const freeLines: string[] = [];
-    let syntheticRow = 0;
-    for (const line of firstColumn.lines) {
-      const text = line.units.map((u) => u.text).join("");
-      if (text.length === 0) continue;
-      if (text.includes("\t")) {
-        const [label, ...valueParts] = text.split("\t");
-        rows.push({ id: `row-${syntheticRow++}`, label, value: valueParts.join("\t") });
-      } else {
-        freeLines.push(text);
+    const rows: { id: string; label: string; value: string }[] =
+      rawRows?.map((row, index) => ({ id: `row-${index}`, ...row })) ?? [];
+    const fallbackFreeLines: string[] = [];
+    if (!rawRows) {
+      let syntheticRow = 0;
+      for (const line of firstColumn.lines) {
+        const text = line.units.map((u) => u.text).join("");
+        if (text.length === 0) continue;
+        if (text.includes("\t")) {
+          const [label, ...valueParts] = text.split("\t");
+          rows.push({ id: `row-${syntheticRow++}`, label, value: valueParts.join("\t") });
+        } else {
+          fallbackFreeLines.push(text);
+        }
       }
     }
 
@@ -1100,7 +1107,7 @@ function buildColophonPaintPage(
     const renderPlan = buildColophonRenderPlan({
       templateId,
       rows,
-      freeText: freeLines.join("\n"),
+      freeText: rawFreeText ?? fallbackFreeLines.join("\n"),
       titleFallback,
       availableWidthEm: availableSafeWidthMm / Math.max(colophonEmMm, 0.001),
     });
