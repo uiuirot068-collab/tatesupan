@@ -141,6 +141,8 @@ export interface PageSettings {
   charsPerLine: number; // 目標: 1行の文字数（小口自動調整の入力値）
   linesPerColumn: number; // 目標: 1段の行数（小口自動調整の入力値）
   layoutMode: "margin" | "capacity"; // 設定モード: 余白から設定 / 文字数・行数から設定
+  /** 作品ごとの標準書き出し保存名（拡張子なし）。空 = 安全な自動候補。 */
+  exportFilenameStem?: string;
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
@@ -272,6 +274,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   charsPerLine: 37,
   linesPerColumn: 16,
   layoutMode: "margin",
+  exportFilenameStem: "",
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
   colophon: createDefaultColophonSettings(),
