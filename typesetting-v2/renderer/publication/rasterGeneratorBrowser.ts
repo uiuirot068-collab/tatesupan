@@ -141,7 +141,12 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
     // native `textAlign`/`textBaseline` (jsPDF's own text() options were
     // deliberately modeled on the same DOM/canvas convention).
     const outputFontSizePt = resolveRasterCommandFontSizePt(cmd, mode);
-    if (fontFamily) ctx.font = `${ptToPx(outputFontSizePt, dpi)}px "${fontFamily}"`;
+    const commandFontFamily = cmd.fontFamily?.trim();
+    if (commandFontFamily) {
+      ctx.font = `${ptToPx(outputFontSizePt, dpi)}px ${commandFontFamily}`;
+    } else if (fontFamily) {
+      ctx.font = `${ptToPx(outputFontSizePt, dpi)}px "${fontFamily}"`;
+    }
     ctx.textAlign = cmd.align;
     ctx.textBaseline = cmd.baseline ?? "alphabetic";
     let fontSizePx = ptToPx(outputFontSizePt, dpi);
@@ -150,7 +155,11 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       const maxWidthPx = mmToPx(cmd.maxWidthMm, dpi);
       if (widthPx > maxWidthPx) {
         fontSizePx = fontSizePx * (maxWidthPx / widthPx);
-        if (fontFamily) ctx.font = `${fontSizePx}px "${fontFamily}"`;
+        if (commandFontFamily) {
+          ctx.font = `${fontSizePx}px ${commandFontFamily}`;
+        } else if (fontFamily) {
+          ctx.font = `${fontSizePx}px "${fontFamily}"`;
+        }
       }
     }
     const xPx = mmToPx(cmd.xMm, dpi);
