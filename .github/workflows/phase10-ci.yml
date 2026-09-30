@@ -19,12 +19,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: TypeScript
+      - name: Build default (WINDOWED)
+        run: npm run build
+      - name: TypeScript after Next generated types
         run: npx tsc --noEmit
       - name: Phase 10 rollout unit tests
         run: npx vitest run src/lib/editorSurfaceRollout.test.ts src/lib/pagedEditorWindowedFinal.test.ts src/lib/pagedEditorWholeReplace.test.ts
-      - name: Build default (WINDOWED)
-        run: npm run build
       - name: Build emergency rollback (FULL)
         env:
           NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE: FULL
