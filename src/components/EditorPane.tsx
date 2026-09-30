@@ -51,7 +51,8 @@ import {
 import { findMarkAt, type DescriptionMark } from "@/lib/descriptionCheckManuscript";
 import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import type { ReviewHubToolId } from "@/lib/reviewHub";
-import { resolveExportFilenameStem, sanitizePdfFilenameStem } from "@/utils/exportFilename";
+import InfoTooltip from "./InfoTooltip";
+import ExportFilenameControl from "./ExportFilenameControl";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -875,21 +876,6 @@ function EditorPaneInner(
   // depending on `reviewSurface` -- portalled into the Desktop Review Bar (bottom of Preview) on
   // "desktop", or rendered inline here (its own `sheet` variant) on "compact". Built once so both
   // call sites always agree on open state / sections / content.
-  const [filenameEditing, setFilenameEditing] = useState(false);
-  const [filenameDraft, setFilenameDraft] = useState(() => resolveExportFilenameStem(exportFilenameStem));
-
-  useEffect(() => {
-    if (!filenameEditing) setFilenameDraft(resolveExportFilenameStem(exportFilenameStem));
-  }, [exportFilenameStem, filenameEditing]);
-
-  const commitExportFilename = () => {
-    const next = sanitizePdfFilenameStem(filenameDraft);
-    if (!next) return;
-    onExportFilenameStemChange(next);
-    setFilenameDraft(next);
-    setFilenameEditing(false);
-  };
-
   const reviewHubPanelElement = (
     <ReviewHubPanel
       open={reviewHubOpen}
@@ -955,7 +941,16 @@ function EditorPaneInner(
             data-demo-target="title"
             className="min-w-0 flex-1 bg-transparent font-serif text-base font-semibold tracking-[0.03em] text-ink outline-none placeholder:text-ink/40 md:text-lg"
           />
-          <div data-editor-export-filename="" className="hidden min-w-0 max-w-[280px] items-center gap-1.5 @min-[700px]:flex">
+          <InfoTooltip
+            text="本棚・背表紙に表示する作品名です。書き出しファイル名とは別です。"
+            label="作品タイトルの説明"
+          />
+          <ExportFilenameControl
+            stem={exportFilenameStem}
+            onChange={onExportFilenameStemChange}
+            className="hidden min-w-0 max-w-[280px] @min-[700px]:flex min-[1180px]:hidden"
+          />
+          <div data-editor-export-filename-legacy="" className="hidden">
             {filenameEditing ? (
               <>
                 <span className="shrink-0 text-[10px] text-ink/45">保存名</span>
@@ -1013,6 +1008,7 @@ function EditorPaneInner(
                 </button>
               </>
             )}
+          </div>
           </div>
           <span
             data-editor-character-count=""
