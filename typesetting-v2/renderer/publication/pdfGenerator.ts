@@ -869,7 +869,8 @@ function paintPlanPageSource(
       doc.runningHeadFontSizePt,
       doc.colophonTemplateId ?? "standard",
       doc.colophonFontSizePt,
-      doc.label
+      doc.label,
+      doc.colophonFontFamily
     );
 
   if (doc.pageSequence) {
@@ -1001,7 +1002,8 @@ function buildColophonPaintPage(
   runningHeadFontSizePt?: number,
   templateId: "standard" | "center" | "minimal" | "classic" = "standard",
   colophonFontSizePt?: number,
-  titleFallback: string = ""
+  titleFallback: string = "",
+  colophonFontFamily?: string
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1144,7 +1146,7 @@ function buildColophonPaintPage(
         align: item.align,
         angle: 0,
         baseline: "middle",
-        ...(doc.colophonFontFamily ? { fontFamily: doc.colophonFontFamily } : {}),
+        ...(colophonFontFamily ? { fontFamily: colophonFontFamily } : {}),
       });
     }
   }
