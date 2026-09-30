@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import { resolveExportFilenameStem, sanitizePdfFilenameStem } from "@/utils/exportFilename";
 import InfoTooltip from "./InfoTooltip";
-
-const SAVE_NAME_HELP =
-  "PDF・JPG・ZIPなどを書き出すときのファイル名です。作品タイトルとは別に設定できます。";
+import { EXPORT_FILENAME_HELP } from "@/lib/editorTerminology";
 
 interface ExportFilenameControlProps {
   stem: string;
@@ -44,11 +42,11 @@ export default function ExportFilenameControl({
     <div
       data-export-filename-control=""
       className={`min-w-0 items-center gap-1.5 ${className}`}
-      title={SAVE_NAME_HELP}
+      title={EXPORT_FILENAME_HELP}
     >
       <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-ink/45">
         保存名
-        <InfoTooltip text={SAVE_NAME_HELP} label="保存名の説明" />
+        <InfoTooltip text={EXPORT_FILENAME_HELP} label="保存名の説明" />
       </span>
 
       {editing ? (
@@ -61,7 +59,7 @@ export default function ExportFilenameControl({
               if (event.key === "Enter") commit();
               if (event.key === "Escape") reset();
             }}
-            title={SAVE_NAME_HELP}
+            title={EXPORT_FILENAME_HELP}
             className={`min-w-0 rounded border border-ink/20 bg-base px-2 py-1 text-[11px] text-ink outline-none focus:border-accent ${compact ? "w-[120px]" : "flex-1"}`}
             aria-label="標準の書き出し保存ファイル名"
           />
@@ -75,14 +73,14 @@ export default function ExportFilenameControl({
       ) : (
         <>
           <span
-            title={SAVE_NAME_HELP}
+            title={EXPORT_FILENAME_HELP}
             className={`min-w-0 truncate text-[11px] font-medium text-ink/65 ${compact ? "max-w-[150px]" : "flex-1"}`}
           >
             {resolveExportFilenameStem(stem)}
           </span>
           <button
             type="button"
-            title={SAVE_NAME_HELP}
+            title={EXPORT_FILENAME_HELP}
             onClick={() => {
               setDraft(resolveExportFilenameStem(stem));
               setEditing(true);
