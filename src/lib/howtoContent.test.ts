@@ -15,6 +15,7 @@ import {
   HOWTO_ROUTE,
   EDITOR_PAGE_EXPLANATION_BODY,
   PDF_FILENAME_EXPLANATION,
+  TITLE_AND_FILENAME_EXPLANATION,
   resolveAffiliateFooterConfig,
 } from "./howtoContent";
 
@@ -67,11 +68,21 @@ describe("Editor Page explanation (req #10)", () => {
   });
 });
 
+describe("title and save-name terminology", () => {
+  it("keeps bookshelf title separate from export filename", () => {
+    expect(TITLE_AND_FILENAME_EXPLANATION).toContain("本棚・背表紙");
+    expect(TITLE_AND_FILENAME_EXPLANATION).toContain("書き出しファイル名");
+    expect(TITLE_AND_FILENAME_EXPLANATION).toContain("別");
+  });
+});
+
 describe("PDF filename explanation (req #11)", () => {
   it("matches the shipped safe-filename field, not the old post-export notice", () => {
     expect(PDF_FILENAME_EXPLANATION).toContain("保存ファイル名");
     expect(PDF_FILENAME_EXPLANATION).toContain(".pdf");
     expect(PDF_FILENAME_EXPLANATION).toContain("半角");
+    expect(PDF_FILENAME_EXPLANATION).toContain("_");
+    expect(PDF_FILENAME_EXPLANATION).toContain("-");
   });
 });
 
