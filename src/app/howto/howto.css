@@ -358,3 +358,13 @@ html[data-theme="dark"] .howto-page .devlog { border-top: 1px solid color-mix(in
   .howto-page .pill.gold:hover,
   .howto-page .quick-ref-list a:hover::after { transform: none; }
 }
+
+/* Unified update-history loading/error state. */
+.log-empty {
+  margin: 0;
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--muted, #6d7280);
+}
