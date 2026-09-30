@@ -9,6 +9,7 @@ import { ProjectListModal } from './ProjectListModal';
 import { Project } from '@/types/database';
 import { withBasePath } from '@/lib/basePath';
 import ThemeToggle from './ThemeToggle';
+import ExportFilenameControl from './ExportFilenameControl';
 
 // TSP-B4-B6-TOPPAGE-001 — the Home header's "SpunTales" label links out to the
 // sibling-service portal, same tab. Not TateSpun-specific and not the
@@ -23,6 +24,8 @@ interface HeaderProps {
   isSaving?: boolean;
   saveStatus?: SaveStatus;
   onOpenHelp?: () => void;
+  exportFilenameStem?: string;
+  onExportFilenameStemChange?: (stem: string) => void;
   /**
    * TSP-LOOP-023: desktop「集中モード」toggle. Present only on the editor
    * route. The button is `md+` only — on a phone the sticky MobileEditorNav
@@ -69,7 +72,7 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
 // Nothing is hidden, renamed or reordered; from 906px up (and on phones) the header is exactly as before.
 const TABLET_COMPACT_SHELL = 'md:max-[905px]:my-1 md:max-[905px]:py-1.5 md:max-[905px]:gap-y-1';
 
-export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, exportFilenameStem = "", onExportFilenameStemChange, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
   const isHome = variant === 'home';
   // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
   // ログイン状態や作品数に関わらず表示しない（空の本棚でも重複表示しない）。
@@ -221,14 +224,24 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
         }
       >
         {!isHome && !isWorksListRoute && (
-          <Link
-            href="/"
-            // TSP-LOOP-022: the phone's sticky MobileEditorNav already has a
-            // 「← 一覧」 link — don't duplicate it in the (non-sticky) header.
-            className="hidden shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline md:inline"
-          >
-            ← 作品一覧
-          </Link>
+          <>
+            <Link
+              href="/"
+              // TSP-LOOP-022: the phone's sticky MobileEditorNav already has a
+              // 「← 一覧」 link — don't duplicate it in the (non-sticky) header.
+              className="hidden shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline md:inline"
+            >
+              ← 作品一覧
+            </Link>
+            {onExportFilenameStemChange && (
+              <ExportFilenameControl
+                stem={exportFilenameStem}
+                onChange={onExportFilenameStemChange}
+                compact
+                className="hidden min-[1180px]:flex"
+              />
+            )}
+          </>
         )}
         {isHome && (
           <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold text-gray-500">
