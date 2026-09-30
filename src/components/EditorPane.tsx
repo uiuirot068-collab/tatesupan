@@ -53,6 +53,7 @@ import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import type { ReviewHubToolId } from "@/lib/reviewHub";
 import InfoTooltip from "./InfoTooltip";
 import ExportFilenameControl from "./ExportFilenameControl";
+import { TITLE_HELP } from "@/lib/editorTerminology";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -942,7 +943,7 @@ function EditorPaneInner(
             className="min-w-0 flex-1 bg-transparent font-serif text-base font-semibold tracking-[0.03em] text-ink outline-none placeholder:text-ink/40 md:text-lg"
           />
           <InfoTooltip
-            text="本棚・背表紙に表示する作品名です。書き出しファイル名とは別です。"
+            text={TITLE_HELP}
             label="作品タイトルの説明"
           />
           <ExportFilenameControl
