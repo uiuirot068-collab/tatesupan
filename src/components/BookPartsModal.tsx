@@ -8,7 +8,6 @@ import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewW
 import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
 import InfoTooltip from './InfoTooltip';
-import InfoTooltip from './InfoTooltip';
 import { TOC_REDETECT_HELP } from '@/lib/editorTerminology';
 
 interface BookPartsModalProps {
