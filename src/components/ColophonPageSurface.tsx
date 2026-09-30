@@ -121,9 +121,10 @@ export default function ColophonPageSurface({
           : "center",
   };
 
-  // 本文と同じ preview スケール係数で文字サイズを決める（export の crop も
-  // この canonical px を前提にしているため、本文と同じ扱いになる）。
-  const basePx = layout.fontSizeMm * PX_PER_MM;
+  // 奥付は本文とは独立して文字サイズを持てる。未指定時のみ本文サイズへ
+  // フォールバックする。pt -> mm -> preview px の変換は本文と同じ座標系。
+  const colophonFontSizePt = colophon.fontSizePt ?? settings.fontSizePt;
+  const basePx = (colophonFontSizePt * 25.4 / 72) * PX_PER_MM;
   const fontFamily =
     colophon.fontFamily && colophon.fontFamily !== COLOPHON_FONT_SAME_AS_BODY
       ? colophon.fontFamily
@@ -192,16 +193,36 @@ export default function ColophonPageSurface({
   }, [measureSignature, onOverflowChange]);
 
   const blockStyle: CSSProperties = {
+    position: "relative",
     maxWidth: "100%",
     maxHeight: "100%",
     color: "#000000",
     fontFamily,
     fontSize: `${basePx}px`,
     lineHeight: 1.8,
+    ...(rendererSource === "v2"
+      ? {
+          padding: `${basePx * 0.9}px ${basePx * 1.1}px`,
+          borderRadius: `${Math.max(4, basePx * 0.4)}px`,
+        }
+      : {}),
   };
 
   return (
-    <div className="flex shrink-0 flex-col items-center gap-2 p-1">
+    <div
+      className="flex h-full shrink-0 flex-col items-center gap-2 p-1"
+      style={{ width: sheetStyle.width }}
+    >
+      <div
+        data-no-print="true"
+        className="no-print flex min-h-[36px] w-full items-center justify-center px-1 text-xs"
+      >
+        <span
+          className="rounded-full border border-[#c7992f]/35 bg-[#c7992f]/12 px-2.5 py-1 font-semibold tracking-[0.08em] text-[#765514]"
+        >
+          奥付
+        </span>
+      </div>
       {overflowing && (
         <div
           data-no-print="true"
@@ -217,18 +238,35 @@ export default function ColophonPageSurface({
         data-colophon-renderer={rendererSource}
         data-is-px-page={paper.isPx ? "true" : undefined}
         className="page-card shrink-0 overflow-hidden border border-gray-200 bg-paper shadow-md dark:border-gray-700 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
-        style={sheetStyle}
+        style={{ ...sheetStyle, marginTop: "auto" }}
       >
         {/* PlacementArea（余白/ノドを考慮した配置基準） > ColophonBlock > Template */}
         <div ref={placementRef} style={placementAreaStyle}>
           <div ref={blockRef} style={blockStyle}>
-            <ColophonTemplateContent
+            {rendererSource === "v2" && (
+              <span
+                data-no-print="true"
+                className="no-print"
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "inherit",
+                  background: "rgba(199, 153, 47, 0.14)",
+                  boxShadow: "inset 0 0 0 1px rgba(199, 153, 47, 0.28)",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <ColophonTemplateContent
               templateId={colophon.templateId}
               rows={rows}
               freeText={freeText}
               basePx={basePx}
-              titleFallback={titleFallback}
-            />
+                titleFallback={titleFallback}
+              />
+            </div>
           </div>
         </div>
         {colophonNombre && (
@@ -270,7 +308,9 @@ export default function ColophonPageSurface({
           />
         )}
       </div>
-      <span className="text-xs text-ink/60">奥付</span>
+      <span aria-hidden="true" className="select-none text-xs text-transparent">
+        {physicalPageNumber}ページ
+      </span>
     </div>
   );
 }
