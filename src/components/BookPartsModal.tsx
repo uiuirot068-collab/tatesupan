@@ -7,6 +7,8 @@ import { computeTocItemsWithV2 } from '@/lib/v2Bridge/tocPageNumbers';
 import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewWorkerClient';
 import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
+import InfoTooltip from './InfoTooltip';
+import { TOC_REDETECT_HELP } from '@/lib/editorTerminology';
 
 interface BookPartsModalProps {
   isOpen: boolean;
@@ -309,14 +311,17 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
               <p className="text-gray-500">
                 本文中の「# 見出し」「■ 見出し」を検出し、ページ番号を自動判定します。
               </p>
-              <button
-                type="button"
-                onClick={() => void detectToc()}
-                disabled={tocLoading}
-                className="mt-2 block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-wait disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
-              >
-                {tocLoading ? '⏳ V2でページ番号を判定中…' : '🔄 再検出'}
-              </button>
+              <div className="mt-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void detectToc()}
+                  disabled={tocLoading}
+                  className="block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-wait disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  {tocLoading ? '⏳ V2でページ番号を判定中…' : '🔄 再検出'}
+                </button>
+                <InfoTooltip text={TOC_REDETECT_HELP} label="目次の再検出について" />
+              </div>
             </div>
 
             {tocError && (
