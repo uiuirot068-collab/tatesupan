@@ -1176,7 +1176,7 @@ function buildColophonPaintPage(
 
     const blockWidthMm = Math.max(structuredFrameWidthMm, freeTextWrapWidthMm);
     const blockLeftMm =
-      horizontal === "left" ? contentLeftMm : horizontal === "right" ? contentRightMm - blockWidthMm : contentLeftMm + Math.max(contentRightMm - contentLeftMm - blockWidthMm, 0) / 2;
+      contentLeftMm + Math.max(contentRightMm - contentLeftMm - blockWidthMm, 0) / 2;
 
     // Deterministic block-height: real line COUNT per section, each at
     // its OWN real line pitch (structured rows at `lineHeightMm`,
@@ -1282,13 +1282,8 @@ function buildColophonPaintPage(
       }
     } else if (templateId === "minimal") {
       commands.length = 0;
-      const anchorX =
-        horizontal === "left"
-          ? contentLeftMm
-          : horizontal === "right"
-            ? contentRightMm
-            : (contentLeftMm + contentRightMm) / 2;
-      const align: "left" | "center" | "right" = horizontal;
+      const anchorX = (contentLeftMm + contentRightMm) / 2;
+      const align: "center" = "center";
       const titleRow = rows[0];
       const restRows = rows.slice(1);
       const titleEm = colophonEmMm * 1.7;
