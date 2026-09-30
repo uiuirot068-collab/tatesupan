@@ -100,7 +100,7 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
   const overlayPages: TategakiPage[] = [];
   const bodySourceRanges: SourceRange[] = [];
   const imagePageIndicesById = new Map<string, number[]>();
-  let previousEnd = layout.bodySourceOffset;
+  let previousEnd = (layout.bodySourceOffset ?? 0);
   let editorBodyIndex = 0;
 
   layout.document.pageSequence.forEach((ref, physicalIndex) => {
@@ -124,7 +124,7 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
       : { start: previousEnd, end: previousEnd };
     previousEnd = combinedRange.end;
 
-    if (combinedRange.end <= layout.bodySourceOffset) {
+    if (combinedRange.end <= (layout.bodySourceOffset ?? 0)) {
       const entry: V2PreviewPage = {
         physicalIndex,
         physicalPageNumber: physicalPageNumber(physicalIndex),
@@ -138,8 +138,8 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
     }
 
     const adjusted = {
-      start: Math.max(0, combinedRange.start - layout.bodySourceOffset),
-      end: Math.max(0, combinedRange.end - layout.bodySourceOffset),
+      start: Math.max(0, combinedRange.start - (layout.bodySourceOffset ?? 0)),
+      end: Math.max(0, combinedRange.end - (layout.bodySourceOffset ?? 0)),
     };
     const sourceRange = includeBoutenMarkers(sourceContent, adjusted);
     const imageIds = images.map((image) => image.refId);

@@ -154,7 +154,7 @@ export interface PageSettings {
   // normalizeColophonSettings 経由で既定値へフォールバックする。
   colophon: ColophonSettings;
   // Phase 11 Human-QA repair: TOC is work-owned structured data, never body text.
-  toc: TocSettings;
+  toc?: TocSettings;
 }
 
 /** 特定ページ単位でマスターページ設定を上書きする項目 */

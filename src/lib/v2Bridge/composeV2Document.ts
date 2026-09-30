@@ -54,7 +54,7 @@ export interface V2BridgeResult {
   /** Body flow code point → raw manuscript offsets (manuscriptAdapter), for the Preview page model. */
   bodySourceMap: ManuscriptSourceMap;
   /** Raw-character offset where the editable body begins inside the composed source. */
-  bodySourceOffset: number;
+  bodySourceOffset?: number;
   colophonUnits?: LogicalUnit[];
   colophonSource?: string;
   layoutSettings: PageCompositionSettings;

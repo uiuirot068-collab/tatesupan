@@ -65,6 +65,7 @@ import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
 import { resolveExportFilenameStem } from "@/utils/exportFilename";
+import { createDefaultTocSettings } from "@/lib/tocSettings";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -1163,7 +1164,7 @@ export default function TategakiEditor({
             onExportFilenameStemChange={(stem) =>
               setSettings((previous) => ({ ...previous, exportFilenameStem: stem }))
             }
-            toc={settings.toc}
+            toc={settings.toc ?? createDefaultTocSettings()}
             onEditToc={() => {
               setBookPartsInitialTab("toc");
               setIsBookPartsModalOpen(true);
