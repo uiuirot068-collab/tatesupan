@@ -88,6 +88,11 @@ export interface ColophonSettings {
   templateId: ColophonTemplateId;
   /** CSS font-family 文字列。"" = 本文と同じ（既定）。 */
   fontFamily: string;
+  /**
+   * 奥付本文の文字サイズ（pt）。null/undefined は「本文と同じ」。
+   * 旧保存データには存在しないため optional default merge で互換を保つ。
+   */
+  fontSizePt?: number | null;
   fields: ColophonField[];
   /** 奥付下部の自由記述欄（plain text。HTML は解釈しない）。 */
   freeText: string;
@@ -115,6 +120,7 @@ export function createDefaultColophonSettings(seedTitle = ""): ColophonSettings 
     enabled: false,
     templateId: "standard",
     fontFamily: COLOPHON_FONT_SAME_AS_BODY,
+    fontSizePt: null,
     fields: defaultColophonFields(seedTitle),
     freeText: "",
     pagePosition: { ...DEFAULT_COLOPHON_PAGE_POSITION },
@@ -131,6 +137,7 @@ export function createGuideColophonSettings(): ColophonSettings {
     enabled: true,
     templateId: "standard",
     fontFamily: COLOPHON_FONT_SAME_AS_BODY,
+    fontSizePt: null,
     fields: [
       { id: "title", label: "書名", value: "使い方ガイド", visible: true },
       { id: "author", label: "著者", value: "TateSpun", visible: true },
@@ -153,6 +160,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function coerceString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function normalizeColophonFontSizePt(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(24, Math.max(4, Math.round(n * 10) / 10));
 }
 
 /** 一意な内部IDを生成する（衝突時のフォールバックにも使う）。 */
@@ -209,6 +223,7 @@ export function normalizeColophonSettings(
     enabled: raw.enabled === true,
     templateId,
     fontFamily: coerceString(raw.fontFamily),
+    fontSizePt: normalizeColophonFontSizePt(raw.fontSizePt),
     fields,
     freeText: coerceString(raw.freeText),
     pagePosition,
