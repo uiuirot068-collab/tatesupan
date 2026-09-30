@@ -107,12 +107,7 @@ export default function ColophonPageSurface({
     right: (rightMarginMm + bleedMm) * PX_PER_MM,
     overflow: "hidden",
     display: "flex",
-    justifyContent:
-      placement.horizontal === "left"
-        ? "flex-start"
-        : placement.horizontal === "right"
-          ? "flex-end"
-          : "center",
+    justifyContent: "center",
     alignItems:
       placement.vertical === "top"
         ? "flex-start"
@@ -200,12 +195,7 @@ export default function ColophonPageSurface({
     fontFamily,
     fontSize: `${basePx}px`,
     lineHeight: 1.8,
-    ...(rendererSource === "v2"
-      ? {
-          padding: `${basePx * 0.9}px ${basePx * 1.1}px`,
-          borderRadius: `${Math.max(4, basePx * 0.4)}px`,
-        }
-      : {}),
+
   };
 
   return (
@@ -243,22 +233,7 @@ export default function ColophonPageSurface({
         {/* PlacementArea（余白/ノドを考慮した配置基準） > ColophonBlock > Template */}
         <div ref={placementRef} style={placementAreaStyle}>
           <div ref={blockRef} style={blockStyle}>
-            {rendererSource === "v2" && (
-              <span
-                data-no-print="true"
-                className="no-print"
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: "inherit",
-                  background: "rgba(199, 153, 47, 0.14)",
-                  boxShadow: "inset 0 0 0 1px rgba(199, 153, 47, 0.28)",
-                  pointerEvents: "none",
-                }}
-              />
-            )}
-            <div style={{ position: "relative", zIndex: 1 }}>
+            <div>
               <ColophonTemplateContent
               templateId={colophon.templateId}
               rows={rows}
