@@ -51,6 +51,7 @@ import {
 import { findMarkAt, type DescriptionMark } from "@/lib/descriptionCheckManuscript";
 import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import type { ReviewHubToolId } from "@/lib/reviewHub";
+import { resolveExportFilenameStem, sanitizePdfFilenameStem } from "@/utils/exportFilename";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
 // avoid re-analysing on every key of a fast typist, short enough to feel live.
@@ -86,6 +87,8 @@ const DEFAULT_INITIAL_TEXT = `■ 基本的な機能と記法
 interface EditorPaneProps {
   title: string;
   onTitleChange: (title: string) => void;
+  exportFilenameStem: string;
+  onExportFilenameStemChange: (stem: string) => void;
   content: string;
   onContentChange: (content: string) => void;
   workSession: WorkSessionState;
@@ -178,6 +181,8 @@ function EditorPaneInner(
   {
     title,
     onTitleChange,
+    exportFilenameStem,
+    onExportFilenameStemChange,
     content,
     onContentChange,
     workSession,
@@ -870,6 +875,21 @@ function EditorPaneInner(
   // depending on `reviewSurface` -- portalled into the Desktop Review Bar (bottom of Preview) on
   // "desktop", or rendered inline here (its own `sheet` variant) on "compact". Built once so both
   // call sites always agree on open state / sections / content.
+  const [filenameEditing, setFilenameEditing] = useState(false);
+  const [filenameDraft, setFilenameDraft] = useState(() => resolveExportFilenameStem(exportFilenameStem));
+
+  useEffect(() => {
+    if (!filenameEditing) setFilenameDraft(resolveExportFilenameStem(exportFilenameStem));
+  }, [exportFilenameStem, filenameEditing]);
+
+  const commitExportFilename = () => {
+    const next = sanitizePdfFilenameStem(filenameDraft);
+    if (!next) return;
+    onExportFilenameStemChange(next);
+    setFilenameDraft(next);
+    setFilenameEditing(false);
+  };
+
   const reviewHubPanelElement = (
     <ReviewHubPanel
       open={reviewHubOpen}
@@ -935,6 +955,65 @@ function EditorPaneInner(
             data-demo-target="title"
             className="min-w-0 flex-1 bg-transparent font-serif text-base font-semibold tracking-[0.03em] text-ink outline-none placeholder:text-ink/40 md:text-lg"
           />
+          <div data-editor-export-filename="" className="hidden min-w-0 max-w-[280px] items-center gap-1.5 @min-[700px]:flex">
+            {filenameEditing ? (
+              <>
+                <span className="shrink-0 text-[10px] text-ink/45">保存名</span>
+                <input
+                  autoFocus
+                  value={filenameDraft}
+                  onChange={(event) => setFilenameDraft(sanitizePdfFilenameStem(event.target.value))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitExportFilename();
+                    if (event.key === "Escape") {
+                      setFilenameDraft(resolveExportFilenameStem(exportFilenameStem));
+                      setFilenameEditing(false);
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded border border-ink/20 bg-base px-2 py-1 text-[11px] text-ink outline-none focus:border-accent"
+                  aria-label="標準の書き出し保存ファイル名"
+                />
+                <button
+                  type="button"
+                  onClick={commitExportFilename}
+                  disabled={filenameDraft.length === 0}
+                  className="shrink-0 text-[11px] font-medium text-accent disabled:opacity-40"
+                >
+                  設定
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilenameDraft(resolveExportFilenameStem(exportFilenameStem));
+                    setFilenameEditing(false);
+                  }}
+                  className="shrink-0 text-[11px] text-ink/50"
+                >
+                  キャンセル
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="shrink-0 text-[10px] text-ink/45">保存名</span>
+                <span
+                  className="min-w-0 truncate text-[11px] font-medium text-ink/65"
+                  title={resolveExportFilenameStem(exportFilenameStem)}
+                >
+                  {resolveExportFilenameStem(exportFilenameStem)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilenameDraft(resolveExportFilenameStem(exportFilenameStem));
+                    setFilenameEditing(true);
+                  }}
+                  className="shrink-0 text-[11px] text-accent hover:underline"
+                >
+                  変更
+                </button>
+              </>
+            )}
+          </div>
           <span
             data-editor-character-count=""
             title="現在の原稿文字数"
