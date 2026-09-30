@@ -8,6 +8,7 @@ import { createGuideColophonSettings, normalizeColophonSettings } from "./coloph
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import { isEphemeralDocId } from "@/constants/demoData";
 import { initializeWorkSessionScope } from "./editorSessionActivity";
+import { bookshelfMetadataFromDocument, type BookshelfMetadataRecord } from "./bookshelfMetadata";
 
 export interface DocumentRecord {
   id: number;
@@ -43,6 +44,7 @@ export interface ImageRecord {
 class TategakiDatabase extends Dexie {
   documents!: Table<DocumentRecord, number>;
   images!: Table<ImageRecord, string>;
+  bookshelfMetadata!: Table<BookshelfMetadataRecord, number>;
 
   constructor() {
     super("tategaki-editor-db");
@@ -57,6 +59,22 @@ class TategakiDatabase extends Dexie {
       documents: "id, updatedAt, isCollection",
       images: "id, createdAt",
     });
+    this.version(4)
+      .stores({
+        documents: "id, updatedAt, isCollection",
+        images: "id, createdAt",
+        bookshelfMetadata: "id, updatedAt, isCollection",
+      })
+      .upgrade(async (tx) => {
+        const documents = await tx.table<DocumentRecord, number>("documents").toArray();
+        const metadata = documents
+          .map((document) => bookshelfMetadataFromDocument(document))
+          .filter((record): record is BookshelfMetadataRecord => record !== null);
+
+        if (metadata.length > 0) {
+          await tx.table<BookshelfMetadataRecord, number>("bookshelfMetadata").bulkPut(metadata);
+        }
+      });
   }
 }
 
@@ -127,6 +145,24 @@ export async function listDocuments(): Promise<DocumentRecord[]> {
   );
 }
 
+export async function listBookshelfMetadata(): Promise<BookshelfMetadataRecord[]> {
+  return db.bookshelfMetadata.orderBy("updatedAt").reverse().toArray();
+}
+
+export async function rebuildBookshelfMetadata(): Promise<void> {
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    const documents = await db.documents.toArray();
+    const metadata = documents
+      .map((document) => bookshelfMetadataFromDocument(document))
+      .filter((record): record is BookshelfMetadataRecord => record !== null);
+
+    await db.bookshelfMetadata.clear();
+    if (metadata.length > 0) {
+      await db.bookshelfMetadata.bulkPut(metadata);
+    }
+  });
+}
+
 export async function loadDocument(id: number): Promise<DocumentRecord | undefined> {
   const doc = await db.documents.get(id);
   if (!doc) return undefined;
@@ -137,13 +173,18 @@ export async function loadDocument(id: number): Promise<DocumentRecord | undefin
 /** Creates a new empty document and returns its id. */
 export async function createDocument(): Promise<number> {
   const id = Date.now();
-  await db.documents.put({
+  const document: DocumentRecord = {
     id,
     title: "",
     content: "",
     settings: DEFAULT_PAGE_SETTINGS,
     plotNote: "",
     updatedAt: Date.now(),
+  };
+  const metadata = bookshelfMetadataFromDocument(document);
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    await db.documents.put(document);
+    if (metadata) await db.bookshelfMetadata.put(metadata);
   });
   // A deleted document's scoped history intentionally survives in localStorage.
   // If a timestamp id is ever reused (for example after a clock rollback), the
@@ -163,7 +204,7 @@ export async function saveDocument(
   // The 使い方ガイド (-1) and the TSP-024 おためしデモ (-2) are in-memory only —
   // never write a row for them.
   if (isEphemeralDocId(id)) return;
-  await db.documents.put({
+  const document: DocumentRecord = {
     id,
     title,
     content,
@@ -172,12 +213,24 @@ export async function saveDocument(
     updatedAt: Date.now(),
     isCollection: collection?.isCollection,
     includedDocumentIds: collection?.includedDocumentIds,
+  };
+  const metadata = bookshelfMetadataFromDocument(document);
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    await db.documents.put(document);
+    if (metadata) {
+      await db.bookshelfMetadata.put(metadata);
+    } else {
+      await db.bookshelfMetadata.delete(id);
+    }
   });
 }
 
 export async function deleteDocument(id: number): Promise<void> {
   if (isEphemeralDocId(id)) return;
-  await db.documents.delete(id);
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    await db.documents.delete(id);
+    await db.bookshelfMetadata.delete(id);
+  });
 }
 
 export async function saveImage(record: ImageRecord): Promise<void> {
