@@ -22,6 +22,7 @@ import {
   SUPPORT_OFUSE_LABEL,
   SUPPORT_NOTE,
 } from "@/lib/supportLinks";
+import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import "./howto.css";
 
 /**
@@ -50,62 +51,17 @@ interface UpdateLogEntry {
   body: string;
 }
 
-const FALLBACK_LOGS: UpdateLogEntry[] = [
-  {
-    date: "2026-09-30",
-    type: "update",
-    title: "WINDOWED版を標準化し、サイトとエディターを更新しました",
-    body: "長文原稿でも入力・ページ移動・検索・Undo／Redoを安定して使いやすくするため、原稿全体を一度に保持するFULL版に代わり、必要な編集ページだけを表示するWINDOWED版を標準エディターにしました。30万字級の原稿、日本語IME、Ctrl+Aによる全文選択・置換、大範囲置換、保存・再読込、Preview、PDF／JPG書き出しまで確認しています。FULL版は緊急時のロールバック用として残しています。あわせて、トップページ（本がない状態／本がある状態）、エディター、HOW TOを新しいデザインへ更新し、本棚から続きを書く導線や、MANUSCRIPT／PROOF、設定・オプション・メモ・ヘルプの区分を分かりやすくしました。",
-  },
-  {
-    date: "2026-09-30",
-    type: "update",
-    title: "トップ・エディター・HOW TOを全面改装しました",
-    body: "トップページを、本がない初回状態と本がある継続利用状態の2つに分けて再設計し、本棚・続きを書く導線・次の一冊への導線を強化しました。エディターはMANUSCRIPT／PROOFや設定・オプション・メモ・ヘルプの区分を整理し、初見でも役割が分かりやすい構成へ更新。HOW TOも章立て・目次・早見表・FAQ／小技の折りたたみを整え、モバイル・ダークモードを含めて見やすくしました。IME、Undo／Redo、保存、Preview、書き出しなどの機能仕様は変更していません。",
-  },
-  {
-    date: "2026-09-26",
-    type: "update",
-    title: "画像の72時間保存とリンク切れ対応を改善しました",
-    body: "クラウド上の一時画像コピーを72時間で自動整理する運用を復旧し、画像切れが起きたページをプレビューのフッターから確認・再配置できるようにしました。72時間の対象はクラウド一時コピーだけで、ブラウザ内の元画像には影響しません。画像切れのないページは単ページで書き出せます。",
-  },
-  {
-    date: "2026-09-26",
-    type: "update",
-    title: "トップページを微調整しました",
-    body: "トップページの文字サイズ・配色・本棚まわりを整え、作品があるとき／ないときの導線を見直しました。「新しく書く」「続きを開く」「HOW TOを見る」へ移動しやすくし、Caroadの見え方もライト／ダークで調整しました。",
-  },
-  {
-    date: "2026-09-24",
-    type: "update",
-    title: "PDF書き出しを更新しました",
-    body: "PDF書き出しをベクター／埋め込みフォント中心の方式へ更新し、仕上がり・塗り足し3mm・トンボ付き出力のPDF内部Boxを整備しました。A5／B5／B6／新書／A6／文庫で確認し、縦組みのかぎ括弧・約物も改善。FAQに固定DPI・フォント埋め込み・β版の縦組み記号の注意点を追加しました。",
-  },
-  {
-    date: "2026-09-23",
-    type: "update",
-    title: "文章見直しツール",
-    body: "HOW TOに「文章見直しツール」を追加し、Hero・ヘッダーから直接移動できるようにしました。文章チェックβ・作業カウンター・音読β・描写語／修飾表現チェックβの詳しい使い方を整理し、デモと機能ガイドからの案内も更新しました。",
-  },
-  {
-    date: "2026-09-12",
-    type: "update",
-    title: "HOW TO TateSpun v3.4",
-    body: "Hero画像を差し替え、説明文とFAQ構成を更新しました。",
-  },
-  {
-    date: "2026-09-12",
-    type: "fix",
-    title: "Section 05",
-    body: "「ここで書かなくてもいい」原稿持ち込み運用の場所を「▶オプション→TXT出入力」に修正しました。",
-  },
-  {
-    date: "2026-09-12",
-    type: "fix",
-    title: "画像ファイル名",
-    body: "各項目に合わせた推奨ファイル名を追加しました。",
-  },
-];
+const formatCanonicalLogDate = (date: string) => {
+  const match = date.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+  return match ? `20${match[1]}-${match[2]}-${match[3]}` : date;
+};
+
+const toHowToLogEntry = (entry: UpdateHistoryEntry): UpdateLogEntry => ({
+  date: formatCanonicalLogDate(entry.date),
+  type: entry.type ?? "improvement",
+  title: entry.title,
+  body: entry.detail,
+});
 
 const asset = (file: string) => withBasePath(`/howto/assets/${file}`);
 // TSP-RC-HOWTO-FINALIZE-003: self-hosted β guide video + poster, produced to
@@ -183,8 +139,9 @@ export default function HowToPage() {
   const [showLabels, setShowLabels] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [logs, setLogs] = useState<UpdateLogEntry[]>(FALLBACK_LOGS);
+  const [logs, setLogs] = useState<UpdateLogEntry[]>([]);
   const [visibleLogCount, setVisibleLogCount] = useState(8);
+  const [logLoadError, setLogLoadError] = useState(false);
   const [activeTocHref, setActiveTocHref] = useState<string | null>(null);
   const [allTipsOpen, setAllTipsOpen] = useState(false);
 
@@ -249,18 +206,18 @@ export default function HowToPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(withBasePath("/howto/updates.json"), { cache: "no-store" })
+    fetch(withBasePath("/data/tatespun-update-history.json"), { cache: "no-store" })
       .then((r) => {
-        if (!r.ok) throw new Error("updates.json fetch failed");
+        if (!r.ok) throw new Error("canonical update history fetch failed");
         return r.json();
       })
-      .then((d: { updates?: UpdateLogEntry[] } | UpdateLogEntry[]) => {
+      .then((value: unknown) => {
         if (cancelled) return;
-        const rows = Array.isArray(d) ? d : (d.updates ?? []);
-        if (rows.length > 0) setLogs(rows);
+        setLogs(parseUpdateHistory(value).map(toHowToLogEntry));
+        setLogLoadError(false);
       })
       .catch(() => {
-        /* keep FALLBACK_LOGS */
+        if (!cancelled) setLogLoadError(true);
       });
     return () => {
       cancelled = true;
@@ -1092,6 +1049,12 @@ export default function HowToPage() {
             </div>
           </div>
           <div className="log-list">
+            {logLoadError && (
+              <p className="log-empty">更新履歴を読み込めませんでした。時間をおいてもう一度ご確認ください。</p>
+            )}
+            {!logLoadError && sortedLogs.length === 0 && (
+              <p className="log-empty">更新履歴を読み込み中です…</p>
+            )}
             {visibleLogs.map((entry, i) => (
               <article className="log-row" key={`${entry.date}-${i}`}>
                 <div className="log-date">{entry.date}</div>
