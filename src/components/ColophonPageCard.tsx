@@ -6,12 +6,11 @@ import {
   COLOPHON_FONT_SAME_AS_BODY,
   colophonRenderModel,
   resolveColophonNombre,
-  type ColophonRenderRow,
-  type ColophonSettings,
-  type ColophonTemplateId,
+  type ColophonSettings
 } from "@/lib/colophon";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import { NombreOverlay } from "./PageCard";
+import { ColophonTemplateContent } from "./ColophonTemplateContent";
 
 /**
  * TSP-LOOP-005 — 本文とは完全に独立した「横書き専用の奥付ページ」1枚。
@@ -219,7 +218,7 @@ export default function ColophonPageCard({
         {/* PlacementArea（余白/ノドを考慮した配置基準） > ColophonBlock > Template */}
         <div ref={placementRef} style={placementAreaStyle}>
           <div ref={blockRef} style={blockStyle}>
-            <ColophonTemplate
+            <ColophonTemplateContent
               templateId={colophon.templateId}
               rows={rows}
               freeText={freeText}
@@ -268,222 +267,6 @@ export default function ColophonPageCard({
         )}
       </div>
       <span className="text-xs text-ink/60">奥付</span>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ *
- *  4テンプレート — すべて同じ ColophonRenderRow[] / freeText を描画する。
- *  共通の行データを持ち、レイアウト/装飾だけをテンプレートごとに分ける
- *  （完全別コンポーネントへのコピー実装はしない）。
- * ------------------------------------------------------------------ */
-
-interface TemplateProps {
-  templateId: ColophonTemplateId;
-  rows: ColophonRenderRow[];
-  freeText: string;
-  basePx: number;
-  titleFallback: string;
-}
-
-function ColophonTemplate({ templateId, rows, freeText, basePx, titleFallback }: TemplateProps) {
-  switch (templateId) {
-    case "center":
-      return <CenterTemplate rows={rows} freeText={freeText} basePx={basePx} />;
-    case "minimal":
-      return (
-        <MinimalTemplate
-          rows={rows}
-          freeText={freeText}
-          basePx={basePx}
-          titleFallback={titleFallback}
-        />
-      );
-    case "classic":
-      return <ClassicTemplate rows={rows} freeText={freeText} basePx={basePx} />;
-    case "standard":
-    default:
-      return <StandardTemplate rows={rows} freeText={freeText} basePx={basePx} />;
-  }
-}
-
-function FreeText({ text, basePx, align = "left" }: { text: string; basePx: number; align?: "left" | "center" }) {
-  if (text.trim() === "") return null;
-  return (
-    <p
-      style={{
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        margin: 0,
-        fontSize: `${basePx * 0.86}px`,
-        textAlign: align,
-        opacity: 0.85,
-      }}
-    >
-      {text}
-    </p>
-  );
-}
-
-/** 標準: 左にラベル・右に値。読みやすさ最優先、情報量中程度。上詰め。 */
-function StandardTemplate({
-  rows,
-  freeText,
-  basePx,
-}: {
-  rows: ColophonRenderRow[];
-  freeText: string;
-  basePx: number;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: `${basePx * 1.4}px` }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "max-content 1fr",
-          columnGap: `${basePx * 1.6}px`,
-          rowGap: `${basePx * 0.7}px`,
-        }}
-      >
-        {rows.map((row) => (
-          <FragmentRow key={row.id} label={row.label} value={row.value} />
-        ))}
-      </div>
-      <FreeText text={freeText} basePx={basePx} />
-    </div>
-  );
-}
-
-function FragmentRow({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <span style={{ opacity: 0.7 }}>{label}</span>
-      <span>{value}</span>
-    </>
-  );
-}
-
-/** 中央: 中央揃え。静かな作品集風。label と value を縦に整理。 */
-function CenterTemplate({
-  rows,
-  freeText,
-  basePx,
-}: {
-  rows: ColophonRenderRow[];
-  freeText: string;
-  basePx: number;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: `${basePx * 1.1}px`,
-        textAlign: "center",
-      }}
-    >
-      {rows.map((row) => (
-        <div key={row.id} style={{ display: "flex", flexDirection: "column", gap: `${basePx * 0.15}px` }}>
-          {row.label.trim() !== "" && (
-            <span style={{ fontSize: `${basePx * 0.78}px`, opacity: 0.6 }}>{row.label}</span>
-          )}
-          <span>{row.value}</span>
-        </div>
-      ))}
-      {freeText.trim() !== "" && <div style={{ height: `${basePx * 0.6}px` }} />}
-      <FreeText text={freeText} basePx={basePx} align="center" />
-    </div>
-  );
-}
-
-/** ミニマル: 書名を主役に。装飾は最小、情報はコンパクト、余白を活かす。 */
-function MinimalTemplate({
-  rows,
-  freeText,
-  basePx,
-  titleFallback,
-}: {
-  rows: ColophonRenderRow[];
-  freeText: string;
-  basePx: number;
-  titleFallback: string;
-}) {
-  const titleRow = rows.find((r) => r.id === "title") ?? rows[0];
-  const rest = rows.filter((r) => r !== titleRow);
-  const mainTitle = (titleRow?.value ?? "").trim() || titleFallback;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: `${basePx * 2.4}px`,
-      }}
-    >
-      {mainTitle !== "" && (
-        <div style={{ fontSize: `${basePx * 1.7}px`, fontWeight: 600, letterSpacing: "0.02em" }}>
-          {mainTitle}
-        </div>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: `${basePx * 0.4}px` }}>
-        {rest.map((row) => (
-          <div key={row.id} style={{ fontSize: `${basePx * 0.9}px`, opacity: 0.8 }}>
-            {row.label.trim() !== "" ? `${row.label}：${row.value}` : row.value}
-          </div>
-        ))}
-      </div>
-      <FreeText text={freeText} basePx={basePx} />
-    </div>
-  );
-}
-
-/** クラシック: 情報整理型。罫線を必要最低限。項目が多くても読みやすい。 */
-function ClassicTemplate({
-  rows,
-  freeText,
-  basePx,
-}: {
-  rows: ColophonRenderRow[];
-  freeText: string;
-  basePx: number;
-}) {
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(0,0,0,0.55)",
-        padding: `${basePx * 1.1}px ${basePx * 1.3}px`,
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {rows.map((row, index) => (
-          <div
-            key={row.id}
-            style={{
-              display: "flex",
-              gap: `${basePx * 1}px`,
-              padding: `${basePx * 0.5}px 0`,
-              borderBottom:
-                index === rows.length - 1 ? "none" : "1px solid rgba(0,0,0,0.15)",
-              fontWeight: row.id === "title" ? 600 : 400,
-            }}
-          >
-            <span style={{ minWidth: `${basePx * 6}px`, opacity: 0.7 }}>{row.label}</span>
-            <span style={{ flex: 1 }}>{row.value}</span>
-          </div>
-        ))}
-      </div>
-      {freeText.trim() !== "" && (
-        <>
-          <div
-            style={{
-              borderTop: "1px solid rgba(0,0,0,0.3)",
-              margin: `${basePx * 0.9}px 0`,
-            }}
-          />
-          <FreeText text={freeText} basePx={basePx} />
-        </>
-      )}
     </div>
   );
 }
