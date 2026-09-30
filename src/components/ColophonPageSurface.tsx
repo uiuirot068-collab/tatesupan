@@ -129,6 +129,9 @@ export default function ColophonPageSurface({
   const { rows, freeText } = colophonRenderModel(colophon);
   const titleFallback = title.trim();
   const templatePlan = colophonTemplateLayoutPlan(colophon.templateId);
+  const placementWidthPx =
+    Math.max(paper.widthMm - leftMarginMm - rightMarginMm, 0) * PX_PER_MM;
+  const availableWidthEm = Math.max(placementWidthPx / Math.max(basePx, 0.001), 1);
 
   // ノンブル: 本文の masterPage 設定をそのまま解釈する（本文ノンブルが
   // 非表示なら奥付にも出さない）。物理ページ番号 - 1 = 奥付より前の本文ページ数。
@@ -190,7 +193,6 @@ export default function ColophonPageSurface({
 
   const blockStyle: CSSProperties = {
     position: "relative",
-    width: `${templatePlan.frameWidthRatio * 100}%`,
     maxWidth: "100%",
     maxHeight: "100%",
     color: "#000000",
@@ -236,11 +238,12 @@ export default function ColophonPageSurface({
           <div ref={blockRef} style={blockStyle}>
             <div>
               <ColophonTemplateContent
-              templateId={colophon.templateId}
-              rows={rows}
-              freeText={freeText}
-              basePx={basePx}
+                templateId={colophon.templateId}
+                rows={rows}
+                freeText={freeText}
+                basePx={basePx}
                 titleFallback={titleFallback}
+                availableWidthEm={availableWidthEm}
               />
             </div>
           </div>
