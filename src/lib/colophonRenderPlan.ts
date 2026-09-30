@@ -123,7 +123,6 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
           yEm: y + lineH / 2,
           fontScale: p.freeTextScale,
           align: "center",
-          opacity: 0.85,
         });
         y += lineH;
       }
@@ -185,7 +184,6 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
           yEm: y + freeH / 2,
           fontScale: p.freeTextScale,
           align: "left",
-          opacity: 0.85,
         });
         y += freeH;
       }
@@ -271,7 +269,6 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
         yEm: y + freeH / 2,
         fontScale: p.freeTextScale,
         align: "left",
-        opacity: 0.85,
       });
       y += freeH;
     }
