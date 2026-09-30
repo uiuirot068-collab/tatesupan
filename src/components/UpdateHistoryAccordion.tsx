@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { withBasePath } from "@/lib/basePath";
 import {
@@ -140,6 +141,14 @@ export function UpdateHistoryAccordion() {
             <p className="mt-1 text-center text-[11px] leading-relaxed text-ink/45 dark:text-[#939DAF]">
               マウスホイール・トラックパッド・タッチ操作・キーボードでも移動できます。
             </p>
+            <div className="mt-3 border-t border-ink/10 pt-3 text-center dark:border-[#2A3240]">
+              <Link
+                href="/howto#devlog"
+                className="inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold text-ink underline decoration-ink/30 underline-offset-4 transition hover:decoration-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:text-[#D4DBE7] dark:decoration-[#939DAF]/40"
+              >
+                更新履歴を詳しく見る →
+              </Link>
+            </div>
           </div>
         )}
       </div>
