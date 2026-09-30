@@ -60,7 +60,7 @@ export const TITLE_AND_FILENAME_EXPLANATION =
   TITLE_HELP + " " + EXPORT_FILENAME_HELP;
 
 export const PDF_FILENAME_EXPLANATION =
-  "作品ごとの「保存名」をPDF・JPG・ZIPなどの書き出し名に共通で使えます。半角英数字・_・-が使えます。" +
+  "作品ごとの「保存ファイル名（保存名）」をPDF・JPG・ZIPなどの書き出し名に共通で使えます。半角英数字・_・-が使えます。" +
   "PDFの拡張子.pdfなどは自動で付きます。書き出し画面では今回だけの名前に変更することもできます。";
 
 export const EDITOR_PAGE_TOOLTIP_EXPLANATION = EDITOR_PAGE_HELP;
