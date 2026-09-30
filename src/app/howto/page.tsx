@@ -52,6 +52,12 @@ interface UpdateLogEntry {
 
 const FALLBACK_LOGS: UpdateLogEntry[] = [
   {
+    date: "2026-09-30",
+    type: "update",
+    title: "トップ・エディター・HOW TOを全面改装しました",
+    body: "トップページを、本がない初回状態と本がある継続利用状態の2つに分けて再設計し、本棚・続きを書く導線・次の一冊への導線を強化しました。エディターはMANUSCRIPT／PROOFや設定・オプション・メモ・ヘルプの区分を整理し、初見でも役割が分かりやすい構成へ更新。HOW TOも章立て・目次・早見表・FAQ／小技の折りたたみを整え、モバイル・ダークモードを含めて見やすくしました。IME、Undo／Redo、保存、Preview、書き出しなどの機能仕様は変更していません。",
+  },
+  {
     date: "2026-09-26",
     type: "update",
     title: "画像の72時間保存とリンク切れ対応を改善しました",
