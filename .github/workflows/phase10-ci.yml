@@ -1,0 +1,31 @@
+name: Phase 10 WINDOWED default gate
+
+on:
+  push:
+    branches: [tsp-phase10-windowed-default]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://rgvqquuthovqjqfogfra.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Phase 10 rollout unit tests
+        run: npx vitest run src/lib/editorSurfaceRollout.test.ts src/lib/pagedEditorWindowedFinal.test.ts src/lib/pagedEditorWholeReplace.test.ts
+      - name: Build default (WINDOWED)
+        run: npm run build
+      - name: Build emergency rollback (FULL)
+        env:
+          NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE: FULL
+        run: npm run build
