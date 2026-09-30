@@ -1,0 +1,29 @@
+name: Phase 11 colophon repair gate
+
+on:
+  push:
+    branches: [tsp-phase11-colophon-v2]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://rgvqquuthovqjqfogfra.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Colophon core
+        run: npx vitest run typesetting-v2/core/colophon/index.test.ts
+      - name: Publication colophon suite
+        run: npx vitest run --config typesetting-v2/renderer/publication/vitest.config.ts typesetting-v2/renderer/publication/structuralColophon.test.ts typesetting-v2/renderer/publication/structuralColophonFinalPlacement.test.ts typesetting-v2/renderer/publication/structuralColophonHumanReviewQa.test.ts typesetting-v2/renderer/publication/structuralColophonFrameWidthContract.test.ts typesetting-v2/renderer/publication/structuralColophonFreeTextTypography.test.ts
