@@ -1,6 +1,6 @@
 "use client";
 
-import ColophonPageCard, { type ColophonPageCardProps } from "./ColophonPageCard";
+import ColophonPageSurface, { type ColophonPageSurfaceProps } from "./ColophonPageSurface";
 
 /**
  * Canonical V2 preview entry point for a colophon page.
@@ -10,6 +10,6 @@ import ColophonPageCard, { type ColophonPageCardProps } from "./ColophonPageCard
  * Phase 11 can remove the old "V2 order + LEGACY appearance" split without
  * forking another copy of the four colophon templates.
  */
-export default function V2ColophonPageCard(props: ColophonPageCardProps) {
-  return <ColophonPageCard {...props} rendererSource="v2" />;
+export default function V2ColophonPageCard(props: ColophonPageSurfaceProps) {
+  return <ColophonPageSurface {...props} rendererSource="v2" />;
 }
