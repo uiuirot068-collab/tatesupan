@@ -64,6 +64,7 @@ import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
+import { resolveExportFilenameStem } from "@/utils/exportFilename";
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -477,12 +478,12 @@ export default function TategakiEditor({
   );
 
   const exportSourceTxt = () => {
-    downloadLocalTxt(title || "TateSpun", content, { bom: false, newlines: "lf" });
+    downloadLocalTxt(resolveExportFilenameStem(settings.exportFilenameStem), content, { bom: false, newlines: "lf" });
     setToast("原稿データTXTを書き出しました（UTF-8・BOMなし・LF）。");
   };
 
   const exportReadableTxt = () => {
-    downloadLocalTxt(`${title || "TateSpun"}_整形本文`, serializeReadableTxt(content), { bom: false, newlines: "lf" });
+    downloadLocalTxt(`${resolveExportFilenameStem(settings.exportFilenameStem)}_readable`, serializeReadableTxt(content), { bom: false, newlines: "lf" });
     setToast("整形本文TXTを書き出しました（記法・画像情報なし）。");
   };
 
@@ -1158,6 +1159,10 @@ export default function TategakiEditor({
             ref={editorPaneRef}
             title={title}
             onTitleChange={setTitle}
+            exportFilenameStem={settings.exportFilenameStem ?? ""}
+            onExportFilenameStemChange={(stem) =>
+              setSettings((previous) => ({ ...previous, exportFilenameStem: stem }))
+            }
             content={content}
             onContentChange={setContent}
             workSession={workSession}
@@ -1220,6 +1225,7 @@ export default function TategakiEditor({
               documentKey={workSessionScope}
               getLatestContent={getLatestContent}
               title={title}
+              exportFilenameStem={settings.exportFilenameStem ?? ""}
               settings={settings}
               layout={layout}
               images={images}
