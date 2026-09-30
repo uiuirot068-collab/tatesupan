@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { generateTitlePageText, generateColophonText, ColophonData } from '@/utils/bookStructure';
-import { computeTocItemsWithOffset, generateTocText, TocItem } from '@/utils/tocGenerator';
+import { generateTocText, type TocItem } from '@/utils/tocGenerator';
+import { computeTocItemsWithV2 } from '@/lib/v2Bridge/tocPageNumbers';
+import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewWorkerClient';
+import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
 
 interface BookPartsModalProps {
@@ -15,6 +18,7 @@ interface BookPartsModalProps {
   content: string;
   layout: PageLayout;
   settings: PageSettings;
+  images: Record<string, string>;
   initialTab?: BookPartTab;
 }
 
@@ -43,17 +47,26 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   content,
   layout,
   settings,
+  images,
   initialTab = 'colophon',
 }) => {
   const [activeTab, setActiveTab] = useState<BookPartTab>(initialTab);
 
-  // 目次作成タブ
-  const [tocItems, setTocItems] = useState<TocItem[]>(() =>
-    initialTab === 'toc'
-      ? computeTocItemsWithOffset(content, { charsPerLine: layout.charsPerLine, linesPerPage: layout.linesPerPage }, settings.masterPage.nombreStart)
-      : []
+  // 目次作成タブ — Phase 11: page numbers are owned by the same V2
+  // composition/pageModel Preview and export use. No LEGACY synchronous
+  // paginator fallback is used here.
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [tocDetected, setTocDetected] = useState(false);
+  const [tocLoading, setTocLoading] = useState(false);
+  const [tocError, setTocError] = useState<string | null>(null);
+  const [tocWorker] = useState(
+    () =>
+      new ReusablePreviewWorker(
+        () => new Worker(new URL("../workers/v2Preview.worker.ts", import.meta.url), { type: "module" })
+      )
   );
-  const [tocDetected, setTocDetected] = useState(initialTab === 'toc');
+
+  useEffect(() => () => tocWorker.dispose(), [tocWorker]);
 
   // 扉フォーム
   const [titleAuthor, setTitleAuthor] = useState('');
@@ -71,19 +84,61 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const detectToc = () => {
-    const items = computeTocItemsWithOffset(
-      content,
-      { charsPerLine: layout.charsPerLine, linesPerPage: layout.linesPerPage },
-      settings.masterPage.nombreStart
-    );
-    setTocItems(items);
-    setTocDetected(true);
+  const composeTocCandidate = (combinedContent: string): Promise<V2PreviewLayout> =>
+    new Promise((resolve, reject) => {
+      tocWorker.request(
+        {
+          content: combinedContent,
+          settings,
+          title: currentTitle.trim() || "TateSpun",
+          images: referencedImages(images, combinedContent),
+        },
+        (outcome) => {
+          if (!outcome.ok) {
+            reject(new Error(outcome.message));
+            return;
+          }
+          const candidate = outcome.reply.layout as V2PreviewLayout | undefined;
+          if (!candidate) {
+            reject(new Error("V2目次判定用のページ情報を取得できませんでした。"));
+            return;
+          }
+          resolve(candidate);
+        }
+      );
+    });
+
+  const detectToc = async () => {
+    setTocLoading(true);
+    setTocError(null);
+    try {
+      const items = await computeTocItemsWithV2({
+        content,
+        nombreStart: settings.masterPage.nombreStart,
+        compose: composeTocCandidate,
+      });
+      setTocItems(items);
+      setTocDetected(true);
+    } catch (cause) {
+      setTocItems([]);
+      setTocDetected(false);
+      setTocError(cause instanceof Error ? cause.message : "目次ページ番号の判定に失敗しました。");
+    } finally {
+      setTocLoading(false);
+    }
   };
 
+  useEffect(() => {
+    if (initialTab === 'toc') void detectToc();
+    // The modal is mounted fresh for each open. Re-running on every object
+    // identity change would restart V2 composition while the user edits the
+    // detected numbers manually.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleOpenTocTab = () => {
-    detectToc();
     setActiveTab('toc');
+    void detectToc();
   };
 
   const handleTocPageNumberChange = (index: number, pageNumber: number) => {
@@ -256,14 +311,22 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
               </p>
               <button
                 type="button"
-                onClick={detectToc}
-                className="mt-2 block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                onClick={() => void detectToc()}
+                disabled={tocLoading}
+                className="mt-2 block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-wait disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
               >
-                🔄 再検出
+                {tocLoading ? '⏳ V2でページ番号を判定中…' : '🔄 再検出'}
               </button>
             </div>
 
-            {tocDetected && tocItems.length === 0 ? (
+            {tocError && (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-left text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+                V2でページ番号を判定できませんでした：{tocError}
+              </p>
+            )}
+            {tocLoading && !tocDetected ? (
+              <p className="py-4 text-left text-gray-400">現在の組版で目次ページ番号を計算しています…</p>
+            ) : tocDetected && tocItems.length === 0 ? (
               <p className="py-4 text-left text-gray-400">
                 見出しが見つかりませんでした。本文に「# 見出し」または「■
                 見出し」の形式で見出しを追加してください。
@@ -312,7 +375,8 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
                     ? handleInsertTitlePage
                     : handleInsertToc
             }
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+            disabled={activeTab === 'toc' && (tocLoading || !!tocError || !tocDetected)}
+            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg"
           >
             {activeTab === 'colophon-h'
               ? '奥付（横）の設定を開く'
@@ -320,7 +384,9 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
                 ? '本文の末尾に挿入'
                 : activeTab === 'title'
                   ? '本文の先頭に挿入'
-                  : '目次を挿入'}
+                  : tocLoading
+                    ? 'ページ番号を判定中…'
+                    : '目次を挿入'}
           </button>
         </div>
       </div>
