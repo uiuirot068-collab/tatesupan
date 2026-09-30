@@ -52,10 +52,10 @@ import {
 } from "@/utils/exportCapture";
 import { withBasePath } from "@/lib/basePath";
 import {
-  buildDefaultPdfFilenameStem,
-  buildPageJpgFileName,
+  buildPageJpgFileNameFromStem,
   buildPdfFileNameFromStem,
-  buildZipFileName,
+  buildZipFileNameFromStem,
+  resolveExportFilenameStem,
   sanitizePdfFilenameStem,
 } from "@/utils/exportFilename";
 import type { ImageRecord } from "@/lib/db";
@@ -460,8 +460,10 @@ interface PreviewPaneProps {
   content: string;
   /** Phase 9: the open document (TategakiEditor's work-session scope); a change forces a full Preview snapshot. */
   documentKey?: string | null;
-  /** 作品タイトル。書き出しファイル名の生成に使う（空なら既定のフォールバック名）。 */
+  /** 作品タイトル。プレビュー本文用。 */
   title?: string;
+  /** 作品ごとの標準書き出し保存名（拡張子なし）。 */
+  exportFilenameStem?: string;
   settings: PageSettings;
   layout: PageLayout;
   images: Record<string, string>;
@@ -543,6 +545,7 @@ function PreviewPane({
   content,
   documentKey,
   title = "",
+  exportFilenameStem = "",
   settings,
   layout,
   images,
@@ -627,6 +630,7 @@ function PreviewPane({
     settings.columnCount,
   ]);
   const listPages: TategakiPage[] = v2PageModel ? v2PageModel.overlayPages : pages;
+  const resolvedExportFilenameStem = resolveExportFilenameStem(exportFilenameStem);
 
   // Phase 4 broken-image warnings (lib/imageWarningLifecycle.ts): the TECHNICAL
   // state (`unresolvedImageIds`, owned by the Editor) and the user's
@@ -1543,7 +1547,7 @@ function PreviewPane({
     indices
       .map((index): ExportPageItem | null => {
         const el = pageElementsRef.current.get(index);
-        return el ? { element: el, fileName: buildPageJpgFileName(title, index + 1) } : null;
+        return el ? { element: el, fileName: buildPageJpgFileNameFromStem(resolvedExportFilenameStem, index + 1) } : null;
       })
       .filter((item): item is ExportPageItem => item != null);
 
@@ -1673,7 +1677,7 @@ function PreviewPane({
         physicalIndices.length,
         readPagesAhead(pages, physicalIndices),
         "Shippori Mincho",
-        (pageNumber) => buildPageJpgFileName(title, filePageNumbers[pageNumber - 1]),
+        (pageNumber) => buildPageJpgFileNameFromStem(resolvedExportFilenameStem, filePageNumbers[pageNumber - 1]),
         mode,
         undefined,
         {
@@ -1687,7 +1691,7 @@ function PreviewPane({
         output.forEach((page) => zip.file(page.fileName, page.blob));
         const blob = await zip.generateAsync({ type: "blob" });
         await waitForExportPermission(signal);
-        saveAs(blob, buildZipFileName(title));
+        saveAs(blob, buildZipFileNameFromStem(resolvedExportFilenameStem));
       } else {
         for (const page of output) {
           await waitForExportPermission(signal);
@@ -1731,7 +1735,7 @@ function PreviewPane({
     try {
       await exportPageToJpg(
         el,
-        buildPageJpgFileName(title, index + 1),
+        buildPageJpgFileNameFromStem(resolvedExportFilenameStem, index + 1),
         resolveJpgScale(el),
         resolvePrintJpgGeometry(el),
         signal
@@ -1762,7 +1766,7 @@ function PreviewPane({
     try {
       await exportPageToJpg(
         el,
-        buildPageJpgFileName(title, colophonPhysicalPageNumber),
+        buildPageJpgFileNameFromStem(resolvedExportFilenameStem, colophonPhysicalPageNumber),
         resolveJpgScale(el),
         resolvePrintJpgGeometry(el),
         signal
@@ -1840,7 +1844,7 @@ function PreviewPane({
     try {
       await exportPagesToZip(
         items,
-        buildZipFileName(title),
+        buildZipFileNameFromStem(resolvedExportFilenameStem),
         (current, total) => setExportProgress({ current, total }),
         resolveJpgScale(items[0].element),
         resolvePrintJpgGeometry(items[0].element),
@@ -1868,7 +1872,7 @@ function PreviewPane({
   // 保存ファイル名（stemのみ、`.pdf`は付与しない）。新しいダイアログ
   // セッションを開くたびに今日の日付でリセットする——同一モーダルを
   // 開いたままの対象/出力ラジオ変更ではリセットしない（TSP-PDF-SAFE-FILENAME-014 I）。
-  const [pdfFilenameStem, setPdfFilenameStem] = useState(() => buildDefaultPdfFilenameStem());
+  const [pdfFilenameStem, setPdfFilenameStem] = useState(() => resolvedExportFilenameStem);
   // Unified export preflight foundation. The report is scoped to what the
   // current PDF setup would actually export: selecting only healthy pages
   // therefore clears an image blocker without hiding the document-level warning.
@@ -1915,7 +1919,7 @@ function PreviewPane({
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
-    setPdfFilenameStem(buildDefaultPdfFilenameStem());
+    setPdfFilenameStem(resolvedExportFilenameStem);
     setOpenPdfModeHelp(null);
     setPdfPreflightOpen(false);
     setPdfPreflightReviewedFingerprint(null);
