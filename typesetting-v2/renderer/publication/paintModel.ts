@@ -272,6 +272,9 @@ export interface PublicationDocument {
   // completion, Step 2D) threads the full object so
   // `respectGutter`/`respectVerticalMargins` reach Publication too.
   colophonPlacement?: ColophonPlacement;
+  /** Editor-owned colophon visual choices carried to Publication paint. */
+  colophonTemplateId?: "standard" | "center" | "minimal" | "classic";
+  colophonFontSizePt?: number;
 }
 
 interface PaintLookup {
@@ -519,7 +522,11 @@ export function buildPublicationDocument(
   // caller) leaves `colophonPages` undefined, byte-identical to before
   // this parameter existed.
   colophonUnits?: LogicalUnit[],
-  colophonSource?: string
+  colophonSource?: string,
+  colophonVisual?: {
+    templateId?: "standard" | "center" | "minimal" | "classic";
+    fontSizePt?: number | null;
+  }
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
   const lookup = createPaintLookup(units, source);
@@ -557,5 +564,9 @@ export function buildPublicationDocument(
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),
     ...(document.colophon?.placement ? { colophonPlacement: document.colophon.placement } : {}),
+    ...(colophonVisual?.templateId ? { colophonTemplateId: colophonVisual.templateId } : {}),
+    ...(typeof colophonVisual?.fontSizePt === "number"
+      ? { colophonFontSizePt: colophonVisual.fontSizePt }
+      : {}),
   };
 }
