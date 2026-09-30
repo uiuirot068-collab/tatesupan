@@ -184,7 +184,20 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   };
 
   const model = colophonComposition
-    ? buildPublicationDocument("editor-doc", input.title, document, units, source, ctx, colophonComposition.units, colophonComposition.source)
+    ? buildPublicationDocument(
+        "editor-doc",
+        input.title,
+        document,
+        units,
+        source,
+        ctx,
+        colophonComposition.units,
+        colophonComposition.source,
+        {
+          templateId: input.settings.colophon.templateId,
+          fontSizePt: input.settings.colophon.fontSizePt,
+        }
+      )
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);
 
   return {
