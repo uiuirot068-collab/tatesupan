@@ -10,12 +10,16 @@ export type EditorSurfaceRolloutMode = "FULL" | "WINDOWED";
  * would force an all-or-nothing rollout of two unrelated risks.
  *
  * Next inlines NEXT_PUBLIC variables at build time, so static hosting needs
- * no server or remote flag service. Unset/unknown values fail closed to
- * FULL (today's single-textarea editor) for immediate rollback.
+ * no server or remote flag service.
+ *
+ * Phase 10: WINDOWED is the product default when the variable is unset.
+ * Explicit FULL remains the emergency rollback. Unknown non-empty values fail
+ * closed to FULL rather than silently opting into WINDOWED.
  */
 export function resolveEditorSurfaceRolloutMode(
   configured: string | undefined = process.env.NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE
 ): EditorSurfaceRolloutMode {
+  if (configured === undefined || configured.trim() === "") return "WINDOWED";
   return configured === "WINDOWED" ? "WINDOWED" : "FULL";
 }
 
