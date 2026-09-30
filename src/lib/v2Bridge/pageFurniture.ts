@@ -38,7 +38,8 @@ function withFurniture(page: CanonicalPage, header: CanonicalPage["header"], fol
 export function applyEditorPageOverrides(
   document: CanonicalDocument,
   headerSettings: HeaderSettings | undefined,
-  pageOverrides: Record<number, PageOverride> | undefined
+  pageOverrides: Record<number, PageOverride> | undefined,
+  syntheticLeadingBodyPages = 0
 ): CanonicalDocument {
   const bodyPages = document.pages.slice();
   const colophonPages = document.colophon ? document.colophon.pages.slice() : undefined;
@@ -46,9 +47,14 @@ export function applyEditorPageOverrides(
     const pages = ref.kind === "body" ? bodyPages : colophonPages;
     if (!pages) return;
     const page = pages[ref.index];
-    const override = ref.kind === "body" ? pageOverrides?.[ref.index + 1] : undefined;
-    const header = headerSettings ? composeHeaderForPage(physicalIndex, headerSettings, headerOverrideFromEditor(override)) : page.header;
-    const folio = override?.hideNombre ? undefined : page.folio;
+    const isSyntheticToc = ref.kind === "body" && ref.index < syntheticLeadingBodyPages;
+    const override = ref.kind === "body" && !isSyntheticToc ? pageOverrides?.[ref.index - syntheticLeadingBodyPages + 1] : undefined;
+    const header = isSyntheticToc
+      ? undefined
+      : headerSettings
+        ? composeHeaderForPage(physicalIndex, headerSettings, headerOverrideFromEditor(override))
+        : page.header;
+    const folio = isSyntheticToc || override?.hideNombre ? undefined : page.folio;
     pages[ref.index] = withFurniture(page, header, folio);
   });
   return {

@@ -102,7 +102,6 @@ import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
 import { bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
 import { readPagesAhead, V2ExportWorkerClient, type ExportPageStream } from "@/lib/v2Bridge/exportWorkerClient";
-import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
 
 import { imageMaxBoxForTextArea } from "@/lib/imageGeometry";
 import {

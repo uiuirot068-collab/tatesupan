@@ -165,7 +165,20 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
     colophonPagePosition: colophonEnabled ? buildV2ColophonPagePosition(input.settings.colophon) : undefined,
     colophonPlacement: colophonEnabled ? buildV2ColophonPlacement(input.settings.colophon) : undefined,
   });
-  const document = applyEditorPageOverrides(composed, headerSettings, input.settings.pageOverrides);
+  const syntheticLeadingBodyPages = tocPrefix.length === 0
+    ? 0
+    : composed.pages.findIndex((page) =>
+        page.columns.some((column) =>
+          column.lines.some((line) =>
+            line.placedUnits.some((placed) => {
+              const endIndex = Math.min(placed.sourceSpan.end, bodySourceMap.rawEnd.length) - 1;
+              return endIndex >= 0 && bodySourceMap.rawEnd[endIndex] > tocPrefix.length;
+            })
+          )
+        )
+      );
+  const tocPageCount = syntheticLeadingBodyPages < 0 ? composed.pages.length : syntheticLeadingBodyPages;
+  const document = applyEditorPageOverrides(composed, headerSettings, input.settings.pageOverrides, tocPageCount);
 
   const ctx: PublicationRenderContext = {
     linePitchTicks: layoutSettings.linePitchTicks,
