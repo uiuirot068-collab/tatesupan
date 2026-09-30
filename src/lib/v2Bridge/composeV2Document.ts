@@ -196,6 +196,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
         {
           templateId: input.settings.colophon.templateId,
           fontSizePt: input.settings.colophon.fontSizePt,
+          fontFamily: input.settings.colophon.fontFamily,
         }
       )
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);
