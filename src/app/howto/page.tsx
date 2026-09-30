@@ -10,6 +10,7 @@ import {
   HOWTO_IMAGES,
   EDITOR_PAGE_EXPLANATION_TITLE,
   EDITOR_PAGE_EXPLANATION_BODY,
+  TITLE_AND_FILENAME_EXPLANATION,
   PDF_FILENAME_EXPLANATION,
   resolveAffiliateFooterConfig,
 } from "@/lib/howtoContent";
@@ -928,6 +929,7 @@ export default function HowToPage() {
                   <li>断ち落としサイズ（塗り足し3mm込み・トンボなし）</li>
                   <li>入稿用フルサイズ（トンボ＋塗り足し3mm付き）</li>
                 </ul>
+                <p><strong>作品タイトルと保存名</strong><br />{TITLE_AND_FILENAME_EXPLANATION}</p>
                 <p data-copy-id="TEXT_SECTION_15_BODY_02">{PDF_FILENAME_EXPLANATION}</p>
                 <p>PDFの解像度・フォント埋め込み・縦組み記号のβ版注意点は、このページ下部の<a href="#faq">FAQ</a>にまとめています。</p>
                 <p>デスクトップ版では、出力中にEscを押すと出力を中断できます。「書き出し途中にミスに気付いたけれど、出力が長い……」というときにご活用ください。</p>
