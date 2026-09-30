@@ -11,6 +11,7 @@ import {
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import { NombreOverlay } from "./PageCard";
 import { ColophonTemplateContent } from "./ColophonTemplateContent";
+import { colophonTemplateLayoutPlan } from "@/lib/colophonLayoutPlan";
 
 /**
  * Phase 11 shared product surface — 本文とは完全に独立した「横書き専用の奥付ページ」。
@@ -127,6 +128,7 @@ export default function ColophonPageSurface({
 
   const { rows, freeText } = colophonRenderModel(colophon);
   const titleFallback = title.trim();
+  const templatePlan = colophonTemplateLayoutPlan(colophon.templateId);
 
   // ノンブル: 本文の masterPage 設定をそのまま解釈する（本文ノンブルが
   // 非表示なら奥付にも出さない）。物理ページ番号 - 1 = 奥付より前の本文ページ数。
@@ -166,7 +168,6 @@ export default function ColophonPageSurface({
     placementAreaStyle.left,
     placementAreaStyle.right,
     placementAreaStyle.bottom,
-    placement.horizontal,
     placement.vertical,
     fontsNonce,
   ]);
@@ -189,13 +190,13 @@ export default function ColophonPageSurface({
 
   const blockStyle: CSSProperties = {
     position: "relative",
+    width: `${templatePlan.frameWidthRatio * 100}%`,
     maxWidth: "100%",
     maxHeight: "100%",
     color: "#000000",
     fontFamily,
     fontSize: `${basePx}px`,
-    lineHeight: 1.8,
-
+    lineHeight: templatePlan.lineHeight,
   };
 
   return (
