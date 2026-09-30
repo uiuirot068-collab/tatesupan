@@ -25,7 +25,10 @@ const howtoPageSrc = readFileSync(
   path.join(repoRoot, "src/app/howto/page.tsx"),
   "utf8"
 );
-const homePageSrc = readFileSync(path.join(repoRoot, "src/app/page.tsx"), "utf8");
+const homePageSrc =
+  readFileSync(path.join(repoRoot, "src/app/page.tsx"), "utf8") +
+  "\n" +
+  readFileSync(path.join(repoRoot, "src/app/HomeClient.tsx"), "utf8");
 
 describe("howto route constant", () => {
   it("is /howto (no trailing slash, no basePath baked in)", () => {
