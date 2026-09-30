@@ -1334,6 +1334,7 @@ export default function TategakiEditor({
           content={content}
           layout={layout}
           settings={settings}
+          images={images}
           initialTab={bookPartsInitialTab}
         />
       )}
