@@ -1,3 +1,5 @@
+import { EDITOR_PAGE_HELP, EXPORT_FILENAME_HELP, TITLE_HELP } from "./editorTerminology";
+
 /**
  * TSP-HOWTO-BETA-016 — shared content for the `/howto` beta onboarding page.
  *
@@ -54,9 +56,14 @@ export const EDITOR_PAGE_EXPLANATION_BODY =
  * field (2baaed1 feat(pdf): add safe export filename field). No mention of
  * the old post-export filename notice.
  */
+export const TITLE_AND_FILENAME_EXPLANATION =
+  TITLE_HELP + " " + EXPORT_FILENAME_HELP;
+
 export const PDF_FILENAME_EXPLANATION =
-  "PDFの書き出し時は「保存ファイル名」を指定できます。半角英数字で入力してください（日本語・記号・全角文字は使えません）。" +
-  "拡張子の.pdfは自動で付きます。入稿先の印刷所によっては別途ファイル名のルールが定められている場合があるため、あわせてご確認ください。";
+  "作品ごとの「保存名」をPDF・JPG・ZIPなどの書き出し名に共通で使えます。半角英数字・_・-が使えます。" +
+  "PDFの拡張子.pdfなどは自動で付きます。書き出し画面では今回だけの名前に変更することもできます。";
+
+export const EDITOR_PAGE_TOOLTIP_EXPLANATION = EDITOR_PAGE_HELP;
 
 /**
  * TSP-RC-AFFILIATE-FOOTER-001 — HOW TO's bottom "お買い物リンク" section.
