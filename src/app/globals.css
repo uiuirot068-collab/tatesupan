@@ -248,6 +248,36 @@ html[data-theme="dark"] [data-nonempty-shell] > header .hover\:text-gray-800:hov
   color: #d4dbe7;
 }
 
+/* Phase 2: the shared Header in dark theme on every page (the rules above
+   only covered the non-empty Home shell): its static gray utilities mapped
+   to the same readable tones. */
+html[data-theme="dark"] header[data-app-header] .text-gray-800 {
+  color: #d4dbe7;
+}
+html[data-theme="dark"] header[data-app-header] .text-gray-700,
+html[data-theme="dark"] header[data-app-header] .text-gray-600,
+html[data-theme="dark"] header[data-app-header] .text-gray-500 {
+  color: #939daf;
+}
+html[data-theme="dark"] header[data-app-header] .text-gray-300 {
+  color: #3a4658;
+}
+html[data-theme="dark"] header[data-app-header] .border-gray-300 {
+  border-color: #3a4658;
+}
+html[data-theme="dark"] header[data-app-header] .hover\:bg-gray-100:hover {
+  background-color: #1d2430;
+}
+
+/* Phase 2: a visible, calm keyboard focus for every button / link / tab /
+   disclosure (ink, not gold: gold would fall under 3:1). Zero specificity
+   via :where, so any component's own focus style still wins; text fields
+   keep their own. */
+:where(button, a[href], summary, [role="tab"], [role="button"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 72%, transparent);
+  outline-offset: 2px;
+}
+
 /* NON-EMPTY home Bookshelf tablist (Black theme): page.tsx's tab pill uses
    --ink-derived utilities that read as too faint on the new near-black
    surface. Targeted via the existing role/aria attributes rather than new

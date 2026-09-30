@@ -99,7 +99,8 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
 
   return (
     <header
-      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : TABLET_COMPACT_SHELL}`}
+      data-app-header={isHome ? 'home' : 'editor'}
+      className={`mx-0 my-0 px-3 py-2 sm:mx-4 sm:my-2 sm:px-4 sm:py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm dark:bg-[#171C26] dark:border-[#2A3240] dark:shadow-none flex flex-wrap items-center justify-between gap-y-2 ${isHome ? 'min-[780px]:flex-nowrap min-[780px]:gap-x-6' : TABLET_COMPACT_SHELL}`}
     >
       {isHome && (
         <div className="flex w-full flex-col items-center gap-2 min-[780px]:hidden">
@@ -185,7 +186,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
               <button
                 type="button"
                 onClick={() => setIsProjectModalOpen(true)}
-                className="shrink-0 whitespace-nowrap rounded-full bg-[#c5a059] px-2 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-[#b38f48]"
+                className="shrink-0 whitespace-nowrap rounded-full bg-transparent px-2 py-1 text-[11px] font-semibold text-[#7a5f2c] ring-1 ring-inset ring-[#c5a059] transition-colors hover:bg-[#c5a059]/10 dark:text-[#D9C28A]"
               >
                 保存作品一覧
               </button>
@@ -326,7 +327,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
           <button
             type="button"
             onClick={() => setIsProjectModalOpen(true)}
-            className="shrink-0 whitespace-nowrap bg-[#c5a059] hover:bg-[#b38f48] text-white font-medium text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 rounded-full shadow-sm transition-colors md:max-[905px]:px-2.5"
+            className="shrink-0 whitespace-nowrap bg-transparent hover:bg-[#c5a059]/10 text-[#7a5f2c] ring-1 ring-inset ring-[#c5a059] font-semibold text-xs px-2.5 py-1 sm:text-sm sm:px-3 sm:py-1.5 rounded-full transition-colors dark:text-[#D9C28A] md:max-[905px]:px-2.5"
           >
             保存作品一覧
           </button>
@@ -347,7 +348,11 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
               setAuthModalNotice(null);
               setIsAuthModalOpen(true);
             }}
-            className="whitespace-nowrap flex-shrink-0 rounded bg-[#c5a059] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#b38f48] md:max-[905px]:px-3"
+            className={`whitespace-nowrap flex-shrink-0 rounded px-4 py-1.5 text-sm font-semibold md:max-[905px]:px-3 ${
+              isHome
+                ? 'bg-[#c5a059] text-white hover:bg-[#b38f48]'
+                : 'bg-transparent text-[#1f2a44] ring-1 ring-inset ring-[#1f2a44]/35 hover:bg-[#1f2a44]/[0.06] dark:text-[#D4DBE7] dark:ring-[#3A4658] dark:hover:bg-[#1D2430]'
+            }`}
           >
             ログイン / 会員登録
           </button>

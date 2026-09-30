@@ -1152,7 +1152,7 @@ export default function TategakiEditor({
               "--editor-w": isPreviewCollapsed ? "auto" : `${editorWidthPercent}%`,
             } as React.CSSProperties
           }
-          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-lg md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
+          className={`@container flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-base shadow-sm md:flex-none ${mobileView !== "editor" ? "max-md:hidden" : ""} ${focusMode || isPreviewCollapsed ? "md:w-auto md:grow" : "md:w-[var(--editor-w)]"}`}
         >
           <EditorPane
             ref={editorPaneRef}

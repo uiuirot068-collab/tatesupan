@@ -56,12 +56,12 @@
   border: 1px solid var(--home-line);
   border-radius: 2px 28px 2px 2px;
   background: rgba(255, 253, 248, .7);
-  box-shadow: 0 28px 80px rgba(34, 35, 31, .08);
+  box-shadow: 0 18px 50px rgba(34, 35, 31, .05);
 }
 
 [data-theme="dark"] .home-v2-hero {
   background: rgba(18, 24, 33, .76);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .22);
+  box-shadow: none;
 }
 
 .home-v2-hero::before,
@@ -131,26 +131,16 @@
   box-shadow: 0 11px 0 rgba(23, 36, 58, .12);
 }
 
+/* Demo / HOW TO on the first view: two ruled entries, not boxed cards. */
 .home-v2-choice {
   position: relative;
-  overflow: hidden;
-  transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
-}
-
-.home-v2-choice::after {
-  position: absolute;
-  right: -14px;
-  bottom: -24px;
-  width: 64px;
-  height: 64px;
-  border: 1px solid var(--home-line);
-  border-radius: 50%;
-  content: "";
+  border-bottom: 1px solid var(--home-line);
+  transition: transform .2s ease, background-color .2s ease;
 }
 
 .home-v2-choice:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--home-shelf) 50%, transparent);
+  background: color-mix(in srgb, var(--home-ink) 4%, transparent);
+  transform: translateX(2px);
 }
 
 .home-v2-process {
@@ -192,20 +182,230 @@
   transform: translateX(-50%);
 }
 
-.home-v2-action-card {
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 12px 30px rgba(26, 31, 45, .045);
+/* ---- Phase 2 editorial system -------------------------------------------
+   One label style for every section (English small caps + a short gold
+   rule), hairlines instead of boxes, numbered index rows, and the shelf as
+   the first view for a returning writer. Key colors unchanged: ink, gold
+   and the shelf gray are the existing --home-* tokens. */
+
+.home-v2-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  color: var(--home-shelf);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .24em;
+  text-transform: uppercase;
 }
 
-.home-v2-action-card::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 36px;
-  height: 3px;
-  background: var(--home-shelf);
+.home-v2-label::before {
+  width: 22px;
+  height: 1px;
+  background: var(--home-gold);
   content: "";
+}
+
+.home-v2-label.justify-center { display: flex; }
+
+.home-v2-shelf-head {
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom: 1px solid var(--home-line);
+}
+
+/* A faint oversized word behind the shelf title: texture, not content. */
+.home-v2-watermark {
+  position: absolute;
+  top: -.12em;
+  right: 0;
+  z-index: -1;
+  color: color-mix(in srgb, var(--home-ink) 3.5%, transparent);
+  font-family: var(--font-serif);
+  font-size: clamp(56px, 11vw, 132px);
+  font-weight: 500;
+  letter-spacing: .06em;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .home-v2-watermark { display: none; }
+}
+
+.home-v2-quiet-link {
+  border-radius: 999px;
+  padding: .45rem .8rem;
+  color: color-mix(in srgb, var(--home-ink) 78%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+.home-v2-quiet-link:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--home-ink) 6%, transparent);
+  color: var(--home-ink);
+}
+
+.home-v2-quiet-link:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+/* The shelf sits on the page, between hairlines -- not inside a card. */
+.home-v2-shelf-stage {
+  border-top: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--home-line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--home-paper-deep) 45%, transparent), transparent 70%);
+}
+
+/* 次の一冊: an empty spine waiting on the shelf. */
+.home-v2-next-spine {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  width: 44px;
+  min-height: 112px;
+  flex-shrink: 0;
+  border: 1px dashed color-mix(in srgb, var(--home-gold) 75%, transparent);
+  border-radius: 3px 3px 2px 2px;
+  background: color-mix(in srgb, var(--home-gold) 7%, transparent);
+  color: color-mix(in srgb, var(--home-ink) 80%, transparent);
+  transition: transform .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.home-v2-next-spine-label {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  letter-spacing: .18em;
+  writing-mode: vertical-rl;
+}
+
+.home-v2-next-spine:hover:not(:disabled) {
+  border-style: solid;
+  background: color-mix(in srgb, var(--home-gold) 14%, transparent);
+  transform: translateY(-3px);
+}
+
+.home-v2-next-spine:disabled { opacity: .5; }
+
+/* Numbered index rows (recent works). */
+.home-v2-index-row {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 1rem;
+  padding: .85rem .25rem;
+  transition: background-color .2s ease;
+}
+
+.home-v2-index-row:hover {
+  background: color-mix(in srgb, var(--home-ink) 4%, transparent);
+}
+
+.home-v2-index-no {
+  flex-shrink: 0;
+  color: var(--home-gold);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.home-v2-index-arrow {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--home-ink) 55%, transparent);
+  font-size: 11px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.home-v2-index-row:hover .home-v2-index-arrow,
+.home-v2-index-row:focus-visible .home-v2-index-arrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* 本棚からできること: three numbered entries between hairlines. */
+.home-v2-action-index {
+  border-top: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--home-line);
+}
+
+.home-v2-action-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: .35rem;
+  padding: 1.4rem 1.25rem 1.6rem;
+  color: var(--home-ink);
+  text-align: left;
+  transition: background-color .2s ease;
+}
+
+.home-v2-action-card + .home-v2-action-card {
+  border-top: 1px solid var(--home-line);
+}
+
+@media (min-width: 640px) {
+  .home-v2-action-card { min-height: 150px; }
+  .home-v2-action-card + .home-v2-action-card {
+    border-top: 0;
+    border-left: 1px solid var(--home-line);
+  }
+}
+
+.home-v2-action-card:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--home-ink) 4%, transparent);
+}
+
+.home-v2-action-card:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.home-v2-action-arrow {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.3rem;
+  color: var(--home-gold);
+  transition: transform .2s ease;
+}
+
+.home-v2-action-card:hover:not(:disabled) .home-v2-action-arrow {
+  transform: translateX(3px);
+}
+
+/* The returning page's brand band: an unframed colophon, not a second hero. */
+.home-v2-about {
+  position: relative;
+  border-top: 1px solid var(--home-line);
+  background: color-mix(in srgb, var(--home-paper-deep) 35%, transparent);
+}
+
+[data-home-v2-page] :where(a, button, summary, [role="tab"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--home-ink) 72%, transparent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-v2-next-spine,
+  .home-v2-index-arrow,
+  .home-v2-action-arrow,
+  .home-v2-choice,
+  .home-v2-primary {
+    transition: none;
+  }
+  .home-v2-next-spine:hover:not(:disabled),
+  .home-v2-choice:hover,
+  .home-v2-primary:hover {
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

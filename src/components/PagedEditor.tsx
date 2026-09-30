@@ -2125,7 +2125,7 @@ function PagedEditorInner(
           aria-label="前の編集ページへ移動"
           disabled={safePageIndex === 0}
           onClick={() => goToPage(safePageIndex - 1)}
-          className="flex min-h-7 min-w-7 items-center justify-center rounded border border-ink/20 text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex min-h-7 min-w-7 items-center justify-center rounded border border-ink/20 text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
         >
           <span aria-hidden="true">←</span>
         </button>
@@ -2137,7 +2137,7 @@ function PagedEditorInner(
           aria-label="次の編集ページへ移動"
           disabled={safePageIndex === pageCount - 1}
           onClick={() => goToPage(safePageIndex + 1)}
-          className="flex min-h-7 min-w-7 items-center justify-center rounded border border-ink/20 text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex min-h-7 min-w-7 items-center justify-center rounded border border-ink/20 text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
         >
           <span aria-hidden="true">→</span>
         </button>
@@ -2184,7 +2184,7 @@ function PagedEditorInner(
           disabled={!canForceSplitAtCaret}
           onClick={forceSplitAtCaret}
           title="現在のカーソル位置で編集ページを区切ります。原稿や印刷ページには影響しません。"
-          className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent sm:px-2"
+          className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent sm:px-2"
         >
           ここで区切る
         </button>
@@ -2203,7 +2203,7 @@ function PagedEditorInner(
             disabled={!canMergeWithPreviousPage}
             onClick={mergeWithPreviousPage}
             title={mergeWithPreviousPageTitle}
-            className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent sm:px-2"
+            className="whitespace-nowrap rounded-full border border-ink/20 px-1.5 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent sm:px-2"
           >
             前のページとつなぐ
           </button>

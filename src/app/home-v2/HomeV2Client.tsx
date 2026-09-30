@@ -204,6 +204,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       ? cloudResult
       : null;
   const localProjectCount = documents?.filter((doc) => !doc.isSample).length ?? 0;
+  // Display only (the shelf's own order and data are untouched): the works
+  // this browser holds, most recently written first, for the shelf's
+  // "RECENTLY" line and its count / last-written date.
+  const recentDocuments = useMemo(
+    () => (documents ?? []).filter((doc) => !doc.isSample).sort((a, b) => b.updatedAt - a.updatedAt),
+    [documents]
+  );
+  const formatShelfDate = (time: number) =>
+    new Date(time).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
   const cloudIsResolved = !!visibleCloudResult && !visibleCloudResult.error;
   const showEmptyState =
     documents !== undefined &&
@@ -236,7 +245,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     return (
       <section
         data-home-brand-panel={mode}
-        className={`home-v2-hero w-full overflow-hidden ${onboarding ? "max-w-[980px] px-6 py-10 sm:px-12 sm:py-14 lg:px-16 lg:py-16" : "px-7 py-9 sm:px-10 sm:py-10"}`}
+        className={`w-full overflow-hidden ${onboarding ? "home-v2-hero max-w-[980px] px-6 py-10 sm:px-12 sm:py-14 lg:px-16 lg:py-16" : "home-v2-about px-5 py-14 sm:px-[clamp(24px,6vw,72px)] sm:py-16"}`}
         aria-labelledby={`tatespun-home-title-${mode}`}
       >
         <div className={`relative z-[1] grid items-center ${onboarding ? "grid-cols-1 gap-8 min-[720px]:grid-cols-[minmax(0,1fr)_minmax(220px,290px)] min-[720px]:gap-12" : "grid-cols-[minmax(0,1fr)_80px] gap-5 sm:grid-cols-[minmax(0,1fr)_112px]"}`}>
@@ -254,16 +263,16 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               <li>原稿を持ち込む</li><li aria-hidden="true">→</li><li>本の形で確認する</li><li aria-hidden="true">→</li><li>PDF / JPGで持ち帰る</li><li aria-hidden="true">→</li><li>入稿前に確認する</li>
             </ol>
             {onboarding && (
-              <div data-home-onboarding-actions="" className="mt-5 grid max-w-2xl gap-3">
-                <button type="button" onClick={handleCreate} disabled={creating} className="home-v2-primary w-fit rounded-sm bg-ink px-8 py-3.5 text-sm font-semibold tracking-[0.04em] text-base transition-all hover:opacity-95 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品をつくる <span aria-hidden="true">→</span></button>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Link data-home-demo-card="" href="/editor?demo=1" className="home-v2-choice group block border border-ink/20 bg-white/40 px-5 py-4 text-ink hover:bg-white/75 dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">TRY · 03 MIN</span><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">デモを始める →</span></Link>
+              <div data-home-onboarding-actions="" className="mt-7 grid max-w-2xl gap-5">
+                <button type="button" onClick={handleCreate} disabled={creating} className="home-v2-primary w-fit rounded-sm bg-ink px-8 py-3.5 text-sm font-semibold tracking-[0.04em] text-base transition-all hover:opacity-95 disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">最初の一冊を書きはじめる <span aria-hidden="true">→</span></button>
+                <div className="grid border-t border-[color:var(--home-line)] sm:grid-cols-2 sm:gap-6">
+                  <Link data-home-demo-card="" href="/editor?demo=1" className="home-v2-choice group block px-1 py-4 text-ink dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">TRY · 03 MIN</span><strong className="block text-sm">3分でわかる TateSpun おためしデモ</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">実際のエディターを触りながら、基本操作を順番に試せます。</span><span data-home-demo-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">デモを始める →</span></Link>
                   {/* TSP-HOWTO-BETA-016B: a first-time user needs two equally
                       obvious paths — try the demo, or read HOW TO — not a
                       demo block plus a small text link. Same visual family
                       as the Demo card above, not a 4th quick-action card
                       (that grid is restored to its original 3 cards). */}
-                  <Link data-home-howto-card="" href="/howto" className="home-v2-choice group block border border-ink/20 bg-white/40 px-5 py-4 text-ink hover:bg-white/75 dark:border-[#3A4658] dark:bg-[#171C26] dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">READ · GUIDE</span><strong className="block text-sm">TateSpunの使い方を見る</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">原稿を持ち込んで、本の形を確認し、書き出すまでの流れを画像つきで紹介します。</span><span data-home-howto-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">HOW TOを見る →</span></Link>
+                  <Link data-home-howto-card="" href="/howto" className="home-v2-choice group block px-1 py-4 text-ink dark:text-[#D4DBE7]"><span className="mb-2 block font-mono text-[9px] tracking-[0.18em] text-[#566078] dark:text-[#939DAF]">READ · GUIDE</span><strong className="block text-sm">TateSpunの使い方を見る</strong><span className="mt-1 block text-xs leading-relaxed text-ink/55 dark:text-[#939DAF]">原稿を持ち込んで、本の形を確認し、書き出すまでの流れを画像つきで紹介します。</span><span data-home-howto-cta="" className="mt-3 inline-flex text-xs font-bold text-ink dark:text-[#D4DBE7]">HOW TOを見る →</span></Link>
                 </div>
               </div>
             )}
@@ -290,14 +299,35 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       >
         {isNonEmptyVisual ? (
           <section data-home-returning-bookshelf="" className="w-full" aria-label="本棚">
-            <div className="mb-5 border-b border-ink/10 pb-4 dark:border-[#2A3240]">
-              <p className="text-[10px] font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
-              <h1 className="mt-1 font-serif text-2xl font-medium text-ink sm:text-3xl dark:text-[#D4DBE7]">あなたの本棚</h1>
-              <div data-home-returning-actions="" className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={handleCreate} disabled={creating} className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-base disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">新しい作品を作成する</button>
-                <Link href="/editor?demo=1" className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink dark:border-[#3A4658] dark:text-[#D4DBE7]">おためしデモ</Link>
-                <button type="button" onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }} disabled={!documents || documents.length < 2} className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5 disabled:opacity-40 dark:border-[#3A4658] dark:text-[#D4DBE7]">総集編を編成する</button>
-                <Link data-home-howto-top-action="" href="/howto" className="rounded-full border border-ink/20 px-4 py-2 text-xs font-semibold text-ink/70 hover:bg-ink/5 dark:border-[#3A4658] dark:text-[#D4DBE7]">TateSpun How to →</Link>
+            {/* The shelf IS the first view for a returning writer: a quiet
+                editorial header (English label + serif title + the shelf's
+                own count), one primary action to add the next book, and the
+                rest as secondary. */}
+            <div className="home-v2-shelf-head relative mb-6 pb-6">
+              <span aria-hidden="true" className="home-v2-watermark">BOOKSHELF</span>
+              <p className="home-v2-label">Your Bookshelf</p>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                <div>
+                  <h1 className="font-serif text-[clamp(28px,4.2vw,40px)] font-medium leading-tight tracking-[0.04em] text-ink dark:text-[#E4DFD3]">あなたの本棚</h1>
+                  {recentDocuments.length > 0 && (
+                    <p data-home-shelf-meta="" className="mt-2 text-xs text-ink/60 dark:text-[#939DAF]">
+                      <span className="font-serif text-base tabular-nums text-ink dark:text-[#E4DFD3]">{recentDocuments.length}</span>
+                      <span className="ml-0.5">冊</span>
+                      <span aria-hidden="true" className="mx-2 text-ink/25">／</span>
+                      最後に書いた日 <span className="tabular-nums">{formatShelfDate(recentDocuments[0].updatedAt)}</span>
+                    </p>
+                  )}
+                </div>
+                <p className="max-w-xs font-serif text-sm leading-7 text-ink/60 dark:text-[#AEB7C6]">一冊ずつ、背表紙が増えていく。<br />続きは、いつでもこの棚から。</p>
+              </div>
+              <div data-home-returning-actions="" className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-3">
+                <button type="button" onClick={handleCreate} disabled={creating} className="home-v2-primary inline-flex items-center gap-2 rounded-sm bg-ink px-6 py-3 text-sm font-semibold tracking-[0.04em] text-base transition-all disabled:opacity-50 dark:bg-[#C6AF63] dark:text-[#11151D]">
+                  <span aria-hidden="true" className="text-base leading-none">＋</span>次の一冊を書く
+                </button>
+                <span aria-hidden="true" className="mx-2 hidden h-6 w-px bg-ink/15 sm:block dark:bg-[#3A4658]" />
+                <Link href="/editor?demo=1" className="home-v2-quiet-link">おためしデモ</Link>
+                <button type="button" onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }} disabled={!documents || documents.length < 2} className="home-v2-quiet-link">総集編を編成する</button>
+                <Link data-home-howto-top-action="" href="/howto" className="home-v2-quiet-link">TateSpun How to →</Link>
               </div>
             </div>
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -342,18 +372,33 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
 
             <div
               role="tabpanel"
-              className="rounded-[18px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.56)] px-2.5 pt-4 pb-6 shadow-[0_18px_48px_rgba(26,31,45,0.08)] sm:px-6 sm:pt-5 sm:pb-7 dark:border-[#2A3240] dark:bg-[#171C26] dark:shadow-none"
+              className="home-v2-shelf-stage px-1 pt-5 pb-7 sm:px-4"
             >
-              <div className="flex items-center justify-between gap-4 pb-3">
+              <div className="flex items-start justify-between gap-4 pb-1">
                 <div className="grid gap-1">
-                  <span className="text-sm font-extrabold tracking-[0.14em] text-accent dark:text-[#C6AF63]">BOOKS</span>
-                  <strong className="text-lg font-bold text-ink dark:text-[#D4DBE7]">
+                  <span className="home-v2-label">Books</span>
+                  <strong className="font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]">
                     {activeBookshelfTab === "cloud" ? "クラウドの本棚" : "このブラウザの本棚"}
                   </strong>
                 </div>
+                {/* The next book's place on the shelf: adding a work reads as
+                    putting one more spine on it (same action as 次の一冊を書く). */}
+                {activeBookshelfTab === "local" && (
+                  <button
+                    type="button"
+                    data-home-next-book=""
+                    onClick={handleCreate}
+                    disabled={creating}
+                    title="本棚に次の一冊を加える（新しい作品を作成）"
+                    className="home-v2-next-spine"
+                  >
+                    <span aria-hidden="true" className="text-lg leading-none">＋</span>
+                    <span className="home-v2-next-spine-label">次の一冊</span>
+                  </button>
+                )}
               </div>
 
-              <div className="mt-[25px]">
+              <div className="mt-3">
                 {activeBookshelfTab === "local" && (
                   <>
                     {documents === undefined && <p className="text-center text-sm text-ink/50">読み込み中…</p>}
@@ -370,10 +415,33 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                           showEmptyState={showEmptyState}
                           collapsible
                         />
-                        <p className="mt-1 text-center text-sm text-ink/55 dark:text-[#939DAF]">
+                        <p className="mt-1 text-center font-serif text-sm text-ink/55 dark:text-[#939DAF]">
                           作品はこの本棚から、いつでも続きを開けます。
                         </p>
                       </>
+                    )}
+                    {/* The works last written in, as a quiet index line (the
+                        shelf above stays the place to browse / manage them). */}
+                    {recentDocuments.length > 0 && (
+                      <div data-home-recent="" className="mx-auto mt-8 max-w-[760px]">
+                        <p className="home-v2-label">Recently</p>
+                        <ol className="mt-2 border-t border-ink/12 dark:border-[#2A3240]">
+                          {recentDocuments.slice(0, 3).map((doc, index) => (
+                            <li key={doc.id} className="border-b border-ink/12 dark:border-[#2A3240]">
+                              <button
+                                type="button"
+                                onClick={() => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${doc.id}`)}
+                                className="home-v2-index-row group"
+                              >
+                                <span className="home-v2-index-no">{String(index + 1).padStart(2, "0")}</span>
+                                <span className="min-w-0 flex-1 truncate text-left font-serif text-[15px] text-ink dark:text-[#D4DBE7]">{doc.title || "無題のドキュメント"}</span>
+                                <span className="shrink-0 text-[11px] tabular-nums text-ink/50 dark:text-[#939DAF]">{formatShelfDate(doc.updatedAt)}</span>
+                                <span aria-hidden="true" className="home-v2-index-arrow">続きを書く →</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
                     )}
                   </>
                 )}
@@ -415,8 +483,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 {renderBrandPanel("onboarding")}
                 <section data-home-empty-bookshelf="" aria-labelledby="empty-bookshelf-title" className="mx-auto mt-12 w-full max-w-[820px] border-t border-ink/10 pt-12 dark:border-[#2A3240] sm:mt-16 sm:pt-14">
                   <div className="px-2 sm:px-7">
-                    <p className="text-[10px] font-semibold tracking-[0.2em] text-accent dark:text-[#C6AF63]">YOUR BOOKSHELF</p>
-                    <h2 id="empty-bookshelf-title" className="mt-1 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
+                    <p className="home-v2-label">Your Bookshelf</p>
+                    <h2 id="empty-bookshelf-title" className="mt-2 font-serif text-[clamp(24px,3vw,30px)] font-medium tracking-[0.04em] text-ink dark:text-[#D4DBE7]">あなたの本棚</h2>
+                    <p className="mt-2 font-serif text-sm leading-7 text-ink/60 dark:text-[#AEB7C6]">まだ空いている棚は、次の一冊のための場所です。</p>
                   </div>
                   <div className="relative z-10 mt-1">
                     <Bookshelf
@@ -440,34 +509,38 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           className="home-v2-section-rule px-4 pt-[58px] pb-[72px] sm:px-[clamp(20px,5vw,62px)] sm:pt-[72px] sm:pb-[96px]"
           aria-labelledby="quick-actions-title"
         >
-          <div className="mb-[22px] text-center">
-            <p className="mb-2 text-sm font-extrabold tracking-[0.18em] text-accent dark:text-[#C6AF63]">FROM THE SHELF</p>
-            <h2 id="quick-actions-title" className="mt-[3px] font-serif text-3xl font-medium text-ink dark:text-[#D4DBE7]">
+          <div className="mx-auto mb-7 max-w-[760px]">
+            <p className="home-v2-label">From the Shelf</p>
+            <h2 id="quick-actions-title" className="mt-2 font-serif text-[clamp(24px,3vw,30px)] font-medium tracking-[0.04em] text-ink dark:text-[#D4DBE7]">
               本棚からできること
             </h2>
           </div>
 
-          <div className="mx-auto grid max-w-[760px] grid-cols-1 gap-[10px] sm:grid-cols-3">
+          {/* A numbered index, not a row of cards: three actions separated by
+              hairlines (same actions, handlers and disabled rules as before). */}
+          <div className="home-v2-action-index mx-auto grid max-w-[760px] grid-cols-1 sm:grid-cols-3">
             <button
               type="button"
               onClick={handleCreate}
               disabled={creating}
-              className="home-v2-action-card grid min-h-[120px] content-center place-items-center gap-2 rounded-sm border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.48)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 disabled:opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+              className="home-v2-action-card"
             >
-              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">✎</span>
-              <strong className="text-lg">新しい本を書く</strong>
+              <span className="home-v2-index-no">01</span>
+              <strong className="font-serif text-lg font-medium">新しい本を書く</strong>
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">新しい作品を作成する</small>
+              <span aria-hidden="true" className="home-v2-action-arrow">→</span>
             </button>
 
             <button
               type="button"
               onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }}
               disabled={!documents || documents.length < 2}
-              className="home-v2-action-card grid min-h-[120px] content-center place-items-center gap-2 rounded-sm border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.48)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 disabled:opacity-50 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+              className="home-v2-action-card"
             >
-              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">▤</span>
-              <strong className="text-lg">本をまとめる</strong>
+              <span className="home-v2-index-no">02</span>
+              <strong className="font-serif text-lg font-medium">本をまとめる</strong>
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">短編集・再録集を編成する</small>
+              <span aria-hidden="true" className="home-v2-action-arrow">→</span>
             </button>
 
             {/* 「使い方を見る」: 新規ガイドページは作らず、ヘッダーの「？」と同じ
@@ -475,11 +548,12 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
             <button
               type="button"
               onClick={() => setIsHelpOpen(true)}
-              className="home-v2-action-card grid min-h-[120px] content-center place-items-center gap-2 rounded-sm border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.48)] text-ink transition-transform hover:border-[rgba(31,42,68,0.28)] hover:-translate-y-0.5 sm:min-h-[148px] dark:border-[#2A3240] dark:bg-[#171C26] dark:text-[#D4DBE7] dark:hover:border-[#3A4658]"
+              className="home-v2-action-card"
             >
-              <span aria-hidden="true" className="text-[28px] text-accent dark:text-[#C6AF63]">?</span>
-              <strong className="text-lg">使い方を見る</strong>
+              <span className="home-v2-index-no">03</span>
+              <strong className="font-serif text-lg font-medium">使い方を見る</strong>
               <small className="text-sm text-ink/55 dark:text-[#939DAF]">本棚・エディタ・書き出し</small>
+              <span aria-hidden="true" className="home-v2-action-arrow">→</span>
             </button>
           </div>
 
@@ -487,12 +561,10 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               COLUMNSTAND系のコンパクトなアコーディオン構成にする。 */}
           <aside
             aria-labelledby="image-storage-note-title"
-            className="mx-auto mt-[26px] max-w-[760px] border-y border-[rgba(31,42,68,0.14)] dark:border-[#2A3240]"
+            className="mx-auto mt-16 max-w-[760px] border-b border-[rgba(31,42,68,0.14)] dark:border-[#2A3240]"
           >
             <div className="py-4">
-              <p className="text-[10px] font-bold tracking-[0.18em] text-accent dark:text-[#C6AF63]">
-                IMAGE STORAGE GUIDE
-              </p>
+              <p className="home-v2-label">Image Storage Guide</p>
               <h3
                 id="image-storage-note-title"
                 className="mt-1 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
@@ -571,21 +643,21 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               免責文ではなく、友達口調のリマインド）。イラストは受領済み。 */}
           <aside
             aria-labelledby="backup-reminder-title"
-            className="mx-auto mt-[14px] flex max-w-[760px] items-center gap-4 rounded-[14px] border border-[rgba(31,42,68,0.14)] bg-[rgba(255,255,255,0.5)] px-5 py-5 sm:px-7 sm:py-6 dark:border-[#2A3240] dark:bg-[#171C26]"
+            className="mx-auto mt-8 flex max-w-[760px] items-center gap-5 border-l-2 border-[color:var(--home-gold)] py-2 pl-5 sm:gap-7 sm:pl-7"
           >
             <Image
               src={withBasePath("/help/backup-caroad.png")}
               alt="原稿のバックアップをすすめる、カロードのイラスト"
               width={1036}
               height={816}
-              className="h-auto w-[120px] shrink-0 sm:w-[150px] md:w-[180px] dark:brightness-0 dark:invert dark:opacity-80"
+              className="h-auto w-[96px] shrink-0 sm:w-[120px] md:w-[140px] dark:brightness-0 dark:invert dark:opacity-80"
             />
             <div>
               <h3
                 id="backup-reminder-title"
                 className="mb-2 font-serif text-lg font-medium text-ink dark:text-[#D4DBE7]"
               >
-                ◇ 大切な原稿は、ときどきバックアップを
+                大切な原稿は、ときどきバックアップを
               </h3>
               <p className="text-sm leading-relaxed text-ink/75 dark:text-[#B9C2D0]">
                 ブラウザのデータ削除や端末トラブルに備えて、本文の控えや、PDF・JPGなどの書き出しデータを、別の場所にも保存しておくと安心です。
@@ -600,7 +672,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
         >
           <div className="grid grid-cols-1 items-center gap-[30px] min-[921px]:grid-cols-[1fr_180px]">
             <div className="text-center min-[921px]:text-left">
-              <p className="mb-2 text-sm font-extrabold tracking-[0.18em] text-accent dark:text-[#C6AF63]">TATESPUN</p>
+              <p className="home-v2-label mb-2">TateSpun</p>
               <h2 className="mt-1 text-balance font-serif text-3xl font-medium text-ink dark:text-[#D4DBE7]">書く場所は、静かでいい。</h2>
               <p className="mt-2.5 text-sm text-ink/55 dark:text-[#939DAF]">
                 TateSpunは、縦書きで書く・整える・本にするための道具です。
@@ -634,7 +706,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           aria-labelledby="tatespun-product-policy-title"
         >
           <div className="mx-auto max-w-3xl">
-            <p className="text-xs font-bold tracking-[0.16em] text-accent dark:text-[#C6AF63]">DEVELOPMENT POLICY</p>
+            <p className="home-v2-label">Development Policy</p>
             <h2 id="tatespun-product-policy-title" className="mt-2 font-serif text-2xl font-medium text-ink dark:text-[#D4DBE7]">
               TateSpunは、使いながら育てています。
             </h2>
@@ -661,7 +733,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           className="border-t border-[rgba(31,42,68,0.14)] px-[18px] py-[42px] text-center sm:px-[clamp(24px,6vw,72px)] dark:border-[#2A3240]"
           aria-labelledby="support-links-title"
         >
-          <h2 id="support-links-title" className="font-serif text-xl font-medium text-ink dark:text-[#D4DBE7]">
+          <p className="home-v2-label justify-center">Support</p>
+          <h2 id="support-links-title" className="mt-2 font-serif text-xl font-medium text-ink dark:text-[#D4DBE7]">
             {SUPPORT_HEADING}
           </h2>
           <p className="mx-auto mt-2.5 max-w-xl text-sm leading-relaxed text-ink/70 dark:text-[#AEB7C6]">

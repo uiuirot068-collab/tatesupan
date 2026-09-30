@@ -936,7 +936,7 @@ function EditorPaneInner(
           <span
             data-editor-character-count=""
             title="現在の原稿文字数"
-            className="shrink-0 whitespace-nowrap rounded-full bg-accent/80 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-paper-ink"
+            className="shrink-0 whitespace-nowrap rounded-full border border-ink/12 bg-ink/[0.04] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-ink/70"
           >
             {visualLength.toLocaleString("ja-JP")}文字
           </span>
@@ -950,7 +950,7 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("undo")}
             title="元に戻す（Ctrl/Cmd+Z）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded-md border border-ink/15 px-2 text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
             <span aria-hidden="true" className="text-xl leading-none md:text-xs md:@max-[905px]:text-[16px]">↶</span>
             <span className="hidden md:inline">元に戻す</span>
@@ -963,17 +963,18 @@ function EditorPaneInner(
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => runHistory("redo")}
             title="やり直す（Ctrl/Cmd+Y）"
-            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded border border-ink/20 px-2 text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
+            className="inline-flex min-h-9 min-w-11 items-center justify-center gap-1 rounded-md border border-ink/15 px-2 text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1 md:text-xs md:@max-[905px]:[&>span:not([aria-hidden])]:hidden"
           >
             <span aria-hidden="true" className="text-xl leading-none md:text-xs md:@max-[905px]:text-[16px]">↷</span>
             <span className="hidden md:inline">やり直す</span>
           </button>
+          <span aria-hidden="true" data-editor-action-divider="" className="hidden h-5 w-px self-center bg-ink/15 md:block" />
           <button
             type="button"
             data-editor-action="page-break"
             onClick={insertPageBreak}
             title="カーソル位置に改ページを挿入"
-            className="min-h-9 min-w-0 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
+            className="min-h-9 min-w-0 whitespace-nowrap rounded-md border border-ink/15 px-2 py-0.5 text-xs text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
           >
             改ページ挿入
           </button>
@@ -982,7 +983,7 @@ function EditorPaneInner(
             data-editor-action="replace"
             onClick={onOpenSearchReplace}
             title="原稿全体を検索し、必要なら置換します"
-            className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
+            className="min-h-9 whitespace-nowrap rounded-md border border-ink/15 px-2 py-0.5 text-xs text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1 md:@max-[905px]:px-2"
           >
             検索・置換
           </button>
@@ -993,7 +994,7 @@ function EditorPaneInner(
               aria-expanded={memoOpen}
               onClick={onToggleMemo}
               title="メモを開く/閉じる"
-              className="min-h-9 whitespace-nowrap rounded border border-ink/20 px-2 py-0.5 text-xs text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-3 md:py-1"
+              className="min-h-9 whitespace-nowrap rounded-md border border-ink/15 px-2 py-0.5 text-xs text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1"
             >
               📝メモ
             </button>
@@ -1028,10 +1029,14 @@ function EditorPaneInner(
               height; min-h-10 keeps the tap target unchanged, and every
               md: value is unchanged so desktop is pixel-identical. */}
           <nav data-editor-secondary-row="" aria-label="エディタ機能" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-0.5 border-t border-ink/10 pt-1 md:gap-1 md:grid-cols-4 md:pt-2">
-            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} className={`min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定</button>
-            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} className={`min-h-10 min-w-0 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション</button>
-            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} className="min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}</button>
-            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} className={`min-h-10 whitespace-nowrap rounded px-1 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5 md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ</button>
+            {/* What each one holds, in words: a short descriptor when the pane
+                is wide enough, and the full list as a tooltip. 設定 = the
+                book's page setup; オプション = parts of the book and file
+                transfer; メモ = notes beside the manuscript; ヘルプ = how to. */}
+            <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} title="用紙・フォント・余白・段組み・ノンブル・柱" className={`min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">用紙・本文</span></button>
+            <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} title="奥付・目次・完成前チェック・原稿データの入出力" className={`min-h-10 min-w-0 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶オプション<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">奥付・目次</span></button>
+            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} title="プロットや執筆メモ（原稿の横に開きます）" className="min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">執筆メモ</span></button>
+            <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} title="使い方・ショートカット・特殊記法" className={`min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">使い方</span></button>
           </nav>
         </div>
         <InlineMemoAccordion
