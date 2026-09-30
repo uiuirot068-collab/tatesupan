@@ -91,6 +91,8 @@ import WritingCheckOverlay from "./WritingCheckOverlay";
 import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
 import { marksForPage } from "@/lib/descriptionMarkSegments";
 import type { WritingDiagnostic } from "@/lib/writingCheckEngine";
+import InfoTooltip from "./InfoTooltip";
+import { EDITOR_PAGE_HELP } from "@/lib/editorTerminology";
 
 export interface PagedEditorHandle {
   focus(): void;
@@ -2129,8 +2131,11 @@ function PagedEditorInner(
         >
           <span aria-hidden="true">←</span>
         </button>
-        <span aria-live="polite" data-editor-page-indicator="" className="whitespace-nowrap font-medium">
-          編集ページ {safePageIndex + 1} / {pageCount}
+        <span className="inline-flex items-center gap-0.5">
+          <span aria-live="polite" data-editor-page-indicator="" className="whitespace-nowrap font-medium">
+            編集ページ {safePageIndex + 1} / {pageCount}
+          </span>
+          <InfoTooltip text={EDITOR_PAGE_HELP} label="編集ページの説明" />
         </span>
         <button
           type="button"
