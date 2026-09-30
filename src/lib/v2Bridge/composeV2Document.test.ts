@@ -73,6 +73,57 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
     expect(result.plan.length).toBeGreaterThan(result.document.pages.length - 1); // colophon adds at least its own page
   });
 
+  it("carries all four colophon templates into Publication and produces distinct colophon PaintPlans", () => {
+    const templateIds = ["standard", "center", "minimal", "classic"] as const;
+    const results = templateIds.map((templateId) => {
+      const settings: PageSettings = {
+        ...DEFAULT_PAGE_SETTINGS,
+        colophon: {
+          ...DEFAULT_PAGE_SETTINGS.colophon,
+          enabled: true,
+          templateId,
+          fontSizePt: 10,
+          placement: {
+            ...DEFAULT_PAGE_SETTINGS.colophon.placement,
+            horizontal: "center",
+            respectGutter: false,
+            vertical: "top",
+          },
+          fields: [
+            { id: "title", label: "書名", value: "テンプレート確認", visible: true },
+            { id: "author", label: "著者", value: "著者名", visible: true },
+            { id: "printer", label: "印刷所", value: "印刷所名", visible: true },
+          ],
+          freeText: "自由記述の確認",
+        },
+      };
+      const result = composeV2Document({
+        title: "T",
+        content: "本文",
+        settings,
+        measurement: MEASUREMENT,
+      });
+      const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");
+      expect(colophonPhysicalIndex).toBeGreaterThanOrEqual(0);
+      expect(result.model.colophonTemplateId).toBe(templateId);
+      expect(result.model.colophonFontSizePt).toBe(10);
+      return result.plan[colophonPhysicalIndex];
+    });
+
+    const signatures = results.map((page) =>
+      JSON.stringify(page.commands.map((command) =>
+        command.op === "text"
+          ? [command.op, command.text, command.xMm, command.yMm, command.fontSizePt, command.align]
+          : command.op === "rect"
+            ? [command.op, command.xMm, command.yMm, command.widthMm, command.heightMm]
+            : [command.op]
+      ))
+    );
+
+    expect(new Set(signatures).size).toBe(4);
+    expect(results[3].commands.some((command) => command.op === "rect")).toBe(true);
+  });
+
   it("a disabled colophon (real Editor default) never adds a colophon page", () => {
     const result = composeV2Document({ title: "T", content: "本文", settings: DEFAULT_PAGE_SETTINGS, measurement: MEASUREMENT });
     expect(result.document.colophon).toBeUndefined();
