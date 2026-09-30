@@ -233,10 +233,11 @@ function EditorPaneInner(
     });
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: internal rollout gate,
-  // off by default (see editorSurfaceRollout.ts) -- independent of the
-  // perfDebug-only `probeMode === "windowed"` diagnostic probe above. When
-  // enabled, <PagedEditor> (one ~50k-char 編集ページ mounted at a time)
+  // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 / Phase 10:
+  // WINDOWED is the product default (see editorSurfaceRollout.ts), independent
+  // of the perfDebug-only `probeMode === "windowed"` diagnostic probe above.
+  // Explicit FULL remains the emergency rollback. <PagedEditor> (one ~50k-char
+  // 編集ページ mounted at a time)
   // replaces the plain full-document textarea; every other feature below
   // (undo/redo, page-break insertion, writing-check jump) is routed through
   // `pagedEditorRef`'s imperative handle instead of `textareaRef` so the
@@ -1064,7 +1065,8 @@ function EditorPaneInner(
         ) : isWindowed ? (
           // TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009: production
           // long-document editor surface, gated by
-          // `resolveEditorSurfaceRolloutMode()` (off by default). Mounts
+          // `resolveEditorSurfaceRolloutMode()` (WINDOWED by default; explicit
+          // FULL is the emergency rollback). Mounts
           // exactly ONE ~50k-char 編集ページ at a time; the writing-check
           // list, jump, fix, ignore, bulk-fix AND the inline red-wavy
           // underline (via `writingCheck`, mapped to page-local coordinates
