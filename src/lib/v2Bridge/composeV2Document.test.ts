@@ -169,6 +169,45 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
     }
   });
 
+  it("keeps classic free text raw until the shared render plan decides wrapping", () => {
+    const freeText = "あ".repeat(80);
+    const settings: PageSettings = {
+      ...DEFAULT_PAGE_SETTINGS,
+      colophon: {
+        ...DEFAULT_PAGE_SETTINGS.colophon,
+        enabled: true,
+        templateId: "classic",
+        fontSizePt: 10,
+        fields: [
+          { id: "title", label: "書名", value: "確認用", visible: true },
+          { id: "author", label: "著者名", value: "著者", visible: true },
+        ],
+        freeText,
+      },
+    };
+    const result = composeV2Document({
+      title: "T",
+      content: "本文",
+      settings,
+      measurement: MEASUREMENT,
+    });
+
+    expect(result.model.colophonFreeText).toBe(freeText);
+    expect(result.model.colophonRows).toEqual([
+      { label: "書名", value: "確認用" },
+      { label: "著者名", value: "著者" },
+    ]);
+
+    const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");
+    const renderedFreeText = result.plan[colophonPhysicalIndex].commands
+      .filter((command): command is Extract<(typeof result.plan)[number]["commands"][number], { op: "text" }> => command.op === "text")
+      .map((command) => command.text)
+      .filter((text) => /^あ+$/.test(text))
+      .join("");
+
+    expect(renderedFreeText).toBe(freeText);
+  });
+
   it("a disabled colophon (real Editor default) never adds a colophon page", () => {
     const result = composeV2Document({ title: "T", content: "本文", settings: DEFAULT_PAGE_SETTINGS, measurement: MEASUREMENT });
     expect(result.document.colophon).toBeUndefined();
