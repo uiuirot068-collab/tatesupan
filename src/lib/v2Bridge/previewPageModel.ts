@@ -30,10 +30,12 @@ export interface V2PreviewPage {
   /** 0-based position in the publication (= PaintPlan index). */
   physicalIndex: number;
   physicalPageNumber: number;
-  kind: "body" | "colophon";
-  /** Body pages only: 0-based body index / 1-based body page number. */
+  kind: "body" | "toc" | "colophon";
+  /** Editable body pages only: 0-based Editor body index / 1-based body page number. */
   bodyIndex?: number;
   bodyPageNumber?: number;
+  /** Canonical Core body-page index. TOC pages occupy canonical body pages too. */
+  canonicalBodyIndex?: number;
   /** Body pages only: raw manuscript [start, end) this page renders (UTF-16 offsets). */
   sourceRange?: SourceRange;
   /** Editor image ids whose IMG marker this page owns (V2 flow ownership). */
@@ -45,9 +47,11 @@ export interface V2PreviewPageModel {
   sourceContent: string;
   /** Publication (physical) order: body pages and the colophon wherever Core placed it. */
   pages: V2PreviewPage[];
-  /** Body pages in body order. */
+  /** Editable body pages in Editor order (synthetic TOC excluded). */
   bodyPages: V2PreviewPage[];
-  /** Canonical body page count (0 for an empty manuscript). */
+  /** Synthetic TOC pages in physical order. */
+  tocPages: V2PreviewPage[];
+  /** Editable body page count (0 for an empty manuscript). */
   bodyPageCount: number;
   /** Preview list length: at least one card, so an empty manuscript keeps its blank page. */
   listLength: number;
@@ -92,46 +96,69 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
 
   const pages: V2PreviewPage[] = [];
   const bodyPages: V2PreviewPage[] = [];
+  const tocPages: V2PreviewPage[] = [];
   const overlayPages: TategakiPage[] = [];
   const bodySourceRanges: SourceRange[] = [];
   const imagePageIndicesById = new Map<string, number[]>();
-  let previousEnd = 0;
+  let previousEnd = layout.bodySourceOffset;
+  let editorBodyIndex = 0;
 
   layout.document.pageSequence.forEach((ref, physicalIndex) => {
     if (ref.kind === "colophon") {
       pages.push({ physicalIndex, physicalPageNumber: physicalPageNumber(physicalIndex), kind: "colophon", imageIds: [] });
       return;
     }
-    const bodyIndex = ref.index;
+    const canonicalBodyIndex = ref.index;
     let start = Number.POSITIVE_INFINITY;
     let end = Number.NEGATIVE_INFINITY;
     const images: ImageUnit[] = [];
-    for (const span of placedSpans(layout.document.pages[bodyIndex])) {
+    for (const span of placedSpans(layout.document.pages[canonicalBodyIndex])) {
       if (span.start >= rawStart.length) continue; // appended ruby readings are never placed; defensive
       start = Math.min(start, rawStart[span.start]);
       end = Math.max(end, rawEnd[Math.min(span.end, rawEnd.length) - 1]);
       const image = imageByFlowStart.get(span.start);
       if (image && span.end - span.start === 1) images.push(image);
     }
-    const sourceRange = Number.isFinite(start)
-      ? includeBoutenMarkers(sourceContent, { start, end })
-      : { start: previousEnd, end: previousEnd }; // a page with no content (e.g. consecutive 【改ページ】)
-    previousEnd = sourceRange.end;
+    const combinedRange = Number.isFinite(start)
+      ? { start, end }
+      : { start: previousEnd, end: previousEnd };
+    previousEnd = combinedRange.end;
+
+    if (combinedRange.end <= layout.bodySourceOffset) {
+      const entry: V2PreviewPage = {
+        physicalIndex,
+        physicalPageNumber: physicalPageNumber(physicalIndex),
+        kind: "toc",
+        canonicalBodyIndex,
+        imageIds: [],
+      };
+      pages.push(entry);
+      tocPages.push(entry);
+      return;
+    }
+
+    const adjusted = {
+      start: Math.max(0, combinedRange.start - layout.bodySourceOffset),
+      end: Math.max(0, combinedRange.end - layout.bodySourceOffset),
+    };
+    const sourceRange = includeBoutenMarkers(sourceContent, adjusted);
     const imageIds = images.map((image) => image.refId);
-    imageIds.forEach((id) => imagePageIndicesById.set(id, [...(imagePageIndicesById.get(id) ?? []), bodyIndex]));
+    imageIds.forEach((id) => imagePageIndicesById.set(id, [...(imagePageIndicesById.get(id) ?? []), editorBodyIndex]));
     const entry: V2PreviewPage = {
       physicalIndex,
       physicalPageNumber: physicalPageNumber(physicalIndex),
       kind: "body",
-      bodyIndex,
-      bodyPageNumber: bodyPageNumber(bodyIndex),
+      bodyIndex: editorBodyIndex,
+      bodyPageNumber: bodyPageNumber(editorBodyIndex),
+      canonicalBodyIndex,
       sourceRange,
       imageIds,
     };
     pages.push(entry);
-    bodyPages[bodyIndex] = entry;
-    overlayPages[bodyIndex] = { tokens: images.map(imageToken), columns: null, lines: [], columnLines: null };
-    bodySourceRanges[bodyIndex] = sourceRange;
+    bodyPages[editorBodyIndex] = entry;
+    overlayPages[editorBodyIndex] = { tokens: images.map(imageToken), columns: null, lines: [], columnLines: null };
+    bodySourceRanges[editorBodyIndex] = sourceRange;
+    editorBodyIndex += 1;
   });
 
   const bodyPageCount = bodyPages.length;
@@ -143,6 +170,7 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
     sourceContent,
     pages,
     bodyPages,
+    tocPages,
     bodyPageCount,
     listLength: Math.max(bodyPageCount, 1),
     overlayPages,

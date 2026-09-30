@@ -13,6 +13,7 @@ import { compileColophonContent } from "../../../typesetting-v2/core/colophon";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
 import { applyEditorPageOverrides } from "./pageFurniture";
 import { computePageLayout, type PageSettings } from "../pageLayout";
+import { buildTocCompositionPrefix } from "../tocSettings";
 import { fitImageToBox, imageMaxBoxForTextArea } from "../imageGeometry";
 import { composeCanonicalDocument } from "../../../typesetting-v2/core/layout/assemble";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
@@ -52,6 +53,8 @@ export interface V2BridgeResult {
   source: string;
   /** Body flow code point → raw manuscript offsets (manuscriptAdapter), for the Preview page model. */
   bodySourceMap: ManuscriptSourceMap;
+  /** Raw-character offset where the editable body begins inside the composed source. */
+  bodySourceOffset: number;
   colophonUnits?: LogicalUnit[];
   colophonSource?: string;
   layoutSettings: PageCompositionSettings;
@@ -111,7 +114,9 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   // 傍点 decoration, and ――/…… runs as inseparable SEMANTIC_RUN units. `charsPerLine - 1`
   // keeps every grouped run narrower than a paragraph-first (一字下げ) line.
   // The colophon (horizontal, its own painter) keeps the prior plain units.
-  const { units: rawUnits, source, sourceMap: bodySourceMap } = buildV2UnitsFromManuscript("body", input.content, {
+  const tocPrefix = buildTocCompositionPrefix(input.settings.toc);
+  const composedBodySource = tocPrefix + input.content;
+  const { units: rawUnits, source, sourceMap: bodySourceMap } = buildV2UnitsFromManuscript("body", composedBodySource, {
     maxSemanticRunCells: Math.floor(input.settings.charsPerLine) - 1,
     decorations: true,
   });
@@ -219,6 +224,7 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
     units,
     source,
     bodySourceMap,
+    bodySourceOffset: tocPrefix.length,
     ...(colophonComposition
       ? { colophonUnits: colophonComposition.units, colophonSource: colophonComposition.source }
       : {}),

@@ -99,7 +99,7 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
-import { bodyPageCount, bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
+import { bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
 import { readPagesAhead, V2ExportWorkerClient, type ExportPageStream } from "@/lib/v2Bridge/exportWorkerClient";
 import type { PhysicalPageRef } from "../../typesetting-v2/core/layout/schema";
@@ -147,8 +147,11 @@ import {
   type PreviewSpreadLayout,
 } from "@/lib/previewPageVirtualization";
 
-/** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
-type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
+/** Presentation Page Sequence の1要素（編集本文 / 独立TOC / 横書き奥付）。 */
+type PresentationItem =
+  | { kind: "body"; bodyIndex: number }
+  | { kind: "toc"; tocIndex: number }
+  | { kind: "colophon" };
 
 /** PDF書き出しボタン押下時点で確定した、実際に書き出す対象。 */
 type PendingPdfExport = {
@@ -784,6 +787,8 @@ function PreviewPane({
         if (page.kind === "colophon") {
           if (items[items.length - 1]?.kind === "colophon") continue;
           items.push({ kind: "colophon" });
+        } else if (page.kind === "toc") {
+          items.push({ kind: "toc", tocIndex: v2PageModel.tocPages.findIndex((toc) => toc.physicalIndex === page.physicalIndex) });
         } else {
           items.push({ kind: "body", bodyIndex: page.bodyIndex! });
         }
@@ -916,9 +921,11 @@ function PreviewPane({
   }, [useV2Engine, supersedePendingCompositions, getLatestContent, content, settings, title, images]);
   const v2BodyPreviewPages = useMemo(() => {
     if (!v2Adapter.layout || !v2Adapter.preview) return [];
-    return v2Adapter.layout.pageSequence
-      .map((pageRef, physicalIndex) => pageRef.kind === "body" ? v2Adapter.preview?.pages[physicalIndex] : undefined)
-      .filter((page): page is NonNullable<typeof page> => page !== undefined);
+    return v2Adapter.layout.pageModel.bodyPages.map((page) => v2Adapter.preview!.pages[page.physicalIndex]);
+  }, [v2Adapter.layout, v2Adapter.preview]);
+  const v2TocPreviewPages = useMemo(() => {
+    if (!v2Adapter.layout || !v2Adapter.preview) return [];
+    return v2Adapter.layout.pageModel.tocPages.map((page) => v2Adapter.preview!.pages[page.physicalIndex]);
   }, [v2Adapter.layout, v2Adapter.preview]);
   // TSP-LOOP-021 §2: which page's ⋮ menu is open (bodyIndex), or null. Lifted
   // here so opening one closes any other, and so an outside pointerdown /
@@ -1647,14 +1654,14 @@ function PreviewPane({
   };
 
   const exportV2JpgPages = async (
-    selectPages: (pageSequence: readonly PhysicalPageRef[]) => { physicalIndices: number[]; filePageNumbers: number[] } | null,
+    selectPages: (layout: NonNullable<typeof v2Adapter.layout>) => { physicalIndices: number[]; filePageNumbers: number[] } | null,
     zipDownload: boolean
   ) => {
     let signal: AbortSignal | null = null;
     let pages: ExportPageStream | null = null;
     try {
       const { input, composed, layerOrder } = await requireV2ExportLayout();
-      const selection = selectPages(composed.pageSequence);
+      const selection = selectPages(composed);
       if (!selection) return;
       const { physicalIndices, filePageNumbers } = selection;
       if (physicalIndices.length === 0 || physicalIndices.some((index) => composed.pageSequence[index] === undefined)) {
@@ -1722,10 +1729,13 @@ function PreviewPane({
     }
     if (exportBlockedByUnresolvedImages([index])) return;
     if (useV2Engine) {
-      await exportV2JpgPages((sequence) => ({
-        physicalIndices: [physicalIndexForBodyIndex(sequence, index)],
-        filePageNumbers: [bodyPageNumber(index)],
-      }), false);
+      await exportV2JpgPages((composed) => {
+        const canonicalBodyIndex = composed.pageModel.bodyPages[index]?.canonicalBodyIndex;
+        return {
+          physicalIndices: [canonicalBodyIndex == null ? -1 : physicalIndexForBodyIndex(composed.pageSequence, canonicalBodyIndex)],
+          filePageNumbers: [bodyPageNumber(index)],
+        };
+      }, false);
       return;
     }
     ensureExportMount([index], false);
@@ -1785,11 +1795,14 @@ function PreviewPane({
     if (useV2Engine) {
       // "No selection" = every body page of the CURRENT canonical layout (not
       // the possibly-debounced LEGACY list); a selection is exported exactly.
-      await exportV2JpgPages((sequence) => {
-        const scope = resolveJpgPageIndices(bodyPageCount(sequence), selected);
+      await exportV2JpgPages((composed) => {
+        const scope = resolveJpgPageIndices(composed.pageModel.bodyPageCount, selected);
         if (exportBlockedByUnresolvedImages(scope)) return null;
         return {
-          physicalIndices: scope.map((index) => physicalIndexForBodyIndex(sequence, index)),
+          physicalIndices: scope.map((index) => {
+            const canonicalBodyIndex = composed.pageModel.bodyPages[index]?.canonicalBodyIndex;
+            return canonicalBodyIndex == null ? -1 : physicalIndexForBodyIndex(composed.pageSequence, canonicalBodyIndex);
+          }),
           filePageNumbers: scope.map(bodyPageNumber),
         };
       }, false);
@@ -1824,11 +1837,14 @@ function PreviewPane({
     if (useV2Engine) {
       // "No selection" = every body page of the CURRENT canonical layout (not
       // the possibly-debounced LEGACY list); a selection is exported exactly.
-      await exportV2JpgPages((sequence) => {
-        const scope = resolveJpgPageIndices(bodyPageCount(sequence), selected);
+      await exportV2JpgPages((composed) => {
+        const scope = resolveJpgPageIndices(composed.pageModel.bodyPageCount, selected);
         if (exportBlockedByUnresolvedImages(scope)) return null;
         return {
-          physicalIndices: scope.map((index) => physicalIndexForBodyIndex(sequence, index)),
+          physicalIndices: scope.map((index) => {
+            const canonicalBodyIndex = composed.pageModel.bodyPages[index]?.canonicalBodyIndex;
+            return canonicalBodyIndex == null ? -1 : physicalIndexForBodyIndex(composed.pageSequence, canonicalBodyIndex);
+          }),
           filePageNumbers: scope.map(bodyPageNumber),
         };
       }, true);
@@ -1962,11 +1978,12 @@ function PreviewPane({
       try {
         const { input, composed, layerOrder } = await requireV2ExportLayout();
         perfPlanReadyAt = performance.now();
+        const canonicalBodyIndices = indices.map((index) => composed.pageModel.bodyPages[index]?.canonicalBodyIndex ?? -1);
         const uniqueIndices = resolvePdfPhysicalIndices({
           pageSequence: composed.pageSequence,
           planLength: composed.pageSequence.length,
           scope: pdfScope,
-          bodyIndices: indices,
+          bodyIndices: canonicalBodyIndices,
           includeColophon: includeColophonInPdf,
         });
         if (uniqueIndices.length === 0 || uniqueIndices.some((index) => composed.pageSequence[index] === undefined)) {
@@ -2905,6 +2922,36 @@ function PreviewPane({
                         onOverflowChange={setColophonOverflow}
                       />
                     </div>
+                  );
+                }
+
+                if (item.kind === "toc") {
+                  return (
+                    <PageSlot
+                      key={`toc-${item.tocIndex}`}
+                      physicalPageNumber={physicalPageNumber}
+                      registerRef={() => undefined}
+                      page={{ tokens: [], columns: null, lines: [], columnLines: null }}
+                      v2PreviewPage={v2TocPreviewPages[item.tocIndex]}
+                      v2PreviewFontSizePx={v2Adapter.preview?.fontSizePx}
+                      v2PreviewEnabled
+                      pageSignature={`toc-${item.tocIndex}`}
+                      startsNewParagraph
+                      settings={settings}
+                      layout={layout}
+                      images={{}}
+                      imageLayerOrder={NO_IMAGE_LAYER_ORDER}
+                      unresolvedImageIds={NO_UNRESOLVED_IMAGE_IDS}
+                      isSelected={false}
+                      isDragging={false}
+                      isDropTarget={false}
+                      dropPosition={null}
+                      insertingImage={false}
+                      hideNombre
+                      hideHashira
+                      chromeScale={chromeScale}
+                      isMenuOpen={false}
+                    />
                   );
                 }
 

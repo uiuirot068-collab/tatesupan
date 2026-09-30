@@ -1,10 +1,10 @@
-import { extractHeadingOffsets, generateTocText, type TocItem } from "@/utils/tocGenerator";
+import { extractHeadingOffsets, type TocItem } from "@/utils/tocGenerator";
 import type { V2PreviewLayout } from "./previewWorkerProtocol";
 
 export interface ComputeV2TocItemsInput {
   content: string;
   nombreStart: number;
-  compose: (combinedContent: string) => Promise<V2PreviewLayout>;
+  compose: (items: TocItem[]) => Promise<V2PreviewLayout>;
 }
 
 function physicalPageForSourceOffset(layout: V2PreviewLayout, sourceOffset: number): number {
@@ -52,13 +52,10 @@ export async function computeTocItemsWithV2({
   }));
 
   for (let i = 0; i < MAX_ITERATIONS; i += 1) {
-    const tocText = generateTocText(items);
-    const combinedContent = tocText + content;
-    const layout = await compose(combinedContent);
+    const layout = await compose(items);
 
     const next = headings.map((heading) => {
-      const shiftedIndex = tocText.length + heading.index;
-      const physicalPage = physicalPageForSourceOffset(layout, shiftedIndex);
+      const physicalPage = physicalPageForSourceOffset(layout, heading.index);
       return {
         title: heading.title,
         pageNumber: nombreStart + physicalPage - 1,

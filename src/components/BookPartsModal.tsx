@@ -89,14 +89,18 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const composeTocCandidate = (combinedContent: string): Promise<V2PreviewLayout> =>
+  const composeTocCandidate = (items: TocItem[]): Promise<V2PreviewLayout> =>
     new Promise((resolve, reject) => {
+      const candidateSettings: PageSettings = {
+        ...settings,
+        toc: { enabled: true, items: items.map((item) => ({ ...item })), updatedAt: null },
+      };
       tocWorker.request(
         {
-          content: combinedContent,
-          settings,
+          content,
+          settings: candidateSettings,
           title: currentTitle.trim() || "TateSpun",
-          images: referencedImages(images, combinedContent),
+          images: referencedImages(images, content),
         },
         (outcome) => {
           if (!outcome.ok) {
