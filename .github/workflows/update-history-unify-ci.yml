@@ -1,0 +1,27 @@
+name: Update history unify gate
+
+on:
+  push:
+    branches: [tsp-update-history-unify-20260930]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://rgvqquuthovqjqfogfra.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Update-history tests
+        run: npx vitest run --config src/lib/vitest.config.ts src/lib/updateHistory.test.ts
