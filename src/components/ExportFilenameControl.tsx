@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { resolveExportFilenameStem, sanitizePdfFilenameStem } from "@/utils/exportFilename";
-import InfoTooltip from "./InfoTooltip";
 import { EXPORT_FILENAME_HELP } from "@/lib/editorTerminology";
 
 interface ExportFilenameControlProps {
@@ -91,6 +90,12 @@ export default function ExportFilenameControl({
           </button>
         </>
       )}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-[90] mt-2 hidden w-max max-w-[280px] -translate-x-1/2 rounded-md border border-ink/15 bg-base px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-ink shadow-lg group-hover:block group-focus-within:block"
+      >
+        {SAVE_NAME_HELP}
+      </span>
     </div>
   );
 }
