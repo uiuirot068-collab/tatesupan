@@ -142,6 +142,8 @@ export type PaintCommand =
       maxWidthMm?: number;
       /** Page-furniture identity lets Web raster output apply its fixed 15/20 scale without changing PDF/print. */
       furnitureRole?: "folio" | "running-head";
+      /** Optional CSS family requested by the source surface (used by browser JPG). */
+      fontFamily?: string;
     }
   | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
   // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
@@ -1142,6 +1144,7 @@ function buildColophonPaintPage(
         align: item.align,
         angle: 0,
         baseline: "middle",
+        ...(doc.colophonFontFamily ? { fontFamily: doc.colophonFontFamily } : {}),
       });
     }
   }
