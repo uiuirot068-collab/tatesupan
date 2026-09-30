@@ -1013,10 +1013,7 @@ function buildColophonPaintPage(
     typeof colophonFontSizePt === "number" && Number.isFinite(colophonFontSizePt)
       ? Math.min(24, Math.max(4, colophonFontSizePt)) * (25.4 / 72)
       : bodyEmMm;
-  const templatePlan = colophonTemplateLayoutPlan(templateId);
-  const horizontal: "center" = "center";
   const vertical = colophonPageCount === 1 ? (placement?.vertical ?? "center") : "top";
-  const respectGutter = false;
   const respectVerticalMargins = placement?.respectVerticalMargins ?? true;
 
   // Human Visual QA HOLD round 29F: `emSizeMm` now defaults to
