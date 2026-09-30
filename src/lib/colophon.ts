@@ -76,7 +76,7 @@ export interface ColophonPlacement {
 export const DEFAULT_COLOPHON_PLACEMENT: ColophonPlacement = {
   horizontal: "center",
   vertical: "center",
-  respectGutter: true,
+  respectGutter: false,
   respectVerticalMargins: true,
 };
 
@@ -244,16 +244,17 @@ export function normalizeColophonPagePosition(raw: unknown): ColophonPagePositio
 export function normalizeColophonPlacement(raw: unknown): ColophonPlacement {
   const base = DEFAULT_COLOPHON_PLACEMENT;
   if (!isPlainObject(raw)) return { ...base };
-  const horizontal = (["left", "center", "right"] as const).includes(raw.horizontal as never)
-    ? (raw.horizontal as ColophonPlacement["horizontal"])
-    : base.horizontal;
   const vertical = (["top", "center", "bottom"] as const).includes(raw.vertical as never)
     ? (raw.vertical as ColophonPlacement["vertical"])
     : base.vertical;
   return {
-    horizontal,
+    // Phase 11 product decision: horizontal placement was removed because
+    // the three choices were not visually meaningful. Old saved values remain
+    // readable, but every normalized document now uses the single canonical
+    // horizontal position.
+    horizontal: "center",
     vertical,
-    respectGutter: raw.respectGutter !== false,
+    respectGutter: false,
     respectVerticalMargins: raw.respectVerticalMargins !== false,
   };
 }
