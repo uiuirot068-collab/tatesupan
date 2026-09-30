@@ -61,6 +61,7 @@ import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
 import {
   resolvePublicationPdfPageOutput,
   type PublicationPdfMode,
@@ -1010,6 +1011,7 @@ function buildColophonPaintPage(
     typeof colophonFontSizePt === "number" && Number.isFinite(colophonFontSizePt)
       ? Math.min(24, Math.max(4, colophonFontSizePt)) * (25.4 / 72)
       : bodyEmMm;
+  const templatePlan = colophonTemplateLayoutPlan(templateId);
   const horizontal: "center" = "center";
   const vertical = colophonPageCount === 1 ? (placement?.vertical ?? "center") : "top";
   const respectGutter = false;
@@ -1048,7 +1050,7 @@ function buildColophonPaintPage(
   };
 
   if (hasFont && firstColumn) {
-    const lineHeightMm = colophonEmMm * 1.5; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
+    const lineHeightMm = colophonEmMm * templatePlan.lineHeight; // simple, deterministic horizontal line spacing -- not a redesign of colophon's own visual style, just enough separation to keep lines legible
     const gutterMm = pageGeometry?.marginGutterMm;
     const outerMm = pageGeometry?.marginOuterMm;
     let placementLeftMm = marginLeftMm;
@@ -1144,11 +1146,12 @@ function buildColophonPaintPage(
         freeTextRawLines.push(text);
       }
     }
-    const gapMm = colophonEmMm; // one real em between label/value columns -- deterministic, documented choice, not measured from any legacy source (legacy's own CSS grid gap is a separate, un-ported visual-density detail)
+    const gapMm = colophonEmMm * templatePlan.labelValueGapEm; // one real em between label/value columns -- deterministic, documented choice, not measured from any legacy source (legacy's own CSS grid gap is a separate, un-ported visual-density detail)
     const availableSafeWidthMm = Math.max(contentRightMm - contentLeftMm, 0);
 
     // (A) Structured row frame -- natural sizing, safety-clamped only.
-    const labelColumnWidthMm = rows.length > 0 ? Math.max(...rows.map((r) => measureMm(r.label))) : 0;
+    const naturalLabelWidthMm = rows.length > 0 ? Math.max(...rows.map((r) => measureMm(r.label))) : 0;
+    const labelColumnWidthMm = Math.max(naturalLabelWidthMm, colophonEmMm * templatePlan.labelWidthEm);
     const naturalValueColumnWidthMm = rows.length > 0 ? Math.max(...rows.map((r) => measureMm(r.value))) : 0;
     const naturalStructuredWidthMm = rows.length > 0 ? labelColumnWidthMm + gapMm + naturalValueColumnWidthMm : 0;
     const structuredFrameWidthMm = Math.min(naturalStructuredWidthMm, availableSafeWidthMm);
@@ -1167,14 +1170,18 @@ function buildColophonPaintPage(
     // names `bodyEmMm` explicitly at this specific use site for
     // clarity, since the "15 em" target is measured in the structured
     // font's own em, not freeText's own smaller one.
-    const freeTextEmMm = colophonEmMm * 0.8;
+    const freeTextEmMm = colophonEmMm * templatePlan.freeTextScale;
     const freeTextLineHeightMm = freeTextEmMm * 1.5;
     const structuredColophonEmMm = colophonEmMm;
-    const freeTextTargetWidthMm = 15 * structuredColophonEmMm;
+    const freeTextTargetWidthMm = availableSafeWidthMm * templatePlan.frameWidthRatio;
     const freeTextWrapWidthMm = Math.min(freeTextTargetWidthMm, availableSafeWidthMm);
     const freeTextLines = freeTextRawLines.flatMap((l) => wrapToWidthMm(l, freeTextWrapWidthMm, freeTextEmMm));
 
-    const blockWidthMm = Math.max(structuredFrameWidthMm, freeTextWrapWidthMm);
+    const plannedFrameWidthMm = availableSafeWidthMm * templatePlan.frameWidthRatio;
+    const blockWidthMm = Math.min(
+      availableSafeWidthMm,
+      Math.max(plannedFrameWidthMm, structuredFrameWidthMm, freeTextWrapWidthMm)
+    );
     const blockLeftMm =
       contentLeftMm + Math.max(contentRightMm - contentLeftMm - blockWidthMm, 0) / 2;
 
@@ -1233,7 +1240,12 @@ function buildColophonPaintPage(
     if (templateId === "center") {
       commands.length = 0;
       const centerX = (contentLeftMm + contentRightMm) / 2;
-      const centerRowHeight = colophonEmMm * 2.25;
+      const centerRowHeight =
+        colophonEmMm *
+        (templatePlan.centerLabelScale +
+          templatePlan.centerLabelValueGapEm +
+          1 +
+          templatePlan.centerRowGapEm);
       const centerFreeHeight = freeTextLines.length * freeTextLineHeightMm;
       const centerTotalHeight = rows.length * centerRowHeight + centerFreeHeight;
       let y =
@@ -1249,7 +1261,7 @@ function buildColophonPaintPage(
             text: row.label,
             xMm: centerX,
             yMm: y + colophonEmMm * 0.45,
-            fontSizePt: mmToPt(colophonEmMm * 0.78),
+            fontSizePt: mmToPt(colophonEmMm * templatePlan.centerLabelScale),
             align: "center",
             angle: 0,
             baseline: "middle",
@@ -1259,7 +1271,12 @@ function buildColophonPaintPage(
           op: "text",
           text: row.value,
           xMm: centerX,
-          yMm: y + colophonEmMm * 1.35,
+          yMm:
+            y +
+            colophonEmMm *
+              (templatePlan.centerLabelScale +
+                templatePlan.centerLabelValueGapEm +
+                0.5),
           fontSizePt: mmToPt(colophonEmMm),
           align: "center",
           angle: 0,
@@ -1286,8 +1303,8 @@ function buildColophonPaintPage(
       const align: "center" = "center";
       const titleRow = rows[0];
       const restRows = rows.slice(1);
-      const titleEm = colophonEmMm * 1.7;
-      const restEm = colophonEmMm * 0.9;
+      const titleEm = colophonEmMm * templatePlan.titleScale;
+      const restEm = colophonEmMm * templatePlan.restScale;
       const titleHeight = titleRow ? titleEm * 1.8 : 0;
       const restHeight = restRows.length * restEm * 1.65;
       const freeHeight = freeTextLines.length * freeTextLineHeightMm;
@@ -1322,7 +1339,7 @@ function buildColophonPaintPage(
           angle: 0,
           baseline: "middle",
         });
-        y += restEm * 1.65;
+        y += restEm * (1 + templatePlan.restGapEm);
       }
       for (const line of freeTextLines) {
         commands.push({
@@ -1338,22 +1355,50 @@ function buildColophonPaintPage(
         y += freeTextLineHeightMm;
       }
     } else if (templateId === "classic") {
-      const pad = colophonEmMm * 1.1;
-      const borderTop = Math.max(contentAreaTopMm, startYMm - pad);
+      const padY = colophonEmMm * templatePlan.paddingYEm;
+      const padX = colophonEmMm * templatePlan.paddingXEm;
+      const borderTop = Math.max(contentAreaTopMm, startYMm - padY);
       const borderHeight = Math.min(
         contentAreaBottomMm - borderTop,
-        totalContentHeightMm + pad * 2
+        totalContentHeightMm + padY * 2
       );
       commands.unshift({
         op: "rect",
-        xMm: Math.max(contentLeftMm, blockLeftMm - pad),
+        xMm: Math.max(contentLeftMm, blockLeftMm - padX),
         yMm: borderTop,
         widthMm: Math.min(
-          contentRightMm - Math.max(contentLeftMm, blockLeftMm - pad),
-          blockWidthMm + pad * 2
+          contentRightMm - Math.max(contentLeftMm, blockLeftMm - padX),
+          blockWidthMm + padX * 2
         ),
         heightMm: Math.max(borderHeight, colophonEmMm * 3),
       });
+
+      if (templatePlan.rowRule && rowsWithWrappedValues.length > 1) {
+        let ruleY = startYMm;
+        rowsWithWrappedValues.forEach((row, index) => {
+          const rowLines = Math.max(1, row.valueLines.length);
+          ruleY += rowLines * lineHeightMm;
+          if (index < rowsWithWrappedValues.length - 1) {
+            commands.unshift({
+              op: "rect",
+              xMm: blockLeftMm,
+              yMm: ruleY,
+              widthMm: blockWidthMm,
+              heightMm: 0.01,
+            });
+          }
+        });
+      }
+
+      if (freeTextLines.length > 0) {
+        commands.unshift({
+          op: "rect",
+          xMm: blockLeftMm,
+          yMm: startYMm + rowsHeightMm + colophonEmMm * templatePlan.freeTextGapEm,
+          widthMm: blockWidthMm,
+          heightMm: 0.01,
+        });
+      }
     }
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {
