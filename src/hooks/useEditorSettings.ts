@@ -20,6 +20,8 @@ function loadStoredSettings(): PageSettings | null {
     return normalizeOutputTypography({
       ...DEFAULT_PAGE_SETTINGS,
       ...parsed,
+      // 保存ファイル名は作品固有。last-used settingsとして新規作品へ引き継がない。
+      exportFilenameStem: "",
       masterPage: {
         ...DEFAULT_MASTER_PAGE_SETTINGS,
         ...parsed.masterPage,
