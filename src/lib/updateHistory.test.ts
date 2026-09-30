@@ -56,12 +56,16 @@ describe("the shipped public/data/tatespun-update-history.json", () => {
     expect(entries).toHaveLength((raw as unknown[]).length);
   });
 
-  it("keeps two entries on the same date valid, newest first (source order is display order)", () => {
-    expect(entries.slice(0, 3).map((entry) => entry.date)).toEqual(["26/09/20", "26/09/20", "26/09/18"]);
+  it("keeps same-date entries valid and the newest release first in source order", () => {
+    expect(entries[0]?.date).toBe("26/09/30");
+    expect(entries[1]?.date).toBe("26/09/30");
+    expect(entries.filter((entry) => entry.date === "26/09/20")).toHaveLength(2);
   });
 
   it("records UX v3 Loop 3 (mobile export without visiting the Preview) for users", () => {
-    const loop3 = entries[0];
+    const loop3 = entries.find((entry) => entry.title.includes("スマホ"));
+    expect(loop3).toBeDefined();
+    if (!loop3) throw new Error("mobile export history entry missing");
     expect(loop3.title).toContain("スマホ");
     expect(loop3.title).toContain("プレビューへ切り替えずに");
     expect(loop3.detail).toContain("書き出し ▾");
@@ -69,7 +73,9 @@ describe("the shipped public/data/tatespun-update-history.json", () => {
   });
 
   it("records UX v3 Loop 2 as the confirm-dialog -> explanatory warning change, not as a bare 'confirm'", () => {
-    const loop2 = entries[1];
+    const loop2 = entries.find((entry) => entry.title.includes("奇数ページ"));
+    expect(loop2).toBeDefined();
+    if (!loop2) throw new Error("odd-page warning history entry missing");
     expect(loop2.title).toContain("奇数ページ");
     expect(loop2.detail).toContain("従来の");
     expect(loop2.detail).toContain("意味と注意点を説明する警告画面");
