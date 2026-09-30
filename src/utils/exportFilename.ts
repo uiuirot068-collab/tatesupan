@@ -30,16 +30,15 @@ export function buildZipFileName(title: string): string {
   return `${sanitizeFilename(title)}_jpg.zip`;
 }
 
-/** PDF書き出しファイル名の入力欄が受け付ける文字（半角英数字のみ）にマッチする文字クラス。 */
-const PDF_FILENAME_ALLOWED_CHARS = /[^A-Za-z0-9]/g;
+/** 共通の書き出し保存名が受け付ける文字: 半角英数字 + "_" + "-"。 */
+const EXPORT_FILENAME_ALLOWED_CHARS = /[^A-Za-z0-9_-]/g;
 
 /**
- * PDF保存ファイル名欄の入力/貼り付けをサニタイズする。全角英数字・記号・
- * 空白・日本語などASCII英数字以外は全て除去する（入稿用ファイル名は
- * 半角英数字のみが安全という前提のβ仕様）。
+ * PDF/JPG/ZIPで共有する保存名stemをサニタイズする。
+ * 日本語・空白・OSで扱いづらい記号は除去し、半角英数字・_・-だけを残す。
  */
 export function sanitizePdfFilenameStem(input: string): string {
-  return input.replace(PDF_FILENAME_ALLOWED_CHARS, '');
+  return input.replace(EXPORT_FILENAME_ALLOWED_CHARS, '');
 }
 
 function padDatePart(value: number): string {
@@ -57,4 +56,11 @@ export function buildDefaultPdfFilenameStem(now: Date = new Date()): string {
 /** サニタイズ済みstemに`.pdf`拡張子を付与する。二重拡張子を作らない。 */
 export function buildPdfFileNameFromStem(stem: string): string {
   return `${stem}.pdf`;
+}
+
+
+/** 作品に確定保存名がまだない場合は、従来の安全な自動候補を使う。 */
+export function resolveExportFilenameStem(savedStem: string | undefined, now: Date = new Date()): string {
+  const saved = sanitizePdfFilenameStem(savedStem ?? "");
+  return saved || buildDefaultPdfFilenameStem(now);
 }
