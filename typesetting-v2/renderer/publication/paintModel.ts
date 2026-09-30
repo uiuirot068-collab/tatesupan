@@ -275,6 +275,8 @@ export interface PublicationDocument {
   /** Editor-owned colophon visual choices carried to Publication paint. */
   colophonTemplateId?: "standard" | "center" | "minimal" | "classic";
   colophonFontSizePt?: number;
+  /** CSS family selected for the colophon. Empty string means follow body. */
+  colophonFontFamily?: string;
 }
 
 interface PaintLookup {
@@ -526,6 +528,7 @@ export function buildPublicationDocument(
   colophonVisual?: {
     templateId?: "standard" | "center" | "minimal" | "classic";
     fontSizePt?: number | null;
+    fontFamily?: string;
   }
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
@@ -567,6 +570,9 @@ export function buildPublicationDocument(
     ...(colophonVisual?.templateId ? { colophonTemplateId: colophonVisual.templateId } : {}),
     ...(typeof colophonVisual?.fontSizePt === "number"
       ? { colophonFontSizePt: colophonVisual.fontSizePt }
+      : {}),
+    ...(typeof colophonVisual?.fontFamily === "string"
+      ? { colophonFontFamily: colophonVisual.fontFamily }
       : {}),
   };
 }
