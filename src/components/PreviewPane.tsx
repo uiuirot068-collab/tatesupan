@@ -83,6 +83,7 @@ import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 import ColophonPageCard from "./ColophonPageCard";
+import V2ColophonPageCard from "./V2ColophonPageCard";
 import { resolveColophonInsertion } from "@/lib/colophon";
 import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE } from "@/lib/cloudImageSync";
 import {
@@ -764,11 +765,11 @@ function PreviewPane({
     () => resolveColophonInsertion(settings.colophon.pagePosition, listPages.length),
     [settings.colophon.pagePosition, listPages.length]
   );
-  // Phase 5: in V2 mode the physical order (and each item's physical page
+  // Phase 11: in V2 mode the physical order (and each item's physical page
   // number) is Core's own `pageSequence`, exactly the PaintPlan order. The
-  // colophon is still shown with the LEGACY ColophonPageCard (the V2 Preview
-  // colophon painter is not production-ready — it paints vertically), placed
-  // and numbered where V2 put it; a multi-page V2 colophon shows as one card.
+  // colophon now enters through V2ColophonPageCard, which shares the single
+  // product-approved visual template layer with the fallback renderer instead
+  // of treating the LEGACY card as V2's appearance implementation.
   const presentation = useMemo<{ items: PresentationItem[]; physicalNumbers: number[] }>(() => {
     if (v2PageModel && v2PageModel.bodyPageCount > 0) {
       const items: PresentationItem[] = [];
@@ -2876,13 +2877,14 @@ function PreviewPane({
                 if (!item) return null;
 
                 if (item.kind === "colophon") {
+                  const ColophonPreviewCard = useV2Engine ? V2ColophonPageCard : ColophonPageCard;
                   return (
                     <div
                       key="colophon"
                       ref={colophonElementRef}
                       className="relative flex shrink-0"
                     >
-                      <ColophonPageCard
+                      <ColophonPreviewCard
                         settings={settings}
                         layout={layout}
                         colophon={settings.colophon}
