@@ -73,6 +73,141 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
     expect(result.plan.length).toBeGreaterThan(result.document.pages.length - 1); // colophon adds at least its own page
   });
 
+  it("carries all four colophon templates into Publication and produces distinct colophon PaintPlans", () => {
+    const templateIds = ["standard", "center", "minimal", "classic"] as const;
+    const results = templateIds.map((templateId) => {
+      const settings: PageSettings = {
+        ...DEFAULT_PAGE_SETTINGS,
+        colophon: {
+          ...DEFAULT_PAGE_SETTINGS.colophon,
+          enabled: true,
+          templateId,
+          fontSizePt: 10,
+          placement: {
+            ...DEFAULT_PAGE_SETTINGS.colophon.placement,
+            horizontal: "center",
+            respectGutter: false,
+            vertical: "top",
+          },
+          fields: [
+            { id: "title", label: "書名", value: "テンプレート確認", visible: true },
+            { id: "author", label: "著者", value: "著者名", visible: true },
+            { id: "printer", label: "印刷所", value: "印刷所名", visible: true },
+          ],
+          freeText: "自由記述の確認",
+        },
+      };
+      const result = composeV2Document({
+        title: "T",
+        content: "本文",
+        settings,
+        measurement: MEASUREMENT,
+      });
+      const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");
+      expect(colophonPhysicalIndex).toBeGreaterThanOrEqual(0);
+      expect(result.model.colophonTemplateId).toBe(templateId);
+      expect(result.model.colophonFontSizePt).toBe(10);
+      return result.plan[colophonPhysicalIndex];
+    });
+
+    const signatures = results.map((page) =>
+      JSON.stringify(page.commands.map((command) =>
+        command.op === "text"
+          ? [command.op, command.text, command.xMm, command.yMm, command.fontSizePt, command.align]
+          : command.op === "rect"
+            ? [command.op, command.xMm, command.yMm, command.widthMm, command.heightMm]
+            : [command.op]
+      ))
+    );
+
+    expect(new Set(signatures).size).toBe(4);
+    expect(results[3].commands.some((command) => command.op === "rect")).toBe(true);
+  });
+
+  it("keeps free-text typography consistent across center/minimal/classic and carries the selected colophon font", () => {
+    const templateIds = ["center", "minimal", "classic"] as const;
+    const freeText = "自由記述ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (const templateId of templateIds) {
+      const settings: PageSettings = {
+        ...DEFAULT_PAGE_SETTINGS,
+        colophon: {
+          ...DEFAULT_PAGE_SETTINGS.colophon,
+          enabled: true,
+          templateId,
+          fontSizePt: 11,
+          fontFamily: "'Shippori Mincho', serif",
+          placement: {
+            ...DEFAULT_PAGE_SETTINGS.colophon.placement,
+            horizontal: "center",
+            respectGutter: false,
+            vertical: "center",
+          },
+          fields: [
+            { id: "title", label: "書名", value: "確認用", visible: true },
+            { id: "author", label: "著者名", value: "著者", visible: true },
+          ],
+          freeText,
+        },
+      };
+      const result = composeV2Document({
+        title: "T",
+        content: "本文",
+        settings,
+        measurement: MEASUREMENT,
+      });
+      expect(result.model.colophonFontFamily).toBe("'Shippori Mincho', serif");
+      expect(result.model.colophonFontSizePt).toBe(11);
+      const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");
+      const textCommands = result.plan[colophonPhysicalIndex].commands.filter(
+        (command): command is Extract<(typeof result.plan)[number]["commands"][number], { op: "text" }> =>
+          command.op === "text"
+      );
+      const freeTextCommands = textCommands.filter((command) => command.text.includes("自由記述") || command.text.includes("ABC"));
+      expect(freeTextCommands.length).toBeGreaterThan(0);
+      expect(freeTextCommands.every((command) => command.fontSizePt < 11)).toBe(true);
+      expect(freeTextCommands.every((command) => command.fontFamily === "'Shippori Mincho', serif")).toBe(true);
+    }
+  });
+
+  it("keeps classic free text raw until the shared render plan decides wrapping", () => {
+    const freeText = "あ".repeat(80);
+    const settings: PageSettings = {
+      ...DEFAULT_PAGE_SETTINGS,
+      colophon: {
+        ...DEFAULT_PAGE_SETTINGS.colophon,
+        enabled: true,
+        templateId: "classic",
+        fontSizePt: 10,
+        fields: [
+          { id: "title", label: "書名", value: "確認用", visible: true },
+          { id: "author", label: "著者名", value: "著者", visible: true },
+        ],
+        freeText,
+      },
+    };
+    const result = composeV2Document({
+      title: "T",
+      content: "本文",
+      settings,
+      measurement: MEASUREMENT,
+    });
+
+    expect(result.model.colophonFreeText).toBe(freeText);
+    expect(result.model.colophonRows).toEqual([
+      { label: "書名", value: "確認用" },
+      { label: "著者名", value: "著者" },
+    ]);
+
+    const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");
+    const renderedFreeText = result.plan[colophonPhysicalIndex].commands
+      .filter((command): command is Extract<(typeof result.plan)[number]["commands"][number], { op: "text" }> => command.op === "text")
+      .map((command) => command.text)
+      .filter((text) => /^あ+$/.test(text))
+      .join("");
+
+    expect(renderedFreeText).toBe(freeText);
+  });
+
   it("a disabled colophon (real Editor default) never adds a colophon page", () => {
     const result = composeV2Document({ title: "T", content: "本文", settings: DEFAULT_PAGE_SETTINGS, measurement: MEASUREMENT });
     expect(result.document.colophon).toBeUndefined();

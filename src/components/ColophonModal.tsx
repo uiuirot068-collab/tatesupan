@@ -177,44 +177,14 @@ export default function ColophonModal({
                   ))}
                 </div>
                 <span className="text-[11px] text-ink/40">
-                  テンプレートを変更しても入力済みの奥付情報・配置は保持されます。
+                  テンプレートを変更しても入力済みの奥付情報・上下位置は保持されます。
                 </span>
               </div>
 
-              {/* B. BLOCK PLACEMENT — 奥付ページ「内」でのブロック配置（テンプレートとは独立）。 */}
+              {/* B. BLOCK PLACEMENT — 左右指定は廃止。奥付ブロックは常に紙面中央。 */}
               <div className="flex flex-col gap-2 rounded border border-ink/15 p-2">
-                <span className="text-xs font-semibold text-ink/70">配置</span>
+                <span className="text-xs font-semibold text-ink/70">上下位置</span>
                 <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-xs text-ink/50">左右</span>
-                  {(
-                    [
-                      ["left", "左寄り"],
-                      ["center", "中央寄せ"],
-                      ["right", "右寄り"],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <label key={v} className="flex items-center gap-1">
-                      <input
-                        type="radio"
-                        name="colophon-h-align"
-                        checked={colophon.placement.horizontal === v}
-                        onChange={() => patchPlacement({ horizontal: v })}
-                      />
-                      <span className="text-ink">{label}</span>
-                    </label>
-                  ))}
-                  <label className="flex items-center gap-1 text-xs text-ink/60">
-                    <input
-                      type="checkbox"
-                      checked={colophon.placement.respectGutter}
-                      onChange={(e) => patchPlacement({ respectGutter: e.target.checked })}
-                      className="h-3.5 w-3.5 rounded border-ink/30"
-                    />
-                    ノドを考慮する
-                  </label>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-xs text-ink/50">上下</span>
                   {(
                     [
                       ["top", "上部寄せ"],
@@ -227,7 +197,7 @@ export default function ColophonModal({
                         type="radio"
                         name="colophon-v-align"
                         checked={colophon.placement.vertical === v}
-                        onChange={() => patchPlacement({ vertical: v })}
+                        onChange={() => patchPlacement({ vertical: v, horizontal: "center", respectGutter: false })}
                       />
                       <span className="text-ink">{label}</span>
                     </label>
@@ -236,29 +206,66 @@ export default function ColophonModal({
                     <input
                       type="checkbox"
                       checked={colophon.placement.respectVerticalMargins}
-                      onChange={(e) => patchPlacement({ respectVerticalMargins: e.target.checked })}
+                      onChange={(e) =>
+                        patchPlacement({
+                          vertical: colophon.placement.vertical,
+                          horizontal: "center",
+                          respectGutter: false,
+                          respectVerticalMargins: e.target.checked,
+                        })
+                      }
                       className="h-3.5 w-3.5 rounded border-ink/30"
                     />
                     天地の余白を考慮する
                   </label>
                 </div>
+                <span className="text-[11px] text-ink/40">
+                  左右位置は紙面中央に固定されます。
+                </span>
               </div>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-ink/60">奥付フォント</span>
-                <select
-                  value={colophon.fontFamily}
-                  onChange={(e) => patch({ fontFamily: e.target.value })}
-                  className="max-w-xs rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-                >
-                  <option value={COLOPHON_FONT_SAME_AS_BODY}>本文と同じ</option>
-                  {FONT_FAMILY_OPTIONS.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px]">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-ink/60">奥付フォント</span>
+                  <select
+                    value={colophon.fontFamily}
+                    onChange={(e) => patch({ fontFamily: e.target.value })}
+                    className="w-full rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                  >
+                    <option value={COLOPHON_FONT_SAME_AS_BODY}>本文と同じ</option>
+                    {FONT_FAMILY_OPTIONS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-ink/60">文字サイズ（pt）</span>
+                  <input
+                    type="number"
+                    min={4}
+                    max={24}
+                    step={0.5}
+                    value={colophon.fontSizePt ?? ""}
+                    placeholder="本文と同じ"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        patch({ fontSizePt: null });
+                        return;
+                      }
+                      const n = Number(raw);
+                      if (!Number.isFinite(n)) return;
+                      patch({ fontSizePt: Math.min(24, Math.max(4, n)) });
+                    }}
+                    className="w-full rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                  />
+                </label>
+              </div>
+              <span className="-mt-2 text-[11px] text-ink/40">
+                文字サイズを空欄にすると本文と同じサイズに戻ります。
+              </span>
 
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-ink/60">項目（項目名そのものも変更できます）</span>
@@ -342,7 +349,7 @@ export default function ColophonModal({
               </label>
 
               <p className="rounded border border-ink/15 bg-ink/5 px-2 py-1.5 text-[11px] leading-snug text-ink/50">
-                配置・ノド・天地の設定で領域が足りず内容が収まらない場合はプレビューに警告が
+                上下位置・天地余白の設定で領域が足りず内容が収まらない場合はプレビューに警告が
                 表示されます。β版では自動でのページ分割・文字の縮小・切り捨ては行いません。
                 本文でノンブルを表示している場合は、奥付ページにも実際の作品ページ順に沿った
                 続きのページ番号が表示されます。

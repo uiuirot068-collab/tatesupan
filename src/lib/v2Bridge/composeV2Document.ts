@@ -9,6 +9,7 @@
  * rationale as `settingsAdapter.ts`'s own doc comment.
  */
 import { buildV2UnitsFromManuscript, type ManuscriptSourceMap } from "./manuscriptAdapter";
+import { compileColophonContent } from "../../../typesetting-v2/core/colophon";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
 import { applyEditorPageOverrides } from "./pageFurniture";
 import { computePageLayout, type PageSettings } from "../pageLayout";
@@ -184,7 +185,32 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   };
 
   const model = colophonComposition
-    ? buildPublicationDocument("editor-doc", input.title, document, units, source, ctx, colophonComposition.units, colophonComposition.source)
+    ? buildPublicationDocument(
+        "editor-doc",
+        input.title,
+        document,
+        units,
+        source,
+        ctx,
+        colophonComposition.units,
+        colophonComposition.source,
+        {
+          templateId: input.settings.colophon.templateId,
+          fontSizePt: input.settings.colophon.fontSizePt,
+          fontFamily: input.settings.colophon.fontFamily,
+          ...(() => {
+            const compiled = compileColophonContent({
+              fields: input.settings.colophon.fields,
+              freeText: input.settings.colophon.freeText,
+            });
+            return {
+              rows: compiled.rows,
+              freeText: compiled.freeText,
+              titleFallback: input.title.trim(),
+            };
+          })(),
+        }
+      )
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);
 
   return {

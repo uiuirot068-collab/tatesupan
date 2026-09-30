@@ -272,6 +272,15 @@ export interface PublicationDocument {
   // completion, Step 2D) threads the full object so
   // `respectGutter`/`respectVerticalMargins` reach Publication too.
   colophonPlacement?: ColophonPlacement;
+  /** Editor-owned colophon visual choices carried to Publication paint. */
+  colophonTemplateId?: "standard" | "center" | "minimal" | "classic";
+  colophonFontSizePt?: number;
+  /** CSS family selected for the colophon. Empty string means follow body. */
+  colophonFontFamily?: string;
+  /** Raw, pre-composition colophon content for Preview/Publication wrap parity. */
+  colophonRows?: Array<{ label: string; value: string }>;
+  colophonFreeText?: string;
+  colophonTitleFallback?: string;
 }
 
 interface PaintLookup {
@@ -519,7 +528,15 @@ export function buildPublicationDocument(
   // caller) leaves `colophonPages` undefined, byte-identical to before
   // this parameter existed.
   colophonUnits?: LogicalUnit[],
-  colophonSource?: string
+  colophonSource?: string,
+  colophonVisual?: {
+    templateId?: "standard" | "center" | "minimal" | "classic";
+    fontSizePt?: number | null;
+    fontFamily?: string;
+    rows?: Array<{ label: string; value: string }>;
+    freeText?: string;
+    titleFallback?: string;
+  }
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
   const lookup = createPaintLookup(units, source);
@@ -557,5 +574,19 @@ export function buildPublicationDocument(
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),
     ...(document.colophon?.placement ? { colophonPlacement: document.colophon.placement } : {}),
+    ...(colophonVisual?.templateId ? { colophonTemplateId: colophonVisual.templateId } : {}),
+    ...(typeof colophonVisual?.fontSizePt === "number"
+      ? { colophonFontSizePt: colophonVisual.fontSizePt }
+      : {}),
+    ...(typeof colophonVisual?.fontFamily === "string"
+      ? { colophonFontFamily: colophonVisual.fontFamily }
+      : {}),
+    ...(colophonVisual?.rows ? { colophonRows: colophonVisual.rows.map((row) => ({ ...row })) } : {}),
+    ...(typeof colophonVisual?.freeText === "string"
+      ? { colophonFreeText: colophonVisual.freeText }
+      : {}),
+    ...(typeof colophonVisual?.titleFallback === "string"
+      ? { colophonTitleFallback: colophonVisual.titleFallback }
+      : {}),
   };
 }
