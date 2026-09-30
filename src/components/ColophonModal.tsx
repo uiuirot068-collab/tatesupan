@@ -244,21 +244,48 @@ export default function ColophonModal({
                 </div>
               </div>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-ink/60">奥付フォント</span>
-                <select
-                  value={colophon.fontFamily}
-                  onChange={(e) => patch({ fontFamily: e.target.value })}
-                  className="max-w-xs rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-                >
-                  <option value={COLOPHON_FONT_SAME_AS_BODY}>本文と同じ</option>
-                  {FONT_FAMILY_OPTIONS.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px]">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-ink/60">奥付フォント</span>
+                  <select
+                    value={colophon.fontFamily}
+                    onChange={(e) => patch({ fontFamily: e.target.value })}
+                    className="w-full rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                  >
+                    <option value={COLOPHON_FONT_SAME_AS_BODY}>本文と同じ</option>
+                    {FONT_FAMILY_OPTIONS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-ink/60">文字サイズ（pt）</span>
+                  <input
+                    type="number"
+                    min={4}
+                    max={24}
+                    step={0.5}
+                    value={colophon.fontSizePt ?? ""}
+                    placeholder="本文と同じ"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        patch({ fontSizePt: null });
+                        return;
+                      }
+                      const n = Number(raw);
+                      if (!Number.isFinite(n)) return;
+                      patch({ fontSizePt: Math.min(24, Math.max(4, n)) });
+                    }}
+                    className="w-full rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                  />
+                </label>
+              </div>
+              <span className="-mt-2 text-[11px] text-ink/40">
+                文字サイズを空欄にすると本文と同じサイズに戻ります。
+              </span>
 
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-ink/60">項目（項目名そのものも変更できます）</span>
