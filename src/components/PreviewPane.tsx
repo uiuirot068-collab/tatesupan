@@ -76,9 +76,15 @@ import ExportProgressModal from "./ExportProgressModal";
 import PdfExportChecklistGate from "./PdfExportChecklistGate";
 import PdfModeOption, { PDF_MODE_OPTIONS } from "./PdfModeOption";
 import { toggleHelp } from "./pdfModeHelp";
-import OddPageExportWarning from "./OddPageExportWarning";
 import { describeExportMenu, PDF_UNAVAILABLE_NOTE, type ExportMenuEntryId } from "./exportMenuEntries";
 import { shouldWarnOddPageExport } from "./oddPageWarningRule";
+import ExportPreflightAccordion from "./ExportPreflightAccordion";
+import {
+  buildExportPreflightReport,
+  canContinueExportAfterPreflight,
+  exportPreflightFingerprint,
+  type ExportPreflightIssue,
+} from "@/lib/exportPreflight";
 import ViewportModal from "./ViewportModal";
 import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
@@ -144,11 +150,7 @@ import {
 /** Presentation Page Sequence の1要素（本文ページ or 横書き奥付ページ）。 */
 type PresentationItem = { kind: "body"; bodyIndex: number } | { kind: "colophon" };
 
-/**
- * PDF書き出しボタン押下時点で確定した、実際に書き出す対象。奇数ページ確認
- * ダイアログを挟む間もこの値を凍結して保持し、`runPdfExport` はこれを1回
- * だけ再開する（scope/filename/奥付込みの計算をやり直さない）。
- */
+/** PDF書き出しボタン押下時点で確定した、実際に書き出す対象。 */
 type PendingPdfExport = {
   indices: number[];
   pdfFileName: string;
@@ -1867,21 +1869,56 @@ function PreviewPane({
   // セッションを開くたびに今日の日付でリセットする——同一モーダルを
   // 開いたままの対象/出力ラジオ変更ではリセットしない（TSP-PDF-SAFE-FILENAME-014 I）。
   const [pdfFilenameStem, setPdfFilenameStem] = useState(() => buildDefaultPdfFilenameStem());
-  // 奇数ページ書き出し確認 (TSP-UX-V3-LOOP2-ODD-PAGE-012): window.confirm を
-  // やめ、「?」helpと同じ ViewportModal パターンで警告する。indices /
-  // pdfFileName / includeColophonInPdf はボタン押下時点の値を凍結して保持し
-  // ——「このままPDFを書き出す」は必ずこの同じ pending を1回だけ再開する
-  // （リトライで再計算せず、二重生成にもならない）。
-  const [oddPageWarning, setOddPageWarning] = useState<{
-    totalPages: number;
-    pending: PendingPdfExport;
-  } | null>(null);
+  // Unified export preflight foundation. The report is scoped to what the
+  // current PDF setup would actually export: selecting only healthy pages
+  // therefore clears an image blocker without hiding the document-level warning.
+  const [pdfPreflightOpen, setPdfPreflightOpen] = useState(false);
+  const [pdfPreflightReviewedFingerprint, setPdfPreflightReviewedFingerprint] = useState<string | null>(null);
+  const pdfTargetBodyIndices =
+    pdfScope === "all" ? listPages.map((_, index) => index) : getOrderedSelectedIndices();
+  const pdfAffectedImagePages = affectedExportPageNumbers(pdfTargetBodyIndices, blockedExportPageSet);
+  const pdfWillIncludeColophon = showColophon && (pdfScope === "all" || pdfIncludeColophon);
+  const pdfOddPageCheck = shouldWarnOddPageExport({
+    scope: pdfScope,
+    bodyPageCount: listPages.length,
+    includeColophon: pdfWillIncludeColophon,
+  });
+  const pdfPreflightIssues: ExportPreflightIssue[] = [
+    ...(pdfAffectedImagePages.length > 0
+      ? [{
+          id: "image-links",
+          severity: "blocker" as const,
+          title: "画像リンク切れ",
+          detail: "この書き出し対象に、未確認の画像リンク切れがあります。対象ページを外すか、画像を確認・復旧してください。",
+          pageNumbers: pdfAffectedImagePages,
+          actionLabel: "画像を確認",
+        }]
+      : []),
+    ...(pdfOddPageCheck
+      ? [{
+          id: "odd-pages",
+          severity: "warning" as const,
+          title: `全体が奇数ページです（${pdfOddPageCheck.totalPages}ページ）`,
+          detail: "見開き・印刷用途では末尾の左右が想定どおりか確認してください。内容を確認済みなら、このまま書き出せます。",
+        }]
+      : []),
+  ];
+  const pdfPreflightReport = buildExportPreflightReport(pdfPreflightIssues);
+  const pdfPreflightFingerprint = exportPreflightFingerprint(pdfPreflightReport);
+  const pdfPreflightReviewed = pdfPreflightReviewedFingerprint === pdfPreflightFingerprint;
+
+  useEffect(() => {
+    // If scope/selection changes while the accordion is open, the new report
+    // is literally visible to the user, so the current fingerprint is reviewed.
+    if (pdfPreflightOpen) setPdfPreflightReviewedFingerprint(pdfPreflightFingerprint);
+  }, [pdfPreflightOpen, pdfPreflightFingerprint]);
 
   const handleOpenPdfModal = () => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
     setPdfFilenameStem(buildDefaultPdfFilenameStem());
     setOpenPdfModeHelp(null);
-    setOddPageWarning(null);
+    setPdfPreflightOpen(false);
+    setPdfPreflightReviewedFingerprint(null);
     setIsPdfModalOpen(true);
   };
 
@@ -1890,17 +1927,6 @@ function PreviewPane({
     setOpenPdfModeHelp(null);
     return true;
   }, [openPdfModeHelp]);
-
-  const handleOddPageWarningReturn = () => {
-    setOddPageWarning(null);
-  };
-
-  const handleOddPageWarningContinue = () => {
-    if (!oddPageWarning) return;
-    const { pending } = oddPageWarning;
-    setOddPageWarning(null);
-    void runPdfExport(pending);
-  };
 
   const performDownloadPdf = async () => {
     if (layout.paper.isPx) return;
@@ -1912,31 +1938,13 @@ function PreviewPane({
       return;
     }
     if (exportBlockedByUnresolvedImages(indices)) return;
-    // Phase 3: in V2 the whole-book page count comes from the CURRENT canonical
-    // layout (what the PDF will actually contain), not the LEGACY page list.
-    let bodyPageCountForWarning = pages.length;
-    if (useV2Engine) {
-      try {
-        bodyPageCountForWarning = bodyPageCount((await v2Adapter.awaitComposition(currentCompositionInput())).pageSequence);
-      } catch (error: unknown) {
-        alert(error instanceof Error ? error.message : "V2 PDF export failed.");
-        return;
-      }
-    }
     // 全ページPDF: 奥付 ON なら含める。
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
       showColophon && (pdfScope === "all" || pdfIncludeColophon);
     const pending: PendingPdfExport = { indices, pdfFileName, includeColophonInPdf };
-    const oddPageCheck = shouldWarnOddPageExport({
-      scope: pdfScope,
-      bodyPageCount: bodyPageCountForWarning,
-      includeColophon: includeColophonInPdf,
-    });
-    if (oddPageCheck) {
-      setOddPageWarning({ totalPages: oddPageCheck.totalPages, pending });
-      return; // PDF未生成のままユーザーの選択を待つ（runPdfExportがpendingを再開する）
-    }
+    // Odd-page guidance is now part of the unified preflight accordion.
+    // A warning can proceed after review; blockers are still re-checked above.
     await runPdfExport(pending);
   };
 
@@ -3114,10 +3122,14 @@ function PreviewPane({
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={(pdfScope === "selected" && selected.size === 0) || pdfFilenameStem.length === 0}
+                disabled={
+                  (pdfScope === "selected" && selected.size === 0) ||
+                  pdfFilenameStem.length === 0 ||
+                  !canContinueExportAfterPreflight(pdfPreflightReport, pdfPreflightReviewed)
+                }
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                ダウンロード
+                {pdfPreflightReport.warningCount > 0 ? "確認してこのまま書き出す" : "ダウンロード"}
               </button>
             </>
           )}
@@ -3125,6 +3137,20 @@ function PreviewPane({
           <p className="mb-3 rounded border border-[#c5a059]/40 bg-[#c5a059]/10 px-3 py-2 text-xs leading-snug text-ink/70">
             TateSpunは現在β版です。書き出したデータは、印刷所への入稿前にページ・サイズ・文字・画像などを必ずご確認ください。
           </p>
+          <ExportPreflightAccordion
+            report={pdfPreflightReport}
+            open={pdfPreflightOpen}
+            reviewed={pdfPreflightReviewed}
+            onToggle={(open) => {
+              setPdfPreflightOpen(open);
+              if (open) setPdfPreflightReviewedFingerprint(pdfPreflightFingerprint);
+            }}
+            onIssueAction={(issueId) => {
+              if (issueId !== "image-links") return;
+              setIsPdfModalOpen(false);
+              setImageWarningOpen(true);
+            }}
+          />
           <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
           <div className="mb-3 flex flex-col gap-2">
             {(
@@ -3261,14 +3287,6 @@ function PreviewPane({
             )}
           </div>
         </ViewportModal>
-      )}
-
-      {oddPageWarning && (
-        <OddPageExportWarning
-          totalPages={oddPageWarning.totalPages}
-          onReturn={handleOddPageWarningReturn}
-          onContinue={handleOddPageWarningContinue}
-        />
       )}
 
       {isExporting && (
