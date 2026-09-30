@@ -16,9 +16,9 @@ describe("TSP-PDF-SAFE-FILENAME-014 — PDF export filename contract", () => {
     expect(sanitizePdfFilenameStem("abcXYZ123")).toBe("abcXYZ123");
   });
 
-  it("strips hyphens, underscores, and spaces", () => {
-    expect(sanitizePdfFilenameStem("Book-01")).toBe("Book01");
-    expect(sanitizePdfFilenameStem("Book_01")).toBe("Book01");
+  it("keeps hyphens and underscores, but strips spaces", () => {
+    expect(sanitizePdfFilenameStem("Book-01")).toBe("Book-01");
+    expect(sanitizePdfFilenameStem("Book_01")).toBe("Book_01");
     expect(sanitizePdfFilenameStem("Book 01")).toBe("Book01");
   });
 
@@ -31,8 +31,8 @@ describe("TSP-PDF-SAFE-FILENAME-014 — PDF export filename contract", () => {
     expect(sanitizePdfFilenameStem("ＡＢＣ１２３")).toBe("");
   });
 
-  it("strips mixed Japanese/symbol/ASCII paste content down to [A-Za-z0-9]", () => {
-    expect(sanitizePdfFilenameStem("My-Book_01")).toBe("MyBook01");
+  it("strips mixed Japanese/symbol input while preserving _ and -", () => {
+    expect(sanitizePdfFilenameStem("My-Book_01")).toBe("My-Book_01");
     expect(sanitizePdfFilenameStem("新刊(Book)#01!")).toBe("Book01");
   });
 
