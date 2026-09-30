@@ -271,12 +271,52 @@ html[data-theme="dark"] .howto-page .devlog { border-top: 1px solid color-mix(in
 .howto-page .devlog-heading h2 { margin: 4px 0 0; font-family: var(--font-serif), serif; font-size: 24px; font-weight: 500; letter-spacing: .05em; }
 .howto-page .devlog-heading p { font-size: 13px; color: #c9c1b3; }
 .howto-page .log-list { display: grid; }
-.howto-page .log-row { display: grid; grid-template-columns: 95px 92px 1fr; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid rgba(244, 240, 231, .16); font-size: 13px; }
+.howto-page .log-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 8px;
+  align-items: start;
+  padding: 22px 0 24px;
+  border-top: 1px solid rgba(244, 240, 231, .16);
+  font-size: 13px;
+}
 .howto-page .log-row:last-child { border-bottom: 1px solid rgba(244, 240, 231, .16); }
-.howto-page .log-date { color: #c9c1b3; font-variant-numeric: tabular-nums; }
-.howto-page .log-type { width: max-content; padding: 4px 8px 3px; background: var(--night-text); color: var(--night); font-size: 10px; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: .16em; }
-.howto-page .log-title { font-weight: 700; }
-.howto-page .log-body { margin-top: 2px; color: #bdb6aa; }
+.howto-page .log-date {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 2px;
+  color: #c9c1b3;
+  font-variant-numeric: tabular-nums;
+}
+.howto-page .log-type {
+  grid-column: 1;
+  grid-row: 2;
+  width: max-content;
+  margin-top: 4px;
+  padding: 4px 8px 3px;
+  background: var(--night-text);
+  color: var(--night);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+}
+.howto-page .log-row > div:last-child {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
+.howto-page .log-title {
+  font-weight: 700;
+  line-height: 1.6;
+}
+.howto-page .log-body {
+  margin-top: 8px;
+  color: #bdb6aa;
+  line-height: 1.95;
+}
 .howto-page .more-logs { width: 100%; min-height: 44px; margin-top: 18px; padding: 10px; border: 1px solid rgba(244, 240, 231, .4); background: transparent; color: var(--night-text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .howto-page .more-logs:hover { background: rgba(244, 240, 231, .06); }
 .howto-page .devlog :where(a, button):focus-visible { outline-color: rgba(244, 240, 231, .85); }
@@ -345,7 +385,12 @@ html[data-theme="dark"] .howto-page .devlog { border-top: 1px solid color-mix(in
   .howto-page .faq-q { padding-left: 32px; font-size: 15px; }
   .howto-page .faq-text { padding-left: 32px; }
   .howto-page .devlog { margin: 0 -18px; padding: 48px 18px 58px; }
-  .howto-page .log-row { grid-template-columns: 1fr; gap: 5px; }
+  .howto-page .log-row { grid-template-columns: 1fr; gap: 8px; padding: 20px 0 22px; }
+  .howto-page .log-date,
+  .howto-page .log-type,
+  .howto-page .log-row > div:last-child { grid-column: 1; grid-row: auto; }
+  .howto-page .log-type { margin-top: 0; }
+  .howto-page .log-body { margin-top: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
