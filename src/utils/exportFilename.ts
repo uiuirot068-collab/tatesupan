@@ -64,3 +64,14 @@ export function resolveExportFilenameStem(savedStem: string | undefined, now: Da
   const saved = sanitizePdfFilenameStem(savedStem ?? "");
   return saved || buildDefaultPdfFilenameStem(now);
 }
+
+
+/** 確定済みの共通stemからページJPG名を作る。 */
+export function buildPageJpgFileNameFromStem(stem: string, pageNumber: number): string {
+  return `${sanitizePdfFilenameStem(stem)}_${padPageNumber(pageNumber)}.jpg`;
+}
+
+/** 確定済みの共通stemからJPG ZIP名を作る。 */
+export function buildZipFileNameFromStem(stem: string): string {
+  return `${sanitizePdfFilenameStem(stem)}_jpg.zip`;
+}
