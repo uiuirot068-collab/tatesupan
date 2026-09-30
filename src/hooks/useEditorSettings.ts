@@ -7,6 +7,7 @@ import {
   type PageSettings,
 } from "@/lib/pageLayout";
 import { normalizeColophonSettings } from "@/lib/colophon";
+import { createDefaultTocSettings, normalizeTocSettings } from "@/lib/tocSettings";
 import { normalizeOutputTypography } from "@/lib/outputTypography";
 
 const STORAGE_KEY = "tatespun_settings";
@@ -28,6 +29,8 @@ function loadStoredSettings(): PageSettings | null {
       },
       pageOverrides: {},
       colophon: normalizeColophonSettings(parsed.colophon),
+      // TOC is work-specific like the export filename; never inherit it into a new work.
+      toc: createDefaultTocSettings(),
     });
   } catch {
     return null;
@@ -66,9 +69,17 @@ export function useEditorSettings({ persist = true }: { persist?: boolean } = {}
   }, [persist, settings]);
 
   const setSettings: Dispatch<SetStateAction<PageSettings>> = useCallback((next) => {
-    setRawSettings((previous) => normalizeOutputTypography(
-      typeof next === "function" ? next(previous) : next
-    ));
+    setRawSettings((previous) => {
+      const resolved = typeof next === "function" ? next(previous) : next;
+      return normalizeOutputTypography({
+        ...DEFAULT_PAGE_SETTINGS,
+        ...resolved,
+        masterPage: { ...DEFAULT_MASTER_PAGE_SETTINGS, ...resolved.masterPage },
+        pageOverrides: resolved.pageOverrides ?? {},
+        colophon: normalizeColophonSettings(resolved.colophon),
+        toc: normalizeTocSettings(resolved.toc),
+      });
+    });
   }, []);
 
   return [settings, setSettings] as const;

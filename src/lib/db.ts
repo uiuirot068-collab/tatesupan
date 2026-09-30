@@ -5,6 +5,7 @@ import {
   type PageSettings,
 } from "./pageLayout";
 import { createGuideColophonSettings, normalizeColophonSettings } from "./colophon";
+import { normalizeTocSettings } from "./tocSettings";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import { isEphemeralDocId } from "@/constants/demoData";
 import { initializeWorkSessionScope } from "./editorSessionActivity";
@@ -95,6 +96,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
       pageOverrides: doc.settings?.pageOverrides ?? {},
       // 旧レコード（colophon 未保存）は既定の奥付設定（enabled=false）で開く。
       colophon: normalizeColophonSettings(doc.settings?.colophon, doc.title),
+      toc: normalizeTocSettings(doc.settings?.toc),
     },
     plotNote: doc.plotNote ?? "",
     isCollection: doc.isCollection ?? false,

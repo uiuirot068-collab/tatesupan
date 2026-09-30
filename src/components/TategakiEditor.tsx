@@ -1163,6 +1163,17 @@ export default function TategakiEditor({
             onExportFilenameStemChange={(stem) =>
               setSettings((previous) => ({ ...previous, exportFilenameStem: stem }))
             }
+            toc={settings.toc}
+            onEditToc={() => {
+              setBookPartsInitialTab("toc");
+              setIsBookPartsModalOpen(true);
+            }}
+            onDeleteToc={() =>
+              setSettings((previous) => ({
+                ...previous,
+                toc: { enabled: false, items: [], updatedAt: null },
+              }))
+            }
             content={content}
             onContentChange={setContent}
             workSession={workSession}
@@ -1332,6 +1343,7 @@ export default function TategakiEditor({
           isOpen={isBookPartsModalOpen}
           onClose={() => setIsBookPartsModalOpen(false)}
           onInsert={handleBookPartsInsert}
+          onTocChange={(toc) => setSettings((previous) => ({ ...previous, toc }))}
           onOpenColophonModal={() => {
             setIsBookPartsModalOpen(false);
             setIsColophonModalOpen(true);

@@ -53,6 +53,7 @@ import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import type { ReviewHubToolId } from "@/lib/reviewHub";
 import InfoTooltip from "./InfoTooltip";
 import ExportFilenameControl from "./ExportFilenameControl";
+import type { TocSettings } from "@/lib/tocSettings";
 import { TITLE_HELP } from "@/lib/editorTerminology";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
@@ -91,6 +92,9 @@ interface EditorPaneProps {
   onTitleChange: (title: string) => void;
   exportFilenameStem: string;
   onExportFilenameStemChange: (stem: string) => void;
+  toc: TocSettings;
+  onEditToc: () => void;
+  onDeleteToc: () => void;
   content: string;
   onContentChange: (content: string) => void;
   workSession: WorkSessionState;
@@ -185,6 +189,9 @@ function EditorPaneInner(
     onTitleChange,
     exportFilenameStem,
     onExportFilenameStemChange,
+    toc,
+    onEditToc,
+    onDeleteToc,
     content,
     onContentChange,
     workSession,
@@ -946,11 +953,6 @@ function EditorPaneInner(
             text={TITLE_HELP}
             label="作品タイトルの説明"
           />
-          <ExportFilenameControl
-            stem={exportFilenameStem}
-            onChange={onExportFilenameStemChange}
-            className="hidden min-w-0 max-w-[280px] @min-[700px]:flex min-[1180px]:hidden"
-          />
           <span
             data-editor-character-count=""
             title="現在の原稿文字数"
@@ -959,7 +961,13 @@ function EditorPaneInner(
             {visualLength.toLocaleString("ja-JP")}文字
           </span>
         </div>
-        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:@max-[905px]:gap-1`}>
+        <div data-editor-action-row="" className={`grid min-w-0 max-w-full ${focusMode ? "grid-cols-[max-content_44px_44px_max-content_max-content_max-content_max-content]" : "grid-cols-[max-content_44px_44px_max-content_max-content_max-content]"} items-stretch justify-center gap-0.5 sm:gap-1 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2 md:@max-[905px]:gap-1`}>
+          <ExportFilenameControl
+            stem={exportFilenameStem}
+            onChange={onExportFilenameStemChange}
+            compact
+            className="flex min-h-9 max-w-[260px] md:min-h-0"
+          />
           <button
             type="button"
             data-editor-action="undo"
@@ -1057,6 +1065,26 @@ function EditorPaneInner(
             <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} title="使い方・ショートカット・特殊記法" className={`min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">使い方</span></button>
           </nav>
         </div>
+        {toc.enabled && toc.items.length > 0 && !focusMode && (
+          <div
+            data-toc-editor-block=""
+            className="mt-1 rounded-md border border-[#c5a059]/45 bg-[#c5a059]/[0.06] px-3 py-2 text-xs text-ink/75"
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">📑 目次</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-ink/50">
+                {toc.items.slice(0, 3).map((item) => `${item.title} p.${item.pageNumber}`).join(" / ")}
+                {toc.items.length > 3 ? ` / +${toc.items.length - 3}` : ""}
+              </span>
+              <button type="button" onClick={onEditToc} className="shrink-0 font-semibold text-accent hover:underline">
+                再検出・編集
+              </button>
+              <button type="button" onClick={onDeleteToc} className="shrink-0 text-ink/45 hover:text-red-500">
+                削除
+              </button>
+            </div>
+          </div>
+        )}
         <InlineMemoAccordion
           key={memoStorageKey}
           open={memoOpen}

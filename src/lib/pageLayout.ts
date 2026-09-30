@@ -1,5 +1,6 @@
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { createDefaultColophonSettings, type ColophonSettings } from "./colophon";
+import { createDefaultTocSettings, type TocSettings } from "./tocSettings";
 
 export type PaperSizeKey = keyof typeof PAPER_SIZE_TEMPLATES;
 
@@ -152,6 +153,8 @@ export interface PageSettings {
   // 1ページ差し込まれる）。旧ドキュメントは db.ts / useEditorSettings 側の
   // normalizeColophonSettings 経由で既定値へフォールバックする。
   colophon: ColophonSettings;
+  // Phase 11 Human-QA repair: TOC is work-owned structured data, never body text.
+  toc: TocSettings;
 }
 
 /** 特定ページ単位でマスターページ設定を上書きする項目 */
@@ -278,6 +281,7 @@ export const DEFAULT_PAGE_SETTINGS: PageSettings = {
   masterPage: DEFAULT_MASTER_PAGE_SETTINGS,
   pageOverrides: {},
   colophon: createDefaultColophonSettings(),
+  toc: createDefaultTocSettings(),
 };
 
 /** 印刷用の塗り足し幅（天地左右）。仕上がり線は用紙外形からこの分だけ内側。 */

@@ -2,18 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import { generateTitlePageText, generateColophonText, ColophonData } from '@/utils/bookStructure';
-import { generateTocText, type TocItem } from '@/utils/tocGenerator';
+import { type TocItem } from '@/utils/tocGenerator';
 import { computeTocItemsWithV2 } from '@/lib/v2Bridge/tocPageNumbers';
 import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewWorkerClient';
 import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
 import InfoTooltip from './InfoTooltip';
 import { TOC_REDETECT_HELP } from '@/lib/editorTerminology';
+import type { TocSettings } from '@/lib/tocSettings';
 
 interface BookPartsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsert: (textToInsert: string, position: 'start' | 'end') => void;
+  onTocChange: (toc: TocSettings) => void;
   /** 「奥付（横）」= 本文とは独立した横書き専用ページ（ColophonModal）を開く。 */
   onOpenColophonModal: () => void;
   currentTitle?: string;
@@ -37,13 +39,14 @@ const BOOK_PART_TABS: { id: BookPartTab; label: string; description: string }[] 
   { id: 'colophon', label: '奥付（縦）', description: '本文ページとして縦書きの奥付を作成' },
   { id: 'colophon-h', label: '奥付（横）', description: '独立した横書き専用ページを作成' },
   // { id: 'title', label: '扉（タイトルページ）', description: '作品タイトルなどの扉を本文へ挿入' },
-  { id: 'toc', label: '目次作成', description: '目次用テキストを作成' },
+  { id: 'toc', label: '目次作成', description: '本文とは別の目次ページを作成' },
 ];
 
 export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   isOpen,
   onClose,
   onInsert,
+  onTocChange,
   onOpenColophonModal,
   currentTitle = '',
   content,
@@ -176,8 +179,11 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
       alert('見出しが見つかりませんでした。本文に「# 見出し」または「■ 見出し」を追加してください。');
       return;
     }
-    const text = generateTocText(tocItems);
-    onInsert(text, 'start');
+    onTocChange({
+      enabled: true,
+      items: tocItems.map((item) => ({ ...item })),
+      updatedAt: Date.now(),
+    });
     onClose();
   };
 
@@ -391,7 +397,7 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
                   ? '本文の先頭に挿入'
                   : tocLoading
                     ? 'ページ番号を判定中…'
-                    : '目次を挿入'}
+                    : settings.toc?.enabled ? '目次を更新' : '目次を作成'}
           </button>
         </div>
       </div>
