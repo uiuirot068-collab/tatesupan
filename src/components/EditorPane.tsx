@@ -53,7 +53,7 @@ import { useReviewHubFooterPins } from "@/hooks/useReviewHubFooterPins";
 import type { ReviewHubToolId } from "@/lib/reviewHub";
 import InfoTooltip from "./InfoTooltip";
 import ExportFilenameControl from "./ExportFilenameControl";
-import type { TocSettings } from "@/lib/tocSettings";
+import { describeTocPosition, type TocSettings } from "@/lib/tocSettings";
 import { TITLE_HELP } from "@/lib/editorTerminology";
 
 // TSP-LOOP-004: debounce between a keystroke and a re-check. Long enough to
@@ -1072,6 +1072,9 @@ function EditorPaneInner(
           >
             <div className="flex items-center gap-2">
               <span className="font-semibold">📑 目次</span>
+              <span data-toc-editor-position="" className="shrink-0 rounded border border-[#c5a059]/40 px-1.5 py-0.5 text-[10px] text-ink/60">
+                {describeTocPosition(toc.position)}
+              </span>
               <span className="min-w-0 flex-1 truncate text-[11px] text-ink/50">
                 {toc.items.slice(0, 3).map((item) => `${item.title} p.${item.pageNumber}`).join(" / ")}
                 {toc.items.length > 3 ? ` / +${toc.items.length - 3}` : ""}

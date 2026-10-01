@@ -1172,7 +1172,7 @@ export default function TategakiEditor({
             onDeleteToc={() =>
               setSettings((previous) => ({
                 ...previous,
-                toc: { enabled: false, items: [], updatedAt: null },
+                toc: createDefaultTocSettings(),
               }))
             }
             content={content}

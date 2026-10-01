@@ -9,11 +9,11 @@
  * rationale as `settingsAdapter.ts`'s own doc comment.
  */
 import { buildV2UnitsFromManuscript, type ManuscriptSourceMap } from "./manuscriptAdapter";
-import { compileColophonContent } from "../../../typesetting-v2/core/colophon";
+import { compileColophonContent, type ColophonPagePosition } from "../../../typesetting-v2/core/colophon";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
 import { applyEditorPageOverrides } from "./pageFurniture";
 import { computePageLayout, type PageSettings } from "../pageLayout";
-import { buildTocCompositionPrefix } from "../tocSettings";
+import { buildTocCompositionInsertion } from "../tocSettings";
 import { fitImageToBox, imageMaxBoxForTextArea } from "../imageGeometry";
 import { composeCanonicalDocument } from "../../../typesetting-v2/core/layout/assemble";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
@@ -45,6 +45,13 @@ export interface V2BridgeInput {
  */
 export type V2LayoutResult = Omit<V2BridgeResult, "plan">;
 
+export interface V2TocPlacement {
+  rawOffset: number;
+  rawLength: number;
+  firstCanonicalPage: number;
+  pageCount: number;
+}
+
 export interface V2BridgeResult {
   document: CanonicalDocument;
   model: PublicationDocument;
@@ -53,8 +60,14 @@ export interface V2BridgeResult {
   source: string;
   /** Body flow code point → raw manuscript offsets (manuscriptAdapter), for the Preview page model. */
   bodySourceMap: ManuscriptSourceMap;
-  /** Raw-character offset where the editable body begins inside the composed source. */
-  bodySourceOffset?: number;
+  /**
+   * Phase 11: the work-owned TOC, when present. `rawOffset`/`rawLength` locate
+   * the composition-only TOC text spliced into the composed body source (the
+   * Editor's `content` never contains it); `firstCanonicalPage`/`pageCount`
+   * are the canonical BODY pages it occupies. Preview page model, page
+   * furniture and export all classify TOC pages from this one value.
+   */
+  toc?: V2TocPlacement;
   colophonUnits?: LogicalUnit[];
   colophonSource?: string;
   layoutSettings: PageCompositionSettings;
@@ -109,13 +122,33 @@ function capEditorImageUnits(units: LogicalUnit[], settings: PageSettings, lineE
   });
 }
 
+/**
+ * Composes the layout. With a TOC whose body continuation must stay a
+ * paragraph start, the TOC is first padded to fill its last page exactly
+ * (`buildTocCompositionInsertion`); if Core's real composition shows that the
+ * padding did not land exactly on a page end (a TOC page sharing a page with
+ * body text, or a padding-only page), the layout is recomposed with the
+ * page-break close instead — the composition itself is the authority.
+ */
 export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
+  const padded = composeV2LayoutOnce(input, true);
+  return padded.tocNeedsPageBreakClose ? composeV2LayoutOnce(input, false).layout : padded.layout;
+}
+
+function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { layout: V2LayoutResult; tocNeedsPageBreakClose: boolean } {
   // Body-only typography (post-beta Phase 1, see manuscriptAdapter.ts):
   // 傍点 decoration, and ――/…… runs as inseparable SEMANTIC_RUN units. `charsPerLine - 1`
   // keeps every grouped run narrower than a paragraph-first (一字下げ) line.
   // The colophon (horizontal, its own painter) keeps the prior plain units.
-  const tocPrefix = buildTocCompositionPrefix(input.settings.toc);
-  const composedBodySource = tocPrefix + input.content;
+  const tocInsertion = buildTocCompositionInsertion(
+    input.content,
+    input.settings.toc,
+    { cellsPerLine: input.settings.charsPerLine, linesPerColumn: input.settings.linesPerColumn, columnsPerPage: input.settings.columnCount },
+    { padToPageEnd }
+  );
+  const composedBodySource = tocInsertion
+    ? input.content.slice(0, tocInsertion.offset) + tocInsertion.text + input.content.slice(tocInsertion.offset)
+    : input.content;
   const { units: rawUnits, source, sourceMap: bodySourceMap } = buildV2UnitsFromManuscript("body", composedBodySource, {
     maxSemanticRunCells: Math.floor(input.settings.charsPerLine) - 1,
     decorations: true,
@@ -153,32 +186,42 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
   // Editor page overrides are keyed by BODY page number; Core would apply
   // header overrides by PHYSICAL number (and has no per-page hideNombre), so
   // they are resolved once after composition — see pageFurniture.ts.
-  const composed = composeCanonicalDocument({
-    bodyUnits: units,
-    colophonUnits: colophonComposition?.units,
-    colophonBlockId: colophonEnabled ? "colophon" : undefined,
-    ruleSet: DEFAULT_RULE_SET_V2,
-    measurement,
-    settings: layoutSettings,
-    folioSettings,
-    headerSettings,
-    colophonPagePosition: colophonEnabled ? buildV2ColophonPagePosition(input.settings.colophon) : undefined,
-    colophonPlacement: colophonEnabled ? buildV2ColophonPlacement(input.settings.colophon) : undefined,
-  });
-  const syntheticLeadingBodyPages = tocPrefix.length === 0
-    ? 0
-    : composed.pages.findIndex((page) =>
-        page.columns.some((column) =>
-          column.lines.some((line) =>
-            line.placedUnits.some((placed) => {
-              const endIndex = Math.min(placed.sourceSpan.end, bodySourceMap.rawEnd.length) - 1;
-              return endIndex >= 0 && bodySourceMap.rawEnd[endIndex] > tocPrefix.length;
-            })
-          )
-        )
-      );
-  const tocPageCount = syntheticLeadingBodyPages < 0 ? composed.pages.length : syntheticLeadingBodyPages;
-  const document = applyEditorPageOverrides(composed, headerSettings, input.settings.pageOverrides, tocPageCount);
+  const composeWithColophonPosition = (colophonPagePosition: ColophonPagePosition | undefined) =>
+    composeCanonicalDocument({
+      bodyUnits: units,
+      colophonUnits: colophonComposition?.units,
+      colophonBlockId: colophonEnabled ? "colophon" : undefined,
+      ruleSet: DEFAULT_RULE_SET_V2,
+      measurement,
+      settings: layoutSettings,
+      folioSettings,
+      headerSettings,
+      colophonPagePosition,
+      colophonPlacement: colophonEnabled ? buildV2ColophonPlacement(input.settings.colophon) : undefined,
+    });
+  const requestedColophonPosition = colophonEnabled ? buildV2ColophonPagePosition(input.settings.colophon) : undefined;
+  let composed = composeWithColophonPosition(requestedColophonPosition);
+
+  const tocPages = tocInsertion
+    ? classifyTocPages(composed, composedBodySource, bodySourceMap, tocInsertion.offset, tocInsertion.text.length)
+    : null;
+  const toc: V2TocPlacement | undefined = tocInsertion && tocPages && tocPages.pageCount > 0
+    ? { rawOffset: tocInsertion.offset, rawLength: tocInsertion.text.length, firstCanonicalPage: tocPages.firstCanonicalPage, pageCount: tocPages.pageCount }
+    : undefined;
+
+  // 「Nページ目の後に奥付」 is an EDITOR body page number. Core counts the
+  // synthetic TOC pages as canonical body pages, so when the TOC sits at or
+  // before that point shift the request past them (the TOC then precedes the
+  // colophon). Body composition never depends on colophon placement
+  // (assemble.ts "body composition invariant"), so the TOC page range above
+  // stays valid. Recompose only in that case (TOC + mid-book colophon).
+  if (toc && requestedColophonPosition?.mode === "after-body-page" && toc.firstCanonicalPage <= requestedColophonPosition.afterBodyPage) {
+    composed = composeWithColophonPosition({
+      mode: "after-body-page",
+      afterBodyPage: requestedColophonPosition.afterBodyPage + toc.pageCount,
+    });
+  }
+  const document = applyEditorPageOverrides(composed, headerSettings, input.settings.pageOverrides, toc);
 
   const ctx: PublicationRenderContext = {
     linePitchTicks: layoutSettings.linePitchTicks,
@@ -231,13 +274,13 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
       )
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);
 
-  return {
+  const layout: V2LayoutResult = {
     document,
     model,
     units,
     source,
     bodySourceMap,
-    bodySourceOffset: tocPrefix.length,
+    ...(toc ? { toc } : {}),
     ...(colophonComposition
       ? { colophonUnits: colophonComposition.units, colophonSource: colophonComposition.source }
       : {}),
@@ -245,4 +288,52 @@ export function composeV2Layout(input: V2BridgeInput): V2LayoutResult {
     pageGeometry,
     ...columnStack,
   };
+  return { layout, tocNeedsPageBreakClose: padToPageEnd && tocInsertion !== null && (tocPages?.inexact ?? false) };
+}
+
+/**
+ * Finds the canonical body pages the spliced TOC text occupies, from Core's
+ * own placed units. Newline (paragraph-break) units are ignored for
+ * ownership. `inexact` reports a page shared by TOC and body text, or a page
+ * holding only TOC padding — i.e. the padding did not end exactly on a page.
+ */
+function classifyTocPages(
+  composed: CanonicalDocument,
+  composedSource: string,
+  sourceMap: ManuscriptSourceMap,
+  tocOffset: number,
+  tocLength: number
+): { firstCanonicalPage: number; pageCount: number; inexact: boolean } {
+  const tocEnd = tocOffset + tocLength;
+  let first = -1;
+  let count = 0;
+  let inexact = false;
+  composed.pages.forEach((page, index) => {
+    let inside = 0;
+    let outside = 0;
+    let newlinesInside = 0;
+    for (const column of page.columns) {
+      for (const line of column.lines) {
+        for (const placed of line.placedUnits) {
+          const flowIndex = placed.sourceSpan.start;
+          if (flowIndex < 0 || flowIndex >= sourceMap.rawStart.length) continue;
+          const raw = sourceMap.rawStart[flowIndex];
+          const isNewline = composedSource[raw] === "\n";
+          const inToc = raw >= tocOffset && raw < tocEnd;
+          if (isNewline) {
+            if (inToc) newlinesInside += 1;
+          } else if (inToc) inside += 1;
+          else outside += 1;
+        }
+      }
+    }
+    if (inside > 0 && outside > 0) inexact = true;
+    const isToc = (inside > 0 && outside === 0) || (inside === 0 && outside === 0 && newlinesInside > 0 && first >= 0 && index === first + count);
+    if (isToc && inside === 0) inexact = true; // a padding-only page
+    if (isToc && (first < 0 || index === first + count)) {
+      if (first < 0) first = index;
+      count += 1;
+    }
+  });
+  return { firstCanonicalPage: Math.max(0, first), pageCount: first < 0 ? 0 : count, inexact };
 }

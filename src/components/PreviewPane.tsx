@@ -1763,7 +1763,7 @@ function PreviewPane({
   const handleExportColophonJpg = async () => {
     if (useV2Engine) {
       await exportV2JpgPages((sequence) => {
-        const physicalIndex = colophonPhysicalIndex(sequence);
+        const physicalIndex = colophonPhysicalIndex(sequence.pageSequence);
         return { physicalIndices: [physicalIndex], filePageNumbers: [physicalPageNumber(physicalIndex)] };
       }, false);
       return;
@@ -1901,6 +1901,7 @@ function PreviewPane({
     scope: pdfScope,
     bodyPageCount: listPages.length,
     includeColophon: pdfWillIncludeColophon,
+    tocPageCount: v2PageModel?.tocPages.length ?? 0,
   });
   const pdfPreflightIssues: ExportPreflightIssue[] = [
     ...(pdfAffectedImagePages.length > 0
@@ -2946,7 +2947,9 @@ function PreviewPane({
                       isDropTarget={false}
                       dropPosition={null}
                       insertingImage={false}
-                      hideNombre
+                      /* ノンブルは canonical folio（Core + pageFurniture）に従う
+                         （PageCard / previewNombre.ts）。TOCページは物理ページ番号の
+                         ノンブルを持ち、柱だけ持たない。 */
                       hideHashira
                       chromeScale={chromeScale}
                       isMenuOpen={false}

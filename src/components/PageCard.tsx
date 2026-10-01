@@ -32,6 +32,7 @@ import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel
 import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { fitImageToBox, imageMaxBoxForTextArea } from "@/lib/imageGeometry";
 import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
+import { resolvePreviewNombre } from "./previewNombre";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -289,7 +290,6 @@ function PageCard({
   // 右綴じ（縦書き）を前提とした物理的なページの左右:
   // 奇数(recto)ページは見開きの左側、偶数(verso)ページは右側に来る。
   const isOddPage = pageNumber % 2 === 1;
-  const isFirstPage = pageNumber === 1;
 
   // isPx（Web閲覧用等）ページは印刷を想定しないため、塗り足し・仕上がり線を
   // 持たない。bleedMm を0にすることで、カード外形が paper.widthMm/heightMm
@@ -461,11 +461,19 @@ function PageCard({
   // 機能。通常ノンブルの表示可否はノンブル関連のフラグだけで、柱の表示可否は
   // 柱関連のフラグだけで決め、互いを連動させない（隠しノンブルは
   // masterPage.showHiddenNombre の設定どおり常時トグル連動——後述）。
-  const isNombreSuppressed = hideNombre || (masterPage.hideNombreOnFirstPage && isFirstPage);
-
+  // Phase 11 round 3: in V2 mode the canonical folio (Core + pageFurniture,
+  // the same one PDF/JPG print) decides presence and value; LEGACY keeps the
+  // prop-based rule (hideNombre / 1ページ目非表示). See previewNombre.ts.
   const nombrePosition = masterPage.nombrePosition;
-  const showNombre = nombrePosition !== "hidden" && !isNombreSuppressed;
-  const nombreValue = masterPage.nombreStart + pageNumber - 1;
+  const { show: showNombre, value: nombreValue } = resolvePreviewNombre({
+    hasCanonicalPage: Boolean(v2PreviewEnabled && v2PreviewPage),
+    canonicalFolioText: v2PreviewPage?.folio?.text,
+    nombrePosition,
+    hideNombre,
+    hideNombreOnFirstPage: masterPage.hideNombreOnFirstPage,
+    pageNumber,
+    nombreStart: masterPage.nombreStart,
+  });
 
   // ページ別の柱上書きがあればそれを、なければ奇数/偶数の共通柱を使用。
   const defaultHashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;

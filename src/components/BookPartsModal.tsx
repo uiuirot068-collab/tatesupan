@@ -1,15 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { generateTitlePageText, generateColophonText, ColophonData } from '@/utils/bookStructure';
-import { type TocItem } from '@/utils/tocGenerator';
+import { extractHeadings, type TocItem } from '@/utils/tocGenerator';
 import { computeTocItemsWithV2 } from '@/lib/v2Bridge/tocPageNumbers';
 import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewWorkerClient';
 import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
 import InfoTooltip from './InfoTooltip';
 import { TOC_REDETECT_HELP } from '@/lib/editorTerminology';
-import type { TocSettings } from '@/lib/tocSettings';
+import {
+  normalizeTocLeader,
+  normalizeTocPosition,
+  resolveTocInsertion,
+  TOC_LEADER_OPTIONS,
+  type TocLeaderStyle,
+  type TocPosition,
+  type TocSettings,
+} from '@/lib/tocSettings';
 
 interface BookPartsModalProps {
   isOpen: boolean;
@@ -62,8 +70,14 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
   // paginator fallback is used here.
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [tocDetected, setTocDetected] = useState(false);
-  const [tocLoading, setTocLoading] = useState(false);
+  const [tocLoading, setTocLoading] = useState(initialTab === 'toc');
   const [tocError, setTocError] = useState<string | null>(null);
+  // 挿入位置（作品データ。本文 content には書き込まない）。既存TOCはその位置、新規は「本文の前」から選び直せる。
+  // リーダー（作品ごと）。既存作品で未設定なら従来どおりの点線。
+  const [tocLeader, setTocLeader] = useState<TocLeaderStyle>(() => normalizeTocLeader(settings.toc?.leader));
+  const [tocPosition, setTocPosition] = useState<TocPosition>(
+    () => resolveTocInsertion(content, normalizeTocPosition(settings.toc?.position)).resolved
+  );
   const [tocWorker] = useState(
     () =>
       new ReusablePreviewWorker(
@@ -87,13 +101,11 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     notice: '※ 本書の無断転載・複写・Web上への転載を禁じます。',
   });
 
-  if (!isOpen) return null;
-
-  const composeTocCandidate = (items: TocItem[]): Promise<V2PreviewLayout> =>
+  const composeTocCandidate = (items: TocItem[], position: TocPosition): Promise<V2PreviewLayout> =>
     new Promise((resolve, reject) => {
       const candidateSettings: PageSettings = {
         ...settings,
-        toc: { enabled: true, items: items.map((item) => ({ ...item })), updatedAt: null },
+        toc: { enabled: true, items: items.map((item) => ({ ...item })), position, leader: tocLeader, updatedAt: null },
       };
       tocWorker.request(
         {
@@ -117,37 +129,98 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
       );
     });
 
-  const detectToc = async () => {
-    setTocLoading(true);
-    setTocError(null);
-    try {
-      const items = await computeTocItemsWithV2({
-        content,
-        nombreStart: settings.masterPage.nombreStart,
-        compose: composeTocCandidate,
-      });
-      setTocItems(items);
-      setTocDetected(true);
-    } catch (cause) {
-      setTocItems([]);
-      setTocDetected(false);
-      setTocError(cause instanceof Error ? cause.message : "目次ページ番号の判定に失敗しました。");
-    } finally {
-      setTocLoading(false);
-    }
+  // 目次の検出は V2 worker への非同期リクエスト。結果の state 反映は必ず
+  // Promise の resolve/reject コールバック内で行い、effect 本体や同期経路から
+  // setState しない（react-hooks/set-state-in-effect）。
+  // `tocRequestIdRef` は最後に開始した検出だけを反映するための世代番号
+  // （再検出の連打・初回検出中の再検出で古い結果が後から上書きしないように）。
+  const tocRequestIdRef = useRef(0);
+
+  /** Pure request: resolves to the detected items. Never touches React state. */
+  const requestTocItems = (position: TocPosition): Promise<TocItem[]> =>
+    computeTocItemsWithV2({
+      content,
+      nombreStart: settings.masterPage.nombreStart,
+      compose: (items) => composeTocCandidate(items, position),
+    });
+
+  const applyTocDetected = (requestId: number, items: TocItem[]) => {
+    if (requestId !== tocRequestIdRef.current) return;
+    setTocItems(items);
+    setTocDetected(true);
+    setTocLoading(false);
   };
 
+  const applyTocFailed = (requestId: number, cause: unknown) => {
+    if (requestId !== tocRequestIdRef.current) return;
+    setTocItems([]);
+    setTocDetected(false);
+    setTocError(cause instanceof Error ? cause.message : "目次ページ番号の判定に失敗しました。");
+    setTocLoading(false);
+  };
+
+  /** User-initiated (再検出 / 目次タブを開く): event handlers may set state synchronously. */
+  const detectToc = (position: TocPosition = tocPosition) => {
+    tocRequestIdRef.current += 1;
+    const requestId = tocRequestIdRef.current;
+    setTocLoading(true);
+    setTocError(null);
+    requestTocItems(position).then(
+      (items) => applyTocDetected(requestId, items),
+      (cause: unknown) => applyTocFailed(requestId, cause)
+    );
+  };
+
+  // 「目次」から直接開いた場合の初回検出。`tocLoading` は initialTab === 'toc'
+  // で true から始まるので、ここでは同期的に state を変えずリクエストだけ開始し、
+  // 結果はコールバックで反映する。アンマウント（閉じる）後の結果は破棄する。
   useEffect(() => {
-    if (initialTab === 'toc') void detectToc();
+    if (initialTab !== 'toc') return;
+    tocRequestIdRef.current += 1;
+    const requestId = tocRequestIdRef.current;
+    let active = true;
+    requestTocItems(tocPosition).then(
+      (items) => {
+        if (active) applyTocDetected(requestId, items);
+      },
+      (cause: unknown) => {
+        if (active) applyTocFailed(requestId, cause);
+      }
+    );
+    return () => {
+      // A late worker reply after close (or StrictMode's re-run) is ignored.
+      active = false;
+    };
     // The modal is mounted fresh for each open. Re-running on every object
     // identity change would restart V2 composition while the user edits the
     // detected numbers manually.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Every hook above runs unconditionally (Rules of Hooks); only the render
+  // bails out while closed.
+  if (!isOpen) return null;
+
   const handleOpenTocTab = () => {
     setActiveTab('toc');
-    void detectToc();
+    detectToc();
+  };
+
+  // 挿入位置の選択肢: 本文の前 / 各見出しの前 / 本文の後。位置で目次自身のページが
+  // 動くので、変更したらページ番号を V2 で再検出する。
+  const tocHeadingTitles = extractHeadings(content);
+  const tocPositionValue =
+    tocPosition.mode === 'before-heading' ? `heading:${tocPosition.headingIndex}` : tocPosition.mode;
+  const handleTocPositionChange = (value: string) => {
+    let next: TocPosition = { mode: 'start' };
+    if (value === 'end') next = { mode: 'end' };
+    else if (value.startsWith('heading:')) {
+      const headingIndex = Number(value.slice('heading:'.length));
+      const headingTitle = tocHeadingTitles[headingIndex];
+      if (headingTitle !== undefined) next = { mode: 'before-heading', headingIndex, headingTitle };
+    }
+    setTocPosition(next);
+    detectToc(next);
   };
 
   const handleTocPageNumberChange = (index: number, pageNumber: number) => {
@@ -186,6 +259,8 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     onTocChange({
       enabled: true,
       items: tocItems.map((item) => ({ ...item })),
+      position: tocPosition,
+      leader: tocLeader,
       updatedAt: Date.now(),
     });
     onClose();
@@ -321,10 +396,43 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
               <p className="text-gray-500">
                 本文中の「# 見出し」「■ 見出し」を検出し、ページ番号を自動判定します。
               </p>
+              <label className="mt-2 flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                <span className="shrink-0 font-semibold">挿入位置</span>
+                <select
+                  data-toc-position-select=""
+                  value={tocPositionValue}
+                  onChange={(event) => handleTocPositionChange(event.target.value)}
+                  disabled={tocLoading}
+                  className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-800"
+                >
+                  <option value="start">本文の前（先頭）</option>
+                  {tocHeadingTitles.map((title, index) => (
+                    <option key={`${index}-${title}`} value={`heading:${index}`}>
+                      「{title}」の前
+                    </option>
+                  ))}
+                  <option value="end">本文の後（末尾）</option>
+                </select>
+              </label>
+              <label className="mt-2 flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                <span className="shrink-0 font-semibold">リーダー</span>
+                <select
+                  data-toc-leader-select=""
+                  value={tocLeader}
+                  onChange={(event) => setTocLeader(normalizeTocLeader(event.target.value))}
+                  className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-800"
+                >
+                  {TOC_LEADER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="mt-2 flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => void detectToc()}
+                  onClick={() => detectToc()}
                   disabled={tocLoading}
                   className="block rounded-md border border-gray-300 px-2 py-1 text-left text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-wait disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
                 >

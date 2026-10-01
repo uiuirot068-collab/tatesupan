@@ -35,6 +35,25 @@ describe("shouldWarnOddPageExport -- the exact condition window.confirm used to 
       shouldWarnOddPageExport({ scope: "selected", bodyPageCount: 10, includeColophon: false })
     ).toBeNull();
   });
+
+  it("Phase 11: work-owned TOC pages are printed sheets and count toward the whole-book total", () => {
+    // 10 body + 1 TOC = 11 (odd) -> warns
+    expect(
+      shouldWarnOddPageExport({ scope: "all", bodyPageCount: 10, includeColophon: false, tocPageCount: 1 })
+    ).toEqual({ totalPages: 11 });
+    // 10 body + 1 TOC + colophon = 12 (even) -> bypasses
+    expect(
+      shouldWarnOddPageExport({ scope: "all", bodyPageCount: 10, includeColophon: true, tocPageCount: 1 })
+    ).toBeNull();
+    // TOC never makes a selected-page export warn.
+    expect(
+      shouldWarnOddPageExport({ scope: "selected", bodyPageCount: 10, includeColophon: false, tocPageCount: 1 })
+    ).toBeNull();
+    // Omitted / 0 = works without a TOC: unchanged result.
+    expect(
+      shouldWarnOddPageExport({ scope: "all", bodyPageCount: 11, includeColophon: false, tocPageCount: 0 })
+    ).toEqual({ totalPages: 11 });
+  });
 });
 
 describe("PreviewPane.tsx source guards (TSP-UX-V3-LOOP2-ODD-PAGE-012)", () => {

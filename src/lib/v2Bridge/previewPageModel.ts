@@ -100,7 +100,19 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
   const overlayPages: TategakiPage[] = [];
   const bodySourceRanges: SourceRange[] = [];
   const imagePageIndicesById = new Map<string, number[]>();
-  let previousEnd = (layout.bodySourceOffset ?? 0);
+  // The ONE TOC placement composeV2Layout also hands to page furniture — so
+  // Preview, export and furniture agree page-for-page. Raw offsets inside the
+  // composed source map back to the Editor's body `content` by removing the
+  // spliced, composition-only TOC text.
+  const toc = layout.toc;
+  const tocFirst = toc?.firstCanonicalPage ?? 0;
+  const tocEnd = toc ? toc.firstCanonicalPage + toc.pageCount : 0;
+  const toBodyOffset = (raw: number): number => {
+    if (!toc || raw <= toc.rawOffset) return raw;
+    if (raw >= toc.rawOffset + toc.rawLength) return raw - toc.rawLength;
+    return toc.rawOffset;
+  };
+  let previousEnd = 0;
   let editorBodyIndex = 0;
 
   layout.document.pageSequence.forEach((ref, physicalIndex) => {
@@ -109,22 +121,7 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
       return;
     }
     const canonicalBodyIndex = ref.index;
-    let start = Number.POSITIVE_INFINITY;
-    let end = Number.NEGATIVE_INFINITY;
-    const images: ImageUnit[] = [];
-    for (const span of placedSpans(layout.document.pages[canonicalBodyIndex])) {
-      if (span.start >= rawStart.length) continue; // appended ruby readings are never placed; defensive
-      start = Math.min(start, rawStart[span.start]);
-      end = Math.max(end, rawEnd[Math.min(span.end, rawEnd.length) - 1]);
-      const image = imageByFlowStart.get(span.start);
-      if (image && span.end - span.start === 1) images.push(image);
-    }
-    const combinedRange = Number.isFinite(start)
-      ? { start, end }
-      : { start: previousEnd, end: previousEnd };
-    previousEnd = combinedRange.end;
-
-    if (combinedRange.end <= (layout.bodySourceOffset ?? 0)) {
+    if (toc && canonicalBodyIndex >= tocFirst && canonicalBodyIndex < tocEnd) {
       const entry: V2PreviewPage = {
         physicalIndex,
         physicalPageNumber: physicalPageNumber(physicalIndex),
@@ -136,11 +133,21 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
       tocPages.push(entry);
       return;
     }
+    let start = Number.POSITIVE_INFINITY;
+    let end = Number.NEGATIVE_INFINITY;
+    const images: ImageUnit[] = [];
+    for (const span of placedSpans(layout.document.pages[canonicalBodyIndex])) {
+      if (span.start >= rawStart.length) continue; // appended ruby readings are never placed; defensive
+      start = Math.min(start, rawStart[span.start]);
+      end = Math.max(end, rawEnd[Math.min(span.end, rawEnd.length) - 1]);
+      const image = imageByFlowStart.get(span.start);
+      if (image && span.end - span.start === 1) images.push(image);
+    }
+    const adjusted = Number.isFinite(start)
+      ? { start: toBodyOffset(start), end: toBodyOffset(end) }
+      : { start: previousEnd, end: previousEnd };
+    previousEnd = adjusted.end;
 
-    const adjusted = {
-      start: Math.max(0, combinedRange.start - (layout.bodySourceOffset ?? 0)),
-      end: Math.max(0, combinedRange.end - (layout.bodySourceOffset ?? 0)),
-    };
     const sourceRange = includeBoutenMarkers(sourceContent, adjusted);
     const imageIds = images.map((image) => image.refId);
     imageIds.forEach((id) => imagePageIndicesById.set(id, [...(imagePageIndicesById.get(id) ?? []), editorBodyIndex]));
