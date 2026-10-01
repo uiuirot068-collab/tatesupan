@@ -1445,7 +1445,12 @@ export function PageFurnitureText({
     fontSize: previewFurnitureFontSize(fontSizePt, paper),
   };
   return (
-    <div {...{ [dataAttribute]: "" }} style={style} className="pointer-events-none select-none">
+    <div
+      data-nombre={dataAttribute === "data-nombre" ? "" : undefined}
+      data-hashira={dataAttribute === "data-hashira" ? "" : undefined}
+      style={style}
+      className="pointer-events-none select-none"
+    >
       {text}
     </div>
   );

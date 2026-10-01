@@ -21,6 +21,7 @@ import {
   computePageSourceRanges,
   detokenizeTategaki,
   findImageTokenRange,
+  imageMarkerSpans,
   findPageIndexForCharIndex,
   formatImageMarker,
   insertImageMarker,
@@ -631,11 +632,11 @@ function PreviewPane({
   // Phase 11 残件④: before the first V2 layout (or on V2 HOLD) the LEGACY
   // cards are a provisional stand-in — shown so the pane never goes blank, but
   // nothing page-keyed is written from them (see previewListAuthority.ts).
-  const listAuthority = resolvePreviewListAuthority({
-    useV2Engine,
-    v2SourceContent: v2PageModel ? v2PageModel.sourceContent : null,
-    content,
-  });
+  const v2SourceContent = v2PageModel ? v2PageModel.sourceContent : null;
+  const listAuthority = useMemo(
+    () => resolvePreviewListAuthority({ useV2Engine, v2SourceContent, content }),
+    [useV2Engine, v2SourceContent, content]
+  );
   const pages = useMemo(() => {
     if (!legacyPaginationNeeded) return NO_LEGACY_PAGES;
     const tokens = tokenizeTategaki(deferredContent);
@@ -2518,8 +2519,11 @@ function PreviewPane({
     const source = readLiveContent();
     const match = findImageTokenRange(source, imageId);
     if (!match) return;
-    onContentChange(source.slice(0, match.start) + source.slice(match.end));
-    onImageDelete?.(imageId);
+    const next = source.slice(0, match.start) + source.slice(match.end);
+    onContentChange(next);
+    // Phase 12: one image placed in several spots — deleting one spot keeps
+    // the image (and its IndexedDB original) for the remaining markers.
+    if (!imageMarkerSpans(next).some((span) => span.id === imageId)) onImageDelete?.(imageId);
   };
 
   // [TateSpun perf] layerOrderは(上記の挿絵handlerと違い)contentへ一切

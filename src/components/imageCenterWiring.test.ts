@@ -78,6 +78,17 @@ describe("editor side", () => {
     expect(resync).not.toContain("setContent(");
   });
 
+  it("replacing a HEALTHY image is refused when another local work places the same id (shared pool)", () => {
+    const replace = body(editor, "const handleImageReplace = useCallback(async (id: string, file: File) => {", "}, [currentProjectId, documentEpoch, imageLayerOrder, images, isSampleDocument]);");
+    expect(replace).toContain("if (images[id] && !isSampleDocument) {");
+    expect(replace).toContain("if (imageUsedByOtherWorks(id, others)) {");
+  });
+
+  it("a page-card delete of one of several spots keeps the image for the remaining markers", () => {
+    const remove = body(preview, "const handleImageDelete = () => (imageId: string) => {", "};");
+    expect(remove).toContain("if (!imageMarkerSpans(next).some((span) => span.id === imageId)) onImageDelete?.(imageId);");
+  });
+
   it("PreviewPane receives the resync / originals / technical-state props", () => {
     expect(editor).toContain("onImageResync={handleImageResync}");
     expect(editor).toContain("onCheckImageOriginals={handleCheckImageOriginals}");

@@ -60,12 +60,6 @@ export const PAGE_BREAK_MARKER = "【改ページ】";
 const MARKER_PATTERN =
   /【IMG:([^:]+):([\d.]+):([\d.]+)(?::(top|center|bottom|full))?】|【改ページ】/g;
 
-/**
- * Phase 7: every 挿絵 id the tokenizer recognizes in `source` (same pattern,
- * same whole-source scan as `tokenizeTategakiWithOffsets`), in order,
- * duplicates kept. Used to send the V2 layout worker only the images this
- * manuscript can reference.
- */
 /** One 挿絵 marker's exact raw span and metadata (Phase 12 画像管理センター). */
 export interface ImageMarkerSpan {
   id: string;
@@ -100,6 +94,12 @@ export function imageMarkerSpans(source: string): ImageMarkerSpan[] {
   return spans;
 }
 
+/**
+ * Phase 7: every 挿絵 id the tokenizer recognizes in `source` (same pattern,
+ * same whole-source scan as `tokenizeTategakiWithOffsets`), in order,
+ * duplicates kept. Used to send the V2 layout worker only the images this
+ * manuscript can reference.
+ */
 export function imageMarkerIds(source: string): string[] {
   const ids: string[] = [];
   for (const match of source.matchAll(MARKER_PATTERN)) {

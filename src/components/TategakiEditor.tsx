@@ -37,7 +37,7 @@ import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
-import { imageOriginalDeletable } from "@/lib/imageCenter";
+import { imageOriginalDeletable, imageUsedByOtherWorks } from "@/lib/imageCenter";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -731,7 +731,8 @@ export default function TategakiEditor({
     saveImage(record).catch(() => setSaveStatus("error"));
   }, [isSampleDocument]);
 
-  // The marker is already gone from this work (PreviewPane splices it). The
+  // Called once the LAST marker of `id` is gone from this work (PreviewPane
+  // splices markers and keeps the image while another spot still places it). The
   // IndexedDB pool is shared by every work in this browser, so the original
   // is removed only when no OTHER local work still references the same id
   // (Phase 12: deleting from one work never breaks another). The cloud copy
@@ -804,6 +805,19 @@ export default function TategakiEditor({
     // the repaired image itself is always kept; only THIS document's technical
     // state and toast are skipped if another document was opened meanwhile.
     const isSameDocument = documentEpoch.capture();
+    // Phase 12: replacing a HEALTHY image rewrites the shared IndexedDB pool
+    // under the same id, which would silently change another local work that
+    // places the same image. Repairing a broken image stays allowed (it is
+    // broken for every work alike).
+    if (images[id] && !isSampleDocument) {
+      const currentDocId = loadedDocIdRef.current;
+      const documents = await listDocuments();
+      const others = documents.filter((document) => document.id !== currentDocId).map((document) => document.content);
+      if (imageUsedByOtherWorks(id, others)) {
+        alert("この画像は他の作品でも使われているため、ここでは差し替えできません。新しい画像として挿入し直してください。");
+        return;
+      }
+    }
     // Phase 7: the live text at call time, not a dependency — a `content`
     // dependency gave this PreviewPane prop a new identity on every keystroke,
     // which defeated PreviewPane's React.memo.

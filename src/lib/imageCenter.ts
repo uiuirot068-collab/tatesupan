@@ -130,11 +130,6 @@ export function imageCenterStatusLabel(status: ImageCenterStatus): string {
   }
 }
 
-/** Display: 1-based physical page numbers of an entry (from a body index → physical number mapper). */
-export function imageCenterPageNumbers(entry: ImageCenterEntry, physicalNumberForBodyIndex: (bodyIndex: number) => number): number[] {
-  return entry.pageIndices.map(physicalNumberForBodyIndex);
-}
-
 /**
  * Removes every marker of `imageId` from `source` by splicing only the
  * markers' own ranges (back to front, so earlier offsets stay valid). Returns
@@ -148,6 +143,14 @@ export function removeImageMarkers(source: string, imageId: string): string {
     next = next.slice(0, spans[i].start) + next.slice(spans[i].end);
   }
   return next;
+}
+
+/**
+ * Whether another local work places `imageId` (the IndexedDB image pool is
+ * shared by every work in this browser).
+ */
+export function imageUsedByOtherWorks(imageId: string, otherWorkContents: Iterable<string>): boolean {
+  return !imageOriginalDeletable(imageId, otherWorkContents);
 }
 
 /**

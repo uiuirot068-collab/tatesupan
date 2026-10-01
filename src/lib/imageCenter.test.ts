@@ -3,6 +3,7 @@ import {
   buildImageCenterInventory,
   imageCenterStatus,
   imageOriginalDeletable,
+  imageUsedByOtherWorks,
   removeImageMarkers,
   summarizeImageCenter,
   type ImageCenterInventoryInput,
@@ -156,6 +157,11 @@ describe("imageOriginalDeletable — never breaks another work", () => {
 
   it("kept when another work still places it", () => {
     expect(imageOriginalDeletable("a", ["本文", `別作品${marker("a")}`])).toBe(false);
+  });
+
+  it("imageUsedByOtherWorks is the inverse (healthy-image replacement guard)", () => {
+    expect(imageUsedByOtherWorks("a", [`別作品${marker("a")}`])).toBe(true);
+    expect(imageUsedByOtherWorks("a", ["本文"])).toBe(false);
   });
 
   it("an id that only appears as text (not a marker) does not block", () => {
