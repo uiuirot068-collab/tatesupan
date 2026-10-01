@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocument,
   deleteImage,
+  listDocuments,
+  listStoredImageIds,
   loadDocument,
   loadImagesByIds,
   saveDocument,
@@ -35,6 +37,7 @@ import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
+import { imageOriginalDeletable } from "@/lib/imageCenter";
 import type { Project } from "@/types/database";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -728,6 +731,12 @@ export default function TategakiEditor({
     saveImage(record).catch(() => setSaveStatus("error"));
   }, [isSampleDocument]);
 
+  // The marker is already gone from this work (PreviewPane splices it). The
+  // IndexedDB pool is shared by every work in this browser, so the original
+  // is removed only when no OTHER local work still references the same id
+  // (Phase 12: deleting from one work never breaks another). The cloud copy
+  // of THIS work is dropped by its next クラウドに保存 (unreferenced rows are
+  // removed by syncManuscriptImages); other works' cloud copies are untouched.
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleImageDelete = useCallback((id: string) => {
     setImages((prev) => {
@@ -736,8 +745,53 @@ export default function TategakiEditor({
       return next;
     });
     if (isSampleDocument) return;
-    deleteImage(id).catch(() => setSaveStatus("error"));
+    const currentDocId = loadedDocIdRef.current;
+    listDocuments()
+      .then((documents) => {
+        const others = documents.filter((document) => document.id !== currentDocId).map((document) => document.content);
+        return imageOriginalDeletable(id, others) ? deleteImage(id) : undefined;
+      })
+      .catch(() => setSaveStatus("error"));
   }, [isSampleDocument]);
+
+  // Phase 12 画像管理センター: which referenced images still have their
+  // original in this browser's IndexedDB (primary keys only).
+  const handleCheckImageOriginals = useCallback((ids: readonly string[]) => listStoredImageIds(ids), []);
+
+  // Phase 12 画像管理センター「再同期」: restores broken images from this
+  // browser's IndexedDB originals under the SAME id (marker, size, position and
+  // layer order untouched). A cloud work then re-syncs, which re-uploads them
+  // and extends the 72h for every referenced image (IndexedDB itself has no
+  // TTL). Ids without an original are reported back for 選び直す / 削除.
+  const handleImageResync = useCallback(async (ids: readonly string[]): Promise<{ restored: string[]; withoutOriginal: string[] }> => {
+    const isSameDocument = documentEpoch.capture();
+    const content = liveContentRef.current;
+    const records = await loadImagesByIds(ids);
+    const restoredImages: Record<string, string> = {};
+    for (const record of records) restoredImages[record.id] = record.dataUrl;
+    const restored = Object.keys(restoredImages);
+    const withoutOriginal = ids.filter((id) => !restoredImages[id]);
+    if (!isSameDocument() || restored.length === 0) return { restored: [], withoutOriginal };
+    const nextImages = { ...images, ...restoredImages };
+    setImages((prev) => ({ ...prev, ...restoredImages }));
+
+    if (currentProjectId) {
+      const sync = await syncManuscriptImages({ projectId: currentProjectId, content, localImages: nextImages });
+      if (sync.ok || sync.noImages) {
+        const status = await getUnresolvedManuscriptImages(currentProjectId, content);
+        if (!isSameDocument()) return { restored, withoutOriginal };
+        setUnresolvedCloudImages(technicallyUnresolvedImages(status, nextImages));
+        showToast("画像を再同期し、クラウドの保存期限を更新しました");
+      } else {
+        if (isSameDocument()) setUnresolvedCloudImages(technicallyUnresolvedImages({ missing: [], unmanifested: sync.unresolved }, nextImages));
+        alert("画像はこのブラウザに復元しましたが、クラウド同期に失敗しました。もう一度「クラウドに保存」をお試しください。");
+      }
+    } else {
+      setUnresolvedCloudImages((prev) => withoutUnresolvedImageIds(prev, new Set(restored)));
+      showToast("画像を再同期しました");
+    }
+    return { restored, withoutOriginal };
+  }, [currentProjectId, documentEpoch, images]);
 
   // Broken cloud images are restored under the SAME image id. This keeps the IMG marker,
   // page placement, size/position metadata and layer order intact.
@@ -1249,6 +1303,9 @@ export default function TategakiEditor({
               onImageAdd={handleImageAdd}
               onImageDelete={handleImageDelete}
               onImageReplace={handleImageReplace}
+              onImageResync={handleImageResync}
+              onCheckImageOriginals={handleCheckImageOriginals}
+              unresolvedImages={unresolvedCloudImages}
               onDismissImageWarnings={handleDismissResolvedImageWarnings}
               imageWarningScope={workSessionScope ?? "editor"}
               silentImageWarningIds={imageWarningBaselineIds}

@@ -256,6 +256,18 @@ export async function loadImagesByIds(ids: readonly string[]): Promise<ImageReco
   return records.filter((record): record is ImageRecord => record !== undefined);
 }
 
+/**
+ * Phase 12: which of `ids` have an original in IndexedDB — primary keys only,
+ * so the image center can show 「IndexedDB原本あり/なし」 without reading
+ * every image's data.
+ */
+export async function listStoredImageIds(ids: readonly string[]): Promise<Set<string>> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return new Set();
+  const keys = await db.images.where("id").anyOf(unique).primaryKeys();
+  return new Set(keys.map(String));
+}
+
 export async function deleteImage(id: string): Promise<void> {
   await db.images.delete(id);
 }

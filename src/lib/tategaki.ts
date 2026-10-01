@@ -66,6 +66,40 @@ const MARKER_PATTERN =
  * duplicates kept. Used to send the V2 layout worker only the images this
  * manuscript can reference.
  */
+/** One 挿絵 marker's exact raw span and metadata (Phase 12 画像管理センター). */
+export interface ImageMarkerSpan {
+  id: string;
+  /** [start, end) of the `【IMG:...】` marker itself in `source` (UTF-16 offsets). */
+  start: number;
+  end: number;
+  widthMm: number;
+  heightMm: number;
+  position: ImagePosition;
+}
+
+/**
+ * Every 挿絵 marker `source` contains, in order, duplicates kept — the same
+ * pattern and the same spans `tokenizeTategakiWithOffsets` produces for image
+ * tokens (an image marker always consumes only its own span), without
+ * tokenizing the rest of the manuscript.
+ */
+export function imageMarkerSpans(source: string): ImageMarkerSpan[] {
+  const spans: ImageMarkerSpan[] = [];
+  for (const match of source.matchAll(MARKER_PATTERN)) {
+    if (match[1] === undefined) continue;
+    const start = match.index ?? 0;
+    spans.push({
+      id: match[1],
+      start,
+      end: start + match[0].length,
+      widthMm: Number(match[2]),
+      heightMm: Number(match[3]),
+      position: (match[4] as ImagePosition | undefined) ?? "center",
+    });
+  }
+  return spans;
+}
+
 export function imageMarkerIds(source: string): string[] {
   const ids: string[] = [];
   for (const match of source.matchAll(MARKER_PATTERN)) {

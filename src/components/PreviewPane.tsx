@@ -92,7 +92,9 @@ import ColophonPageCard from "./ColophonPageCard";
 import V2ColophonPageCard from "./V2ColophonPageCard";
 import { resolvePreviewListAuthority, warningPageIndices } from "@/lib/v2Bridge/previewListAuthority";
 import { resolveColophonInsertion } from "@/lib/colophon";
-import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE } from "@/lib/cloudImageSync";
+import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE, referencedImageIds, type CloudImageResolution } from "@/lib/cloudImageSync";
+import { buildImageCenterInventory, removeImageMarkers } from "@/lib/imageCenter";
+import ImageCenterModal from "./ImageCenterModal";
 import {
   ExportCancellationCoordinator,
   isExportCancelledError,
@@ -485,6 +487,15 @@ interface PreviewPaneProps {
   /** 手動復旧後など、実体が戻っている警告だけを明示解除する。 */
   onDismissImageWarnings?: (imageIds: string[]) => void;
   /**
+   * Phase 12 画像管理センター「再同期」: restores the given ids from this
+   * browser's IndexedDB originals (cloud works re-sync and extend the 72h).
+   */
+  onImageResync?: (imageIds: readonly string[]) => Promise<{ restored: string[]; withoutOriginal: string[] }>;
+  /** Phase 12: ids whose original IndexedDB holds. */
+  onCheckImageOriginals?: (imageIds: readonly string[]) => Promise<ReadonlySet<string>>;
+  /** Phase 12: the technical cloud state split (期限切れ / 未同期・欠損), for the image center. */
+  unresolvedImages?: CloudImageResolution | null;
+  /**
    * Phase 4: identity of the open document. The broken-image warning
    * (acknowledgment) state belongs to one document and resets when it changes.
    */
@@ -561,6 +572,9 @@ function PreviewPane({
   onImageDelete,
   onImageReplace,
   onDismissImageWarnings,
+  onImageResync,
+  onCheckImageOriginals,
+  unresolvedImages = null,
   imageWarningScope = "editor",
   silentImageWarningIds,
   onImageLayerChange,
@@ -684,6 +698,11 @@ function PreviewPane({
       markerExists: imagePageIndicesById.has(imageId),
     });
   const [imageWarningOpen, setImageWarningOpen] = useState(false);
+  const [imageCenterOpen, setImageCenterOpen] = useState(false);
+  const [imageCenterBusy, setImageCenterBusy] = useState(false);
+  const [imageCenterNotice, setImageCenterNotice] = useState<string | null>(null);
+  const [imageOriginals, setImageOriginals] = useState<ReadonlySet<string> | null>(null);
+  const imageOriginalsRequestRef = useRef(0);
   const [imageBreakNoticePages, setImageBreakNoticePages] = useState<number[] | null>(null);
   const [pendingReplacementId, setPendingReplacementId] = useState<string | null>(null);
   const replacementInputRef = useRef<HTMLInputElement | null>(null);
@@ -708,6 +727,24 @@ function PreviewPane({
       setImageBreakNoticePages([...new Set(pagesForNotice)].sort((a, b) => a - b));
     }
   }
+
+  // Phase 12: built only while the image center is open.
+  const imageCenterEntries = useMemo(
+    () =>
+      imageCenterOpen
+        ? buildImageCenterInventory({
+            content,
+            images,
+            unresolved: unresolvedImages,
+            localOriginalIds: imageOriginals,
+            pageIndicesById: warningPageIndices(listAuthority, imagePageIndicesById),
+            imageLayerOrder,
+            pendingWarnings: imageWarnings.pending,
+          })
+        : [],
+    [imageCenterOpen, content, images, unresolvedImages, imageOriginals, listAuthority, imagePageIndicesById, imageLayerOrder, imageWarnings.pending]
+  );
+  const referencedImageCount = imagePageIndicesById.size;
 
   const handleDismissImageWarningEntry = (imageIds: string[]) => {
     const result = dismissImageWarnings(imageWarnings, imageIds, (id) => imageWarningStatusFor(id) === "broken");
@@ -2585,6 +2622,63 @@ function PreviewPane({
     replacementInputRef.current?.click();
   };
 
+  // Phase 12 画像管理センター. It owns no image state of its own: the
+  // inventory is derived from the manuscript, the loaded images, the
+  // technical cloud state, the canonical page list and the warning lifecycle
+  // (lib/imageCenter.ts); every action is the existing one.
+  const openImageCenter = () => {
+    setImageWarningOpen(false);
+    setImageCenterNotice(null);
+    setImageCenterOpen(true);
+    refreshImageOriginals();
+  };
+  const refreshImageOriginals = () => {
+    if (!onCheckImageOriginals) return;
+    const requestId = imageOriginalsRequestRef.current + 1;
+    imageOriginalsRequestRef.current = requestId;
+    setImageOriginals(null);
+    onCheckImageOriginals(referencedImageIds(readLiveContent())).then(
+      (ids) => {
+        if (imageOriginalsRequestRef.current === requestId) setImageOriginals(ids);
+      },
+      () => {
+        if (imageOriginalsRequestRef.current === requestId) setImageOriginals(new Set());
+      }
+    );
+  };
+  const handleImageCenterNavigate = (bodyIndex: number) => {
+    setImageCenterOpen(false);
+    scrollToPreviewPage(bodyIndex);
+  };
+  // Marker-range splice of the LIVE manuscript (every marker of this id; the
+  // rest of the text is untouched), then the editor's own delete.
+  const handleImageCenterDelete = (imageId: string) => {
+    if (!onContentChange) return;
+    const source = readLiveContent();
+    const next = removeImageMarkers(source, imageId);
+    if (next === source) return;
+    onContentChange(next);
+    onImageDelete?.(imageId);
+  };
+  const handleImageCenterResync = (imageIds: string[]) => {
+    if (!onImageResync || imageCenterBusy) return;
+    setImageCenterBusy(true);
+    setImageCenterNotice(null);
+    onImageResync(imageIds)
+      .then(
+        (result) => {
+          if (result.withoutOriginal.length > 0) {
+            setImageCenterNotice(`この端末に元画像がない画像が${result.withoutOriginal.length}点あります。画像を選び直すか、削除してください。`);
+          }
+        },
+        () => setImageCenterNotice("再同期に失敗しました。時間をおいてもう一度お試しください。")
+      )
+      .finally(() => {
+        setImageCenterBusy(false);
+        refreshImageOriginals();
+      });
+  };
+
   // TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: ONE list for both the desktop
   // dropdown below and the phone Editor-view export sheet. `run` is always one
   // of the handlers defined above -- the only place ids are bound to them --
@@ -3072,11 +3166,34 @@ function PreviewPane({
         </div>
       </div>
 
+      {imageWarningEntries.length === 0 && referencedImageCount > 0 && (
+        <div
+          data-image-footer=""
+          className="flex flex-none items-center justify-end border-t border-ink/10 px-2 py-1 text-xs"
+        >
+          <button
+            type="button"
+            data-image-center-open=""
+            onClick={openImageCenter}
+            className="rounded-full border border-ink/20 px-3 py-0.5 text-[11px] text-ink/70 hover:bg-ink/5"
+          >
+            画像 {referencedImageCount}
+          </button>
+        </div>
+      )}
       {imageWarningEntries.length > 0 && (
         <div
           data-image-link-warning-footer=""
-          className="relative flex flex-none items-center justify-end border-t border-amber-300/50 bg-amber-50 px-2 py-1.5 text-xs text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100"
+          className="relative flex flex-none items-center justify-end gap-2 border-t border-amber-300/50 bg-amber-50 px-2 py-1.5 text-xs text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100"
         >
+          <button
+            type="button"
+            data-image-center-open=""
+            onClick={openImageCenter}
+            className="rounded-full border border-amber-500/40 bg-white px-3 py-1 text-[11px] hover:bg-amber-100 dark:bg-neutral-900 dark:hover:bg-amber-950"
+          >
+            画像 {referencedImageCount}
+          </button>
           <button
             type="button"
             onClick={() => setImageWarningOpen((open) => !open)}
@@ -3089,6 +3206,14 @@ function PreviewPane({
               <p className="mb-2 font-semibold text-ink">画像リンク切れ</p>
               <p className="mb-3 text-[11px] leading-relaxed text-ink/65">
                 画像を再配置するか、不要な画像を原稿から削除してください。
+                <button
+                  type="button"
+                  data-image-warning-open-center=""
+                  onClick={openImageCenter}
+                  className="ml-1 text-ink underline-offset-2 hover:underline"
+                >
+                  画像管理を開く
+                </button>
               </p>
               <div className="max-h-56 space-y-2 overflow-auto">
                 {imageWarningEntries.map((entry) => (
@@ -3140,20 +3265,40 @@ function PreviewPane({
               </div>
             </div>
           )}
-          <input
-            ref={replacementInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (!file || !pendingReplacementId) return;
-              void onImageReplace?.(pendingReplacementId, file);
-              setPendingReplacementId(null);
-            }}
-          />
         </div>
+      )}
+      {/* Shared by the footer popover and the image center (Phase 12), so it
+          exists whether or not a warning is showing. */}
+      <input
+        ref={replacementInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file || !pendingReplacementId) return;
+          const replacing = onImageReplace?.(pendingReplacementId, file);
+          setPendingReplacementId(null);
+          if (imageCenterOpen) void Promise.resolve(replacing).finally(refreshImageOriginals);
+        }}
+      />
+
+      {imageCenterOpen && (
+        <ImageCenterModal
+          entries={imageCenterEntries}
+          pagesKnown={listAuthority.canonical}
+          checkingOriginals={Boolean(onCheckImageOriginals) && imageOriginals === null}
+          busy={imageCenterBusy}
+          notice={imageCenterNotice}
+          canEdit={canEditContent}
+          onClose={() => setImageCenterOpen(false)}
+          onNavigate={handleImageCenterNavigate}
+          onReplace={requestImageReplacement}
+          onDelete={handleImageCenterDelete}
+          onResync={handleImageCenterResync}
+          onDismissWarning={(imageId) => handleDismissImageWarningEntry([imageId])}
+        />
       )}
 
       {imageBreakNoticePages && imageBreakNoticePages.length > 0 && (
