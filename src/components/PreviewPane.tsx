@@ -2950,6 +2950,7 @@ function PreviewPane({
                       /* ノンブルは canonical folio（Core + pageFurniture）に従う
                          （PageCard / previewNombre.ts）。TOCページは物理ページ番号の
                          ノンブルを持ち、柱だけ持たない。 */
+                      hideNombre={false}
                       hideHashira
                       chromeScale={chromeScale}
                       isMenuOpen={false}
