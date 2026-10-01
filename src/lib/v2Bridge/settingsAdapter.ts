@@ -85,6 +85,21 @@ export function buildV2PageGeometry(settings: PageSettings): PublicationPageGeom
     marginLeftMm: settings.marginOuter,
     marginGutterMm: settings.marginGutter,
     marginOuterMm: settings.marginOuter,
+    // Phase 11 残件③: page furniture (folio / 柱) and the text frame are
+    // placed with the Editor Preview's geometry — parity-aware ノド/小口 and
+    // `nombreBottomMargin` — through `renderer/furnitureGeometry.ts`, so
+    // Preview / PDF / JPG print them in one place. Web閲覧用 (isPx) keeps its
+    // own fixed web-reading furniture (Preview: bottom-left folio + footer)
+    // and is intentionally left on the historical export placement.
+    ...(paper.isPx
+      ? {}
+      : {
+          furniture: {
+            marginGutterMm: settings.marginGutter,
+            marginOuterMm: settings.marginOuter,
+            folioBottomEdgeMm: settings.masterPage.nombreBottomMargin,
+          },
+        }),
   };
 }
 

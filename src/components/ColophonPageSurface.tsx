@@ -9,7 +9,14 @@ import {
   type ColophonSettings
 } from "@/lib/colophon";
 import { resolveNombreFontFamily } from "@/constants/fonts";
-import { NombreOverlay } from "./PageCard";
+import { NombreOverlay, PageFurnitureText } from "./PageCard";
+import {
+  folioSideForPage,
+  previewFurnitureFrame,
+  previewHeaderPlacement,
+  resolveColophonPreviewFurniture,
+  type CanonicalPageFurniture,
+} from "./previewFurniture";
 import { ColophonTemplateContent } from "./ColophonTemplateContent";
 import { colophonTemplateLayoutPlan } from "@/lib/colophonLayoutPlan";
 
@@ -27,7 +34,10 @@ import { colophonTemplateLayoutPlan } from "@/lib/colophonLayoutPlan";
  * - ノンブル（ページ番号）: 本文のノンブルが表示 ON なら、奥付にも「実際の
  *   作品ページ順（物理ページ順）」に従った続き番号を表示する（奥付を途中へ
  *   入れた場合も物理順）。本文用 NombreOverlay をそのまま再利用。本文が
- *   非表示なら奥付にも出さない。柱は付けない。
+ *   非表示なら奥付にも出さない。
+ * - Phase 11 残件③: V2 Preview では Core の canonical な奥付ページ装飾
+ *   （`canonicalFurniture`: PDF/JPG が描くのと同じ folio / 柱）に従う。
+ *   LEGACY（canonical なし）は従来どおりノンブルのみ・柱なし。
  * - ページ位置（本文の何ページ後 / 末尾）は呼び出し側が Presentation Sequence
  *   で決める。ページ内の配置（左右 / 上下 / ノド・天地考慮）は placement で。
  *
@@ -50,6 +60,11 @@ export interface ColophonPageSurfaceProps {
   onOverflowChange?: (overflowing: boolean) => void;
   /** QA/rollout marker only; does not change page geometry or appearance. */
   rendererSource?: "legacy" | "v2";
+  /**
+   * V2: Core's canonical furniture of this colophon page (the folio / 柱
+   * PDF/JPG paint). Omitted (LEGACY), the historical nombre-only rule applies.
+   */
+  canonicalFurniture?: CanonicalPageFurniture;
 }
 
 export default function ColophonPageSurface({
@@ -60,6 +75,7 @@ export default function ColophonPageSurface({
   physicalPageNumber,
   onOverflowChange,
   rendererSource = "legacy",
+  canonicalFurniture,
 }: ColophonPageSurfaceProps) {
   const { paper } = layout;
   const bleedMm = paper.isPx ? 0 : BLEED_MM;
@@ -135,7 +151,17 @@ export default function ColophonPageSurface({
 
   // ノンブル: 本文の masterPage 設定をそのまま解釈する（本文ノンブルが
   // 非表示なら奥付にも出さない）。物理ページ番号 - 1 = 奥付より前の本文ページ数。
-  const colophonNombre = resolveColophonNombre(masterPage, physicalPageNumber - 1);
+  const furniture = resolveColophonPreviewFurniture({
+    canonicalFurniture,
+    legacyNombre: resolveColophonNombre(masterPage, physicalPageNumber - 1),
+    legacySide: folioSideForPage(
+      masterPage.nombrePosition === "hidden" ? "center" : (masterPage.nombrePosition as "center" | "gutter" | "outer"),
+      isOddPage
+    ),
+  });
+  const colophonNombre = furniture.nombre;
+  const colophonHashira = furniture.hashira;
+  const furnitureFrame = previewFurnitureFrame(settings, paper);
   const isWebPreset = settings.paperSize === "Web閲覧用";
 
   const placementRef = useRef<HTMLDivElement | null>(null);
@@ -251,15 +277,11 @@ export default function ColophonPageSurface({
         {colophonNombre && (
           <NombreOverlay
             value={colophonNombre.value}
-            position={
-              isWebPreset
-                ? "left"
-                : (masterPage.nombrePosition as "center" | "gutter" | "outer")
-            }
-            isOddPage={colophonNombre.isOddPage}
-            bottomMarginMm={masterPage.nombreBottomMargin}
-            marginGutterMm={settings.marginGutter}
-            marginOuterMm={settings.marginOuter}
+            webReading={isWebPreset}
+            side={colophonNombre.side}
+            isOddPage={isOddPage}
+            frame={furnitureFrame}
+            paper={paper}
             fontSize={masterPage.nombreFontSize}
             // ページ番号は本全体で一貫させる: 本文ページと同じ解決規則
             // （明示指定があればそれ、なければ本文フォント）を使う——奥付の
@@ -268,6 +290,17 @@ export default function ColophonPageSurface({
               masterPage.nombreFontFamily,
               settings.fontFamily || "'Shippori Mincho', serif"
             )}
+            bleedMm={bleedMm}
+          />
+        )}
+        {colophonHashira && (
+          <PageFurnitureText
+            dataAttribute="data-hashira"
+            text={colophonHashira.text}
+            placement={previewHeaderPlacement(colophonHashira.band, colophonHashira.horizontal, furnitureFrame, isOddPage)}
+            paper={paper}
+            fontFamily={settings.fontFamily || "'Shippori Mincho', serif"}
+            fontSizePt={masterPage.headerFontSize ?? 8}
             bleedMm={bleedMm}
           />
         )}

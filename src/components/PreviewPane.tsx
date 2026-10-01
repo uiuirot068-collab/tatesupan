@@ -778,6 +778,11 @@ function PreviewPane({
   // colophon now enters through V2ColophonPageCard, which shares the single
   // product-approved visual template layer with the fallback renderer instead
   // of treating the LEGACY card as V2's appearance implementation.
+  // Phase 11 残件③: Core's canonical colophon furniture (V2 only).
+  const v2ColophonFurniture = useMemo(
+    () => v2PageModel?.pages.find((page) => page.kind === "colophon")?.furniture,
+    [v2PageModel]
+  );
   const presentation = useMemo<{ items: PresentationItem[]; physicalNumbers: number[] }>(() => {
     if (v2PageModel && v2PageModel.bodyPageCount > 0) {
       const items: PresentationItem[] = [];
@@ -2906,21 +2911,36 @@ function PreviewPane({
                 if (!item) return null;
 
                 if (item.kind === "colophon") {
-                  const ColophonPreviewCard = useV2Engine ? V2ColophonPageCard : ColophonPageCard;
+                  // Phase 11 残件③: the V2 card paints Core's canonical colophon
+                  // furniture (the folio / 柱 PDF/JPG print). Before the first V2
+                  // layout there is none yet and the card keeps the LEGACY rule.
+                  const colophonFurniture = useV2Engine ? v2ColophonFurniture : undefined;
                   return (
                     <div
                       key="colophon"
                       ref={colophonElementRef}
                       className="relative flex shrink-0"
                     >
-                      <ColophonPreviewCard
-                        settings={settings}
-                        layout={layout}
-                        colophon={settings.colophon}
-                        title={title}
-                        physicalPageNumber={physicalPageNumber}
-                        onOverflowChange={setColophonOverflow}
-                      />
+                      {useV2Engine ? (
+                        <V2ColophonPageCard
+                          settings={settings}
+                          layout={layout}
+                          colophon={settings.colophon}
+                          title={title}
+                          physicalPageNumber={physicalPageNumber}
+                          onOverflowChange={setColophonOverflow}
+                          canonicalFurniture={colophonFurniture}
+                        />
+                      ) : (
+                        <ColophonPageCard
+                          settings={settings}
+                          layout={layout}
+                          colophon={settings.colophon}
+                          title={title}
+                          physicalPageNumber={physicalPageNumber}
+                          onOverflowChange={setColophonOverflow}
+                        />
+                      )}
                     </div>
                   );
                 }

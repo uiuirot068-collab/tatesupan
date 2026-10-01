@@ -48,6 +48,7 @@
 // (`topMm`/`heightMm`/`rubyAnnotation`/`semanticRunKind`/`text`) and never
 // recalculates placement, breaks, or canonical occupancy.
 
+import { folioPlacement, furnitureFrameMargins, headerPlacement, type FurniturePageFrame, type PublicationFurnitureGeometry } from "../furnitureGeometry";
 import { jsPDF } from "jspdf";
 import type { PaintPage, PaintPlacedUnit, PublicationDocument } from "./paintModel";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
@@ -111,7 +112,9 @@ export interface PublicationPageGeometry {
   // which every OTHER paint path (body content, folio, header) still
   // uses as one fixed, parity-INDEPENDENT physical rectangle for the
   // whole document (a real, pre-existing v2 simplification, not
-  // resolved by this round). These two fields are read ONLY by
+  // resolved by this round; Phase 11 残件③ resolves it through the
+  // optional `furniture` field below, leaving these two untouched). These
+  // two fields are read ONLY by
   // `buildColophonPaintPage`'s own `ColophonPlacement.respectGutter`
   // resolution (round 29) -- body/folio/header remain byte-identical.
   // Optional/additive: omitted (every existing caller), `respectGutter`
@@ -120,6 +123,13 @@ export interface PublicationPageGeometry {
   // honest inertness, not a silent no-op dressed up as support.
   marginGutterMm?: number;
   marginOuterMm?: number;
+  /**
+   * Phase 11 残件③: the Editor's page-furniture geometry (parity-aware
+   * ノド/小口 frame edges + `nombreBottomMargin`). When supplied, folio / 柱
+   * are placed by `renderer/furnitureGeometry.ts` exactly where the Editor
+   * Preview paints them; omitted, the historical placement is unchanged.
+   */
+  furniture?: PublicationFurnitureGeometry;
 }
 
 export type PaintCommand =
@@ -702,6 +712,7 @@ function buildBodyPaintPage(
   pageGeometry: PublicationPageGeometry | undefined,
   doc: PublicationDocument,
   baselineRatio: number,
+  isOddPage: boolean,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
   yakumonoContext?: VerticalYakumonoAlignContext
@@ -710,16 +721,33 @@ function buildBodyPaintPage(
   // The content area's own right edge, physically: the paper's right
     // edge minus the inside margin when pageGeometry is supplied, or the
     // content's own extent (the prior, margin-less behavior) otherwise.
-    const contentRightEdgeMm = pageGeometry ? pageGeometry.paperWidthMm - pageGeometry.marginRightMm : page.widthMm;
+    // Phase 11 残件③: with the Editor's furniture geometry the text frame is
+    // parity-aware (ノド on the spine side of each page, as the Preview sheet
+    // pads it); without it the historical fixed frame is kept.
+    const frameMargins = pageGeometry
+      ? furnitureFrameMargins(
+          {
+            paperWidthMm: pageGeometry.paperWidthMm,
+            paperHeightMm: pageGeometry.paperHeightMm,
+            marginTopMm: pageGeometry.marginTopMm,
+            marginBottomMm: pageGeometry.marginBottomMm,
+            marginLeftMm: pageGeometry.marginLeftMm,
+            marginRightMm: pageGeometry.marginRightMm,
+            ...(pageGeometry.furniture ? { furniture: pageGeometry.furniture } : {}),
+          },
+          isOddPage
+        )
+      : undefined;
+    const contentRightEdgeMm = pageGeometry && frameMargins ? pageGeometry.paperWidthMm - frameMargins.rightMm : page.widthMm;
     const yOffsetMm = pageGeometry ? pageGeometry.marginTopMm : 0;
     // Round 30 follow-up (Human Visual QA HOLD, image size/placement
     // fix): the real content-area box, used ONLY as an IMAGE unit's own
     // sizing/centering reference (see `unitCommands`'s own `imageBoxMm`
     // doc) — undefined when no real page geometry was supplied, so
     // geometry-less callers keep their prior `lineWidthMm`-based behavior.
-    const contentAreaWidthMm = pageGeometry ? contentRightEdgeMm - pageGeometry.marginLeftMm : undefined;
-    const imageBoxMm = pageGeometry && contentAreaWidthMm !== undefined ? {
-      contentLeftMm: pageGeometry.marginLeftMm,
+    const contentAreaWidthMm = pageGeometry && frameMargins ? contentRightEdgeMm - frameMargins.leftMm : undefined;
+    const imageBoxMm = pageGeometry && frameMargins && contentAreaWidthMm !== undefined ? {
+      contentLeftMm: frameMargins.leftMm,
       contentTopMm: pageGeometry.marginTopMm,
       contentWidthMm: contentAreaWidthMm,
       contentHeightMm: pageGeometry.paperHeightMm - pageGeometry.marginTopMm - pageGeometry.marginBottomMm,
@@ -771,38 +799,28 @@ function buildBodyPaintPage(
     const marginTopMm = pageGeometry?.marginTopMm ?? 0;
     const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
     const marginRightMm = pageGeometry?.marginRightMm ?? 0;
+    const furnitureFrame: FurniturePageFrame = {
+      paperWidthMm,
+      paperHeightMm,
+      marginTopMm,
+      marginBottomMm,
+      marginLeftMm,
+      marginRightMm,
+      ...(pageGeometry?.furniture ? { furniture: pageGeometry.furniture } : {}),
+    };
     if (page.folio && page.folio.text.length > 0 && hasFont) {
-      // "left"/"right" anchor flush with the SAME margin the body
-      // content area itself uses, mirroring legacy's own "frame edge,
-      // not paper edge" convention (`PageCard.tsx`'s `NombreOverlay`).
-      const xCenter =
-        page.folio.position === "left"
-          ? marginLeftMm + doc.bodyEmMm / 2
-          : page.folio.position === "right"
-            ? paperWidthMm - marginRightMm - doc.bodyEmMm / 2
-            : paperWidthMm / 2;
-      const yCenter = paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, doc.folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), "center", "folio"));
+      // Placement is shared with the Editor Preview (renderer/furnitureGeometry.ts).
+      const folioSizePt = doc.folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm));
+      const at = folioPlacement(page.folio.position, furnitureFrame, isOddPage, folioSizePt, doc.bodyEmMm);
+      commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
-      // Human Visual QA HOLD round 25 (correction to round 24's own
-      // vertical-center misreading): `band` is the ONLY vertical axis
-      // (top/bottom, matching legacy exactly) -- there is no vertical
-      // center. `horizontal` reuses the SAME center/left/right
-      // resolution folio's own position already uses: "left"/"right"
-      // anchor flush with the margin the body content area itself
-      // uses; "center" horizontally centers on the PAPER's own
-      // physical width (jsPDF's own `align:"center"` in
-      // `horizontalFurnitureCommand` already accounts for the real
-      // text width -- no separate measurement needed here).
-      const xAnchor =
-        page.header.position.horizontal === "left"
-          ? marginLeftMm
-          : page.header.position.horizontal === "right"
-            ? paperWidthMm - marginRightMm
-            : paperWidthMm / 2;
-      const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-      commands.push(horizontalFurnitureCommand(page.header.text, xAnchor, yCenter, doc.runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), page.header.position.horizontal, "running-head"));
+      // Human Visual QA HOLD round 25: `band` is the only vertical axis
+      // (top/bottom); `horizontal` is Core's parity-resolved side. The
+      // physical anchor (text frame edge / paper centre) is shared with the
+      // Editor Preview (renderer/furnitureGeometry.ts).
+      const at = headerPlacement(page.header.position, furnitureFrame, isOddPage, doc.bodyEmMm);
+      commands.push(horizontalFurnitureCommand(page.header.text, at.xMm, at.yCenterMm, doc.runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), at.align, "running-head"));
     }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
@@ -847,7 +865,9 @@ function paintPlanPageSource(
   yakumonoContext?: VerticalYakumonoAlignContext
 ): PaintPlanPageSource {
   const colophonPageCount = doc.colophonPages?.length ?? 0;
-  const bodyPageAt = (i: number) => buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, outlineContext, gposContext, yakumonoContext);
+  // `physicalIndex` decides the page's parity (ノド/小口 side) for furniture.
+  const bodyPageAt = (i: number, physicalIndex: number) =>
+    buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, (physicalIndex + 1) % 2 === 1, outlineContext, gposContext, yakumonoContext);
   // `physicalIndex` (Human Visual QA HOLD round 29): the SAME 0-based
   // final-physical-sequence position `core/layout/assemble.ts` already
   // used to resolve this page's own folio/header -- re-derived here
@@ -881,14 +901,14 @@ function paintPlanPageSource(
       pageCount: sequence.length,
       pageAt: (physicalIndex) => {
         const ref = sequence[physicalIndex];
-        return ref.kind === "body" ? bodyPageAt(ref.index) : colophonPageAt(ref.index, physicalIndex);
+        return ref.kind === "body" ? bodyPageAt(ref.index, physicalIndex) : colophonPageAt(ref.index, physicalIndex);
       },
     };
   }
   const bodyCount = doc.pages.length;
   return {
     pageCount: bodyCount + colophonPageCount,
-    pageAt: (physicalIndex) => (physicalIndex < bodyCount ? bodyPageAt(physicalIndex) : colophonPageAt(physicalIndex - bodyCount, physicalIndex)),
+    pageAt: (physicalIndex) => (physicalIndex < bodyCount ? bodyPageAt(physicalIndex, physicalIndex) : colophonPageAt(physicalIndex - bodyCount, physicalIndex)),
   };
 }
 
@@ -1015,6 +1035,15 @@ function buildColophonPaintPage(
   const marginBottomMm = pageGeometry?.marginBottomMm ?? 0;
   const marginLeftMm = pageGeometry?.marginLeftMm ?? 0;
   const marginRightMm = pageGeometry?.marginRightMm ?? 0;
+  const colophonFurnitureFrame: FurniturePageFrame = {
+    paperWidthMm,
+    paperHeightMm,
+    marginTopMm,
+    marginBottomMm,
+    marginLeftMm,
+    marginRightMm,
+    ...(pageGeometry?.furniture ? { furniture: pageGeometry.furniture } : {}),
+  };
   const commands: PaintCommand[] = [];
   const firstColumn = page.columns[0];
   const colophonEmMm =
@@ -1081,7 +1110,13 @@ function buildColophonPaintPage(
       }
     }
     if (page.folio && page.folio.text.length > 0) {
-      const folioYCenterMm = paperHeightMm - marginBottomMm / 2;
+      const folioYCenterMm = folioPlacement(
+        page.folio.position,
+        colophonFurnitureFrame,
+        isOddPage,
+        folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)),
+        bodyEmMm
+      ).yCenterMm;
       contentAreaBottomMm = Math.min(contentAreaBottomMm, folioYCenterMm - halfFurnitureBandMm);
     }
     contentAreaBottomMm = Math.max(contentAreaBottomMm, contentAreaTopMm);
@@ -1158,25 +1193,17 @@ function buildColophonPaintPage(
     }
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {
-    const xCenter =
-      page.folio.position === "left" ? marginLeftMm + bodyEmMm / 2 : page.folio.position === "right" ? paperWidthMm - marginRightMm - bodyEmMm / 2 : paperWidthMm / 2;
-    const yCenter = paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.folio.text, xCenter, yCenter, folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "folio"));
+    const folioSizePt = folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm));
+    const at = folioPlacement(page.folio.position, colophonFurnitureFrame, isOddPage, folioSizePt, bodyEmMm);
+    commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
   }
-  // Human Visual QA HOLD round 28: colophon pages have carried a real,
-  // Core-generated `header` since round 26 (`assemble.ts`'s own
-  // physical-sequence continuation), but this function never painted
-  // it -- an undetected round-26 gap, fixed here, mirroring the body
-  // page header paint exactly (`buildBodyPaintPage` above).
+  // Human Visual QA HOLD round 28: colophon pages carry Core's `header`
+  // (`assemble.ts` physical-sequence continuation) and paint it. With Editor
+  // geometry the placement is the body page's (shared helper); without it
+  // the historical half-cell centring is kept.
   if (page.header && page.header.text.length > 0 && hasFont) {
-    const xCenter =
-      page.header.position.horizontal === "left"
-        ? marginLeftMm + bodyEmMm / 2
-        : page.header.position.horizontal === "right"
-          ? paperWidthMm - marginRightMm - bodyEmMm / 2
-          : paperWidthMm / 2;
-    const yCenter = page.header.position.band === "top" ? marginTopMm / 2 : paperHeightMm - marginBottomMm / 2;
-    commands.push(horizontalFurnitureCommand(page.header.text, xCenter, yCenter, runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), "center", "running-head"));
+    const at = headerPlacement(page.header.position, colophonFurnitureFrame, isOddPage, bodyEmMm, true);
+    commands.push(horizontalFurnitureCommand(page.header.text, at.xMm, at.yCenterMm, runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm)), at.align, "running-head"));
   }
   return { widthMm: paperWidthMm, heightMm: paperHeightMm, commands };
 }

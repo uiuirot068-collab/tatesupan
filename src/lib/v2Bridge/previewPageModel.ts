@@ -17,7 +17,7 @@
 import type { TategakiPage, TategakiToken } from "../tategaki";
 import type { V2LayoutResult } from "./composeV2Document";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
-import type { CanonicalPage } from "../../../typesetting-v2/core/layout/schema";
+import type { CanonicalPage, GeneratedHeader, GeneratedPageFurniture } from "../../../typesetting-v2/core/layout/schema";
 import type { LogicalUnit } from "../../../typesetting-v2/core/units";
 import { bodyPageNumber, physicalPageNumber } from "./pageIndex";
 
@@ -40,6 +40,12 @@ export interface V2PreviewPage {
   sourceRange?: SourceRange;
   /** Editor image ids whose IMG marker this page owns (V2 flow ownership). */
   imageIds: string[];
+  /**
+   * Colophon pages only (Phase 11 残件③): Core's canonical furniture — the
+   * folio / 柱 PDF/JPG paint on this page — so the Preview colophon card
+   * shows the same decoration. Body/TOC pages carry theirs on the PaintPage.
+   */
+  furniture?: { folio?: GeneratedPageFurniture; header?: GeneratedHeader };
 }
 
 export interface V2PreviewPageModel {
@@ -117,7 +123,12 @@ export function buildV2PreviewPageModel(layout: V2LayoutResult, sourceContent: s
 
   layout.document.pageSequence.forEach((ref, physicalIndex) => {
     if (ref.kind === "colophon") {
-      pages.push({ physicalIndex, physicalPageNumber: physicalPageNumber(physicalIndex), kind: "colophon", imageIds: [] });
+      const colophonPage = layout.document.colophon?.pages[ref.index];
+      const furniture = {
+        ...(colophonPage?.folio ? { folio: colophonPage.folio } : {}),
+        ...(colophonPage?.header ? { header: colophonPage.header } : {}),
+      };
+      pages.push({ physicalIndex, physicalPageNumber: physicalPageNumber(physicalIndex), kind: "colophon", imageIds: [], furniture });
       return;
     }
     const canonicalBodyIndex = ref.index;

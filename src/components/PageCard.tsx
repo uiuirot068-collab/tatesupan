@@ -20,7 +20,7 @@ import {
   type TategakiPage,
   type TategakiToken,
 } from "@/lib/tategaki";
-import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
+import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings, type PaperSize } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import {
@@ -33,6 +33,17 @@ import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRender
 import { fitImageToBox, imageMaxBoxForTextArea } from "@/lib/imageGeometry";
 import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
 import { resolvePreviewNombre } from "./previewNombre";
+import {
+  folioSideForPage,
+  previewFolioPlacement,
+  previewFurnitureFontSize,
+  previewFurnitureFrame,
+  previewFurnitureStyle,
+  previewHeaderPlacement,
+  resolvePreviewHashira,
+} from "./previewFurniture";
+import type { FolioPosition, ResolvedFolioPosition } from "../../typesetting-v2/core/layout/schema";
+import type { FurniturePageFrame, FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -475,10 +486,26 @@ function PageCard({
     nombreStart: masterPage.nombreStart,
   });
 
-  // ページ別の柱上書きがあればそれを、なければ奇数/偶数の共通柱を使用。
+  // ページ別の柱上書きがあればそれを、なければ奇数/偶数の共通柱を使用（LEGACY）。
+  // Phase 11 残件③: in V2 mode Core's canonical header (the one PDF/JPG
+  // paint, with per-page overrides and the TOC rule already applied) decides
+  // presence, text, band and side. See previewFurniture.ts.
   const defaultHashiraText = isOddPage ? masterPage.hashiraOdd : masterPage.hashiraEven;
-  const hashiraText = hashiraOverride ?? defaultHashiraText;
-  const showHashira = Boolean(hashiraText) && !hideHashira;
+  const hashira = resolvePreviewHashira({
+    hasCanonicalPage: Boolean(v2PreviewEnabled && v2PreviewPage),
+    canonicalHeader: v2PreviewPage?.header,
+    legacyText: hashiraOverride ?? defaultHashiraText,
+    hideHashira,
+    legacyBand: masterPage.hashiraPosition,
+    isOddPage,
+  });
+  const showHashira = hashira.show;
+  // Canonical folio side (Core parity rule); LEGACY derives the same rule.
+  const nombreSide =
+    v2PreviewEnabled && v2PreviewPage?.folio
+      ? v2PreviewPage.folio.position
+      : folioSideForPage(nombrePosition === "hidden" ? "center" : (nombrePosition as FolioPosition), isOddPage);
+  const furnitureFrame = previewFurnitureFrame(settings, paper);
 
   const showWebFooter = settings.paperSize === "Web閲覧用";
   const folioFontSizePt = masterPage.nombreFontSize;
@@ -1154,19 +1181,13 @@ function PageCard({
         )}
 
         {showHashira && (
-          <HashiraOverlay
-            text={hashiraText}
-            position={masterPage.hashiraPosition}
-            marginMm={
-              masterPage.hashiraPosition === "top"
-                ? settings.marginTop
-                : settings.marginBottom
-            }
-            isOddPage={isOddPage}
-            insetLeftPx={sheetStyle.paddingLeft as number}
-            insetRightPx={sheetStyle.paddingRight as number}
+          <PageFurnitureText
+            dataAttribute="data-hashira"
+            text={hashira.text}
+            placement={previewHeaderPlacement(hashira.band, hashira.horizontal, furnitureFrame, isOddPage)}
+            paper={paper}
             fontFamily={lineStyle.fontFamily as string}
-            fontSize={runningHeadFontSizePt}
+            fontSizePt={runningHeadFontSizePt ?? 8}
             bleedMm={bleedMm}
           />
         )}
@@ -1176,11 +1197,11 @@ function PageCard({
             value={nombreValue}
             // Web閲覧用はフッターが右寄りに表示されるため、ノンブルが重ならないよう
             // 綴じ側/小口側の慣例より優先して左下固定にする。
-            position={showWebFooter ? "left" : (nombrePosition as "center" | "gutter" | "outer")}
+            webReading={showWebFooter}
+            side={nombreSide}
             isOddPage={isOddPage}
-            bottomMarginMm={masterPage.nombreBottomMargin}
-            marginGutterMm={settings.marginGutter}
-            marginOuterMm={settings.marginOuter}
+            frame={furnitureFrame}
+            paper={paper}
             fontSize={folioFontSizePt}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
@@ -1325,40 +1346,45 @@ function TrimGuide() {
   return <div data-bleed-guide="true" className="border-dashed" style={style} />;
 }
 
-// Exported so the horizontal 奥付 page (ColophonPageCard) can render the page
-// number with the *exact same* component — same nombre font / style / position
-// rules as the body — instead of a parallel implementation (TSP-LOOP-005 §1).
-// Purely presentational; no behavior change to body pages.
+// Exported so the horizontal 奥付 page (ColophonPageSurface) can render the
+// page number with the *exact same* component — same nombre font / style /
+// position rules as the body — instead of a parallel implementation
+// (TSP-LOOP-005 §1). Purely presentational.
+//
+// Phase 11 残件③: the position is the shared furniture placement
+// (`renderer/furnitureGeometry.ts`, also used by the PDF/JPG paint plan): the
+// number's outer edge on the text frame edge of its resolved side (ノド/小口
+// mirror per parity), or the paper centre, with its bottom edge
+// `nombreBottomMargin` above the trim line.
 export function NombreOverlay({
   value,
-  position,
+  webReading,
+  side,
   isOddPage,
-  bottomMarginMm,
-  marginGutterMm,
-  marginOuterMm,
+  frame,
+  paper,
   fontSize,
   fontFamily,
   bleedMm,
 }: {
   value: number;
-  position: "center" | "gutter" | "outer" | "left";
+  /** Web閲覧用: fixed bottom-left reading-view folio (clear of the web footer). */
+  webReading: boolean;
+  /** Physical side (Core's parity-resolved folio position). */
+  side: ResolvedFolioPosition;
   isOddPage: boolean;
-  bottomMarginMm: number;
-  /** ノド（綴じ側）余白 mm。ノド寄せノンブルの水平アンカーに使う。 */
-  marginGutterMm: number;
-  /** 小口（外側）余白 mm。小口寄せノンブルの水平アンカーに使う。 */
-  marginOuterMm: number;
+  frame: FurniturePageFrame;
+  paper: PaperSize;
   fontSize?: number;
   // Resolved page-number font — either an explicit choice or the body font
-  // (see resolveNombreFontFamily). Affects the glyph face only; position,
-  // size, and pagination are all computed elsewhere and unchanged.
+  // (see resolveNombreFontFamily). Affects the glyph face only.
   fontFamily: string;
   bleedMm: number;
 }) {
   const nombreFontSizePt = fontSize ?? 4;
 
   // Web閲覧用のノンブルは左下に固定表示する。
-  if (position === "left") {
+  if (webReading) {
     const webStyle: CSSProperties = {
       position: "absolute",
       left: "16px",
@@ -1376,58 +1402,51 @@ export function NombreOverlay({
     );
   }
 
-  // 地の余白帯の中、本文フレームの下端より下。既存の
-  // masterPage.nombreBottomMargin（ユーザー調整可）がそのまま距離を決める。
-  const bottomPx = (bottomMarginMm + bleedMm) * PX_PER_MM;
-  const baseStyle: CSSProperties = {
-    position: "absolute",
-    bottom: bottomPx,
-    display: "inline-block",
+  return (
+    <PageFurnitureText
+      dataAttribute="data-nombre"
+      text={String(value)}
+      placement={previewFolioPlacement(side, frame, isOddPage, nombreFontSizePt)}
+      paper={paper}
+      fontFamily={fontFamily}
+      fontSizePt={nombreFontSizePt}
+      bleedMm={bleedMm}
+    />
+  );
+}
+
+/**
+ * One horizontal furniture text (ノンブル / 柱) at a shared furniture
+ * placement. Font size follows the card's mm→px scale on print papers (see
+ * `previewFurnitureFontSize`), so its proportion to the page is the printed one.
+ */
+export function PageFurnitureText({
+  dataAttribute,
+  text,
+  placement,
+  paper,
+  fontFamily,
+  fontSizePt,
+  bleedMm,
+}: {
+  dataAttribute: "data-nombre" | "data-hashira";
+  text: string;
+  placement: FurniturePlacement;
+  paper: PaperSize;
+  fontFamily: string;
+  fontSizePt: number;
+  bleedMm: number;
+}) {
+  const style: CSSProperties = {
+    ...previewFurnitureStyle(placement, paper.widthMm, bleedMm),
     writingMode: "horizontal-tb",
     color: "#000000",
-    fontSize: `${nombreFontSizePt}pt`,
     fontFamily,
-    lineHeight: 1,
+    fontSize: previewFurnitureFontSize(fontSizePt, paper),
   };
-
-  if (position === "center") {
-    // ページ中央（本文フレーム基準ではなく紙面中央 — 慣例どおり）。
-    return (
-      <div
-        data-nombre=""
-        style={{ ...baseStyle, left: 0, right: 0, display: "flex", justifyContent: "center" }}
-        className="pointer-events-none select-none"
-      >
-        {value}
-      </div>
-    );
-  }
-
-  // TSP-LOOP-021 §3: ノド／小口ノンブルは「紙の端＋インセット」ではなく、
-  // 実際の本文フレームの端を水平アンカーにする。フレームの端は塗り足し込み
-  // カード端から（小口側 = marginOuter+bleed / ノド側 = marginGutter+bleed）。
-  // 右綴じ縦組み: 奇数ページ(recto)は小口=左・ノド=右、偶数ページ(verso)は逆。
-  // ノンブルはそのフレーム端に外側を揃え、内側（本文側）へ伸びる。
-  // → 版面のすぐ下に置かれ、紙の端には貼り付かず、断ち切りも越えない。
-  const outerEdgePx = (marginOuterMm + bleedMm) * PX_PER_MM;
-  const gutterEdgePx = (marginGutterMm + bleedMm) * PX_PER_MM;
-  const anchoredSide: "left" | "right" =
-    position === "outer"
-      ? isOddPage
-        ? "left"
-        : "right"
-      : isOddPage
-        ? "right"
-        : "left";
-  const anchorPx = position === "outer" ? outerEdgePx : gutterEdgePx;
-
   return (
-    <div
-      data-nombre=""
-      style={{ ...baseStyle, [anchoredSide]: anchorPx }}
-      className="pointer-events-none select-none"
-    >
-      {value}
+    <div {...{ [dataAttribute]: "" }} style={style} className="pointer-events-none select-none">
+      {text}
     </div>
   );
 }
@@ -1541,60 +1560,6 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
         <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>
         <span style={finePrintStyle}>#スパンテイル</span>
       </div>
-    </div>
-  );
-}
-
-function HashiraOverlay({
-  text,
-  position,
-  marginMm,
-  isOddPage,
-  insetLeftPx,
-  insetRightPx,
-  fontFamily,
-  fontSize,
-  bleedMm,
-}: {
-  text: string;
-  position: "top" | "bottom";
-  marginMm: number;
-  isOddPage: boolean;
-  insetLeftPx: number;
-  insetRightPx: number;
-  fontFamily: string;
-  fontSize?: number;
-  bleedMm: number;
-}) {
-  // 柱のコンテナは本文領域(小口境界)と同じ左右インセットを持たせ、
-  // 小口側の端に文字が吸着するようテキスト側で text-align を指定する。
-  const style: CSSProperties = {
-    position: "absolute",
-    left: insetLeftPx,
-    right: insetRightPx,
-    top: position === "top" ? bleedMm * PX_PER_MM : undefined,
-    bottom: position === "bottom" ? bleedMm * PX_PER_MM : undefined,
-    height: marginMm * PX_PER_MM,
-    display: "flex",
-    alignItems: "center",
-    writingMode: "horizontal-tb",
-    color: "#000000",
-    fontFamily,
-    fontSize: `${fontSize ?? 8}pt`,
-  };
-
-  // insetLeftPx/insetRightPx はsheetStyleのpaddingLeft/Rightと同じ値——
-  // 奇数ページはpaddingLeft=marginOuter（小口が左）、偶数ページは
-  // paddingRight=marginOuter（小口が右）。よってコンテナの「小口側の端」は
-  // 奇数=左端・偶数=右端になる（NombreOverlayの「小口」判定と同じ規約、
-  // justifyContent: isOddPage ? "flex-start" : "flex-end" 参照）。
-  const textStyle: CSSProperties = isOddPage
-    ? { textAlign: "left", width: "100%" }
-    : { textAlign: "right", width: "100%" };
-
-  return (
-    <div style={style} className="pointer-events-none select-none">
-      <div style={textStyle}>{text}</div>
     </div>
   );
 }
