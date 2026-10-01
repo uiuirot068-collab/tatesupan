@@ -90,6 +90,7 @@ import PageCard from "./PageCard";
 import { resolveJpgPageIndices } from "@/lib/jpgPageSelection";
 import ColophonPageCard from "./ColophonPageCard";
 import V2ColophonPageCard from "./V2ColophonPageCard";
+import { resolvePreviewListAuthority, warningPageIndices } from "@/lib/v2Bridge/previewListAuthority";
 import { resolveColophonInsertion } from "@/lib/colophon";
 import { CLOUD_IMAGE_EXPORT_BLOCK_TITLE } from "@/lib/cloudImageSync";
 import {
@@ -613,6 +614,14 @@ function PreviewPane({
   // listSourceRanges, imagePageIndicesById; V2 exports use the canonical
   // layout), so re-paginating on every text change was pure waste.
   const legacyPaginationNeeded = !useV2Engine || v2PageModel === null;
+  // Phase 11 残件④: before the first V2 layout (or on V2 HOLD) the LEGACY
+  // cards are a provisional stand-in — shown so the pane never goes blank, but
+  // nothing page-keyed is written from them (see previewListAuthority.ts).
+  const listAuthority = resolvePreviewListAuthority({
+    useV2Engine,
+    v2SourceContent: v2PageModel ? v2PageModel.sourceContent : null,
+    content,
+  });
   const pages = useMemo(() => {
     if (!legacyPaginationNeeded) return NO_LEGACY_PAGES;
     const tokens = tokenizeTategaki(deferredContent);
@@ -686,7 +695,8 @@ function PreviewPane({
   // (silentImageWarningIds) only get the footer.
   const reconciledImageWarnings = reconcileImageWarnings(imageWarnings, {
     unresolvedIds: technicalUnresolvedIds,
-    pageIndicesById: imagePageIndicesById,
+    // Phase 11 残件④: a break is recorded with its CANONICAL page only.
+    pageIndicesById: warningPageIndices(listAuthority, imagePageIndicesById),
     silentIds: silentImageWarningIds,
   });
   if (reconciledImageWarnings.state !== imageWarnings) {
@@ -724,7 +734,7 @@ function PreviewPane({
   const listSourceRanges = v2PageModel ? v2PageModel.bodySourceRanges : pageSourceRanges;
   // Source-editing actions (reorder, image insertion) splice `content` by
   // these ranges; in V2 mode they must describe the CURRENT content.
-  const listRangesAreCurrent = !v2PageModel || v2PageModel.sourceContent === content;
+  const listRangesAreCurrent = listAuthority.rangesCurrent;
   // Phase 6: `content` is the Editor's DEBOUNCED snapshot, and an async
   // handler's closure is the render it started in. The live manuscript can be
   // newer (keystrokes inside the debounce, typing during an image decode, or
@@ -828,7 +838,7 @@ function PreviewPane({
   // 選択ページ export never refer to missing pages. In V2 mode this waits for
   // the canonical V2 list: the LEGACY fallback (before the first V2 layout, or
   // V2 HOLD) may paginate differently and must not prune V2 selections.
-  const pageListIsCanonical = !useV2Engine || v2PageModel !== null;
+  const pageListIsCanonical = listAuthority.canonical;
   useEffect(() => {
     if (!pageListIsCanonical) return;
     const pruned = pruneSelectedPages(selected, listPages.length);
@@ -2226,7 +2236,11 @@ function PreviewPane({
     releasePanUserSelectRef.current = null;
   };
 
-  const canReorder = Boolean(onContentChange);
+  // Phase 11 残件④: page-keyed actions (selection, reorder, insertion at a
+  // page, page menu) wait for the canonical page list; marker-id-keyed image
+  // edits (position / layer / delete) do not depend on it.
+  const canEditContent = Boolean(onContentChange);
+  const canReorder = canEditContent && listAuthority.pageActionsEnabled;
 
   // Rebuilds document text for a reordered page sequence. Runs of pages that
   // were already consecutive in the original order are copied verbatim from
@@ -2671,12 +2685,12 @@ function PreviewPane({
               100%
             </button>
           </span>
-          {canReorder && (
+          {canEditContent && (
             <span className="flex flex-shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={selectAll}
-                disabled={listPages.length === 0 || selected.size === listPages.length}
+                disabled={!canReorder || listPages.length === 0 || selected.size === listPages.length}
                 className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 全選択
@@ -2684,7 +2698,7 @@ function PreviewPane({
               <button
                 type="button"
                 onClick={clearSelection}
-                disabled={selected.size === 0}
+                disabled={!canReorder || selected.size === 0}
                 className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 全解除
@@ -3011,16 +3025,16 @@ function PreviewPane({
                     onDragEnd={canReorder ? stableDragEnd : undefined}
                     onInsertImage={canReorder ? stableInsertImage(bodyIndex) : undefined}
                     insertingImage={insertingImageIndex === bodyIndex}
-                    onImagePositionChange={canReorder ? stableImagePositionChange : undefined}
-                    onImageDelete={canReorder ? stableImageDelete : undefined}
-                    onImageLayerChange={canReorder ? stableImageLayerChange : undefined}
+                    onImagePositionChange={canEditContent ? stableImagePositionChange : undefined}
+                    onImageDelete={canEditContent ? stableImageDelete : undefined}
+                    onImageLayerChange={canEditContent ? stableImageLayerChange : undefined}
                     hideNombre={Boolean(settings.pageOverrides[bodyIndex + 1]?.hideNombre)}
                     onHideNombreChange={
-                      onSettingsChange ? stableHideNombreChange(bodyIndex + 1) : undefined
+                      onSettingsChange && listAuthority.pageActionsEnabled ? stableHideNombreChange(bodyIndex + 1) : undefined
                     }
                     hideHashira={Boolean(settings.pageOverrides[bodyIndex + 1]?.hideHashira)}
                     onHideHashiraChange={
-                      onSettingsChange ? stableHideHashiraChange(bodyIndex + 1) : undefined
+                      onSettingsChange && listAuthority.pageActionsEnabled ? stableHideHashiraChange(bodyIndex + 1) : undefined
                     }
                     hashiraOverride={settings.pageOverrides[bodyIndex + 1]?.hashiraOverride}
                     chromeScale={chromeScale}

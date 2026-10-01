@@ -95,7 +95,11 @@ describe("unmount cleanup", () => {
 
 describe("PreviewPane: selection pruning", () => {
   it("prunes against the canonical list only (never the LEGACY fallback in V2 mode)", () => {
-    expect(preview).toContain("const pageListIsCanonical = !useV2Engine || v2PageModel !== null;");
+    // Phase 11 残件④: the canonical/provisional decision lives in
+    // lib/v2Bridge/previewListAuthority.ts (V2 without a page model = provisional).
+    expect(preview).toContain("const listAuthority = resolvePreviewListAuthority({");
+    expect(preview).toContain("v2SourceContent: v2PageModel ? v2PageModel.sourceContent : null,");
+    expect(preview).toContain("const pageListIsCanonical = listAuthority.canonical;");
     const prune = body(preview, "useEffect(() => {\n    if (!pageListIsCanonical) return;", "}, [pageListIsCanonical");
     expect(prune).toContain("pruneSelectedPages(selected, listPages.length)");
     expect(prune).toContain("if (pruned !== selected) setSelected(new Set(pruned));");
