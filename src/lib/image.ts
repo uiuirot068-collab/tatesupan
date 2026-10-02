@@ -7,7 +7,7 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function loadImageNaturalSizePx(dataUrl: string): Promise<{ width: number; height: number }> {
+export function loadImageNaturalSizePx(dataUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });

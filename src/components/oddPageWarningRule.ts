@@ -15,10 +15,26 @@ export function shouldWarnOddPageExport(params: {
    * the binding total. Omitted / 0 for works without a TOC (unchanged result).
    */
   tocPageCount?: number;
+  /**
+   * TSP-PHASE13-001: pages the colophon actually occupies (V2 can lay a long
+   * colophon over several pages). Omitted = 1, the historical assumption.
+   */
+  colophonPageCount?: number;
 }): { totalPages: number } | null {
   if (params.scope !== "all") return null;
+  const totalPages = exportTotalPageCount(params);
+  return totalPages % 2 !== 0 ? { totalPages } : null;
+}
+
+/** Physical pages of a whole-book export: body + colophon (when ON) + TOC. */
+export function exportTotalPageCount(params: {
+  bodyPageCount: number;
+  includeColophon: boolean;
+  tocPageCount?: number;
+  colophonPageCount?: number;
+}): number {
   // 奥付ページ（ON のとき）・目次ページも物理的な1枚なので総数へ含める。
   const tocPages = Math.max(0, Math.trunc(params.tocPageCount ?? 0));
-  const totalPages = params.bodyPageCount + (params.includeColophon ? 1 : 0) + tocPages;
-  return totalPages % 2 !== 0 ? { totalPages } : null;
+  const colophonPages = params.includeColophon ? Math.max(1, Math.trunc(params.colophonPageCount ?? 1)) : 0;
+  return params.bodyPageCount + colophonPages + tocPages;
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { shouldWarnOddPageExport } from "./oddPageWarningRule";
+import { exportTotalPageCount, shouldWarnOddPageExport } from "./oddPageWarningRule";
 
 describe("shouldWarnOddPageExport -- the exact condition window.confirm used to gate", () => {
   it("1. even total page count -> bypasses the warning (null)", () => {
@@ -74,5 +74,21 @@ describe("PreviewPane.tsx source guards (TSP-UX-V3-LOOP2-ODD-PAGE-012)", () => {
     // The odd-page path only ever calls setOddPageWarning -- it must never
     // touch page count state (setPages / page insertion helpers).
     expect(source).not.toMatch(/setOddPageWarning[\s\S]{0,400}(setPages|insertPage|addBlankPage)/);
+  });
+});
+
+describe("TSP-PHASE13-001: a multi-page colophon counts every page", () => {
+  it("uses the real colophon page count instead of assuming one page", () => {
+    expect(
+      shouldWarnOddPageExport({ scope: "all", bodyPageCount: 10, includeColophon: true, colophonPageCount: 2 })
+    ).toBeNull();
+    expect(
+      shouldWarnOddPageExport({ scope: "all", bodyPageCount: 9, includeColophon: true, colophonPageCount: 2 })
+    ).toEqual({ totalPages: 11 });
+  });
+
+  it("ignores the colophon page count when the colophon is not exported", () => {
+    expect(exportTotalPageCount({ bodyPageCount: 10, includeColophon: false, colophonPageCount: 2 })).toBe(10);
+    expect(exportTotalPageCount({ bodyPageCount: 10, includeColophon: true, tocPageCount: 1 })).toBe(12);
   });
 });

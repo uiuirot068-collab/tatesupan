@@ -30,11 +30,12 @@ import {
   tokenizeTategaki,
   type ImagePosition,
   type TategakiPage,
+  type TategakiToken,
 } from "@/lib/tategaki";
 import { computeSpreadGroups, moveSelected, pruneSelectedPages, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
-import { fitImageToMm, readFileAsDataUrl } from "@/lib/image";
+import { fitImageToMm, loadImageNaturalSizePx, readFileAsDataUrl } from "@/lib/image";
 import { convertPsdToPngDataUrl } from "@/utils/psdConverter";
 import {
   exportPagesAsIndividualJpgs,
@@ -78,7 +79,14 @@ import PdfExportChecklistGate from "./PdfExportChecklistGate";
 import PdfModeOption, { PDF_MODE_OPTIONS } from "./PdfModeOption";
 import { toggleHelp } from "./pdfModeHelp";
 import { describeExportMenu, PDF_UNAVAILABLE_NOTE, type ExportMenuEntryId } from "./exportMenuEntries";
-import { shouldWarnOddPageExport } from "./oddPageWarningRule";
+import { exportTotalPageCount, shouldWarnOddPageExport } from "./oddPageWarningRule";
+import {
+  findLowResolutionImages,
+  LOW_RESOLUTION_IMAGE_DPI,
+  shouldWarnPageCountNotMultipleOfFour,
+  type ImagePixelSize,
+  type PreflightImageToken,
+} from "@/lib/exportPreflightChecks";
 import ExportPreflightAccordion from "./ExportPreflightAccordion";
 import {
   buildExportPreflightReport,
@@ -1950,12 +1958,72 @@ function PreviewPane({
     pdfScope === "all" ? listPages.map((_, index) => index) : getOrderedSelectedIndices();
   const pdfAffectedImagePages = affectedExportPageNumbers(pdfTargetBodyIndices, blockedExportPageSet);
   const pdfWillIncludeColophon = showColophon && (pdfScope === "all" || pdfIncludeColophon);
-  const pdfOddPageCheck = shouldWarnOddPageExport({
-    scope: pdfScope,
+  // TSP-PHASE13-001: a long V2 colophon can occupy more than one page.
+  const v2ColophonPageCount = v2PageModel ? v2PageModel.pages.filter((page) => page.kind === "colophon").length : 0;
+  const pdfPageCountParams = {
     bodyPageCount: listPages.length,
     includeColophon: pdfWillIncludeColophon,
     tocPageCount: v2PageModel?.tocPages.length ?? 0,
+    colophonPageCount: v2ColophonPageCount > 0 ? v2ColophonPageCount : undefined,
+  };
+  const pdfOddPageCheck = shouldWarnOddPageExport({
+    scope: pdfScope,
+    ...pdfPageCountParams,
   });
+  const pdfTotalPageCount = exportTotalPageCount(pdfPageCountParams);
+  const pdfPageCountNotMultipleOfFour = shouldWarnPageCountNotMultipleOfFour(pdfScope, pdfTotalPageCount);
+  // TSP-PHASE13-001: effective resolution of the images this PDF would paint.
+  // Pixel sizes are decoded only while the PDF dialog is open.
+  const pdfTargetImagePages = pdfTargetBodyIndices.map((bodyIndex) => ({
+    bodyIndex,
+    images: (listPages[bodyIndex]?.tokens ?? []).filter(
+      (token): token is Extract<TategakiToken, { type: "image" }> => token.type === "image"
+    ) satisfies PreflightImageToken[],
+  }));
+  const pdfTargetImageIdsKey = [...new Set(pdfTargetImagePages.flatMap((page) => page.images.map((image) => image.id)))].join("\n");
+  const [imagePixelSizes, setImagePixelSizes] = useState<ReadonlyMap<string, ImagePixelSize & { src: string }>>(() => new Map());
+  useEffect(() => {
+    if (!isPdfModalOpen || pdfTargetImageIdsKey === "") return;
+    const pending = new Map<string, string>();
+    for (const id of pdfTargetImageIdsKey.split("\n")) {
+      const src = images[id];
+      if (src && imagePixelSizes.get(id)?.src !== src) pending.set(id, src);
+    }
+    if (pending.size === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      [...pending].map(async ([id, src]) => {
+        try {
+          const { width, height } = await loadImageNaturalSizePx(src);
+          return [id, { widthPx: width, heightPx: height, src }] as const;
+        } catch {
+          // 読めない画像はリンク切れ側のチェックが扱う。0px で記録し、再読込を繰り返さない。
+          return [id, { widthPx: 0, heightPx: 0, src }] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setImagePixelSizes((prev) => {
+        const next = new Map(prev);
+        for (const [id, size] of entries) next.set(id, size);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPdfModalOpen, pdfTargetImageIdsKey, images, imagePixelSizes]);
+  const pdfLowResolutionImages = layout.paper.isPx
+    ? null
+    : findLowResolutionImages({
+        pages: pdfTargetImagePages,
+        pixelSizes: imagePixelSizes,
+        textFrame: {
+          widthMm: layout.paper.widthMm - settings.marginOuter - settings.marginGutter,
+          heightMm: layout.paper.heightMm - settings.marginTop - settings.marginBottom,
+        },
+        paper: { widthMm: layout.paper.widthMm, heightMm: layout.paper.heightMm },
+      });
   const pdfPreflightIssues: ExportPreflightIssue[] = [
     ...(pdfAffectedImagePages.length > 0
       ? [{
@@ -1973,6 +2041,23 @@ function PreviewPane({
           severity: "warning" as const,
           title: `全体が奇数ページです（${pdfOddPageCheck.totalPages}ページ）`,
           detail: "見開き・印刷用途では末尾の左右が想定どおりか確認してください。内容を確認済みなら、このまま書き出せます。",
+        }]
+      : []),
+    ...(pdfPageCountNotMultipleOfFour
+      ? [{
+          id: "page-count-multiple-of-4",
+          severity: "warning" as const,
+          title: `全体のページ数が4の倍数ではありません（${pdfTotalPageCount}ページ）`,
+          detail: "中綴じなど、4の倍数でないと製本できない印刷所・製本方法があります。入稿先の条件を確認し、必要なら白ページを足してください。",
+        }]
+      : []),
+    ...(pdfLowResolutionImages
+      ? [{
+          id: "low-resolution-images",
+          severity: "warning" as const,
+          title: `解像度の低い画像があります（最小 約${pdfLowResolutionImages.lowestDpi}dpi）`,
+          detail: `印刷では${LOW_RESOLUTION_IMAGE_DPI}dpi以上が目安です。このままだと粗く印刷されるおそれがあります。より大きな画像に差し替えるか、仕上がりを確認してください。`,
+          pageNumbers: pdfLowResolutionImages.pageNumbers,
         }]
       : []),
   ];
