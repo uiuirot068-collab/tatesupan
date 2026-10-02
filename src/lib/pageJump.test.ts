@@ -3,6 +3,7 @@ import {
   groupIndexForPhysicalPage,
   pageAtViewport,
   parsePageNumberInput,
+  parsePreviewPageLayout,
   presentationIndexForPhysicalPage,
   previewNavigationGroups,
   stepPreviewPage,
@@ -129,5 +130,19 @@ describe("pageAtViewport", () => {
 
   it("returns null without layout", () => {
     expect(pageAtViewport([], 10, spreads, numbers, 1)).toBeNull();
+  });
+});
+
+describe("parsePreviewPageLayout (CST-PORT-005)", () => {
+  it("restores 1P only from the exact stored value", () => {
+    expect(parsePreviewPageLayout("single")).toBe("single");
+    expect(parsePreviewPageLayout("spread")).toBe("spread");
+  });
+
+  it("falls back to 見開き for missing or unknown values", () => {
+    expect(parsePreviewPageLayout(null)).toBe("spread");
+    expect(parsePreviewPageLayout("")).toBe("spread");
+    expect(parsePreviewPageLayout("Single")).toBe("spread");
+    expect(parsePreviewPageLayout("1p")).toBe("spread");
   });
 });
