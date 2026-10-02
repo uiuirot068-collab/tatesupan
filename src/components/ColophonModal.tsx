@@ -270,7 +270,7 @@ export default function ColophonModal({
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-ink/60">項目（項目名そのものも変更できます）</span>
                 <span className="text-[11px] leading-relaxed text-ink/45">
-                  「書名」には、奥付を作ったときの作品タイトルが入ります。あとで作品タイトルを変えても書名は自動では変わらないので、必要なら書き換えてください。テンプレート「ミニマル」では、書名が空欄のとき作品タイトルが表示されます。
+                  「書名」は作品タイトルとは別の項目です。奥付にはここに入力した内容が載ります（テンプレート「ミニマル」だけは、書名が空欄のとき作品タイトルを表示します）。
                 </span>
                 <div className="flex flex-col gap-1.5">
                   {colophon.fields.map((field, index) => (
