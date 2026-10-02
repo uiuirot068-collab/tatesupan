@@ -9,6 +9,7 @@ import {
 import { normalizeColophonSettings } from "@/lib/colophon";
 import { createDefaultTocSettings, normalizeTocSettings } from "@/lib/tocSettings";
 import { normalizeOutputTypography } from "@/lib/outputTypography";
+import { normalizeSettingsFonts } from "@/constants/fonts";
 
 const STORAGE_KEY = "tatespun_settings";
 
@@ -18,7 +19,7 @@ function loadStoredSettings(): PageSettings | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PageSettings>;
-    return normalizeOutputTypography({
+    return normalizeOutputTypography(normalizeSettingsFonts({
       ...DEFAULT_PAGE_SETTINGS,
       ...parsed,
       // 保存ファイル名は作品固有。last-used settingsとして新規作品へ引き継がない。
@@ -31,7 +32,7 @@ function loadStoredSettings(): PageSettings | null {
       colophon: normalizeColophonSettings(parsed.colophon),
       // TOC is work-specific like the export filename; never inherit it into a new work.
       toc: createDefaultTocSettings(),
-    });
+    }));
   } catch {
     return null;
   }
@@ -71,14 +72,14 @@ export function useEditorSettings({ persist = true }: { persist?: boolean } = {}
   const setSettings: Dispatch<SetStateAction<PageSettings>> = useCallback((next) => {
     setRawSettings((previous) => {
       const resolved = typeof next === "function" ? next(previous) : next;
-      return normalizeOutputTypography({
+      return normalizeOutputTypography(normalizeSettingsFonts({
         ...DEFAULT_PAGE_SETTINGS,
         ...resolved,
         masterPage: { ...DEFAULT_MASTER_PAGE_SETTINGS, ...resolved.masterPage },
         pageOverrides: resolved.pageOverrides ?? {},
         colophon: normalizeColophonSettings(resolved.colophon),
         toc: normalizeTocSettings(resolved.toc),
-      });
+      }));
     });
   }, []);
 
