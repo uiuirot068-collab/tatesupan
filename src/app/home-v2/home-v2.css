@@ -369,6 +369,28 @@
   opacity: .45;
 }
 
+/* 「本をまとめる」：作品2冊未満でも押せる（押すと理由と次の行動を案内する）。
+   使えない状態だと分かるよう、矢印だけ控えめにする。 */
+.home-v2-action-card[aria-disabled="true"] .home-v2-action-arrow {
+  opacity: .35;
+}
+
+.home-v2-combine-guide {
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--home-line);
+}
+
+.home-v2-combine-guide:focus {
+  outline: none;
+}
+
+.home-v2-combine-guide:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 .home-v2-action-arrow {
   position: absolute;
   right: 1.25rem;
