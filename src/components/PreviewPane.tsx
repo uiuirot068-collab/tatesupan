@@ -32,6 +32,8 @@ import {
   type TategakiPage,
   type TategakiToken,
 } from "@/lib/tategaki";
+import PageNumberInput from "./PageNumberInput";
+import { groupIndexForPhysicalPage, pageAtViewport, stepPreviewPage } from "@/lib/pageJump";
 import { computeSpreadGroups, moveSelected, pruneSelectedPages, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
@@ -341,7 +343,7 @@ const PageSlot = memo(function PageSlot({
   onNavigateToSource,
 }: PageSlotProps) {
   return (
-    <div ref={registerRef} className="relative flex shrink-0">
+    <div ref={registerRef} data-preview-physical-page={physicalPageNumber} className="relative flex shrink-0">
       {/* ページ間drop挿入ガイド: PageCard.tsx自体は変更せず、その兄弟として
           hover中のページ1枚だけに細い縦線を重ねる。見開きはRTL表示——
           このページの右半分をhoverしたとき("before"、このページの手前へ
@@ -2306,7 +2308,87 @@ function PreviewPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePageIndex]);
 
+  // CST-PORT-003: preview pager (ページ番号で移動). The preview is always
+  // 見開き here, so navigation groups are `spreadGroups`; page numbers are the
+  // physical ones (目次・奥付を含む), matching ノンブル and 「全 N ページ」.
+  const previewPageTotal = presentationSequence.length;
+  const [pagerPage, setPagerPage] = useState(1);
+  const currentPagerPage = Math.min(Math.max(1, pagerPage), Math.max(1, previewPageTotal));
+  const pagerScrollFrameRef = useRef<number | null>(null);
+  const pageFlashTimersRef = useRef<number[]>([]);
+  useEffect(() => () => {
+    if (pagerScrollFrameRef.current != null) cancelAnimationFrame(pagerScrollFrameRef.current);
+    for (const id of pageFlashTimersRef.current) clearTimeout(id);
+  }, []);
+
+  const syncPagerToScroll = () => {
+    pagerScrollFrameRef.current = null;
+    const container = scrollContainerRef.current;
+    const wrapper = scaleContentRef.current;
+    if (!container || !wrapper || presentationScale <= 0) return;
+    const wrapperLayoutTop = getLayoutTop(wrapper) - getLayoutTop(container);
+    const logicalViewportY =
+      (container.scrollTop + container.clientHeight / 2 - wrapperLayoutTop) / presentationScale;
+    setPagerPage((current) =>
+      pageAtViewport(getSpreadLayouts(wrapper), logicalViewportY, spreadGroups, presentation.physicalNumbers, current) ??
+      current
+    );
+  };
+
+  const scrollToPhysicalPage = (page: number, flash: boolean) => {
+    const element = scaleContentRef.current?.querySelector<HTMLElement>(
+      `[data-preview-physical-page="${page}"]`
+    );
+    if (!element) return false;
+    element.scrollIntoView({ behavior: "instant", block: "center", inline: "center" });
+    const surface = element.querySelector<HTMLElement>(".page-card") ?? element;
+    if (flash && typeof surface.animate === "function") {
+      surface.animate(
+        [
+          { boxShadow: "0 0 0 4px rgba(37, 99, 235, 0.55)" },
+          { boxShadow: "0 0 0 4px rgba(37, 99, 235, 0)" },
+        ],
+        { duration: 1200, easing: "ease-out" }
+      );
+    }
+    return true;
+  };
+
+  const jumpToPreviewPage = (page: number) => {
+    if (previewPageTotal < 1) return;
+    const target = Math.min(previewPageTotal, Math.max(1, page));
+    setPagerPage(target);
+    const spreadIndex = groupIndexForPhysicalPage(spreadGroups, presentation.physicalNumbers, target);
+    if (spreadIndex === null) return;
+    for (const id of pageFlashTimersRef.current) clearTimeout(id);
+    pageFlashTimersRef.current = [];
+    // A virtualized spread is only a placeholder until it scrolls into view;
+    // scroll the spread first, then centre the page itself once it has mounted.
+    if (!scrollToPhysicalPage(target, false)) {
+      spreadElementsRef.current.get(spreadIndex)?.scrollIntoView({
+        behavior: "instant",
+        block: "center",
+        inline: "center",
+      });
+    }
+    const settle = (attempt: number) => {
+      if (scrollToPhysicalPage(target, true) || attempt >= 10) return;
+      pageFlashTimersRef.current.push(window.setTimeout(() => settle(attempt + 1), 60));
+    };
+    pageFlashTimersRef.current.push(window.setTimeout(() => settle(0), 60));
+  };
+
+  const stepPager = (direction: -1 | 1) =>
+    jumpToPreviewPage(stepPreviewPage(currentPagerPage, direction, spreadGroups, presentation.physicalNumbers));
+  const canStepPagerBackward =
+    stepPreviewPage(currentPagerPage, -1, spreadGroups, presentation.physicalNumbers) !== currentPagerPage;
+  const canStepPagerForward =
+    stepPreviewPage(currentPagerPage, 1, spreadGroups, presentation.physicalNumbers) !== currentPagerPage;
+
   const handlePreviewScroll = () => {
+    if (pagerScrollFrameRef.current == null) {
+      pagerScrollFrameRef.current = requestAnimationFrame(syncPagerToScroll);
+    }
     // While an automatic cursor-follow scroll is in flight, ignore scroll
     // events so they can't be misread as a manual scroll and trigger a
     // feedback loop.
@@ -2868,6 +2950,17 @@ function PreviewPane({
               100%
             </button>
           </span>
+          {previewPageTotal > 0 && (
+            <PageNumberInput
+              currentPage={currentPagerPage}
+              totalPages={previewPageTotal}
+              onCommit={jumpToPreviewPage}
+              onPrevious={() => stepPager(-1)}
+              onNext={() => stepPager(1)}
+              canPrevious={canStepPagerBackward}
+              canNext={canStepPagerForward}
+            />
+          )}
           {canEditContent && (
             <span className="flex flex-shrink-0 items-center gap-1.5">
               <button
@@ -3115,6 +3208,7 @@ function PreviewPane({
                     <div
                       key="colophon"
                       ref={colophonElementRef}
+                      data-preview-physical-page={physicalPageNumber}
                       className="relative flex shrink-0"
                     >
                       {useV2Engine ? (
