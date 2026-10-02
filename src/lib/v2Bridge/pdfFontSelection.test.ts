@@ -7,6 +7,7 @@ import { composeV2Layout } from "./composeV2Document";
 import { ExportWorkerSession } from "./exportWorkerProtocol";
 import { publicationModelOf } from "./previewWorkerProtocol";
 import { PUBLICATION_FONT_ASSETS, publicationFontAssetFor } from "../v2BrowserExport";
+import { FONT_FAMILY_OPTIONS } from "../../constants/fonts";
 import { createFakeMeasurementProvider } from "../../../typesetting-v2/core/measurement/fakeProvider";
 import type { PublicationFontResource } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 
@@ -67,7 +68,7 @@ function usedFontResources(bytes: Uint8Array): Set<string> {
 async function exportPdf(settings: PageSettings) {
   loads.length = 0;
   const session = new ExportWorkerSession({ loadFont, decode });
-  const publication = structuredClone(publicationModelOf(composeV2Layout({ title: "T", content: "　吾輩は猫である。名前はまだ無い。", settings, measurement: MEASUREMENT })));
+  const publication = structuredClone(publicationModelOf(composeV2Layout({ title: "T", content: "　吾輩は「猫」である。名前はまだ無い……。ニャーと鳴いた――ABC、123。", settings, measurement: MEASUREMENT })));
   session.receiveModel({ ok: true, publication } as Parameters<ExportWorkerSession["receiveModel"]>[0]);
   const indices = publication.pageSequence.map((_, index) => index);
   const result = await session.renderPdf({ physicalIndices: indices, layerOrder: {}, mode: "trim" });
@@ -76,7 +77,7 @@ async function exportPdf(settings: PageSettings) {
 
 describe("TSP-PHASE13-001 PDF font selection", () => {
   it("has an embeddable file for every Editor font choice except the system stack", () => {
-    expect(PUBLICATION_FONT_ASSETS.map((asset) => asset.cssName)).toEqual(["Shippori Mincho", "Zen Old Mincho", "Noto Serif JP", "Noto Sans JP"]);
+    expect(PUBLICATION_FONT_ASSETS).toHaveLength(FONT_FAMILY_OPTIONS.length);
     expect(publicationFontAssetFor(ZEN).fontName).toBe("Zen Old Mincho");
     expect(publicationFontAssetFor("serif").fontName).toBe("Shippori Mincho");
     expect(publicationFontAssetFor(undefined).fontName).toBe("Shippori Mincho");
@@ -98,4 +99,9 @@ describe("TSP-PHASE13-001 PDF font selection", () => {
     const bytes = await exportPdf(settingsWith(DEFAULT_PAGE_SETTINGS.fontFamily, "", ""));
     expect(embeddedFonts(bytes)).toEqual(["Shippori Mincho"]);
   });
+
+  it.each(FONT_FAMILY_OPTIONS.map((option) => [option.label, option.value]))("paints a whole document (vertical body, ノンブル, 奥付) in %s", async (_label, value) => {
+    const bytes = await exportPdf(settingsWith(value, "", ""));
+    expect(embeddedFonts(bytes)).toEqual([publicationFontAssetFor(value).fontName]);
+  }, 30_000);
 });

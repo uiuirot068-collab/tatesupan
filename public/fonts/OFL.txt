@@ -4,6 +4,16 @@ Fonts in this folder (embedded into TateSpun PDF output):
 - ZenOldMincho-Regular.ttf — Copyright 2021 The Zen Old Mincho Project Authors (https://github.com/googlefonts/zen-oldmincho)
 - NotoSerifJP-Regular.ttf — (c) 2017-2024 Adobe (http://www.adobe.com/)
 - NotoSansJP-Regular.ttf — (c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+- BIZUDMincho-Regular.ttf — Copyright 2022 The BIZ UDMincho Project Authors (https://github.com/googlefonts/morisawa-biz-ud-mincho)
+- ShipporiMinchoB1-Regular.ttf — Copyright 2021 The Shippori Mincho Project Authors (https://github.com/fontdasu/ShipporiMincho)
+- KaiseiTokumin-Regular.ttf, KaiseiOpti-Regular.ttf — Copyright 2020 The Kaisei Project Authors (https://github.com/Font-Kai/Kaisei)
+- HinaMincho-Regular.ttf — Copyright 2020 The Hina Mincho Project Authors (https://github.com/satsuyako/Hina-Mincho)
+- ZenAntique-Regular.ttf — Copyright 2021 The Zen Antique Project Authors (https://github.com/googlefonts/zen-antique)
+- BIZUDGothic-Regular.ttf — Copyright 2022 The BIZ UDGothic Project Authors (https://github.com/googlefonts/morisawa-biz-ud-gothic)
+- ZenKakuGothicNew-Regular.ttf — Copyright 2022 The Zen Project Authors (https://github.com/googlefonts/zen-kakugothic)
+- MPLUS1p-Regular.ttf — Copyright 2016 The M+ Project Authors.
+- ZenMaruGothic-Regular.ttf — Copyright 2021 The Zen Maru Gothic Authors (https://github.com/googlefonts/zen-marugothic)
+- KiwiMaru-Regular.ttf — Copyright 2020 The Kiwi Maru Project Authors (https://github.com/Kiwi-KawagotoKajiru/Kiwi-Maru)
 
 All are licensed under the SIL Open Font License, Version 1.1, reproduced below.
 

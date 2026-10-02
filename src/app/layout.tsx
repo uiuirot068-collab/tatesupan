@@ -41,7 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Zen+Old+Mincho:wght@400;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Zen+Old+Mincho:wght@400;700&family=BIZ+UDMincho&family=Shippori+Mincho+B1&family=Kaisei+Tokumin&family=Kaisei+Opti&family=Hina+Mincho&family=Zen+Antique&family=BIZ+UDGothic&family=Zen+Kaku+Gothic+New&family=M+PLUS+1p&family=Zen+Maru+Gothic&family=Kiwi+Maru&display=swap"
           rel="stylesheet"
           crossOrigin="anonymous"
         />

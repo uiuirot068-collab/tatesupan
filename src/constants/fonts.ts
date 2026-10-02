@@ -17,7 +17,18 @@ export const FONT_FAMILY_OPTIONS: readonly FontOption[] = [
   { value: "'Shippori Mincho', serif", label: "しっぽり明朝" },
   { value: "'Zen Old Mincho', serif", label: "Zenオールド明朝" },
   { value: "'Noto Serif JP', serif", label: "Noto Serif 明朝" },
+  { value: "'BIZ UDMincho', serif", label: "BIZ UD明朝" },
+  { value: "'Shippori Mincho B1', serif", label: "しっぽり明朝B1" },
+  { value: "'Kaisei Tokumin', serif", label: "Kaisei Tokumin（解星 特ミン）" },
+  { value: "'Kaisei Opti', serif", label: "Kaisei Opti（解星 オプティ）" },
+  { value: "'Hina Mincho', serif", label: "ひな明朝" },
+  { value: "'Zen Antique', serif", label: "Zenアンティーク" },
   { value: "'Noto Sans JP', sans-serif", label: "Noto Sans ゴシック" },
+  { value: "'BIZ UDGothic', sans-serif", label: "BIZ UDゴシック" },
+  { value: "'Zen Kaku Gothic New', sans-serif", label: "Zen角ゴシック" },
+  { value: "'M PLUS 1p', sans-serif", label: "M PLUS 1p" },
+  { value: "'Zen Maru Gothic', sans-serif", label: "Zen丸ゴシック" },
+  { value: "'Kiwi Maru', sans-serif", label: "キウイ丸" },
 ];
 
 /**
