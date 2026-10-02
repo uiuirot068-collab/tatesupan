@@ -2357,11 +2357,12 @@ function PreviewPane({
     if (!element) return false;
     element.scrollIntoView({ behavior: "instant", block: "center", inline: "center" });
     const surface = element.querySelector<HTMLElement>(".page-card") ?? element;
+    // Gold = the --accent ウォームゴールド (#bfa858), not a foreign blue.
     if (flash && typeof surface.animate === "function") {
       surface.animate(
         [
-          { boxShadow: "0 0 0 4px rgba(37, 99, 235, 0.55)" },
-          { boxShadow: "0 0 0 4px rgba(37, 99, 235, 0)" },
+          { boxShadow: "0 0 0 4px rgba(191, 168, 88, 0.8)" },
+          { boxShadow: "0 0 0 4px rgba(191, 168, 88, 0)" },
         ],
         { duration: 1200, easing: "ease-out" }
       );
