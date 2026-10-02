@@ -43,7 +43,7 @@ import {
   resolvePreviewHashira,
 } from "./previewFurniture";
 import type { FolioPosition, ResolvedFolioPosition } from "../../typesetting-v2/core/layout/schema";
-import type { FurniturePageFrame, FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
+import { hiddenNombreGlyphCentres, type FurniturePageFrame, type FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -1218,7 +1218,15 @@ function PageCard({
         )}
 
         {masterPage.showHiddenNombre && (
-          <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
+          v2PreviewEnabled ? (
+            // TSP-PHASE13-001: same geometry/size as PDF/JPG; a print-shop
+            // marker, so Web閲覧用 (which has no print furniture) omits it.
+            !paper.isPx && (
+              <V2HiddenNombreOverlay text={String(nombreValue)} isOddPage={isOddPage} bleedMm={bleedMm} paperWidthMm={paper.widthMm} paperHeightMm={paper.heightMm} />
+            )
+          ) : (
+            <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
+          )
         )}
 
         {showWebFooter && <WebFooterOverlay bodyFontSizePx={fontSizePx} />}
@@ -1503,6 +1511,46 @@ function HiddenNombreOverlay({
   return (
     <div style={style} className="pointer-events-none select-none">
       {value}
+    </div>
+  );
+}
+
+/** V2 隠しノンブル: one upright digit per em at the ノド trim edge (shared with export). */
+function V2HiddenNombreOverlay({
+  text,
+  isOddPage,
+  bleedMm,
+  paperWidthMm,
+  paperHeightMm,
+}: {
+  text: string;
+  isOddPage: boolean;
+  bleedMm: number;
+  paperWidthMm: number;
+  paperHeightMm: number;
+}) {
+  const at = hiddenNombreGlyphCentres(text, { paperWidthMm, paperHeightMm }, isOddPage);
+  const emPx = at.emMm * PX_PER_MM;
+  return (
+    <div className="pointer-events-none select-none" style={{ position: "absolute", inset: 0, writingMode: "horizontal-tb" }}>
+      {Array.from(text).map((glyph, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            left: (bleedMm + at.xCenterMm - at.emMm / 2) * PX_PER_MM,
+            top: (bleedMm + at.yCentersMm[i] - at.emMm / 2) * PX_PER_MM,
+            width: emPx,
+            height: emPx,
+            fontSize: emPx,
+            lineHeight: `${emPx}px`,
+            textAlign: "center",
+            color: "#000000",
+          }}
+        >
+          {glyph}
+        </span>
+      ))}
     </div>
   );
 }

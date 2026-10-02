@@ -98,6 +98,9 @@ export function buildV2PageGeometry(settings: PageSettings): PublicationPageGeom
             marginGutterMm: settings.marginGutter,
             marginOuterMm: settings.marginOuter,
             folioBottomEdgeMm: settings.masterPage.nombreBottomMargin,
+            ...(settings.masterPage.showHiddenNombre
+              ? { hiddenNombre: { nombreStart: settings.masterPage.nombreStart } }
+              : {}),
           },
         }),
   };

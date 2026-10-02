@@ -48,7 +48,7 @@
 // (`topMm`/`heightMm`/`rubyAnnotation`/`semanticRunKind`/`text`) and never
 // recalculates placement, breaks, or canonical occupancy.
 
-import { folioPlacement, furnitureFrameMargins, headerPlacement, type FurniturePageFrame, type PublicationFurnitureGeometry } from "../furnitureGeometry";
+import { folioPlacement, furnitureFrameMargins, headerPlacement, HIDDEN_NOMBRE_FONT_SIZE_PT, hiddenNombreGlyphCentres, hiddenNombreText, type FurniturePageFrame, type PublicationFurnitureGeometry } from "../furnitureGeometry";
 import { jsPDF } from "jspdf";
 import type { PaintPage, PaintPlacedUnit, PublicationDocument } from "./paintModel";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
@@ -763,7 +763,8 @@ function buildBodyPaintPage(
   isOddPage: boolean,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
-  yakumonoContext?: VerticalYakumonoAlignContext
+  yakumonoContext?: VerticalYakumonoAlignContext,
+  physicalPageNumber?: number
 ): PaintPagePlan {
   const commands: PaintCommand[] = [];
   // The content area's own right edge, physically: the paper's right
@@ -871,6 +872,17 @@ function buildBodyPaintPage(
       const at = headerPlacement(page.header.position, furnitureFrame, isOddPage, doc.bodyEmMm);
       commands.push(horizontalFurnitureCommand(page.header.text, at.xMm, at.yCenterMm, doc.runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), at.align, "running-head"));
     }
+    // TSP-PHASE13-001: 隠しノンブル, independent of the visible folio (it is
+    // printed even when nombrePosition is "hidden"). Geometry is shared with
+    // the Preview overlay (renderer/furnitureGeometry.ts).
+    const hiddenNombre = pageGeometry?.furniture?.hiddenNombre;
+    if (hiddenNombre && hasFont && physicalPageNumber !== undefined) {
+      const text = hiddenNombreText(page.folio?.text, hiddenNombre.nombreStart, physicalPageNumber);
+      const at = hiddenNombreGlyphCentres(text, furnitureFrame, isOddPage);
+      Array.from(text).forEach((glyph, i) => {
+        commands.push(horizontalFurnitureCommand(glyph, at.xCenterMm, at.yCentersMm[i], HIDDEN_NOMBRE_FONT_SIZE_PT, "center"));
+      });
+    }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
     heightMm: pageGeometry?.paperHeightMm ?? page.heightMm,
@@ -916,7 +928,7 @@ function paintPlanPageSource(
   const colophonPageCount = doc.colophonPages?.length ?? 0;
   // `physicalIndex` decides the page's parity (ノド/小口 side) for furniture.
   const bodyPageAt = (i: number, physicalIndex: number) =>
-    buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, (physicalIndex + 1) % 2 === 1, outlineContext, gposContext, yakumonoContext);
+    buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, (physicalIndex + 1) % 2 === 1, outlineContext, gposContext, yakumonoContext, physicalIndex + 1);
   // `physicalIndex` (Human Visual QA HOLD round 29): the SAME 0-based
   // final-physical-sequence position `core/layout/assemble.ts` already
   // used to resolve this page's own folio/header -- re-derived here
