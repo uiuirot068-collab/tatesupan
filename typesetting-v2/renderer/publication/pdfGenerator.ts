@@ -64,6 +64,7 @@ import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
 import { buildColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
 import {
+  PDF_BLEED_MM,
   resolvePublicationPdfPageOutput,
   type PublicationPdfMode,
   type PublicationPdfPageOutput,
@@ -177,7 +178,12 @@ export type PaintCommand =
   // decoder (unavoidable — the PDF image-XObject model has no native
   // PNG encoding), which does preserve a real alpha channel via jsPDF's
   // own SMask support.
-  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string }
+  //
+  // TSP-PHASE13-001: `fullPageCover` marks an Editor 「全面」 image whose box
+  // covers the finished page. The canonical box stays trim-based (JPG and
+  // trim-mode PDF are unchanged); the PDF executor re-covers the 3 mm bleed
+  // in bleed/full modes and clips to the bleed box.
+  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string; fullPageCover?: true }
   // Post-beta typography Phase 1 (傍点): one FILLED vector circle, centre
   // (xMm, yMm). Font-independent geometry, so PDF (jsPDF circle) and both
   // JPG rasterizers (Canvas arc) paint the identical dot.
@@ -627,7 +633,7 @@ function unitCommands(
       const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
       const resolution = unit.imageResolution;
       return resolution && resolution.kind === "RESOLVED"
-        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }]
+        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}), fullPageCover: true }]
         : [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
     }
     if (placement === "FULL") {
@@ -1255,6 +1261,45 @@ function applyPublicationPdfPageBoxes(pdf: jsPDF, output: PublicationPdfPageOutp
   pageContext.trimBox = publicationBoxToJsPdfPoints(output.trimBox, output.heightMm, scaleFactor);
 }
 
+/**
+ * TSP-PHASE13-001: box of a 「全面」 image in bleed/full output. Covers the
+ * trim page plus `PDF_BLEED_MM` on every side, keeping the image's aspect
+ * ratio and centring it on the trim page, in output-sheet coordinates.
+ */
+export function resolveBleedCoverImageBoxMm(
+  cmd: { widthMm: number; heightMm: number },
+  page: { widthMm: number; heightMm: number },
+  output: PublicationPdfPageOutput,
+): { xMm: number; yMm: number; widthMm: number; heightMm: number } {
+  const targetWidthMm = page.widthMm + PDF_BLEED_MM * 2;
+  const targetHeightMm = page.heightMm + PDF_BLEED_MM * 2;
+  const scale = Math.max(targetWidthMm / cmd.widthMm, targetHeightMm / cmd.heightMm);
+  const widthMm = cmd.widthMm * scale;
+  const heightMm = cmd.heightMm * scale;
+  return {
+    xMm: output.contentOffsetXMm + (page.widthMm - widthMm) / 2,
+    yMm: output.contentOffsetYMm + (page.heightMm - heightMm) / 2,
+    widthMm,
+    heightMm,
+  };
+}
+
+function paintBleedCoverImage(
+  pdf: jsPDF,
+  cmd: Extract<PaintCommand, { op: "image" }>,
+  page: PaintPagePlan,
+  output: PublicationPdfPageOutput,
+): void {
+  const box = resolveBleedCoverImageBoxMm(cmd, page, output);
+  const clip = output.bleedBox;
+  // Clip to the bleed box so an aspect-ratio overflow never reaches the
+  // crop-mark margin of a full-mode sheet.
+  pdf.saveGraphicsState();
+  pdf.rect(clip.xMm, clip.yMm, clip.widthMm, clip.heightMm, null).clip().discardPath();
+  pdf.addImage(cmd.bytes, cmd.format, box.xMm, box.yMm, box.widthMm, box.heightMm);
+  pdf.restoreGraphicsState();
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
@@ -1275,6 +1320,10 @@ function paintPageCommands(
       continue;
     }
     if (cmd.op === "image") {
+      if (cmd.fullPageCover && output.mode !== "trim") {
+        paintBleedCoverImage(pdf, cmd, page, output);
+        continue;
+      }
       pdf.addImage(cmd.bytes, cmd.format, cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
       continue;
     }
