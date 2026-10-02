@@ -78,6 +78,9 @@ describe("P3-O08 — Publication artifact generation", () => {
       for (const column of page.columns) {
         for (const line of column.lines) {
           for (const unit of line.units) {
+            // TSP-PHASE13-001: a ぶら下げ 句読点 deliberately sits past the
+            // line end (into the margin); everything else stays inside.
+            if (unit.hanging) continue;
             expect(unit.topMm + unit.heightMm).toBeLessThanOrEqual(page.heightMm + 1e-9);
           }
         }

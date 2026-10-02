@@ -952,6 +952,7 @@ function EditorPaneInner(
           <InfoTooltip
             text={TITLE_HELP}
             label="作品タイトルの説明"
+            align="end"
           />
           <span
             data-editor-character-count=""

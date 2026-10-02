@@ -167,50 +167,40 @@ function colophonTextCommands(plan: ReturnType<typeof buildPaintPlan>, colophonP
 }
 
 describe("respectGutter -- real, parity-dependent asymmetric margin selection", () => {
-  it("respectGutter=true on an ODD physical page: outer margin (small) lands on the LEFT, matching Core's own resolveFolioPhysicalSide('outer', isOddPage) convention (test 1)", () => {
-    // colophon inserted after body page 0 -> its own physicalIndex is 1 -> physical page NUMBER 2 -> EVEN.
-    // Insert after body page count 0 is not valid; use afterBodyPage:1 on a 2-page-worthy single-page body instead:
-    // simplest controlled case: end placement on a 1-body-page doc -> colophon physicalIndex 1 -> page number 2 -> EVEN.
-    // For an ODD physical colophon page, use a 2-body-page doc (colophon physicalIndex 2 -> page number 3 -> ODD).
-    const twoBodyPages = "あ".repeat(30); // 20 + 10 -> 2 real pages
-    const { plan, document } = buildOne(twoBodyPages, MINIMAL_FIELDS, "自由記述", { horizontal: "left", vertical: "center", respectGutter: true, respectVerticalMargins: true });
-    const colophonPlanIndex = document.pageSequence.findIndex((r) => r.kind === "colophon");
-    expect(colophonPlanIndex).toBe(2); // physical page number 3 -> odd
-    const cmds = colophonTextCommands(plan, colophonPlanIndex);
-    const freeTextCmd = cmds.find((c) => c.text === "自由記述");
-    // odd page -> outer=left (11mm) -> content starts further LEFT (closer to paper edge) than the gutter (26mm) would allow.
-    expect(freeTextCmd?.xMm).toBeCloseTo(ASYMMETRIC_GEOMETRY.marginOuterMm!, 5);
+  // TSP-PHASE13-001: the block is centred in the placement area (the
+  // horizontal anchor was retired — 「左右位置は紙面中央に固定」), and that area
+  // follows the Preview (`ColophonPageSurface`): respectGutter ON keeps ノド/小口
+  // per physical parity, OFF uses min(gutter, outer) on both sides.
+  const gutterMinusOuter = ASYMMETRIC_GEOMETRY.marginGutterMm! - ASYMMETRIC_GEOMETRY.marginOuterMm!;
+
+  it("respectGutter=true: the even page's area sits (gutter - outer) further right than the odd page's (tests 1, 2)", () => {
+    const odd = buildOne("あ".repeat(30), MINIMAL_FIELDS, "自由記述", { horizontal: "center", vertical: "center", respectGutter: true, respectVerticalMargins: true });
+    const even = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "center", vertical: "center", respectGutter: true, respectVerticalMargins: true });
+    const oddIdx = odd.document.pageSequence.findIndex((r) => r.kind === "colophon");
+    const evenIdx = even.document.pageSequence.findIndex((r) => r.kind === "colophon");
+    expect(oddIdx).toBe(2); // physical page 3 -> odd: 小口 left
+    expect(evenIdx).toBe(1); // physical page 2 -> even: ノド left
+    const oddX = colophonTextCommands(odd.plan, oddIdx).find((c) => c.text === "自由記述")?.xMm;
+    const evenX = colophonTextCommands(even.plan, evenIdx).find((c) => c.text === "自由記述")?.xMm;
+    expect(evenX! - oddX!).toBeCloseTo(gutterMinusOuter, 5);
   });
 
-  it("respectGutter=true on an EVEN physical page: gutter margin (large) lands on the LEFT (test 2)", () => {
-    const { plan, document } = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "left", vertical: "center", respectGutter: true, respectVerticalMargins: true });
-    const colophonPlanIndex = document.pageSequence.findIndex((r) => r.kind === "colophon");
-    expect(colophonPlanIndex).toBe(1); // physical page number 2 -> even
-    const cmds = colophonTextCommands(plan, colophonPlanIndex);
-    const freeTextCmd = cmds.find((c) => c.text === "自由記述");
-    expect(freeTextCmd?.xMm).toBeCloseTo(ASYMMETRIC_GEOMETRY.marginGutterMm!, 5);
-  });
-
-  it("respectGutter=false: both sides use the SAME symmetric min(gutter,outer) regardless of parity (test 3)", () => {
-    const odd = buildOne("あ".repeat(30), MINIMAL_FIELDS, "自由記述", { horizontal: "left", vertical: "center", respectGutter: false, respectVerticalMargins: true });
-    const even = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "left", vertical: "center", respectGutter: false, respectVerticalMargins: true });
+  it("respectGutter=false: both parities use the SAME symmetric min(gutter,outer) area (test 3)", () => {
+    const odd = buildOne("あ".repeat(30), MINIMAL_FIELDS, "自由記述", { horizontal: "center", vertical: "center", respectGutter: false, respectVerticalMargins: true });
+    const even = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "center", vertical: "center", respectGutter: false, respectVerticalMargins: true });
     const oddIdx = odd.document.pageSequence.findIndex((r) => r.kind === "colophon");
     const evenIdx = even.document.pageSequence.findIndex((r) => r.kind === "colophon");
     const oddX = colophonTextCommands(odd.plan, oddIdx).find((c) => c.text === "自由記述")?.xMm;
     const evenX = colophonTextCommands(even.plan, evenIdx).find((c) => c.text === "自由記述")?.xMm;
-    const expected = Math.min(ASYMMETRIC_GEOMETRY.marginGutterMm!, ASYMMETRIC_GEOMETRY.marginOuterMm!);
-    expect(oddX).toBeCloseTo(expected, 5);
-    expect(evenX).toBeCloseTo(expected, 5);
+    expect(oddX).toBeCloseTo(evenX!, 5);
   });
 
-  it("left vs right anchor combined with respectGutter is deterministic and physically distinct (test 4)", () => {
+  it("the retired horizontal anchor no longer moves the block (test 4)", () => {
     const left = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "left", vertical: "center", respectGutter: true, respectVerticalMargins: true });
     const right = buildOne(BODY_1_PAGE, MINIMAL_FIELDS, "自由記述", { horizontal: "right", vertical: "center", respectGutter: true, respectVerticalMargins: true });
     const leftIdx = left.document.pageSequence.findIndex((r) => r.kind === "colophon");
     const rightIdx = right.document.pageSequence.findIndex((r) => r.kind === "colophon");
-    const leftX = colophonTextCommands(left.plan, leftIdx).find((c) => c.text === "自由記述")?.xMm;
-    const rightX = colophonTextCommands(right.plan, rightIdx).find((c) => c.text === "自由記述")?.xMm;
-    expect(leftX).not.toBe(rightX);
+    expect(colophonTextCommands(left.plan, leftIdx)).toEqual(colophonTextCommands(right.plan, rightIdx));
   });
 });
 
@@ -289,7 +279,14 @@ describe("Multi-page continuation -- gutter side alternates correctly across rea
     const leftXs = colophonIndices.map((i) => Math.min(...colophonTextCommands(plan, i).map((c) => c.xMm)));
     // Alternates between the outer (11) and gutter (26) mm values, one per physical parity.
     for (let k = 1; k < leftXs.length; k++) expect(leftXs[k]).not.toBeCloseTo(leftXs[k - 1], 3);
-    for (const x of leftXs) expect([ASYMMETRIC_GEOMETRY.marginOuterMm, ASYMMETRIC_GEOMETRY.marginGutterMm]).toContainEqual(expect.closeTo(x, 3));
+    // TSP-PHASE13-001: the block is centred in each page's parity-aware
+    // area, so its left edge is no longer the margin itself; every page's
+    // block stays inside its own area.
+    colophonIndices.forEach((i, k) => {
+      const isOdd = (i + 1) % 2 === 1;
+      const areaLeft = isOdd ? ASYMMETRIC_GEOMETRY.marginOuterMm! : ASYMMETRIC_GEOMETRY.marginGutterMm!;
+      expect(leftXs[k]).toBeGreaterThanOrEqual(areaLeft - 1e-6);
+    });
   });
 });
 

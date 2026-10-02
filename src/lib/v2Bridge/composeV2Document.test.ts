@@ -193,9 +193,10 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
     });
 
     expect(result.model.colophonFreeText).toBe(freeText);
+    // TSP-PHASE13-001: rows keep their field id, like the Preview's rows.
     expect(result.model.colophonRows).toEqual([
-      { label: "書名", value: "確認用" },
-      { label: "著者名", value: "著者" },
+      { id: "title", label: "書名", value: "確認用" },
+      { id: "author", label: "著者名", value: "著者" },
     ]);
 
     const colophonPhysicalIndex = result.document.pageSequence.findIndex((ref) => ref.kind === "colophon");

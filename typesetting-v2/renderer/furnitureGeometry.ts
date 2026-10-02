@@ -26,6 +26,11 @@ export interface PublicationFurnitureGeometry {
   marginOuterMm: number;
   /** Distance from the paper's bottom edge to the folio's bottom edge, mm (`nombreBottomMargin`). */
   folioBottomEdgeMm: number;
+  /**
+   * TSP-PHASE13-001: 隠しノンブル (`masterPage.showHiddenNombre`). Present only
+   * when enabled; `nombreStart` gives the number of a page without a folio.
+   */
+  hiddenNombre?: { nombreStart: number };
 }
 
 export interface FurniturePageFrame {
@@ -120,4 +125,34 @@ export function headerPlacement(
   if (position.horizontal === "left") return { xMm: leftMm, align: "left", yCenterMm };
   if (position.horizontal === "right") return { xMm: frame.paperWidthMm - rightMm, align: "right", yCenterMm };
   return { xMm: frame.paperWidthMm / 2, align: "center", yCenterMm };
+}
+
+/** 隠しノンブル font size (pt, physical) and its inset from the trim edge (mm). */
+export const HIDDEN_NOMBRE_FONT_SIZE_PT = 6;
+export const HIDDEN_NOMBRE_INSET_MM = 1;
+
+/**
+ * TSP-PHASE13-001: 隠しノンブル geometry shared by the Preview overlay and
+ * PDF/JPG. The number runs vertically (one upright digit per em), centred on
+ * the page height, against the ノド trim edge (right on odd pages, left on
+ * even pages). Returns the column centre x and the centre y of each digit.
+ */
+export function hiddenNombreGlyphCentres(
+  text: string,
+  frame: { paperWidthMm: number; paperHeightMm: number },
+  isOddPage: boolean
+): { xCenterMm: number; emMm: number; yCentersMm: number[] } {
+  const emMm = HIDDEN_NOMBRE_FONT_SIZE_PT * MM_PER_PT;
+  const xCenterMm = isOddPage
+    ? frame.paperWidthMm - HIDDEN_NOMBRE_INSET_MM - emMm / 2
+    : HIDDEN_NOMBRE_INSET_MM + emMm / 2;
+  const glyphs = Array.from(text);
+  const topMm = (frame.paperHeightMm - glyphs.length * emMm) / 2;
+  return { xCenterMm, emMm, yCentersMm: glyphs.map((_, i) => topMm + (i + 0.5) * emMm) };
+}
+
+/** The number a 隠しノンブル shows: the page's folio when it has one, else nombreStart + physical page - 1. */
+export function hiddenNombreText(folioText: string | undefined, nombreStart: number, physicalPageNumber: number): string {
+  const parsed = folioText === undefined ? Number.NaN : Number(folioText);
+  return String(Number.isFinite(parsed) && folioText !== "" ? parsed : nombreStart + physicalPageNumber - 1);
 }

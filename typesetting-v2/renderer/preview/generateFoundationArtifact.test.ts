@@ -196,6 +196,8 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
           for (const column of page.columns) {
             for (const line of column.lines) {
               for (const unit of line.units) {
+                // TSP-PHASE13-001: ぶら下げ 句読点 hang past the line end by design.
+                if (unit.hanging) continue;
                 expect(unit.topPx + unit.heightPx).toBeLessThanOrEqual(page.heightPx + 1e-6);
               }
             }

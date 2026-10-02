@@ -98,7 +98,9 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
     if (cmd.op === "rect") {
       // jsPDF's `pdf.rect(x, y, w, h)` (no style argument) strokes only --
       // see `rasterGenerator.ts`'s own identical comment.
+      if (cmd.inkGray !== undefined) ctx.strokeStyle = inkGrayCss(cmd.inkGray);
       ctx.strokeRect(mmToPx(cmd.xMm, dpi), mmToPx(cmd.yMm, dpi), mmToPx(cmd.widthMm, dpi), mmToPx(cmd.heightMm, dpi));
+      if (cmd.inkGray !== undefined) ctx.strokeStyle = "black";
       continue;
     }
     if (cmd.op === "circle") {
@@ -174,9 +176,29 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       ctx.fillText(cmd.text, 0, 0);
       ctx.restore();
     } else {
+      // TSP-PHASE13-001: same ink tone / weight stroke as the PDF executor.
+      if (cmd.inkGray !== undefined) {
+        ctx.fillStyle = inkGrayCss(cmd.inkGray);
+        ctx.strokeStyle = inkGrayCss(cmd.inkGray);
+      }
       ctx.fillText(cmd.text, xPx, yPx);
+      if (cmd.strokeWidthMm !== undefined) {
+        ctx.lineWidth = mmToPx(cmd.strokeWidthMm, dpi);
+        ctx.strokeText(cmd.text, xPx, yPx);
+        ctx.lineWidth = mmToPx(0.05, dpi);
+      }
+      if (cmd.inkGray !== undefined) {
+        ctx.fillStyle = "black";
+        ctx.strokeStyle = "black";
+      }
     }
   }
+}
+
+/** 0 (black) … 1 (white) ink tone as a CSS gray. */
+function inkGrayCss(inkGray: number): string {
+  const v = Math.round(Math.min(1, Math.max(0, inkGray)) * 255);
+  return `rgb(${v}, ${v}, ${v})`;
 }
 
 export interface BrowserRasterPage {

@@ -91,6 +91,8 @@ export interface PaintPlacedUnit {
   topPx: number;
   heightPx: number;
   heightIsApproximate: boolean;
+  /** TSP-PHASE13-001: a ぶら下げ 句読点 placed past the line end (Core `PlacedUnit.hanging`). */
+  hanging?: true;
   provisional: boolean;
   rubyAnnotation?: RubyAnnotationPaint; // RUBY units only
   imageResolution?: ImageResolution; // IMAGE units only
@@ -442,7 +444,9 @@ function buildPaintLine(
       // can only ever SHRINK an already-wrong guess toward safety —
       // it never grows it, and never claims a more exact value than the
       // guess it is.
-      const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
+      // TSP-PHASE13-001: a ぶら下げ 句読点 keeps its own cell past the line end
+      // (see the publication paint model).
+      const remainingLineExtentTicks = placed.hanging ? ctx.nominalCellTicks : Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
       // Shared with the other paint model (lastAtomExtent.ts) so Preview and
       // PDF/JPG always agree on a line-final atom's extent.
       extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks: ctx.nominalCellTicks, remainingLineExtentTicks });
@@ -461,6 +465,7 @@ function buildPaintLine(
       heightPx,
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
+      ...(placed.hanging ? { hanging: true as const } : {}),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed, ctx) } : {}),
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),

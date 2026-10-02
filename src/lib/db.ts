@@ -1,3 +1,4 @@
+import { normalizeSettingsFonts } from "../constants/fonts";
 import Dexie, { type Table } from "dexie";
 import {
   DEFAULT_MASTER_PAGE_SETTINGS,
@@ -86,7 +87,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
   // `masterPage` was added to it) still load with valid values.
   return {
     ...doc,
-    settings: {
+    settings: normalizeSettingsFonts({
       ...DEFAULT_PAGE_SETTINGS,
       ...doc.settings,
       masterPage: {
@@ -97,7 +98,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
       // 旧レコード（colophon 未保存）は既定の奥付設定（enabled=false）で開く。
       colophon: normalizeColophonSettings(doc.settings?.colophon, doc.title),
       toc: normalizeTocSettings(doc.settings?.toc),
-    },
+    }),
     plotNote: doc.plotNote ?? "",
     isCollection: doc.isCollection ?? false,
     includedDocumentIds: doc.includedDocumentIds ?? [],

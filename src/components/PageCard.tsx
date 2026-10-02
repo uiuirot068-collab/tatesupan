@@ -30,7 +30,7 @@ import {
 } from "@/lib/webFooterBranding";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
-import { fitImageToBox, imageMaxBoxForTextArea } from "@/lib/imageGeometry";
+import { fitImageToBox, imageMaxBoxForTextArea, layoutImageGroup, type ImageContentBoxMm } from "@/lib/imageGeometry";
 import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
 import { resolvePreviewNombre } from "./previewNombre";
 import {
@@ -43,7 +43,7 @@ import {
   resolvePreviewHashira,
 } from "./previewFurniture";
 import type { FolioPosition, ResolvedFolioPosition } from "../../typesetting-v2/core/layout/schema";
-import type { FurniturePageFrame, FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
+import { hiddenNombreGlyphCentres, type FurniturePageFrame, type FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -328,6 +328,15 @@ function PageCard({
     // mirrors.
     paddingLeft: ((isOddPage ? settings.marginOuter : settings.marginGutter) + bleedMm) * PX_PER_MM,
     paddingRight: ((isOddPage ? settings.marginGutter : settings.marginOuter) + bleedMm) * PX_PER_MM,
+  };
+  // TSP-PHASE13-001: the V2 text frame in sheet coordinates (the same frame
+  // export places 天/中央/地 images in), so Preview and PDF/JPG share
+  // `layoutImageGroup`.
+  const v2ImageContentBoxMm: ImageContentBoxMm = {
+    leftMm: bleedMm + (isOddPage ? settings.marginOuter : settings.marginGutter),
+    topMm: bleedMm + settings.marginTop,
+    widthMm: paper.widthMm - settings.marginOuter - settings.marginGutter,
+    heightMm: paper.heightMm - settings.marginTop - settings.marginBottom,
   };
 
   // Font size must be scaled by the same PX_PER_MM factor as the page box
@@ -1008,13 +1017,13 @@ function PageCard({
               ) : (
                 <>
                   {topImages.length > 0 && (
-                    <ImagePositionOverlay tokens={topImages} images={images} unresolvedImageIds={unresolvedImageIds} position="top" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                    <ImagePositionOverlay tokens={topImages} images={images} unresolvedImageIds={unresolvedImageIds} position="top" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} contentBoxMm={v2ImageContentBoxMm} />
                   )}
                   {centerImages.length > 0 && (
-                    <ImagePositionOverlay tokens={centerImages} images={images} unresolvedImageIds={unresolvedImageIds} position="center" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                    <ImagePositionOverlay tokens={centerImages} images={images} unresolvedImageIds={unresolvedImageIds} position="center" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} contentBoxMm={v2ImageContentBoxMm} />
                   )}
                   {bottomImages.length > 0 && (
-                    <ImagePositionOverlay tokens={bottomImages} images={images} unresolvedImageIds={unresolvedImageIds} position="bottom" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} />
+                    <ImagePositionOverlay tokens={bottomImages} images={images} unresolvedImageIds={unresolvedImageIds} position="bottom" maxWidthMm={maxImageWidthMm} maxHeightMm={maxImageHeightMm} imageLayerOrder={imageLayerOrder} contentBoxMm={v2ImageContentBoxMm} />
                   )}
                 </>
               )}
@@ -1209,7 +1218,15 @@ function PageCard({
         )}
 
         {masterPage.showHiddenNombre && (
-          <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
+          v2PreviewEnabled ? (
+            // TSP-PHASE13-001: same geometry/size as PDF/JPG; a print-shop
+            // marker, so Web閲覧用 (which has no print furniture) omits it.
+            !paper.isPx && (
+              <V2HiddenNombreOverlay text={String(nombreValue)} isOddPage={isOddPage} bleedMm={bleedMm} paperWidthMm={paper.widthMm} paperHeightMm={paper.heightMm} />
+            )
+          ) : (
+            <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
+          )
         )}
 
         {showWebFooter && <WebFooterOverlay bodyFontSizePx={fontSizePx} />}
@@ -1494,6 +1511,46 @@ function HiddenNombreOverlay({
   return (
     <div style={style} className="pointer-events-none select-none">
       {value}
+    </div>
+  );
+}
+
+/** V2 隠しノンブル: one upright digit per em at the ノド trim edge (shared with export). */
+function V2HiddenNombreOverlay({
+  text,
+  isOddPage,
+  bleedMm,
+  paperWidthMm,
+  paperHeightMm,
+}: {
+  text: string;
+  isOddPage: boolean;
+  bleedMm: number;
+  paperWidthMm: number;
+  paperHeightMm: number;
+}) {
+  const at = hiddenNombreGlyphCentres(text, { paperWidthMm, paperHeightMm }, isOddPage);
+  const emPx = at.emMm * PX_PER_MM;
+  return (
+    <div className="pointer-events-none select-none" style={{ position: "absolute", inset: 0, writingMode: "horizontal-tb" }}>
+      {Array.from(text).map((glyph, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            left: (bleedMm + at.xCenterMm - at.emMm / 2) * PX_PER_MM,
+            top: (bleedMm + at.yCentersMm[i] - at.emMm / 2) * PX_PER_MM,
+            width: emPx,
+            height: emPx,
+            fontSize: emPx,
+            lineHeight: `${emPx}px`,
+            textAlign: "center",
+            color: "#000000",
+          }}
+        >
+          {glyph}
+        </span>
+      ))}
     </div>
   );
 }
@@ -2456,6 +2513,7 @@ function ImagePositionOverlay({
   maxWidthMm,
   maxHeightMm,
   imageLayerOrder,
+  contentBoxMm,
 }: {
   tokens: ImageToken[];
   images: Record<string, string>;
@@ -2464,6 +2522,8 @@ function ImagePositionOverlay({
   maxWidthMm: number;
   maxHeightMm: number;
   imageLayerOrder: Record<string, number>;
+  /** V2 only: place images with the shared export rule inside this text frame. */
+  contentBoxMm?: ImageContentBoxMm;
 }) {
   // `tokens` keeps its original (document/token) order here so the flex-wrap
   // left-to-right layout position of each image is never affected by
@@ -2473,6 +2533,38 @@ function ImagePositionOverlay({
   // to their layer rank while non-overlapping images keep their normal
   // left-to-right placement.
   const layerRank = new Map(orderedByLayer(tokens, imageLayerOrder).map((token, index) => [token.id, index]));
+  if (contentBoxMm) {
+    // Tokens whose bytes are gone and that are not flagged unresolved draw
+    // nothing, exactly as below — and take no slot, matching export (an
+    // unresolved image blocks export entirely).
+    const shown = tokens.filter((token) => images[token.id] || unresolvedImageIds.has(token.id));
+    const sizes = shown.map((token) => getDisplayImageSize(token, maxWidthMm, maxHeightMm));
+    const rects = layoutImageGroup(sizes, contentBoxMm, position === "top" ? "TOP" : position === "bottom" ? "BOTTOM" : "CENTER");
+    return (
+      <div style={{ position: "absolute", inset: 0, writingMode: "horizontal-tb", pointerEvents: "none" }}>
+        {shown.map((token, index) => {
+          const rect = rects[index];
+          const box: CSSProperties = {
+            position: "absolute",
+            left: rect.xMm * PX_PER_MM,
+            top: rect.yMm * PX_PER_MM,
+            width: rect.widthMm * PX_PER_MM,
+            height: rect.heightMm * PX_PER_MM,
+            zIndex: layerRank.get(token.id),
+          };
+          const src = images[token.id];
+          if (!src) {
+            return (
+              <span key={token.id} style={{ ...box, display: "flex" }}>
+                <ExpiredImagePlaceholder widthPx={rect.widthMm * PX_PER_MM} heightPx={rect.heightMm * PX_PER_MM} />
+              </span>
+            );
+          }
+          return <img key={token.id} src={src} alt="" style={{ ...box, filter: "grayscale(100%)" }} />;
+        })}
+      </div>
+    );
+  }
   const style: CSSProperties = {
     position: "absolute",
     left: 0,

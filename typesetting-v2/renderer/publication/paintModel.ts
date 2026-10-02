@@ -88,6 +88,8 @@ export interface PaintPlacedUnit {
   topMm: number;
   heightMm: number;
   heightIsApproximate: boolean;
+  /** TSP-PHASE13-001: a ぶら下げ 句読点 placed past the line end (Core `PlacedUnit.hanging`). */
+  hanging?: true;
   provisional: boolean;
   rubyAnnotation?: RubyAnnotationPaint;
   imageResolution?: ImageResolution;
@@ -215,6 +217,9 @@ export interface PublicationRenderContext {
   /** Explicit Editor-selected publication furniture sizes. */
   folioFontSizePt?: number;
   runningHeadFontSizePt?: number;
+  /** TSP-PHASE13-001: Editor CSS font families (body, and the ノンブル when it differs). */
+  bodyFontFamily?: string;
+  folioFontFamily?: string;
 }
 
 export interface PublicationDocument {
@@ -239,6 +244,13 @@ export interface PublicationDocument {
   bodyEmMm: number;
   folioFontSizePt?: number;
   runningHeadFontSizePt?: number;
+  /**
+   * TSP-PHASE13-001: the Editor's body CSS font family (PDF embeds the
+   * matching font) and the ノンブル family when the Editor chose a
+   * different one (folio commands carry it as `fontFamily`).
+   */
+  bodyFontFamily?: string;
+  folioFontFamily?: string;
   pages: PaintPage[];
   // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
   // 2, structural colophon): Core's own `CanonicalDocument.colophon`
@@ -278,7 +290,7 @@ export interface PublicationDocument {
   /** CSS family selected for the colophon. Empty string means follow body. */
   colophonFontFamily?: string;
   /** Raw, pre-composition colophon content for Preview/Publication wrap parity. */
-  colophonRows?: Array<{ label: string; value: string }>;
+  colophonRows?: Array<{ id?: string; label: string; value: string }>;
   colophonFreeText?: string;
   colophonTitleFallback?: string;
 }
@@ -390,10 +402,14 @@ function buildPaintLine(
       // P3-O09-PAGE-CONTENT-CLIPPING-HOLD fix (renderer/preview/paintModel.ts) —
       // clamped so it can only ever shrink toward the line's own remaining
       // budget, never overshoot it.
-      const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
+      // TSP-PHASE13-001: a ぶら下げ 句読点 sits past the line end by design, so
+      // its own cell is not clamped to the (exhausted) line budget — clamping
+      // it to ~0 painted it on top of the line's last character.
+      const cellTicks = ctx.bodyFontSizeTick ?? ctx.linePitchTicks;
+      const remainingLineExtentTicks = placed.hanging ? cellTicks : Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
       // Shared with the other paint model (lastAtomExtent.ts) so Preview and
       // PDF/JPG always agree on a line-final atom's extent.
-      extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks: ctx.bodyFontSizeTick ?? ctx.linePitchTicks, remainingLineExtentTicks });
+      extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks, remainingLineExtentTicks });
       heightIsApproximate = true;
     }
     const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);
@@ -424,6 +440,7 @@ function buildPaintLine(
       heightMm,
       heightIsApproximate: isImage ? false : heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
+      ...(placed.hanging ? { hanging: true as const } : {}),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed) } : {}),
       ...(isImage ? {
         imageResolution: resolveImage(owner.refId),
@@ -533,7 +550,7 @@ export function buildPublicationDocument(
     templateId?: "standard" | "center" | "minimal" | "classic";
     fontSizePt?: number | null;
     fontFamily?: string;
-    rows?: Array<{ label: string; value: string }>;
+    rows?: Array<{ id?: string; label: string; value: string }>;
     freeText?: string;
     titleFallback?: string;
   }
@@ -570,6 +587,8 @@ export function buildPublicationDocument(
     bodyEmMm: tickToMm(ctx.bodyFontSizeTick ?? ctx.linePitchTicks),
     ...(ctx.folioFontSizePt !== undefined ? { folioFontSizePt: ctx.folioFontSizePt } : {}),
     ...(ctx.runningHeadFontSizePt !== undefined ? { runningHeadFontSizePt: ctx.runningHeadFontSizePt } : {}),
+    ...(ctx.bodyFontFamily ? { bodyFontFamily: ctx.bodyFontFamily } : {}),
+    ...(ctx.folioFontFamily ? { folioFontFamily: ctx.folioFontFamily } : {}),
     pages,
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),

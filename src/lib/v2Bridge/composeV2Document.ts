@@ -8,6 +8,7 @@
  * -- never a second layout/composition engine. Deep imports only, same
  * rationale as `settingsAdapter.ts`'s own doc comment.
  */
+import { resolveNombreFontFamily } from "../../constants/fonts";
 import { buildV2UnitsFromManuscript, type ManuscriptSourceMap } from "./manuscriptAdapter";
 import { compileColophonContent, type ColophonPagePosition } from "../../../typesetting-v2/core/colophon";
 import { buildV2LayoutSettings, buildV2PageGeometry, buildV2FolioSettings, buildV2HeaderSettings, buildV2ColophonText, buildV2ColophonPagePosition, buildV2ColophonPlacement } from "./settingsAdapter";
@@ -243,6 +244,11 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
     bodyFontSizeTick: mmToTicks((layoutSettings.bodyFontSizePt * 25.4) / 72),
     folioFontSizePt: input.settings.masterPage.nombreFontSize,
     runningHeadFontSizePt: input.settings.masterPage.headerFontSize,
+    // TSP-PHASE13-001: the fonts PDF embeds (JPG uses the same CSS families).
+    bodyFontFamily: input.settings.fontFamily,
+    ...(resolveNombreFontFamily(input.settings.masterPage.nombreFontFamily, input.settings.fontFamily) !== input.settings.fontFamily
+      ? { folioFontFamily: resolveNombreFontFamily(input.settings.masterPage.nombreFontFamily, input.settings.fontFamily) }
+      : {}),
   };
 
   const model = colophonComposition
@@ -264,8 +270,14 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
               fields: input.settings.colophon.fields,
               freeText: input.settings.colophon.freeText,
             });
+            // TSP-PHASE13-001: keep each row's field id (the same rows the
+            // Preview's `colophonRenderModel` builds), so id-dependent
+            // template styling such as the classic title weight matches.
+            const ids = input.settings.colophon.fields
+              .filter((f) => f.visible && (f.label.trim() !== "" || f.value.trim() !== ""))
+              .map((f) => f.id);
             return {
-              rows: compiled.rows,
+              rows: compiled.rows.map((row, index) => ({ id: ids[index], ...row })),
               freeText: compiled.freeText,
               titleFallback: input.title.trim(),
             };

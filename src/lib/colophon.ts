@@ -16,6 +16,7 @@
  *    `normalizeColophonSettings(undefined)` が既定値を返すため、そのまま
  *    正常に開ける。migration は増やさない（optional な default merge 方式）。
  */
+import { normalizeFontChoice } from "../constants/fonts";
 
 export type ColophonTemplateId = "standard" | "center" | "minimal" | "classic";
 
@@ -222,7 +223,8 @@ export function normalizeColophonSettings(
   return {
     enabled: raw.enabled === true,
     templateId,
-    fontFamily: coerceString(raw.fontFamily),
+    // TSP-PHASE13-001: a retired font choice (system「serif」) follows the body again.
+    fontFamily: normalizeFontChoice(coerceString(raw.fontFamily), COLOPHON_FONT_SAME_AS_BODY),
     fontSizePt: normalizeColophonFontSizePt(raw.fontSizePt),
     fields,
     freeText: coerceString(raw.freeText),

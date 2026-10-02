@@ -48,7 +48,7 @@
 // (`topMm`/`heightMm`/`rubyAnnotation`/`semanticRunKind`/`text`) and never
 // recalculates placement, breaks, or canonical occupancy.
 
-import { folioPlacement, furnitureFrameMargins, headerPlacement, type FurniturePageFrame, type PublicationFurnitureGeometry } from "../furnitureGeometry";
+import { folioPlacement, furnitureFrameMargins, headerPlacement, HIDDEN_NOMBRE_FONT_SIZE_PT, hiddenNombreGlyphCentres, hiddenNombreText, type FurniturePageFrame, type PublicationFurnitureGeometry } from "../furnitureGeometry";
 import { jsPDF } from "jspdf";
 import type { PaintPage, PaintPlacedUnit, PublicationDocument } from "./paintModel";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
@@ -63,7 +63,9 @@ import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } 
 import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
 import { buildColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
+import { layoutImageGroup, type GroupedImagePosition, type ImageRectMm } from "../../../src/lib/imageGeometry";
 import {
+  PDF_BLEED_MM,
   resolvePublicationPdfPageOutput,
   type PublicationPdfMode,
   type PublicationPdfPageOutput,
@@ -154,8 +156,16 @@ export type PaintCommand =
       furnitureRole?: "folio" | "running-head";
       /** Optional CSS family requested by the source surface (used by browser JPG). */
       fontFamily?: string;
+      /**
+       * TSP-PHASE13-001: ink tone, 0 = black (default) … 1 = white. Output is
+       * grayscale, so the Preview's text opacity on white paper is printed as
+       * the equivalent gray (`colophonInkGray`).
+       */
+      inkGray?: number;
+      /** TSP-PHASE13-001: outline stroke (mm) added to the fill for weight > 400. */
+      strokeWidthMm?: number;
     }
-  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
+  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number; /** see text `inkGray` */ inkGray?: number }
   // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
   // dependency-gate approval — opentype.js): a real vector glyph outline,
   // already fully translated/scaled into mm page-coordinate space
@@ -177,7 +187,12 @@ export type PaintCommand =
   // decoder (unavoidable — the PDF image-XObject model has no native
   // PNG encoding), which does preserve a real alpha channel via jsPDF's
   // own SMask support.
-  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string }
+  //
+  // TSP-PHASE13-001: `fullPageCover` marks an Editor 「全面」 image whose box
+  // covers the finished page. The canonical box stays trim-based (JPG and
+  // trim-mode PDF are unchanged); the PDF executor re-covers the 3 mm bleed
+  // in bleed/full modes and clips to the bleed box.
+  | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string; fullPageCover?: true }
   // Post-beta typography Phase 1 (傍点): one FILLED vector circle, centre
   // (xMm, yMm). Font-independent geometry, so PDF (jsPDF circle) and both
   // JPG rasterizers (Canvas arc) paint the identical dot.
@@ -445,9 +460,14 @@ function horizontalFurnitureCommand(
   yCenterMm: number,
   fontSizePt: number,
   align: "left" | "center" | "right" = "center",
-  furnitureRole?: "folio" | "running-head"
+  furnitureRole?: "folio" | "running-head",
+  fontFamily?: string
 ): PaintCommand {
-  return { op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle", ...(furnitureRole ? { furnitureRole } : {}) };
+  return {
+    op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle",
+    ...(furnitureRole ? { furnitureRole } : {}),
+    ...(fontFamily ? { fontFamily } : {}),
+  };
 }
 
 // Converts a physical mm length to the equivalent jsPDF font-size point
@@ -484,7 +504,11 @@ function unitCommands(
     contentHeightMm: number;
     paperWidthMm: number;
     paperHeightMm: number;
-  }
+  },
+  // TSP-PHASE13-001: the shared group placement (`layoutImageGroup`) of a
+  // 天/中央/地 image, computed per page by `buildBodyPaintPage`. When given it
+  // replaces the single-image centring below.
+  imageRectMm?: ImageRectMm
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -627,7 +651,7 @@ function unitCommands(
       const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
       const resolution = unit.imageResolution;
       return resolution && resolution.kind === "RESOLVED"
-        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }]
+        ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}), fullPageCover: true }]
         : [{ op: "rect", xMm: imageX, yMm: imageY, widthMm, heightMm }];
     }
     if (placement === "FULL") {
@@ -644,14 +668,14 @@ function unitCommands(
         : [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
     }
     const scale = Math.min(1, boxWidthMm / naturalWidthMm, boxHeightMm / naturalHeightMm);
-    const widthMm = naturalWidthMm * scale;
-    const heightMm = naturalHeightMm * scale;
-    const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
-    const imageY = placement === "TOP"
+    const widthMm = imageRectMm?.widthMm ?? naturalWidthMm * scale;
+    const heightMm = imageRectMm?.heightMm ?? naturalHeightMm * scale;
+    const imageX = imageRectMm?.xMm ?? boxLeftMm + (boxWidthMm - widthMm) / 2;
+    const imageY = imageRectMm?.yMm ?? (placement === "TOP"
       ? boxTopMm
       : placement === "BOTTOM"
         ? boxTopMm + boxHeightMm - heightMm
-        : boxTopMm + (boxHeightMm - heightMm) / 2;
+        : boxTopMm + (boxHeightMm - heightMm) / 2);
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
       return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }];
@@ -706,6 +730,43 @@ function emphasisDotCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: numb
 // paint via a real vector glyph outline instead of jsPDF's Unicode
 // `text()` path. Omitting it preserves the exact prior (pre-round-7)
 // "text"-only behavior — every existing call site/test is unaffected.
+/**
+ * TSP-PHASE13-001: places every 天/中央/地 image of one page with the shared
+ * `layoutImageGroup` rule (the same rule the V2 Preview overlay uses), so
+ * several images at one position flow in a row instead of overlapping.
+ * Sizes are the existing safety-clamped intrinsic sizes.
+ */
+function groupedImageRects(
+  page: PaintPage,
+  box: { contentLeftMm: number; contentTopMm: number; contentWidthMm: number; contentHeightMm: number },
+): Map<PaintPlacedUnit, ImageRectMm> {
+  const groups = new Map<GroupedImagePosition, PaintPlacedUnit[]>();
+  for (const column of page.columns) {
+    for (const line of column.lines) {
+      for (const unit of line.units) {
+        if (unit.kind !== "IMAGE") continue;
+        const placement = unit.imagePlacement ?? "CENTER";
+        if (placement === "FULL") continue;
+        const list = groups.get(placement) ?? [];
+        list.push(unit);
+        groups.set(placement, list);
+      }
+    }
+  }
+  const rects = new Map<PaintPlacedUnit, ImageRectMm>();
+  const contentBox = { leftMm: box.contentLeftMm, topMm: box.contentTopMm, widthMm: box.contentWidthMm, heightMm: box.contentHeightMm };
+  for (const [placement, units] of groups) {
+    const sizes = units.map((unit) => {
+      const naturalWidthMm = unit.imageIntrinsicWidthMm ?? box.contentWidthMm;
+      const naturalHeightMm = unit.heightMm;
+      const scale = Math.min(1, box.contentWidthMm / naturalWidthMm, box.contentHeightMm / naturalHeightMm);
+      return { widthMm: naturalWidthMm * scale, heightMm: naturalHeightMm * scale };
+    });
+    layoutImageGroup(sizes, contentBox, placement).forEach((rect, index) => rects.set(units[index], rect));
+  }
+  return rects;
+}
+
 function buildBodyPaintPage(
   page: PaintPage,
   hasFont: boolean,
@@ -715,7 +776,8 @@ function buildBodyPaintPage(
   isOddPage: boolean,
   outlineContext?: VerticalOutlineContext,
   gposContext?: VerticalGposContext,
-  yakumonoContext?: VerticalYakumonoAlignContext
+  yakumonoContext?: VerticalYakumonoAlignContext,
+  physicalPageNumber?: number
 ): PaintPagePlan {
   const commands: PaintCommand[] = [];
   // The content area's own right edge, physically: the paper's right
@@ -754,6 +816,7 @@ function buildBodyPaintPage(
       paperWidthMm: pageGeometry.paperWidthMm,
       paperHeightMm: pageGeometry.paperHeightMm,
     } : undefined;
+    const imageRects = imageBoxMm ? groupedImageRects(page, imageBoxMm) : undefined;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {
@@ -766,7 +829,7 @@ function buildBodyPaintPage(
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm, imageRects?.get(unit)));
             commands.push(...emphasisDotCommands(unit, x, line.widthMm, yOffsetMm, doc.bodyEmMm));
           }
         }
@@ -812,7 +875,7 @@ function buildBodyPaintPage(
       // Placement is shared with the Editor Preview (renderer/furnitureGeometry.ts).
       const folioSizePt = doc.folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm));
       const at = folioPlacement(page.folio.position, furnitureFrame, isOddPage, folioSizePt, doc.bodyEmMm);
-      commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
+      commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio", doc.folioFontFamily));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
       // Human Visual QA HOLD round 25: `band` is the only vertical axis
@@ -821,6 +884,17 @@ function buildBodyPaintPage(
       // Editor Preview (renderer/furnitureGeometry.ts).
       const at = headerPlacement(page.header.position, furnitureFrame, isOddPage, doc.bodyEmMm);
       commands.push(horizontalFurnitureCommand(page.header.text, at.xMm, at.yCenterMm, doc.runningHeadFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm)), at.align, "running-head"));
+    }
+    // TSP-PHASE13-001: 隠しノンブル, independent of the visible folio (it is
+    // printed even when nombrePosition is "hidden"). Geometry is shared with
+    // the Preview overlay (renderer/furnitureGeometry.ts).
+    const hiddenNombre = pageGeometry?.furniture?.hiddenNombre;
+    if (hiddenNombre && hasFont && physicalPageNumber !== undefined) {
+      const text = hiddenNombreText(page.folio?.text, hiddenNombre.nombreStart, physicalPageNumber);
+      const at = hiddenNombreGlyphCentres(text, furnitureFrame, isOddPage);
+      Array.from(text).forEach((glyph, i) => {
+        commands.push(horizontalFurnitureCommand(glyph, at.xCenterMm, at.yCentersMm[i], HIDDEN_NOMBRE_FONT_SIZE_PT, "center"));
+      });
     }
   return {
     widthMm: pageGeometry?.paperWidthMm ?? page.widthMm,
@@ -867,7 +941,7 @@ function paintPlanPageSource(
   const colophonPageCount = doc.colophonPages?.length ?? 0;
   // `physicalIndex` decides the page's parity (ノド/小口 side) for furniture.
   const bodyPageAt = (i: number, physicalIndex: number) =>
-    buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, (physicalIndex + 1) % 2 === 1, outlineContext, gposContext, yakumonoContext);
+    buildBodyPaintPage(doc.pages[i], hasFont, pageGeometry, doc, baselineRatio, (physicalIndex + 1) % 2 === 1, outlineContext, gposContext, yakumonoContext, physicalIndex + 1);
   // `physicalIndex` (Human Visual QA HOLD round 29): the SAME 0-based
   // final-physical-sequence position `core/layout/assemble.ts` already
   // used to resolve this page's own folio/header -- re-derived here
@@ -892,7 +966,8 @@ function paintPlanPageSource(
       doc.colophonTitleFallback ?? doc.label,
       doc.colophonFontFamily,
       doc.colophonRows,
-      doc.colophonFreeText
+      doc.colophonFreeText,
+      doc.folioFontFamily
     );
 
   if (doc.pageSequence) {
@@ -1011,6 +1086,18 @@ export interface PaintPlanPageSource {
 // (`page.header`/`page.folio` absent or empty -> no exclusion band at
 // all, matching the SAME condition already gating whether that
 // furniture paints below).
+/**
+ * TSP-PHASE13-001: the Preview draws colophon text/rules/frames with CSS
+ * opacity/alpha over white paper. Output is grayscale, so the same look is
+ * printed as the equivalent gray ink (alpha 1 → black, omitted).
+ */
+function colophonInk(alpha: number): { inkGray?: number } {
+  return alpha >= 1 ? {} : { inkGray: 1 - Math.max(0, alpha) };
+}
+
+/** Fill+stroke width (em) that stands in for weight 600 (the regular face is the only embedded one). */
+const COLOPHON_WEIGHT_STROKE_EM = 0.03;
+
 function buildColophonPaintPage(
   page: PaintPage,
   hasFont: boolean,
@@ -1026,8 +1113,9 @@ function buildColophonPaintPage(
   colophonFontSizePt?: number,
   titleFallback: string = "",
   colophonFontFamily?: string,
-  rawRows?: Array<{ label: string; value: string }>,
-  rawFreeText?: string
+  rawRows?: Array<{ id?: string; label: string; value: string }>,
+  rawFreeText?: string,
+  folioFontFamily?: string
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1088,12 +1176,16 @@ function buildColophonPaintPage(
   if (hasFont && firstColumn) {
     const placementTopMm = respectVerticalMargins ? marginTopMm : Math.min(marginTopMm, marginBottomMm);
     const placementBottomMm = respectVerticalMargins ? marginBottomMm : Math.min(marginTopMm, marginBottomMm);
-    const symmetricHorizontalMm =
-      pageGeometry?.marginGutterMm !== undefined && pageGeometry?.marginOuterMm !== undefined
-        ? Math.min(pageGeometry.marginGutterMm, pageGeometry.marginOuterMm)
-        : Math.min(marginLeftMm, marginRightMm);
-    const contentLeftMm = symmetricHorizontalMm;
-    const contentRightMm = paperWidthMm - symmetricHorizontalMm;
+    // TSP-PHASE13-001: the same placement area as the Preview
+    // (`ColophonPageSurface`): respectGutter ON keeps ノド/小口 per physical
+    // parity (odd: 小口 left / ノド right; even: mirrored), OFF uses the
+    // smaller of the two on both sides.
+    const gutterMm = pageGeometry?.marginGutterMm ?? marginRightMm;
+    const outerMm = pageGeometry?.marginOuterMm ?? marginLeftMm;
+    const symmetricHorizontalMm = Math.min(gutterMm, outerMm);
+    const respectGutter = placement?.respectGutter ?? false;
+    const contentLeftMm = respectGutter ? (isOddPage ? outerMm : gutterMm) : symmetricHorizontalMm;
+    const contentRightMm = paperWidthMm - (respectGutter ? (isOddPage ? gutterMm : outerMm) : symmetricHorizontalMm);
 
     const halfFurnitureBandMm = bodyEmMm / 2;
     let contentAreaTopMm = placementTopMm;
@@ -1122,7 +1214,7 @@ function buildColophonPaintPage(
     contentAreaBottomMm = Math.max(contentAreaBottomMm, contentAreaTopMm);
 
     const rows: { id: string; label: string; value: string }[] =
-      rawRows?.map((row, index) => ({ id: `row-${index}`, ...row })) ?? [];
+      rawRows?.map((row, index) => ({ ...row, id: row.id ?? `row-${index}` })) ?? [];
     const fallbackFreeLines: string[] = [];
     if (!rawRows) {
       let syntheticRow = 0;
@@ -1166,6 +1258,7 @@ function buildColophonPaintPage(
           yMm: blockTopMm + item.yEm * colophonEmMm,
           widthMm: item.widthEm * colophonEmMm,
           heightMm: item.heightEm * colophonEmMm,
+          ...colophonInk(item.alpha),
         });
         continue;
       }
@@ -1176,6 +1269,7 @@ function buildColophonPaintPage(
           yMm: blockTopMm + item.yEm * colophonEmMm,
           widthMm: item.widthEm * colophonEmMm,
           heightMm: 0.01,
+          ...colophonInk(item.alpha),
         });
         continue;
       }
@@ -1189,13 +1283,17 @@ function buildColophonPaintPage(
         angle: 0,
         baseline: "middle",
         ...(colophonFontFamily ? { fontFamily: colophonFontFamily } : {}),
+        ...colophonInk(item.opacity ?? 1),
+        ...(item.weight !== undefined && item.weight > 400
+          ? { strokeWidthMm: colophonEmMm * item.fontScale * COLOPHON_WEIGHT_STROKE_EM * ((item.weight - 400) / 200) }
+          : {}),
       });
     }
   }
   if (page.folio && page.folio.text.length > 0 && hasFont) {
     const folioSizePt = folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm));
     const at = folioPlacement(page.folio.position, colophonFurnitureFrame, isOddPage, folioSizePt, bodyEmMm);
-    commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
+    commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio", folioFontFamily));
   }
   // Human Visual QA HOLD round 28: colophon pages carry Core's `header`
   // (`assemble.ts` physical-sequence continuation) and paint it. With Editor
@@ -1211,6 +1309,35 @@ function buildColophonPaintPage(
 export interface PublicationPdfRenderOptions {
   /** Defaults to the historical V2 behavior: canonical finished/trim size. */
   mode?: PublicationPdfMode;
+  /**
+   * TSP-PHASE13-001: further embeddable fonts, keyed by the CSS family a text
+   * command requests (`PaintCommand.fontFamily` — the ノンブル / 奥付 font).
+   * A command whose family is not listed paints with the base font.
+   */
+  extraFonts?: ReadonlyArray<{ cssFamily: string; font: PublicationFontResource }>;
+}
+
+/** Registers the base and extra fonts; returns the jsPDF font name per CSS family. */
+function registerPdfFonts(
+  pdf: jsPDF,
+  fontResource: PublicationFontResource | undefined,
+  extraFonts: PublicationPdfRenderOptions["extraFonts"]
+): Map<string, string> {
+  const registered = new Set<string>();
+  const register = (font: PublicationFontResource) => {
+    if (registered.has(font.fontName)) return;
+    registered.add(font.fontName);
+    pdf.addFileToVFS(font.fileName, font.base64);
+    pdf.addFont(font.fileName, font.fontName, "normal");
+  };
+  if (fontResource) register(fontResource);
+  const byFamily = new Map<string, string>();
+  if (!fontResource) return byFamily;
+  for (const extra of extraFonts ?? []) {
+    register(extra.font);
+    byFamily.set(extra.cssFamily.trim(), extra.font.fontName);
+  }
+  return byFamily;
 }
 
 type JsPdfPageBox = {
@@ -1255,10 +1382,55 @@ function applyPublicationPdfPageBoxes(pdf: jsPDF, output: PublicationPdfPageOutp
   pageContext.trimBox = publicationBoxToJsPdfPoints(output.trimBox, output.heightMm, scaleFactor);
 }
 
+/**
+ * TSP-PHASE13-001: box of a 「全面」 image in bleed/full output. Covers the
+ * trim page plus `PDF_BLEED_MM` on every side, keeping the image's aspect
+ * ratio and centring it on the trim page, in output-sheet coordinates.
+ */
+export function resolveBleedCoverImageBoxMm(
+  cmd: { widthMm: number; heightMm: number },
+  page: { widthMm: number; heightMm: number },
+  output: PublicationPdfPageOutput,
+): { xMm: number; yMm: number; widthMm: number; heightMm: number } {
+  const targetWidthMm = page.widthMm + PDF_BLEED_MM * 2;
+  const targetHeightMm = page.heightMm + PDF_BLEED_MM * 2;
+  const scale = Math.max(targetWidthMm / cmd.widthMm, targetHeightMm / cmd.heightMm);
+  const widthMm = cmd.widthMm * scale;
+  const heightMm = cmd.heightMm * scale;
+  return {
+    xMm: output.contentOffsetXMm + (page.widthMm - widthMm) / 2,
+    yMm: output.contentOffsetYMm + (page.heightMm - heightMm) / 2,
+    widthMm,
+    heightMm,
+  };
+}
+
+function paintBleedCoverImage(
+  pdf: jsPDF,
+  cmd: Extract<PaintCommand, { op: "image" }>,
+  page: PaintPagePlan,
+  output: PublicationPdfPageOutput,
+): void {
+  const box = resolveBleedCoverImageBoxMm(cmd, page, output);
+  const clip = output.bleedBox;
+  // Clip to the bleed box so an aspect-ratio overflow never reaches the
+  // crop-mark margin of a full-mode sheet.
+  pdf.saveGraphicsState();
+  pdf.rect(clip.xMm, clip.yMm, clip.widthMm, clip.heightMm, null).clip().discardPath();
+  pdf.addImage(cmd.bytes, cmd.format, box.xMm, box.yMm, box.widthMm, box.heightMm);
+  pdf.restoreGraphicsState();
+}
+
+/** 0 (black) … 1 (white) ink tone to a jsPDF gray byte. */
+function grayByte(inkGray: number): number {
+  return Math.round(Math.min(1, Math.max(0, inkGray)) * 255);
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
   output: PublicationPdfPageOutput,
+  fonts?: { base: string; byFamily: ReadonlyMap<string, string> },
 ): void {
   const offsetX = output.contentOffsetXMm;
   const offsetY = output.contentOffsetYMm;
@@ -1267,7 +1439,9 @@ function paintPageCommands(
   pdf.setFillColor(0, 0, 0);
   for (const cmd of page.commands) {
     if (cmd.op === "rect") {
+      if (cmd.inkGray !== undefined) pdf.setDrawColor(grayByte(cmd.inkGray));
       pdf.rect(cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      if (cmd.inkGray !== undefined) pdf.setDrawColor(0, 0, 0);
       continue;
     }
     if (cmd.op === "circle") {
@@ -1275,6 +1449,10 @@ function paintPageCommands(
       continue;
     }
     if (cmd.op === "image") {
+      if (cmd.fullPageCover && output.mode !== "trim") {
+        paintBleedCoverImage(pdf, cmd, page, output);
+        continue;
+      }
       pdf.addImage(cmd.bytes, cmd.format, cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
       continue;
     }
@@ -1295,6 +1473,8 @@ function paintPageCommands(
       pdf.fill();
       continue;
     }
+    const commandFont = cmd.fontFamily ? fonts?.byFamily.get(cmd.fontFamily.trim()) : undefined;
+    if (commandFont) pdf.setFont(commandFont);
     pdf.setFontSize(cmd.fontSizePt);
     if (cmd.maxWidthMm !== undefined) {
       const widthMm = pdf.getTextWidth(cmd.text);
@@ -1302,11 +1482,23 @@ function paintPageCommands(
         pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
       }
     }
+    if (cmd.inkGray !== undefined) {
+      pdf.setTextColor(grayByte(cmd.inkGray));
+      pdf.setDrawColor(grayByte(cmd.inkGray));
+    }
+    if (cmd.strokeWidthMm !== undefined) pdf.setLineWidth(cmd.strokeWidthMm);
     pdf.text(cmd.text, cmd.xMm + offsetX, cmd.yMm + offsetY, {
       align: cmd.align,
       ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
       ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
+      ...(cmd.strokeWidthMm !== undefined ? { renderingMode: "fillThenStroke" as const } : {}),
     });
+    if (cmd.strokeWidthMm !== undefined) pdf.setLineWidth(0.05);
+    if (cmd.inkGray !== undefined) {
+      pdf.setTextColor(0, 0, 0);
+      pdf.setDrawColor(0, 0, 0);
+    }
+    if (commandFont && fonts) pdf.setFont(fonts.base);
   }
 
   if (output.cropMarks.length > 0) {
@@ -1329,10 +1521,7 @@ export function renderPaintPlanToPdf(
   options: PublicationPdfRenderOptions = {},
 ): PublicationPdfResult {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
-  if (fontResource) {
-    pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
-    pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
-  }
+  const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
   // jsPDF always creates one initial page at construction time (sized to
   // `format` above, a throwaway placeholder) — every real page below is
   // added explicitly with its own correct physical size, then the
@@ -1344,7 +1533,7 @@ export function renderPaintPlanToPdf(
     pdf.setPage(i + 2); // page 1 is the throwaway placeholder
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output);
+    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
   });
   pdf.deletePage(1);
 
@@ -1382,10 +1571,7 @@ export async function renderPaintPagesToPdfAsync(
   options: AsyncPdfRenderOptions = {}
 ): Promise<PublicationPdfResult> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
-  if (fontResource) {
-    pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
-    pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
-  }
+  const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
   for (let index = 0; index < pageCount; index += 1) {
     await options.beforePage?.(index + 1, pageCount);
     const page = await pageAt(index);
@@ -1394,7 +1580,7 @@ export async function renderPaintPagesToPdfAsync(
     pdf.setPage(index + 2);
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output);
+    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
     options.onProgress?.(index + 1, pageCount);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }

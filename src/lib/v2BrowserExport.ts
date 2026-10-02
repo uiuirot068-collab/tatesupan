@@ -5,6 +5,51 @@ import { createV2PdfWorkerStartMessage } from "./v2PdfWorkerContract";
 
 export const V2_PUBLICATION_FONT_PATH = "/fonts/ShipporiMincho-Regular.ttf";
 
+/**
+ * TSP-PHASE13-001: fonts PDF export can embed — one per Editor font choice
+ * (`FONT_FAMILY_OPTIONS`). JPG already rasterizes with the browser's webfont.
+ * Any other family (the system「serif」stack) falls back to Shippori Mincho,
+ * which is also the font Core measures layout with.
+ */
+export interface PublicationFontAsset {
+  /** First family name of the Editor's CSS value, e.g. "Zen Old Mincho". */
+  cssName: string;
+  path: string;
+  fileName: string;
+  fontName: string;
+}
+
+const SHIPPORI_ASSET: PublicationFontAsset = {
+  cssName: "Shippori Mincho",
+  path: V2_PUBLICATION_FONT_PATH,
+  fileName: "ShipporiMincho-Regular.ttf",
+  fontName: "Shippori Mincho",
+};
+
+export const PUBLICATION_FONT_ASSETS: readonly PublicationFontAsset[] = [
+  SHIPPORI_ASSET,
+  { cssName: "Zen Old Mincho", path: "/fonts/ZenOldMincho-Regular.ttf", fileName: "ZenOldMincho-Regular.ttf", fontName: "Zen Old Mincho" },
+  { cssName: "Noto Serif JP", path: "/fonts/NotoSerifJP-Regular.ttf", fileName: "NotoSerifJP-Regular.ttf", fontName: "Noto Serif JP" },
+  { cssName: "Noto Sans JP", path: "/fonts/NotoSansJP-Regular.ttf", fileName: "NotoSansJP-Regular.ttf", fontName: "Noto Sans JP" },
+  { cssName: "BIZ UDMincho", path: "/fonts/BIZUDMincho-Regular.ttf", fileName: "BIZUDMincho-Regular.ttf", fontName: "BIZ UDMincho" },
+  { cssName: "Shippori Mincho B1", path: "/fonts/ShipporiMinchoB1-Regular.ttf", fileName: "ShipporiMinchoB1-Regular.ttf", fontName: "Shippori Mincho B1" },
+  { cssName: "Kaisei Tokumin", path: "/fonts/KaiseiTokumin-Regular.ttf", fileName: "KaiseiTokumin-Regular.ttf", fontName: "Kaisei Tokumin" },
+  { cssName: "Kaisei Opti", path: "/fonts/KaiseiOpti-Regular.ttf", fileName: "KaiseiOpti-Regular.ttf", fontName: "Kaisei Opti" },
+  { cssName: "Hina Mincho", path: "/fonts/HinaMincho-Regular.ttf", fileName: "HinaMincho-Regular.ttf", fontName: "Hina Mincho" },
+  { cssName: "Zen Antique", path: "/fonts/ZenAntique-Regular.ttf", fileName: "ZenAntique-Regular.ttf", fontName: "Zen Antique" },
+  { cssName: "BIZ UDGothic", path: "/fonts/BIZUDGothic-Regular.ttf", fileName: "BIZUDGothic-Regular.ttf", fontName: "BIZ UDGothic" },
+  { cssName: "Zen Kaku Gothic New", path: "/fonts/ZenKakuGothicNew-Regular.ttf", fileName: "ZenKakuGothicNew-Regular.ttf", fontName: "Zen Kaku Gothic New" },
+  { cssName: "M PLUS 1p", path: "/fonts/MPLUS1p-Regular.ttf", fileName: "MPLUS1p-Regular.ttf", fontName: "M PLUS 1p" },
+  { cssName: "Zen Maru Gothic", path: "/fonts/ZenMaruGothic-Regular.ttf", fileName: "ZenMaruGothic-Regular.ttf", fontName: "Zen Maru Gothic" },
+  { cssName: "Kiwi Maru", path: "/fonts/KiwiMaru-Regular.ttf", fileName: "KiwiMaru-Regular.ttf", fontName: "Kiwi Maru" },
+];
+
+/** The embeddable font for a CSS font-family value (first family wins; unknown → Shippori Mincho). */
+export function publicationFontAssetFor(cssFamily: string | undefined): PublicationFontAsset {
+  const first = (cssFamily ?? "").split(",")[0]?.trim().replace(/^['"]|['"]$/g, "") ?? "";
+  return PUBLICATION_FONT_ASSETS.find((asset) => asset.cssName === first) ?? SHIPPORI_ASSET;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
   let binary = "";
@@ -14,37 +59,41 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-let fontBytesPromise: Promise<Uint8Array> | null = null;
-let fontPromise: Promise<PublicationFontResource> | null = null;
+const fontBytesPromises = new Map<string, Promise<Uint8Array>>();
+const fontPromises = new Map<string, Promise<PublicationFontResource>>();
 
-export function loadV2FontBytes(): Promise<Uint8Array> {
-  fontBytesPromise ??= fetch(withBasePath(V2_PUBLICATION_FONT_PATH))
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`Shippori Mincho font unavailable (${response.status}). Retry after the asset is restored.`);
-      }
-      return response.arrayBuffer();
-    })
-    .then((buffer) => new Uint8Array(buffer))
-    .catch((error: unknown) => {
-      fontBytesPromise = null;
-      throw error;
-    });
-  return fontBytesPromise;
+/** Font bytes (fetched once per file). Without an argument: Shippori Mincho, Core's measurement font. */
+export function loadV2FontBytes(asset: PublicationFontAsset = SHIPPORI_ASSET): Promise<Uint8Array> {
+  let pending = fontBytesPromises.get(asset.path);
+  if (!pending) {
+    pending = fetch(withBasePath(asset.path))
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`${asset.fontName} font unavailable (${response.status}). Retry after the asset is restored.`);
+        }
+        return response.arrayBuffer();
+      })
+      .then((buffer) => new Uint8Array(buffer));
+    pending.catch(() => fontBytesPromises.delete(asset.path));
+    fontBytesPromises.set(asset.path, pending);
+  }
+  return pending;
 }
 
-export function loadV2PublicationFont(): Promise<PublicationFontResource> {
-  fontPromise ??= loadV2FontBytes()
-    .then((bytes) => ({
-      fileName: "ShipporiMincho-Regular.ttf",
-      fontName: "Shippori Mincho",
+/** The PDF font resource for a CSS font-family value (Shippori Mincho when omitted or not embeddable). */
+export function loadV2PublicationFont(cssFamily?: string): Promise<PublicationFontResource> {
+  const asset = publicationFontAssetFor(cssFamily);
+  let pending = fontPromises.get(asset.path);
+  if (!pending) {
+    pending = loadV2FontBytes(asset).then((bytes) => ({
+      fileName: asset.fileName,
+      fontName: asset.fontName,
       base64: bytesToBase64(bytes),
-    }))
-    .catch((error: unknown) => {
-      fontPromise = null;
-      throw error;
-    });
-  return fontPromise;
+    }));
+    pending.catch(() => fontPromises.delete(asset.path));
+    fontPromises.set(asset.path, pending);
+  }
+  return pending;
 }
 
 export interface WorkerPdfProgress {
