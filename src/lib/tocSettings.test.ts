@@ -156,10 +156,10 @@ describe("TOC insertion position (manuscript anchor, never a body edit)", () => 
 
 /** Cell index (0-based) where the fixed leader block starts. */
 function leaderStartCell(line: string): number {
-  return numberCellIndex(line) - TOC_LEADER_CELLS;
+  return numberCellIndex(line) - TOC_LEADER_CELLS - 1;
 }
 
-describe("TOC entry layout: [章タイトル領域][　][リーダー×5][ページ番号]", () => {
+describe("TOC entry layout: [章タイトル領域][　][リーダー×5][　][ページ番号]", () => {
   const titles = ["序", "第一章　はじまり", "第十二章　とても長い章題", "第3章", "｜漢字《かんじ》の章"];
   const items = titles.map((title, index) => ({ title, pageNumber: [3, 12, 128, 7, 45][index] }));
 
@@ -171,12 +171,12 @@ describe("TOC entry layout: [章タイトル領域][　][リーダー×5][ペー
     const longest = Math.max(...titles.map(tocTitleCells));
     expect(tocTitleAreaCells(items, lineCells)).toBe(longest);
     for (const line of lines) {
-      // [　 indent 1][title area = longest][　 gap][leader 5][number]
-      expect(numberCellIndex(line)).toBe(1 + longest + 1 + TOC_LEADER_CELLS);
-      expect(cellsOf(line)).toBe(1 + longest + 1 + TOC_LEADER_CELLS + 1);
-      expect(line).toMatch(/　…{5}\[tate\]\d+\[\/tate\]$/);
+      // [　 indent 1][title area = longest][　 gap][leader 5][　 gap][number]
+      expect(numberCellIndex(line)).toBe(1 + longest + 1 + TOC_LEADER_CELLS + 1);
+      expect(cellsOf(line)).toBe(1 + longest + 1 + TOC_LEADER_CELLS + 1 + 1);
+      expect(line).toMatch(/　…{5}　\[tate\]\d+\[\/tate\]$/);
       expect(leaderStartCell(line)).toBe(1 + longest + 1);
-      expect(Array.from(line.replace(/\[tate\]\d+\[\/tate\]$/, "")).slice(-TOC_LEADER_CELLS).join("")).toBe("…".repeat(TOC_LEADER_CELLS));
+      expect(Array.from(line.replace(/　\[tate\]\d+\[\/tate\]$/, "")).slice(-TOC_LEADER_CELLS).join("")).toBe("…".repeat(TOC_LEADER_CELLS));
     }
     // The longest title is followed directly by the single gap space.
     expect(lines[2]).toMatch(/^　第十二章　とても長い章題　…{5}/);
@@ -195,7 +195,7 @@ describe("TOC entry layout: [章タイトル領域][　][リーダー×5][ペー
     const longTitle = "あいうえおかきくけこさしすせそたちつてとなにぬねの";
     const lineCells = 16;
     const area = tocTitleAreaCells([{ title: longTitle, pageNumber: 9 }, { title: "短", pageNumber: 10 }], lineCells);
-    expect(area).toBe(lineCells - 1 - (1 + TOC_LEADER_CELLS + 1));
+    expect(area).toBe(lineCells - 1 - (1 + TOC_LEADER_CELLS + 1 + 1));
     const wrapped = buildTocEntryLines({ title: longTitle, pageNumber: 9 }, lineCells, "dash", area);
     const short = buildTocEntryLines({ title: "短", pageNumber: 10 }, lineCells, "dash", area);
     expect(wrapped.length).toBeGreaterThan(1);
@@ -206,13 +206,13 @@ describe("TOC entry layout: [章タイトル領域][　][リーダー×5][ペー
     });
     expect(wrapped.slice(1).every((line) => line.startsWith("　　"))).toBe(true);
     expect(numberCellIndex(wrapped[wrapped.length - 1])).toBe(numberCellIndex(short[0]));
-    expect(wrapped.map((line) => line.replace(/^　+/, "").replace(/　*―{5}\[tate\]\d+\[\/tate\]$/, "")).join("")).toBe(longTitle);
+    expect(wrapped.map((line) => line.replace(/^　+/, "").replace(/　*―{5}　\[tate\]\d+\[\/tate\]$/, "")).join("")).toBe(longTitle);
   });
 
   it("keeps ruby / 縦中横 notation atomic inside titles", () => {
     const [line] = buildTocEntryLines({ title: "｜漢字《かんじ》と99", pageNumber: 5 }, 16);
     expect(line).toContain("｜漢字《かんじ》");
-    expect(cellsOf(line)).toBe(1 + 4 + 1 + TOC_LEADER_CELLS + 1);
+    expect(cellsOf(line)).toBe(1 + 4 + 1 + TOC_LEADER_CELLS + 1 + 1);
   });
 });
 
@@ -228,9 +228,9 @@ describe("TOC leader block: ……／―――／なし (作品ごと)", () => {
 
   it("every style is the same 5-cell block, so the page number cell is identical; なし keeps blank cells", () => {
     const fills: Record<TocLeaderStyle, RegExp> = {
-      dots: /^　第一章　…{5}\[tate\]12\[\/tate\]$/,
-      dash: /^　第一章　―{5}\[tate\]12\[\/tate\]$/,
-      none: /^　第一章　{6}\[tate\]12\[\/tate\]$/,
+      dots: /^　第一章　…{5}　\[tate\]12\[\/tate\]$/,
+      dash: /^　第一章　―{5}　\[tate\]12\[\/tate\]$/,
+      none: /^　第一章　{7}\[tate\]12\[\/tate\]$/,
     };
     const positions = (["dots", "dash", "none"] as const).map((leader) => {
       const lines = buildTocEntryLines({ title: "第一章", pageNumber: 12 }, 37, leader);
@@ -239,16 +239,16 @@ describe("TOC leader block: ……／―――／なし (作品ごと)", () => {
       return numberCellIndex(lines[0]);
     });
     expect(new Set(positions).size).toBe(1);
-    expect(positions[0]).toBe(1 + 3 + 1 + TOC_LEADER_CELLS);
+    expect(positions[0]).toBe(1 + 3 + 1 + TOC_LEADER_CELLS + 1);
   });
 
   it("the composition-only TOC text uses the work's leader", () => {
     const grid = { cellsPerLine: 20, linesPerColumn: 10, columnsPerPage: 1 };
     const dash = buildTocCompositionInsertion("# 第一章\n本文", { ...toc([{ title: "第一章", pageNumber: 2 }]), leader: "dash" }, grid)!;
-    expect(dash.text).toContain("―[tate]2[/tate]");
+    expect(dash.text).toContain("―　[tate]2[/tate]");
     expect(dash.text).not.toContain("…");
     const none = buildTocCompositionInsertion("# 第一章\n本文", { ...toc([{ title: "第一章", pageNumber: 2 }]), leader: "none" }, grid)!;
-    expect(none.text).toContain("　[tate]2[/tate]");
+    expect(none.text).toContain("　　[tate]2[/tate]");
     expect(none.text).not.toContain("…");
   });
 });

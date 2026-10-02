@@ -2859,8 +2859,7 @@ function PreviewPane({
           </span>
         </div>
         <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
-          {layout.paper.label} / 全 {listPages.length} ページ
-          {showColophon ? " ＋ 奥付1ページ" : ""} / 1ページ
+          {layout.paper.label} / 全 {presentationSequence.length} ページ / 1ページ
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
         {showColophon && colophonInsertion.fallback && (
@@ -3392,7 +3391,7 @@ function PreviewPane({
           <div className="mb-3 flex flex-col gap-2">
             {(
               [
-                { value: "all", label: `全ページ（全 ${listPages.length} ページ）` },
+                { value: "all", label: `全ページ（全 ${presentationSequence.length} ページ）` },
                 { value: "selected", label: `選択ページ（${selected.size} ページ選択中）` },
               ] as { value: "all" | "selected"; label: string }[]
             ).map((option) => (

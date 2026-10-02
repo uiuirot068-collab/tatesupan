@@ -189,8 +189,8 @@ function pageNumberCell(pageNumber: number): string {
 
 /** Fixed leader block length (cells), the same for every leader style. */
 export const TOC_LEADER_CELLS = 5;
-/** Cells after the title area: 全角スペース 1 + leader block + page number (1 縦中横 cell). */
-const TOC_TAIL_CELLS = 1 + TOC_LEADER_CELLS + 1;
+/** Cells after the title area: 全角スペース 1 + leader block + 全角スペース 1 + page number (1 縦中横 cell). */
+const TOC_TAIL_CELLS = 1 + TOC_LEADER_CELLS + 1 + 1;
 const ENTRY_INDENT = 1;
 const CONTINUATION_INDENT = 2;
 
@@ -213,7 +213,7 @@ export function tocTitleAreaCells(items: readonly TocSettingsItem[], cellsPerLin
 /**
  * One TOC entry as manuscript lines, each exactly one composed line:
  *
- *   [　][章タイトル + 全角スペース詰め → 共通タイトル領域][　][リーダー×5][ページ番号]
+ *   [　][章タイトル + 全角スペース詰め → 共通タイトル領域][　][リーダー×5][　][ページ番号]
  *
  * - Every line starts with an explicit 全角スペース, which also exempts it from
  *   Core's automatic 一字下げ (AUTO_INDENT_CHAR), so indentation is fixed.
@@ -261,6 +261,7 @@ export function buildTocEntryLines(
       FULLWIDTH_SPACE.repeat(padCells) +
       FULLWIDTH_SPACE +
       LEADER_CELL[leader].repeat(TOC_LEADER_CELLS) +
+      FULLWIDTH_SPACE +
       pageNumberCell(item.pageNumber)
   );
   return lines;
