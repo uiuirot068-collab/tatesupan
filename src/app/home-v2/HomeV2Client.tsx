@@ -95,6 +95,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
+  // 「本をまとめる」を作品2冊未満で押したときの案内（無反応にしない）。
+  const [showCombineGuide, setShowCombineGuide] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [localOnlyNotice, setLocalOnlyNotice] = useState<{ count: number } | null>(null);
   const [selectedBookshelfTab, setSelectedBookshelfTab] = useState<BookshelfTab | null>(null);
@@ -207,6 +209,22 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       ? cloudResult
       : null;
   const localProjectCount = documents?.filter((doc) => !doc.isSample).length ?? 0;
+  // 「本をまとめる」は自分の作品（使い方ガイドのサンプルは数えない）が2冊以上あるときに開く。
+  const canCombine = localProjectCount >= 2;
+  const handleCombineClick = () => {
+    if (qaMode) return;
+    if (canCombine) {
+      setShowCombineGuide(false);
+      setIsCombineModalOpen(true);
+      return;
+    }
+    setShowCombineGuide(true);
+    window.requestAnimationFrame(() => {
+      const guide = document.getElementById("home-combine-guide");
+      guide?.scrollIntoView({ behavior: "smooth", block: "center" });
+      guide?.focus({ preventScroll: true });
+    });
+  };
   // Display only (the shelf's own order and data are untouched): the works
   // this browser holds, most recently written first, for the shelf's
   // "RECENTLY" line and its count / last-written date.
@@ -379,7 +397,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                       <span aria-hidden="true" className="text-base leading-none">＋</span>次の一冊を書く
                     </button>
                     <Link href="/editor?demo=1" className="home-v2-quiet-link">おためしデモ</Link>
-                    <button type="button" onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }} disabled={!documents || documents.length < 2} className="home-v2-quiet-link">総集編を編成する</button>
+                    <button type="button" onClick={handleCombineClick} aria-disabled={!canCombine || undefined} aria-controls="home-combine-guide" className="home-v2-quiet-link">総集編を編成する</button>
                     <Link data-home-howto-top-action="" href="/howto" className="home-v2-quiet-link">TateSpun How to →</Link>
                   </div>
                 </div>
@@ -636,13 +654,16 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
 
             <button
               type="button"
-              onClick={() => { if (!qaMode) setIsCombineModalOpen(true); }}
-              disabled={!documents || documents.length < 2}
+              onClick={handleCombineClick}
+              aria-disabled={!canCombine || undefined}
+              aria-controls="home-combine-guide"
               className="home-v2-action-card"
             >
               <span className="home-v2-index-no">02</span>
               <strong className="font-serif text-lg font-medium">本をまとめる</strong>
-              <small className="text-sm text-ink/55 dark:text-[#939DAF]">短編集・再録集を編成する</small>
+              <small className="text-sm text-ink/55 dark:text-[#939DAF]">
+                {canCombine ? "短編集・再録集を編成する" : "作品が2冊以上になるとまとめられます"}
+              </small>
               <span aria-hidden="true" className="home-v2-action-arrow">→</span>
             </button>
 
@@ -659,6 +680,27 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               <span aria-hidden="true" className="home-v2-action-arrow">→</span>
             </button>
           </div>
+
+          {/* 作品2冊未満で「本をまとめる」を押したときの案内。理由と次にできることを並べる。 */}
+          {showCombineGuide && !canCombine && (
+            <div
+              id="home-combine-guide"
+              role="status"
+              tabIndex={-1}
+              className="home-v2-combine-guide"
+            >
+              <p className="text-sm leading-relaxed text-ink/75 dark:text-[#C9D1DE]">
+                本をまとめるには、このブラウザの本棚に作品が2冊以上必要です（いま{localProjectCount}冊）。
+                まずは作品を書いて、本棚に並べてみましょう。
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta inline-flex items-center gap-2">
+                  <span aria-hidden="true" className="text-base leading-none">＋</span>新しい本を書く
+                </button>
+                <Link href="/editor?demo=1" className="home-v2-quiet-link">おためしデモで試す</Link>
+              </div>
+            </div>
+          )}
 
           {/* 画像保存ガイド。初期状態では各説明を閉じ、必要な項目だけ読める
               COLUMNSTAND系のコンパクトなアコーディオン構成にする。 */}
