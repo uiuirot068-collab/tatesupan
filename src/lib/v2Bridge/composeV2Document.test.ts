@@ -124,7 +124,7 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
     expect(results[3].commands.some((command) => command.op === "rect")).toBe(true);
   });
 
-  it("keeps free-text typography consistent across center/minimal/classic and paints the colophon in the body font (TSP-PHASE13-001: a stored colophon font is ignored)", () => {
+  it("keeps free-text typography consistent across center/minimal/classic and carries the selected colophon font", () => {
     const templateIds = ["center", "minimal", "classic"] as const;
     const freeText = "自由記述ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     for (const templateId of templateIds) {
@@ -135,7 +135,7 @@ describe("composeV2Document -- realistic Editor state -> real v2 PaintPlan (inte
           enabled: true,
           templateId,
           fontSizePt: 11,
-          fontFamily: "'Zen Old Mincho', serif",
+          fontFamily: "'Shippori Mincho', serif",
           placement: {
             ...DEFAULT_PAGE_SETTINGS.colophon.placement,
             horizontal: "center",

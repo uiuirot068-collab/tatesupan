@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings } from "@/lib/pageLayout";
 import {
+  COLOPHON_FONT_SAME_AS_BODY,
   colophonRenderModel,
   resolveColophonNombre,
   type ColophonSettings
@@ -136,8 +137,10 @@ export default function ColophonPageSurface({
   // フォールバックする。pt -> mm -> preview px の変換は本文と同じ座標系。
   const colophonFontSizePt = colophon.fontSizePt ?? settings.fontSizePt;
   const basePx = (colophonFontSizePt * 25.4 / 72) * PX_PER_MM;
-  // TSP-PHASE13-001: 奥付は常に本文と同じフォント（保存済みの colophon.fontFamily は無視）。
-  const fontFamily = settings.fontFamily || "'Shippori Mincho', serif";
+  const fontFamily =
+    colophon.fontFamily && colophon.fontFamily !== COLOPHON_FONT_SAME_AS_BODY
+      ? colophon.fontFamily
+      : settings.fontFamily || "'Shippori Mincho', serif";
 
   const { rows, freeText } = colophonRenderModel(colophon);
   const titleFallback = title.trim();
