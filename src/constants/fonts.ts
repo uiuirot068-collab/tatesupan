@@ -29,12 +29,16 @@ export const FONT_FAMILY_OPTIONS: readonly FontOption[] = [
  */
 export const NOMBRE_FONT_SAME_AS_BODY = "";
 
-/** Resolves the effective page-number font family. */
+/**
+ * Resolves the effective page-number font family.
+ *
+ * TSP-PHASE13-001: ノンブル・奥付は本文と同じフォントに統一（なつお決定
+ * 2026-10-02）。PDF/JPG が本文フォントでしか描けないため、Preview との
+ * 食い違いをなくす。保存済みの `nombreFontFamily` は消さずに無視する。
+ */
 export function resolveNombreFontFamily(
-  nombreFontFamily: string | undefined,
+  _nombreFontFamily: string | undefined,
   bodyFontFamily: string
 ): string {
-  return nombreFontFamily && nombreFontFamily !== NOMBRE_FONT_SAME_AS_BODY
-    ? nombreFontFamily
-    : bodyFontFamily;
+  return bodyFontFamily;
 }

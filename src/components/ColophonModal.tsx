@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { FONT_FAMILY_OPTIONS } from "@/constants/fonts";
 import {
-  COLOPHON_FONT_SAME_AS_BODY,
   COLOPHON_TEMPLATE_IDS,
   COLOPHON_TEMPLATE_LABELS,
   addColophonField,
@@ -225,21 +223,11 @@ export default function ColophonModal({
               </div>
 
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px]">
-                <label className="flex flex-col gap-1">
+                {/* TSP-PHASE13-001: 奥付フォントは本文と同じに固定（PDF/JPGと見た目をそろえるため）。 */}
+                <div className="flex flex-col gap-1">
                   <span className="text-xs text-ink/60">奥付フォント</span>
-                  <select
-                    value={colophon.fontFamily}
-                    onChange={(e) => patch({ fontFamily: e.target.value })}
-                    className="w-full rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-                  >
-                    <option value={COLOPHON_FONT_SAME_AS_BODY}>本文と同じ</option>
-                    {FONT_FAMILY_OPTIONS.map((f) => (
-                      <option key={f.value} value={f.value}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <span className="px-2 py-1.5 text-sm text-ink/70">本文と同じ</span>
+                </div>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-ink/60">文字サイズ（pt）</span>
                   <input

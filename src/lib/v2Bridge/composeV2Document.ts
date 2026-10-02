@@ -258,7 +258,8 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
         {
           templateId: input.settings.colophon.templateId,
           fontSizePt: input.settings.colophon.fontSizePt,
-          fontFamily: input.settings.colophon.fontFamily,
+          // TSP-PHASE13-001: 奥付は常に本文と同じフォント（保存済みの奥付フォント指定は無視）。
+          fontFamily: input.settings.fontFamily,
           ...(() => {
             const compiled = compileColophonContent({
               fields: input.settings.colophon.fields,

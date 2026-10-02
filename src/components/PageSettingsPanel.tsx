@@ -16,7 +16,7 @@ import {
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { applyColumnCountPreset, applyDestinationPaperPreset } from "@/lib/paperPresets";
-import { FONT_FAMILY_OPTIONS, NOMBRE_FONT_SAME_AS_BODY } from "@/constants/fonts";
+import { FONT_FAMILY_OPTIONS } from "@/constants/fonts";
 import { calculateCapacityFromMargins } from "@/utils/layoutCalculator";
 import {
   HORIZONTAL_ANCHORS,
@@ -1069,22 +1069,6 @@ export default function PageSettingsPanel({
               title="用紙presetの推奨初期値。手動値は次の用紙変更まで保存されます"
               className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
             />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-ink/60">ノンブルのフォント</span>
-            <select
-              value={settings.masterPage.nombreFontFamily ?? NOMBRE_FONT_SAME_AS_BODY}
-              onChange={(e) => updateMasterPage("nombreFontFamily", e.target.value)}
-              className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
-            >
-              <option value={NOMBRE_FONT_SAME_AS_BODY}>本文と同じ</option>
-              {FONT_FAMILY_OPTIONS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
 
