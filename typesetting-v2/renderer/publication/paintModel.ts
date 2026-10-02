@@ -402,10 +402,14 @@ function buildPaintLine(
       // P3-O09-PAGE-CONTENT-CLIPPING-HOLD fix (renderer/preview/paintModel.ts) —
       // clamped so it can only ever shrink toward the line's own remaining
       // budget, never overshoot it.
-      const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
+      // TSP-PHASE13-001: a ぶら下げ 句読点 sits past the line end by design, so
+      // its own cell is not clamped to the (exhausted) line budget — clamping
+      // it to ~0 painted it on top of the line's last character.
+      const cellTicks = ctx.bodyFontSizeTick ?? ctx.linePitchTicks;
+      const remainingLineExtentTicks = placed.hanging ? cellTicks : Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
       // Shared with the other paint model (lastAtomExtent.ts) so Preview and
       // PDF/JPG always agree on a line-final atom's extent.
-      extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks: ctx.bodyFontSizeTick ?? ctx.linePitchTicks, remainingLineExtentTicks });
+      extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks, remainingLineExtentTicks });
       heightIsApproximate = true;
     }
     const text = textFor(kind, placed.sourceSpan, lookup.sourceCodePoints);

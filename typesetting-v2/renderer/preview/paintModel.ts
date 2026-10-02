@@ -444,7 +444,9 @@ function buildPaintLine(
       // can only ever SHRINK an already-wrong guess toward safety —
       // it never grows it, and never claims a more exact value than the
       // guess it is.
-      const remainingLineExtentTicks = Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
+      // TSP-PHASE13-001: a ぶら下げ 句読点 keeps its own cell past the line end
+      // (see the publication paint model).
+      const remainingLineExtentTicks = placed.hanging ? ctx.nominalCellTicks : Math.max(ctx.lineExtentTicks - (placed.yTick + indentOffsetTicks), 0);
       // Shared with the other paint model (lastAtomExtent.ts) so Preview and
       // PDF/JPG always agree on a line-final atom's extent.
       extentTicks = lastAtomExtentTicks({ owner, placed, prev, cellTicks: ctx.nominalCellTicks, remainingLineExtentTicks });

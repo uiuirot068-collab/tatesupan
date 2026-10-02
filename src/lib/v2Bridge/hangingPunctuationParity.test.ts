@@ -33,4 +33,26 @@ describe("ぶら下げ組 through the Editor bridge", () => {
     expect(unit.topMm).toBeGreaterThanOrEqual(lineExtentMm - 1e-6);
     expect(g.marginTopMm + unit.topMm + unit.heightMm).toBeLessThan(g.paperHeightMm);
   });
+
+  // Human QA 2026-10-02: the hanging glyph was given a ~0 extent (clamped to the
+  // exhausted line), so PDF/JPG drew it on top of the line's last character
+  // and the Preview clipped it away entirely.
+  it("gives the hanging 、 its own full cell in Preview and export, below the last character", () => {
+    const measurement = createFakeMeasurementProvider();
+    const preview = buildLivePreviewDocument(composeV2Layout({ title: "T", content, settings, measurement }));
+    const previewUnits = preview.pages[0].columns[0].lines[0].units;
+    const [previewPrev, previewHang] = previewUnits.slice(-2);
+    expect(previewHang.heightPx).toBeCloseTo(previewPrev.heightPx, 3);
+    expect(previewHang.topPx).toBeCloseTo(previewPrev.topPx + previewPrev.heightPx, 3);
+
+    const bridge = composeV2Document({ title: "T", content, settings, measurement: createFakeMeasurementProvider() });
+    const units = bridge.model.pages[0].columns[0].lines[0].units;
+    const [prev, hang] = units.slice(-2);
+    expect(hang.heightMm).toBeCloseTo(prev.heightMm, 6);
+    const text = bridge.plan[0].commands.filter((c): c is Extract<typeof c, { op: "text" }> => c.op === "text");
+    const prevCmd = text.find((c) => c.text === "漢" && Math.abs(c.yMm - Math.max(...text.filter((t) => t.text === "漢").map((t) => t.yMm))) < 1e-9)!;
+    const hangCmd = text.find((c) => c.text === "︑" || c.text === "、")!;
+    // one full cell below the last 漢, never overlapping it
+    expect(hangCmd.yMm - prevCmd.yMm).toBeGreaterThan(prev.heightMm * 0.5);
+  });
 });
