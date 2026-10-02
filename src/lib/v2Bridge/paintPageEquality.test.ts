@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "../pageLayout";
 import { composeV2Layout } from "./composeV2Document";
 import { buildLivePreviewDocument } from "./previewWorkerProtocol";
@@ -41,7 +42,12 @@ describe("samePaintPage", () => {
     const before = pagesFor(manuscript);
     const after = pagesFor(`あ${manuscript}`);
     expect(samePaintPage(before[0], after[0])).toBe(false);
-    expect(samePaintPage(before[1], after[1])).toBe(false);
+    // TSP-PHASE13-001: with ぶら下げ組 a line ending in 。/、 can absorb the
+    // shift, so a later page may legitimately reflow back to identical
+    // paint. What must hold is "never a false equal".
+    for (let i = 1; i < Math.min(before.length, after.length); i++) {
+      expect(samePaintPage(before[i], after[i])).toBe(isDeepStrictEqual(before[i], after[i]));
+    }
   });
 
   it("any paint field difference is detected (text, geometry, ruby, 傍点, missing field)", () => {

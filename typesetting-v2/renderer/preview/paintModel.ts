@@ -91,6 +91,8 @@ export interface PaintPlacedUnit {
   topPx: number;
   heightPx: number;
   heightIsApproximate: boolean;
+  /** TSP-PHASE13-001: a ぶら下げ 句読点 placed past the line end (Core `PlacedUnit.hanging`). */
+  hanging?: true;
   provisional: boolean;
   rubyAnnotation?: RubyAnnotationPaint; // RUBY units only
   imageResolution?: ImageResolution; // IMAGE units only
@@ -461,6 +463,7 @@ function buildPaintLine(
       heightPx,
       heightIsApproximate,
       provisional: PROVISIONAL_KINDS.has(kind),
+      ...(placed.hanging ? { hanging: true as const } : {}),
       ...(kind === "RUBY" && owner && owner.kind === "RUBY" ? { rubyAnnotation: rubyAnnotationFor(owner, placed, ctx) } : {}),
       ...(kind === "IMAGE" && owner && owner.kind === "IMAGE" ? { imageResolution: resolveImage(owner.refId) } : {}),
       ...(semanticRunKind ? { semanticRunKind } : {}),

@@ -87,13 +87,15 @@ describe("Prohibited boundary is skipped in favor of an earlier legal one (test 
   });
 
   it("retreats to an earlier legal boundary (oidashi) when extending through the prohibited character would overflow", () => {
-    // Same text, but a 3-cell extent: '、' at offset 3 doesn't fit at all
-    // (would need 4 cells), and breaking right before it (offset 3) is
-    // PROHIBITED_KINSOKU -- so the composer must retreat past 'う' as well,
-    // cutting at the nearest actually-legal boundary (offset 2, after 'い'),
-    // pushing both 'う' and '、' to the next line even though 'う' alone
-    // would otherwise have fit.
-    const unit = text("あいう、え", 0);
+    // A 3-cell extent: '」' at offset 3 doesn't fit at all (would need 4
+    // cells), and breaking right before it (offset 3) is PROHIBITED_KINSOKU
+    // -- so the composer must retreat past 'う' as well, cutting at the
+    // nearest actually-legal boundary (offset 2, after 'い'), pushing both
+    // 'う' and '」' to the next line even though 'う' alone would otherwise
+    // have fit. (TSP-PHASE13-001: '、' now hangs instead -- see the
+    // ぶら下げ組 group below -- so this uses a closing bracket, which never
+    // hangs on its own.)
+    const unit = text("あいう」え", 0);
     const result = composeLine([unit], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
     expect(result.hold).toBeUndefined();
     expect(result.line.placedUnits).toHaveLength(2);
@@ -224,5 +226,42 @@ describe("Line trace identifies the chosen boundary and RuleSetVersion (test gro
     expect(recorder.trace.ruleSetVersion).toBe(DEFAULT_RULE_SET_V2.id);
     const cutEvent = recorder.trace.events.find((e) => e.outcome === `LINE_CUT_AT:${result.consumedThroughOffset}`);
     expect(cutEvent).toBeDefined();
+  });
+});
+
+describe("ぶら下げ組 (TSP-PHASE13-001, LEGACY TSP-LOOP-029 parity)", () => {
+  it("a 、 that overflows a full line hangs past the line end instead of pushing う down", () => {
+    const result = composeLine([text("あいう、え", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
+    expect(result.hold).toBeUndefined();
+    expect(result.line.placedUnits).toHaveLength(4);
+    expect(result.consumedThroughOffset).toBe(4);
+    expect(result.line.placedUnits[3].hanging).toBe(true);
+    expect(result.line.placedUnits[3].yTick).toBe(CELL * 3);
+    expect(result.line.placedUnits.slice(0, 3).every((u) => u.hanging === undefined)).toBe(true);
+    expect(result.residualSpaceTick).toBe(0);
+  });
+
+  it("。 hangs too, and a single following closing bracket hangs with it", () => {
+    const result = composeLine([text("あいう。」え", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
+    expect(result.consumedThroughOffset).toBe(5);
+    expect(result.line.placedUnits.map((u) => u.hanging === true)).toEqual([false, false, false, true, true]);
+  });
+
+  it("does not hang two 句読点 or a bracket pair (keeps 追い出し)", () => {
+    const double = composeLine([text("あいう。。え", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
+    expect(double.consumedThroughOffset).toBe(2);
+    expect(double.line.placedUnits.some((u) => u.hanging)).toBe(false);
+    const brackets = composeLine([text("あいう。」』え", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 3, false);
+    expect(brackets.consumedThroughOffset).toBe(2);
+  });
+
+  it("is off when CompositionSettings.hangingPunctuation is false", () => {
+    const result = composeLine([text("あいう、え", 0)], DEFAULT_RULE_SET_V2, measurement, { ...settings, hangingPunctuation: false }, CELL * 3, false);
+    expect(result.consumedThroughOffset).toBe(2);
+  });
+
+  it("never hangs a 句読点 at a fresh line's first position", () => {
+    const result = composeLine([text("、あ", 0)], DEFAULT_RULE_SET_V2, measurement, settings, CELL * 1, false);
+    expect(result.line.placedUnits.some((u) => u.hanging)).toBe(false);
   });
 });

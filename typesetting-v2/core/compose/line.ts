@@ -38,6 +38,11 @@ export interface CompositionSettings {
   // Only ever affects ruby READING-extent measurement (below) — never body
   // advance, never Natural Pitch, never any non-ruby unit.
   rubyScale?: number;
+  // TSP-PHASE13-001 (ぶら下げ組): when not false, a 句読点 in
+  // `RuleSetVersion.hangingPunctuationScope` that overflows a full line
+  // hangs past the line end instead of pushing the previous character to
+  // the next line (LEGACY parity, TSP-LOOP-029 issue A / R3).
+  hangingPunctuation?: boolean;
 }
 
 export interface LineCompositionHold {
@@ -468,6 +473,35 @@ function indexBoundaryLegalities(opportunities: BreakOpportunity[]): Map<number,
   return legalities;
 }
 
+/**
+ * TSP-PHASE13-001 (ぶら下げ組). `atoms[i]` overflowed a full line. When it is
+ * a single 句読点 of `ruleSet.hangingPunctuationScope` (。．、，), it may hang
+ * past the line end, together with ONE directly following closing bracket
+ * (cl-02, so `。」` never leaves 」 at the next line's head). Returns the last
+ * hanging atom's index, or -1 when hanging does not apply: the run must end
+ * at a boundary that is not ILLEGAL (so `。。`, `、」」` etc. keep the
+ * ordinary 追い出し), exactly like LEGACY's bounded rule.
+ */
+function hangingRunEnd(
+  atoms: readonly CompositionAtom[],
+  i: number,
+  legalityByOffset: ReadonlyMap<number, BoundaryLegality>,
+  ruleSet: RuleSetVersion
+): number {
+  const classOf = (atom: CompositionAtom | undefined): string | undefined => {
+    if (!atom || atom.owner.kind !== "TEXT" || atom.literalText === undefined) return undefined;
+    const chars = Array.from(atom.literalText);
+    return chars.length === 1 ? ruleSet.characterClassFor(chars[0]).id : undefined;
+  };
+  const punctuationClass = classOf(atoms[i]);
+  if (punctuationClass === undefined || !ruleSet.hangingPunctuationScope.includes(punctuationClass as never)) return -1;
+  const legalAfter = (index: number) =>
+    index === atoms.length - 1 || (legalityByOffset.get(atoms[index].sourceSpan.end) ?? "LEGAL") !== "ILLEGAL";
+  if (legalAfter(i)) return i;
+  if (classOf(atoms[i + 1]) === "cl-02" && legalAfter(i + 1)) return i + 1;
+  return -1;
+}
+
 export interface PreparedLineComposition {
   readonly atoms: readonly CompositionAtom[];
   readonly legalityByOffset: ReadonlyMap<number, BoundaryLegality>;
@@ -573,9 +607,21 @@ export function composeLine(
   let forcedCut = false;
   let endedAtParagraphBreak = false;
 
+  let hangFromAtomIndex = -1; // first atom placed past the line end (ぶら下げ)
   for (let i = firstAtomIndex; i < atoms.length; i++) {
     const nextUsed = used + atoms[i].advanceTick;
     if (nextUsed > effectiveLineExtentTicks) {
+      const hangEnd = i > firstAtomIndex && settings.hangingPunctuation !== false
+        ? hangingRunEnd(atoms, i, legalityByOffset, ruleSet)
+        : -1;
+      if (hangEnd >= 0) {
+        hangFromAtomIndex = i;
+        cutAtAtomIndex = hangEnd;
+        sawAnyLegalCut = true;
+        const legality = legalityByOffset.get(atoms[hangEnd].sourceSpan.end) ?? "LEGAL";
+        if (legality === "FORCED_PAGE") forcedCut = true;
+        if (legality === "FORCED_LINE") endedAtParagraphBreak = true;
+      }
       break;
     }
     used = nextUsed;
@@ -633,6 +679,7 @@ export function composeLine(
       sourceSpan: atom.sourceSpan,
       xTick: 0,
       yTick,
+      ...(hangFromAtomIndex >= 0 && i >= hangFromAtomIndex ? { hanging: true } : {}),
     };
 
     // Ruby Placement Micro-Loop: annotation geometry is computed here, once,
@@ -678,7 +725,8 @@ export function composeLine(
   }
 
   const usedTick = yTick;
-  const residualSpaceTick = effectiveLineExtentTicks - usedTick;
+  // A hanging 句読点 sits past the line end; the line itself is full.
+  const residualSpaceTick = Math.max(0, effectiveLineExtentTicks - usedTick);
   const consumedThroughOffset = atoms[cutAtAtomIndex].sourceSpan.end;
 
   trace?.record({
