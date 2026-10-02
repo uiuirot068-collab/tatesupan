@@ -63,6 +63,7 @@ import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } 
 import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
 import { buildColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
+import { layoutImageGroup, type GroupedImagePosition, type ImageRectMm } from "../../../src/lib/imageGeometry";
 import {
   PDF_BLEED_MM,
   resolvePublicationPdfPageOutput,
@@ -490,7 +491,11 @@ function unitCommands(
     contentHeightMm: number;
     paperWidthMm: number;
     paperHeightMm: number;
-  }
+  },
+  // TSP-PHASE13-001: the shared group placement (`layoutImageGroup`) of a
+  // 天/中央/地 image, computed per page by `buildBodyPaintPage`. When given it
+  // replaces the single-image centring below.
+  imageRectMm?: ImageRectMm
 ): PaintCommand[] {
   const y = yOffsetMm + unit.topMm;
   const xCenter = x + lineWidthMm / 2;
@@ -650,14 +655,14 @@ function unitCommands(
         : [{ op: "rect", xMm: imageX, yMm: y, widthMm, heightMm }];
     }
     const scale = Math.min(1, boxWidthMm / naturalWidthMm, boxHeightMm / naturalHeightMm);
-    const widthMm = naturalWidthMm * scale;
-    const heightMm = naturalHeightMm * scale;
-    const imageX = boxLeftMm + (boxWidthMm - widthMm) / 2;
-    const imageY = placement === "TOP"
+    const widthMm = imageRectMm?.widthMm ?? naturalWidthMm * scale;
+    const heightMm = imageRectMm?.heightMm ?? naturalHeightMm * scale;
+    const imageX = imageRectMm?.xMm ?? boxLeftMm + (boxWidthMm - widthMm) / 2;
+    const imageY = imageRectMm?.yMm ?? (placement === "TOP"
       ? boxTopMm
       : placement === "BOTTOM"
         ? boxTopMm + boxHeightMm - heightMm
-        : boxTopMm + (boxHeightMm - heightMm) / 2;
+        : boxTopMm + (boxHeightMm - heightMm) / 2);
     const resolution = unit.imageResolution;
     if (resolution && resolution.kind === "RESOLVED") {
       return [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}) }];
@@ -712,6 +717,43 @@ function emphasisDotCommands(unit: PaintPlacedUnit, x: number, lineWidthMm: numb
 // paint via a real vector glyph outline instead of jsPDF's Unicode
 // `text()` path. Omitting it preserves the exact prior (pre-round-7)
 // "text"-only behavior — every existing call site/test is unaffected.
+/**
+ * TSP-PHASE13-001: places every 天/中央/地 image of one page with the shared
+ * `layoutImageGroup` rule (the same rule the V2 Preview overlay uses), so
+ * several images at one position flow in a row instead of overlapping.
+ * Sizes are the existing safety-clamped intrinsic sizes.
+ */
+function groupedImageRects(
+  page: PaintPage,
+  box: { contentLeftMm: number; contentTopMm: number; contentWidthMm: number; contentHeightMm: number },
+): Map<PaintPlacedUnit, ImageRectMm> {
+  const groups = new Map<GroupedImagePosition, PaintPlacedUnit[]>();
+  for (const column of page.columns) {
+    for (const line of column.lines) {
+      for (const unit of line.units) {
+        if (unit.kind !== "IMAGE") continue;
+        const placement = unit.imagePlacement ?? "CENTER";
+        if (placement === "FULL") continue;
+        const list = groups.get(placement) ?? [];
+        list.push(unit);
+        groups.set(placement, list);
+      }
+    }
+  }
+  const rects = new Map<PaintPlacedUnit, ImageRectMm>();
+  const contentBox = { leftMm: box.contentLeftMm, topMm: box.contentTopMm, widthMm: box.contentWidthMm, heightMm: box.contentHeightMm };
+  for (const [placement, units] of groups) {
+    const sizes = units.map((unit) => {
+      const naturalWidthMm = unit.imageIntrinsicWidthMm ?? box.contentWidthMm;
+      const naturalHeightMm = unit.heightMm;
+      const scale = Math.min(1, box.contentWidthMm / naturalWidthMm, box.contentHeightMm / naturalHeightMm);
+      return { widthMm: naturalWidthMm * scale, heightMm: naturalHeightMm * scale };
+    });
+    layoutImageGroup(sizes, contentBox, placement).forEach((rect, index) => rects.set(units[index], rect));
+  }
+  return rects;
+}
+
 function buildBodyPaintPage(
   page: PaintPage,
   hasFont: boolean,
@@ -760,6 +802,7 @@ function buildBodyPaintPage(
       paperWidthMm: pageGeometry.paperWidthMm,
       paperHeightMm: pageGeometry.paperHeightMm,
     } : undefined;
+    const imageRects = imageBoxMm ? groupedImageRects(page, imageBoxMm) : undefined;
     for (const column of page.columns) {
       for (const line of column.lines) {
         for (const unit of line.units) {
@@ -772,7 +815,7 @@ function buildBodyPaintPage(
           if (!hasFont) {
             commands.push({ op: "rect", xMm: x, yMm: yOffsetMm + unit.topMm, widthMm: line.widthMm, heightMm: unit.heightMm });
           } else {
-            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm));
+            commands.push(...unitCommands(unit, x, line.widthMm, yOffsetMm, baselineRatio, doc.bodyEmMm, outlineContext, gposContext, yakumonoContext, imageBoxMm, imageRects?.get(unit)));
             commands.push(...emphasisDotCommands(unit, x, line.widthMm, yOffsetMm, doc.bodyEmMm));
           }
         }
