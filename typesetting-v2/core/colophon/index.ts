@@ -16,7 +16,7 @@ import type { CanonicalPage, ColophonBlock, ColophonPlacement } from "../layout/
 export const DEFAULT_COLOPHON_PLACEMENT: ColophonPlacement = {
   horizontal: "center",
   vertical: "center",
-  respectGutter: true,
+  respectGutter: false,
   respectVerticalMargins: true,
 };
 

@@ -156,8 +156,16 @@ export type PaintCommand =
       furnitureRole?: "folio" | "running-head";
       /** Optional CSS family requested by the source surface (used by browser JPG). */
       fontFamily?: string;
+      /**
+       * TSP-PHASE13-001: ink tone, 0 = black (default) … 1 = white. Output is
+       * grayscale, so the Preview's text opacity on white paper is printed as
+       * the equivalent gray (`colophonInkGray`).
+       */
+      inkGray?: number;
+      /** TSP-PHASE13-001: outline stroke (mm) added to the fill for weight > 400. */
+      strokeWidthMm?: number;
     }
-  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number }
+  | { op: "rect"; xMm: number; yMm: number; widthMm: number; heightMm: number; /** see text `inkGray` */ inkGray?: number }
   // Human Visual QA HOLD round 7 (OpenType vertical GSUB outline paint,
   // dependency-gate approval — opentype.js): a real vector glyph outline,
   // already fully translated/scaled into mm page-coordinate space
@@ -1072,6 +1080,18 @@ export interface PaintPlanPageSource {
 // (`page.header`/`page.folio` absent or empty -> no exclusion band at
 // all, matching the SAME condition already gating whether that
 // furniture paints below).
+/**
+ * TSP-PHASE13-001: the Preview draws colophon text/rules/frames with CSS
+ * opacity/alpha over white paper. Output is grayscale, so the same look is
+ * printed as the equivalent gray ink (alpha 1 → black, omitted).
+ */
+function colophonInk(alpha: number): { inkGray?: number } {
+  return alpha >= 1 ? {} : { inkGray: 1 - Math.max(0, alpha) };
+}
+
+/** Fill+stroke width (em) that stands in for weight 600 (the regular face is the only embedded one). */
+const COLOPHON_WEIGHT_STROKE_EM = 0.03;
+
 function buildColophonPaintPage(
   page: PaintPage,
   hasFont: boolean,
@@ -1087,7 +1107,7 @@ function buildColophonPaintPage(
   colophonFontSizePt?: number,
   titleFallback: string = "",
   colophonFontFamily?: string,
-  rawRows?: Array<{ label: string; value: string }>,
+  rawRows?: Array<{ id?: string; label: string; value: string }>,
   rawFreeText?: string
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
@@ -1149,12 +1169,16 @@ function buildColophonPaintPage(
   if (hasFont && firstColumn) {
     const placementTopMm = respectVerticalMargins ? marginTopMm : Math.min(marginTopMm, marginBottomMm);
     const placementBottomMm = respectVerticalMargins ? marginBottomMm : Math.min(marginTopMm, marginBottomMm);
-    const symmetricHorizontalMm =
-      pageGeometry?.marginGutterMm !== undefined && pageGeometry?.marginOuterMm !== undefined
-        ? Math.min(pageGeometry.marginGutterMm, pageGeometry.marginOuterMm)
-        : Math.min(marginLeftMm, marginRightMm);
-    const contentLeftMm = symmetricHorizontalMm;
-    const contentRightMm = paperWidthMm - symmetricHorizontalMm;
+    // TSP-PHASE13-001: the same placement area as the Preview
+    // (`ColophonPageSurface`): respectGutter ON keeps ノド/小口 per physical
+    // parity (odd: 小口 left / ノド right; even: mirrored), OFF uses the
+    // smaller of the two on both sides.
+    const gutterMm = pageGeometry?.marginGutterMm ?? marginRightMm;
+    const outerMm = pageGeometry?.marginOuterMm ?? marginLeftMm;
+    const symmetricHorizontalMm = Math.min(gutterMm, outerMm);
+    const respectGutter = placement?.respectGutter ?? false;
+    const contentLeftMm = respectGutter ? (isOddPage ? outerMm : gutterMm) : symmetricHorizontalMm;
+    const contentRightMm = paperWidthMm - (respectGutter ? (isOddPage ? gutterMm : outerMm) : symmetricHorizontalMm);
 
     const halfFurnitureBandMm = bodyEmMm / 2;
     let contentAreaTopMm = placementTopMm;
@@ -1183,7 +1207,7 @@ function buildColophonPaintPage(
     contentAreaBottomMm = Math.max(contentAreaBottomMm, contentAreaTopMm);
 
     const rows: { id: string; label: string; value: string }[] =
-      rawRows?.map((row, index) => ({ id: `row-${index}`, ...row })) ?? [];
+      rawRows?.map((row, index) => ({ ...row, id: row.id ?? `row-${index}` })) ?? [];
     const fallbackFreeLines: string[] = [];
     if (!rawRows) {
       let syntheticRow = 0;
@@ -1227,6 +1251,7 @@ function buildColophonPaintPage(
           yMm: blockTopMm + item.yEm * colophonEmMm,
           widthMm: item.widthEm * colophonEmMm,
           heightMm: item.heightEm * colophonEmMm,
+          ...colophonInk(item.alpha),
         });
         continue;
       }
@@ -1237,6 +1262,7 @@ function buildColophonPaintPage(
           yMm: blockTopMm + item.yEm * colophonEmMm,
           widthMm: item.widthEm * colophonEmMm,
           heightMm: 0.01,
+          ...colophonInk(item.alpha),
         });
         continue;
       }
@@ -1250,6 +1276,10 @@ function buildColophonPaintPage(
         angle: 0,
         baseline: "middle",
         ...(colophonFontFamily ? { fontFamily: colophonFontFamily } : {}),
+        ...colophonInk(item.opacity ?? 1),
+        ...(item.weight !== undefined && item.weight > 400
+          ? { strokeWidthMm: colophonEmMm * item.fontScale * COLOPHON_WEIGHT_STROKE_EM * ((item.weight - 400) / 200) }
+          : {}),
       });
     }
   }
@@ -1355,6 +1385,11 @@ function paintBleedCoverImage(
   pdf.restoreGraphicsState();
 }
 
+/** 0 (black) … 1 (white) ink tone to a jsPDF gray byte. */
+function grayByte(inkGray: number): number {
+  return Math.round(Math.min(1, Math.max(0, inkGray)) * 255);
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
@@ -1367,7 +1402,9 @@ function paintPageCommands(
   pdf.setFillColor(0, 0, 0);
   for (const cmd of page.commands) {
     if (cmd.op === "rect") {
+      if (cmd.inkGray !== undefined) pdf.setDrawColor(grayByte(cmd.inkGray));
       pdf.rect(cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      if (cmd.inkGray !== undefined) pdf.setDrawColor(0, 0, 0);
       continue;
     }
     if (cmd.op === "circle") {
@@ -1406,11 +1443,22 @@ function paintPageCommands(
         pdf.setFontSize(cmd.fontSizePt * (cmd.maxWidthMm / widthMm));
       }
     }
+    if (cmd.inkGray !== undefined) {
+      pdf.setTextColor(grayByte(cmd.inkGray));
+      pdf.setDrawColor(grayByte(cmd.inkGray));
+    }
+    if (cmd.strokeWidthMm !== undefined) pdf.setLineWidth(cmd.strokeWidthMm);
     pdf.text(cmd.text, cmd.xMm + offsetX, cmd.yMm + offsetY, {
       align: cmd.align,
       ...(cmd.angle !== undefined ? { angle: cmd.angle } : {}),
       ...(cmd.baseline ? { baseline: cmd.baseline } : {}),
+      ...(cmd.strokeWidthMm !== undefined ? { renderingMode: "fillThenStroke" as const } : {}),
     });
+    if (cmd.strokeWidthMm !== undefined) pdf.setLineWidth(0.05);
+    if (cmd.inkGray !== undefined) {
+      pdf.setTextColor(0, 0, 0);
+      pdf.setDrawColor(0, 0, 0);
+    }
   }
 
   if (output.cropMarks.length > 0) {

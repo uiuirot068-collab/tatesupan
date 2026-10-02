@@ -278,7 +278,7 @@ export interface PublicationDocument {
   /** CSS family selected for the colophon. Empty string means follow body. */
   colophonFontFamily?: string;
   /** Raw, pre-composition colophon content for Preview/Publication wrap parity. */
-  colophonRows?: Array<{ label: string; value: string }>;
+  colophonRows?: Array<{ id?: string; label: string; value: string }>;
   colophonFreeText?: string;
   colophonTitleFallback?: string;
 }
@@ -533,7 +533,7 @@ export function buildPublicationDocument(
     templateId?: "standard" | "center" | "minimal" | "classic";
     fontSizePt?: number | null;
     fontFamily?: string;
-    rows?: Array<{ label: string; value: string }>;
+    rows?: Array<{ id?: string; label: string; value: string }>;
     freeText?: string;
     titleFallback?: string;
   }
