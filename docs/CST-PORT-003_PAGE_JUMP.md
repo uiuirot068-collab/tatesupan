@@ -16,9 +16,8 @@
 目次・奥付を含む物理ページ番号(Phase11〜13 の Presentation Sequence、ノンブル・「全 N ページ」と同じ数え方)。
 
 ## 1ページ表示・見開き表示
-TateSpun のプレビューは現在、見開き表示だけ(1ページ目は単独)。移動の計算(`src/lib/pageJump.ts`)は
-`"single"` / `"spread"` の両方に対応しており、テストも両方を確認している。1ページ表示の切り替えを足すときは
-`previewNavigationGroups(n, "single")` を渡せばそのまま使える。
+CST-PORT-005 で「1P / 見開き」の切り替えが付いた(`docs/CST-PORT-005_PAGE_LAYOUT.md`)。1P では「前」「次」が
+1ページずつ動く。計算(`src/lib/pageJump.ts`)は `previewNavigationGroups(n, layout)` のまま両方に対応。
 
 ## ファイル
 - `src/lib/pageJump.ts` 計算(入力の解釈・丸め、ページ→見開き、前/次、スクロール位置→ページ)

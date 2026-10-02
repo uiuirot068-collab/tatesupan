@@ -18,6 +18,14 @@ import {
 export type PreviewPageLayout = "single" | "spread";
 
 /**
+ * CST-PORT-005: the stored 1P / 見開き choice. Anything but "single"
+ * (missing, malformed, stale) is 見開き, the preview's original layout.
+ */
+export function parsePreviewPageLayout(stored: string | null): PreviewPageLayout {
+  return stored === "single" ? "single" : "spread";
+}
+
+/**
  * Parse what the user typed into the page field.
  * - 全角数字 / 全角マイナス are accepted (NFKC).
  * - ≤ 0 → 1, > total → total.

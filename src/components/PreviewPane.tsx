@@ -33,8 +33,14 @@ import {
   type TategakiToken,
 } from "@/lib/tategaki";
 import PageNumberInput from "./PageNumberInput";
-import { groupIndexForPhysicalPage, pageAtViewport, stepPreviewPage } from "@/lib/pageJump";
-import { computeSpreadGroups, moveSelected, pruneSelectedPages, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
+import {
+  groupIndexForPhysicalPage,
+  pageAtViewport,
+  previewNavigationGroups,
+  stepPreviewPage,
+} from "@/lib/pageJump";
+import { usePreviewPageLayout } from "@/hooks/usePreviewPageLayout";
+import { moveSelected, pruneSelectedPages, rangeIndices, reorderByDrag } from "@/lib/pageOrder";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { fitImageToMm, loadImageNaturalSizePx, readFileAsDataUrl } from "@/lib/image";
@@ -895,10 +901,15 @@ function PreviewPane({
 
   // 面付け: page 1 stands alone (奇数ページ始まり), then pages pair up as
   // (2,3), (4,5), ... into 見開き spreads — Presentation Sequence 全体（奥付含む）
-  // を単位にする。
+  // を単位にする。CST-PORT-005: in 1P (1ページ表示) every page is its own
+  // row instead; the rest of the preview (virtualization, zoom anchor, pager,
+  // cursor-follow) works on these rows either way. Display only — pagination
+  // and export never read this.
+  const [pageLayout, setPageLayout] = usePreviewPageLayout();
+  const isSinglePageLayout = pageLayout === "single";
   const spreadGroups = useMemo(
-    () => computeSpreadGroups(presentationSequence.length),
-    [presentationSequence.length]
+    () => previewNavigationGroups(presentationSequence.length, pageLayout),
+    [presentationSequence.length, pageLayout]
   );
   const [visibleSpreadIndices, setVisibleSpreadIndices] = useState<Set<number>>(() =>
     initialPreviewSpreadIndices(spreadGroups.length)
@@ -942,11 +953,14 @@ function PreviewPane({
   // container's existing `overflow-x-auto`, rather than shrinking every
   // page to make the spread fit.
   const spreadWidthPx = layout.paper.widthMm * 2 * PX_PER_MM + SPREAD_GAP_PX;
+  // CST-PORT-005: a 1P row is one page wide (also the size of its
+  // virtualization placeholder, so the phone width-fit sees a single page).
+  const singlePageWidthPx = layout.paper.widthMm * PX_PER_MM;
   // True canonical single-page height, used only to reserve visual breathing
   // room below a still-single-page manuscript (see the spacer below) — never
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
   const canonicalPageHeightPx = layout.paper.heightMm * PX_PER_MM;
-  const spreadGeometryKey = `${spreadWidthPx}:${canonicalPageHeightPx}`;
+  const spreadGeometryKey = `${pageLayout}:${spreadWidthPx}:${canonicalPageHeightPx}`;
   const [defaultSpreadMeasurement, setDefaultSpreadMeasurement] = useState<{
     geometryKey: string;
     height: number;
@@ -2308,9 +2322,10 @@ function PreviewPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePageIndex]);
 
-  // CST-PORT-003: preview pager (ページ番号で移動). The preview is always
-  // 見開き here, so navigation groups are `spreadGroups`; page numbers are the
-  // physical ones (目次・奥付を含む), matching ノンブル and 「全 N ページ」.
+  // CST-PORT-003: preview pager (ページ番号で移動). Navigation groups are the
+  // preview rows (`spreadGroups`: 見開き, or one page each in 1P since
+  // CST-PORT-005); page numbers are the physical ones (目次・奥付を含む),
+  // matching ノンブル and 「全 N ページ」.
   const previewPageTotal = presentationSequence.length;
   const [pagerPage, setPagerPage] = useState(1);
   const currentPagerPage = Math.min(Math.max(1, pagerPage), Math.max(1, previewPageTotal));
@@ -2354,7 +2369,7 @@ function PreviewPane({
     return true;
   };
 
-  const jumpToPreviewPage = (page: number) => {
+  const jumpToPreviewPage = (page: number, flash = true) => {
     if (previewPageTotal < 1) return;
     const target = Math.min(previewPageTotal, Math.max(1, page));
     setPagerPage(target);
@@ -2372,11 +2387,28 @@ function PreviewPane({
       });
     }
     const settle = (attempt: number) => {
-      if (scrollToPhysicalPage(target, true) || attempt >= 10) return;
+      if (scrollToPhysicalPage(target, flash) || attempt >= 10) return;
       pageFlashTimersRef.current.push(window.setTimeout(() => settle(attempt + 1), 60));
     };
     pageFlashTimersRef.current.push(window.setTimeout(() => settle(0), 60));
   };
+
+  // CST-PORT-005: switching 1P ⇄ 見開き keeps the page the pager shows on
+  // screen (no flash — the user did not ask to move).
+  const pendingLayoutPageRef = useRef<number | null>(null);
+  const changePageLayout = (next: typeof pageLayout) => {
+    if (next === pageLayout) return;
+    pendingLayoutPageRef.current = currentPagerPage;
+    setPageLayout(next);
+  };
+  useEffect(() => {
+    const page = pendingLayoutPageRef.current;
+    if (page == null) return;
+    pendingLayoutPageRef.current = null;
+    jumpToPreviewPage(page, false);
+    // Runs once per layout switch; jumpToPreviewPage reads this render's rows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageLayout]);
 
   const stepPager = (direction: -1 | 1) =>
     jumpToPreviewPage(stepPreviewPage(currentPagerPage, direction, spreadGroups, presentation.physicalNumbers));
@@ -2950,6 +2982,31 @@ function PreviewPane({
               100%
             </button>
           </span>
+          <span
+            role="group"
+            aria-label="ページの並べ方"
+            data-preview-page-layout={pageLayout}
+            className="flex flex-shrink-0 items-center"
+          >
+            {([
+              ["single", "1P", "1ページずつ表示"],
+              ["spread", "見開き", "見開きで表示"],
+            ] as const).map(([value, label, hint], index) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => changePageLayout(value)}
+                aria-pressed={pageLayout === value}
+                title={hint}
+                data-preview-page-layout-option={value}
+                className={`h-9 flex-shrink-0 whitespace-nowrap border border-ink/20 px-2 text-xs md:h-7 ${
+                  index === 0 ? "rounded-l" : "-ml-px rounded-r"
+                } ${pageLayout === value ? "bg-ink/80 text-[#faf8f2] dark:text-[#11151d]" : "hover:bg-ink/5"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
           {previewPageTotal > 0 && (
             <PageNumberInput
               currentPage={currentPagerPage}
@@ -3149,7 +3206,7 @@ function PreviewPane({
               mounted={mountSpread}
               registerRef={stableRegisterSpreadElement(spreadIndex)}
               estimatedHeight={defaultSpreadHeight}
-              placeholderWidth={spreadWidthPx}
+              placeholderWidth={isSinglePageLayout ? singlePageWidthPx : spreadWidthPx}
               onMeasuredHeight={spreadIndex === 0 ? establishDefaultSpreadHeight : undefined}
               // `items-stretch` (the flexbox default, made explicit here)
               // makes both per-page wrapper columns in a spread exactly as
@@ -3186,8 +3243,12 @@ function PreviewPane({
                 // single-page-basis scale while showing "page 1 beside an
                 // empty slot" instead of page 1 centered alone with no
                 // spread context.
-                width: isSingle ? spreadWidthPx : undefined,
-                justifyContent: isSingle
+                // CST-PORT-005: in 1P every row is one page, centred, with no
+                // reserved partner slot.
+                width: isSingle && !isSinglePageLayout ? spreadWidthPx : undefined,
+                justifyContent: isSinglePageLayout
+                  ? "center"
+                  : isSingle
                   ? singleIsOdd
                     ? "flex-start"
                     : "flex-end"
