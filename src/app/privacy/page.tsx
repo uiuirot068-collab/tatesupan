@@ -7,14 +7,14 @@ import {
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー | TateSpun",
-  description: "TateSpun（運営者：caload）のプライバシーポリシー。",
+  description: "TateSpun（運営者：caroad）のプライバシーポリシー。",
 };
 
 export default function PrivacyPolicyPage() {
   return (
     <LegalArticle title="プライバシーポリシー">
       <p>
-        caload（以下「運営者」といいます。）は、TateSpun（以下「本サービス」といいます。）における利用者情報の取扱いについて、以下のとおりプライバシーポリシーを定めます。
+        caroad（以下「運営者」といいます。）は、TateSpun（以下「本サービス」といいます。）における利用者情報の取扱いについて、以下のとおりプライバシーポリシーを定めます。
       </p>
 
       <h2>1. 取得・利用する情報</h2>

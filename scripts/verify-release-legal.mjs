@@ -91,7 +91,7 @@ check(
 
 /* ---------------- privacy content contract ---------------- */
 
-check("6a. privacy: operator caload + 制定日 2026年9月1日", has(privacy, "caload") && has(privacy, "2026年9月1日"));
+check("6a. privacy: operator caroad + 制定日 2026年9月1日", has(privacy, "caroad") && has(privacy, "2026年9月1日"));
 check(
   "6b. privacy: external services named (Supabase / Discord / Google Apps Script / Google Spreadsheet / Google Forms)",
   has(privacy, "Supabase") && has(privacy, "Discord") && has(privacy, "Google Apps Script") && has(privacy, "Google Spreadsheet") && has(privacy, "Google Forms")
@@ -146,7 +146,7 @@ check("6l. privacy: inquiry form link present", (privacy ?? "").includes("INQUIR
 
 /* ---------------- terms content contract ---------------- */
 
-check("7a. terms: β版 / operator caload / 制定日 2026年9月1日", has(terms, "β版") && has(terms, "caload") && has(terms, "2026年9月1日"));
+check("7a. terms: β版 / operator caroad / 制定日 2026年9月1日", has(terms, "β版") && has(terms, "caroad") && has(terms, "2026年9月1日"));
 check(
   "7b. terms: user (not operator) retains rights to their content",
   has(terms, "コンテンツの権利は、利用者または正当な権利者に帰属します") &&

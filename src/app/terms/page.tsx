@@ -7,14 +7,14 @@ import {
 
 export const metadata: Metadata = {
   title: "利用規約 | TateSpun",
-  description: "TateSpun（運営者：caload）のβ版利用規約。",
+  description: "TateSpun（運営者：caroad）のβ版利用規約。",
 };
 
 export default function TermsPage() {
   return (
     <LegalArticle title="利用規約">
       <p>
-        この利用規約は、caloadが提供するTateSpunの利用条件を定めるものです。
+        この利用規約は、caroadが提供するTateSpunの利用条件を定めるものです。
       </p>
       <p>本サービスを利用した場合、本規約に同意したものとして取り扱います。</p>
 

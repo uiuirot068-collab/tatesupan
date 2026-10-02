@@ -59,7 +59,7 @@ export function LegalArticle({
 export function LegalFooterBlock({ date }: { date: string }) {
   return (
     <p className="mt-10 text-sm text-ink/60 dark:text-[#939DAF]">
-      運営者：caload
+      運営者：caroad
       <br />
       制定日：{date}
     </p>
