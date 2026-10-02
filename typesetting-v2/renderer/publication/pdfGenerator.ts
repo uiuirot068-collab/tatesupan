@@ -460,9 +460,14 @@ function horizontalFurnitureCommand(
   yCenterMm: number,
   fontSizePt: number,
   align: "left" | "center" | "right" = "center",
-  furnitureRole?: "folio" | "running-head"
+  furnitureRole?: "folio" | "running-head",
+  fontFamily?: string
 ): PaintCommand {
-  return { op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle", ...(furnitureRole ? { furnitureRole } : {}) };
+  return {
+    op: "text", text, xMm, yMm: yCenterMm, fontSizePt, align, angle: 0, baseline: "middle",
+    ...(furnitureRole ? { furnitureRole } : {}),
+    ...(fontFamily ? { fontFamily } : {}),
+  };
 }
 
 // Converts a physical mm length to the equivalent jsPDF font-size point
@@ -870,7 +875,7 @@ function buildBodyPaintPage(
       // Placement is shared with the Editor Preview (renderer/furnitureGeometry.ts).
       const folioSizePt = doc.folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(doc.bodyEmMm));
       const at = folioPlacement(page.folio.position, furnitureFrame, isOddPage, folioSizePt, doc.bodyEmMm);
-      commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
+      commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio", doc.folioFontFamily));
     }
     if (page.header && page.header.text.length > 0 && hasFont) {
       // Human Visual QA HOLD round 25: `band` is the only vertical axis
@@ -961,7 +966,8 @@ function paintPlanPageSource(
       doc.colophonTitleFallback ?? doc.label,
       doc.colophonFontFamily,
       doc.colophonRows,
-      doc.colophonFreeText
+      doc.colophonFreeText,
+      doc.folioFontFamily
     );
 
   if (doc.pageSequence) {
@@ -1108,7 +1114,8 @@ function buildColophonPaintPage(
   titleFallback: string = "",
   colophonFontFamily?: string,
   rawRows?: Array<{ id?: string; label: string; value: string }>,
-  rawFreeText?: string
+  rawFreeText?: string,
+  folioFontFamily?: string
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1286,7 +1293,7 @@ function buildColophonPaintPage(
   if (page.folio && page.folio.text.length > 0 && hasFont) {
     const folioSizePt = folioFontSizePt ?? publicationFurnitureFontSizePt(mmToPt(bodyEmMm));
     const at = folioPlacement(page.folio.position, colophonFurnitureFrame, isOddPage, folioSizePt, bodyEmMm);
-    commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio"));
+    commands.push(horizontalFurnitureCommand(page.folio.text, at.xMm, at.yCenterMm, folioSizePt, at.align, "folio", folioFontFamily));
   }
   // Human Visual QA HOLD round 28: colophon pages carry Core's `header`
   // (`assemble.ts` physical-sequence continuation) and paint it. With Editor
@@ -1302,6 +1309,35 @@ function buildColophonPaintPage(
 export interface PublicationPdfRenderOptions {
   /** Defaults to the historical V2 behavior: canonical finished/trim size. */
   mode?: PublicationPdfMode;
+  /**
+   * TSP-PHASE13-001: further embeddable fonts, keyed by the CSS family a text
+   * command requests (`PaintCommand.fontFamily` — the ノンブル / 奥付 font).
+   * A command whose family is not listed paints with the base font.
+   */
+  extraFonts?: ReadonlyArray<{ cssFamily: string; font: PublicationFontResource }>;
+}
+
+/** Registers the base and extra fonts; returns the jsPDF font name per CSS family. */
+function registerPdfFonts(
+  pdf: jsPDF,
+  fontResource: PublicationFontResource | undefined,
+  extraFonts: PublicationPdfRenderOptions["extraFonts"]
+): Map<string, string> {
+  const registered = new Set<string>();
+  const register = (font: PublicationFontResource) => {
+    if (registered.has(font.fontName)) return;
+    registered.add(font.fontName);
+    pdf.addFileToVFS(font.fileName, font.base64);
+    pdf.addFont(font.fileName, font.fontName, "normal");
+  };
+  if (fontResource) register(fontResource);
+  const byFamily = new Map<string, string>();
+  if (!fontResource) return byFamily;
+  for (const extra of extraFonts ?? []) {
+    register(extra.font);
+    byFamily.set(extra.cssFamily.trim(), extra.font.fontName);
+  }
+  return byFamily;
 }
 
 type JsPdfPageBox = {
@@ -1394,6 +1430,7 @@ function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
   output: PublicationPdfPageOutput,
+  fonts?: { base: string; byFamily: ReadonlyMap<string, string> },
 ): void {
   const offsetX = output.contentOffsetXMm;
   const offsetY = output.contentOffsetYMm;
@@ -1436,6 +1473,8 @@ function paintPageCommands(
       pdf.fill();
       continue;
     }
+    const commandFont = cmd.fontFamily ? fonts?.byFamily.get(cmd.fontFamily.trim()) : undefined;
+    if (commandFont) pdf.setFont(commandFont);
     pdf.setFontSize(cmd.fontSizePt);
     if (cmd.maxWidthMm !== undefined) {
       const widthMm = pdf.getTextWidth(cmd.text);
@@ -1459,6 +1498,7 @@ function paintPageCommands(
       pdf.setTextColor(0, 0, 0);
       pdf.setDrawColor(0, 0, 0);
     }
+    if (commandFont && fonts) pdf.setFont(fonts.base);
   }
 
   if (output.cropMarks.length > 0) {
@@ -1481,10 +1521,7 @@ export function renderPaintPlanToPdf(
   options: PublicationPdfRenderOptions = {},
 ): PublicationPdfResult {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
-  if (fontResource) {
-    pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
-    pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
-  }
+  const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
   // jsPDF always creates one initial page at construction time (sized to
   // `format` above, a throwaway placeholder) — every real page below is
   // added explicitly with its own correct physical size, then the
@@ -1496,7 +1533,7 @@ export function renderPaintPlanToPdf(
     pdf.setPage(i + 2); // page 1 is the throwaway placeholder
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output);
+    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
   });
   pdf.deletePage(1);
 
@@ -1534,10 +1571,7 @@ export async function renderPaintPagesToPdfAsync(
   options: AsyncPdfRenderOptions = {}
 ): Promise<PublicationPdfResult> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
-  if (fontResource) {
-    pdf.addFileToVFS(fontResource.fileName, fontResource.base64);
-    pdf.addFont(fontResource.fileName, fontResource.fontName, "normal");
-  }
+  const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
   for (let index = 0; index < pageCount; index += 1) {
     await options.beforePage?.(index + 1, pageCount);
     const page = await pageAt(index);
@@ -1546,7 +1580,7 @@ export async function renderPaintPagesToPdfAsync(
     pdf.setPage(index + 2);
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output);
+    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
     options.onProgress?.(index + 1, pageCount);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }

@@ -217,6 +217,9 @@ export interface PublicationRenderContext {
   /** Explicit Editor-selected publication furniture sizes. */
   folioFontSizePt?: number;
   runningHeadFontSizePt?: number;
+  /** TSP-PHASE13-001: Editor CSS font families (body, and the ノンブル when it differs). */
+  bodyFontFamily?: string;
+  folioFontFamily?: string;
 }
 
 export interface PublicationDocument {
@@ -241,6 +244,13 @@ export interface PublicationDocument {
   bodyEmMm: number;
   folioFontSizePt?: number;
   runningHeadFontSizePt?: number;
+  /**
+   * TSP-PHASE13-001: the Editor's body CSS font family (PDF embeds the
+   * matching font) and the ノンブル family when the Editor chose a
+   * different one (folio commands carry it as `fontFamily`).
+   */
+  bodyFontFamily?: string;
+  folioFontFamily?: string;
   pages: PaintPage[];
   // Human Visual QA HOLD round 26 (P3-O08 final-page completion, Step
   // 2, structural colophon): Core's own `CanonicalDocument.colophon`
@@ -573,6 +583,8 @@ export function buildPublicationDocument(
     bodyEmMm: tickToMm(ctx.bodyFontSizeTick ?? ctx.linePitchTicks),
     ...(ctx.folioFontSizePt !== undefined ? { folioFontSizePt: ctx.folioFontSizePt } : {}),
     ...(ctx.runningHeadFontSizePt !== undefined ? { runningHeadFontSizePt: ctx.runningHeadFontSizePt } : {}),
+    ...(ctx.bodyFontFamily ? { bodyFontFamily: ctx.bodyFontFamily } : {}),
+    ...(ctx.folioFontFamily ? { folioFontFamily: ctx.folioFontFamily } : {}),
     pages,
     ...(colophonPages ? { colophonPages } : {}),
     ...(document.pageSequence ? { pageSequence: document.pageSequence } : {}),

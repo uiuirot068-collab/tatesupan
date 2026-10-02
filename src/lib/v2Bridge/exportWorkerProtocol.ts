@@ -72,13 +72,15 @@ export type ExportWorkerReply =
   | { type: "error"; jobId: number; message: string };
 
 export interface ExportWorkerDeps {
-  loadFont: () => Promise<PublicationFontResource>;
+  /** The embeddable font for an Editor CSS family (TSP-PHASE13-001); omitted = the default font. */
+  loadFont: (cssFamily?: string) => Promise<PublicationFontResource>;
   decode: RgbaDecoder;
 }
 
 /** The worker's state, separate from `self` so it can be tested. */
 export class ExportWorkerSession {
-  private fontContext: Promise<PublicationFontPaintContext> | null = null;
+  /** Paint contexts per body CSS family ("" = default font). */
+  private fontContexts = new Map<string, Promise<PublicationFontPaintContext>>();
   private held: {
     publication: V2PublicationModel;
     grayscale: (page: PaintPagePlan) => Promise<PaintPagePlan>;
@@ -91,17 +93,32 @@ export class ExportWorkerSession {
 
   constructor(private readonly deps: ExportWorkerDeps) {}
 
-  /** Font bytes and paint contexts: loaded once per worker, retried after a failure. */
-  font(): Promise<PublicationFontPaintContext> {
-    if (!this.fontContext) {
+  /** Font bytes and paint contexts: loaded once per worker and body font, retried after a failure. */
+  font(cssFamily?: string): Promise<PublicationFontPaintContext> {
+    const key = cssFamily ?? "";
+    let pending = this.fontContexts.get(key);
+    if (!pending) {
       this.fontLoads += 1;
-      const pending = this.deps.loadFont().then(preparePublicationFontPaintContext);
-      pending.catch(() => {
-        if (this.fontContext === pending) this.fontContext = null;
+      const created = (key ? this.deps.loadFont(key) : this.deps.loadFont()).then(preparePublicationFontPaintContext);
+      created.catch(() => {
+        if (this.fontContexts.get(key) === created) this.fontContexts.delete(key);
       });
-      this.fontContext = pending;
+      this.fontContexts.set(key, created);
+      pending = created;
     }
-    return this.fontContext;
+    return pending;
+  }
+
+  /**
+   * TSP-PHASE13-001: the ノンブル / 奥付 fonts PDF also embeds, when they
+   * differ from the body font (JPG uses the browser's webfonts instead).
+   */
+  private async extraFonts(model: V2PublicationModel["model"]): Promise<NonNullable<AsyncPdfRenderOptions["extraFonts"]>> {
+    const body = (model.bodyFontFamily ?? "").trim();
+    const families = [...new Set([model.folioFontFamily, model.colophonFontFamily].map((family) => (family ?? "").trim()))].filter(
+      (family) => family !== "" && family !== body
+    );
+    return Promise.all(families.map(async (cssFamily) => ({ cssFamily, font: await this.deps.loadFont(cssFamily) })));
   }
 
   get hasModel(): boolean {
@@ -121,6 +138,7 @@ export class ExportWorkerSession {
     hooks: Pick<AsyncPdfRenderOptions, "beforePage" | "onProgress"> = {}
   ): Promise<PublicationPdfResult> {
     const { held, source, fontContext } = await this.pageSource();
+    const extraFonts = await this.extraFonts(held.publication.model);
     const indices = job.physicalIndices;
     if (indices.length === 0 || indices.some((index) => !Number.isInteger(index) || index < 0 || index >= source.pageCount)) {
       throw new Error("V2 PDF export could not resolve the selected canonical pages.");
@@ -132,7 +150,7 @@ export class ExportWorkerSession {
         return held.grayscale(applyPageImageLayerOrder(source.pageAt(indices[i]), job.layerOrder));
       },
       fontContext.fontResource,
-      { mode: job.mode, ...hooks }
+      { mode: job.mode, ...(extraFonts.length > 0 ? { extraFonts } : {}), ...hooks }
     );
   }
 
@@ -150,7 +168,8 @@ export class ExportWorkerSession {
   private async pageSource() {
     const held = this.held;
     if (!held) throw new Error("V2 export: the export worker has no publication model.");
-    const fontContext = await this.font();
+    // TSP-PHASE13-001: the body font paints (and supplies glyph metrics for) the plan.
+    const fontContext = await this.font(held.publication.model.bodyFontFamily);
     held.pages ??= createPublicationPaintPlanBuilder(held.publication.model, fontContext.fontResource, held.publication.pageGeometry, V2_EXPORT_REFUSAL_PREFIX, fontContext);
     return { held, source: held.pages, fontContext };
   }
