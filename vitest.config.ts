@@ -3,6 +3,6 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["typesetting-v2/core/**/*.test.ts"],
+    include: ["typesetting-v2/core/**/*.test.ts", "src/lib/pageJump.test.ts"],
   },
 });
