@@ -15,6 +15,21 @@ export interface DemoViewport {
 export type DemoPlacementSide = "above" | "below" | "floating";
 export type DemoPlacementPreference = "auto" | "lower-safe";
 
+export interface DemoPlacementOptions {
+  /**
+   * TSP-DEMO-001: upper bound for the card's own height. On phones the guide
+   * is capped to a part of the screen so it can never hide the whole
+   * toolbar or preview; its body scrolls inside the cap.
+   */
+  maxCardHeight?: number;
+  /**
+   * Where a card with no visible target sits. "center" is the desktop
+   * default; "bottom" (phones) keeps the sticky top bar and the middle of
+   * the page uncovered.
+   */
+  freeDock?: "center" | "bottom";
+}
+
 export interface DemoCardPlacement {
   top: number;
   left: number;
@@ -39,9 +54,13 @@ export function computeDemoCardPlacement(
   target: DemoRect | null,
   card: { width: number; height: number },
   viewport: DemoViewport,
-  preference: DemoPlacementPreference = "auto"
+  preference: DemoPlacementPreference = "auto",
+  options: DemoPlacementOptions = {}
 ): DemoCardPlacement {
-  const maxHeight = Math.max(0, viewport.height - EDGE_MARGIN * 2);
+  const maxHeight = Math.max(
+    0,
+    Math.min(viewport.height - EDGE_MARGIN * 2, options.maxCardHeight ?? Infinity)
+  );
   const visibleCardHeight = Math.min(card.height, maxHeight);
   const left = target
     ? clamp(
@@ -100,10 +119,11 @@ export function computeDemoCardPlacement(
       viewport.height - EDGE_MARGIN - target.bottom - TARGET_GAP
     );
     if (availableAbove >= availableBelow && availableAbove > 0) {
+      const height = Math.min(availableAbove, maxHeight);
       return {
-        top: EDGE_MARGIN,
+        top: target.top - TARGET_GAP - height,
         left,
-        maxHeight: availableAbove,
+        maxHeight: height,
         side: "above",
       };
     }
@@ -111,10 +131,19 @@ export function computeDemoCardPlacement(
       return {
         top: target.bottom + TARGET_GAP,
         left,
-        maxHeight: availableBelow,
+        maxHeight: Math.min(availableBelow, maxHeight),
         side: "below",
       };
     }
+  }
+
+  if (options.freeDock === "bottom") {
+    return {
+      top: Math.max(EDGE_MARGIN, viewport.height - visibleCardHeight - EDGE_MARGIN),
+      left,
+      maxHeight,
+      side: "floating",
+    };
   }
 
   return {

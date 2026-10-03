@@ -600,6 +600,13 @@ interface PreviewPaneProps {
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
   selected: Set<number>;
   onSelectedChange: (next: Set<number>) => void;
+  /**
+   * TSP-DEMO-001: the おためしデモ opens a phone preview one page at a time
+   * (a whole spread squeezed into a phone width is too small to read). Kept
+   * in memory only — the visitor's own 1P／見開き choice is never rewritten,
+   * and tapping 1P／見開き hands control back to that choice.
+   */
+  startSinglePageOnNarrow?: boolean;
 }
 
 function PreviewPane({
@@ -642,6 +649,7 @@ function PreviewPane({
   onToggleCollapse,
   selected,
   onSelectedChange: setSelected,
+  startSinglePageOnNarrow = false,
 }: PreviewPaneProps) {
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002 / Phase 7: `content` already arrives
   // debounced from TategakiEditor (PREVIEW_PROP_DEBOUNCE_MS, a real setTimeout
@@ -940,7 +948,15 @@ function PreviewPane({
   // row instead; the rest of the preview (virtualization, zoom anchor, pager,
   // cursor-follow) works on these rows either way. Display only — pagination
   // and export never read this.
-  const [pageLayout, setPageLayout] = usePreviewPageLayout();
+  const [storedPageLayout, setStoredPageLayout] = usePreviewPageLayout();
+  // TSP-LOOP-020 — phone-width flag. Drives the width-fit branch below.
+  const isNarrow = useIsNarrowViewport();
+  const [singlePageOverride, setSinglePageOverride] = useState(startSinglePageOnNarrow);
+  const pageLayout = isNarrow && singlePageOverride ? "single" : storedPageLayout;
+  const setPageLayout = (next: typeof storedPageLayout) => {
+    setSinglePageOverride(false);
+    setStoredPageLayout(next);
+  };
   const isSinglePageLayout = pageLayout === "single";
   const spreadGroups = useMemo(
     () => previewNavigationGroups(presentationSequence.length, pageLayout),
@@ -1084,20 +1100,23 @@ function PreviewPane({
   // "100%" toolbar button still targets a literal 100%, matching its label;
   // only this initial mount value changes.
   const [zoomScale, setZoomScale] = useState<number>(0.5);
-
-  // TSP-LOOP-020 — phone-width flag. Drives the width-fit branch below.
-  const isNarrow = useIsNarrowViewport();
+  // TSP-DEMO-001: on a phone the preview already opens fitted to the screen
+  // width and never shows smaller than that (see `effectiveZoom` below), so
+  // 100% is the phone floor: the label shows the size actually on screen
+  // (never "50%"), and the first ＋ really enlarges.
+  const zoomFloor = isNarrow ? 1 : ZOOM_MIN;
+  const displayedZoom = Math.max(zoomScale, zoomFloor);
 
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
 
   const zoomOut = () => {
     captureZoomAnchor();
-    setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
+    setZoomScale((prev) => Math.max(zoomFloor, clampZoom(Math.max(prev, zoomFloor) - ZOOM_STEP)));
   };
   const zoomIn = () => {
     captureZoomAnchor();
-    setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
+    setZoomScale((prev) => clampZoom(Math.max(prev, zoomFloor) + ZOOM_STEP));
   };
   const zoomReset = () => {
     captureZoomAnchor();
@@ -3099,7 +3118,7 @@ function PreviewPane({
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
       `}</style>}
-      <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
+      <div data-demo-target="preview" className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           {onToggleCollapse && (
             <button
@@ -3120,18 +3139,18 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomOut}
-              disabled={show3d || zoomScale <= ZOOM_MIN}
+              disabled={show3d || displayedZoom <= zoomFloor}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               －
             </button>
             <span className="w-10 flex-shrink-0 whitespace-nowrap text-center text-xs tabular-nums">
-              {Math.round(zoomScale * 100)}%
+              {Math.round(displayedZoom * 100)}%
             </span>
             <button
               type="button"
               onClick={zoomIn}
-              disabled={show3d || zoomScale >= ZOOM_MAX}
+              disabled={show3d || displayedZoom >= ZOOM_MAX}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ＋
@@ -3139,7 +3158,7 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomReset}
-              disabled={show3d || zoomScale === 1.0}
+              disabled={show3d || displayedZoom === 1.0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               100%

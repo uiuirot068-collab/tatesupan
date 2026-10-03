@@ -63,32 +63,11 @@ describe("responsive demo card placement", () => {
     }
   });
 
-  it("targets the 編集ページ nav row via a raw selector, not the whole editor surface", () => {
-    const data = readFileSync(join(__dirname, "..", "constants", "demoData.ts"), "utf8");
+  it("keeps raw-selector targeting available to the tour", () => {
+    // TSP-DEMO-001 trimmed the tour to 6 steps; the 編集ページ step (the
+    // only raw-selector step) was removed, but the mechanism stays.
     const tour = readFileSync(join(__dirname, "..", "components", "DemoTour.tsx"), "utf8");
-
-    expect(data).toMatch(/title: "長い原稿は「編集ページ」で軽やかに"[\s\S]{0,1200}targetSelector: "\[data-editor-page-navigator\]"/);
-    // STEP 8 must NOT keep spotlighting the generic whole-editor target.
-    expect(data).not.toMatch(/title: "長い原稿は「編集ページ」で軽やかに"[\s\S]{0,1200}target: "editor"/);
     expect(tour).toContain("step.targetSelector ?? (step.target");
-  });
-
-  it("STEP 8 explains arbitrary editor-only splits without implying publication pagination changes", () => {
-    const data = readFileSync(join(__dirname, "..", "constants", "demoData.ts"), "utf8");
-    const step = data.slice(
-      data.indexOf('title: "長い原稿は「編集ページ」で軽やかに"'),
-      data.indexOf('title: "作業タイムを記録しよう"')
-    );
-    expect(step).toContain("ここで区切る");
-    expect(step).toContain("前のページとつなぐ");
-    // TSP-EDITOR-UNIFIED-SPLIT-JOIN-012D: no manual/automatic boundary
-    // terminology -- just "編集ページは作業用の区切り" (an editing aid) and
-    // that the manuscript/publication output is unaffected.
-    expect(step).not.toMatch(/自動区切り|手動区切り/);
-    expect(step).toContain("編集ページは作業用の区切り");
-    expect(step).toContain("原稿そのもの");
-    expect(step).toContain("プレビュー・PDF・JPGのページには影響しません");
-    expect(step).toContain('targetSelector: "[data-editor-page-navigator]"');
   });
 
   it("is used by the real tour while its navigation controls stay fixed", () => {
