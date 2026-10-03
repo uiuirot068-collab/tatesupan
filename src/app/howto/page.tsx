@@ -66,6 +66,8 @@ const formatCanonicalLogDate = (date: string) => {
   return match ? `20${match[1]}-${match[2]}-${match[3]}` : date;
 };
 
+const RECENT_LOG_COUNT = 3;
+
 const toHowToLogEntry = (entry: UpdateHistoryEntry): UpdateLogEntry => ({
   date: formatCanonicalLogDate(entry.date),
   type: entry.type ?? "improvement",
@@ -152,7 +154,7 @@ export default function HowToPage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [logs, setLogs] = useState<UpdateLogEntry[]>([]);
-  const [visibleLogCount, setVisibleLogCount] = useState(8);
+  const [olderLogsOpen, setOlderLogsOpen] = useState(false);
   const [logLoadError, setLogLoadError] = useState(false);
   const [activeTocHref, setActiveTocHref] = useState<string | null>(null);
   const [allTipsOpen, setAllTipsOpen] = useState(false);
@@ -250,7 +252,9 @@ export default function HowToPage() {
   }, []);
 
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
-  const visibleLogs = sortedLogs.slice(0, visibleLogCount);
+  // TSP-HISTORY-001: only the newest few updates show; the rest fold away.
+  const visibleLogs = olderLogsOpen ? sortedLogs : sortedLogs.slice(0, RECENT_LOG_COUNT);
+  const olderLogCount = Math.max(0, sortedLogs.length - RECENT_LOG_COUNT);
 
   return (
     <div
@@ -1186,7 +1190,7 @@ export default function HowToPage() {
               <h2 data-copy-id="TEXT_DEVLOG_TITLE">更新・デバッグログ</h2>
             </div>
           </div>
-          <div className="log-list">
+          <div className="log-list" id="devlog-list">
             {logLoadError && (
               <p className="log-empty">更新履歴を読み込めませんでした。時間をおいてもう一度ご確認ください。</p>
             )}
@@ -1204,13 +1208,23 @@ export default function HowToPage() {
               </article>
             ))}
           </div>
-          {visibleLogCount < sortedLogs.length && (
+          {olderLogCount > 0 && (
             <button
               className="more-logs"
               type="button"
-              onClick={() => setVisibleLogCount((v) => v + 8)}
+              aria-expanded={olderLogsOpen}
+              aria-controls="devlog-list"
+              onClick={(event) => {
+                const button = event.currentTarget;
+                setOlderLogsOpen((v) => !v);
+                // Folding a long list would leave the reader far below it:
+                // follow the button back up to where the newest 3 end.
+                if (olderLogsOpen) {
+                  requestAnimationFrame(() => button.scrollIntoView({ block: "center" }));
+                }
+              }}
             >
-              もっと見る
+              {olderLogsOpen ? "過去の更新をたたむ" : `過去の更新を見る（${olderLogCount}件）`}
             </button>
           )}
         </section>
