@@ -30,6 +30,7 @@ import {
   USE_CASES_NOT_YET_HEADING,
   USE_CASES_NOT_YET,
   USE_CASE_PREPARING_LABEL,
+  USE_CASE_DETAIL_LABEL,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import "./howto.css";
@@ -133,6 +134,7 @@ const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] =
 // Phase 3: the operations people look for most, and where each one lives
 // (the same places each chapter's 「場所」 line gives), linking to the chapter.
 const HOWTO_QUICK_REFERENCE: { task: string; where: string; href: string }[] = [
+  { task: "Word・TXTの原稿を読み込む", where: "▶本づくり→原稿ファイル", href: "#varied-use" },
   { task: "用紙・フォント・余白を変える", where: "テキストエディター直上→▶設定", href: "#settings" },
   { task: "ルビ・縦中横・改ページを入れる", where: "タイトル下／ヘルプの中", href: "#body-notation" },
   { task: "本の形で確かめる", where: "プレビュー（ズーム50％・100％・200％）", href: "#preview" },
@@ -496,6 +498,9 @@ export default function HowToPage() {
               <li key={item.title}>
                 <b>{item.title}{item.preparing && <em className="use-case-preparing">{USE_CASE_PREPARING_LABEL}</em>}</b>
                 <span>{item.body}</span>
+                {item.howtoHash && (
+                  <a href={item.howtoHash} className="use-case-more">{USE_CASE_DETAIL_LABEL} <i aria-hidden="true">→</i></a>
+                )}
               </li>
             ))}
           </ul>

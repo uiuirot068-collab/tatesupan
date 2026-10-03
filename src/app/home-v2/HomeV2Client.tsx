@@ -39,6 +39,8 @@ import {
   USE_CASES_NOT_YET_HEADING,
   USE_CASES_NOT_YET,
   USE_CASE_PREPARING_LABEL,
+  USE_CASE_DETAIL_LABEL,
+  USE_CASES_TEASER,
 } from "@/lib/useCaseExamples";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
@@ -318,6 +320,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 <span className="block">どこで綴っても、</span><span className="block">ひとつの本になる。</span>
               </h1>
               <p className="home-p3-cover-lead mt-6 max-w-xl font-serif">書きかけの原稿をひらいて、縦組みで確かめる。<br className="hidden sm:block" />物語が紙の本になる、その直前までを静かに支えます。</p>
+              <a data-home-use-cases-teaser="" href="#use-cases" className="home-p3-teaser mt-4 inline-block">{USE_CASES_TEASER} <span aria-hidden="true">→</span></a>
               <div data-home-onboarding-actions="" className="mt-9 grid max-w-2xl gap-7">
                 <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta home-p3-cta-gold w-fit">最初の一冊を書きはじめる <span aria-hidden="true">→</span></button>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -628,7 +631,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 {/* TSP-COPY-001: uses beyond a printed novel, and what does
                     not work yet, so a first-time visitor can tell whether
                     TateSpun fits what they want to make. */}
-                <section data-home-use-cases="" aria-labelledby="use-cases-title" className="home-p3-sided mx-auto mt-20 w-full max-w-[1040px] px-4 sm:px-6">
+                <section id="use-cases" data-home-use-cases="" aria-labelledby="use-cases-title" className="home-p3-sided mx-auto mt-20 w-full max-w-[1040px] px-4 sm:px-6">
                   <div className="home-p3-side">
                     <p className="home-p3-chip">Ways to Use</p>
                     <h2 id="use-cases-title" className="home-p3-side-title font-serif font-medium text-ink dark:text-[#D4DBE7]">{USE_CASES_HEADING}</h2>
@@ -640,6 +643,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                         <li key={item.title}>
                           <strong className="font-serif">{item.title}{item.preparing && <em className="home-use-preparing">{USE_CASE_PREPARING_LABEL}</em>}</strong>
                           <span>{item.body}</span>
+                          {item.howtoHash && (
+                            <Link href={`/howto${item.howtoHash}`} className="home-use-more">{USE_CASE_DETAIL_LABEL} <span aria-hidden="true">→</span></Link>
+                          )}
                         </li>
                       ))}
                     </ul>

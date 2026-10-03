@@ -892,6 +892,30 @@
   white-space: nowrap;
 }
 
+.home-use-more {
+  justify-self: start;
+  margin-top: .2rem;
+  color: color-mix(in srgb, var(--home-gold) 70%, var(--home-ink));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.home-use-more:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* TSP-COPY-001: a quiet line on the cover pointing down to the examples. */
+.home-p3-teaser {
+  justify-self: start;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--home-night-text) 40%, transparent);
+  color: var(--home-night-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  word-break: auto-phrase;
+}
+
+.home-p3-teaser:hover { border-bottom-color: var(--home-night-text); }
+
 .home-use-notyet-title {
   display: flex;
   align-items: center;
