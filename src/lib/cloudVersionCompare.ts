@@ -70,6 +70,7 @@ export const CLOUD_COMPARE_COPY = {
   cloudLabel: "クラウド版",
   screenTimeLabel: "開いた・保存した時刻",
   cloudTimeLabel: "クラウドの保存時刻",
+  screenNotSavedYet: "この画面からは、まだクラウドに保存していません",
   overwrite: "この画面の版で上書き保存",
   overwriteNote: "クラウド版は、この画面の版に置き換わります。",
   openCloud: "クラウド版を開く",

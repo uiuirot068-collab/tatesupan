@@ -22,6 +22,7 @@ export default defineConfig({
       "src/lib/book3d/**/*.test.ts",
       // CST-PORT-014: cloud version compare
       "src/lib/cloudVersionCompare.test.ts",
+      "src/lib/cloudLink.test.ts",
     ],
   },
 });

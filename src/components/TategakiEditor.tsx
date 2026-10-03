@@ -41,6 +41,7 @@ import { imageOriginalDeletable, imageUsedByOtherWorks } from "@/lib/imageCenter
 import type { Project } from "@/types/database";
 import { cloudCompareLocalCopyTitle, isCloudVersionChanged, type CloudVersionBase } from "@/lib/cloudVersionCompare";
 import CloudVersionCompareModal from "./CloudVersionCompareModal";
+import { clearCloudLink, readCloudLink, writeCloudLink } from "@/lib/cloudLink";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { useReviewSurface } from "@/hooks/useReviewSurface";
@@ -1061,19 +1062,43 @@ export default function TategakiEditor({
     try {
       // Existing cloud projects can always be overwritten regardless of the
       // plan's count limit -- the limit only ever blocks brand-new saves.
-      const isNewCloudSave = !currentProjectId;
-      let knownPlan: CloudPlan | null = null;
+      // CST-PORT-014: a local work saves to the cloud work it was saved to
+      // before in this browser (lib/cloudLink.ts), not a new one each time.
+      let projectId = currentProjectId;
+      let linkedOnly = false;
+      if (!projectId && docId !== null) {
+        const linked = readCloudLink(docId);
+        if (linked) {
+          projectId = linked;
+          linkedOnly = true;
+        }
+      }
 
       // CST-PORT-014: never overwrite a newer cloud version silently. If the
       // cloud cannot be read, save as before (the check must not block saving).
-      if (currentProjectId && !skipNewerCheck) {
-        const cloudNow = await getProjectById(currentProjectId);
+      if (projectId && (linkedOnly || !skipNewerCheck)) {
+        const cloudNow = await getProjectById(projectId);
         if (!isSameDocument()) return;
-        if (cloudNow && isCloudVersionChanged(cloudNow, cloudBaseRef.current)) {
-          setCloudCompare({ cloud: cloudNow, base: cloudBaseRef.current?.updatedAt ?? null });
+        if (linkedOnly) {
+          if (!cloudNow) {
+            // The linked cloud work is gone (deleted): save as a new one.
+            if (docId !== null) clearCloudLink(docId);
+            projectId = null;
+          } else {
+            setCurrentProjectId(cloudNow.id);
+          }
+        }
+        // A screen that never saw the linked cloud version compares it with
+        // what it shows now.
+        const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
+        if (cloudNow && projectId && !skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
+          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null });
           return;
         }
       }
+
+      const isNewCloudSave = !projectId;
+      let knownPlan: CloudPlan | null = null;
 
       if (isNewCloudSave) {
         // UX-only early check: lets us show the "cloud bookshelf is full"
@@ -1095,8 +1120,8 @@ export default function TategakiEditor({
         }
       }
 
-      const result = currentProjectId
-        ? await updateProject(currentProjectId, { title, content, settings })
+      const result = projectId
+        ? await updateProject(projectId, { title, content, settings })
         : await createProject({ title, content, settings });
 
       if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
@@ -1111,6 +1136,7 @@ export default function TategakiEditor({
 
       if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
       if (isSameDocument()) cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
+      if (docId !== null) writeCloudLink(docId, result.data.id);
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。

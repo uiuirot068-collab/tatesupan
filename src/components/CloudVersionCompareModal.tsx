@@ -94,8 +94,14 @@ export default function CloudVersionCompareModal({
             <dd className="mt-1 tabular-nums text-ink/70">
               {countVisualLength(side.content).toLocaleString("ja-JP")}文字
             </dd>
-            <dd className="mt-2 text-ink/60">{timeLabel}</dd>
-            <dd className="tabular-nums text-ink/80">{formatCloudVersionTime(side.updatedAt)}</dd>
+            {key === "screen" && !side.updatedAt ? (
+              <dd className="mt-2 text-ink/60">{CLOUD_COMPARE_COPY.screenNotSavedYet}</dd>
+            ) : (
+              <>
+                <dd className="mt-2 text-ink/60">{timeLabel}</dd>
+                <dd className="tabular-nums text-ink/80">{formatCloudVersionTime(side.updatedAt)}</dd>
+              </>
+            )}
           </div>
         ))}
       </dl>
