@@ -49,6 +49,12 @@ export interface ExportPdfJob {
   physicalIndices: number[];
   layerOrder: Record<string, number>;
   mode: PublicationPdfMode;
+  /**
+   * CST-PORT-013 確認用PDF: finished pages painted before / after the body
+   * (the cover and back cover as one image each). Not grayscaled.
+   */
+  leadingPages?: PaintPagePlan[];
+  trailingPages?: PaintPagePlan[];
 }
 
 /** One built page for the JPG rasterizer (layer order and grayscale applied). */
@@ -134,7 +140,7 @@ export class ExportWorkerSession {
   }
 
   async renderPdf(
-    job: Pick<ExportPdfJob, "physicalIndices" | "layerOrder" | "mode">,
+    job: Pick<ExportPdfJob, "physicalIndices" | "layerOrder" | "mode" | "leadingPages" | "trailingPages">,
     hooks: Pick<AsyncPdfRenderOptions, "beforePage" | "onProgress"> = {}
   ): Promise<PublicationPdfResult> {
     const { held, source, fontContext } = await this.pageSource();
@@ -143,11 +149,16 @@ export class ExportWorkerSession {
     if (indices.length === 0 || indices.some((index) => !Number.isInteger(index) || index < 0 || index >= source.pageCount)) {
       throw new Error("V2 PDF export could not resolve the selected canonical pages.");
     }
+    const leading = job.leadingPages ?? [];
+    const trailing = job.trailingPages ?? [];
     return renderPaintPagesToPdfAsync(
-      indices.length,
+      leading.length + indices.length + trailing.length,
       (i) => {
+        if (i < leading.length) return leading[i];
+        const bodyIndex = i - leading.length;
+        if (bodyIndex >= indices.length) return trailing[bodyIndex - indices.length];
         this.pagesBuilt += 1;
-        return held.grayscale(applyPageImageLayerOrder(source.pageAt(indices[i]), job.layerOrder));
+        return held.grayscale(applyPageImageLayerOrder(source.pageAt(indices[bodyIndex]), job.layerOrder));
       },
       fontContext.fontResource,
       { mode: job.mode, ...(extraFonts.length > 0 ? { extraFonts } : {}), ...hooks }

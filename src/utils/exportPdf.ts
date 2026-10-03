@@ -18,6 +18,7 @@ import {
   downloadPdfExportPerfReport,
   type PdfExportPerfPageSample,
 } from '@/lib/pdfExportPerfAudit';
+import { coverProofImageBox, type CoverProofRaster } from '@/lib/cover/coverProof';
 
 export type PdfExportMode = 'trim' | 'bleed' | 'full';
 
@@ -51,6 +52,11 @@ interface PdfOptions {
   onProgress?: (current: number, total: number) => void;
   /** Cooperative cancellation checked between capture/encode/page/save boundaries. */
   signal?: AbortSignal;
+  /**
+   * CST-PORT-013 確認用PDF: the cover / back cover (one color image each,
+   * bleed included) placed before / after the pages. trim / bleed modes only.
+   */
+  coverPages?: { leading: CoverProofRaster[]; trailing: CoverProofRaster[] };
 }
 
 /**
@@ -139,7 +145,8 @@ export async function exportCustomPdf(
     fileName,
     scale,
     onProgress,
-    signal
+    signal,
+    coverPages
   } = options;
 
   await waitForExportPermission(signal);
@@ -189,11 +196,24 @@ export async function exportCustomPdf(
     format: [pdfWidth, pdfHeight],
   });
 
+  // jsPDF starts with one page: the first page written uses it, every later one adds a page.
+  let pagesWritten = 0;
+  const nextPage = () => {
+    if (pagesWritten > 0) pdf.addPage();
+    pagesWritten += 1;
+  };
+  const addCoverPage = (raster: CoverProofRaster) => {
+    nextPage();
+    const box = coverProofImageBox(raster, mode === 'bleed' ? 'bleed' : 'trim');
+    pdf.addImage(raster.jpeg, 'JPEG', box.xMm, box.yMm, box.widthMm, box.heightMm, undefined, 'NONE');
+  };
+  for (const raster of coverPages?.leading ?? []) addCoverPage(raster);
+
   const perfLoopStartedAt = performance.now();
 
   for (let i = 0; i < elements.length; i++) {
     await waitForExportPermission(signal);
-    if (i > 0) pdf.addPage();
+    nextPage();
     if (onProgress) onProgress(i + 1, elements.length);
 
     const el = elements[i];
@@ -365,6 +385,7 @@ export async function exportCustomPdf(
   }
 
   const perfLoopEndedAt = performance.now();
+  for (const raster of coverPages?.trailing ?? []) addCoverPage(raster);
   await waitForExportPermission(signal);
   const perfSaveStartedAt = performance.now();
   pdf.save(fileName);

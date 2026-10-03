@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { Canvas } from "@napi-rs/canvas";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "../pageLayout";
@@ -96,6 +97,26 @@ describe("export worker session builds the PDF itself", () => {
     expect(normalizePdf(pdf.bytes)).toBe(normalizePdf(expected.bytes));
     expect(progress).toEqual([1, 2, 3]);
     expect(worker.pagesBuilt).toBe(3); // only the selected pages were built
+  }, 60_000);
+
+  it("CST-PORT-013 確認用PDF: leading / trailing pages wrap the body, unchanged and not grayscaled", async () => {
+    const model = publication();
+    const indices = [0, 1];
+    const jpeg = new Uint8Array(new Canvas(4, 6).toBuffer("image/jpeg"));
+    const cover = { widthMm: 148, heightMm: 210, commands: [{ op: "image" as const, xMm: -3, yMm: -3, widthMm: 154, heightMm: 216, bytes: jpeg, format: "JPEG" as const }] };
+    const back = { ...cover, commands: [{ ...cover.commands[0], xMm: -3.5 }] };
+    const { worker } = session();
+    worker.receiveModel({ ok: true, publication: model });
+    const progress: number[] = [];
+    const pdf = await worker.renderPdf(
+      { physicalIndices: indices, layerOrder: {}, mode: "bleed", leadingPages: [cover], trailingPages: [back] },
+      { onProgress: (current, total) => progress.push(current * 10 + total) }
+    );
+    const expected = await renderPaintPlanToPdfAsync([cover, ...(await phase8Plan(model, {}, indices)), back], FONT, { mode: "bleed" });
+    expect(pdf.pageCount).toBe(4);
+    expect(normalizePdf(pdf.bytes)).toBe(normalizePdf(expected.bytes));
+    expect(progress).toEqual([14, 24, 34, 44]);
+    expect(worker.pagesBuilt).toBe(2); // the covers are not built from the model
   }, 60_000);
 
   it("the font is loaded once per worker and the model is kept between exports", async () => {
@@ -276,6 +297,8 @@ describe("export worker client", () => {
     expect(job.transfer).toEqual([{ id: "p2-1" }]); // the port is transferred, the model never passes here
     expect(job.message).not.toHaveProperty("plan");
     expect(job.message).not.toHaveProperty("font");
+    expect(job.message).not.toHaveProperty("leadingPages"); // a plain PDF carries no proof pages
+    expect(job.message).not.toHaveProperty("trailingPages");
     workers[0].reply({ type: "progress", jobId: job.message.jobId as number, current: 1, total: 2 });
     workers[0].reply({ type: "complete", jobId: job.message.jobId as number, bytes: new Uint8Array([7]), pageCount: 2 });
     await expect(first.result).resolves.toEqual(new Uint8Array([7]));
@@ -287,6 +310,13 @@ describe("export worker client", () => {
     expect(secondJob.message).not.toHaveProperty("modelPort");
     workers[0].reply({ type: "complete", jobId: secondJob.message.jobId as number, bytes: new Uint8Array([8]), pageCount: 2 });
     await second.result;
+
+    const coverPage = { widthMm: 1, heightMm: 2, commands: [] };
+    const proof = client.startPdf({ ...pdfRequest(layout, deliver), leadingPages: [coverPage], trailingPages: [coverPage] });
+    const proofJob = workers[0].jobs[2];
+    expect(proofJob.message).toMatchObject({ leadingPages: [coverPage], trailingPages: [coverPage] });
+    workers[0].reply({ type: "complete", jobId: proofJob.message.jobId as number, bytes: new Uint8Array([9]), pageCount: 4 });
+    await proof.result;
 
     client.startPdf(pdfRequest({}, deliver)); // a newer layout
     expect(deliver).toHaveBeenCalledTimes(2);
