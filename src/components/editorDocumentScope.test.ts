@@ -47,7 +47,7 @@ describe("TategakiEditor: one document-switch owner", () => {
 
 describe("TategakiEditor: async handlers write only into the document they started in", () => {
   it("cloud save captures before its first await and guards the project link and technical state", () => {
-    const save = body(editor, "const handleSave = async () => {", "const handleSelectProject");
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean) => {", "const handleCloudCompareOverwrite");
     expect(save.indexOf("documentEpoch.capture()")).toBeLessThan(save.indexOf("await "));
     expect(save).toContain("if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);");
     expect(save.match(/setUnresolvedCloudImages\(/g)).toHaveLength(2);

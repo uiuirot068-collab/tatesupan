@@ -114,7 +114,10 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
 
   const { data, error } = await supabase
     .from('projects')
-    .update({ ...input, user_id: user.id })
+    // CST-PORT-014: also send the save time. The DB trigger
+    // (projects_set_updated_at) overwrites it with its own clock where it is
+    // installed; where it is not, updated_at would otherwise never change.
+    .update({ ...input, user_id: user.id, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();
