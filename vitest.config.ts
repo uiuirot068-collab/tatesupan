@@ -18,6 +18,8 @@ export default defineConfig({
       "src/lib/cover/**/*.test.ts",
       // CST-PORT-011B: 本づくり drawer accordion state
       "src/hooks/useBookmakingSections.test.ts",
+      // CST-PORT-012: 3D preview
+      "src/lib/book3d/**/*.test.ts",
     ],
   },
 });

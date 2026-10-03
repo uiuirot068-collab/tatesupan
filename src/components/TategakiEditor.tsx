@@ -233,6 +233,12 @@ export default function TategakiEditor({
   const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<"settings" | "options" | null>(null);
+  // CST-PORT-012: 3D のノド注意 →「ノドを調整する」で開いたときだけ、設定のノド欄を示す
+  const [settingsFocus, setSettingsFocus] = useState<"gutter" | null>(null);
+  const openGutterSetting = useCallback(() => {
+    setSettingsFocus("gutter");
+    setActiveDrawer("settings");
+  }, []);
   // 本文の総ページ数（PreviewPane の pagination 結果）。奥付編集ポップアップの
   // 「本文の何ページ後」入力の目安・範囲外警告に使う。
   const [bodyPageCount, setBodyPageCount] = useState(0);
@@ -1367,6 +1373,9 @@ export default function TategakiEditor({
               onContentChange={setContent}
               onSettingsChange={handleLayoutSettingsChange}
               onOpenCoverExport={openCoverExport}
+              cover={settings.cover}
+              coverImageDataUrls={coverImages}
+              onAdjustGutter={openGutterSetting}
               onImageAdd={handleImageAdd}
               onImageDelete={handleImageDelete}
               onImageReplace={handleImageReplace}
@@ -1435,7 +1444,7 @@ export default function TategakiEditor({
 
       {isChecklistOpen && <ChecklistPanel onClose={() => setIsChecklistOpen(false)} />}
 
-      {activeDrawer === "settings" && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} selectedPageNumbers={selectedPageNumbers} onClose={() => setActiveDrawer(null)} />}
+      {activeDrawer === "settings" && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} selectedPageNumbers={selectedPageNumbers} focusSetting={settingsFocus} onClose={() => { setActiveDrawer(null); setSettingsFocus(null); }} />}
 
       {activeDrawer === "options" && (
         <EditorOptionsDrawer

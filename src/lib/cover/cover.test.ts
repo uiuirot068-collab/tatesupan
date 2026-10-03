@@ -36,6 +36,7 @@ import {
   approximateCoverMeasure,
   backgroundFill,
   buildCoverFacePlan,
+  frameLabelText,
   buildCoverSpreadPlan,
   coverPlanFonts,
   coverPlanImageIds,
@@ -346,6 +347,29 @@ describe("coverPaint — 描画命令（プレビューと書き出しで共通�
     expect(title.x + 9).toBeCloseTo(face.widthPx / 2, 0);
     const pill = plan.ops.find((op) => op.kind === "fill" && op.radius);
     expect(pill).toBeDefined();
+  });
+
+  it("額縁ラベル: スペースだけの欄は空欄（文字も白い台紙も出さない）、未入力は見本の文字", () => {
+    const fills = (plan: ReturnType<typeof buildCoverFacePlan>) => plan.ops.filter((op) => op.kind === "fill");
+    const withAll = buildCoverFacePlan(cover((base) => ({ ...base, templateId: "frame-label", simple: { ...base.simple, title: "夜", subtitle: "朝", author: "猫" } })), "front", face, options);
+    // 背景 + ラベル台紙 + 著者名の丸い台紙
+    expect(fills(withAll)).toHaveLength(3);
+
+    const noAuthor = buildCoverFacePlan(cover((base) => ({ ...base, templateId: "frame-label", simple: { ...base.simple, title: "夜", subtitle: "朝", author: " " } })), "front", face, options);
+    expect(noAuthor.ops.find((op) => op.kind === "fill" && op.radius)).toBeUndefined();
+    expect(glyphs(noAuthor).map((op) => op.text).join("")).toBe("夜朝");
+
+    const fullWidthSpace = buildCoverFacePlan(cover((base) => ({ ...base, templateId: "frame-label", simple: { ...base.simple, title: "夜", subtitle: "\u3000", author: "猫" } })), "front", face, options);
+    expect(fullWidthSpace.ops.some((op) => op.kind === "line")).toBe(false);
+    expect(glyphs(fullWidthSpace).map((op) => op.text).join("")).toBe("夜猫");
+
+    const allBlank = buildCoverFacePlan(cover((base) => ({ ...base, templateId: "frame-label", simple: { ...base.simple, title: " ", subtitle: " ", author: " " } })), "front", face, options);
+    expect(fills(allBlank)).toHaveLength(1);
+    expect(glyphs(allBlank)).toEqual([]);
+
+    expect(frameLabelText("", "著者名")).toBe("著者名");
+    expect(frameLabelText("  ", "著者名")).toBeNull();
+    expect(frameLabelText(" 猫 ", "著者名")).toBe(" 猫 ");
   });
 
   it("裏表紙: 文字がなければ何も足さない。文字は中央に横書き", () => {
