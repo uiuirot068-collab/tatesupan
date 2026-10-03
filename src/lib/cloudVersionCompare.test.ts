@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLOUD_COMPARE_COPY,
+  isCloudVersionChanged,
   cloudCompareLocalCopyTitle,
   formatCloudVersionTime,
   isCloudVersionNewer,
@@ -51,5 +52,26 @@ describe("CST-PORT-014 copy helpers", () => {
     expect(CLOUD_COMPARE_COPY.overwrite).toBe("この画面の版で上書き保存");
     expect(CLOUD_COMPARE_COPY.openCloud).toBe("クラウド版を開く");
     expect(CLOUD_COMPARE_COPY.cancel).toBe("やめる");
+  });
+});
+
+describe("CST-PORT-014 isCloudVersionChanged", () => {
+  const base = { updatedAt: "2026-10-03T07:00:00+00:00", title: "夜の港", content: "本文" };
+
+  it("unchanged cloud version is not changed", () => {
+    expect(isCloudVersionChanged({ updated_at: base.updatedAt, title: "夜の港", content: "本文" }, base)).toBe(false);
+  });
+
+  it("a newer updated_at is changed", () => {
+    expect(isCloudVersionChanged({ updated_at: "2026-10-03T07:01:00+00:00", title: "夜の港", content: "本文" }, base)).toBe(true);
+  });
+
+  it("different content with the same updated_at is still changed (time not bumped)", () => {
+    expect(isCloudVersionChanged({ updated_at: base.updatedAt, title: "夜の港", content: "本文。書き足し" }, base)).toBe(true);
+    expect(isCloudVersionChanged({ updated_at: base.updatedAt, title: "朝の港", content: "本文" }, base)).toBe(true);
+  });
+
+  it("no base (never opened or saved here) never blocks saving", () => {
+    expect(isCloudVersionChanged({ updated_at: base.updatedAt, title: "x", content: "y" }, null)).toBe(false);
   });
 });

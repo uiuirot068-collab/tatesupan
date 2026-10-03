@@ -26,6 +26,27 @@ export function isCloudVersionNewer(cloud: string | null | undefined, base: stri
   return cloudMs > baseMs;
 }
 
+export interface CloudVersionBase {
+  updatedAt: string | null;
+  title: string;
+  content: string;
+}
+
+/**
+ * クラウドの今の版が、この画面が最後に読んだ・保存した版から変わったか。
+ * 時刻（updated_at）が新しいとき、または題名・本文が違うとき。
+ * 時刻だけに頼らないのは、時刻が変わらない保存（データベースの時刻の
+ * 付け方が古いままの場合など）でも、中身が違えば確かめるため。
+ */
+export function isCloudVersionChanged(
+  cloud: { updated_at?: string | null; title: string; content: string },
+  base: CloudVersionBase | null
+): boolean {
+  if (!base) return false;
+  if (isCloudVersionNewer(cloud.updated_at, base.updatedAt)) return true;
+  return cloud.title !== base.title || cloud.content !== base.content;
+}
+
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 /** 確認画面に出す日時（端末の時刻で「10/3 16:05」）。 */

@@ -39,7 +39,7 @@ import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
 import { imageOriginalDeletable, imageUsedByOtherWorks } from "@/lib/imageCenter";
 import type { Project } from "@/types/database";
-import { cloudCompareLocalCopyTitle, isCloudVersionNewer } from "@/lib/cloudVersionCompare";
+import { cloudCompareLocalCopyTitle, isCloudVersionChanged, type CloudVersionBase } from "@/lib/cloudVersionCompare";
 import CloudVersionCompareModal from "./CloudVersionCompareModal";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
@@ -333,10 +333,11 @@ export default function TategakiEditor({
   }, []);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  // CST-PORT-014: updated_at of the cloud version this screen last opened or
-  // saved. A save first checks the cloud; if someone saved there since (other
-  // device / tab), the compare dialog asks which version to keep.
-  const cloudBaseUpdatedAtRef = useRef<string | null>(null);
+  // CST-PORT-014: the cloud version this screen last opened or saved
+  // (updated_at + title + content). A save first checks the cloud; if it was
+  // saved there since (other device / tab), the compare dialog asks which
+  // version to keep.
+  const cloudBaseRef = useRef<CloudVersionBase | null>(null);
   const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null } | null>(null);
   const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -602,7 +603,7 @@ export default function TategakiEditor({
 
   const applyCloudProject = useCallback((project: Project) => {
     setCurrentProjectId(project.id);
-    cloudBaseUpdatedAtRef.current = project.updated_at ?? null;
+    cloudBaseRef.current = { updatedAt: project.updated_at ?? null, title: project.title, content: project.content };
     setTitle(project.title);
     setContent(project.content);
     setSettings(
@@ -675,7 +676,7 @@ export default function TategakiEditor({
         setUnresolvedCloudImages(null);
         setImageWarningBaselineIds(new Set());
         setCurrentProjectId(null);
-        cloudBaseUpdatedAtRef.current = null;
+        cloudBaseRef.current = null;
         loadedDocIdRef.current = DEMO_PROJECT.id;
         setDocId(DEMO_PROJECT.id);
         hasLoadedRef.current = true;
@@ -718,7 +719,7 @@ export default function TategakiEditor({
       // with this document — and any technical break its manifest poll
       // reported while this load was in flight.
       setCurrentProjectId(null);
-      cloudBaseUpdatedAtRef.current = null;
+      cloudBaseRef.current = null;
       setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
 
@@ -1068,8 +1069,8 @@ export default function TategakiEditor({
       if (currentProjectId && !skipNewerCheck) {
         const cloudNow = await getProjectById(currentProjectId);
         if (!isSameDocument()) return;
-        if (cloudNow && isCloudVersionNewer(cloudNow.updated_at, cloudBaseUpdatedAtRef.current)) {
-          setCloudCompare({ cloud: cloudNow, base: cloudBaseUpdatedAtRef.current });
+        if (cloudNow && isCloudVersionChanged(cloudNow, cloudBaseRef.current)) {
+          setCloudCompare({ cloud: cloudNow, base: cloudBaseRef.current?.updatedAt ?? null });
           return;
         }
       }
@@ -1109,7 +1110,7 @@ export default function TategakiEditor({
       }
 
       if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
-      if (isSameDocument()) cloudBaseUpdatedAtRef.current = result.data.updated_at ?? null;
+      if (isSameDocument()) cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
