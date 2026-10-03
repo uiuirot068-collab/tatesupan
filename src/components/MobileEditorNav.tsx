@@ -114,6 +114,7 @@ export default function MobileEditorNav({
           <button
             type="button"
             onClick={onShowPreview}
+            data-demo-target="preview"
             aria-pressed={mobileView === "preview"}
             className={tab(mobileView === "preview")}
           >

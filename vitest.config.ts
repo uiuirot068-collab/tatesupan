@@ -23,6 +23,8 @@ export default defineConfig({
       // CST-PORT-014: cloud version compare
       "src/lib/cloudVersionCompare.test.ts",
       "src/lib/cloudLink.test.ts",
+      // TSP-DEMO-001: おためしデモ on phones
+      "src/lib/tspDemo001.test.ts",
     ],
   },
 });

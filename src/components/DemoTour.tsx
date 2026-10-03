@@ -18,7 +18,7 @@ interface DemoTourProps {
   onExitToNewProject: () => void;
   onExitToBookshelf: () => void;
   onOpenFeatureGuide: () => void;
-  /** ［デモを終了］ — always available. */
+  /** ［デモを終了］→［終了する］ — always available, confirmed once. */
   onExit: () => void;
 }
 
@@ -41,6 +41,18 @@ export default function DemoTour({
   const narrow = useIsNarrowViewport();
   const cardRef = useRef<HTMLElement>(null);
   const [placement, setPlacement] = useState<DemoCardPlacement | null>(null);
+  // TSP-DEMO-001: the guide can be folded away (only the guide — the demo
+  // keeps running), and ［デモを終了］ asks once before leaving the demo.
+  const [collapsed, setCollapsed] = useState(false);
+  const [confirmingExit, setConfirmingExit] = useState(false);
+  const goNext = () => {
+    setConfirmingExit(false);
+    next();
+  };
+  const goPrev = () => {
+    setConfirmingExit(false);
+    prev();
+  };
 
   // `targetSelector` lets a step spotlight one specific control inside a
   // larger `data-demo-target` surface (see demoData.ts's own doc); it always
@@ -57,13 +69,18 @@ export default function DemoTour({
     const target = targets.find((node) => node.offsetParent !== null) ?? null;
     const targetRect = target?.getBoundingClientRect() ?? null;
     const cardRect = card.getBoundingClientRect();
+    const viewportHeight = document.documentElement.clientHeight;
     setPlacement(computeDemoCardPlacement(
       targetRect,
       { width: cardRect.width, height: card.scrollHeight },
-      { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight },
-      step.target === "export" ? "lower-safe" : "auto"
+      { width: document.documentElement.clientWidth, height: viewportHeight },
+      step.target === "export" ? "lower-safe" : "auto",
+      // TSP-DEMO-001: on phones the guide takes at most ~4 tenths of the
+      // screen and, with nothing to point at, sits at the bottom — the
+      // toolbar and the page in the middle stay readable.
+      narrow ? { maxCardHeight: Math.round(viewportHeight * 0.42), freeDock: "bottom" } : {}
     ));
-  }, [targetQuery, step.target]);
+  }, [targetQuery, step.target, narrow]);
 
   useEffect(() => {
     if (!targetQuery) return;
@@ -92,7 +109,7 @@ export default function DemoTour({
   useLayoutEffect(() => {
     const frame = window.requestAnimationFrame(updatePlacement);
     return () => window.cancelAnimationFrame(frame);
-  }, [stepNumber, narrow, updatePlacement]);
+  }, [stepNumber, narrow, collapsed, confirmingExit, updatePlacement]);
 
   useEffect(() => {
     let frame = 0;
@@ -100,12 +117,22 @@ export default function DemoTour({
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(updatePlacement);
     };
+    // A tap elsewhere (e.g. the phone 本文／プレビュー tabs) can show or hide
+    // the step's target without any resize or scroll — re-place after it.
+    let tapTimer = 0;
+    const scheduleAfterTap = () => {
+      window.clearTimeout(tapTimer);
+      tapTimer = window.setTimeout(schedulePlacement, 80);
+    };
     window.addEventListener("resize", schedulePlacement);
     window.addEventListener("scroll", schedulePlacement, true);
+    document.addEventListener("click", scheduleAfterTap, true);
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearTimeout(tapTimer);
       window.removeEventListener("resize", schedulePlacement);
       window.removeEventListener("scroll", schedulePlacement, true);
+      document.removeEventListener("click", scheduleAfterTap, true);
     };
   }, [updatePlacement]);
 
@@ -114,6 +141,21 @@ export default function DemoTour({
     : narrow
       ? { right: 12, bottom: 12 }
       : { right: 24, bottom: 24 };
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        data-demo-expand=""
+        onClick={() => setCollapsed(false)}
+        aria-label={`おためしデモの案内を開く（ステップ ${stepNumber} / ${total}）`}
+        className="pointer-events-auto fixed bottom-3 right-3 z-[60] flex items-center gap-2 rounded-full border border-ink/20 bg-base/95 px-3.5 py-2 text-xs font-semibold text-ink/80 shadow-sm backdrop-blur hover:bg-ink/5 md:bottom-6 md:right-6"
+      >
+        <span className="tabular-nums text-ink/55">STEP {stepNumber} / {total}</span>
+        案内を開く
+      </button>
+    );
+  }
 
   return (
     <aside
@@ -129,14 +171,28 @@ export default function DemoTour({
         <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-semibold text-ink/70">
           STEP {stepNumber} / {total}
         </span>
-        <button
-          type="button"
-          data-demo-exit=""
-          onClick={onExit}
-          className="rounded px-2 py-1 text-[11px] font-medium text-ink/55 hover:bg-ink/5"
-        >
-          デモを終了
-        </button>
+        <span className="flex items-center gap-0.5">
+          <button
+            type="button"
+            data-demo-collapse=""
+            onClick={() => {
+              setConfirmingExit(false);
+              setCollapsed(true);
+            }}
+            className="rounded px-2 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/5"
+          >
+            案内をたたむ
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingExit(true)}
+            aria-expanded={confirmingExit}
+            className="rounded px-2 py-1 text-[11px] font-medium text-ink/55 hover:bg-ink/5"
+            data-demo-exit=""
+          >
+            デモを終了
+          </button>
+        </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
@@ -157,9 +213,46 @@ export default function DemoTour({
             {step.moreInfoLabel}
           </Link>
         ) : null}
+        {step.terms?.length ? (
+          <dl
+            data-demo-terms=""
+            className="mt-2 border-t border-ink/10 pt-1.5 text-[12px] leading-relaxed text-ink/65"
+          >
+            {step.terms.map((term) => (
+              <div key={term.word} className="flex gap-2">
+                <dt className="flex-none font-semibold text-ink/80">{term.word}</dt>
+                <dd>{term.meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
       </div>
 
-      {isLast ? (
+      {confirmingExit ? (
+        <div data-demo-exit-confirm="" className="mt-3 flex flex-none flex-col gap-2 border-t border-ink/10 pt-2">
+          <p className="text-[12px] leading-relaxed text-ink/75">
+            デモを終えて、TateSpunのトップページに戻ります。案内だけを隠したいときは「案内をたたむ」を使ってください。
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              data-demo-exit-cancel=""
+              onClick={() => setConfirmingExit(false)}
+              className="rounded-full border border-ink/20 px-3 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/5"
+            >
+              デモを続ける
+            </button>
+            <button
+              type="button"
+              data-demo-exit-confirm-button=""
+              onClick={onExit}
+              className="rounded-full bg-ink px-4 py-1.5 text-xs font-semibold text-base hover:opacity-90"
+            >
+              終了する
+            </button>
+          </div>
+        </div>
+      ) : isLast ? (
         <div className="mt-3 flex flex-none flex-col gap-1.5">
           <button
             type="button"
@@ -193,7 +286,7 @@ export default function DemoTour({
           <button
             type="button"
             data-demo-prev=""
-            onClick={prev}
+            onClick={goPrev}
             disabled={isFirst}
             className="rounded-full border border-ink/20 px-3 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/5 disabled:invisible"
           >
@@ -202,7 +295,7 @@ export default function DemoTour({
           <button
             type="button"
             data-demo-next=""
-            onClick={next}
+            onClick={goNext}
             className="rounded-full bg-ink px-5 py-1.5 text-xs font-semibold text-base hover:opacity-90"
           >
             次へ
