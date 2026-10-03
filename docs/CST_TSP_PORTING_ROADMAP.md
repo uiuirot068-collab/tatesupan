@@ -1,6 +1,6 @@
 # COLUMNSTAND ⇄ TateSpun 移植ロードマップ
 
-最終更新: 2026-10-03(CST-PORT-012 時点)
+最終更新: 2026-10-03(CST-PORT-013 時点)
 このファイルが進行表の正本。各回の終わりに「状態」を書き換える。各リポジトリの docs/CST_TSP_PORTING_ROADMAP.md は、その回のコミット時点の写し。
 
 ## なつおさんの方針(2026-10-02 13:55)
@@ -34,8 +34,8 @@
 | 1 | CST-PORT-005 | プレビューに「1ページ表示／見開き」切り替え | → TSP | 小〜中 | pageJump.ts は1ページ対応済み | 済み: Human QA 8/8 OK(1P/見開き7項目＋移動時の枠を青→金に修正)、master へ squash マージ(2026-10-02)。TSP更新履歴に掲載。CSTは元から有り載せない |
 | 2 | CST-PORT-006(文章チェックβ)・007(作業カウンター)・008(音読β)・009(描写・修飾β) | 見直し4種(A2) | → CST | 中×4 | 1種ずつコミットを分けた。縦書き専用ルールは見直し(13ルールすべて横書きでも有効)。本文の下に「見直し」の切り替え欄を新設。続けてA3(Review Hub・下部ピン) | 実装済み・Human QA 12/12 OK: 作業ブランチ claude/cst-port-006-text-check-hbbdsv(V3本線 9df78ab の上に 26bf69d / 86289ce / d7b94b8 / 266d2f0 ＋ロードマップ写し 887d185＋QA修正 c168a59、push済み)。更新履歴に4件掲載。スマホの見直し欄はQA中に修正。V3本線 c168a59 に取り込み済み(2026-10-02、fast-forward、戻し先 9df78ab)。**続きのA3 = CST-PORT-010**(見直しの一覧＋「下に表示」2つまで＋たたむ): 作業ブランチ claude/cst-port-010-review-hub-pw468x(V3本線 c168a59 の上)で実装、push済み(478d135)・Human QA 9/9 OK(2026-10-03)、V3本線 chatgpt/editor-v3-2-compact に fast-forward 取り込み済み(478d135、戻し先 c168a59、「COLUMNSTAND本線 push OK」2026-10-03)。更新履歴に1件 |
 | 3 | CST-PORT-011 | 表紙(B2、テンプレートなし含む) | → TSP | 大 | 描画はV2のPDF生成に合わせて作り直し(描画命令＋Canvasでプレビューと書き出しを共通化)。背文字の縦組み・右綴じの並び | Human QA 10/10 OK(2026-10-03): 作業ブランチ claude/cst-port-011-cover-to-tsp-l20lbn(TSP master 6a2c217 の上)に 96bfafd(push済み)。続けて「オプション」→「本づくり」＋開閉欄2つ(開いた状態を記憶)は なつおPC側の版(ループID CST-PORT-011B、ブランチ claude/cst-port-011b-bookmaking-menu b37292f、96bfafd の上、push済み 2026-10-03)。Human QA 9/9 OK(2026-10-03)。PR #25 で TateSpun master 61eec0e に取り込み済み(2026-10-03、戻し先 6a2c217)。クラウド側で重複して作った 960a3d3 は使わない(未push)。master マージは未。npm test 498件合格。更新履歴に1件。仕様 tatesupan docs/CST-PORT-011_COVER.md、状況 CST-PORT-011_STATUS_20261003.md |
-| 4 | CST-PORT-012 | 3Dプレビュー(B4) | → TSP | 大 | 3が前提。2ページだけ描く。gutterZone.ts は TSP に入れ済み | push済み・Human QA 1回目(2026-10-03): 額縁ラベルのスペース欄・ノドへの誘導 以外 pass → 修正済み(TSP のQA修正コミット、CST にも額縁ラベル修正 08b1740)、push OK・再QA待ち。仕様 tatesupan docs/CST-PORT-012_3D_PREVIEW.md、状況 CST-PORT-012_STATUS_20261003.md |
-| 5 | 未定 | 確認用PDF(B3、表紙＋本文＋裏表紙) | → TSP | 中 | 3が前提 | 未着手 |
+| 4 | CST-PORT-012 | 3Dプレビュー(B4) | → TSP | 大 | 3が前提。2ページだけ描く。gutterZone.ts は TSP に入れ済み | push済み・Human QA 1回目(2026-10-03): 額縁ラベルのスペース欄・ノドへの誘導 以外 pass → 修正済み(TSP e3910c7、CST にも額縁ラベル修正 08b1740)、push済み・再QA all pass(2026-10-03)、PR #26 で TSP master 458be3b・本番公開済み(戻し先 61eec0e)。仕様 tatesupan docs/CST-PORT-012_3D_PREVIEW.md、状況 CST-PORT-012_STATUS_20261003.md |
+| 5 | CST-PORT-013 | 確認用PDF(B3、表紙＋本文＋裏表紙) | → TSP | 中 | 3が前提 | 実装済み・push前(2026-10-03): tatesupan ブランチ claude/project-thread-szq5kn(master dfb1582 の上)。書き出し ▾ →「確認用PDF」。表紙→本文→裏表紙、反映した面だけ・カラー、背は入れない、仕上がり/断ち落とし、`_proof.pdf`。npm test 524件合格。更新履歴に1件。仕様 tatesupan docs/CST-PORT-013_PROOF_PDF.md、状況 CST-PORT-013_STATUS_20261003.md。push OK・Human QA 待ち |
 | 6 | 未定 | クラウドの新旧比較(B5) | → TSP | 小〜中 | DB変更なし | 未着手 |
 | 7 | 未定 | 検索結果に前後の文字(B7) | → TSP | 小 | 検索の中核は共通化済み | 未着手 |
 | 8 | 未定 | 長文の速度計測パネル(B6、?perf=1) | → TSP | 小 | 開発用 | 未着手 |

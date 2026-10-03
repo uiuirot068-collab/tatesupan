@@ -174,6 +174,14 @@ import { useBook3DPageTextures } from "@/components/book3d/useBook3DPageTextures
 import { useBook3DState } from "@/components/book3d/useBook3DState";
 import { book3dSpreadForPage, book3dViewForOpenState } from "@/lib/book3d/book3dModel";
 import type { CoverSettings } from "@/lib/cover/coverModel";
+import {
+  COVER_PROOF_HINT,
+  COVER_PROOF_LABEL,
+  coverProofFileStem,
+  coverProofOrderText,
+  coverProofPagesAround,
+  coverProofPaintPage,
+} from "@/lib/cover/coverProof";
 
 /** Presentation Page Sequence の1要素（編集本文 / 独立TOC / 横書き奥付）。 */
 type PresentationItem =
@@ -186,6 +194,8 @@ type PendingPdfExport = {
   indices: number[];
   pdfFileName: string;
   includeColophonInPdf: boolean;
+  /** CST-PORT-013: 確認用PDF — the applied cover first, the applied back cover last. */
+  proof: boolean;
 };
 
 /** Visual seam width (px) between the two pages of a spread. */
@@ -2005,9 +2015,16 @@ function PreviewPane({
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [pdfChecklistAttempt, setPdfChecklistAttempt] = useState<PdfExportChecklistAttempt | null>(null);
-  const [pdfMode, setPdfMode] = useState<PdfExportMode>("trim");
+  const [pdfModeChoice, setPdfMode] = useState<PdfExportMode>("trim");
+  // CST-PORT-013: the same PDF dialog opened as 確認用PDF（表紙＋本文＋裏表紙）.
+  const [isPdfProof, setIsPdfProof] = useState(false);
+  // 表紙を画像にしている間（書き出しの進み具合の画面が出る前）は、もう一度押せないようにする。
+  const [isPreparingProofCovers, setIsPreparingProofCovers] = useState(false);
   const [openPdfModeHelp, setOpenPdfModeHelp] = useState<PdfExportMode | null>(null);
-  const [pdfScope, setPdfScope] = useState<"all" | "selected">("all");
+  const [pdfScopeChoice, setPdfScope] = useState<"all" | "selected">("all");
+  // 確認用PDF is always the whole book, finished or with bleed (no 入稿用トンボ).
+  const pdfScope = isPdfProof ? "all" : pdfScopeChoice;
+  const pdfMode: PdfExportMode = isPdfProof && pdfModeChoice === "full" ? "trim" : pdfModeChoice;
   // 選択ページPDFで奥付を含めるか。default OFF——「奥付ONなら常にappend」とは
   // 推測しない（PDFは共有・確認用途にも使われるため、ユーザーの選択を尊重する）。
   // 全ページPDFは従来どおり奥付ONなら常に含める。
@@ -2033,12 +2050,16 @@ function PreviewPane({
     tocPageCount: v2PageModel?.tocPages.length ?? 0,
     colophonPageCount: v2ColophonPageCount > 0 ? v2ColophonPageCount : undefined,
   };
-  const pdfOddPageCheck = shouldWarnOddPageExport({
-    scope: pdfScope,
-    ...pdfPageCountParams,
-  });
+  // 確認用PDF is for reading, not for binding: no odd-page / 4の倍数 warnings (as in COLUMNSTAND).
+  const pdfOddPageCheck = isPdfProof
+    ? null
+    : shouldWarnOddPageExport({
+        scope: pdfScope,
+        ...pdfPageCountParams,
+      });
   const pdfTotalPageCount = exportTotalPageCount(pdfPageCountParams);
-  const pdfPageCountNotMultipleOfFour = shouldWarnPageCountNotMultipleOfFour(pdfScope, pdfTotalPageCount);
+  const pdfPageCountNotMultipleOfFour =
+    !isPdfProof && shouldWarnPageCountNotMultipleOfFour(pdfScope, pdfTotalPageCount);
   // TSP-PHASE13-001: effective resolution of the images this PDF would paint.
   // Pixel sizes are decoded only while the PDF dialog is open.
   const pdfTargetImagePages = pdfTargetBodyIndices.map((bodyIndex) => ({
@@ -2138,14 +2159,17 @@ function PreviewPane({
     if (pdfPreflightOpen) setPdfPreflightReviewedFingerprint(pdfPreflightFingerprint);
   }, [pdfPreflightOpen, pdfPreflightFingerprint]);
 
-  const handleOpenPdfModal = () => {
+  const openPdfModal = (proof: boolean) => {
     if (layout.paper.isPx) return; // Web閲覧用はPDF非対応（呼び出し元のUIでも選択不可にする）
+    setIsPdfProof(proof);
     setPdfFilenameStem(resolvedExportFilenameStem);
     setOpenPdfModeHelp(null);
     setPdfPreflightOpen(false);
     setPdfPreflightReviewedFingerprint(null);
     setIsPdfModalOpen(true);
   };
+  const handleOpenPdfModal = () => openPdfModal(false);
+  const handleOpenProofPdfModal = () => openPdfModal(true);
 
   const handlePdfModalEscape = useCallback(() => {
     if (openPdfModeHelp === null) return false;
@@ -2156,7 +2180,7 @@ function PreviewPane({
   const performDownloadPdf = async () => {
     if (layout.paper.isPx) return;
     if (pdfFilenameStem.length === 0) return; // ボタン側でも無効化するが、二重の安全網。
-    const pdfFileName = buildPdfFileNameFromStem(pdfFilenameStem);
+    const pdfFileName = buildPdfFileNameFromStem(isPdfProof ? coverProofFileStem(pdfFilenameStem) : pdfFilenameStem);
     const indices = pdfScope === "all" ? listPages.map((_, i) => i) : getOrderedSelectedIndices();
     if (pdfScope === "selected" && indices.length === 0) {
       alert("書き出すページを選択してください。");
@@ -2167,14 +2191,37 @@ function PreviewPane({
     // 選択ページPDF: 奥付 ON かつ「奥付ページを含める」を選んだ場合のみ含める。
     const includeColophonInPdf =
       showColophon && (pdfScope === "all" || pdfIncludeColophon);
-    const pending: PendingPdfExport = { indices, pdfFileName, includeColophonInPdf };
+    const pending: PendingPdfExport = { indices, pdfFileName, includeColophonInPdf, proof: isPdfProof };
     // Odd-page guidance is now part of the unified preflight accordion.
     // A warning can proceed after review; blockers are still re-checked above.
     await runPdfExport(pending);
   };
 
+  /** CST-PORT-013: the applied cover / back cover as images (proof only). Alerts and returns null on failure. */
+  const prepareProofCovers = async (proof: boolean) => {
+    if (!proof) return { leading: [], trailing: [] };
+    setIsPreparingProofCovers(true);
+    try {
+      const { renderCoverProofRasters } = await import("@/lib/cover/coverProofRun");
+      const rasters = await renderCoverProofRasters({
+        cover,
+        paperSize: settings.paperSize,
+        imageDataUrls: coverImageDataUrls ?? NO_COVER_IMAGES,
+      });
+      return coverProofPagesAround(rasters);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : "表紙を準備できませんでした。");
+      return null;
+    } finally {
+      setIsPreparingProofCovers(false);
+    }
+  };
+
   const runPdfExport = async (pending: PendingPdfExport) => {
     const { indices, pdfFileName, includeColophonInPdf } = pending;
+    const proofCovers = await prepareProofCovers(pending.proof);
+    if (!proofCovers) return;
+    const proofCoverCount = proofCovers.leading.length + proofCovers.trailing.length;
     if (useV2Engine) {
       let signal: AbortSignal | null = null;
       const perfEnabled = process.env.NODE_ENV !== "production";
@@ -2194,7 +2241,7 @@ function PreviewPane({
         if (uniqueIndices.length === 0 || uniqueIndices.some((index) => composed.pageSequence[index] === undefined)) {
           throw new Error("V2 PDF export could not resolve the selected canonical pages.");
         }
-        signal = beginExport("PDF", uniqueIndices.length);
+        signal = beginExport("PDF", uniqueIndices.length + proofCoverCount);
         // Unmounted while the layout was awaited: do not start a worker.
         throwIfExportCancelled(signal);
         const perfWorkerStartedAt = performance.now();
@@ -2206,6 +2253,8 @@ function PreviewPane({
           physicalIndices: uniqueIndices,
           layerOrder,
           mode: pdfMode,
+          leadingPages: proofCovers.leading.map(coverProofPaintPage),
+          trailingPages: proofCovers.trailing.map(coverProofPaintPage),
           onProgress: ({ current, total }) => setExportProgress({ current, total }),
         });
         v2PdfHandleRef.current = handle;
@@ -2300,6 +2349,7 @@ function PreviewPane({
         scale: pixelRatioForDpi(PDF_EXPORT_DPI),
         onProgress: (current, total) => setExportProgress({ current, total }),
         signal,
+        ...(proofCoverCount > 0 ? { coverPages: proofCovers } : {}),
       });
       // Success boundary: exportCustomPdf resolved — every page was captured
       // and jsPDF's `pdf.save()` download trigger fired without throwing. The
@@ -2321,7 +2371,8 @@ function PreviewPane({
   };
 
   const handleDownloadPdf = () => {
-    const attempt = readPdfExportChecklistAttempt();
+    // 確認用PDF is a reading copy, not the finished file: no 完成前チェックリスト gate.
+    const attempt = isPdfProof ? null : readPdfExportChecklistAttempt();
     if (attempt) {
       // Fresh attempt means 0/N every time, regardless of the editor
       // checklist's persistent completion state.
@@ -3003,6 +3054,7 @@ function PreviewPane({
     "jpg-zip": handleExportZip,
     "colophon-jpg": handleExportColophonJpg,
     pdf: handleOpenPdfModal,
+    proof: handleOpenProofPdfModal,
     cover: handleOpenCoverExport,
   };
   const exportMenuEntries = describeExportMenu({
@@ -3205,6 +3257,7 @@ function PreviewPane({
                       className="rounded px-2 py-1.5 text-left text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       {entry.label}
+                      {entry.detail ? <span className="block text-[11px] text-ink/55">{entry.detail}</span> : null}
                     </button>
                   ))}
                   {layout.paper.isPx && (
@@ -3741,9 +3794,9 @@ function PreviewPane({
           listener registered above. */}
       {isPdfModalOpen && !isExporting && (
         <ViewportModal
-          title="PDF出力"
+          title={isPdfProof ? COVER_PROOF_LABEL : "PDF出力"}
           titleId="pdf-export-setup-title"
-          closeLabel="PDF出力を閉じる"
+          closeLabel={isPdfProof ? "確認用PDFを閉じる" : "PDF出力を閉じる"}
           onClose={() => setIsPdfModalOpen(false)}
           onEscape={handlePdfModalEscape}
           panelClassName="max-w-sm"
@@ -3761,13 +3814,18 @@ function PreviewPane({
                 type="button"
                 onClick={handleDownloadPdf}
                 disabled={
+                  isPreparingProofCovers ||
                   (pdfScope === "selected" && selected.size === 0) ||
                   pdfFilenameStem.length === 0 ||
                   !canContinueExportAfterPreflight(pdfPreflightReport, pdfPreflightReviewed)
                 }
                 className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-paper-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {pdfPreflightReport.warningCount > 0 ? "確認してこのまま書き出す" : "ダウンロード"}
+                {isPreparingProofCovers
+                  ? "表紙を準備中…"
+                  : pdfPreflightReport.warningCount > 0
+                    ? "確認してこのまま書き出す"
+                    : "ダウンロード"}
               </button>
             </>
           )}
@@ -3789,6 +3847,19 @@ function PreviewPane({
               setImageWarningOpen(true);
             }}
           />
+          {isPdfProof ? (
+            <div data-pdf-proof-summary="" className="mb-3 border-l-[3px] border-accent py-1 pl-3 text-xs leading-relaxed">
+              <p className="text-[11px] text-ink/60">この順に1つのPDFにまとめます</p>
+              <p className="font-medium text-ink">{coverProofOrderText(cover, pdfTotalPageCount)}</p>
+              <p className="mt-1 text-[11px] text-ink/60">{COVER_PROOF_HINT}</p>
+              {!cover?.frontApplied || !cover?.backApplied ? (
+                <p className="mt-1 text-[11px] text-ink/60">
+                  表紙・裏表紙は「本づくり」の表紙の画面で「反映」を押した面だけが入ります。
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {!isPdfProof && (<>
           <p className="mb-1 text-xs font-medium text-ink/70">対象</p>
           <div className="mb-3 flex flex-col gap-2">
             {(
@@ -3813,6 +3884,7 @@ function PreviewPane({
               </label>
             ))}
           </div>
+          </>)}
           {showColophon && (
             pdfScope === "selected" ? (
               <label className="mb-3 flex cursor-pointer items-start gap-2 rounded border border-ink/10 px-3 py-2 text-sm hover:bg-ink/5">
@@ -3826,13 +3898,13 @@ function PreviewPane({
               </label>
             ) : (
               <p className="mb-3 rounded border border-ink/10 px-3 py-2 text-xs text-ink/60">
-                奥付ページは最後に含まれます。
+                {isPdfProof ? "奥付ページは本文の後ろ（裏表紙の前）に含まれます。" : "奥付ページは最後に含まれます。"}
               </p>
             )
           )}
           <p className="mb-1 text-xs font-medium text-ink/70">出力</p>
           <div className="flex flex-col gap-2">
-            {PDF_MODE_OPTIONS.map((option) => (
+            {PDF_MODE_OPTIONS.filter((option) => !isPdfProof || option.value !== "full").map((option) => (
               <PdfModeOption
                 key={option.value}
                 option={option}
@@ -3869,7 +3941,7 @@ function PreviewPane({
               aria-describedby="pdf-filename-stem-help"
               className="w-full min-w-0 rounded border border-ink/20 bg-base px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none"
             />
-            <span className="shrink-0 text-sm text-ink/60">.pdf</span>
+            <span className="shrink-0 text-sm text-ink/60">{isPdfProof ? "_proof.pdf" : ".pdf"}</span>
           </div>
           <p id="pdf-filename-stem-help" className="mt-1 text-xs text-ink/60">
             入稿用ファイル名は英数字がおすすめです。印刷所の指定もご確認ください。
@@ -3918,6 +3990,7 @@ function PreviewPane({
                 className="min-h-11 rounded border border-ink/20 px-3 py-2.5 text-left text-sm font-medium hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
               >
                 {entry.label}
+                {entry.detail ? <span className="block text-xs font-normal text-ink/60">{entry.detail}</span> : null}
               </button>
             ))}
             {layout.paper.isPx && (

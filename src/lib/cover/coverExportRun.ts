@@ -70,7 +70,8 @@ function buildJobs(request: CoverExportRequest): Job[] {
   }));
 }
 
-async function loadImages(plans: CoverPlan[], dataUrls: Record<string, string>): Promise<CoverImageSources> {
+/** 描画命令が使う表紙画像を読み込む（確認用PDF も使う）。 */
+export async function loadImages(plans: CoverPlan[], dataUrls: Record<string, string>): Promise<CoverImageSources> {
   const ids = Array.from(new Set(plans.flatMap(coverPlanImageIds)));
   const sources: CoverImageSources = {};
   for (const id of ids) {

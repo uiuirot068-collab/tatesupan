@@ -45,6 +45,9 @@ export interface ExportModelSource {
 export interface ExportPdfRequest extends ExportModelSource {
   physicalIndices: number[];
   mode: PublicationPdfMode;
+  /** CST-PORT-013 確認用PDF: pages before / after the body (cover, back cover). */
+  leadingPages?: PaintPagePlan[];
+  trailingPages?: PaintPagePlan[];
   onProgress: (progress: WorkerPdfProgress) => void;
 }
 
@@ -129,6 +132,8 @@ export class V2ExportWorkerClient {
         physicalIndices: [...request.physicalIndices],
         layerOrder: request.layerOrder,
         mode: request.mode,
+        ...(request.leadingPages?.length ? { leadingPages: request.leadingPages } : {}),
+        ...(request.trailingPages?.length ? { trailingPages: request.trailingPages } : {}),
       },
       modelPort ? [modelPort] : undefined
     );

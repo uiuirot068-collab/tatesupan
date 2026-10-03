@@ -36,8 +36,8 @@ describe("A. desktop regression -- the Preview's own 書き出し ▾ is intact"
 
   it("lists the same entries, in the same order, as before Loop 3", () => {
     const labels = (colophon: boolean) => describeExportMenu({ showColophon: colophon, pdfUnavailable: false }).map((e) => e.label);
-    expect(labels(false)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "PDF", "表紙（JPG / PDF）"]);
-    expect(labels(true)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "奥付ページ（JPG）", "PDF", "表紙（JPG / PDF）"]);
+    expect(labels(false)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "PDF", "確認用PDF", "表紙（JPG / PDF）"]);
+    expect(labels(true)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "奥付ページ（JPG）", "PDF", "確認用PDF", "表紙（JPG / PDF）"]);
   });
 
   it("still disables PDF (with the same explanation) for Web閲覧用 paper presets", () => {

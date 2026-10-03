@@ -10,11 +10,13 @@
  * they read refs, and handing them to a function during render trips the
  * react-hooks/refs rule -- PreviewPane maps `id -> handler` itself.
  */
-export type ExportMenuEntryId = "jpg" | "jpg-batch" | "jpg-zip" | "colophon-jpg" | "pdf" | "cover";
+export type ExportMenuEntryId = "jpg" | "jpg-batch" | "jpg-zip" | "colophon-jpg" | "pdf" | "proof" | "cover";
 
 export interface ExportMenuEntryDescriptor {
   id: ExportMenuEntryId;
   label: string;
+  /** A second, smaller line under the label (kept apart so the label never wraps mid-word). */
+  detail?: string;
   disabled?: boolean;
   /** Tooltip explaining why the entry is disabled. */
   disabledReason?: string;
@@ -40,6 +42,14 @@ export function describeExportMenu(params: {
     {
       id: "pdf",
       label: "PDF",
+      disabled: pdfUnavailable,
+      disabledReason: pdfUnavailable ? PDF_UNAVAILABLE_TITLE : undefined,
+    },
+    // CST-PORT-013: 表紙＋本文＋裏表紙を読む順に1つのPDFへ（PDFの画面を確認用で開く）
+    {
+      id: "proof",
+      label: "確認用PDF",
+      detail: "表紙＋本文＋裏表紙",
       disabled: pdfUnavailable,
       disabledReason: pdfUnavailable ? PDF_UNAVAILABLE_TITLE : undefined,
     },
