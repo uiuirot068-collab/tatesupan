@@ -38,6 +38,7 @@ import {
   USE_CASE_EXAMPLES,
   USE_CASES_NOT_YET_HEADING,
   USE_CASES_NOT_YET,
+  USE_CASE_PREPARING_LABEL,
 } from "@/lib/useCaseExamples";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
@@ -637,7 +638,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                     <ul className="home-use-list mt-5">
                       {USE_CASE_EXAMPLES.map((item) => (
                         <li key={item.title}>
-                          <strong className="font-serif">{item.title}</strong>
+                          <strong className="font-serif">{item.title}{item.preparing && <em className="home-use-preparing">{USE_CASE_PREPARING_LABEL}</em>}</strong>
                           <span>{item.body}</span>
                         </li>
                       ))}

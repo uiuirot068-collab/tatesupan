@@ -876,6 +876,22 @@
   text-wrap: pretty;
 }
 
+.home-use-preparing {
+  display: inline-block;
+  margin-left: .6rem;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 45%, transparent);
+  color: var(--home-ink);
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.5;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
 .home-use-notyet-title {
   display: flex;
   align-items: center;

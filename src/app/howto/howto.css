@@ -154,6 +154,7 @@ html[data-theme="dark"] .howto-page .toc-sheet-head { border-top-color: var(--go
 .howto-page .use-case-list b { font-family: var(--font-serif), serif; font-size: 16px; font-weight: 500; letter-spacing: .03em; line-height: 1.6; }
 .howto-page .use-case-list span { color: var(--muted); font-size: 13px; line-height: 1.8; }
 .howto-page .use-case-list :where(b, span), .howto-page .use-cases .section-hint { word-break: auto-phrase; text-wrap: pretty; }
+.howto-page .use-case-preparing { display: inline-block; margin-left: 10px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--text) 45%, transparent); font-family: system-ui, sans-serif; font-size: 11px; font-style: normal; font-weight: 700; letter-spacing: .08em; line-height: 1.5; vertical-align: 2px; white-space: nowrap; }
 .howto-page .use-case-notyet-title { display: flex; align-items: center; gap: 10px; margin: 40px 0 0; font-family: var(--font-serif), serif; font-size: 18px; font-weight: 500; letter-spacing: .06em; }
 .howto-page .use-case-notyet-title::before { width: 24px; height: 1px; background: var(--gold); content: ""; }
 .howto-page .use-case-notyet { margin-top: 14px; }

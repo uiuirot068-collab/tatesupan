@@ -29,6 +29,7 @@ import {
   USE_CASE_EXAMPLES,
   USE_CASES_NOT_YET_HEADING,
   USE_CASES_NOT_YET,
+  USE_CASE_PREPARING_LABEL,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import "./howto.css";
@@ -493,7 +494,7 @@ export default function HowToPage() {
           <ul className="use-case-list">
             {USE_CASE_EXAMPLES.map((item) => (
               <li key={item.title}>
-                <b>{item.title}</b>
+                <b>{item.title}{item.preparing && <em className="use-case-preparing">{USE_CASE_PREPARING_LABEL}</em>}</b>
                 <span>{item.body}</span>
               </li>
             ))}
