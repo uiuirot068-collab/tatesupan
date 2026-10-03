@@ -46,6 +46,10 @@ import PreviewPane from "./PreviewPane";
 import SearchReplaceModal from "./SearchReplaceModal";
 import { BookPartsModal, type BookPartTab } from "./BookPartsModal";
 import ColophonModal from "./ColophonModal";
+import CoverModal from "./cover/CoverModal";
+import CoverExportDialog from "./cover/CoverExportDialog";
+import { coverImageIds, type CoverFaceSide, type CoverSettings } from "@/lib/cover/coverModel";
+import { keepCover, settingsWithoutCover } from "@/lib/cover/coverSettingsSync";
 import HelpModal from "./HelpModal";
 import PdfExportNoticeModal from "./PdfExportNoticeModal";
 import { useShowPdfFilenameNotice } from "@/hooks/useShowPdfFilenameNotice";
@@ -141,6 +145,11 @@ export default function TategakiEditor({
   const isEphemeralRoute = demoMode || isEphemeralDocId(documentId);
   const [settings, setSettings] = useEditorSettings({ persist: !isEphemeralRoute });
   const [images, setImages] = useState<Record<string, string>>({});
+  // CST-PORT-011: 表紙画像（IndexedDB の id → dataUrl）。本文の挿絵とは別に持つ
+  // （本文の組版・画像管理センターには入れない）。
+  const [coverImages, setCoverImages] = useState<Record<string, string>>({});
+  const [coverModalSide, setCoverModalSide] = useState<CoverFaceSide | null>(null);
+  const [isCoverExportOpen, setIsCoverExportOpen] = useState(false);
   // Front/back stacking rank per image id, sourced from ImageRecord.layerOrder
   // (see lib/db.ts) — kept entirely separate from `content`/IMG markers so
   // reordering layers never touches document text, tokenLength, or
@@ -448,8 +457,51 @@ export default function TategakiEditor({
   const txtInputRef = useRef<HTMLInputElement | null>(null);
   const docxInputRef = useRef<HTMLInputElement | null>(null);
 
-  const layout = useMemo(() => computePageLayout(settings), [settings]);
+  // CST-PORT-011: 表紙（settings.cover）は本文の組版に関係しない。プレビュー・
+  // 組版には cover を除いた settings を渡し、表紙をいじっても本文の組み直しや
+  // プレビューの再描画が起きないようにする（中身が同じなら同じオブジェクト）。
+  const layoutSettingsKey = useMemo(() => JSON.stringify(settingsWithoutCover(settings)), [settings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const layoutSettings = useMemo(() => settingsWithoutCover(settings), [layoutSettingsKey]);
+  const layout = useMemo(() => computePageLayout(layoutSettings), [layoutSettings]);
   const isSampleDocument = demoMode || isEphemeralDocId(docId);
+  // プレビューから戻ってくる settings には cover がないので、いまの表紙を引き継ぐ
+  const handleLayoutSettingsChange = useCallback(
+    (next: PageSettings) => setSettings((previous) => keepCover(previous, next)),
+    [setSettings]
+  );
+  const handleCoverChange = useCallback(
+    (cover: CoverSettings) => setSettings((previous) => ({ ...previous, cover })),
+    [setSettings]
+  );
+  const handleCoverImageAdd = useCallback(
+    async (id: string, dataUrl: string) => {
+      setCoverImages((previous) => ({ ...previous, [id]: dataUrl }));
+      if (isSampleDocument) return;
+      await saveImage({ id, dataUrl, createdAt: Date.now() });
+    },
+    [isSampleDocument]
+  );
+  const openCoverExport = useCallback(() => setIsCoverExportOpen(true), []);
+  const coverImageKey = coverImageIds(settings.cover).join("\n");
+  useEffect(() => {
+    const ids = coverImageKey ? coverImageKey.split("\n") : [];
+    const missing = ids.filter((id) => coverImages[id] === undefined);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    loadImagesByIds(missing)
+      .then((records) => {
+        if (cancelled || records.length === 0) return;
+        setCoverImages((previous) => ({
+          ...Object.fromEntries(records.map((record) => [record.id, record.dataUrl])),
+          ...previous,
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [coverImageKey, coverImages]);
 
   // Phase 7 (lib/documentImages.ts): a local document holds only the images
   // its manuscript referenced when opened. A marker added later that is not in
@@ -1306,14 +1358,15 @@ export default function TategakiEditor({
               getLatestContent={getLatestContent}
               title={title}
               exportFilenameStem={settings.exportFilenameStem ?? ""}
-              settings={settings}
+              settings={layoutSettings}
               layout={layout}
               images={images}
               imageLayerOrder={imageLayerOrder}
               unresolvedImageIds={unresolvedImageIdSet}
               blockExportForUnresolvedImages={unresolvedImageIdSet.size > 0}
               onContentChange={setContent}
-              onSettingsChange={setSettings}
+              onSettingsChange={handleLayoutSettingsChange}
+              onOpenCoverExport={openCoverExport}
               onImageAdd={handleImageAdd}
               onImageDelete={handleImageDelete}
               onImageReplace={handleImageReplace}
@@ -1386,6 +1439,7 @@ export default function TategakiEditor({
 
       {activeDrawer === "options" && (
         <EditorOptionsDrawer
+          onOpenCover={() => setCoverModalSide("front")}
           onOpenVerticalColophon={() => { setBookPartsInitialTab("colophon"); setIsBookPartsModalOpen(true); }}
           onOpenHorizontalColophon={() => setIsColophonModalOpen(true)}
           onOpenToc={() => { setBookPartsInitialTab("toc"); setIsBookPartsModalOpen(true); }}
@@ -1423,9 +1477,39 @@ export default function TategakiEditor({
           currentTitle={title}
           content={content}
           layout={layout}
-          settings={settings}
+          settings={layoutSettings}
           images={images}
           initialTab={bookPartsInitialTab}
+        />
+      )}
+
+      {coverModalSide && (
+        <CoverModal
+          cover={settings.cover}
+          paperSize={settings.paperSize}
+          imageDataUrls={coverImages}
+          initialSide={coverModalSide}
+          onChange={handleCoverChange}
+          onImageAdd={handleCoverImageAdd}
+          onOpenExport={() => {
+            setCoverModalSide(null);
+            setIsCoverExportOpen(true);
+          }}
+          onClose={() => setCoverModalSide(null)}
+        />
+      )}
+
+      {isCoverExportOpen && (
+        <CoverExportDialog
+          cover={settings.cover}
+          paperSize={settings.paperSize}
+          stem={resolveExportFilenameStem(settings.exportFilenameStem)}
+          imageDataUrls={coverImages}
+          onOpenCover={() => {
+            setIsCoverExportOpen(false);
+            setCoverModalSide("front");
+          }}
+          onClose={() => setIsCoverExportOpen(false)}
         />
       )}
 

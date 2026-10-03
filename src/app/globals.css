@@ -171,7 +171,7 @@ body:has([data-howto-page]) {
          escape/save/focus-toggle affordances are already duplicated by
          MobileEditorNav (kept visible, below this block, unaffected), so
          nothing reachable is lost; only branding chrome disappears.
-       - `[data-editor-secondary-row]` -- the ▶設定/▶オプション/▶メモ/▶ヘルプ
+       - `[data-editor-secondary-row]` -- the ▶設定/▶本づくり/▶メモ/▶ヘルプ
          row. Not needed mid-keystroke; each opens its own drawer/modal
          requiring the keyboard to close first anyway.
        - `[data-demo-target="title"]` -- the document title input. Title
@@ -312,7 +312,7 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
   display: none;
 }
 
-/* Phase 3: the Editor's four panel doors (設定 / オプション / メモ / ヘルプ)
+/* Phase 3: the Editor's four panel doors (設定 / 本づくり / メモ / ヘルプ)
    read as one numbered, ruled index when the manuscript pane is wide --
    decoration only (the numbers are hidden from assistive tech), no size or
    behaviour change, nothing near the textarea. */

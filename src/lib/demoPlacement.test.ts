@@ -108,7 +108,7 @@ describe("responsive demo card placement", () => {
     // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G added one step (編集ページ).
     expect(data.match(/^    title: "/gm)).toHaveLength(12);
     expect(data).not.toMatch(/\bn:\s*\d+,/);
-    expect(data).toContain('title: "オプションも使えます"');
+    expect(data).toContain('title: "本づくりメニューも使えます"');
     expect(data).toContain('title: "集中モードで本文を広く"');
     expect(data).toContain('title: "作業タイムを記録しよう"');
     expect(data).toContain("作業スタート");

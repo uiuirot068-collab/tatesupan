@@ -1,6 +1,7 @@
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { createDefaultColophonSettings, type ColophonSettings } from "./colophon";
 import { createDefaultTocSettings, type TocSettings } from "./tocSettings";
+import type { CoverSettings } from "./cover/coverModel";
 
 export type PaperSizeKey = keyof typeof PAPER_SIZE_TEMPLATES;
 
@@ -155,6 +156,10 @@ export interface PageSettings {
   colophon: ColophonSettings;
   // Phase 11 Human-QA repair: TOC is work-owned structured data, never body text.
   toc?: TocSettings;
+  // CST-PORT-011: 表紙・背表紙・裏表紙（COLUMNSTAND と同じ形）。本文の組版・
+  // ページ分割には一切使わない（プレビューには cover を除いた settings を渡す）。
+  // 未作成の作品は undefined。
+  cover?: CoverSettings;
 }
 
 /** 特定ページ単位でマスターページ設定を上書きする項目 */

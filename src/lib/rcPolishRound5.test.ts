@@ -83,7 +83,7 @@ describe("Round 5 compact mobile Editor controls", () => {
     expect(secondaryRow).toContain("grid-cols-[auto_minmax(0,1fr)_auto_auto]");
     expect(secondaryRow).toContain("gap-0.5");
     expect(secondaryRow.match(/whitespace-nowrap/g)).toHaveLength(4);
-    expect(secondaryRow).toContain("▶オプション");
+    expect(secondaryRow).toContain("▶本づくり");
     expect(secondaryRow).not.toContain("flex-wrap");
   });
 
@@ -104,7 +104,7 @@ describe("Round 5 Demo contract", () => {
       "作品にタイトルをつけよう",
       "本のサイズを決めよう",
       "ノンブルや柱も設定できるよ",
-      "オプションも使えます",
+      "本づくりメニューも使えます",
       "困ったらヘルプへ",
       "集中モードで本文を広く",
     ]);

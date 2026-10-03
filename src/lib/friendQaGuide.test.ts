@@ -6,7 +6,7 @@ import { SAMPLE_PROJECT } from "../constants/sampleData";
 describe("FRIEND QA guide-book canonical seed", () => {
   it("uses current Editor labels and removes the stale four-menu explanation", () => {
     expect(SAMPLE_PROJECT.content).toContain(
-      "［▶設定］［▶オプション］［▶メモ］［▶ヘルプ］",
+      "［▶設定］［▶本づくり］［▶メモ］［▶ヘルプ］",
     );
     expect(SAMPLE_PROJECT.content).toContain(
       "［元に戻す］［やり直す］［改ページ挿入］［検索・置換］",

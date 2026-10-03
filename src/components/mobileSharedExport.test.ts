@@ -36,8 +36,8 @@ describe("A. desktop regression -- the Preview's own 書き出し ▾ is intact"
 
   it("lists the same entries, in the same order, as before Loop 3", () => {
     const labels = (colophon: boolean) => describeExportMenu({ showColophon: colophon, pdfUnavailable: false }).map((e) => e.label);
-    expect(labels(false)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "PDF"]);
-    expect(labels(true)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "奥付ページ（JPG）", "PDF"]);
+    expect(labels(false)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "PDF", "表紙（JPG / PDF）"]);
+    expect(labels(true)).toEqual(["JPG", "JPG一括（個別ダウンロード）", "JPG ZIP", "奥付ページ（JPG）", "PDF", "表紙（JPG / PDF）"]);
   });
 
   it("still disables PDF (with the same explanation) for Web閲覧用 paper presets", () => {
@@ -101,7 +101,7 @@ describe("C. shared contract -- one export implementation, two entry points", ()
 
   it("ids are bound to PreviewPane's own handlers in exactly one place", () => {
     const binding = preview.slice(preview.indexOf("const exportMenuHandlers"), preview.indexOf("const exportMenuEntries ="));
-    for (const handler of ["handleExportJpg", "handleExportJpgBatch", "handleExportZip", "handleExportColophonJpg", "handleOpenPdfModal"]) {
+    for (const handler of ["handleExportJpg", "handleExportJpgBatch", "handleExportZip", "handleExportColophonJpg", "handleOpenPdfModal", "handleOpenCoverExport"]) {
       expect(binding).toContain(`: ${handler}`);
       expect(count(preview, `const ${handler} = `)).toBe(1); // still defined exactly once
     }

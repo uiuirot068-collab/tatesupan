@@ -497,6 +497,8 @@ interface PreviewPaneProps {
   blockExportForUnresolvedImages?: boolean;
   onContentChange?: (content: string) => void;
   onSettingsChange?: (settings: PageSettings) => void;
+  /** CST-PORT-011: 書き出しメニューの「表紙（JPG / PDF）」— 表紙の書き出し画面を開く。 */
+  onOpenCoverExport?: () => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
   /** Link切れ画像を既存imageIdのまま差し替える。 */
@@ -585,6 +587,7 @@ function PreviewPane({
   unresolvedImageIds,
   onContentChange,
   onSettingsChange,
+  onOpenCoverExport,
   onImageAdd,
   onImageDelete,
   onImageReplace,
@@ -2887,12 +2890,14 @@ function PreviewPane({
   // dropdown below and the phone Editor-view export sheet. `run` is always one
   // of the handlers defined above -- the only place ids are bound to them --
   // so there is no second export implementation.
+  const handleOpenCoverExport = () => onOpenCoverExport?.();
   const exportMenuHandlers: Record<ExportMenuEntryId, () => void | Promise<void>> = {
     jpg: handleExportJpg,
     "jpg-batch": handleExportJpgBatch,
     "jpg-zip": handleExportZip,
     "colophon-jpg": handleExportColophonJpg,
     pdf: handleOpenPdfModal,
+    cover: handleOpenCoverExport,
   };
   const exportMenuEntries = describeExportMenu({
     showColophon,
@@ -3748,7 +3753,7 @@ function PreviewPane({
                 key={entry.id}
                 type="button"
                 data-export-sheet-entry={entry.id}
-                disabled={entry.disabled || isExporting || listPages.length === 0}
+                disabled={entry.disabled || isExporting || (entry.id !== "cover" && listPages.length === 0)}
                 title={entry.disabledReason}
                 onClick={() => {
                   onMobileExportClose?.();
