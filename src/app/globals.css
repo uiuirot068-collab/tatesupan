@@ -333,3 +333,331 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
   }
   html[data-theme="dark"] [data-editor-secondary-row] > button::before { color: #c6af63; }
 }
+
+/* ── CST-PORT-012: 3D book preview (from COLUMNSTAND editor-v3.css .cb3d-* / .eb3d-*) ──
+   Visual only. TateSpun colours: ink = インディゴ, accent = ウォームゴールド. */
+.book3d-layer {
+  --b3d-line: color-mix(in srgb, var(--ink) 16%, transparent);
+  --b3d-line-strong: color-mix(in srgb, var(--ink) 28%, transparent);
+  --b3d-muted: color-mix(in srgb, var(--ink) 58%, transparent);
+  --b3d-raised: var(--base);
+  --b3d-sunk: color-mix(in srgb, var(--ink) 7%, var(--base));
+}
+.cb3d-stage {
+  position: relative;
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.55), rgba(255,255,255,.08) 70%);
+  perspective: 1600px;
+  cursor: grab;
+  /* horizontal drags rotate; vertical swipes keep scrolling the page */
+  touch-action: pan-y;
+  user-select: none;
+}
+[data-theme="dark"] .cb3d-stage {
+  background: radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.07), rgba(255,255,255,0) 70%);
+}
+.cb3d-stage.is-dragging { cursor: grabbing; }
+.cb3d-zoom { transform-style: preserve-3d; transition: transform .18s ease-out; }
+.cb3d-book { position: relative; transform-style: preserve-3d; transition: transform .12s linear; }
+.cb3d-stage.is-dragging .cb3d-book { transition: none; }
+.cb3d-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.cb3d-front,
+.cb3d-back { width: 100%; height: 100%; box-shadow: 0 18px 40px rgba(20,15,22,.22); }
+.cb3d-spine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,.12), rgba(255,255,255,.08) 45%, rgba(0,0,0,.14));
+  pointer-events: none;
+}
+.cb3d-fore-edge {
+  background: repeating-linear-gradient(90deg, rgba(120,104,96,.16) 0 1px, transparent 1px 3px), #f4efe5;
+}
+.cb3d-cap {
+  background: repeating-linear-gradient(0deg, rgba(120,104,96,.16) 0 1px, transparent 1px 3px), #f4efe5;
+}
+.eb3d-root {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 12px 8px;
+}
+.eb3d-stage {
+  flex: 1 1 0;
+  min-height: 240px;
+  /* the stage centres the (unscaled) book in ONE fixed cell (CST low-height fit) */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.eb3d-stage > .cb3d-zoom { align-self: center; justify-self: center; }
+.eb3d-hinge,
+.eb3d-page-anchor,
+.eb3d-curved-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-style: preserve-3d;
+}
+.eb3d-hinge { transition: transform .35s ease; }
+.eb3d-stage.is-dragging .eb3d-hinge { transition: none; }
+/* one window onto the page image (flat part or one curl strip) */
+.eb3d-page-window {
+  position: absolute;
+  top: 0;
+  overflow: hidden;
+  background: #fffdf8;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* page-stack edges under the curved pages (天地 + 小口); they follow the curve */
+.eb3d-stack-edge,
+.eb3d-stack-fore { position: absolute; top: 0; pointer-events: none; }
+.eb3d-stack-edge {
+  background: repeating-linear-gradient(0deg, rgba(120,104,96,.20) 0 1px, transparent 1px 2.5px), #efe9de;
+}
+.eb3d-stack-fore {
+  background: repeating-linear-gradient(90deg, rgba(120,104,96,.20) 0 1px, transparent 1px 2.5px), #f1ebe1;
+}
+.eb3d-strip-shade { position: absolute; inset: 0; pointer-events: none; }
+.eb3d-page-crop { position: relative; }
+.eb3d-page-image,
+.eb3d-cover-image {
+  background-color: #fffdf8;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.eb3d-blank-page { width: 100%; height: 100%; background: #fffdf8; }
+.eb3d-blank-page[data-loading] {
+  background:
+    repeating-linear-gradient(90deg, rgba(31,42,68,.05) 0 1px, transparent 1px 14px),
+    #fffdf8;
+}
+/* ノド注意範囲: separate from trim / bleed / safe-area guides */
+.eb3d-gutter-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, rgba(196,74,120,.16) 0 6px, rgba(196,74,120,.08) 6px 12px);
+  box-shadow: inset 0 0 0 1px rgba(196,74,120,.28);
+  pointer-events: auto;
+  cursor: help;
+}
+.eb3d-placeholder-cover {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  background: linear-gradient(160deg, rgba(255,255,255,.65), rgba(255,255,255,0) 55%), #e9e3da;
+  color: #6b5d69;
+  text-align: center;
+}
+.eb3d-placeholder-cover strong { font-size: 16px; letter-spacing: .1em; }
+.eb3d-placeholder-cover span { font-size: 11px; opacity: .8; }
+.eb3d-plain-spine { background: linear-gradient(90deg, #8a7f86, #b3a9b0 50%, #7f747b); }
+/* cover board under the curved page block (open state) */
+.eb3d-board { position: absolute; top: 0; transform-style: preserve-3d; pointer-events: none; }
+.eb3d-board-plain { background: #ddd5c9; }
+.eb3d-board-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* compact control bar */
+.eb3d-bar-wrap {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  min-width: 0;
+  container: eb3d-bar / inline-size;
+}
+.eb3d-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border: 1px solid var(--b3d-line);
+  border-radius: 999px;
+  background: var(--b3d-raised);
+  box-shadow: 0 4px 14px rgba(30,22,32,.08);
+}
+.eb3d-bar::-webkit-scrollbar { display: none; }
+.eb3d-group { display: flex; flex: none; align-items: center; gap: 1px; }
+.eb3d-sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--b3d-line); }
+.eb3d-tool,
+.eb3d-seg button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.eb3d-tool:hover,
+.eb3d-seg button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.eb3d-tool:focus-visible,
+.eb3d-seg button:focus-visible,
+.eb3d-select select:focus-visible,
+.eb3d-guide-info-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.eb3d-tool.is-on,
+.eb3d-seg button.is-on { background: color-mix(in srgb, var(--ink) 80%, transparent); color: var(--base); }
+.eb3d-zoom-value {
+  flex: none;
+  min-width: 36px;
+  color: var(--b3d-muted);
+  font-size: 10.5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.eb3d-seg { display: flex; flex: none; gap: 1px; padding: 2px; border-radius: 999px; background: var(--b3d-sunk); }
+.eb3d-seg button { width: 26px; height: 24px; font-size: 11px; }
+.eb3d-select { position: relative; flex: none; margin-left: 4px; }
+.eb3d-select select {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--b3d-line);
+  border-radius: 999px;
+  background: var(--b3d-raised);
+  color: var(--ink);
+  font-size: 11px;
+}
+.eb3d-visually-hidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.eb3d-status {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--b3d-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eb3d-notice {
+  display: flex;
+  gap: 5px;
+  max-width: min(100%, 560px);
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #c98a1e 12%, var(--base));
+  color: var(--ink);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.eb3d-notice span { flex: none; color: #a86d0c; }
+.eb3d-guide-info {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 20;
+  width: min(360px, calc(100% - 24px));
+  transform: translateX(-50%);
+  padding: 14px 16px 12px;
+  border: 1px solid var(--b3d-line-strong);
+  border-left: 3px solid #c44a78;
+  border-radius: 10px;
+  background: var(--base);
+  box-shadow: 0 12px 32px rgba(30,22,32,.18);
+  color: var(--ink);
+}
+.eb3d-guide-info strong { display: block; margin-bottom: 6px; font-size: 13px; }
+.eb3d-guide-info p { margin: 0 0 10px; font-size: 12px; line-height: 1.7; }
+.eb3d-guide-info-check { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--b3d-muted); font-size: 11.5px; }
+.eb3d-guide-info-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.eb3d-guide-info-actions button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--b3d-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+.eb3d-guide-info-actions button.is-primary {
+  border-color: color-mix(in srgb, var(--ink) 80%, transparent);
+  background: color-mix(in srgb, var(--ink) 80%, transparent);
+  color: var(--base);
+}
+.eb3d-row-break,
+.eb3d-m-only { display: none; }
+@media (max-width: 900px) {
+  .cb3d-stage { perspective: 1200px; }
+  /* lighter on phones: no soft shadows, no easing */
+  .cb3d-front,
+  .cb3d-back { box-shadow: none; }
+  .cb3d-zoom,
+  .cb3d-book,
+  .eb3d-hinge { transition: none; }
+  .eb3d-root { padding: 6px 8px; }
+  .eb3d-stage { min-height: 120px; }
+}
+/* whenever the one-row bar would not fit, every control stays visible in two rows */
+@container eb3d-bar (max-width: 619px) {
+  .eb3d-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 4px;
+    width: 100%;
+    height: auto;
+    padding: 4px 6px;
+    overflow: visible;
+    border-radius: 18px;
+  }
+  .eb3d-row-break { display: block; flex-basis: 100%; height: 0; }
+  .eb3d-m-only { display: block; }
+  .eb3d-m-hide { display: none; }
+  .eb3d-m-1 { order: 1; }
+  .eb3d-m-2 { order: 2; }
+  .eb3d-m-3 { order: 3; }
+  .eb3d-m-4 { order: 4; }
+  .eb3d-m-5 { order: 5; }
+  .eb3d-m-6 { order: 6; }
+  .eb3d-m-7 { order: 7; }
+  .eb3d-m-8 { order: 8; }
+  .eb3d-m-9 { order: 9; }
+  .eb3d-m-10 { order: 10; }
+  .eb3d-m-11 { order: 11; }
+  .eb3d-tool { width: 32px; height: 32px; }
+  .eb3d-seg button { width: 30px; height: 28px; font-size: 12px; }
+  .eb3d-select { margin-left: 2px; }
+  .eb3d-select select { height: 30px; font-size: 12px; }
+}

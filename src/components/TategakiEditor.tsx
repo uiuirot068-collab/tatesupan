@@ -1367,6 +1367,8 @@ export default function TategakiEditor({
               onContentChange={setContent}
               onSettingsChange={handleLayoutSettingsChange}
               onOpenCoverExport={openCoverExport}
+              cover={settings.cover}
+              coverImageDataUrls={coverImages}
               onImageAdd={handleImageAdd}
               onImageDelete={handleImageDelete}
               onImageReplace={handleImageReplace}
