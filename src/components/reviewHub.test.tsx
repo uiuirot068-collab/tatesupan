@@ -65,7 +65,7 @@ const paneBetween = (from: string, to: string) => {
 };
 
 describe("B1 top toolbar is unchanged", () => {
-  it("still exposes exactly 設定・オプション・メモ・ヘルプ and no Review Hub entry", () => {
+  it("still exposes exactly 設定・本づくり・メモ・ヘルプ and no Review Hub entry", () => {
     const secondary = paneBetween('data-editor-secondary-row=""', "</nav>");
     expect(Array.from(secondary.matchAll(/data-editor-secondary="([^"]+)"/g), (m) => m[1])).toEqual([
       "settings",

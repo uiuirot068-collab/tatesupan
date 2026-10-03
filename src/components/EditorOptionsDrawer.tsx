@@ -1,6 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
+import { useBookmakingSections, type BookmakingSection } from "@/hooks/useBookmakingSections";
+
+// CST-PORT-011B: one collapsible group inside the ▶本づくり drawer.
+function DrawerAccordion({
+  id,
+  title,
+  summary,
+  open,
+  onToggle,
+  children,
+}: {
+  id: BookmakingSection;
+  title: string;
+  summary: string;
+  open: boolean;
+  onToggle: (section: BookmakingSection, open: boolean) => void;
+  children: ReactNode;
+}) {
+  const panelId = `bookmaking-section-${id}`;
+  return (
+    <section data-bookmaking-section={id} className="rounded-xl border border-ink/15 bg-base">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => onToggle(id, !open)}
+        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-ink/[0.04]"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-ink">{title}</span>
+          <span className="mt-0.5 block text-[11px] text-ink/50">{summary}</span>
+        </span>
+        <span aria-hidden="true" className={`shrink-0 text-xs text-ink/50 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
+      </button>
+      {open && (
+        <div id={panelId} className="grid gap-3 border-t border-ink/10 p-3">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
 
 interface EditorOptionsDrawerProps {
   /** CST-PORT-011: 表紙・裏表紙・背表紙 */
@@ -36,22 +78,25 @@ export default function EditorOptionsDrawer({
     return () => document.removeEventListener("keydown", close, true);
   }, [onClose]);
 
+  const [sections, setSectionOpen] = useBookmakingSections();
+
   const open = (action: () => void) => {
     onClose();
     action();
   };
   const flatOptionClass = "border-b border-ink/10 pb-3";
-  const groupedOptionClass = "rounded-xl border border-ink/15 bg-base p-3";
+  const groupedOptionClass = "grid gap-3";
   const buttonClass = "rounded border border-ink/20 bg-ink/[0.04] px-3 py-2 text-left text-sm font-medium text-ink/85 hover:border-ink/35 hover:bg-ink/[0.08]";
 
   return (
     <div className="fixed inset-0 z-[75] bg-black/35" onMouseDown={onClose}>
-      <aside aria-label="オプション" className="ml-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-base shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+      <aside aria-label="本づくり" className="ml-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-base shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-          <div><p className="text-[10px] tracking-[0.16em] text-ink/45">EDITOR OPTIONS</p><h2 className="text-base font-bold text-ink">オプション</h2></div>
-          <button type="button" onClick={onClose} aria-label="オプションを閉じる" className="rounded p-2 text-xl text-ink/55 hover:bg-ink/5">×</button>
+          <div><p className="text-[10px] tracking-[0.16em] text-ink/45">BOOKMAKING</p><h2 className="text-base font-bold text-ink">本づくり</h2></div>
+          <button type="button" onClick={onClose} aria-label="本づくりを閉じる" className="rounded p-2 text-xl text-ink/55 hover:bg-ink/5">×</button>
         </header>
-        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+          <DrawerAccordion id="book" title="本づくり" summary="表紙・奥付・目次・完成前チェック" open={sections.book} onToggle={setSectionOpen}>
           <section data-editor-option="cover" className={flatOptionClass}>
             <h3 className="text-sm font-semibold text-accent">表紙</h3>
             <p className="mt-1 text-xs text-ink/55">表紙・裏表紙・背表紙を作り、JPG / PDF で書き出します。</p>
@@ -77,9 +122,10 @@ export default function EditorOptionsDrawer({
             <p className="mt-1 text-xs text-ink/55">入稿前に自分の確認項目を見直します。</p>
             <button type="button" onClick={() => open(onOpenChecklist)} className={`${buttonClass} mt-2 w-full`}>完成前チェックを開く</button>
           </section>
+          </DrawerAccordion>
+          <DrawerAccordion id="files" title="原稿ファイル" summary="TXTの読み込み・書き出し、Wordの読み込み" open={sections.files} onToggle={setSectionOpen}>
           <section data-editor-option="txt-transfer" className={groupedOptionClass}>
-            <h3 className="text-sm font-semibold">原稿データ入出力</h3>
-            <div className="mt-2 grid gap-3">
+            <div className="grid gap-3">
               <div className="rounded-lg bg-ink/[0.035] p-3">
                 <p className="text-xs font-semibold">A 原稿データ（TXT）</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-ink/55">TateSpunの記法を残して保存・再読込できます。</p>
@@ -111,6 +157,7 @@ export default function EditorOptionsDrawer({
               </div>
             </div>
           </section>
+          </DrawerAccordion>
         </div>
       </aside>
     </div>

@@ -130,7 +130,7 @@ const HOWTO_QUICK_REFERENCE: { task: string; where: string; href: string }[] = [
   { task: "元に戻す・改ページ・検索・置換", where: "テキストエディター直上の４ボタン", href: "#four-buttons" },
   { task: "文章を見直す", where: "「見直し」→文章チェックβ・作業カウンター など", href: "#review-tools" },
   { task: "挿絵を入れる", where: "プレビュー画面→ページ上［…］内", href: "#image-insert" },
-  { task: "奥付を入れる", where: "▶オプション→奥付（縦）、奥付（横）", href: "#colophon" },
+  { task: "奥付を入れる", where: "▶本づくり→奥付（縦）、奥付（横）", href: "#colophon" },
   { task: "PDF・JPGで書き出す", where: "プレビュー画面左側「書き出し▼」", href: "#export" },
 ];
 
@@ -444,7 +444,7 @@ export default function HowToPage() {
 
         <section className="chapter essential" id="my-check">
           <h2 data-eyebrow="ESSENTIAL 01 / 05" data-copy-id="TEXT_SECTION_01_TITLE">1. 完成前マイチェックリスト＋PDF書き出し前チェック</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_01_SUBTITLE">場所：▶オプション→完成前チェックリスト</div>
+          <div className="subhead" data-copy-id="TEXT_SECTION_01_SUBTITLE">場所：▶本づくり→完成前チェック</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.myCheck.file)} alt={HOWTO_IMAGES.myCheck.alt} loading="lazy" />
@@ -553,7 +553,7 @@ export default function HowToPage() {
 
         <section className="chapter essential" id="varied-use">
           <h2 data-eyebrow="ESSENTIAL 05 / 05" data-copy-id="TEXT_SECTION_05_TITLE">5. 「ここで書かなくてもいい」原稿持ち込み運用</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_05_SUBTITLE">場所：▶オプション→TXT出入力</div>
+          <div className="subhead" data-copy-id="TEXT_SECTION_05_SUBTITLE">場所：▶本づくり→原稿ファイル</div>
           <div className="chapter-grid">
             <div className="image-frame">
               <img src={asset(HOWTO_IMAGES.txtImportExport.file)} alt={HOWTO_IMAGES.txtImportExport.alt} loading="lazy" />
@@ -570,7 +570,7 @@ export default function HowToPage() {
               <section className="copy-block">
                 <h3 data-copy-id="TEXT_SECTION_05_HEADING_03">併せて知ってほしい機能！</h3>
                 <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_03">
-                  <p><strong>TXTデータの読み込み・出力</strong><br />場所：▶オプション→TXT出入力</p>
+                  <p><strong>TXTデータの読み込み・出力</strong><br />場所：▶本づくり→原稿ファイル</p>
                   <p>メモ帳などで書いた <code>.txt</code> データを読み込めます。逆に、TateSpunで使っているマークダウン形式のまま保存することもできます。</p>
                   <p>さらに、文章校正（行頭下げ等）をした状態で、マークダウンのない整形TXTを書き出すこともできます。作品公開サイトへ持っていくときにも便利です！</p>
                 </div>
@@ -871,7 +871,7 @@ export default function HowToPage() {
         <details className="chapter tip" id="colophon">
           <summary className="tip-summary" data-eyebrow="TIPS 08 / 10">
             <h2 data-copy-id="TEXT_SECTION_13_TITLE">8. 横書きの奥付が配置できる「奥付機能」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_13_SUBTITLE">場所：▶オプション→奥付（縦）、奥付（横）</div>
+            <div className="subhead" data-copy-id="TEXT_SECTION_13_SUBTITLE">場所：▶本づくり→奥付（縦）、奥付（横）</div>
             <span className="tip-toggle" aria-hidden="true"></span>
           </summary>
           <div className="chapter-grid">
@@ -882,7 +882,7 @@ export default function HowToPage() {
               <div className="copy-body" data-copy-id="TEXT_SECTION_13_BODY_01">
                 縦と横で、別機能の奥付を付けられます。
                 <p><strong>奥付（縦）</strong><br />項目を入力すると、本文の末尾にテキストとして入力されます。テキストエディター内でさらに細かく調整できます。</p>
-                <p><strong>奥付（横）</strong><br />TateSpun内で唯一、横書き表記ができる機能です。横書き専用ページをプレビュー内に1枚追加します。テキストエディターではなく、再度「オプション→奥付（横）」を開くと編集できます。任意の位置にページを配置できます。</p>
+                <p><strong>奥付（横）</strong><br />TateSpun内で唯一、横書き表記ができる機能です。横書き専用ページをプレビュー内に1枚追加します。テキストエディターではなく、再度「本づくり→奥付（横）」を開くと編集できます。任意の位置にページを配置できます。</p>
                 <p>複数種類のテンプレートと配置位置を指定でき、項目も細かくカスタマイズ可能です。1冊につき1ページのみの機能なので、奥付以外にも活用方法がある……かも!?</p>
               </div>
             </div>

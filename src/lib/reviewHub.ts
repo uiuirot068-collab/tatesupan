@@ -63,7 +63,7 @@ const REVIEW_HUB_AREA_GAP_PX = 8;
  * own content height, capped by the space between the top of the Editor pane and
  * the top of the footer (`spaceAboveFooterPx`) so it can never leave the pane
  * (the global header stays untouched). On every ordinary phone/desktop that
- * content fits inside the manuscript area, so the title / undo-redo / 設定・オプション
+ * content fits inside the manuscript area, so the title / undo-redo / 設定・本づくり
  * rows are not covered; only on a very short screen, where the expanded footer
  * leaves the manuscript area smaller than the panel, does it rise over those rows
  * — and only as far as it needs. Longer content scrolls inside the panel.
