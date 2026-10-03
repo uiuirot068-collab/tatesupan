@@ -2369,8 +2369,7 @@ function PreviewPane({
   };
 
   const handleDownloadPdf = () => {
-    // 確認用PDF is a reading copy, not the finished file: no 完成前チェックリスト gate.
-    const attempt = isPdfProof ? null : readPdfExportChecklistAttempt();
+    const attempt = readPdfExportChecklistAttempt();
     if (attempt) {
       // Fresh attempt means 0/N every time, regardless of the editor
       // checklist's persistent completion state.
