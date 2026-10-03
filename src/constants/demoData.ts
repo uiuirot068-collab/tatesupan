@@ -73,6 +73,17 @@ export interface DemoStep {
   /** Optional contextual link shown under this step's explanation. */
   moreInfoHref?: string;
   moreInfoLabel?: string;
+  /**
+   * TSP-DEMO-001: plain-word notes for book-making words the step uses
+   * (ノンブル・柱 …), shown under the body so first-time visitors are not
+   * left with unexplained printing terms.
+   */
+  terms?: DemoTerm[];
+}
+
+export interface DemoTerm {
+  word: string;
+  meaning: string;
 }
 
 export const DEMO_STEPS: DemoStep[] = [
@@ -87,6 +98,9 @@ export const DEMO_STEPS: DemoStep[] = [
     target: "settings",
     mobileNote:
       "下の「設定」画面の「ページ設定」から、用紙サイズ・文字サイズ・余白・段組を調整できます。",
+    terms: [
+      { word: "段組", meaning: "1ページの本文を、上下2段などに分けて組むこと" },
+    ],
   },
   {
     title: "ノンブルや柱も設定できるよ",
@@ -94,12 +108,19 @@ export const DEMO_STEPS: DemoStep[] = [
     target: "settings",
     mobileNote:
       "「設定」画面の「ノンブル・柱」から、ページ番号やヘッダー／フッターを設定できます。",
+    terms: [
+      { word: "ノンブル", meaning: "ページ番号のこと" },
+      { word: "柱", meaning: "ページの余白に小さく入れる、作品名や章の名前" },
+    ],
   },
   {
     title: "本づくりメニューも使えます",
     body:
       "本づくりには、表紙、奥付（縦・横）、目次、完成前チェック、TXT出入力をまとめています。「本づくり」と「原稿ファイル」の2つに分かれています。",
     target: "options",
+    terms: [
+      { word: "奥付", meaning: "本の最後に載せる、書名・著者名・発行日などのまとめ" },
+    ],
   },
   {
     title: "困ったらヘルプへ",
@@ -122,6 +143,10 @@ export const DEMO_STEPS: DemoStep[] = [
     body:
       "本文に「吾輩は猫である」と入力してみましょう。プレビューがリアルタイムで変わります。ルビ（｜漢字《かんじ》）や【改ページ】も使えます。括弧や表記が気になるときは、文章チェックβも使えます。原稿をAIへ送らず、ブラウザ内でチェックします。",
     target: "editor",
+    terms: [
+      { word: "ルビ", meaning: "漢字の横に小さく添える読みがな" },
+      { word: "縦中横", meaning: "縦書きの中で、数字などを横向きに並べること" },
+    ],
   },
   {
     // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G: describes the paged

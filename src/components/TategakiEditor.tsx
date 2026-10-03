@@ -1374,6 +1374,7 @@ export default function TategakiEditor({
         >
           <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-lg md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
+              startSinglePageOnNarrow={demoMode}
               content={previewContent}
               documentKey={workSessionScope}
               getLatestContent={getLatestContent}

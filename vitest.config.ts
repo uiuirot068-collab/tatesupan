@@ -20,6 +20,8 @@ export default defineConfig({
       "src/hooks/useBookmakingSections.test.ts",
       // CST-PORT-012: 3D preview
       "src/lib/book3d/**/*.test.ts",
+      // TSP-DEMO-001: おためしデモ on phones
+      "src/lib/tspDemo001.test.ts",
     ],
   },
 });
