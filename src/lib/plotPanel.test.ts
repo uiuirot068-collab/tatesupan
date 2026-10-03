@@ -182,3 +182,18 @@ describe("PLT-LOOP-003 the panel stays read-only", () => {
     }
   });
 });
+
+describe("PLT-LOOP-003 QA: the plot side says it is view-only", () => {
+  it("tells writers the plot cannot be written here and points them to the memo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const view = readFileSync("src/components/PlotPanelView.tsx", "utf8");
+    const memo = readFileSync("src/components/InlineMemoAccordion.tsx", "utf8");
+    const pane = readFileSync("src/components/EditorPane.tsx", "utf8");
+    expect(view).toContain("プロットを書くことはできません");
+    expect(view).toContain("プロット帳で直して、読み込み直してください");
+    expect(view).toContain("メモを開く");
+    expect(memo).toContain('data-plot-view-only=""');
+    expect(memo).toContain('onOpenMemo={() => chooseTab("memo")}');
+    expect(view + pane).not.toContain("原稿の横");
+  });
+});

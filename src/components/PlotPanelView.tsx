@@ -24,10 +24,13 @@ import {
 export default function PlotPanelView({
   storageKey,
   currentHeading,
+  onOpenMemo,
 }: {
   storageKey: string;
   /** the manuscript heading the cursor is under, or null */
   currentHeading: string | null;
+  /** switches the panel to the メモ tab, for writers who came here to write */
+  onOpenMemo: () => void;
 }) {
   const [plot, setPlot] = useState<Plot | null>(() =>
     typeof window === "undefined" ? null : readStoredPlot(window.localStorage, storageKey)
@@ -168,8 +171,12 @@ export default function PlotPanelView({
   if (!plot) {
     return (
       <div data-plot-panel="empty">
-        <p className="text-sm leading-relaxed text-ink/75">プロット帳で作ったプロットを読み込むと、原稿の横で章ごとに見られます。</p>
-        <p className="mt-1 text-xs leading-relaxed text-ink/55">カーソルのある章の見出し（例：# 第1章　帰郷）に合わせて、プロットも同じ章を開きます。ここでは見るだけで、原稿やメモは変わりません。</p>
+        <p className="text-sm leading-relaxed text-ink/75">プロット帳で作ったプロットを読み込むと、この欄で章ごとに見ながら原稿を書けます。</p>
+        <p data-plot-read-only-note="" className="mt-1 text-xs leading-relaxed text-ink/65">
+          ここはプロットを見るための欄で、プロットを書くことはできません。プロットはプロット帳で書きます。思いついたことを書きとめたいときはメモを使ってください。
+          <button type="button" onClick={onOpenMemo} className={`${linkButton} ml-1`}>メモを開く</button>
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-ink/55">カーソルのある章の見出し（例：# 第1章　帰郷）に合わせて、プロットも同じ章を開きます。原稿やメモは変わりません。</p>
         <div className="mt-3">{loaders}</div>
         {messages}
       </div>
@@ -231,6 +238,9 @@ export default function PlotPanelView({
           </li>
         ))}
       </ol>
+      <p data-plot-read-only-note="" className="mt-2 text-[11px] leading-relaxed text-ink/50">
+        プロットはここでは直せません。直すときはプロット帳で直して、読み込み直してください。
+      </p>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink/10 pt-2 text-xs text-ink/50">
         <span className="min-w-0 truncate">{plotDisplayTitle(plot)}</span>
         <span aria-hidden="true">·</span>

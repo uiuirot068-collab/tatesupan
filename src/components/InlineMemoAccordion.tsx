@@ -81,6 +81,7 @@ export default function InlineMemoAccordion({
           <button type="button" role="tab" aria-selected={tab === "plot"} data-memo-tab="plot" onClick={() => chooseTab("plot")} className={tabClass(tab === "plot")}>
             プロット
           </button>
+          {tab === "plot" && <span data-plot-view-only="" className="rounded border border-ink/15 px-1.5 text-[10px] text-ink/55">見るだけ</span>}
           {tab === "memo" && hasSavedDraft && <span className="text-[10px] text-accent">下書き保存済み</span>}
         </div>
         <div className="flex items-center gap-1">
@@ -99,7 +100,7 @@ export default function InlineMemoAccordion({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "plot" ? (
-          <PlotPanelView key={plotStorageKey} storageKey={plotStorageKey} currentHeading={currentHeading} />
+          <PlotPanelView key={plotStorageKey} storageKey={plotStorageKey} currentHeading={currentHeading} onOpenMemo={() => chooseTab("memo")} />
         ) : editing ? (
           <>
             <textarea
