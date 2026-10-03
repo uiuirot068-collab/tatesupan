@@ -23,8 +23,14 @@
 ## 作り
 - `src/lib/cloudVersionCompare.ts` … 新旧の判定・時刻の表示・控えの題名・文言。テスト `cloudVersionCompare.test.ts`（npm test に追加）。
 - `src/components/CloudVersionCompareModal.tsx` … 確認画面（ViewportModal）。
-- `src/components/TategakiEditor.tsx` … `cloudBaseUpdatedAtRef`、`saveToCloud(skipNewerCheck)`、「クラウド版を開く」。
+- `src/components/TategakiEditor.tsx` … `cloudBaseRef`（最後に読んだ・保存したクラウド版の時刻・題名・本文）、`saveToCloud(skipNewerCheck)`、「クラウド版を開く」。
+- `src/lib/cloudLink.ts` … 端末の作品と、そこから保存したクラウド作品の結びつき（ブラウザごとに localStorage `tatespun:cloud-link:local:{作品ID}`）。テスト `cloudLink.test.ts`。
 
 ## 画面確認（この環境）
 - next dev、Chromium、PC 1366px・スマホ 390px。クラウド（Supabase）は見せかけの応答に差し替え、開いたあとにクラウドの時刻と本文を新しくしてから「クラウドに保存」を押した。
 - 上書き: 保存が1回送られ「クラウドに保存しました！」。クラウド版を開く: 本文がクラウド版に替わり、本棚に「夜の港（この端末の控え）」ができた。やめる: 画面が閉じ、保存は送られない。
+
+## Human QA で直したところ（2026-10-03、なつおPC localhost:3114）
+- dc0dfde: 時刻が変わらない保存でも気づけるよう、時刻だけでなく題名・本文が違うときも確認画面を出す（`isCloudVersionChanged`）。
+- ebb690e: 端末の作品を2つのタブで開いて別々に保存すると、クラウドに作品が2つできていた。なつおの決定（「そうする」）で、この端末の作品は、いつも同じクラウドの作品に保存する。2つ目のタブの保存では確認画面が出る（この画面の版は「この画面からは、まだクラウドに保存していません」と表示）。結びついたクラウド作品が消えていたら、これまでどおり新しく作る。
+- Human QA 1〜8 すべて合格（なつお、12:18）。
