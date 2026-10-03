@@ -3118,7 +3118,7 @@ function PreviewPane({
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
       `}</style>}
-      <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
+      <div data-demo-target="preview" className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           {onToggleCollapse && (
             <button

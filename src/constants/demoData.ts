@@ -86,62 +86,15 @@ export interface DemoTerm {
   meaning: string;
 }
 
+// TSP-DEMO-001: trimmed from 12 to 6 steps — only the path a first-time
+// visitor needs (書く → 見る → 本の設定 → 本づくり → 書き出す). Title, help,
+// focus mode, 編集ページ, 見直し and cloud save stay discoverable in the
+// editor and in HOW TO; the last step points there.
 export const DEMO_STEPS: DemoStep[] = [
   {
-    title: "作品にタイトルをつけよう",
-    body: "ここに入力したタイトルは、本棚の作品一覧に表示されます。",
-    target: "title",
-  },
-  {
-    title: "本のサイズを決めよう",
-    body: "ページ設定から用紙サイズを選べます。文字サイズ・余白・段組なども調整できます。",
-    target: "settings",
-    mobileNote:
-      "下の「設定」画面の「ページ設定」から、用紙サイズ・文字サイズ・余白・段組を調整できます。",
-    terms: [
-      { word: "段組", meaning: "1ページの本文を、上下2段などに分けて組むこと" },
-    ],
-  },
-  {
-    title: "ノンブルや柱も設定できるよ",
-    body: "本らしいページになるよう、ノンブルや柱なども細かく設定できます。",
-    target: "settings",
-    mobileNote:
-      "「設定」画面の「ノンブル・柱」から、ページ番号やヘッダー／フッターを設定できます。",
-    terms: [
-      { word: "ノンブル", meaning: "ページ番号のこと" },
-      { word: "柱", meaning: "ページの余白に小さく入れる、作品名や章の名前" },
-    ],
-  },
-  {
-    title: "本づくりメニューも使えます",
+    title: "文章を書いてみよう",
     body:
-      "本づくりには、表紙、奥付（縦・横）、目次、完成前チェック、TXT出入力をまとめています。「本づくり」と「原稿ファイル」の2つに分かれています。",
-    target: "options",
-    terms: [
-      { word: "奥付", meaning: "本の最後に載せる、書名・著者名・発行日などのまとめ" },
-    ],
-  },
-  {
-    title: "困ったらヘルプへ",
-    body:
-      "わからないことがあれば、いつでもヘルプを確認できます。開いても、このデモの進み具合は消えません。TateSpunで使える機能をまとめて知りたいときは、HOW TOで詳しい説明を確認できます。",
-    target: "help",
-    moreInfoHref: "/howto",
-    moreInfoLabel: "HOW TOで機能を見る ↗",
-  },
-  {
-    title: "集中モードで本文を広く",
-    body:
-      "「集中モード」で不要な情報を隠し、本文の編集領域を広くできます。通常表示へいつでも戻せます。",
-    target: "focus-mode",
-    mobileNote:
-      "スマートフォンでは「本文」と「プレビュー」を切り替えられます。「集中モード」なら不要な情報を隠して本文を広くでき、通常表示へいつでも戻せます。",
-  },
-  {
-    title: "実際に文章を書いてみよう",
-    body:
-      "本文に「吾輩は猫である」と入力してみましょう。プレビューがリアルタイムで変わります。ルビ（｜漢字《かんじ》）や【改ページ】も使えます。括弧や表記が気になるときは、文章チェックβも使えます。原稿をAIへ送らず、ブラウザ内でチェックします。",
+      "本文に文章を入力すると、プレビューの縦書きページにすぐ反映されます。ルビ（｜漢字《かんじ》）や【改ページ】も使えます。",
     target: "editor",
     terms: [
       { word: "ルビ", meaning: "漢字の横に小さく添える読みがな" },
@@ -149,48 +102,38 @@ export const DEMO_STEPS: DemoStep[] = [
     ],
   },
   {
-    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G: describes the paged
-    // long-document editor surface (NEXT_PUBLIC_TATESPUN_EDITOR_SURFACE=WINDOWED).
-    // Kept as a general "did you know" step even when the default FULL
-    // surface is active (the demo manuscript is far too short to ever
-    // split into more than one 編集ページ either way) -- copy matches the
-    // ACTUAL implemented Preview interaction (⋮ メニュー →「編集位置へ移動」),
-    // never a direct page-click, which isn't implemented.
-    title: "長い原稿は「編集ページ」で軽やかに",
-    body:
-      "長い原稿は、快適に編集できるよう適度な長さで編集ページに分かれます。「ここで区切る」で好きな位置に分けたり、「前のページとつなぐ」で戻したりできます。編集ページは作業用の区切りなので、原稿そのものやプレビュー・PDF・JPGのページには影響しません。",
-    // TSP-PAGED-EDITOR-PREVIEW-SYNC-STABILITY-011 §G: spotlight just the
-    // ←編集ページN/M→ 全文を選択 ここで区切る nav row (PagedEditor.tsx's own
-    // `data-editor-page-navigator` hook), not the whole editor textarea --
-    // that row is a thin strip near the top of the pane, so a below-target
-    // popover placement no longer has to fight the full-height editor rect
-    // for room. Absent entirely on the (default) non-paged editor surface,
-    // in which case this step falls back to the ordinary floating placement
-    // like any other targetless step.
-    targetSelector: "[data-editor-page-navigator]",
+    title: "プレビューで本の形を見よう",
+    body: "プレビューでは、書いた文章が本のページの形で表示されます。",
+    target: "preview",
+    mobileNote: "上の「プレビュー」を押すと、本のページの形で確かめられます。「本文」で書く画面に戻れます。",
   },
   {
-    title: "「見直し」で原稿をチェックしよう",
-    body:
-      "「見直し」を押すと、文章チェックβ・作業カウンター・音読β・描写語・修飾表現チェックβなど、原稿を見直すための機能がまとまって開きます。フッターに表示する機能は最大2つまで選べます。",
-    targetSelector: "[data-editor-review-hub-trigger]",
+    title: "本のサイズと文字を決めよう",
+    body: "「設定」で、用紙サイズ・文字の大きさ・余白・段組、ノンブルや柱を決められます。",
+    target: "settings",
+    terms: [
+      { word: "段組", meaning: "1ページの本文を、上下2段などに分けて組むこと" },
+      { word: "ノンブル", meaning: "ページ番号のこと" },
+      { word: "柱", meaning: "ページの余白に小さく入れる、作品名や章の名前" },
+    ],
   },
   {
-    title: "作品を書き出してみよう",
-    body:
-      "プレビュー上部の「選択」で2ページ目にチェックを入れ、「書き出し」→ JPG → 書き出し設定 →「設定済みにする」→ ダウンロード、の順で書き出せます。JPGだけでなく、PDFやWeb版にも書き出せます。ダウンロードは任意です。",
+    title: "表紙や目次は「本づくり」へ",
+    body: "「本づくり」には、表紙・奥付・目次・完成前チェックをまとめています。",
+    target: "options",
+    terms: [
+      { word: "奥付", meaning: "本の最後に載せる、書名・著者名・発行日などのまとめ" },
+    ],
+  },
+  {
+    title: "書き出してみよう",
+    body: "プレビューの「書き出し」から、PDF・JPG・Web版で保存できます。デモでは保存しなくても大丈夫です。",
     target: "export",
   },
   {
-    title: "クラウド保存について",
-    body: "", // filled from auth state in DemoTour
-    target: "cloud-save",
-    mobileNote: "会員登録すると、作品ごとにクラウド保存を設定できます。",
-  },
-  {
-    title: "TateSpunの基本操作はこれで完了です！",
+    title: "基本の流れはこれでおしまいです",
     body:
-      "タイトルをつけて、本のサイズを決めて、文章を書いて、プレビューして、書き出すところまで体験できました。今度は、自分の作品を作ってみましょう。",
+      "書く、見る、整える、書き出す。これがTateSpunの流れです。わからないときは、いつでも「ヘルプ」を開けます。今度は自分の作品を作ってみましょう。",
   },
 ];
 

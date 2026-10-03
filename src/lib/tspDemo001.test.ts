@@ -45,8 +45,29 @@ describe("TSP-DEMO-001 plain words for printing terms", () => {
     for (const word of ["ノンブル", "柱", "段組", "奥付", "ルビ", "縦中横"]) {
       expect(terms.get(word)).toBeTruthy();
     }
-    const nombre = DEMO_STEPS.find((step) => step.title === "ノンブルや柱も設定できるよ");
-    expect(nombre?.terms?.map((t) => t.word)).toEqual(["ノンブル", "柱"]);
+    const settings = DEMO_STEPS.find((step) => step.target === "settings");
+    expect(settings?.terms?.map((t) => t.word)).toEqual(["段組", "ノンブル", "柱"]);
+  });
+});
+
+describe("TSP-DEMO-001 short tour", () => {
+  it("keeps only the first-time path: write, see, set up, bookmaking, export, done", () => {
+    expect(DEMO_STEPS.map((step) => step.target ?? null)).toEqual([
+      "editor",
+      "preview",
+      "settings",
+      "options",
+      "export",
+      null,
+    ]);
+    for (const step of DEMO_STEPS) {
+      expect(`${step.body}${step.mobileNote ?? ""}`).not.toMatch(/右側/);
+    }
+  });
+
+  it("can point at the preview on desktop and at the プレビュー tab on phones", () => {
+    expect(source("src/components/PreviewPane.tsx")).toContain('data-demo-target="preview"');
+    expect(source("src/components/MobileEditorNav.tsx")).toContain('data-demo-target="preview"');
   });
 });
 
