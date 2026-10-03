@@ -12,9 +12,17 @@
 export const SUPPORT_FANBOX_URL = "https://www.fanbox.cc/@caroad";
 export const SUPPORT_OFUSE_URL = "https://ofuse.me/caroad";
 
-export const SUPPORT_HEADING = "SpunTalesの開発を応援する";
+// SPN-SUPPORT-001: SpunTales全体の応援欄（caroad assets/js/support-note.js、
+// Pairlex・Moorlia）と同じやわらかい言い方にそろえる。OFUSE（1回ごと）が先、FANBOX（毎月）が後。
+export const SUPPORT_HEADING = "SpunTalesを応援する";
 export const SUPPORT_BODY =
-  "TateSpunを含むSpunTalesのツールは、個人で開発・運営しています。気に入っていただけたら、FANBOXやOFUSEから開発を応援していただけます。";
-export const SUPPORT_FANBOX_LABEL = "FANBOXで応援する";
-export const SUPPORT_OFUSE_LABEL = "OFUSEで応援する";
-export const SUPPORT_NOTE = "ご支援の有無にかかわらず、TateSpunの基本機能は無料でご利用いただけます。";
+  "TateSpunを気に入っていただけたら、開発の応援をしてもらえるとうれしいです。";
+export const SUPPORT_OFUSE_LABEL = "☕ OFUSEで応援";
+export const SUPPORT_FANBOX_LABEL = "🍰 FANBOXで応援";
+export const SUPPORT_NOTE =
+  "OFUSEは1回ごと、FANBOXは毎月の応援です。応援の有無で、使える機能が変わることはありません。";
+
+/** 書き出しに成功した直後、プレビュー欄にそっと出す一行。 */
+export const SUPPORT_AFTER_EXPORT_TEXT = "楽しんでもらえたら、応援してもらえるとうれしいです。";
+export const SUPPORT_AFTER_EXPORT_OFUSE_LABEL = "☕ OFUSE";
+export const SUPPORT_AFTER_EXPORT_FANBOX_LABEL = "🍰 FANBOX";

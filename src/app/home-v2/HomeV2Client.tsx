@@ -969,20 +969,20 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           </p>
           <div className="mt-5 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
             <a
-              href={SUPPORT_FANBOX_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full max-w-[280px] rounded-full border border-ink/20 px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 sm:w-auto dark:border-[#3A4658] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
-            >
-              {SUPPORT_FANBOX_LABEL}
-            </a>
-            <a
               href={SUPPORT_OFUSE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full max-w-[280px] rounded-full border border-ink/20 px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 sm:w-auto dark:border-[#3A4658] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
             >
               {SUPPORT_OFUSE_LABEL}
+            </a>
+            <a
+              href={SUPPORT_FANBOX_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full max-w-[280px] rounded-full border border-ink/20 px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 sm:w-auto dark:border-[#3A4658] dark:text-[#D4DBE7] dark:hover:bg-[#1D2430]"
+            >
+              {SUPPORT_FANBOX_LABEL}
             </a>
           </div>
           <p className="mt-3 text-xs text-ink/50 dark:text-[#939DAF]">{SUPPORT_NOTE}</p>

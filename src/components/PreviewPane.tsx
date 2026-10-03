@@ -147,6 +147,7 @@ const NO_LEGACY_PAGES: TategakiPage[] = [];
 const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import ExportSupportLine from "./ExportSupportLine";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
 import { exportPaintPagesToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
@@ -485,6 +486,9 @@ const PreviewSpread = memo(function PreviewSpread({
     </div>
   );
 });
+
+/** SPN-SUPPORT-001: sessionStorage flag set when the after-export support line is closed. */
+const EXPORT_SUPPORT_LINE_DISMISSED_KEY = "tatespun:export-support-line-dismissed";
 
 interface PreviewPaneProps {
   content: string;
@@ -1609,6 +1613,26 @@ function PreviewPane({
     setExportProgress(null);
   }, [exportCancellation]);
 
+  // SPN-SUPPORT-001: after a successful export, show one quiet support line
+  // in the header area (no popup). ✕ hides it for the rest of this visit.
+  const [isExportSupportLineVisible, setIsExportSupportLineVisible] = useState(false);
+  const markExportSucceeded = useCallback(() => {
+    try {
+      if (window.sessionStorage.getItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY)) return;
+    } catch {
+      // Storage unavailable: still show the line.
+    }
+    setIsExportSupportLineVisible(true);
+  }, []);
+  const dismissExportSupportLine = useCallback(() => {
+    setIsExportSupportLineVisible(false);
+    try {
+      window.sessionStorage.setItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY, "1");
+    } catch {
+      // Storage unavailable: hidden until the next export.
+    }
+  }, []);
+
   const continueExport = useCallback(() => {
     exportCancellation.continueExport();
     v2PdfHandleRef.current?.resume();
@@ -1803,6 +1827,7 @@ function PreviewPane({
           saveAs(page.blob, page.fileName);
         }
       }
+      markExportSucceeded();
     } catch (error: unknown) {
       if (!isExportCancelledError(error)) {
         alert(error instanceof Error ? error.message : "V2 JPG export failed.");
@@ -1848,6 +1873,7 @@ function PreviewPane({
         resolvePrintJpgGeometry(el),
         signal
       );
+      markExportSucceeded();
     } catch (err) {
       if (!isExportCancelledError(err)) {
         alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
@@ -1879,6 +1905,7 @@ function PreviewPane({
         resolvePrintJpgGeometry(el),
         signal
       );
+      markExportSucceeded();
     } catch (err) {
       if (!isExportCancelledError(err)) {
         alert(err instanceof Error ? err.message : "JPG書き出しに失敗しました。");
@@ -1921,6 +1948,7 @@ function PreviewPane({
         resolvePrintJpgGeometry(items[0].element),
         signal
       );
+      markExportSucceeded();
     } catch (err) {
       if (!isExportCancelledError(err)) {
         alert(err instanceof Error ? err.message : "JPG一括書き出しに失敗しました。");
@@ -1964,6 +1992,7 @@ function PreviewPane({
         resolvePrintJpgGeometry(items[0].element),
         signal
       );
+      markExportSucceeded();
     } catch (err) {
       if (!isExportCancelledError(err)) {
         alert(err instanceof Error ? err.message : "ZIP書き出しに失敗しました。");
@@ -2210,6 +2239,7 @@ function PreviewPane({
 
         setIsPdfModalOpen(false);
         onPdfExportSuccess?.();
+        markExportSucceeded();
       } catch (error: unknown) {
         if (!isExportCancelledError(error)) {
           alert(error instanceof Error ? error.message : "V2 PDF export failed.");
@@ -2279,6 +2309,7 @@ function PreviewPane({
       // the post-export filename notice.
       setIsPdfModalOpen(false);
       onPdfExportSuccess?.();
+      markExportSucceeded();
     } catch (err) {
       if (!isExportCancelledError(err)) {
         alert(err instanceof Error ? err.message : "PDF書き出しに失敗しました。");
@@ -3190,6 +3221,9 @@ function PreviewPane({
           {layout.paper.label} / 全 {presentationSequence.length} ページ / 1ページ
           {layout.charsPerPage} 文字（{layout.charsPerLine}字×{layout.linesPerPage}行）
         </div>
+        {isExportSupportLineVisible && !isExporting && (
+          <ExportSupportLine onClose={dismissExportSupportLine} />
+        )}
         {showColophon && colophonInsertion.fallback && (
           <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
             指定した{colophonInsertion.requestedPage}P目が現在の本文にはありません。

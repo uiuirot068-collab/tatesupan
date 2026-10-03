@@ -1159,21 +1159,21 @@ export default function HowToPage() {
           <div className="support-actions">
             <a
               className="support-button"
-              data-support-cta="fanbox"
-              href={SUPPORT_FANBOX_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {SUPPORT_FANBOX_LABEL}
-            </a>
-            <a
-              className="support-button"
               data-support-cta="ofuse"
               href={SUPPORT_OFUSE_URL}
               target="_blank"
               rel="noopener noreferrer"
             >
               {SUPPORT_OFUSE_LABEL}
+            </a>
+            <a
+              className="support-button"
+              data-support-cta="fanbox"
+              href={SUPPORT_FANBOX_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {SUPPORT_FANBOX_LABEL}
             </a>
           </div>
           <p className="support-note" data-copy-id="TEXT_SUPPORT_NOTE">{SUPPORT_NOTE}</p>
