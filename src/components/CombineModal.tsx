@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/db';
 import type { PageSettings } from '@/lib/pageLayout';
 import { DEFAULT_PAGE_SETTINGS } from '@/lib/pageLayout';
+import { settingsWithoutCover } from '@/lib/cover/coverSettingsSync';
 import { combineNovelTexts, canUsePremiumFeatures, UserStatus } from '@/utils/combineProjects';
 
 /** 選択中の作品から「〜」ほか○編（短編集）形式のデフォルトタイトルを生成する */
@@ -111,7 +112,8 @@ export const CombineModal: React.FC<CombineModalProps> = ({
       const combinedContent = combineNovelTexts(targetDocs, insertTitleAsHeader);
 
       // 最初の作品の組版設定をベースに保存（存在する場合）
-      const baseSettings = targetDocs[0]?.settings ?? DEFAULT_PAGE_SETTINGS;
+      // 表紙（CST-PORT-011）は作品ごとのものなので短編集へは引き継がない
+      const baseSettings = settingsWithoutCover(targetDocs[0]?.settings ?? DEFAULT_PAGE_SETTINGS);
 
       // DBへ新規短編集として保存
       const newId = Date.now();

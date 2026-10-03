@@ -1,6 +1,11 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    // same as tsconfig "paths" ("@/*" -> "./src/*")
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   test: {
     environment: "node",
     include: [
@@ -9,6 +14,8 @@ export default defineConfig({
       // CST-PORT-004: shared with COLUMNSTAND (same core / same file)
       "src/lib/searchReplaceNavigation.test.ts",
       "src/lib/gutterZone.test.ts",
+      // CST-PORT-011: cover
+      "src/lib/cover/**/*.test.ts",
     ],
   },
 });

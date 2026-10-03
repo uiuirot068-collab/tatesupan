@@ -10,6 +10,7 @@ import { normalizeColophonSettings } from "@/lib/colophon";
 import { createDefaultTocSettings, normalizeTocSettings } from "@/lib/tocSettings";
 import { normalizeOutputTypography } from "@/lib/outputTypography";
 import { normalizeSettingsFonts } from "@/constants/fonts";
+import { normalizeSettingsCover, settingsWithoutCover } from "@/lib/cover/coverSettingsSync";
 
 const STORAGE_KEY = "tatespun_settings";
 
@@ -19,6 +20,8 @@ function loadStoredSettings(): PageSettings | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PageSettings>;
+    // CST-PORT-011: 表紙は作品固有。新規作品へ引き継がない。
+    delete parsed.cover;
     return normalizeOutputTypography(normalizeSettingsFonts({
       ...DEFAULT_PAGE_SETTINGS,
       ...parsed,
@@ -63,7 +66,7 @@ export function useEditorSettings({ persist = true }: { persist?: boolean } = {}
   useEffect(() => {
     if (!persist || !hasLoadedRef.current || typeof window === "undefined") return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsWithoutCover(settings)));
     } catch {
       // Ignore storage failures (e.g. private browsing quota exceeded).
     }
@@ -72,14 +75,14 @@ export function useEditorSettings({ persist = true }: { persist?: boolean } = {}
   const setSettings: Dispatch<SetStateAction<PageSettings>> = useCallback((next) => {
     setRawSettings((previous) => {
       const resolved = typeof next === "function" ? next(previous) : next;
-      return normalizeOutputTypography(normalizeSettingsFonts({
+      return normalizeOutputTypography(normalizeSettingsFonts(normalizeSettingsCover({
         ...DEFAULT_PAGE_SETTINGS,
         ...resolved,
         masterPage: { ...DEFAULT_MASTER_PAGE_SETTINGS, ...resolved.masterPage },
         pageOverrides: resolved.pageOverrides ?? {},
         colophon: normalizeColophonSettings(resolved.colophon),
         toc: normalizeTocSettings(resolved.toc),
-      }));
+      })));
     });
   }, []);
 

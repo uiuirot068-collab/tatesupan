@@ -7,6 +7,7 @@ import {
 } from "./pageLayout";
 import { createGuideColophonSettings, normalizeColophonSettings } from "./colophon";
 import { normalizeTocSettings } from "./tocSettings";
+import { normalizeSettingsCover } from "./cover/coverSettingsSync";
 import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import { isEphemeralDocId } from "@/constants/demoData";
 import { initializeWorkSessionScope } from "./editorSessionActivity";
@@ -87,7 +88,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
   // `masterPage` was added to it) still load with valid values.
   return {
     ...doc,
-    settings: normalizeSettingsFonts({
+    settings: normalizeSettingsFonts(normalizeSettingsCover({
       ...DEFAULT_PAGE_SETTINGS,
       ...doc.settings,
       masterPage: {
@@ -98,7 +99,7 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
       // 旧レコード（colophon 未保存）は既定の奥付設定（enabled=false）で開く。
       colophon: normalizeColophonSettings(doc.settings?.colophon, doc.title),
       toc: normalizeTocSettings(doc.settings?.toc),
-    }),
+    })),
     plotNote: doc.plotNote ?? "",
     isCollection: doc.isCollection ?? false,
     includedDocumentIds: doc.includedDocumentIds ?? [],

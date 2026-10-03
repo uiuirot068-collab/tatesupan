@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 
 interface EditorOptionsDrawerProps {
+  /** CST-PORT-011: 表紙・裏表紙・背表紙 */
+  onOpenCover: () => void;
   onOpenVerticalColophon: () => void;
   onOpenHorizontalColophon: () => void;
   onOpenToc: () => void;
@@ -15,6 +17,7 @@ interface EditorOptionsDrawerProps {
 }
 
 export default function EditorOptionsDrawer({
+  onOpenCover,
   onOpenVerticalColophon,
   onOpenHorizontalColophon,
   onOpenToc,
@@ -49,6 +52,11 @@ export default function EditorOptionsDrawer({
           <button type="button" onClick={onClose} aria-label="オプションを閉じる" className="rounded p-2 text-xl text-ink/55 hover:bg-ink/5">×</button>
         </header>
         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">
+          <section data-editor-option="cover" className={flatOptionClass}>
+            <h3 className="text-sm font-semibold text-accent">表紙</h3>
+            <p className="mt-1 text-xs text-ink/55">表紙・裏表紙・背表紙を作り、JPG / PDF で書き出します。</p>
+            <button type="button" onClick={() => open(onOpenCover)} className={`${buttonClass} mt-2 w-full`}>表紙を開く</button>
+          </section>
           <section data-editor-option="vertical-colophon" className={flatOptionClass}>
             <h3 className="text-sm font-semibold text-accent">奥付（縦）</h3>
             <p className="mt-1 text-xs text-ink/55">本文ページとして縦書きの奥付を作成します。</p>
