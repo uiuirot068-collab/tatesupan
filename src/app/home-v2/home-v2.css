@@ -824,6 +824,83 @@
 
 .home-p3-pill:hover { background: color-mix(in srgb, var(--home-ink) 6%, transparent); }
 
+/* TSP-COPY-001: ways to use / not yet. A ruled two-column index (one
+   column on phones); rows in the same line share a height through the grid. */
+.home-use-list,
+.home-use-notyet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--home-line);
+}
+
+.home-use-list li,
+.home-use-notyet li {
+  display: grid;
+  align-content: start;
+  gap: .3rem;
+  border-bottom: 1px solid var(--home-line);
+}
+
+.home-use-list li { padding: 1rem .25rem 1.1rem; }
+.home-use-notyet li { padding: .8rem .25rem .9rem; }
+
+.home-use-list strong {
+  color: var(--home-ink);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  line-height: 1.6;
+}
+
+.home-use-notyet strong {
+  color: var(--home-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.home-use-list span,
+.home-use-notyet span {
+  color: color-mix(in srgb, var(--home-ink) 68%, transparent);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.home-use-list :where(strong, span),
+.home-use-notyet :where(strong, span),
+[data-home-use-cases] > div > p {
+  word-break: auto-phrase;
+  text-wrap: pretty;
+}
+
+.home-use-notyet-title {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  color: var(--home-ink);
+  font-family: var(--font-serif), serif;
+  font-size: 16px;
+  letter-spacing: .06em;
+}
+
+.home-use-notyet-title::before {
+  width: 1.5rem;
+  height: 1px;
+  background: var(--home-gold);
+  content: "";
+}
+
+@media (min-width: 768px) {
+  .home-use-list,
+  .home-use-notyet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 2rem;
+  }
+}
+
 /* Closing band. */
 .home-p3-closing {
   background: var(--home-night);

@@ -23,6 +23,13 @@ import {
   SUPPORT_OFUSE_LABEL,
   SUPPORT_NOTE,
 } from "@/lib/supportLinks";
+import {
+  USE_CASES_HEADING,
+  USE_CASES_LEAD,
+  USE_CASE_EXAMPLES,
+  USE_CASES_NOT_YET_HEADING,
+  USE_CASES_NOT_YET,
+} from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import "./howto.css";
 
@@ -84,6 +91,7 @@ const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
 // rail (same chapters and names the hero menu already lists).
 const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] = [
   { group: "よく使う操作", items: [{ href: "#quick-reference", label: "操作と場所の早見表" }] },
+  { group: "使い方の例", items: [{ href: "#use-cases", label: USE_CASES_HEADING }] },
   {
     group: "まずは知ってほしい５つの機能",
     items: [
@@ -145,6 +153,19 @@ export default function HowToPage() {
   const [logLoadError, setLogLoadError] = useState(false);
   const [activeTocHref, setActiveTocHref] = useState<string | null>(null);
   const [allTipsOpen, setAllTipsOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
+
+  // TSP-COPY-001: the full table of contents opens as a sheet from the top
+  // of the page and from the sticky bar, so any chapter is one tap away.
+  useEffect(() => {
+    if (!tocOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTocOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.getElementById("howto-toc-close")?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [tocOpen]);
 
   // Phase 3: tips chapters are collapsible. Any in-page link (hero menu,
   // rail, quick reference, a shared #hash URL) opens the chapter it points
@@ -254,6 +275,17 @@ export default function HowToPage() {
                 デモを見る
               </Link>
             </div>
+            <button
+              type="button"
+              className="hero-toc-open"
+              data-howto-toc-open="hero"
+              aria-haspopup="dialog"
+              aria-expanded={tocOpen}
+              onClick={() => setTocOpen(true)}
+            >
+              <span>このページの目次をひらく</span>
+              <span aria-hidden="true">→</span>
+            </button>
             {/* Phase 3: where to start. Three chapters in reading order on one
                 thread, so a first-time reader knows what to read first. */}
             <div className="start-path-block">
@@ -371,8 +403,53 @@ export default function HowToPage() {
             >
               ヘルプ
             </button>
+            <button
+              type="button"
+              className="toc-cta"
+              data-howto-toc-open="sticky-nav"
+              aria-haspopup="dialog"
+              aria-expanded={tocOpen}
+              onClick={() => setTocOpen(true)}
+            >
+              目次
+            </button>
           </div>
         </header>
+
+        {tocOpen && (
+          <div className="toc-sheet-backdrop" onClick={() => setTocOpen(false)}>
+            <div
+              className="toc-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="howto-toc-title"
+              data-howto-toc-sheet=""
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="toc-sheet-head">
+                <p className="howto-chip">Contents</p>
+                <h2 id="howto-toc-title">目次</h2>
+                <button id="howto-toc-close" type="button" className="toc-sheet-close" onClick={() => setTocOpen(false)}>
+                  閉じる
+                </button>
+              </div>
+              <div className="toc-sheet-body">
+                {HOWTO_TOC.map((group) => (
+                  <div key={group.group} className="toc-sheet-group">
+                    <p className="toc-sheet-group-title">{group.group}</p>
+                    <ul>
+                      {group.items.map((item) => (
+                        <li key={item.href}>
+                          <a href={item.href} onClick={() => setTocOpen(false)}>{item.label}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="howto-layout">
           <nav className="howto-rail" aria-label="目次">
@@ -405,6 +482,31 @@ export default function HowToPage() {
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* TSP-COPY-001: what TateSpun can be used for besides a printed
+            novel, and what does not work yet (same copy as the Home). */}
+        <section className="use-cases" id="use-cases" aria-labelledby="use-cases-title">
+          <p className="howto-chip">Ways to Use</p>
+          <h2 id="use-cases-title">{USE_CASES_HEADING}</h2>
+          <p className="section-hint">{USE_CASES_LEAD}</p>
+          <ul className="use-case-list">
+            {USE_CASE_EXAMPLES.map((item) => (
+              <li key={item.title}>
+                <b>{item.title}</b>
+                <span>{item.body}</span>
+              </li>
+            ))}
+          </ul>
+          <h3 className="use-case-notyet-title">{USE_CASES_NOT_YET_HEADING}</h3>
+          <ul className="use-case-list use-case-notyet">
+            {USE_CASES_NOT_YET.map((item) => (
+              <li key={item.title}>
+                <b>{item.title}</b>
+                <span>{item.body}</span>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section className="intro" id="five-features">

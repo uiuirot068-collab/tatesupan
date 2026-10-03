@@ -32,6 +32,13 @@ import {
   SUPPORT_OFUSE_LABEL,
   SUPPORT_NOTE,
 } from "@/lib/supportLinks";
+import {
+  USE_CASES_HEADING,
+  USE_CASES_LEAD,
+  USE_CASE_EXAMPLES,
+  USE_CASES_NOT_YET_HEADING,
+  USE_CASES_NOT_YET,
+} from "@/lib/useCaseExamples";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
 import {
@@ -613,6 +620,39 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                     <div className="mt-8 flex flex-wrap items-center gap-x-2 gap-y-3">
                       <Link href="/editor?demo=1" className="home-p3-pill">デモで試す →</Link>
                       <Link href="/howto" className="home-p3-pill">HOW TOで読む →</Link>
+                    </div>
+                  </div>
+                </section>
+
+                {/* TSP-COPY-001: uses beyond a printed novel, and what does
+                    not work yet, so a first-time visitor can tell whether
+                    TateSpun fits what they want to make. */}
+                <section data-home-use-cases="" aria-labelledby="use-cases-title" className="home-p3-sided mx-auto mt-20 w-full max-w-[1040px] px-4 sm:px-6">
+                  <div className="home-p3-side">
+                    <p className="home-p3-chip">Ways to Use</p>
+                    <h2 id="use-cases-title" className="home-p3-side-title font-serif font-medium text-ink dark:text-[#D4DBE7]">{USE_CASES_HEADING}</h2>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-serif text-[15px] leading-8 text-ink/70 dark:text-[#AEB7C6]">{USE_CASES_LEAD}</p>
+                    <ul className="home-use-list mt-5">
+                      {USE_CASE_EXAMPLES.map((item) => (
+                        <li key={item.title}>
+                          <strong className="font-serif">{item.title}</strong>
+                          <span>{item.body}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="home-use-notyet-title mt-10">{USE_CASES_NOT_YET_HEADING}</p>
+                    <ul className="home-use-notyet mt-3">
+                      {USE_CASES_NOT_YET.map((item) => (
+                        <li key={item.title}>
+                          <strong>{item.title}</strong>
+                          <span>{item.body}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-8">
+                      <Link href="/howto#use-cases" className="home-p3-pill">HOW TOで読む →</Link>
                     </div>
                   </div>
                 </section>
