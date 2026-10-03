@@ -278,8 +278,12 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   const outerClassName = isNonEmptyVisual
     ? "home-v2-shell flex min-h-dvh flex-col px-0 min-[641px]:px-[29px] min-[921px]:px-[82px]"
     : "home-v2-shell flex min-h-dvh flex-col";
+  // The blur stays off below 640px: backdrop-filter makes this shell the
+  // containing block for position: fixed, and the phone bookshelf menu
+  // (Bookshelf.module.css, max-width: 639px) must center on the screen, not
+  // on this tall shell.
   const nonEmptyShellClassName =
-    "flex min-h-dvh w-full max-w-[1160px] flex-1 flex-col mx-auto bg-[rgba(250,248,242,0.78)] text-[#17243a] shadow-[0_0_0_1px_rgba(31,42,68,0.05),0_26px_90px_rgba(31,42,68,0.12)] backdrop-blur-[2px] dark:bg-[rgba(16,21,29,0.9)] dark:text-[#E4DFD3] dark:shadow-none";
+    "flex min-h-dvh w-full max-w-[1160px] flex-1 flex-col mx-auto bg-[rgba(250,248,242,0.78)] text-[#17243a] shadow-[0_0_0_1px_rgba(31,42,68,0.05),0_26px_90px_rgba(31,42,68,0.12)] min-[640px]:backdrop-blur-[2px] dark:bg-[rgba(16,21,29,0.9)] dark:text-[#E4DFD3] dark:shadow-none";
 
   // Phase 3: the four steps from manuscript to book, drawn as one thread
   // with large numerals (the same four steps the brand panel always listed).
