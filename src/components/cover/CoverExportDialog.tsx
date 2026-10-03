@@ -10,6 +10,8 @@
  */
 import { useState } from "react";
 import ViewportModal from "@/components/ViewportModal";
+import ExportSupportLine from "@/components/ExportSupportLine";
+import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import { PDF_UNAVAILABLE_NOTE } from "@/components/exportMenuEntries";
 import { createDefaultCoverSettings, type CoverSettings } from "@/lib/cover/coverModel";
 import { getCoverFaceGeometry } from "@/lib/cover/coverGeometry";
@@ -41,6 +43,8 @@ export default function CoverExportDialog({ cover, paperSize, stem, imageDataUrl
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  // SPN-SUPPORT-003: the same quiet after-export line as the Preview pane.
+  const [isSupportLineVisible, setIsSupportLineVisible] = useState(false);
 
   const availability = coverExportAvailability(content, settings);
   const fileNames = coverExportFileNames(content, settings, stem, format);
@@ -63,6 +67,7 @@ export default function CoverExportDialog({ cover, paperSize, stem, imageDataUrl
         onProgress: setProgress,
       });
       setProgress("書き出し完了");
+      if (!isExportSupportLineDismissed()) setIsSupportLineVisible(true);
     } catch (caught) {
       console.error(caught);
       setError(caught instanceof Error ? caught.message : "書き出し中にエラーが発生しました。");
@@ -184,6 +189,16 @@ export default function CoverExportDialog({ cover, paperSize, stem, imageDataUrl
         <p role="status" className="mt-3 text-xs text-ink/70">
           {progress}
         </p>
+      ) : null}
+      {isSupportLineVisible && !busy ? (
+        <div className="mt-3">
+          <ExportSupportLine
+            onClose={() => {
+              setIsSupportLineVisible(false);
+              rememberExportSupportLineDismissed();
+            }}
+          />
+        </div>
       ) : null}
       {error ? (
         <p role="alert" className="mt-3 text-xs text-red-700 dark:text-red-400">

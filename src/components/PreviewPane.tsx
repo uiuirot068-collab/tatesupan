@@ -148,6 +148,7 @@ const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import ExportSupportLine from "./ExportSupportLine";
+import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
 import { exportPaintPagesToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
@@ -497,9 +498,6 @@ const PreviewSpread = memo(function PreviewSpread({
   );
 });
 
-/** SPN-SUPPORT-001: sessionStorage flag set when the after-export support line is closed. */
-const EXPORT_SUPPORT_LINE_DISMISSED_KEY = "tatespun:export-support-line-dismissed";
-
 interface PreviewPaneProps {
   content: string;
   /** Phase 9: the open document (TategakiEditor's work-session scope); a change forces a full Preview snapshot. */
@@ -577,6 +575,8 @@ interface PreviewPaneProps {
    * owns the post-export filename notice.
    */
   onPdfExportSuccess?: () => void;
+  /** SPN-SUPPORT-003: the after-export support line was shown (true) or closed (false). */
+  onExportSupportLineChange?: (visible: boolean) => void;
   /**
    * TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: the phone Editor view's 書き出し
    * button (MobileEditorNav) opens THIS pane's export menu as a ViewportModal
@@ -633,6 +633,7 @@ function PreviewPane({
   onNavigateToSource,
   onBodyPageCountChange,
   onPdfExportSuccess,
+  onExportSupportLineChange,
   mobileExportOpen = false,
   onMobileExportClose,
   onExportActiveChange,
@@ -1626,21 +1627,22 @@ function PreviewPane({
   // SPN-SUPPORT-001: after a successful export, show one quiet support line
   // in the header area (no popup). ✕ hides it for the rest of this visit.
   const [isExportSupportLineVisible, setIsExportSupportLineVisible] = useState(false);
+  // SPN-SUPPORT-003: on a phone the export can run from the 編集 view, where
+  // this pane is off-screen; onExportSupportLineChange lets the Editor show
+  // the same line there.
+  const onExportSupportLineChangeRef = useRef(onExportSupportLineChange);
+  useEffect(() => {
+    onExportSupportLineChangeRef.current = onExportSupportLineChange;
+  }, [onExportSupportLineChange]);
   const markExportSucceeded = useCallback(() => {
-    try {
-      if (window.sessionStorage.getItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY)) return;
-    } catch {
-      // Storage unavailable: still show the line.
-    }
+    if (isExportSupportLineDismissed()) return;
     setIsExportSupportLineVisible(true);
+    onExportSupportLineChangeRef.current?.(true);
   }, []);
   const dismissExportSupportLine = useCallback(() => {
     setIsExportSupportLineVisible(false);
-    try {
-      window.sessionStorage.setItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY, "1");
-    } catch {
-      // Storage unavailable: hidden until the next export.
-    }
+    rememberExportSupportLineDismissed();
+    onExportSupportLineChangeRef.current?.(false);
   }, []);
 
   const continueExport = useCallback(() => {

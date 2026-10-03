@@ -57,6 +57,8 @@ import BetaFeedbackModal from "./BetaFeedbackModal";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import { Header } from "./Header";
 import MobileEditorNav from "./MobileEditorNav";
+import ExportSupportLine from "./ExportSupportLine";
+import { rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import {
   DEMO_PROJECT,
   DEMO_SEED_CONTENT,
@@ -320,6 +322,13 @@ export default function TategakiEditor({
   // TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: phone Editor-view access to the
   // Preview's own 書き出し menu (state only -- see the hook's doc).
   const sharedExport = useMobileSharedExport({ mobileView, isPreviewCollapsed, setIsPreviewCollapsed });
+  // SPN-SUPPORT-003: a phone export started from the 編集 view runs in the
+  // off-screen Preview, so its after-export support line is mirrored here.
+  const [isExportSupportLineVisible, setIsExportSupportLineVisible] = useState(false);
+  const dismissEditorExportSupportLine = useCallback(() => {
+    setIsExportSupportLineVisible(false);
+    rememberExportSupportLineDismissed();
+  }, []);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1254,6 +1263,12 @@ export default function TategakiEditor({
         exportBusy={sharedExport.isExporting}
       />
 
+      {isExportSupportLineVisible && mobileView === "editor" && !sharedExport.isExporting && (
+        <div className="px-3 md:hidden" data-editor-export-support-line="">
+          <ExportSupportLine onClose={dismissEditorExportSupportLine} />
+        </div>
+      )}
+
       <main
         ref={mainRef}
         data-review-surface={reviewSurface}
@@ -1390,6 +1405,7 @@ export default function TategakiEditor({
               onNavigateToSource={navigateEditorToGlobalOffset}
               onBodyPageCountChange={setBodyPageCount}
               onPdfExportSuccess={handlePreviewPdfExportSuccess}
+              onExportSupportLineChange={setIsExportSupportLineVisible}
               mobileExportOpen={sharedExport.mobileExportOpen}
               onMobileExportClose={sharedExport.closeMobileExport}
               onExportActiveChange={sharedExport.onExportActiveChange}
