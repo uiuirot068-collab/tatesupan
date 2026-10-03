@@ -643,6 +643,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                         <li key={item.title}>
                           <strong className="font-serif">{item.title}{item.preparing && <em className="home-use-preparing">{USE_CASE_PREPARING_LABEL}</em>}</strong>
                           <span>{item.body}</span>
+                          {item.detail && (
+                            <details className="home-use-detail">
+                              <summary>{item.detail.summary}</summary>
+                              <p>{item.detail.body}</p>
+                            </details>
+                          )}
+                          {item.elsewhere && (
+                            <a href={item.elsewhere.href} className="home-use-more">{item.elsewhere.label} <span aria-hidden="true">→</span></a>
+                          )}
                           {item.howtoHash && (
                             <Link href={`/howto${item.howtoHash}`} className="home-use-more">{USE_CASE_DETAIL_LABEL} <span aria-hidden="true">→</span></Link>
                           )}
@@ -655,6 +664,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                         <li key={item.title}>
                           <strong>{item.title}</strong>
                           <span>{item.body}</span>
+                          {item.detail && (
+                            <details className="home-use-detail">
+                              <summary>{item.detail.summary}</summary>
+                              <p>{item.detail.body}</p>
+                            </details>
+                          )}
+                          {item.elsewhere && (
+                            <a href={item.elsewhere.href} className="home-use-more">{item.elsewhere.label} <span aria-hidden="true">→</span></a>
+                          )}
                         </li>
                       ))}
                     </ul>

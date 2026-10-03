@@ -143,6 +143,7 @@ html[data-theme="dark"] .howto-page .toc-sheet-head { border-top-color: var(--go
 .howto-page .toc-sheet-group:last-child { border-bottom: 0; }
 .howto-page .toc-sheet-group-title { margin: 0 0 4px; color: var(--gold-text); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
 .howto-page .toc-sheet-group ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; margin: 0; padding: 0; list-style: none; }
+.howto-page .toc-sheet-group ul.toc-sheet-tasks { grid-template-columns: 1fr; }
 .howto-page .toc-sheet-group a { display: block; padding: 8px 4px; font-size: 14px; word-break: auto-phrase; line-height: 1.5; text-decoration: none; }
 .howto-page .toc-sheet-group a:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
 
@@ -158,6 +159,12 @@ html[data-theme="dark"] .howto-page .toc-sheet-head { border-top-color: var(--go
 .howto-page .use-case-more { justify-self: start; margin-top: 4px; color: var(--gold-text); font-size: 12px; font-weight: 700; text-decoration: none; }
 .howto-page .use-case-more i { font-style: normal; }
 .howto-page .use-case-more:hover { text-decoration: underline; text-underline-offset: 3px; }
+.howto-page .use-case-detail { margin-top: 4px; border-top: 1px dashed var(--line); }
+.howto-page .use-case-detail summary { display: flex; align-items: center; gap: 6px; padding: 8px 0 2px; font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.howto-page .use-case-detail summary::-webkit-details-marker { display: none; }
+.howto-page .use-case-detail summary::after { color: var(--gold); content: "▼"; font-size: 10px; transition: transform .2s ease; }
+.howto-page .use-case-detail[open] summary::after { transform: rotate(180deg); }
+.howto-page .use-case-detail p { margin: 4px 0 2px; color: var(--muted); font-size: 13px; line-height: 1.8; word-break: auto-phrase; text-wrap: pretty; }
 .howto-page .use-case-notyet-title { display: flex; align-items: center; gap: 10px; margin: 40px 0 0; font-family: var(--font-serif), serif; font-size: 18px; font-weight: 500; letter-spacing: .06em; }
 .howto-page .use-case-notyet-title::before { width: 24px; height: 1px; background: var(--gold); content: ""; }
 .howto-page .use-case-notyet { margin-top: 14px; }

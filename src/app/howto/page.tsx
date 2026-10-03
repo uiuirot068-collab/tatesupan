@@ -101,7 +101,7 @@ const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] =
       { href: "#writing-check", label: "文章チェックβ" },
       { href: "#body-notation", label: "本文記法" },
       { href: "#work-counter", label: "作業カウンター" },
-      { href: "#varied-use", label: "多様な使い方" },
+      { href: "#varied-use", label: "多様な使い方（原稿の持ち込み）" },
     ],
   },
   {
@@ -437,6 +437,16 @@ export default function HowToPage() {
                 </button>
               </div>
               <div className="toc-sheet-body">
+                <div className="toc-sheet-group">
+                  <p className="toc-sheet-group-title">やりたいことから探す</p>
+                  <ul className="toc-sheet-tasks">
+                    {HOWTO_QUICK_REFERENCE.map((row) => (
+                      <li key={row.task}>
+                        <a href={row.href} onClick={() => setTocOpen(false)}>{row.task}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
                 {HOWTO_TOC.map((group) => (
                   <div key={group.group} className="toc-sheet-group">
                     <p className="toc-sheet-group-title">{group.group}</p>
@@ -498,6 +508,15 @@ export default function HowToPage() {
               <li key={item.title}>
                 <b>{item.title}{item.preparing && <em className="use-case-preparing">{USE_CASE_PREPARING_LABEL}</em>}</b>
                 <span>{item.body}</span>
+                {item.detail && (
+                  <details className="use-case-detail">
+                    <summary>{item.detail.summary}</summary>
+                    <p>{item.detail.body}</p>
+                  </details>
+                )}
+                {item.elsewhere && (
+                  <a href={item.elsewhere.href} className="use-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
+                )}
                 {item.howtoHash && (
                   <a href={item.howtoHash} className="use-case-more">{USE_CASE_DETAIL_LABEL} <i aria-hidden="true">→</i></a>
                 )}
@@ -510,6 +529,15 @@ export default function HowToPage() {
               <li key={item.title}>
                 <b>{item.title}</b>
                 <span>{item.body}</span>
+                {item.detail && (
+                  <details className="use-case-detail">
+                    <summary>{item.detail.summary}</summary>
+                    <p>{item.detail.body}</p>
+                  </details>
+                )}
+                {item.elsewhere && (
+                  <a href={item.elsewhere.href} className="use-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
+                )}
               </li>
             ))}
           </ul>

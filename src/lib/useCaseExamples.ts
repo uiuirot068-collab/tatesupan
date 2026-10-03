@@ -9,7 +9,14 @@ export type UseCaseExample = {
   preparing?: boolean;
   /** HOW TO chapter that explains how to do it. */
   howtoHash?: string;
+  /** A folded note (opened with ▼) under the body. */
+  detail?: { summary: string; body: string };
+  /** A sibling SpunTales tool that fits better (site-absolute path). */
+  elsewhere?: { label: string; href: string };
 };
+
+// COLUMNSTAND lives outside TateSpun's basePath, so it is a site-absolute link.
+const COLUMNSTAND_LINK = { label: "横書きや写真入りの誌面なら COLUMNSTAND", href: "/columnstand/" };
 
 export const USE_CASE_DETAIL_LABEL = "くわしく";
 
@@ -49,7 +56,11 @@ export const USE_CASE_EXAMPLES: UseCaseExample[] = [
   },
   {
     title: "合同誌・アンソロジー",
-    body: "参加者の原稿を「本をまとめる」で一冊に並べる機能は、いま準備中です。それまでは、ひとつの作品に原稿を順に貼り付けて、あいだに改ページを入れると一冊にできます。",
+    body: "参加者の原稿を「本をまとめる」で一冊に並べる機能は、いま準備中です。",
+    detail: {
+      summary: "今のおすすめの進め方",
+      body: "現在は、参加者のみなさんにTateSpunで原稿を入力・確認してもらい、「▶本づくり→原稿ファイル」の「TXTを書き出す」で書き出したファイルを主催の方へ送ってもらう方法がおすすめです。主催の方は、届いた原稿をひとつの作品に順に貼り付け、あいだに改ページを入れて全体を調整します。",
+    },
     preparing: true,
     howtoHash: "#settings",
   },
@@ -65,10 +76,12 @@ export const USE_CASES_NOT_YET: UseCaseExample[] = [
   {
     title: "本文の横書き",
     body: "本文は縦書きだけです。横書きにできるのは奥付のみです。",
+    elsewhere: COLUMNSTAND_LINK,
   },
   {
     title: "写真やイラストを自由に並べるレイアウト",
     body: "画像はページの中央に置く形で、細かな位置は決められません。",
+    elsewhere: COLUMNSTAND_LINK,
   },
   {
     title: "何人かで同じ原稿を同時に書くこと",
