@@ -183,7 +183,7 @@ describe("PLT-LOOP-003 the panel stays read-only", () => {
   });
 });
 
-describe("PLT-LOOP-003 QA: the plot side says it is view-only", () => {
+describe("PLT-LOOP-003 QA: the plot side says it is view-only and in preparation", () => {
   it("tells writers the plot cannot be written here and points them to the memo", async () => {
     const { readFileSync } = await import("node:fs");
     const view = readFileSync("src/components/PlotPanelView.tsx", "utf8");
@@ -192,8 +192,16 @@ describe("PLT-LOOP-003 QA: the plot side says it is view-only", () => {
     expect(view).toContain("プロットを書くことはできません");
     expect(view).toContain("プロット帳で直して、読み込み直してください");
     expect(view).toContain("メモを開く");
-    expect(memo).toContain('data-plot-view-only=""');
+    expect(memo).toContain('data-plot-tab-preparing=""');
+    expect(memo).toContain("{PLOT_TAB_LABEL}");
     expect(memo).toContain('onOpenMemo={() => chooseTab("memo")}');
     expect(view + pane).not.toContain("原稿の横");
+  });
+});
+
+describe("PLT-LOOP-003 QA: tab name", () => {
+  it("names the tab プロット帳の読み込み", async () => {
+    const { PLOT_TAB_LABEL } = await import("./plotPanel");
+    expect(PLOT_TAB_LABEL).toBe("プロット帳の読み込み");
   });
 });

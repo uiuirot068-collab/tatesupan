@@ -7,7 +7,7 @@ import {
   readMemoDraft,
   writeMemoDraft,
 } from "@/lib/memoDraft";
-import { readMemoPanelTab, writeMemoPanelTab, type MemoPanelTab } from "@/lib/plotPanel";
+import { PLOT_TAB_LABEL, readMemoPanelTab, writeMemoPanelTab, type MemoPanelTab } from "@/lib/plotPanel";
 import PlotPanelView from "./PlotPanelView";
 
 export default function InlineMemoAccordion({
@@ -64,7 +64,7 @@ export default function InlineMemoAccordion({
     writeMemoPanelTab(window.localStorage, next);
   };
   const tabClass = (active: boolean) =>
-    `border-b-2 px-1 pb-0.5 text-sm transition-colors ${active ? "border-accent font-semibold text-ink" : "border-transparent text-ink/50 hover:text-ink/80"}`;
+    `whitespace-nowrap border-b-2 px-1 pb-0.5 text-sm transition-colors ${active ? "border-accent font-semibold text-ink" : "border-transparent text-ink/50 hover:text-ink/80"}`;
 
   return (
     <section
@@ -79,9 +79,9 @@ export default function InlineMemoAccordion({
             メモ
           </button>
           <button type="button" role="tab" aria-selected={tab === "plot"} data-memo-tab="plot" onClick={() => chooseTab("plot")} className={tabClass(tab === "plot")}>
-            プロット
+            {PLOT_TAB_LABEL}
+            <span data-plot-tab-preparing="" className="ml-1 rounded border border-ink/15 px-1 align-middle text-[10px] font-normal text-ink/55">準備中</span>
           </button>
-          {tab === "plot" && <span data-plot-view-only="" className="rounded border border-ink/15 px-1.5 text-[10px] text-ink/55">見るだけ</span>}
           {tab === "memo" && hasSavedDraft && <span className="text-[10px] text-accent">下書き保存済み</span>}
         </div>
         <div className="flex items-center gap-1">

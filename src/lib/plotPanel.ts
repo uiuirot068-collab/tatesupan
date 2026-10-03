@@ -288,6 +288,12 @@ export interface PlotPanelStorage {
   removeItem(key: string): void;
 }
 
+/**
+ * The tab's name. 「プロット帳」 is a working name and will change; the tab
+ * carries a 準備中 tag until the feature is officially released.
+ */
+export const PLOT_TAB_LABEL = "プロット帳の読み込み";
+
 const PLOT_PREFIX = "tatespun:plot-panel:v1:";
 export const MEMO_PANEL_TAB_KEY = "tatespun:memo-panel-tab:v1";
 export type MemoPanelTab = "memo" | "plot";
