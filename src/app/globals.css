@@ -591,10 +591,10 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
   width: min(360px, calc(100% - 24px));
   transform: translateX(-50%);
   padding: 14px 16px 12px;
-  border: 1px solid var(--b3d-line-strong);
-  border-left: 3px solid #c44a78;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-left: 3px solid var(--accent);
   border-radius: 10px;
-  background: var(--base);
+  background: color-mix(in srgb, var(--accent) 7%, var(--base));
   box-shadow: 0 12px 32px rgba(30,22,32,.18);
   color: var(--ink);
 }
@@ -612,11 +612,25 @@ html[data-theme="dark"] [data-nonempty-shell] [role="tab"][aria-selected="true"]
   font-size: 12px;
   cursor: pointer;
 }
-.eb3d-guide-info-actions button.is-primary {
-  border-color: color-mix(in srgb, var(--ink) 80%, transparent);
-  background: color-mix(in srgb, var(--ink) 80%, transparent);
-  color: var(--base);
+/* TateSpun: the guide box is gold like the rest of TateSpun's notices (CST's is pink) */
+.eb3d-guide-info-actions button.is-adjust {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--paper-ink);
+  font-weight: 600;
 }
+.eb3d-guide-info-actions button.is-primary {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: transparent;
+  color: var(--ink);
+}
+/* CST-PORT-012: 3D「ノドを調整する」で開いた設定の目印 */
+@keyframes tsp-setting-flash {
+  0%, 60% { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background: transparent; box-shadow: 0 0 0 4px transparent; }
+}
+.tsp-setting-flash { animation: tsp-setting-flash 2.4s ease-out 1; }
+.tsp-setting-flash input { border-color: var(--accent); }
 .eb3d-row-break,
 .eb3d-m-only { display: none; }
 @media (max-width: 900px) {

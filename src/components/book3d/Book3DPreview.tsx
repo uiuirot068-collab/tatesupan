@@ -85,6 +85,8 @@ export type Book3DPreviewProps = {
   onBindingChange: (binding: Book3DBinding) => void;
   onShowGutterGuideChange: (value: boolean) => void;
   onDismissGuideHelp: () => void;
+  /** 「ノドを調整する」: opens 設定 at the ノド field (CST: ページ設定 › ノド). Optional. */
+  onAdjustGutter?: () => void;
 };
 
 /* ── one page texture (image of the trim area) ───────────────────────── */
@@ -451,6 +453,7 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
     onBindingChange,
     onShowGutterGuideChange,
     onDismissGuideHelp,
+    onAdjustGutter,
   } = props;
 
   const [guideInfoOpen, setGuideInfoOpen] = useState(false);
@@ -461,10 +464,12 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
   }, []);
   // After "次からこの説明を表示しない" the guide keeps only its hover tooltip.
   const onGuideClick = showGuideHelp ? openGuideInfo : undefined;
-  const closeGuideInfo = (action: "keep" | "hide") => {
+  const closeGuideInfo = (action: "keep" | "hide" | "adjust") => {
     if (dontShowAgain) onDismissGuideHelp();
     if (action === "hide") onShowGutterGuideChange(false);
     setGuideInfoOpen(false);
+    // the guide stays visible so the effect of a new ノド value can be checked in 3D
+    if (action === "adjust") onAdjustGutter?.();
   };
 
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -564,6 +569,11 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
             <button type="button" onClick={() => closeGuideInfo("hide")}>
               非表示にする
             </button>
+            {onAdjustGutter ? (
+              <button type="button" className="is-adjust" onClick={() => closeGuideInfo("adjust")}>
+                ノドを調整する
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -549,59 +549,79 @@ function frameLabelOps(settings: CoverSettings, box: FaceBox, color: string, mea
     width: 1,
   });
 
-  const title = settings.simple.title || "タイトル";
-  const subtitle = settings.simple.subtitle || "サブタイトル";
-  const author = settings.simple.author || "著者名";
+  // 未入力は見本の文字、スペースだけなら「空欄」= その部分（文字の台紙ごと）を出さない。
+  const title = frameLabelText(settings.simple.title, "タイトル");
+  const subtitle = frameLabelText(settings.simple.subtitle, "サブタイトル");
+  const author = frameLabelText(settings.simple.author, "著者名");
   const paper = "rgba(247,242,232,0.96)";
 
-  const labelWidth = Math.min(W * 0.56, W - safeX * 2);
-  const labelX = (W - labelWidth) / 2;
-  const padV = W * 0.07;
-  const padH = W * 0.06;
-  const innerWidth = Math.max(1, labelWidth - padH * 2);
+  if (title !== null || subtitle !== null) {
+    const labelWidth = Math.min(W * 0.56, W - safeX * 2);
+    const labelX = (W - labelWidth) / 2;
+    const padV = W * 0.07;
+    const padH = W * 0.06;
+    const innerWidth = Math.max(1, labelWidth - padH * 2);
 
-  const titleFont: CoverFont = { family: COVER_MINCHO_FAMILY, sizePx: 18, weight: 500 };
-  const titleLineHeight = titleFont.sizePx * LINE_HEIGHT_NORMAL;
-  const titleLines = layoutHorizontalLines(title, titleFont, 0, innerWidth, measure);
-  const titleHeight = titleLines.length * titleLineHeight;
+    const titleFont: CoverFont = { family: COVER_MINCHO_FAMILY, sizePx: 18, weight: 500 };
+    const titleLineHeight = titleFont.sizePx * LINE_HEIGHT_NORMAL;
+    const titleLines = title === null ? [] : layoutHorizontalLines(title, titleFont, 0, innerWidth, measure);
+    const titleHeight = titleLines.length * titleLineHeight;
 
-  const subFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
-  const subLineHeight = subFont.sizePx * LINE_HEIGHT_NORMAL;
-  const subLines = layoutHorizontalLines(subtitle, subFont, 0, innerWidth, measure);
-  const subHeight = subLines.length * subLineHeight;
+    const subFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
+    const subLineHeight = subFont.sizePx * LINE_HEIGHT_NORMAL;
+    const subLines = subtitle === null ? [] : layoutHorizontalLines(subtitle, subFont, 0, innerWidth, measure);
+    const subHeight = subLines.length * subLineHeight;
 
-  const gap = 7;
-  const ruleAndPad = 1 + 7;
-  const labelHeight = padV * 2 + titleHeight + gap + ruleAndPad + subHeight;
-  ops.push({ kind: "fill", rect: { x: labelX, y: safeY, width: labelWidth, height: labelHeight }, fill: { type: "solid", color: paper } });
+    // 罫線はタイトルとサブタイトルの両方があるときだけ（その間に引く）
+    const both = title !== null && subtitle !== null;
+    const gap = 7;
+    const ruleAndPad = 1 + 7;
+    const labelHeight = padV * 2 + titleHeight + subHeight + (both ? gap + ruleAndPad : 0);
+    ops.push({ kind: "fill", rect: { x: labelX, y: safeY, width: labelWidth, height: labelHeight }, fill: { type: "solid", color: paper } });
 
-  const innerX = labelX + padH;
-  const titleTop = safeY + padV;
-  placeLines(ops, titleLines, titleFont, color, { x: innerX, y: titleTop, width: innerWidth }, titleLineHeight, "center");
-  const ruleY = titleTop + titleHeight + gap + 0.5;
-  ops.push({ kind: "line", x1: innerX, y1: ruleY, x2: innerX + innerWidth, y2: ruleY, color: "rgba(40,30,40,0.35)", width: 1 });
-  placeLines(ops, subLines, subFont, color, { x: innerX, y: ruleY - 0.5 + ruleAndPad, width: innerWidth }, subLineHeight, "center");
+    const innerX = labelX + padH;
+    const titleTop = safeY + padV;
+    placeLines(ops, titleLines, titleFont, color, { x: innerX, y: titleTop, width: innerWidth }, titleLineHeight, "center");
+    let subTop = titleTop + titleHeight;
+    if (both) {
+      const ruleY = titleTop + titleHeight + gap + 0.5;
+      ops.push({ kind: "line", x1: innerX, y1: ruleY, x2: innerX + innerWidth, y2: ruleY, color: "rgba(40,30,40,0.35)", width: 1 });
+      subTop = ruleY - 0.5 + ruleAndPad;
+    }
+    placeLines(ops, subLines, subFont, color, { x: innerX, y: subTop, width: innerWidth }, subLineHeight, "center");
+  }
 
-  const authorFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
-  const authorLineHeight = authorFont.sizePx * 1.4;
-  const pillPadV = 6;
-  const pillPadH = 13;
-  const authorMaxWidth = Math.max(1, W - safeX * 2 - pillPadH * 2);
-  const authorLines = layoutHorizontalLines(author, authorFont, 0.22, authorMaxWidth, measure);
-  const textWidth = Math.min(authorMaxWidth, maxLineWidth(authorLines) + authorFont.sizePx * 0.22);
-  const pillWidth = textWidth + pillPadH * 2;
-  const pillHeight = authorLines.length * authorLineHeight + pillPadV * 2;
-  const pillBottom = Math.max(H * 0.07, safeY);
-  const pillX = (W - pillWidth) / 2;
-  const pillY = H - pillBottom - pillHeight;
-  ops.push({
-    kind: "fill",
-    rect: { x: pillX, y: pillY, width: pillWidth, height: pillHeight },
-    fill: { type: "solid", color: paper },
-    radius: Math.min(pillHeight, pillWidth) / 2,
-  });
-  placeLines(ops, authorLines, authorFont, color, { x: pillX + pillPadH, y: pillY + pillPadV, width: textWidth }, authorLineHeight, "center");
+  if (author !== null) {
+    const authorFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
+    const authorLineHeight = authorFont.sizePx * 1.4;
+    const pillPadV = 6;
+    const pillPadH = 13;
+    const authorMaxWidth = Math.max(1, W - safeX * 2 - pillPadH * 2);
+    const authorLines = layoutHorizontalLines(author, authorFont, 0.22, authorMaxWidth, measure);
+    const textWidth = Math.min(authorMaxWidth, maxLineWidth(authorLines) + authorFont.sizePx * 0.22);
+    const pillWidth = textWidth + pillPadH * 2;
+    const pillHeight = authorLines.length * authorLineHeight + pillPadV * 2;
+    const pillBottom = Math.max(H * 0.07, safeY);
+    const pillX = (W - pillWidth) / 2;
+    const pillY = H - pillBottom - pillHeight;
+    ops.push({
+      kind: "fill",
+      rect: { x: pillX, y: pillY, width: pillWidth, height: pillHeight },
+      fill: { type: "solid", color: paper },
+      radius: Math.min(pillHeight, pillWidth) / 2,
+    });
+    placeLines(ops, authorLines, authorFont, color, { x: pillX + pillPadH, y: pillY + pillPadV, width: textWidth }, authorLineHeight, "center");
+  }
   return ops;
+}
+
+/**
+ * 額縁ラベルの文字: 未入力 → 見本の文字（placeholder）、スペースだけ → null（空欄＝台紙ごと出さない）。
+ * 入力欄の案内「空欄にしたい場合はスペースのみ入れてください」に合わせる。
+ */
+export function frameLabelText(value: string, placeholder: string): string | null {
+  if (!value) return placeholder;
+  return value.trim() === "" ? null : value;
 }
 
 function backTextOps(settings: CoverSettings, box: FaceBox, measure: CoverMeasure): CoverPaintOp[] {

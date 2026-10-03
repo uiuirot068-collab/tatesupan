@@ -511,6 +511,8 @@ interface PreviewPaneProps {
   cover?: CoverSettings;
   /** CST-PORT-012: 表紙画像（IndexedDB の id → dataUrl）。 */
   coverImageDataUrls?: Record<string, string>;
+  /** CST-PORT-012: 3D のノド注意 →「ノドを調整する」（設定のノド欄を開く）。 */
+  onAdjustGutter?: () => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
   /** Link切れ画像を既存imageIdのまま差し替える。 */
@@ -602,6 +604,7 @@ function PreviewPane({
   onOpenCoverExport,
   cover,
   coverImageDataUrls,
+  onAdjustGutter,
   onImageAdd,
   onImageDelete,
   onImageReplace,
@@ -3525,6 +3528,7 @@ function PreviewPane({
             onBindingChange={book3d.setBinding}
             onShowGutterGuideChange={book3d.setShowGutterGuide}
             onDismissGuideHelp={book3d.dismissGuideHelp}
+            onAdjustGutter={onAdjustGutter}
           />
           <p className="flex-none px-3 pb-1.5 text-center text-[10.5px] text-ink/50">
             表紙＋本文＋背の完成イメージ（印刷データではありません）。通常のプレビューへ戻るには 1P / 見開きを選択
