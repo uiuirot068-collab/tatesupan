@@ -39,6 +39,8 @@ import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
 import { imageOriginalDeletable, imageUsedByOtherWorks } from "@/lib/imageCenter";
 import type { Project } from "@/types/database";
+import { cloudCompareLocalCopyTitle, isCloudVersionNewer } from "@/lib/cloudVersionCompare";
+import CloudVersionCompareModal from "./CloudVersionCompareModal";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { useReviewSurface } from "@/hooks/useReviewSurface";
@@ -331,6 +333,12 @@ export default function TategakiEditor({
   }, []);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  // CST-PORT-014: updated_at of the cloud version this screen last opened or
+  // saved. A save first checks the cloud; if someone saved there since (other
+  // device / tab), the compare dialog asks which version to keep.
+  const cloudBaseUpdatedAtRef = useRef<string | null>(null);
+  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null } | null>(null);
+  const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const workSessionScope = useMemo(() => {
     if (demoMode) return `demo:${DEMO_PROJECT.id}`;
@@ -594,6 +602,7 @@ export default function TategakiEditor({
 
   const applyCloudProject = useCallback((project: Project) => {
     setCurrentProjectId(project.id);
+    cloudBaseUpdatedAtRef.current = project.updated_at ?? null;
     setTitle(project.title);
     setContent(project.content);
     setSettings(
@@ -666,6 +675,7 @@ export default function TategakiEditor({
         setUnresolvedCloudImages(null);
         setImageWarningBaselineIds(new Set());
         setCurrentProjectId(null);
+        cloudBaseUpdatedAtRef.current = null;
         loadedDocIdRef.current = DEMO_PROJECT.id;
         setDocId(DEMO_PROJECT.id);
         hasLoadedRef.current = true;
@@ -708,6 +718,7 @@ export default function TategakiEditor({
       // with this document — and any technical break its manifest poll
       // reported while this load was in flight.
       setCurrentProjectId(null);
+      cloudBaseUpdatedAtRef.current = null;
       setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
 
@@ -1035,7 +1046,9 @@ export default function TategakiEditor({
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
-  const handleSave = async () => {
+  const handleSave = () => saveToCloud(false);
+
+  const saveToCloud = async (skipNewerCheck: boolean) => {
     if (isSampleDocument) return;
     // Phase 6: 保存作品一覧 stays usable while this save is in flight. The save
     // itself (this document's title/content, sent to this document's project)
@@ -1049,6 +1062,17 @@ export default function TategakiEditor({
       // plan's count limit -- the limit only ever blocks brand-new saves.
       const isNewCloudSave = !currentProjectId;
       let knownPlan: CloudPlan | null = null;
+
+      // CST-PORT-014: never overwrite a newer cloud version silently. If the
+      // cloud cannot be read, save as before (the check must not block saving).
+      if (currentProjectId && !skipNewerCheck) {
+        const cloudNow = await getProjectById(currentProjectId);
+        if (!isSameDocument()) return;
+        if (cloudNow && isCloudVersionNewer(cloudNow.updated_at, cloudBaseUpdatedAtRef.current)) {
+          setCloudCompare({ cloud: cloudNow, base: cloudBaseUpdatedAtRef.current });
+          return;
+        }
+      }
 
       if (isNewCloudSave) {
         // UX-only early check: lets us show the "cloud bookshelf is full"
@@ -1085,6 +1109,7 @@ export default function TategakiEditor({
       }
 
       if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
+      if (isSameDocument()) cloudBaseUpdatedAtRef.current = result.data.updated_at ?? null;
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
@@ -1112,6 +1137,47 @@ export default function TategakiEditor({
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCloudCompareOverwrite = () => {
+    setCloudCompare(null);
+    void saveToCloud(true);
+  };
+
+  // 「クラウド版を開く」: the screen's version is never thrown away. A local
+  // work linked to the cloud already holds it (autosave, flushed here); a
+  // work opened from the cloud lives only on this screen, so it is kept as a
+  // new local work 「…（この端末の控え）」 before the cloud version replaces it.
+  const handleCloudCompareOpenCloud = async () => {
+    const cloudProject = cloudCompare?.cloud;
+    if (!cloudProject) return;
+    const isSameDocument = documentEpoch.capture();
+    setCloudCompareBusy(true);
+    try {
+      let keptTitle: string | null = null;
+      if (docId === null) {
+        keptTitle = cloudCompareLocalCopyTitle(title);
+        const copyId = await createDocument();
+        await saveDocument(copyId, keptTitle, content, settings, plotNote);
+      } else {
+        await flushAutosave();
+      }
+      if (!isSameDocument()) return;
+      setCloudCompare(null);
+      beginDocumentSwitch();
+      applyCloudProject(cloudProject);
+      void openCloudProjectImages(cloudProject, documentEpoch.capture());
+      showToast(
+        keptTitle
+          ? `クラウド版を開きました。この画面の版は本棚に「${keptTitle}」として残しました。`
+          : "クラウド版を開きました。この画面の版は本棚のこの作品に残っています。"
+      );
+    } catch (error) {
+      console.error("TateSpun: open cloud version failed", error);
+      alert("クラウド版を開けませんでした。この画面の版はそのままです。");
+    } finally {
+      setCloudCompareBusy(false);
     }
   };
 
@@ -1563,6 +1629,17 @@ export default function TategakiEditor({
             router.push(`/editor?id=${id}`);
           }}
           onOpenFeatureGuide={() => router.push("/guide")}
+        />
+      )}
+
+      {cloudCompare && (
+        <CloudVersionCompareModal
+          screen={{ title, content, updatedAt: cloudCompare.base }}
+          cloud={{ title: cloudCompare.cloud.title, content: cloudCompare.cloud.content, updatedAt: cloudCompare.cloud.updated_at }}
+          busy={cloudCompareBusy}
+          onOverwrite={handleCloudCompareOverwrite}
+          onOpenCloud={() => void handleCloudCompareOpenCloud()}
+          onCancel={() => setCloudCompare(null)}
         />
       )}
 

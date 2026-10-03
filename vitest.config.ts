@@ -20,6 +20,8 @@ export default defineConfig({
       "src/hooks/useBookmakingSections.test.ts",
       // CST-PORT-012: 3D preview
       "src/lib/book3d/**/*.test.ts",
+      // CST-PORT-014: cloud version compare
+      "src/lib/cloudVersionCompare.test.ts",
     ],
   },
 });
