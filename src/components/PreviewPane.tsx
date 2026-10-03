@@ -2050,16 +2050,14 @@ function PreviewPane({
     tocPageCount: v2PageModel?.tocPages.length ?? 0,
     colophonPageCount: v2ColophonPageCount > 0 ? v2ColophonPageCount : undefined,
   };
-  // 確認用PDF is for reading, not for binding: no odd-page / 4の倍数 warnings (as in COLUMNSTAND).
-  const pdfOddPageCheck = isPdfProof
-    ? null
-    : shouldWarnOddPageExport({
-        scope: pdfScope,
-        ...pdfPageCountParams,
-      });
+  // 確認用PDF keeps the odd-page / 4の倍数 warnings too (なつお 2026-10-03); they count the
+  // inner pages only, as for the normal PDF (the covers are not part of the page count).
+  const pdfOddPageCheck = shouldWarnOddPageExport({
+    scope: pdfScope,
+    ...pdfPageCountParams,
+  });
   const pdfTotalPageCount = exportTotalPageCount(pdfPageCountParams);
-  const pdfPageCountNotMultipleOfFour =
-    !isPdfProof && shouldWarnPageCountNotMultipleOfFour(pdfScope, pdfTotalPageCount);
+  const pdfPageCountNotMultipleOfFour = shouldWarnPageCountNotMultipleOfFour(pdfScope, pdfTotalPageCount);
   // TSP-PHASE13-001: effective resolution of the images this PDF would paint.
   // Pixel sizes are decoded only while the PDF dialog is open.
   const pdfTargetImagePages = pdfTargetBodyIndices.map((bodyIndex) => ({
