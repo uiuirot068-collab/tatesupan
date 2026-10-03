@@ -294,6 +294,9 @@ export default function TategakiEditor({
   const replaceSearchMatch = useCallback((start: number, end: number, text: string) => {
     editorPaneRef.current?.replaceSearchMatch(start, end, text);
   }, []);
+  const markSearchReplaced = useCallback((range: { start: number; end: number } | null) => {
+    editorPaneRef.current?.setSearchMark(range);
+  }, []);
   // すべて置換 goes through the editor too, so it is ONE undoable body edit
   // (Ctrl+Z / 元に戻す) on both surfaces instead of a history-wiping setContent.
   const replaceWholeText = useCallback((next: string) => {
@@ -1518,10 +1521,8 @@ export default function TategakiEditor({
                   content={content}
                   onFind={revealSearchMatch}
                   onReplaceOne={replaceSearchMatch}
-                  onReplace={(next) => {
-                    replaceWholeText(next);
-                    setIsSearchOpen(false);
-                  }}
+                  onReplace={(next) => replaceWholeText(next)}
+                  onMarkChange={markSearchReplaced}
                   onClose={() => setIsSearchOpen(false)}
                 />
               </div>
@@ -1543,10 +1544,8 @@ export default function TategakiEditor({
             content={content}
             onFind={revealSearchMatch}
             onReplaceOne={replaceSearchMatch}
-            onReplace={(next) => {
-              replaceWholeText(next);
-              setIsSearchOpen(false);
-            }}
+            onReplace={(next) => replaceWholeText(next)}
+            onMarkChange={markSearchReplaced}
             onClose={() => setIsSearchOpen(false)}
           />
         </div>
