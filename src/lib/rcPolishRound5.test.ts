@@ -22,7 +22,7 @@ describe("Round 5 Memo and Home contracts", () => {
   it("uses the same Memo entry as an open/close toggle without touching draft semantics", () => {
     expect(pane).toContain("onToggleMemo: () => void");
     expect(pane).toContain("onClick={onToggleMemo}");
-    expect(pane).toContain('{memoOpen ? "▼メモ" : "▶メモ"}');
+    expect(pane).toContain('{memoOpen ? "▼メモ・プロット" : "▶メモ・プロット"}');
     expect(pane).toContain("aria-expanded={memoOpen}");
     expect(shell).toContain("setIsMemoOpen((open) => !open)");
     expect(memo).toContain("writeMemoDraft(window.localStorage, storageKey, value)");

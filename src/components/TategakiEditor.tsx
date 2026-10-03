@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocument,
   deleteImage,
@@ -71,6 +71,7 @@ import ChecklistPanel from "./ChecklistPanel";
 import EditorSettingsDrawer from "./EditorSettingsDrawer";
 import EditorOptionsDrawer from "./EditorOptionsDrawer";
 import { memoDraftStorageKey } from "@/lib/memoDraft";
+import { headingAtCursor, manuscriptHeadings, plotPanelStorageKey } from "@/lib/plotPanel";
 import { resolveExportFilenameStem } from "@/utils/exportFilename";
 import { createDefaultTocSettings } from "@/lib/tocSettings";
 
@@ -390,6 +391,17 @@ export default function TategakiEditor({
     () => memoDraftStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
     [currentProjectId, docId]
   );
+  // PLT-LOOP-003: the plot read beside the manuscript lives in its own drawer,
+  // per work, next to (never inside) the memo and the manuscript.
+  const plotStorageKey = useMemo(
+    () => plotPanelStorageKey(currentProjectId ? `cloud:${currentProjectId}` : `local:${docId ?? "new"}`),
+    [currentProjectId, docId]
+  );
+  // Headings are only read while the panel is open, and from a deferred copy
+  // of the manuscript so typing never waits on them.
+  const deferredContentForPlot = useDeferredValue(isMemoOpen ? content : "");
+  const plotHeadings = useMemo(() => manuscriptHeadings(deferredContentForPlot), [deferredContentForPlot]);
+  const plotCurrentHeading = headingAtCursor(plotHeadings, cursorIndex);
   const [cloudLimitPlan, setCloudLimitPlan] = useState<CloudPlan | null>(null);
   // プレビューで選択中のページ（0-based index into PreviewPane's `pages`）。
   // 「ノンブル・柱」タブの選択ページパネル（PageSettingsPanel、EditorPane側）
@@ -1318,6 +1330,8 @@ export default function TategakiEditor({
             confirmedMemo={plotNote}
             onConfirmMemo={setPlotNote}
             onCloseMemo={() => setIsMemoOpen(false)}
+            plotStorageKey={plotStorageKey}
+            currentHeading={plotCurrentHeading}
             onOpenSettingsDrawer={() => setActiveDrawer("settings")}
             onOpenHelp={() => { setActiveDrawer(null); setIsHelpOpen(true); }}
             onCursorIndexChange={setCursorIndex}

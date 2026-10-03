@@ -113,6 +113,9 @@ interface EditorPaneProps {
   confirmedMemo: string;
   onConfirmMemo: (memo: string) => void;
   onCloseMemo: () => void;
+  /** PLT-LOOP-003: this work's read-only plot drawer, and the heading the plot follows */
+  plotStorageKey: string;
+  currentHeading: string | null;
   onOpenSettingsDrawer: () => void;
   onOpenHelp: () => void;
   /** Fired whenever the caret's character index into `content` changes, so the preview can scroll to the matching page. */
@@ -209,6 +212,8 @@ function EditorPaneInner(
     confirmedMemo,
     onConfirmMemo,
     onCloseMemo,
+    plotStorageKey,
+    currentHeading,
     onOpenSettingsDrawer,
     onOpenHelp,
     onCursorIndexChange,
@@ -1020,10 +1025,10 @@ function EditorPaneInner(
               data-editor-action="memo"
               aria-expanded={memoOpen}
               onClick={onToggleMemo}
-              title="メモを開く/閉じる"
+              title="メモ・プロットを開く/閉じる"
               className="min-h-9 whitespace-nowrap rounded-md border border-ink/15 px-2 py-0.5 text-xs text-ink/75 transition-colors hover:border-ink/30 hover:bg-ink/[0.04] md:min-h-0 md:px-3 md:py-1"
             >
-              📝メモ
+              📝メモ・プロット
             </button>
           )}
           {onOpenBetaFeedback && (
@@ -1062,7 +1067,7 @@ function EditorPaneInner(
                 transfer; メモ = notes beside the manuscript; ヘルプ = how to. */}
             <button type="button" data-editor-secondary="settings" data-demo-target="settings" onClick={onOpenSettingsDrawer} title="用紙・フォント・余白・段組み・ノンブル・柱" className={`min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶設定<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">用紙・本文</span></button>
             <button type="button" data-editor-secondary="options" data-demo-target="options" onClick={onOpenOptions} title="表紙・奥付・目次・完成前チェック・原稿データの入出力" className={`min-h-10 min-w-0 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶本づくり<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">表紙・奥付・目次</span></button>
-            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} title="プロットや執筆メモ（原稿の横に開きます）" className="min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs">{memoOpen ? "▼メモ" : "▶メモ"}<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">執筆メモ</span></button>
+            <button type="button" data-editor-secondary="memo" aria-expanded={memoOpen} onClick={onToggleMemo} title="執筆メモと、プロット帳のプロット（原稿の横に開きます）" className="min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs">{memoOpen ? "▼メモ・プロット" : "▶メモ・プロット"}</button>
             <button type="button" data-editor-secondary="help" data-demo-target="help" onClick={onOpenHelp} title="使い方・ショートカット・特殊記法" className={`min-h-10 whitespace-nowrap rounded-md px-1 py-1 text-[11px] font-medium text-ink/75 transition-colors hover:bg-ink/[0.05] hover:text-ink md:min-h-0 md:px-2 md:py-1.5 md:text-xs ${focusMode ? "md:hidden" : ""}`}>▶ヘルプ<span className="ml-1.5 hidden font-normal text-ink/45 @min-[640px]:inline">使い方</span></button>
           </nav>
         </div>
@@ -1096,6 +1101,8 @@ function EditorPaneInner(
           confirmedMemo={confirmedMemo}
           onConfirm={onConfirmMemo}
           onClose={onCloseMemo}
+          plotStorageKey={plotStorageKey}
+          currentHeading={currentHeading}
         />
       </div>
 
