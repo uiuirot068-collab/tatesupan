@@ -12,8 +12,8 @@
 //
 // Covers: 検索・置換 naming, search with an empty replacement, 次へ / 前へ with
 // wrap, the match selected AND inside the editor's visible area, WINDOWED
-// 編集ページ switching, snippet, 選択箇所を置換 (one match, then the next is
-// active), 0 件 disabled state, query change resets the index, すべて置換 over
+// 編集ページ switching, snippet, 選択箇所を置換 (one match; CST-PORT-015: the
+// editor stays on the replaced text, この置換を戻す, 次へ moves on), 0 件 disabled state, query change resets the index, すべて置換 over
 // the whole manuscript, close → the editor takes input again, phone modal,
 // undo/redo: Ctrl+Z right after 選択箇所を置換 (typed replacement in the panel)
 // reverts the BODY, Ctrl+Y redoes it, 元に戻す, one Ctrl+Z / Ctrl+Y for すべて置換,
@@ -235,18 +235,23 @@ try {
   await cdp.send("Input.insertText", { text: "群" });
   await cdp.send("Input.insertText", { text: "青" });
   assert.equal(await cdp.evaluate(`document.querySelector('${panelSel("preview")} [data-replace-input]').value`), "群青", "search panel input takes ordinary typing");
+  const beforeOne = await editorState();
   await realClick(`${panelSel("preview")} [data-search-action="replace-one"]`);
-  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 4 件目'`, { timeoutMs: 30_000, label: "after replace-one: 2 / 4" });
-  await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "瑠璃色参"; })()`, { timeoutMs: 30_000, label: "next match selected after replace-one" });
+  // CST-PORT-015: the panel and the editor stay on the replaced text.
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '残り 4 件'`, { timeoutMs: 30_000, label: "after replace-one: 残り 4 件" });
+  await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "群青弐"; })()`, { timeoutMs: 30_000, label: "the replaced text stays selected" });
   await sleep(200);
   const afterOne = await editorState();
-  assert.equal(afterOne.visible, true, "the next match is revealed after 選択箇所を置換");
+  assert.equal(afterOne.visible, true, "the replaced text is still in view");
+  assert.ok(Math.abs(afterOne.scrollTop - beforeOne.scrollTop) <= 2, `the editor did not scroll (${beforeOne.scrollTop} → ${afterOne.scrollTop})`);
+  assert.equal(afterOne.page, beforeOne.page, "same 編集ページ");
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-search-receipt]')?.textContent.includes('2 件目を置換しました')`), true, "receipt says which match was replaced");
+  assert.ok(await cdp.evaluate(`document.querySelector('[data-search-receipt-context]')?.textContent ?? ""`).then((t) => t.includes("群青弐")), "receipt shows the replaced text in its surroundings");
   const dbAfterOne = await savedDocWhere((doc) => doc.includes("群青"), "replace-one saved");
   assert.equal(count(dbAfterOne, "瑠璃色"), 4, "exactly one match replaced");
   assert.equal(count(dbAfterOne, "群青弐"), 1, "the ACTIVE match (弐) was the one replaced");
   assert.equal(dbAfterOne.length, CONTENT.length - 1, "nothing else changed");
-  assert.ok(await snippet().then((t) => t.includes("瑠璃色参")), "snippet follows to the next match");
-  log(`選択箇所を置換: PASS (弐 → 群青弐; next = 瑠璃色参, visible=${afterOne.visible})`);
+  log(`選択箇所を置換: PASS (弐 → 群青弐, stays in place: scroll ${beforeOne.scrollTop} → ${afterOne.scrollTop})`);
   results.shotAfterReplaceOne = await screenshot(`search-replace-one-${surf}.png`);
 
   // Ctrl+Z right after 選択箇所を置換 reverts the BODY (not the panel input), Ctrl+Y redoes it.
@@ -255,22 +260,34 @@ try {
   const dbUndoOne = await savedDocWhere((doc) => doc === CONTENT, "Ctrl+Z restores the manuscript before 選択箇所を置換");
   assert.equal(count(dbUndoOne, "瑠璃色"), 5);
   assert.equal(await cdp.evaluate(`document.querySelector('${panelSel("preview")} [data-replace-input]').value`), "群青", "Ctrl+Z did not go to the panel input");
-  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.includes('/ 5 件目')`, { label: "panel sees 5 matches after undo" });
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '5 件見つかりました'`, { label: "panel sees 5 matches after undo" });
   await pressCtrl("y", "redo");
   const dbRedoOne = await savedDocWhere((doc) => doc === dbAfterOne, "Ctrl+Y re-applies 選択箇所を置換");
   assert.equal(count(dbRedoOne, "群青弐"), 1);
-  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 4 件目'`, { label: "panel back to 2 / 4 after redo" });
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '残り 4 件'`, { label: "panel back to 残り 4 件 after redo" });
   log(`選択箇所を置換 undo/redo (Ctrl+Z / Ctrl+Y, focus=${results.focusAfterReplaceOne}): PASS`);
 
-  // A second 選択箇所を置換 moves on (no same-position loop).
+  // この置換を戻す puts that one match back and makes it the active match again.
+  await realClick(`${panelSel("preview")} [data-search-action="undo-one"]`);
+  await savedDocWhere((doc) => doc === CONTENT, "この置換を戻す restores the match");
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 5 件目'`, { label: "restored match is active" });
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-search-receipt]')?.textContent.includes('2 件目を元に戻しました')`), true);
   await realClick(`${panelSel("preview")} [data-search-action="replace-one"]`);
-  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 3 件目'`, { timeoutMs: 30_000, label: "after 2nd replace-one: 2 / 3" });
-  await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "瑠璃色肆"; })()`, { timeoutMs: 30_000, label: "肆 selected" });
+  await savedDocWhere((doc) => doc === dbAfterOne, "replace again after この置換を戻す");
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '残り 4 件'`, { label: "残り 4 件 again" });
+  log("この置換を戻す: PASS");
+
+  // 次へ moves on from the replaced text; a second 選択箇所を置換 replaces that one.
+  await realClick(`${panelSel("preview")} [data-search-step="next"]`);
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '2 / 4 件目'`, { timeoutMs: 30_000, label: "次へ after replace: 2 / 4" });
+  await cdp.waitFor(`(() => { const el = document.querySelector('[data-demo-target="editor"]'); return el.value.slice(el.selectionStart, el.selectionEnd + 1) === "瑠璃色参"; })()`, { timeoutMs: 30_000, label: "参 selected" });
+  await realClick(`${panelSel("preview")} [data-search-action="replace-one"]`);
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '残り 3 件'`, { timeoutMs: 30_000, label: "after 2nd replace-one: 残り 3 件" });
 
   // The toolbar 元に戻す reverts the 2nd 選択箇所を置換 on both surfaces.
   await realClick('[data-editor-action="undo"]');
   await savedDocWhere((doc) => doc === dbAfterOne, "元に戻す reverts the 2nd 選択箇所を置換");
-  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.includes('/ 4 件目')`, { timeoutMs: 20_000, label: "undo restores one match" });
+  await cdp.waitFor(`document.querySelector('[data-search-match-status]')?.textContent.trim() === '4 件見つかりました'`, { timeoutMs: 20_000, label: "undo restores one match" });
   results.toolbarUndo = await status();
   log(`  元に戻す after the 2nd 選択箇所を置換: status ${results.toolbarUndo}`);
 
@@ -291,7 +308,9 @@ try {
 
   // ------------------------------------------------ すべて置換
   await realClick(`${panelSel("preview")} [data-search-action="replace-all"]`);
-  await cdp.waitFor(`!document.querySelector('[data-search-replace-placement]')`, { label: "panel closes after すべて置換" });
+  // CST-PORT-015: the panel stays open and says how many were replaced.
+  await cdp.waitFor(`document.querySelector('[data-search-receipt]')?.textContent.includes('${remaining} 件を置換しました')`, { label: "すべて置換 receipt" });
+  assert.equal(await status(), "残り 0 件");
   const dbAfterAll = await savedDocWhere((doc) => !doc.includes("瑠璃色"), "replace-all saved");
   assert.equal(count(dbAfterAll, "瑠璃色"), 0, "すべて置換 left no match anywhere in the manuscript");
   assert.equal(count(dbAfterAll, "群青"), 5, "all five places now read 群青");
@@ -303,6 +322,8 @@ try {
   await savedDocWhere((doc) => doc === dbAfterAll, "Ctrl+Y re-applies すべて置換");
   log(`すべて置換 undo/redo (one Ctrl+Z / Ctrl+Y, focus=${results.focusAfterReplaceAll}): PASS`);
   // Whole-manuscript search confirms it too (WINDOWED only mounts one page).
+  await realClick(`${panelSel("preview")} [data-search-action="close"]`);
+  await cdp.waitFor(`!document.querySelector('[data-search-replace-placement]')`, { label: "panel closed after すべて置換" });
   await realClick('[data-editor-action="replace"]');
   await cdp.waitFor(`!!document.querySelector('${panelSel("preview")} [data-search-input]')`, { label: "panel reopened" });
   await setInput(`${panelSel("preview")} [data-search-input]`, "群青");

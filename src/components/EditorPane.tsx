@@ -177,8 +177,14 @@ export interface EditorPaneHandle {
   navigateToGlobalOffset(start: number, end: number): void;
   /** 検索・置換: select `[start, end)` and scroll it into the visible area (switching 編集ページ on WINDOWED). */
   revealSearchMatch(start: number, end: number): void;
-  /** 検索・置換 選択箇所を置換: replace exactly `[start, end)` with `text` as one edit. */
+  /**
+   * 検索・置換 選択箇所を置換: replace exactly `[start, end)` with `text` as one
+   * edit, leaving the inserted text selected where it is (CST-PORT-015: no
+   * jump to the next match, no scroll).
+   */
   replaceSearchMatch(start: number, end: number, text: string): void;
+  /** CST-PORT-015: tint the text 検索・置換 just replaced / restored (null clears it). */
+  setSearchMark(range: { start: number; end: number } | null): void;
   /** 検索・置換 すべて置換: commit `next` as ONE undoable body edit on either surface. */
   replaceWholeText(next: string): void;
 }
@@ -502,14 +508,17 @@ function EditorPaneInner(
   );
   // Ghost highlights (blue, behind the text): B4's held 選択範囲 while 選択範囲 is the reading target, and the candidate B5's
   // 前へ / 次へ is on (so the place stays obvious even when the editor is not focused, e.g. after blurring on a phone).
+  // CST-PORT-015: the text 検索・置換 just replaced, tinted the same way so it stays findable while the panel has focus.
+  const [searchMark, setSearchMark] = useState<{ start: number; end: number } | null>(null);
   const ghostRanges = useMemo(() => {
     const ranges: { start: number; end: number }[] = [];
+    if (searchMark && searchMark.end > searchMark.start) ranges.push(searchMark);
     if (readAloud.target === "selection" && held) ranges.push({ start: held.start, end: held.end });
     if (descriptionEnabled && footerPins.includes("description-check") && descriptionNavMark && descriptionCurrentMark) {
       ranges.push({ start: descriptionCurrentMark.start, end: descriptionCurrentMark.end });
     }
     return ranges;
-  }, [readAloud.target, held, descriptionEnabled, footerPins, descriptionNavMark, descriptionCurrentMark]);
+  }, [searchMark, readAloud.target, held, descriptionEnabled, footerPins, descriptionNavMark, descriptionCurrentMark]);
   const readAloudViewProps = {
     state: readAloud.state,
     target: readAloud.target,
@@ -654,11 +663,11 @@ function EditorPaneInner(
    * `value` instead (the previous approach) wipes that history, which left
    * Ctrl+Z with nothing to undo in the body (Human QA).
    */
-  const applySearchEdit = (start: number, end: number, text: string) => {
+  const applySearchEdit = (start: number, end: number, text: string, selectInserted = false) => {
     if (isComposingRef.current) return;
     if (start === end && text === "") return;
     if (isWindowed) {
-      pagedEditorRef.current?.replaceRangeGlobal(start, end, text);
+      pagedEditorRef.current?.replaceRangeGlobal(start, end, text, selectInserted ? { selectInserted: true } : undefined);
       return;
     }
     const el = textareaRef.current;
@@ -679,11 +688,17 @@ function EditorPaneInner(
       // exact text, even though this fallback cannot be undone natively.
       inputActivityStateRef.current = syncTextInputActivityState(inputActivityStateRef.current, expected);
       onContentChange(expected);
+      return;
+    }
+    // The inserted text is already on screen: select it without scrolling.
+    if (selectInserted) {
+      el.setSelectionRange(start, start + text.length);
+      reportCursorIndex();
     }
   };
 
-  /** 選択箇所を置換: exactly the active match. */
-  const replaceSearchMatch = (start: number, end: number, text: string) => applySearchEdit(start, end, text);
+  /** 選択箇所を置換: exactly the active match; the new text stays selected in place (CST-PORT-015). */
+  const replaceSearchMatch = (start: number, end: number, text: string) => applySearchEdit(start, end, text, true);
 
   /**
    * すべて置換 as ONE undo step on both surfaces. WINDOWED: one atomic range
@@ -723,7 +738,7 @@ function EditorPaneInner(
   // is refreshed on every commit (as it already was with per-render deps).
   useImperativeHandle(
     ref,
-    (): EditorPaneHandle => ({ navigateToGlobalOffset, revealSearchMatch, replaceSearchMatch, replaceWholeText })
+    (): EditorPaneHandle => ({ navigateToGlobalOffset, revealSearchMatch, replaceSearchMatch, setSearchMark, replaceWholeText })
   );
 
   /** Mutates the manuscript ONLY in direct response to an explicit Human action (直す / まとめて直す / 元に戻す). */

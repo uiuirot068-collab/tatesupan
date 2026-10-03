@@ -1,6 +1,6 @@
 # COLUMNSTAND ⇄ TateSpun 移植ロードマップ
 
-最終更新: 2026-10-03(CST-PORT-014 時点)
+最終更新: 2026-10-03(CST-PORT-015 時点)
 このファイルが進行表の正本。各回の終わりに「状態」を書き換える。各リポジトリの docs/CST_TSP_PORTING_ROADMAP.md は、その回のコミット時点の写し。
 
 ## なつおさんの方針(2026-10-02 13:55)
@@ -36,8 +36,8 @@
 | 3 | CST-PORT-011 | 表紙(B2、テンプレートなし含む) | → TSP | 大 | 描画はV2のPDF生成に合わせて作り直し(描画命令＋Canvasでプレビューと書き出しを共通化)。背文字の縦組み・右綴じの並び | Human QA 10/10 OK(2026-10-03): 作業ブランチ claude/cst-port-011-cover-to-tsp-l20lbn(TSP master 6a2c217 の上)に 96bfafd(push済み)。続けて「オプション」→「本づくり」＋開閉欄2つ(開いた状態を記憶)は なつおPC側の版(ループID CST-PORT-011B、ブランチ claude/cst-port-011b-bookmaking-menu b37292f、96bfafd の上、push済み 2026-10-03)。Human QA 9/9 OK(2026-10-03)。PR #25 で TateSpun master 61eec0e に取り込み済み(2026-10-03、戻し先 6a2c217)。クラウド側で重複して作った 960a3d3 は使わない(未push)。master マージは未。npm test 498件合格。更新履歴に1件。仕様 tatesupan docs/CST-PORT-011_COVER.md、状況 CST-PORT-011_STATUS_20261003.md |
 | 4 | CST-PORT-012 | 3Dプレビュー(B4) | → TSP | 大 | 3が前提。2ページだけ描く。gutterZone.ts は TSP に入れ済み | push済み・Human QA 1回目(2026-10-03): 額縁ラベルのスペース欄・ノドへの誘導 以外 pass → 修正済み(TSP e3910c7、CST にも額縁ラベル修正 08b1740)、push済み・再QA all pass(2026-10-03)、PR #26 で TSP master 458be3b・本番公開済み(戻し先 61eec0e)。仕様 tatesupan docs/CST-PORT-012_3D_PREVIEW.md、状況 CST-PORT-012_STATUS_20261003.md |
 | 5 | CST-PORT-013 | 確認用PDF(B3、表紙＋本文＋裏表紙) | → TSP | 中 | 3が前提 | 実装済み(2026-10-03): tatesupan ブランチ claude/project-thread-szq5kn(master dfb1582 の上)。書き出し ▾ →「確認用PDF」。表紙→本文→裏表紙、反映した面だけ・カラー、背は入れない、仕上がり/断ち落とし、`_proof.pdf`、奇数・4の倍数の注意あり(660c1a9)。npm test 524件合格。更新履歴に1件。仕様 tatesupan docs/CST-PORT-013_PROOF_PDF.md、状況 CST-PORT-013_STATUS_20261003.md。fee8df4 push済み(2026-10-03)・Human QA all pass 8/8(2026-10-03)、PR #27 で master 2e7e6a7・本番公開済み(戻し先 dfb1582) |
-| 6 | CST-PORT-014 | クラウドの新旧比較(B5) | → TSP | 小〜中 | DB変更なし | 実装済み・未push(2026-10-03): tatesupan ブランチ claude/cst-port-014-cloud-compare-iqrzye(master 2e7e6a7 の上)。TSPは開くとき常にクラウドから読むので、比べる時点を「クラウドに保存」の直前にした(別端末・タブで先に保存されていたら確認画面: 上書き保存/クラウド版を開く(この画面の版は本棚に控え)/やめる)。npm test 532件合格。更新履歴に1件。仕様 tatesupan docs/CST-PORT-014_CLOUD_COMPARE.md、状況 CST-PORT-014_STATUS_20261003.md |
-| 7 | 未定 | 検索結果に前後の文字(B7) | → TSP | 小 | 検索の中核は共通化済み | 未着手 |
+| 6 | CST-PORT-014 | クラウドの新旧比較(B5) | → TSP | 小〜中 | DB変更なし | 本番公開済み(2026-10-03 12:37、PR #29、master 422a54a、戻し先 e242f87)。「クラウドに保存」の直前にクラウド版が新しい(時刻か中身が違う)と確認画面(上書き保存/クラウド版を開く(控えを本棚に)/やめる)。端末の作品はいつも同じクラウド作品へ保存。Human QA 1〜8 合格。仕様 tatesupan docs/CST-PORT-014_CLOUD_COMPARE.md。次ループ案: CST-PORT-015_SEARCH_REPLACE_PLAN_20261003.md |
+| 7 | CST-PORT-015 | 検索結果に前後の文字(B7)＋なつお要望「置換したら、その場で確かめられる」 | → TSP・CST 両方 | 小〜中 | 検索の中核は共通化済み(searchReplaceNavigation.ts をバイト一致で更新) | 実装済み・未push(2026-10-03): 置換しても次へ移らず、直した文字に色＋「n 件目を置換しました」と前後12文字、「この置換を戻す」、次へ/前へは直した文字を起点、件数「残り ○ 件」、すべて置換も窓を閉じず件数表示。前後表示(B7)は前後12文字・一致に色・改行↵にそろえた。tatesupan・columnstand とも作業ブランチ claude/cst-port-015-search-replace-yozv1c(TSP master 422a54a / CST main 0f906da の上)。npm test TSP 545件・CST 508件、TSP e2e WINDOWED/FULL 合格。両方の更新履歴に1件。仕様 docs/CST-PORT-015_SEARCH_REPLACE.md、状況 CST-PORT-015_STATUS_20261003.md。Human QA 待ち |
 | 8 | 未定 | 長文の速度計測パネル(B6、?perf=1) | → TSP | 小 | 開発用 | 未着手 |
 | 9 | 未定 | 画像の確認状態(A4) | → CST | 中 | | 未着手 |
 | 10 | 未定 | 画像管理センター(A5) | → CST | 中 | 9の後。CSTはページ枠ごとの画像IDなので作り直し | 未着手 |

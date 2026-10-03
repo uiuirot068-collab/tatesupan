@@ -3,11 +3,15 @@ import {
   INITIAL_SEARCH_REPLACE_STATE,
   deriveSearchReplaceView,
   findMatchOffsets,
+  matchContext,
   planActiveReplace,
+  planUndoReceipt,
   minimalReplacementRange,
   replaceAllMatches,
   searchReplaceReducer,
+  stepFromView,
   stepMatchIndex,
+  type ReplaceReceipt,
   type SearchReplaceState,
 } from "./searchReplaceNavigation";
 import { computeEditorPages, editorPageForGlobalOffset, globalToEditorPageLocal } from "./editorPagination/paginationModel";
@@ -250,5 +254,98 @@ describe("すべて置換 as ONE undoable edit (minimalReplacementRange)", () =>
     // Shared low surrogate at the suffix edge: 𠀋 (D840 DC0B) → 𡀋 (D844 DC0B).
     const r2 = minimalReplacementRange("x𠀋", "x𡀋");
     expect(r2).toEqual({ start: 1, end: 3, text: "𡀋" });
+  });
+});
+
+describe("CST-PORT-015: 置換したら、その場で確かめられる", () => {
+  /** Replays the dialog: 置換 on the active match, then the receipt once the edit has landed. */
+  const replaceActive = (content: string, state: SearchReplaceState) => {
+    const view = deriveSearchReplaceView(content, state);
+    const plan = planActiveReplace(content, state, view.activeOffset)!;
+    const receipt: ReplaceReceipt = { kind: "replaced", start: plan.start, text: state.replaceText, previousText: state.searchText, ordinal: view.activeIndex + 1 };
+    return { content: plan.nextContent, state: searchReplaceReducer(state, { type: "receipt", receipt, matchIndex: -1 }) };
+  };
+  const next = (content: string, state: SearchReplaceState, dir: 1 | -1) => {
+    const view = deriveSearchReplaceView(content, state);
+    return searchReplaceReducer(state, { type: "activate", index: stepFromView(view, state.searchText.length, dir) });
+  };
+
+  it("stays on the replaced text: 「2 件目を置換しました」, 残り件数, its surroundings and the range to tint", () => {
+    const start = step(TEXT, step(TEXT, search("瑠璃色", "群青"), 1), 1); // active = 2nd
+    const { content, state } = replaceActive(TEXT, start);
+    const view = deriveSearchReplaceView(content, state);
+    expect(content).toBe("瑠璃色の空、群青の海、瑠璃色の瓶。");
+    expect(view.activeIndex).toBe(-1);
+    expect(view.canReplaceActive).toBe(false); // nothing else is replaced until 次へ is pressed
+    expect(view.receiptLabel).toBe("2 件目を置換しました");
+    expect(view.statusLabel).toBe("残り 2 件");
+    expect(view.markRange).toEqual({ start: 6, end: 8 });
+    expect(view.receiptContext).toEqual({ before: "瑠璃色の空、", hit: "群青", after: "の海、瑠璃色の瓶。" });
+    expect(view.canUndoReceipt).toBe(true);
+  });
+
+  it("次へ goes to the match after the replaced text, 前へ to the one before it", () => {
+    const start = step(TEXT, step(TEXT, search("瑠璃色", "群青"), 1), 1);
+    const { content, state } = replaceActive(TEXT, start);
+    const forward = deriveSearchReplaceView(content, next(content, state, 1));
+    expect(forward.activeOffset).toBe(content.indexOf("瑠璃色の瓶"));
+    expect(forward.receipt).toBeNull(); // moving on clears the receipt
+    const back = deriveSearchReplaceView(content, next(content, state, -1));
+    expect(back.activeOffset).toBe(0);
+  });
+
+  it("次へ wraps without landing inside a replacement that contains the search text", () => {
+    const begin = step("山と山", step("山と山", search("山", "山田"), 1), 1); // active = 2nd 山
+    const { content, state } = replaceActive("山と山", begin);
+    expect(content).toBe("山と山田");
+    const view = deriveSearchReplaceView(content, next(content, state, 1));
+    expect(view.activeOffset).toBe(0);
+  });
+
+  it("この置換を戻す puts that one match back and makes it the active match again", () => {
+    const start = step(TEXT, step(TEXT, search("瑠璃色", "群青"), 1), 1);
+    const { content, state } = replaceActive(TEXT, start);
+    const undo = planUndoReceipt(content, state.receipt)!;
+    expect(undo).toMatchObject({ start: 6, end: 8, text: "瑠璃色" });
+    expect(undo.nextContent).toBe(TEXT);
+    const restored: ReplaceReceipt = { kind: "restored", start: 6, text: "瑠璃色", previousText: "群青", ordinal: 2 };
+    const after = searchReplaceReducer(state, { type: "receipt", receipt: restored, matchIndex: findMatchOffsets(TEXT, "瑠璃色").indexOf(6) });
+    const view = deriveSearchReplaceView(TEXT, after);
+    expect(view.receiptLabel).toBe("2 件目を元に戻しました");
+    expect(view.statusLabel).toBe("2 / 3 件目");
+    expect(view.canReplaceActive).toBe(true);
+    expect(view.canUndoReceipt).toBe(false);
+    expect(view.markRange).toEqual({ start: 6, end: 9 });
+  });
+
+  it("drops the receipt (and refuses to undo) once the replaced text has changed", () => {
+    const start = step(TEXT, search("瑠璃色", "群青"), 1);
+    const { content, state } = replaceActive(TEXT, start);
+    const edited = "前置き" + content; // an edit before it shifts the offsets
+    const view = deriveSearchReplaceView(edited, state);
+    expect(view.receipt).toBeNull();
+    expect(view.markRange).toBeNull();
+    expect(view.statusLabel).toBe("2 件見つかりました");
+    expect(planUndoReceipt(edited, state.receipt)).toBeNull();
+  });
+
+  it("すべて置換 reports how many were replaced; a new search clears it", () => {
+    const { nextContent, count } = replaceAllMatches(TEXT, "瑠璃色", "群青");
+    const receipt: ReplaceReceipt = { kind: "all", start: -1, text: "群青", previousText: "瑠璃色", ordinal: count };
+    const state = searchReplaceReducer(search("瑠璃色", "群青"), { type: "receipt", receipt, matchIndex: -1 });
+    const view = deriveSearchReplaceView(nextContent, state);
+    expect(view.receiptLabel).toBe("3 件を置換しました");
+    expect(view.statusLabel).toBe("残り 0 件");
+    expect(view.markRange).toBeNull();
+    expect(view.canUndoReceipt).toBe(false);
+    expect(searchReplaceReducer(state, { type: "setSearch", searchText: "群青" }).receipt).toBeNull();
+  });
+
+  it("the surroundings show line breaks as ↵ and never split a surrogate pair", () => {
+    expect(matchContext("一行目\n瑠璃色\n三行目", 4, 7)).toEqual({ before: "一行目↵", hit: "瑠璃色", after: "↵三行目" });
+    const astral = "𠮷".repeat(8) + "瑠璃色" + "𠮷".repeat(8);
+    expect(matchContext(astral, 16, 19)).toMatchObject({ before: "𠮷".repeat(6), after: "𠮷".repeat(6) });
+    // An odd window would end inside a pair on both sides: the half character is left out.
+    expect(matchContext(astral, 16, 19, 5)).toEqual({ before: "𠮷".repeat(2), hit: "瑠璃色", after: "𠮷".repeat(2) });
   });
 });

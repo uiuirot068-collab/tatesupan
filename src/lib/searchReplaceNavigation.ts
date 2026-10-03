@@ -9,6 +9,9 @@
  * reveal/replace a range.
  */
 
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
 /** Start offsets of every non-overlapping occurrence (the same matches `split`/replace-all count). */
 export function findMatchOffsets(content: string, searchText: string): number[] {
   if (searchText === "") return [];
@@ -26,32 +29,86 @@ export function stepMatchIndex(current: number, count: number, dir: 1 | -1): num
   return (current + dir + count) % count;
 }
 
+/**
+ * CST-PORT-015: what the dialog just changed, kept on screen until the next
+ * search action so the writer can check it in place (the editor does not
+ * move on to the next match by itself any more).
+ *
+ * - "replaced": 置換 wrote `text` at `start` (it was `previousText`); `ordinal` is the match number it had.
+ * - "restored": この置換を戻す put `text` (the search text) back at `start`.
+ * - "all": すべて置換 replaced `ordinal` matches (`start` is -1).
+ */
+export interface ReplaceReceipt {
+  kind: "replaced" | "restored" | "all";
+  start: number;
+  text: string;
+  previousText: string;
+  ordinal: number;
+}
+
 export interface SearchReplaceState {
   searchText: string;
   replaceText: string;
   /** Index into the current match list; -1 = no active match (nothing selected by the dialog yet). */
   matchIndex: number;
+  receipt: ReplaceReceipt | null;
 }
 
 export type SearchReplaceAction =
   /** A new query always drops the active match, so a stale range can never be replaced. */
   | { type: "setSearch"; searchText: string }
   | { type: "setReplace"; replaceText: string }
-  | { type: "activate"; index: number };
+  | { type: "activate"; index: number }
+  /** A replace / restore landed: show it, with `matchIndex` (-1 = none) as the active match. */
+  | { type: "receipt"; receipt: ReplaceReceipt; matchIndex: number };
 
-export const INITIAL_SEARCH_REPLACE_STATE: SearchReplaceState = { searchText: "", replaceText: "", matchIndex: -1 };
+export const INITIAL_SEARCH_REPLACE_STATE: SearchReplaceState = { searchText: "", replaceText: "", matchIndex: -1, receipt: null };
 
 export function searchReplaceReducer(state: SearchReplaceState, action: SearchReplaceAction): SearchReplaceState {
   switch (action.type) {
     case "setSearch":
-      return action.searchText === state.searchText && state.matchIndex === -1
+      return action.searchText === state.searchText && state.matchIndex === -1 && state.receipt === null
         ? state
-        : { ...state, searchText: action.searchText, matchIndex: -1 };
+        : { ...state, searchText: action.searchText, matchIndex: -1, receipt: null };
     case "setReplace":
       return { ...state, replaceText: action.replaceText };
     case "activate":
-      return { ...state, matchIndex: action.index };
+      return { ...state, matchIndex: action.index, receipt: null };
+    case "receipt":
+      return { ...state, matchIndex: action.matchIndex, receipt: action.receipt };
   }
+}
+
+/** The receipt while it still describes `content` (an edit elsewhere that shifts or changes it drops it). */
+export function validReceipt(content: string, receipt: ReplaceReceipt | null): ReplaceReceipt | null {
+  if (!receipt) return null;
+  if (receipt.kind === "all") return receipt;
+  return content.slice(receipt.start, receipt.start + receipt.text.length) === receipt.text ? receipt : null;
+}
+
+export interface MatchContext {
+  before: string;
+  hit: string;
+  after: string;
+}
+
+const CONTEXT_CHARS = 12;
+const showBreaks = (text: string) => text.replace(/\r?\n/g, "↵");
+
+/**
+ * B7 / CST-PORT-015: up to 12 characters on each side of `[start, end)`, line
+ * breaks shown as ↵, never cutting a surrogate pair in half at either edge.
+ */
+export function matchContext(content: string, start: number, end: number, chars = CONTEXT_CHARS): MatchContext {
+  let from = Math.max(0, start - chars);
+  if (from > 0 && from < start && isLowSurrogate(content.charCodeAt(from))) from += 1;
+  let to = Math.min(content.length, end + chars);
+  if (to < content.length && to > end && isHighSurrogate(content.charCodeAt(to - 1))) to -= 1;
+  return {
+    before: showBreaks(content.slice(from, start)),
+    hit: showBreaks(content.slice(start, end)),
+    after: showBreaks(content.slice(end, to)),
+  };
 }
 
 export interface SearchReplaceView {
@@ -63,29 +120,47 @@ export interface SearchReplaceView {
   statusLabel: string | null;
   /** A short window around the active match for the panel's snippet ("" when none). */
   context: string;
+  /** The same window split around the match, so the match itself can be marked (null when none). */
+  contextParts: MatchContext | null;
+  /** The last replace / restore while it still holds (see `validReceipt`). */
+  receipt: ReplaceReceipt | null;
+  /** 「3件目を置換しました」 etc. (null when there is no receipt). */
+  receiptLabel: string | null;
+  /** The changed text with its surroundings (null for すべて置換). */
+  receiptContext: MatchContext | null;
+  /** The range to tint in the editor: the text just replaced / restored. */
+  markRange: { start: number; end: number } | null;
+  /** この置換を戻す is offered right after a single 置換. */
+  canUndoReceipt: boolean;
   canStep: boolean;
   canReplaceActive: boolean;
   canReplaceAll: boolean;
 }
 
-const CONTEXT_CHARS = 16;
-
 export function deriveSearchReplaceView(content: string, state: SearchReplaceState, matches = findMatchOffsets(content, state.searchText)): SearchReplaceView {
   const count = matches.length;
   const activeIndex = state.matchIndex >= 0 && state.matchIndex < count ? state.matchIndex : -1;
   const activeOffset = activeIndex >= 0 ? matches[activeIndex] : -1;
+  const receipt = validReceipt(content, state.receipt);
   const statusLabel = state.searchText === ""
     ? null
     : activeIndex >= 0
       ? `${activeIndex + 1} / ${count} 件目`
-      : count === 0
-        ? "0 件"
-        : `${count} 件見つかりました`;
-  const context = activeOffset >= 0
-    ? content
-      .slice(Math.max(0, activeOffset - CONTEXT_CHARS), Math.min(content.length, activeOffset + state.searchText.length + CONTEXT_CHARS))
-      .replace(/\s+/g, " ")
-    : "";
+      : receipt
+        ? `残り ${count} 件`
+        : count === 0
+          ? "0 件"
+          : `${count} 件見つかりました`;
+  const contextParts = activeOffset >= 0 ? matchContext(content, activeOffset, activeOffset + state.searchText.length) : null;
+  const context = contextParts ? contextParts.before + contextParts.hit + contextParts.after : "";
+  const receiptLabel = !receipt
+    ? null
+    : receipt.kind === "all"
+      ? `${receipt.ordinal} 件を置換しました`
+      : receipt.kind === "restored"
+        ? `${receipt.ordinal} 件目を元に戻しました`
+        : `${receipt.ordinal} 件目を置換しました`;
+  const markRange = receipt && receipt.kind !== "all" ? { start: receipt.start, end: receipt.start + receipt.text.length } : null;
   return {
     matches,
     count,
@@ -93,6 +168,12 @@ export function deriveSearchReplaceView(content: string, state: SearchReplaceSta
     activeOffset,
     statusLabel,
     context,
+    contextParts,
+    receipt,
+    receiptLabel,
+    receiptContext: markRange ? matchContext(content, markRange.start, markRange.end) : null,
+    markRange,
+    canUndoReceipt: receipt?.kind === "replaced",
     canStep: count > 0,
     canReplaceActive: activeIndex >= 0,
     canReplaceAll: state.searchText !== "" && count > 0,
@@ -105,12 +186,13 @@ export interface ActiveReplacePlan {
   end: number;
   nextContent: string;
   /**
-   * The match to activate once `nextContent` is committed: the first match
+   * The match after the replaced one: the first match
    * that starts at or after the end of the inserted text, wrapping to the
    * first match. Matches that lie inside the inserted text itself (a
    * replacement that contains the search text, e.g. 山 → 山田) are skipped so
    * 選択箇所を置換 can never loop on the text it just wrote. -1 when no match
-   * is left.
+   * is left. (Since CST-PORT-015 the dialog stays on the replaced text and
+   * 次へ reaches this match through `stepFromView`.)
    */
   nextIndex: number;
   nextOffset: number;
@@ -133,6 +215,38 @@ export function planActiveReplace(content: string, state: SearchReplaceState, ac
   return { start: activeOffset, end, nextContent, nextIndex, nextOffset: nextIndex >= 0 ? nextMatches[nextIndex] : -1 };
 }
 
+/**
+ * CST-PORT-015 次へ / 前へ: from the active match, or -- right after a 置換,
+ * when no match is active -- from the replaced text: 次へ goes to the first
+ * match after it, 前へ to the last match before it (wrapping, never onto a
+ * match inside the replaced text itself). -1 when there is no match.
+ */
+export function stepFromView(view: Pick<SearchReplaceView, "matches" | "activeIndex" | "markRange" | "receipt">, searchLength: number, dir: 1 | -1): number {
+  const { matches, activeIndex, markRange } = view;
+  const count = matches.length;
+  if (activeIndex >= 0 || !markRange || view.receipt?.kind !== "replaced") return stepMatchIndex(activeIndex, count, dir);
+  const after = (offset: number) => offset >= markRange.end;
+  const before = (offset: number) => offset + searchLength <= markRange.start;
+  if (dir === 1) {
+    const next = matches.findIndex(after);
+    return next !== -1 ? next : matches.findIndex(before);
+  }
+  const lastIndex = (test: (offset: number) => boolean) => {
+    for (let i = count - 1; i >= 0; i -= 1) if (test(matches[i])) return i;
+    return -1;
+  };
+  const previous = lastIndex(before);
+  return previous !== -1 ? previous : lastIndex(after);
+}
+
+/** CST-PORT-015 この置換を戻す: put the replaced match back, as one edit; `null` once the text there has changed. */
+export function planUndoReceipt(content: string, receipt: ReplaceReceipt | null): { start: number; end: number; text: string; nextContent: string } | null {
+  const valid = validReceipt(content, receipt);
+  if (!valid || valid.kind !== "replaced") return null;
+  const end = valid.start + valid.text.length;
+  return { start: valid.start, end, text: valid.previousText, nextContent: content.slice(0, valid.start) + valid.previousText + content.slice(end) };
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -144,9 +258,6 @@ export function replaceAllMatches(content: string, searchText: string, replaceTe
   const nextContent = content.replace(new RegExp(escapeRegExp(searchText), "g"), () => replaceText);
   return { nextContent, count };
 }
-
-const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
-const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
 
 /**
  * The single contiguous edit turning `before` into `after`: replace
