@@ -39,6 +39,9 @@ import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
 import { imageOriginalDeletable, imageUsedByOtherWorks } from "@/lib/imageCenter";
 import type { Project } from "@/types/database";
+import { cloudCompareLocalCopyTitle, isCloudVersionChanged, type CloudVersionBase } from "@/lib/cloudVersionCompare";
+import CloudVersionCompareModal from "./CloudVersionCompareModal";
+import { clearCloudLink, readCloudLink, writeCloudLink } from "@/lib/cloudLink";
 import EditorPane, { type EditorPaneHandle } from "./EditorPane";
 import { DesktopReviewBarMount } from "./DesktopReviewBar";
 import { useReviewSurface } from "@/hooks/useReviewSurface";
@@ -331,6 +334,13 @@ export default function TategakiEditor({
   }, []);
   const [toast, setToast] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  // CST-PORT-014: the cloud version this screen last opened or saved
+  // (updated_at + title + content). A save first checks the cloud; if it was
+  // saved there since (other device / tab), the compare dialog asks which
+  // version to keep.
+  const cloudBaseRef = useRef<CloudVersionBase | null>(null);
+  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null } | null>(null);
+  const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const workSessionScope = useMemo(() => {
     if (demoMode) return `demo:${DEMO_PROJECT.id}`;
@@ -594,6 +604,7 @@ export default function TategakiEditor({
 
   const applyCloudProject = useCallback((project: Project) => {
     setCurrentProjectId(project.id);
+    cloudBaseRef.current = { updatedAt: project.updated_at ?? null, title: project.title, content: project.content };
     setTitle(project.title);
     setContent(project.content);
     setSettings(
@@ -666,6 +677,7 @@ export default function TategakiEditor({
         setUnresolvedCloudImages(null);
         setImageWarningBaselineIds(new Set());
         setCurrentProjectId(null);
+        cloudBaseRef.current = null;
         loadedDocIdRef.current = DEMO_PROJECT.id;
         setDocId(DEMO_PROJECT.id);
         hasLoadedRef.current = true;
@@ -708,6 +720,7 @@ export default function TategakiEditor({
       // with this document — and any technical break its manifest poll
       // reported while this load was in flight.
       setCurrentProjectId(null);
+      cloudBaseRef.current = null;
       setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
 
@@ -1035,7 +1048,9 @@ export default function TategakiEditor({
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
-  const handleSave = async () => {
+  const handleSave = () => saveToCloud(false);
+
+  const saveToCloud = async (skipNewerCheck: boolean) => {
     if (isSampleDocument) return;
     // Phase 6: 保存作品一覧 stays usable while this save is in flight. The save
     // itself (this document's title/content, sent to this document's project)
@@ -1047,7 +1062,42 @@ export default function TategakiEditor({
     try {
       // Existing cloud projects can always be overwritten regardless of the
       // plan's count limit -- the limit only ever blocks brand-new saves.
-      const isNewCloudSave = !currentProjectId;
+      // CST-PORT-014: a local work saves to the cloud work it was saved to
+      // before in this browser (lib/cloudLink.ts), not a new one each time.
+      let projectId = currentProjectId;
+      let linkedOnly = false;
+      if (!projectId && docId !== null) {
+        const linked = readCloudLink(docId);
+        if (linked) {
+          projectId = linked;
+          linkedOnly = true;
+        }
+      }
+
+      // CST-PORT-014: never overwrite a newer cloud version silently. If the
+      // cloud cannot be read, save as before (the check must not block saving).
+      if (projectId && (linkedOnly || !skipNewerCheck)) {
+        const cloudNow = await getProjectById(projectId);
+        if (!isSameDocument()) return;
+        if (linkedOnly) {
+          if (!cloudNow) {
+            // The linked cloud work is gone (deleted): save as a new one.
+            if (docId !== null) clearCloudLink(docId);
+            projectId = null;
+          } else {
+            setCurrentProjectId(cloudNow.id);
+          }
+        }
+        // A screen that never saw the linked cloud version compares it with
+        // what it shows now.
+        const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
+        if (cloudNow && projectId && !skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
+          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null });
+          return;
+        }
+      }
+
+      const isNewCloudSave = !projectId;
       let knownPlan: CloudPlan | null = null;
 
       if (isNewCloudSave) {
@@ -1070,8 +1120,8 @@ export default function TategakiEditor({
         }
       }
 
-      const result = currentProjectId
-        ? await updateProject(currentProjectId, { title, content, settings })
+      const result = projectId
+        ? await updateProject(projectId, { title, content, settings })
         : await createProject({ title, content, settings });
 
       if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
@@ -1085,6 +1135,8 @@ export default function TategakiEditor({
       }
 
       if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
+      if (isSameDocument()) cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
+      if (docId !== null) writeCloudLink(docId, result.data.id);
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
@@ -1112,6 +1164,47 @@ export default function TategakiEditor({
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCloudCompareOverwrite = () => {
+    setCloudCompare(null);
+    void saveToCloud(true);
+  };
+
+  // 「クラウド版を開く」: the screen's version is never thrown away. A local
+  // work linked to the cloud already holds it (autosave, flushed here); a
+  // work opened from the cloud lives only on this screen, so it is kept as a
+  // new local work 「…（この端末の控え）」 before the cloud version replaces it.
+  const handleCloudCompareOpenCloud = async () => {
+    const cloudProject = cloudCompare?.cloud;
+    if (!cloudProject) return;
+    const isSameDocument = documentEpoch.capture();
+    setCloudCompareBusy(true);
+    try {
+      let keptTitle: string | null = null;
+      if (docId === null) {
+        keptTitle = cloudCompareLocalCopyTitle(title);
+        const copyId = await createDocument();
+        await saveDocument(copyId, keptTitle, content, settings, plotNote);
+      } else {
+        await flushAutosave();
+      }
+      if (!isSameDocument()) return;
+      setCloudCompare(null);
+      beginDocumentSwitch();
+      applyCloudProject(cloudProject);
+      void openCloudProjectImages(cloudProject, documentEpoch.capture());
+      showToast(
+        keptTitle
+          ? `クラウド版を開きました。この画面の版は本棚に「${keptTitle}」として残しました。`
+          : "クラウド版を開きました。この画面の版は本棚のこの作品に残っています。"
+      );
+    } catch (error) {
+      console.error("TateSpun: open cloud version failed", error);
+      alert("クラウド版を開けませんでした。この画面の版はそのままです。");
+    } finally {
+      setCloudCompareBusy(false);
     }
   };
 
@@ -1564,6 +1657,17 @@ export default function TategakiEditor({
             router.push(`/editor?id=${id}`);
           }}
           onOpenFeatureGuide={() => router.push("/guide")}
+        />
+      )}
+
+      {cloudCompare && (
+        <CloudVersionCompareModal
+          screen={{ title, content, updatedAt: cloudCompare.base }}
+          cloud={{ title: cloudCompare.cloud.title, content: cloudCompare.cloud.content, updatedAt: cloudCompare.cloud.updated_at }}
+          busy={cloudCompareBusy}
+          onOverwrite={handleCloudCompareOverwrite}
+          onOpenCloud={() => void handleCloudCompareOpenCloud()}
+          onCancel={() => setCloudCompare(null)}
         />
       )}
 
