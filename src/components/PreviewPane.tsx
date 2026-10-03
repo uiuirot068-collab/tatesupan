@@ -139,6 +139,8 @@ import {
 const NO_UNRESOLVED_IMAGE_IDS: ReadonlySet<string> = new Set();
 const LAYOUT_UPDATING_MESSAGE = "プレビューのレイアウトを更新しています。表示が落ち着いてから、もう一度お試しください。";
 
+/** CST-PORT-012: no 表紙 images yet. */
+const NO_COVER_IMAGES: Record<string, string> = {};
 const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 // Phase 7: stable empty LEGACY results while the canonical V2 list is in use.
 const NO_LEGACY_PAGES: TategakiPage[] = [];
@@ -165,6 +167,12 @@ import {
   shouldVirtualizePreview,
   type PreviewSpreadLayout,
 } from "@/lib/previewPageVirtualization";
+import Book3DPreview from "@/components/book3d/Book3DPreview";
+import { useBook3DCoverTextures } from "@/components/book3d/useBook3DCoverTextures";
+import { useBook3DPageTextures } from "@/components/book3d/useBook3DPageTextures";
+import { useBook3DState } from "@/components/book3d/useBook3DState";
+import { book3dSpreadForPage, book3dViewForOpenState } from "@/lib/book3d/book3dModel";
+import type { CoverSettings } from "@/lib/cover/coverModel";
 
 /** Presentation Page Sequence の1要素（編集本文 / 独立TOC / 横書き奥付）。 */
 type PresentationItem =
@@ -499,6 +507,12 @@ interface PreviewPaneProps {
   onSettingsChange?: (settings: PageSettings) => void;
   /** CST-PORT-011: 書き出しメニューの「表紙（JPG / PDF）」— 表紙の書き出し画面を開く。 */
   onOpenCoverExport?: () => void;
+  /** CST-PORT-012: 3Dプレビューに描く表紙（settings には表紙が入っていないため別に受け取る）。 */
+  cover?: CoverSettings;
+  /** CST-PORT-012: 表紙画像（IndexedDB の id → dataUrl）。 */
+  coverImageDataUrls?: Record<string, string>;
+  /** CST-PORT-012: 3D のノド注意 →「ノドを調整する」（設定のノド欄を開く）。 */
+  onAdjustGutter?: () => void;
   onImageAdd?: (record: ImageRecord) => void;
   onImageDelete?: (imageId: string) => void;
   /** Link切れ画像を既存imageIdのまま差し替える。 */
@@ -588,6 +602,9 @@ function PreviewPane({
   onContentChange,
   onSettingsChange,
   onOpenCoverExport,
+  cover,
+  coverImageDataUrls,
+  onAdjustGutter,
   onImageAdd,
   onImageDelete,
   onImageReplace,
@@ -1377,6 +1394,8 @@ function PreviewPane({
   // visible/active-page sets, populated immediately before an export run
   // and cleared again in that export's `finally` block.
   const [exportMountSpreadIndices, setExportMountSpreadIndices] = useState<Set<number>>(() => new Set());
+  // CST-PORT-012: the (at most two) pages the 3D book is photographing.
+  const [book3dMountSpreadIndices, setBook3dMountSpreadIndices] = useState<Set<number>>(() => new Set());
   const spreadIndexForBodyIndex = (bodyIndex: number): number | null => {
     const presentationIndex = presentationSequence.findIndex(
       (item) => item.kind === "body" && item.bodyIndex === bodyIndex
@@ -2414,14 +2433,70 @@ function PreviewPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageLayout]);
 
+  // CST-PORT-012: 3D book preview. It covers the flat preview, which stays
+  // mounted underneath: the pager still scrolls it (so the page number keeps
+  // following it), and the 3D book photographs its two pages from it.
+  const [show3d, setShow3d] = useState(false);
+  const book3d = useBook3DState(previewPageTotal);
+  const book3dSpread = useMemo(
+    () => book3dSpreadForPage(presentation.physicalNumbers, currentPagerPage),
+    [presentation.physicalNumbers, currentPagerPage]
+  );
+  // In 3D the pager moves by 見開き whatever the flat layout is.
+  const book3dGroups = useMemo(
+    () => previewNavigationGroups(presentationSequence.length, "spread"),
+    [presentationSequence.length]
+  );
+  const pagerGroups = show3d ? book3dGroups : spreadGroups;
+  // Any change that can alter a page's look: the photographed pages are retaken.
+  const book3dPageSource = useMemo(
+    () => ({}),
+    // identity-only token
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [listPages, v2PageModel, settings, layout, images, imageLayerOrder, presentationSequence, colophonPhysicalPageNumber]
+  );
+  const book3dPageTextures = useBook3DPageTextures({
+    enabled: show3d && book3d.openState !== "closed",
+    indices: [book3dSpread.leftIndex, book3dSpread.rightIndex],
+    source: book3dPageSource,
+    paused: isExporting,
+    mount: (indices) => {
+      const needed = new Set<number>();
+      for (const index of indices) {
+        const spreadIndex = findPreviewSpreadIndex(spreadGroups, index);
+        if (spreadIndex != null) needed.add(spreadIndex);
+      }
+      flushSync(() => setBook3dMountSpreadIndices((current) =>
+        current.size === needed.size && [...needed].every((index) => current.has(index)) ? current : needed
+      ));
+    },
+    elementAt: (index) =>
+      scaleContentRef.current?.querySelector<HTMLElement>(
+        `[data-preview-physical-page="${presentation.physicalNumbers[index] ?? index + 1}"]`
+      ) ?? null,
+  });
+  const book3dCovers = useBook3DCoverTextures(cover, settings.paperSize, coverImageDataUrls ?? NO_COVER_IMAGES, show3d);
+  // Moving to a page in 3D opens the book there (CST: the pager is shared).
+  const jumpPager = (page: number) => {
+    if (show3d && book3d.openState === "closed") {
+      book3d.setOpenState("open");
+      book3d.setView(book3dViewForOpenState("open", "right"));
+    }
+    jumpToPreviewPage(page);
+  };
+
   const stepPager = (direction: -1 | 1) =>
-    jumpToPreviewPage(stepPreviewPage(currentPagerPage, direction, spreadGroups, presentation.physicalNumbers));
+    jumpPager(stepPreviewPage(currentPagerPage, direction, pagerGroups, presentation.physicalNumbers));
   const canStepPagerBackward =
-    stepPreviewPage(currentPagerPage, -1, spreadGroups, presentation.physicalNumbers) !== currentPagerPage;
+    stepPreviewPage(currentPagerPage, -1, pagerGroups, presentation.physicalNumbers) !== currentPagerPage;
   const canStepPagerForward =
-    stepPreviewPage(currentPagerPage, 1, spreadGroups, presentation.physicalNumbers) !== currentPagerPage;
+    stepPreviewPage(currentPagerPage, 1, pagerGroups, presentation.physicalNumbers) !== currentPagerPage;
 
   const handlePreviewScroll = () => {
+    // CST-PORT-012: under the 3D book the flat preview only scrolls because
+    // the pager moved it (or a page is being photographed, which briefly
+    // unscales it), so the page number must not follow that scroll.
+    if (show3d) return;
     if (pagerScrollFrameRef.current == null) {
       pagerScrollFrameRef.current = requestAnimationFrame(syncPagerToScroll);
     }
@@ -2963,7 +3038,7 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomOut}
-              disabled={zoomScale <= ZOOM_MIN}
+              disabled={show3d || zoomScale <= ZOOM_MIN}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               －
@@ -2974,7 +3049,7 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomIn}
-              disabled={zoomScale >= ZOOM_MAX}
+              disabled={show3d || zoomScale >= ZOOM_MAX}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ＋
@@ -2982,7 +3057,7 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomReset}
-              disabled={zoomScale === 1.0}
+              disabled={show3d || zoomScale === 1.0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               100%
@@ -2997,27 +3072,39 @@ function PreviewPane({
             {([
               ["single", "1P", "1ページずつ表示"],
               ["spread", "見開き", "見開きで表示"],
-            ] as const).map(([value, label, hint], index) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => changePageLayout(value)}
-                aria-pressed={pageLayout === value}
-                title={hint}
-                data-preview-page-layout-option={value}
-                className={`h-9 flex-shrink-0 whitespace-nowrap border border-ink/20 px-2 text-xs md:h-7 ${
-                  index === 0 ? "rounded-l" : "-ml-px rounded-r"
-                } ${pageLayout === value ? "bg-ink/80 text-[#faf8f2] dark:text-[#11151d]" : "hover:bg-ink/5"}`}
-              >
-                {label}
-              </button>
-            ))}
+              // CST-PORT-012: 表紙＋背＋本文の完成イメージ（印刷データではありません）
+              ["3d", "3D", "本の形（3D）で表示"],
+            ] as const).map(([value, label, hint], index) => {
+              const pressed = value === "3d" ? show3d : !show3d && pageLayout === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    if (value === "3d") {
+                      setShow3d(true);
+                      return;
+                    }
+                    setShow3d(false);
+                    changePageLayout(value);
+                  }}
+                  aria-pressed={pressed}
+                  title={hint}
+                  data-preview-page-layout-option={value}
+                  className={`h-9 flex-shrink-0 whitespace-nowrap border border-ink/20 px-2 text-xs md:h-7 ${
+                    index === 0 ? "rounded-l" : index === 2 ? "-ml-px rounded-r" : "-ml-px"
+                  } ${pressed ? "bg-ink/80 text-[#faf8f2] dark:text-[#11151d]" : "hover:bg-ink/5"}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </span>
           {previewPageTotal > 0 && (
             <PageNumberInput
               currentPage={currentPagerPage}
               totalPages={previewPageTotal}
-              onCommit={jumpToPreviewPage}
+              onCommit={jumpPager}
               onPrevious={() => stepPager(-1)}
               onNext={() => stepPager(1)}
               canPrevious={canStepPagerBackward}
@@ -3148,6 +3235,8 @@ function PreviewPane({
         </div>
       )}
 
+      {/* CST-PORT-012: the 3D book covers the flat preview, which stays mounted underneath. */}
+      <div className="relative flex min-h-0 w-full flex-1">
       <div
         ref={scrollContainerRef}
         data-preview-scroll-container="true"
@@ -3204,7 +3293,8 @@ function PreviewPane({
             !virtualizePreview ||
             visibleSpreadIndices.has(spreadIndex) ||
             activeSpreadIndex === spreadIndex ||
-            exportMountSpreadIndices.has(spreadIndex);
+            exportMountSpreadIndices.has(spreadIndex) ||
+            book3dMountSpreadIndices.has(spreadIndex);
           return (
             <PreviewSpread
               key={`${spreadGeometryKey}:${spreadIndex}`}
@@ -3413,6 +3503,38 @@ function PreviewPane({
         )}
         </div>
         </div>
+      </div>
+      {show3d && (
+        <div
+          className="book3d-layer absolute inset-0 z-10 flex min-h-0 flex-col bg-base"
+          data-book3d-layer=""
+        >
+          <Book3DPreview
+            paperSize={settings.paperSize}
+            pageCount={previewPageTotal}
+            spread={book3dSpread}
+            pageTextures={book3dPageTextures}
+            covers={book3dCovers}
+            spineWidthMm={cover?.spine.widthMm ?? 0}
+            view={book3d.view}
+            zoom={book3d.zoom}
+            openState={book3d.openState}
+            binding={book3d.binding}
+            showGutterGuide={book3d.showGutterGuide}
+            showGuideHelp={book3d.showGuideHelp}
+            onViewChange={book3d.setView}
+            onZoomChange={book3d.setZoom}
+            onOpenStateChange={book3d.setOpenState}
+            onBindingChange={book3d.setBinding}
+            onShowGutterGuideChange={book3d.setShowGutterGuide}
+            onDismissGuideHelp={book3d.dismissGuideHelp}
+            onAdjustGutter={onAdjustGutter}
+          />
+          <p className="flex-none px-3 pb-1.5 text-center text-[10.5px] text-ink/50">
+            表紙＋本文＋背の完成イメージ（印刷データではありません）。通常のプレビューへ戻るには 1P / 見開きを選択
+          </p>
+        </div>
+      )}
       </div>
 
       {imageWarningEntries.length === 0 && referencedImageCount > 0 && (

@@ -40,6 +40,8 @@ interface PageSettingsPanelProps {
   onOpenHelp?: () => void;
   /** 1-based printed page numbers currently selected in the preview. */
   selectedPageNumbers: number[];
+  /** CST-PORT-012: on open, scroll to and highlight this setting (3D「ノドを調整する」). */
+  focusSetting?: "gutter" | null;
   /**
    * TSP-LOOP-022: rendered as the phone's dedicated 設定 workspace (not the
    * collapsible strip that sits above the desktop editor). In that mode the
@@ -136,6 +138,7 @@ export default function PageSettingsPanel({
   selectedPageNumbers,
   mobileSurface = false,
   settingsOnly = false,
+  focusSetting = null,
 }: PageSettingsPanelProps) {
   // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
   // 同じ "page" に固定し、window/localStorage に依存する判定は
@@ -159,6 +162,29 @@ export default function PageSettingsPanel({
     }
     setActiveTab(null); // 2回目以降は閉じる
   }, [mobileSurface]);
+
+  // CST-PORT-012: 3D「ノドを調整する」— bring the ノド setting into view and
+  // light it up. 余白から設定する: the ノド field itself. 文字数・行数から設定する:
+  // the ノドの余白 field when 版面の位置 is ノド寄せ, otherwise the 版面の位置 box
+  // (its 自動計算 line shows the ノド).
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusSetting !== "gutter") return;
+    const timer = window.setTimeout(() => {
+      const root = panelRef.current;
+      if (!root) return;
+      const target =
+        root.querySelector<HTMLElement>('[data-setting-id="gutter"]') ??
+        root.querySelector<HTMLElement>('[data-setting-id="gutter-position"]');
+      if (!target) return;
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+      target.classList.remove("tsp-setting-flash");
+      void target.offsetWidth;
+      target.classList.add("tsp-setting-flash");
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [focusSetting]);
 
   const toggleTab = (tab: SettingsTab) => {
     setActiveTab((current) => (current === tab ? null : tab));
@@ -709,7 +735,7 @@ export default function PageSettingsPanel({
   };
 
   return (
-    <div className="border-b border-ink/10">
+    <div ref={panelRef} className="border-b border-ink/10">
       {!settingsOnly && <div data-settings-tabs="" className="grid grid-cols-4">
         <button
           type="button"
@@ -899,7 +925,7 @@ export default function PageSettingsPanel({
             <div data-settings-order="layout-controls" className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
               <MarginField label="天（上）" value={draft.marginTop} onChange={(v) => setDraftField("marginTop", v)} onKeyDown={handleDraftKeyDown} />
               <MarginField label="地（下）" value={draft.marginBottom} onChange={(v) => setDraftField("marginBottom", v)} onKeyDown={handleDraftKeyDown} />
-              <MarginField label="ノド（閉じ側）" value={draft.marginGutter} onChange={(v) => setDraftField("marginGutter", v)} onKeyDown={handleDraftKeyDown} />
+              <MarginField label="ノド（閉じ側）" settingId="gutter" value={draft.marginGutter} onChange={(v) => setDraftField("marginGutter", v)} onKeyDown={handleDraftKeyDown} />
               <MarginField label="小口（外側）" value={draft.marginOuter} onChange={(v) => setDraftField("marginOuter", v)} onKeyDown={handleDraftKeyDown} />
             </div>
           ) : (
@@ -1387,19 +1413,22 @@ function MarkdownPreview({ text }: { text: string }) {
 
 function MarginField({
   label,
+  settingId,
   value,
   onChange,
   onKeyDown,
   disabled = false,
 }: {
   label: string;
+  /** CST-PORT-012: target of 「ノドを調整する」 */
+  settingId?: string;
   value: string;
   onChange: (value: string) => void;
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   disabled?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label data-setting-id={settingId} className="flex flex-col gap-1 rounded">
       <span className="text-xs text-ink/60">{label} mm</span>
       <input
         type="number"
@@ -1453,7 +1482,7 @@ function TextFramePositionField({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-ink/15 bg-ink/[0.03] p-3 sm:flex-row sm:items-start sm:gap-4">
+    <div data-setting-id="gutter-position" className="flex flex-col gap-3 rounded border border-ink/15 bg-ink/[0.03] p-3 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex flex-col items-start gap-1">
         <span className="text-xs text-ink/60">版面の位置</span>
         <div role="radiogroup" aria-label="版面の位置" className="grid w-[132px] grid-cols-3 gap-1">
@@ -1498,6 +1527,7 @@ function TextFramePositionField({
           {position.horizontal !== "center" && (
             <MarginField
               label={`${HORIZONTAL_ANCHOR_LABELS[position.horizontal]}の余白`}
+              settingId={position.horizontal === "gutter" ? "gutter" : undefined}
               value={horizontalAnchorValue}
               onChange={onHorizontalAnchorChange}
               onKeyDown={onKeyDown}
