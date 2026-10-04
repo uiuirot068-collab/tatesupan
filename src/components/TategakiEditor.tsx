@@ -65,6 +65,7 @@ import { rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSessi
 import {
   DEMO_PROJECT,
   DEMO_SEED_CONTENT,
+  DEMO_SEED_CONTENT_MOBILE,
   isEphemeralDocId,
 } from "@/constants/demoData";
 import { useAuth } from "./AuthProvider";
@@ -684,7 +685,8 @@ export default function TategakiEditor({
         // loadDocument, no createDocument — nothing is read from or written
         // to IndexedDB, so the demo can never become a bookshelf project.
         setTitle("");
-        setContent(DEMO_SEED_CONTENT);
+        // SPN-XFIX-001: phones get the seed worded for their 「プレビュー」 tab.
+        setContent(window.matchMedia("(max-width: 767px)").matches ? DEMO_SEED_CONTENT_MOBILE : DEMO_SEED_CONTENT);
         setSettings(DEFAULT_PAGE_SETTINGS);
         setPlotNote("");
         setImages({});
@@ -813,10 +815,10 @@ export default function TategakiEditor({
   // dependencies (excluding the always-stable useState setters, per the
   // ordinary react-hooks/exhaustive-deps convention) is correct for the
   // runtime that actually ships; the lint rule is suppressed accordingly.
-  const showToast = (message: string) => {
+  const showToast = (message: string, durationMs = 2400) => {
     setToast(message);
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 2400);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), durationMs);
   };
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
@@ -1484,7 +1486,10 @@ export default function TategakiEditor({
         >
           <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${reviewBarEligible ? "md:rounded-t-lg md:[&>div]:rounded-none md:[&>div]:border-0 md:[&>div]:shadow-none" : ""}`}>
             <PreviewPane
-              startSinglePageOnNarrow={demoMode}
+              // SPN-XFIX-001: every phone preview (not only the demo) opens one
+              // page at a time, fitted to the screen width; the saved 1P/見開き
+              // choice is not rewritten.
+              startSinglePageOnNarrow
               content={previewContent}
               documentKey={workSessionScope}
               getLatestContent={getLatestContent}
@@ -1517,6 +1522,7 @@ export default function TategakiEditor({
               onBodyPageCountChange={setBodyPageCount}
               onPdfExportSuccess={handlePreviewPdfExportSuccess}
               onExportSupportLineChange={setIsExportSupportLineVisible}
+              onExportNotice={(message) => showToast(message, 5000)}
               mobileExportOpen={sharedExport.mobileExportOpen}
               onMobileExportClose={sharedExport.closeMobileExport}
               onExportActiveChange={sharedExport.onExportActiveChange}
@@ -1567,7 +1573,7 @@ export default function TategakiEditor({
 
       {isChecklistOpen && <ChecklistPanel onClose={() => setIsChecklistOpen(false)} />}
 
-      {activeDrawer === "settings" && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} selectedPageNumbers={selectedPageNumbers} focusSetting={settingsFocus} onClose={() => { setActiveDrawer(null); setSettingsFocus(null); }} />}
+      {activeDrawer === "settings" && <EditorSettingsDrawer settings={settings} layout={layout} onChange={setSettings} selectedPageNumbers={selectedPageNumbers} focusSetting={settingsFocus} getManuscript={getLatestContent} onClose={() => { setActiveDrawer(null); setSettingsFocus(null); }} />}
 
       {activeDrawer === "options" && (
         <EditorOptionsDrawer
@@ -1655,7 +1661,7 @@ export default function TategakiEditor({
       )}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-50 rounded-lg border border-ink/10 bg-ink px-4 py-2 text-sm text-base shadow-lg">
+        <div role="status" aria-live="polite" className="pointer-events-none fixed left-4 right-4 top-4 z-[70] rounded-lg md:left-auto md:top-auto md:bottom-4 md:right-4 md:max-w-md border border-ink/10 bg-ink px-4 py-2 text-sm text-base shadow-lg">
           {toast}
         </div>
       )}

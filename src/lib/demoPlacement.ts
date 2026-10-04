@@ -13,7 +13,7 @@ export interface DemoViewport {
 }
 
 export type DemoPlacementSide = "above" | "below" | "floating";
-export type DemoPlacementPreference = "auto" | "lower-safe";
+export type DemoPlacementPreference = "auto" | "lower-safe" | "beside";
 
 export interface DemoPlacementOptions {
   /**
@@ -28,6 +28,14 @@ export interface DemoPlacementOptions {
    * the page uncovered.
    */
   freeDock?: "center" | "bottom";
+  /**
+   * SPN-XFIX-001: a tall target (the manuscript textarea fills most of the
+   * screen) leaves no room above or below it. Instead of squeezing the card
+   * into the strip above it — over the toolbar and the title field — dock
+   * the card at the bottom of the screen, over the target's own lower part,
+   * so the toolbar, the title and the first lines stay visible.
+   */
+  largeTargetDock?: "bottom";
 }
 
 export interface DemoCardPlacement {
@@ -74,7 +82,22 @@ export function computeDemoCardPlacement(
       viewport.width - card.width - EDGE_MARGIN
     );
 
-  if (target && preference === "lower-safe") {
+  if (target && preference === "beside") {
+    // SPN-XFIX-001: wide screens — put the card next to the target (e.g. over
+    // the editor, left of the preview) at the bottom, so the target itself
+    // (the preview pages) stays fully visible.
+    const besideLeft = target.left - TARGET_GAP - card.width;
+    if (besideLeft >= EDGE_MARGIN) {
+      return {
+        top: Math.max(EDGE_MARGIN, viewport.height - visibleCardHeight - EDGE_MARGIN),
+        left: besideLeft,
+        maxHeight,
+        side: "floating",
+      };
+    }
+  }
+
+  if (target && (preference === "lower-safe" || preference === "beside")) {
     const lowerTop = viewport.height - visibleCardHeight - EDGE_MARGIN;
     if (lowerTop >= target.bottom + TARGET_GAP) {
       return {
@@ -87,6 +110,20 @@ export function computeDemoCardPlacement(
   }
 
   if (target) {
+    const minVisibleTargetTop = 160;
+    if (
+      options.largeTargetDock === "bottom" &&
+      target.height >= viewport.height * 0.4 &&
+      viewport.height - visibleCardHeight - EDGE_MARGIN >= Math.max(target.top, 0) + minVisibleTargetTop
+    ) {
+      return {
+        top: viewport.height - visibleCardHeight - EDGE_MARGIN,
+        left,
+        maxHeight,
+        side: "below",
+      };
+    }
+
     const targetCenter = (target.top + target.bottom) / 2;
     const fitsAbove = target.top - TARGET_GAP - visibleCardHeight >= EDGE_MARGIN;
     const fitsBelow = target.bottom + TARGET_GAP + visibleCardHeight <= viewport.height - EDGE_MARGIN;

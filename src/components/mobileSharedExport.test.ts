@@ -43,7 +43,7 @@ describe("A. desktop regression -- the Preview's own 書き出し ▾ is intact"
   it("still disables PDF (with the same explanation) for Web閲覧用 paper presets", () => {
     const pdf = describeExportMenu({ showColophon: false, pdfUnavailable: true }).find((e) => e.id === "pdf");
     expect(pdf?.disabled).toBe(true);
-    expect(pdf?.disabledReason).toContain("Web閲覧用はJPGで書き出してください");
+    expect(pdf?.disabledReason).toContain("Web閲覧用・SNS用の用紙はJPGで書き出してください");
     expect(PDF_UNAVAILABLE_NOTE).toContain("PDF書き出しは印刷用の用紙サイズで利用できます。");
     expect(describeExportMenu({ showColophon: false, pdfUnavailable: false }).some((e) => e.disabled)).toBe(false);
   });

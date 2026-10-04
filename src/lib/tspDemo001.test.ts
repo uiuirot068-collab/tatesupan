@@ -91,8 +91,9 @@ describe("TSP-DEMO-001 guide controls", () => {
     expect(exitButton).not.toContain("onClick={onExit}");
   });
 
-  it("opens the demo's phone preview one page at a time without rewriting the saved choice", () => {
-    expect(shell).toContain("startSinglePageOnNarrow={demoMode}");
+  it("opens the phone preview (demo included) one page at a time without rewriting the saved choice", () => {
+    // SPN-XFIX-001: every phone preview, not only the demo.
+    expect(shell).toMatch(/startSinglePageOnNarrow\s*\n/);
     expect(pane).toContain('const pageLayout = isNarrow && singlePageOverride ? "single" : storedPageLayout;');
     expect(pane).toContain("setSinglePageOverride(false);");
   });

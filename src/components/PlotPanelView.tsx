@@ -5,7 +5,10 @@ import {
   PLOTBOOK_URL,
   chapterHeading,
   chapterIndexForHeading,
+  countPlotScenes,
   parsePlotFile,
+  plotToManuscriptTemplate,
+  plotToSceneMemo,
   plotDisplayTitle,
   PLOT_LIMITS,
   readStoredPlot,
@@ -20,18 +23,28 @@ import {
  * PLT-LOOP-003: the プロット side of the メモ・プロット panel. Read-only: it
  * shows one chapter of a プロット帳 plot at a time and follows the `#` heading
  * the cursor is under. It never writes to the manuscript, settings, memo or
- * cloud copy; the plot is kept in its own localStorage drawer (`storageKey`).
+ * cloud copy on its own; the plot is kept in its own localStorage drawer
+ * (`storageKey`). SPN-XFIX-001: the one exception is 「本文のひな形として入れる」,
+ * which the writer presses and confirms — it hands the chapter headings and
+ * scene names (and, if chosen, each scene's plot for the メモ) to
+ * `onInsertTemplate`, which adds them as one undoable edit.
  */
 export default function PlotPanelView({
   storageKey,
   currentHeading,
   onOpenMemo,
+  onInsertTemplate,
+  manuscriptHasText = false,
 }: {
   storageKey: string;
   /** the manuscript heading the cursor is under, or null */
   currentHeading: string | null;
   /** switches the panel to the メモ tab, for writers who came here to write */
   onOpenMemo: () => void;
+  /** SPN-XFIX-001: adds the template to the end of the manuscript (and the scene plots to the メモ). */
+  onInsertTemplate?: (template: { body: string; memo: string | null }) => void;
+  /** whether the manuscript already has text (the template is then added after it) */
+  manuscriptHasText?: boolean;
 }) {
   const [plot, setPlot] = useState<Plot | null>(() =>
     typeof window === "undefined" ? null : readStoredPlot(window.localStorage, storageKey)
@@ -47,7 +60,8 @@ export default function PlotPanelView({
     if (match >= 0) setChapterIndex(match);
   }
 
-  const [mode, setMode] = useState<"view" | "paste" | "confirm-replace" | "confirm-remove">("view");
+  const [mode, setMode] = useState<"view" | "paste" | "confirm-replace" | "confirm-remove" | "confirm-template">("view");
+  const [templateWithMemo, setTemplateWithMemo] = useState(true);
   const [pasteText, setPasteText] = useState("");
   const [pending, setPending] = useState<Plot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +201,44 @@ export default function PlotPanelView({
     );
   }
 
+  if (mode === "confirm-template" && onInsertTemplate) {
+    const sceneCount = countPlotScenes(plot);
+    const memo = plotToSceneMemo(plot);
+    return (
+      <div data-plot-panel="confirm-template" className="text-sm leading-relaxed text-ink/80">
+        <p>
+          「{plotDisplayTitle(plot)}」の章見出し {plot.chapters.length} 個と場面名 {sceneCount} 個を、
+          {manuscriptHasText ? "本文の最後に足します。いまの本文は消えません。" : "本文に入れます。"}
+        </p>
+        <p className="mt-1 text-xs text-ink/60">
+          章は「# 第1章　〇〇」の見出し、場面は「◇ 場面名」の行になります。「◇」の行は、書き始めるときに本文へ書きかえてください。入れたあとも「元に戻す」で取り消せます。
+        </p>
+        <label className="mt-2 flex items-start gap-1.5 text-xs text-ink/75">
+          <input type="checkbox" className="mt-0.5" checked={templateWithMemo && memo !== ""} disabled={memo === ""} onChange={(event) => setTemplateWithMemo(event.target.checked)} />
+          <span>
+            各場面のプロット（あらすじ・人物など）をメモにも入れる
+            {memo === "" ? <span className="text-ink/50">（このプロットには場面のあらすじがありません）</span> : <span className="text-ink/50">（本の中には印刷されません）</span>}
+          </span>
+        </label>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            data-plot-template-confirm=""
+            onClick={() => {
+              onInsertTemplate({ body: plotToManuscriptTemplate(plot), memo: templateWithMemo && memo !== "" ? memo : null });
+              setMode("view");
+              setNote(templateWithMemo && memo !== "" ? "本文にひな形を入れ、場面のプロットをメモに入れました。" : "本文にひな形を入れました。");
+            }}
+            className="rounded bg-accent px-3 py-1 text-xs font-semibold text-paper-ink"
+          >
+            入れる
+          </button>
+          <button type="button" onClick={() => setMode("view")} className={linkButton}>やめる</button>
+        </div>
+      </div>
+    );
+  }
+
   if (mode === "confirm-remove") {
     return (
       <div data-plot-panel="confirm-remove" className="text-sm leading-relaxed text-ink/80">
@@ -245,6 +297,18 @@ export default function PlotPanelView({
       <p data-plot-read-only-note="" className="mt-2 text-[11px] leading-relaxed text-ink/50">
         プロットはここでは直せません。直すときはプロット帳で直して、読み込み直してください。
       </p>
+      {onInsertTemplate && (
+        <div data-plot-template="" className="mt-2 border-t border-ink/10 pt-2">
+          <button
+            type="button"
+            onClick={() => { setNote(null); setError(null); setMode("confirm-template"); }}
+            className="rounded border border-ink/20 px-3 py-1 text-xs text-ink/75 hover:bg-ink/5"
+          >
+            本文のひな形として入れる
+          </button>
+          <p className="mt-1 text-[11px] leading-relaxed text-ink/50">全部の章の見出しと場面名を、本文に入れます（場面のプロットはメモへ）。</p>
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink/10 pt-2 text-xs text-ink/50">
         <span className="min-w-0 truncate">{plotDisplayTitle(plot)}</span>
         <span aria-hidden="true">·</span>

@@ -31,6 +31,8 @@ import {
   USE_CASES_NOT_YET,
   USE_CASE_PREPARING_LABEL,
   USE_CASE_DETAIL_LABEL,
+  SHORT_POEM_STEPS_HEADING,
+  SHORT_POEM_STEPS,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import "./howto.css";
@@ -95,7 +97,13 @@ const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
 // rail (same chapters and names the hero menu already lists).
 const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] = [
   { group: "よく使う操作", items: [{ href: "#quick-reference", label: "操作と場所の早見表" }] },
-  { group: "使い方の例", items: [{ href: "#use-cases", label: USE_CASES_HEADING }] },
+  {
+    group: "使い方の例",
+    items: [
+      { href: "#use-cases", label: USE_CASES_HEADING },
+      { href: "#short-poems", label: SHORT_POEM_STEPS_HEADING },
+    ],
+  },
   {
     group: "まずは知ってほしい５つの機能",
     items: [
@@ -545,6 +553,20 @@ export default function HowToPage() {
               </li>
             ))}
           </ul>
+        </section>
+
+        {/* SPN-XFIX-001: 使い方の例「短歌・詩・エッセイの小冊子」の「くわしく」の行き先。 */}
+        <section className="use-cases short-poems" id="short-poems" aria-labelledby="short-poems-title">
+          <p className="howto-chip">Short Poems</p>
+          <h2 id="short-poems-title">{SHORT_POEM_STEPS_HEADING}</h2>
+          <ol className="use-case-list short-poem-steps">
+            {SHORT_POEM_STEPS.map((step) => (
+              <li key={step.title}>
+                <b>{step.title}</b>
+                <span>{step.body}</span>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section className="intro" id="five-features">

@@ -87,6 +87,8 @@ export type Book3DPreviewProps = {
   onDismissGuideHelp: () => void;
   /** 「ノドを調整する」: opens 設定 at the ノド field (CST: ページ設定 › ノド). Optional. */
   onAdjustGutter?: () => void;
+  /** SPN-XFIX-001: 「画像で保存」の保存名（拡張子なし）。 */
+  snapshotFileStem?: string;
 };
 
 /* ── one page texture (image of the trim area) ───────────────────────── */
@@ -454,7 +456,10 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
     onShowGutterGuideChange,
     onDismissGuideHelp,
     onAdjustGutter,
+    snapshotFileStem = "",
   } = props;
+
+  const [snapshotState, setSnapshotState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const [guideInfoOpen, setGuideInfoOpen] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -512,6 +517,21 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
     .filter(Boolean)
     .join("・");
   const thicknessNotice = describeBook3DThicknessNotice(thickness);
+
+  const saveSnapshot = async () => {
+    const stage = stageRef.current;
+    if (!stage || snapshotState === "saving") return;
+    setSnapshotState("saving");
+    try {
+      const { saveBook3DSnapshot, book3dSnapshotFileName } = await import("@/utils/book3dSnapshot");
+      await saveBook3DSnapshot(stage, book3dSnapshotFileName(snapshotFileStem));
+      setSnapshotState("saved");
+      window.setTimeout(() => setSnapshotState((state) => (state === "saved" ? "idle" : state)), 6000);
+    } catch (error) {
+      console.error(error);
+      setSnapshotState("error");
+    }
+  };
 
   return (
     <div className="eb3d-root" data-book3d-preview="">
@@ -577,6 +597,23 @@ export default function Book3DPreview(props: Book3DPreviewProps) {
           </div>
         </div>
       ) : null}
+
+      <div className="eb3d-snapshot-row flex flex-none flex-wrap items-center justify-end gap-x-3 gap-y-1 px-3 pt-1.5 text-xs">
+        {snapshotState === "saved" ? (
+          <span role="status" className="text-ink/60">PNG画像を保存しました。</span>
+        ) : snapshotState === "error" ? (
+          <span role="status" className="text-red-600">画像にできませんでした。少し待ってもう一度押してください。</span>
+        ) : null}
+        <button
+          type="button"
+          data-book3d-save-image=""
+          onClick={() => void saveSnapshot()}
+          disabled={snapshotState === "saving" || preparing}
+          className="rounded border border-ink/25 px-2.5 py-1 font-medium text-ink hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {snapshotState === "saving" ? "保存中…" : "画像で保存（PNG）"}
+        </button>
+      </div>
 
       <Book3DToolbar
         zoom={zoom}

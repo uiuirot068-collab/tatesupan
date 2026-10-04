@@ -45,6 +45,16 @@ export const DEMO_SEED_CONTENT = `これはおためしデモです。実際の�
 
 このデモで入力・変更した内容は保存されません。本棚にも残らないので、気軽に試してください。`;
 
+/**
+ * SPN-XFIX-001: phones have no 「右側のプレビュー」 — the same seed with the
+ * one sentence worded for the phone's 「プレビュー」 tab. Everything else
+ * (paragraphs, 【改ページ】, line structure) is identical to DEMO_SEED_CONTENT.
+ */
+export const DEMO_SEED_CONTENT_MOBILE = DEMO_SEED_CONTENT.replace(
+  "右側のプレビュー（スマートフォンでは「プレビュー」画面）の縦書きページに",
+  "上の「プレビュー」を押して開く縦書きページに"
+);
+
 export interface DemoStep {
   title: string;
   /** Body copy. Kept short — one or two short sentences. */
@@ -127,7 +137,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     title: "書き出してみよう",
-    body: "プレビューの「書き出し」から、PDF・JPG・Web版で保存できます。デモでは保存しなくても大丈夫です。",
+    body: "プレビューの「書き出し」から、PDF・JPG（画像）で保存できます。Web閲覧用やSNS用の用紙はJPGで書き出します。デモでは保存しなくても大丈夫です。",
     target: "export",
   },
   {

@@ -7,7 +7,7 @@ import {
   type PaperSizeKey,
 } from "@/lib/pageLayout";
 
-const ONE_COLUMN_DEFAULTS = new Set<PaperSizeKey>(["文庫", "A6"]);
+const ONE_COLUMN_DEFAULTS = new Set<PaperSizeKey>(["文庫", "A6", "SNS用 正方形", "SNS用 4:5"]);
 const COLUMN_FONT_PRESETS = new Set<PaperSizeKey>(["A5", "B5"]);
 
 function profileFor(paperSize: PaperSizeKey, columnCount: ColumnCount) {

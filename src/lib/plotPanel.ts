@@ -348,3 +348,65 @@ export function writeMemoPanelTab(storage: PlotPanelStorage, tab: MemoPanelTab):
     // remembering the tab is only a convenience
   }
 }
+
+// ---- 本文のひな形（SPN-XFIX-001） -------------------------------------------
+//
+// プロット帳の章と場面から、本文のひな形と、メモに入れる各場面のプロットを
+// 作る。ファイルの形（spuntales-plot v1）は読むだけで変えない。
+
+/** A heading must stay on one line and must not start another heading. */
+function oneLine(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** 場面名の行の頭につける印（見出しではないので、目次やプロット欄の章合わせには入らない）。 */
+export const PLOT_TEMPLATE_SCENE_MARK = "◇";
+
+/**
+ * 本文のひな形: 章ごとに `# 第1章　帰郷` の見出し、その下に場面名を1行ずつ
+ * （`◇ 場面名`）。場面名の行は書き始めるときに本文へ書きかえる前提の目印。
+ */
+export function plotToManuscriptTemplate(plot: Plot): string {
+  const blocks = plot.chapters.map((chapter, ci) => {
+    const lines = [`# ${oneLine(chapterHeading(chapter, ci))}`, ""];
+    chapter.scenes.forEach((scene, si) => {
+      lines.push(`${PLOT_TEMPLATE_SCENE_MARK} ${oneLine(sceneDisplayTitle(scene, si))}`, "");
+    });
+    return lines.join("\n");
+  });
+  return `${blocks.join("\n")}`.replace(/\n+$/, "\n");
+}
+
+function indentLines(text: string, prefix: string): string {
+  return text
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
+/** メモに入れる各場面のプロット（あらすじ・人物・時と場所・メモ）。何もなければ空文字。 */
+export function plotToSceneMemo(plot: Plot): string {
+  const out: string[] = [];
+  plot.chapters.forEach((chapter, ci) => {
+    const scenes: string[] = [];
+    chapter.scenes.forEach((scene, si) => {
+      const parts: string[] = [];
+      if (scene.summary.trim()) parts.push(indentLines(scene.summary, "  "));
+      if (scene.characters.trim()) parts.push(`  人物：${oneLine(scene.characters)}`);
+      if (scene.timePlace.trim()) parts.push(`  時と場所：${oneLine(scene.timePlace)}`);
+      if (scene.memo.trim()) parts.push(indentLines(scene.memo, "  メモ："));
+      if (parts.length > 0) scenes.push(`・${oneLine(sceneDisplayTitle(scene, si))}\n${parts.join("\n")}`);
+    });
+    if (!chapter.summary.trim() && scenes.length === 0) return;
+    const head = [`【${oneLine(chapterHeading(chapter, ci))}】`];
+    if (chapter.summary.trim()) head.push(indentLines(chapter.summary, "  "));
+    out.push([head.join("\n"), ...scenes].join("\n"));
+  });
+  if (out.length === 0) return "";
+  return [`プロット帳「${oneLine(plotDisplayTitle(plot))}」より`, ...out].join("\n\n");
+}
+
+export function countPlotScenes(plot: Plot): number {
+  return plot.chapters.reduce((sum, chapter) => sum + chapter.scenes.length, 0);
+}

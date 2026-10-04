@@ -24,9 +24,9 @@ export interface ExportMenuEntryDescriptor {
 
 /** Shown wherever PDF is unavailable (Web閲覧用 px paper presets). */
 export const PDF_UNAVAILABLE_NOTE =
-  "PDF書き出しは印刷用の用紙サイズで利用できます。 Web閲覧用はJPGで書き出してください。";
+  "PDF書き出しは印刷用の用紙サイズで利用できます。 Web閲覧用・SNS用の用紙はJPGで書き出してください。";
 export const PDF_UNAVAILABLE_TITLE =
-  "PDF書き出しは印刷用の用紙サイズで利用できます。Web閲覧用はJPGで書き出してください。";
+  "PDF書き出しは印刷用の用紙サイズで利用できます。Web閲覧用・SNS用の用紙はJPGで書き出してください。";
 
 export function describeExportMenu(params: {
   showColophon: boolean;

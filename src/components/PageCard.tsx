@@ -1620,7 +1620,7 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
         />
         <span>TateSpun</span>
         <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>
-        <span style={finePrintStyle}>#スパンテイル</span>
+        <span style={finePrintStyle}>#スパンテイルズ</span>
       </div>
     </div>
   );

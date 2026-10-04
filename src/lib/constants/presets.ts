@@ -121,7 +121,7 @@ export const PAGE_PRESETS: Record<string, PagePreset> = {
       logoPath: '/img/caroad_main2.png',
       text: 'TateSpun',
       url: 'https://tatespun.pages.dev/',
-      hashtag: '#スパンテイル',
+      hashtag: '#スパンテイルズ',
     },
   },
 };
