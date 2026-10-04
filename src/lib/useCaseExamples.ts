@@ -31,7 +31,7 @@ export const USE_CASES_LEAD = "縦書きで読む文章なら、こんな使い�
 export const USE_CASE_EXAMPLES: UseCaseExample[] = [
   {
     title: "Web小説を縦書きで読み返す",
-    body: "投稿サイトの原稿を貼り付けるか、TXTやWordのファイルを読み込んで、縦書きの見え方を確かめられます。用紙は「Web閲覧用」も選べます。",
+    body: "投稿サイトの原稿を貼り付けるか、TXTやWordのファイルを読み込んで、縦書きの見え方を確かめられます。",
     howtoHash: "#varied-use",
   },
   {

@@ -22,6 +22,7 @@ import {
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings, type PaperSize } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { resolveSnsId, showsSnsCredit, SNS_CREDIT_URL } from "@/lib/snsCredit";
 import { resolveNombreFontFamily } from "@/constants/fonts";
 import {
   WEB_FOOTER_BRAND_CSS_WIDTH,
@@ -517,6 +518,7 @@ function PageCard({
   const furnitureFrame = previewFurnitureFrame(settings, paper);
 
   const showWebFooter = settings.paperSize === "Web閲覧用";
+  const showSnsFooter = showsSnsCredit(settings);
   const folioFontSizePt = masterPage.nombreFontSize;
   const runningHeadFontSizePt = masterPage.headerFontSize;
 
@@ -1230,6 +1232,7 @@ function PageCard({
         )}
 
         {showWebFooter && <WebFooterOverlay bodyFontSizePx={fontSizePx} />}
+        {showSnsFooter && <SnsFooterOverlay snsId={resolveSnsId(settings)} />}
 
         {!paper.isPx && <TrimGuide />}
       </div>
@@ -1555,6 +1558,25 @@ function V2HiddenNombreOverlay({
   );
 }
 
+/**
+ * 紙面フッターのTateSpunロゴ（Web閲覧用・SNS用 4:5 で共通）。書き出し時は
+ * exportCapture が data-export-branding="web-footer" の img を data: URL に差し替える。
+ */
+function FooterBrandLogo({ cssWidthPx }: { cssWidthPx: number }) {
+  return (
+    <img
+      src={withBasePath("/caroad_main2.png")}
+      alt="logo"
+      data-logo-img="true"
+      data-export-branding="web-footer"
+      className="footer-logo"
+      width={WEB_FOOTER_BRAND_SOURCE_WIDTH}
+      height={WEB_FOOTER_BRAND_SOURCE_HEIGHT}
+      style={{ width: `${cssWidthPx}px`, height: "auto", aspectRatio: `${WEB_FOOTER_BRAND_SOURCE_WIDTH} / ${WEB_FOOTER_BRAND_SOURCE_HEIGHT}`, objectFit: "contain", flexShrink: 0 }}
+    />
+  );
+}
+
 /** Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。 */
 function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // 親のsheetStyleが writingMode: vertical-rl を敷いているため、ここで
@@ -1608,19 +1630,50 @@ function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
     <div style={containerStyle} className="pointer-events-none select-none">
       <div style={dividerStyle} />
       <div style={contentStyle}>
-        <img
-          src={withBasePath("/caroad_main2.png")}
-          alt="logo"
-          data-logo-img="true"
-          data-export-branding="web-footer"
-          className="footer-logo"
-          width={WEB_FOOTER_BRAND_SOURCE_WIDTH}
-          height={WEB_FOOTER_BRAND_SOURCE_HEIGHT}
-          style={{ width: `${WEB_FOOTER_BRAND_CSS_WIDTH}px`, height: "auto", aspectRatio: `${WEB_FOOTER_BRAND_SOURCE_WIDTH} / ${WEB_FOOTER_BRAND_SOURCE_HEIGHT}`, objectFit: "contain", flexShrink: 0 }}
-        />
+        <FooterBrandLogo cssWidthPx={WEB_FOOTER_BRAND_CSS_WIDTH} />
         <span>TateSpun</span>
         <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>
         <span style={finePrintStyle}>#スパンテイルズ</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SPN-XFIX-002: 「SNS用 4:5」の下のクレジット（ロゴ・TateSpun・URL・本人のSNSのID）。
+ * 用紙は 1080×1350px 固定なので、文字の大きさも本文と切り離して固定にし、
+ * 地の余白（70px）の中に収める。紙面の一部として、プレビューと書き出しの両方に入る。
+ */
+function SnsFooterOverlay({ snsId }: { snsId: string }) {
+  const containerStyle: CSSProperties = {
+    position: "absolute",
+    bottom: "14px",
+    left: "60px",
+    right: "60px",
+    writingMode: "horizontal-tb",
+    borderTop: "1px solid #d6d2ca",
+  };
+  const contentStyle: CSSProperties = {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "14px",
+    paddingTop: "10px",
+    whiteSpace: "nowrap",
+    writingMode: "horizontal-tb",
+    fontFamily: '"Shippori Mincho", serif',
+    fontSize: "21px",
+    lineHeight: 1.2,
+    color: "#7a766f",
+  };
+  const fineStyle: CSSProperties = { fontSize: "18px" };
+  return (
+    <div style={containerStyle} className="pointer-events-none select-none" data-sns-credit="true">
+      <div style={contentStyle}>
+        <FooterBrandLogo cssWidthPx={30} />
+        <span>TateSpun</span>
+        <span style={fineStyle}>{SNS_CREDIT_URL}</span>
+        {snsId && <span style={fineStyle}>{snsId}</span>}
       </div>
     </div>
   );

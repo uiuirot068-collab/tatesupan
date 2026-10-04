@@ -15,6 +15,11 @@ import {
   recommendedNombreFontSizePt,
 } from "@/lib/pageLayout";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
+import { lastSnsId, rememberSnsId, SNS_CREDIT_PAPER, SNS_ID_MAX_LENGTH } from "@/lib/snsCredit";
+
+// SPN-XFIX-002: 用紙の一覧からいったん隠す用紙（なつお 2026-10-04「SNS用を残し、web用を一旦非表示に」）。
+// その用紙で作ってある作品は、そのまま開けて一覧にも出る。戻すときはここから消す。
+const HIDDEN_PAPER_SIZES = new Set<string>(["Web閲覧用"]);
 import { applyColumnCountPreset, applyDestinationPaperPreset } from "@/lib/paperPresets";
 import { FONT_FAMILY_OPTIONS, NOMBRE_FONT_SAME_AS_BODY } from "@/constants/fonts";
 import { calculateCapacityFromMargins } from "@/utils/layoutCalculator";
@@ -805,7 +810,7 @@ export default function PageSettingsPanel({
             onChange={(e) => handlePaperSizeChange(e.target.value as PaperSizeKey)}
             className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
           >
-            {Object.entries(PAPER_SIZE_TEMPLATES).map(([key, size]) => (
+            {Object.entries(PAPER_SIZE_TEMPLATES).filter(([key]) => !HIDDEN_PAPER_SIZES.has(key) || key === settings.paperSize).map(([key, size]) => (
               <option key={key} value={key}>
                 {paperOptionLabel(key, size)}
               </option>
@@ -827,6 +832,36 @@ export default function PageSettingsPanel({
             </span>
           )}
         </label>
+        {settings.paperSize === SNS_CREDIT_PAPER && (
+          <div data-settings-row="sns-credit" className="order-[1] flex flex-col gap-2 border-t border-ink/10 pt-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.snsCredit !== false}
+                onChange={(e) => update("snsCredit", e.target.checked)}
+                className="h-4 w-4 rounded border-ink/30"
+              />
+              <span className="text-xs text-ink/70">画像の下に「TateSpun・URL・SNSのID」を入れる</span>
+            </label>
+            {settings.snsCredit !== false && (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-ink/60">SNSのID（なくても大丈夫です）</span>
+                <input
+                  type="text"
+                  value={settings.snsId !== undefined ? settings.snsId : lastSnsId()}
+                  maxLength={SNS_ID_MAX_LENGTH}
+                  placeholder="例：@spuntales"
+                  onChange={(e) => {
+                    rememberSnsId(e.target.value);
+                    update("snsId", e.target.value);
+                  }}
+                  className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
+                />
+                <span className="text-[11px] leading-snug text-ink/55">入れたIDは、この端末のブラウザの中だけに残り、次の作品にも最初から入ります。</span>
+              </label>
+            )}
+          </div>
+        )}
 
         <div data-settings-row="typography" className="order-[2] grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
         <label data-settings-order="font" className="flex flex-col gap-1">
