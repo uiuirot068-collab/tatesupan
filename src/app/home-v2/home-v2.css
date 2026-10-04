@@ -965,6 +965,49 @@
   }
 }
 
+/* TSP-HOWTO-001: other SpunTales tools (COLUMNSTAND, ことばテラス), side by
+   side between rules on wide screens; the pills line up at the bottom. */
+.home-sister {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--home-ink);
+}
+
+.home-sister li {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: .5rem;
+  padding: 1.2rem .25rem 1.3rem;
+  border-bottom: 1px solid var(--home-line);
+}
+
+.home-sister strong {
+  color: var(--home-ink);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  line-height: 1.6;
+}
+
+.home-sister span {
+  color: color-mix(in srgb, var(--home-ink) 68%, transparent);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.home-sister :where(strong, span) { word-break: auto-phrase; text-wrap: pretty; }
+.home-sister .home-p3-pill { justify-self: start; margin-top: .3rem; }
+
+@media (min-width: 768px) {
+  .home-sister {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 2rem;
+  }
+}
+
 /* Closing band. */
 .home-p3-closing {
   background: var(--home-night);
