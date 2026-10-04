@@ -28,7 +28,7 @@ import {
   SHORT_POEM_STEPS,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
-import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, type HowtoItem } from "./content";
+import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, COLUMNSTAND_PROMO, type HowtoItem } from "./content";
 import "./howto-v2.css";
 
 /**
@@ -95,6 +95,75 @@ const MOVED_ANCHORS: Record<string, string> = {
   "writing-check": "review-writing-check",
   "work-counter": "review-work-counter",
 };
+
+/** How long each hero picture stays before cross-fading to the other. */
+const HERO_SLIDE_MS = 6000;
+
+/**
+ * Hero picture: the current guide cat and the design's open book take turns,
+ * cross-fading every few seconds. Without motion (prefers-reduced-motion) it
+ * stays on the cat; the two dots switch by hand and stop the rotation.
+ */
+function HeroVisual() {
+  const [slide, setSlide] = useState(0);
+  const [auto, setAuto] = useState(true);
+
+  useEffect(() => {
+    if (!auto) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setSlide((n) => (n + 1) % 2);
+    }, HERO_SLIDE_MS);
+    return () => window.clearInterval(timer);
+  }, [auto]);
+
+  const pick = (n: number) => {
+    setAuto(false);
+    setSlide(n);
+  };
+
+  return (
+    <div className="v2-hero-visual">
+      <div className="v2-hero-stage">
+        <div className={`v2-hero-slide${slide === 0 ? " is-on" : ""}`} aria-hidden={slide !== 0}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={asset(HERO_IMAGE.file)} alt={HERO_IMAGE.alt} />
+        </div>
+        <div className={`v2-hero-slide${slide === 1 ? " is-on" : ""}`} aria-hidden="true">
+          <div className="v2-book">
+            <div className="v2-spread">
+              <div className="v2-pg">
+                <span className="v2-hashira">TateSpun</span>
+                <div className="v2-vtext">確かめて、<br />持ち帰る。<br />ＰＤＦも、<br />ＪＰＧも。</div>
+                <span className="v2-nombre">13</span>
+              </div>
+              <div className="v2-pg">
+                <div className="v2-vtext">書くのは、<br /><ruby>好<rt>す</rt></ruby>きな場所で。<br />本の<ruby>形<rt>かたち</rt></ruby>に<br />するのは、ここで。</div>
+                <span className="v2-nombre">12</span>
+                <span className="v2-trim" />
+              </div>
+            </div>
+            <span className="v2-tag" style={{ top: "-14px", left: "12%" }}><i />柱</span>
+            <span className="v2-tag" style={{ top: "64%", right: "-10px", animationDelay: "-1.6s" }}><i />ルビ</span>
+            <span className="v2-tag" style={{ bottom: "-8px", left: "44%", animationDelay: "-3.2s" }}><i />ノンブル</span>
+          </div>
+        </div>
+      </div>
+      <div className="v2-hero-dots">
+        {["案内猫の絵", "本の見開き"].map((label, n) => (
+          <button
+            key={label}
+            type="button"
+            aria-label={`${label}を表示`}
+            aria-pressed={slide === n}
+            className={slide === n ? "is-on" : undefined}
+            onClick={() => pick(n)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const Arrow = ({ dir = "right" }: { dir?: "right" | "down" | "up" }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -327,7 +396,7 @@ export default function HowToV2Page() {
               </h1>
               <p className="v2-hero-lead">
                 色々出来るTateSpun<br />是非知ってもらいたい機能を<br />こちらのページにまとめました。
-                <br />ブラウザだけで動作し、原稿はあなたのものです。
+                <br /><span className="v2-nw">ブラウザだけで動作し、</span><span className="v2-nw">原稿はあなたのものです。</span>
               </p>
               <div className="v2-hero-cta">
                 <a className="v2-btn v2-pri" href="#start">
@@ -343,10 +412,7 @@ export default function HowToV2Page() {
                 <span>β版公開中</span>
               </div>
             </div>
-            <div className="v2-hero-visual">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={asset(HERO_IMAGE.file)} alt={HERO_IMAGE.alt} />
-            </div>
+            <HeroVisual />
           </div>
         </section>
 
@@ -627,6 +693,11 @@ export default function HowToV2Page() {
                 </li>
               ))}
             </ul>
+            <aside className="v2-promo" aria-labelledby="v2-promo-title">
+              <h3 className="v2-mincho" id="v2-promo-title">{COLUMNSTAND_PROMO.heading}</h3>
+              <p>{COLUMNSTAND_PROMO.body}</p>
+              <a className="v2-btn" href={COLUMNSTAND_PROMO.href}>{COLUMNSTAND_PROMO.label}<Arrow /></a>
+            </aside>
             <h3 className="v2-cases-sub">{USE_CASES_NOT_YET_HEADING}</h3>
             <ul className="v2-cases v2-cases-notyet">
               {USE_CASES_NOT_YET.map((item) => (

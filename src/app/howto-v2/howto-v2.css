@@ -107,7 +107,27 @@ html[data-theme="dark"] .htv2 {
 .htv2 .v2-hero-meta span { display: inline-flex; align-items: center; gap: 8px; }
 .htv2 .v2-hero-meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--dot); }
 .htv2 .v2-hero-visual { position: relative; max-width: 540px; width: 100%; margin-left: auto; }
-.htv2 .v2-hero-visual img { display: block; width: 100%; height: auto; }
+.htv2 .v2-hero-stage { position: relative; aspect-ratio: 1.36 / 1; }
+.htv2 .v2-hero-slide { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; visibility: hidden; transition: opacity 1.4s ease, visibility 0s 1.4s; }
+.htv2 .v2-hero-slide.is-on { opacity: 1; visibility: visible; transition: opacity 1.4s ease, visibility 0s; }
+.htv2 .v2-hero-slide img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.htv2 .v2-hero-dots { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
+.htv2 .v2-hero-dots button { width: 8px; height: 8px; padding: 0; border: 1px solid var(--dot); border-radius: 50%; background: transparent; cursor: pointer; }
+.htv2 .v2-hero-dots button.is-on { background: var(--dot); }
+.htv2 .v2-hero-dots button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* the design's open book */
+.htv2 .v2-book { position: relative; width: 92%; aspect-ratio: 1.42 / 1; }
+.htv2 .v2-spread { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 100%; overflow: hidden; border-radius: 6px; background: #fff; box-shadow: 0 40px 80px -30px rgba(70,52,20,.35), 0 2px 0 var(--line); transform: rotate(-2.5deg); }
+.htv2 .v2-pg { position: relative; padding: 15% 10% 15%; display: flex; justify-content: center; min-height: 0; overflow: hidden; background: linear-gradient(270deg, rgba(0,0,0,.035), transparent 14%); }
+.htv2 .v2-pg + .v2-pg { border-left: 1px solid #eee7da; background: linear-gradient(90deg, rgba(0,0,0,.035), transparent 14%); }
+.htv2 .v2-vtext { writing-mode: vertical-rl; font-family: "Zen Old Mincho", "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif; font-size: clamp(11px, 1.05vw, 15px); line-height: 2.2; letter-spacing: .14em; color: #2a2622; height: 100%; white-space: nowrap; }
+.htv2 .v2-vtext rt { font-size: .45em; letter-spacing: 0; color: var(--accent); }
+.htv2 .v2-hashira { position: absolute; top: 5%; left: 10%; font-size: 10px; letter-spacing: .2em; color: #8e8578; }
+.htv2 .v2-nombre { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); font-size: 11px; color: #8e8578; }
+.htv2 .v2-trim { position: absolute; inset: 6% 6% 6% 0; border: 1px dashed rgba(138,95,24,.28); pointer-events: none; }
+.htv2 .v2-tag { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .08em; line-height: 1.4; box-shadow: 0 10px 24px rgba(42,38,34,.18); animation: v2bob 5s ease-in-out infinite; }
+.htv2 .v2-tag i { width: 6px; height: 6px; border-radius: 50%; background: var(--marker); }
+@keyframes v2bob { 50% { transform: translateY(-6px); } }
 .htv2 .v2-hero h1 .v2-nw, .htv2 .v2-hero-lead, .htv2 .v2-hero-cta, .htv2 .v2-hero-meta { animation: v2rise .9s cubic-bezier(.165,.84,.44,1) both; }
 .htv2 .v2-hero h1 .v2-nw:nth-child(2) { animation-delay: .08s; }
 .htv2 .v2-hero h1 .v2-nw:nth-child(4) { animation-delay: .16s; }
@@ -245,6 +265,14 @@ html[data-theme="dark"] .htv2 {
 .htv2 .v2-case-detail p { margin-top: 6px; font-size: 13px; color: var(--sub); }
 .htv2 .v2-case-more { margin-top: auto; font-size: 13px; font-weight: 700; text-decoration: none; }
 .htv2 .v2-case-more i { font-style: normal; }
+.htv2 .v2-promo { margin-top: 56px; padding: 36px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px 48px; align-items: start; }
+.htv2 .v2-promo h3 { font-size: clamp(20px, 2vw, 24px); line-height: 1.6; grid-row: span 2; }
+.htv2 .v2-promo p { color: var(--sub); word-break: auto-phrase; }
+.htv2 .v2-promo .v2-btn { justify-self: start; margin-top: 8px; }
+@media (max-width: 760px) {
+  .htv2 .v2-promo { grid-template-columns: 1fr; padding: 28px 0; }
+  .htv2 .v2-promo h3 { grid-row: auto; }
+}
 .htv2 .v2-cases-sub { margin: 48px 0 16px; font-size: 18px; }
 .htv2 .v2-cases-notyet b { color: var(--sub); }
 .htv2 .v2-poems { margin-top: 64px; padding: 40px 44px; border-radius: 28px; background: var(--card); scroll-margin-top: 100px; }

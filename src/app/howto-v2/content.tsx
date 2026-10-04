@@ -113,7 +113,7 @@ export const FEATURES: HowtoItem[] = [
         <p>フォントから段組まで設定可能です。</p>
         <p>天地・小口・ノドの余白も指定できます。余白から指定する方法に加え、文字数・行数を指定して余白を逆算設定することも可能です。合同誌・アンソロジーなど、組版を合わせる必要があるときに便利です。</p>
         <p>余白から「1ページに何文字入るか」が分かるのも便利なポイントです！</p>
-        <p>Xなどに貼る縦書き画像をつくるときは、用紙を「SNS用」にします。くわしくは<a href="#sns-image">小技10「SNSに載せる縦書き画像」</a>へ。</p>
+        <p>書き出したJPGは、文庫やA5など、どの用紙で組んだものでも、そのままSNSへの投稿や書店委託のサンプルに使えます。Xの画面に合わせた縦長・正方形の画像にしたいときは、用紙を「SNS用 4:5」か「SNS用 正方形」にする方法もあります。くわしくは<a href="#sns-image">小技10「SNSに載せる縦書き画像」</a>へ。</p>
       </>
     ),
   },
@@ -350,6 +350,7 @@ export const TIPS: HowtoItem[] = [
     image: { file: shot("tip-10-sns.jpg"), alt: "用紙「SNS用 4:5」で書き出した縦書き画像の見本" },
     body: (
       <>
+        <p>本の用紙のままJPGで書き出した画像も、SNSに投稿できます。SNS用の用紙は、Xの画面に合わせた形にしたいときに使います。</p>
         <p>用紙を「SNS用 4:5」か「SNS用 正方形」にすると、Xなどに貼る画像（JPG）向けの用紙になります。PDFには書き出せません。短歌や詩は、設定の「本文を用紙の中央に置く」で真ん中に置けます。</p>
         <p>「SNS用 4:5」では、画像の下に「TateSpun・URL・SNSのID」を入れられます。SNSのIDはなくても大丈夫です。入れたIDは、この端末のブラウザの中だけに残ります。SNS用を選んだときは、次の作品にも最初から入ります。</p>
         <p>書き出しは、プレビュー左側の「書き出し▼」からJPGで。</p>
@@ -360,3 +361,14 @@ export const TIPS: HowtoItem[] = [
 
 export const HERO_IMAGE = HOWTO_IMAGES.hero;
 export const GUIDE_CAT = HOWTO_IMAGES.guideCat;
+
+/**
+ * 「小説の本のほかにも」の中で COLUMNSTAND をすすめる囲み（HOW TOだけ）。
+ * COLUMNSTAND は TateSpun の basePath の外なので、サイトの絶対パスで書く。
+ */
+export const COLUMNSTAND_PROMO = {
+  heading: "ZINEやコラムなら、COLUMNSTANDも。",
+  body: "TateSpunは縦書きの本づくり専用です。同じSpunTalesのCOLUMNSTANDでは、縦書き・横書きの段組テンプレートを使って、文章と写真・イラストを並べた誌面をつくれます。ZINEやコラム、会報づくりには、COLUMNSTANDもあわせて使ってみてください。",
+  label: "COLUMNSTANDを見る",
+  href: "/columnstand/",
+};
