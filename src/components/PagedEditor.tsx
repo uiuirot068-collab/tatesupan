@@ -87,6 +87,7 @@ import {
 } from "@/lib/windowedEditor/compositionTransaction";
 import { resolveTextareaDeletion } from "@/lib/editorInputIntegrity";
 import { perfMark, perfSpan } from "@/lib/perfDebug";
+import { measureLongDocumentPerf } from "@/lib/longDocumentPerf";
 import WritingCheckOverlay from "./WritingCheckOverlay";
 import DescriptionMarkOverlay from "./DescriptionMarkOverlay";
 import { marksForPage } from "@/lib/descriptionMarkSegments";
@@ -195,7 +196,7 @@ function paginate(
     return cached.pages;
   }
   const end = perfSpan("PagedEditor:paginate", { length: text.length });
-  const result = computeEditorPages(text, state);
+  const result = measureLongDocumentPerf("editorPagination", text.length, () => computeEditorPages(text, state), (pages) => pages.length);
   end({ pages: result.length });
   paginationCache = { text, forcedBoundaries: state.forcedBoundaries, joinedRanges: state.joinedRanges, pages: result };
   return result;

@@ -21,6 +21,7 @@
     "test:e2e:review-layout": "node tests/e2e/reviewLayout.e2e.mjs",
     "qa:local-feedback-send": "node tests/local-feedback-harness/run.mjs",
     "test:e2e:header-density": "node tests/e2e/headerTabletDensity.e2e.mjs",
+    "test:e2e:long-document-perf-panel": "node tests/e2e/longDocumentPerfPanel.e2e.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

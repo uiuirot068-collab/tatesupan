@@ -29,6 +29,8 @@ export default defineConfig({
       "src/lib/plotPanel.test.ts",
       // SPN-XFIX-001: Xから来た50人のテストの直し
       "src/lib/spnXfix001.test.ts", "src/lib/snsCredit.test.ts",
+      // CST-PORT-016: 長い原稿の速度計測（?perf=1、開発用）
+      "src/lib/longDocumentPerf.test.ts",
     ],
   },
 });

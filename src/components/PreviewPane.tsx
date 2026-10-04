@@ -185,6 +185,7 @@ import {
   coverProofPagesAround,
   coverProofPaintPage,
 } from "@/lib/cover/coverProof";
+import { measureLongDocumentPerf } from "@/lib/longDocumentPerf";
 
 /** Presentation Page Sequence の1要素（編集本文 / 独立TOC / 横書き奥付）。 */
 type PresentationItem =
@@ -705,14 +706,19 @@ function PreviewPane({
   );
   const pages = useMemo(() => {
     if (!legacyPaginationNeeded) return NO_LEGACY_PAGES;
-    const tokens = tokenizeTategaki(deferredContent);
-    const result = paginateTokens(tokens, {
-      charsPerLine: layout.charsPerLine,
-      linesPerPage: layout.linesPerPage,
-      columnCount: settings.columnCount,
-      linesPerColumn: layout.linesPerColumn,
-    });
-    return result;
+    // CST-PORT-016: `?perf=1` のときだけ時間を記録する
+    return measureLongDocumentPerf(
+      "legacyPaginate",
+      deferredContent.length,
+      () =>
+        paginateTokens(tokenizeTategaki(deferredContent), {
+          charsPerLine: layout.charsPerLine,
+          linesPerPage: layout.linesPerPage,
+          columnCount: settings.columnCount,
+          linesPerColumn: layout.linesPerColumn,
+        }),
+      (result) => result.length
+    );
   }, [
     legacyPaginationNeeded,
     deferredContent,
