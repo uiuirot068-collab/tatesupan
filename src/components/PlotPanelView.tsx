@@ -135,7 +135,7 @@ export default function PlotPanelView({
   if (mode === "paste") {
     return (
       <div data-plot-panel="paste">
-        <p className="text-xs leading-relaxed text-ink/65">プロット帳の「書き出す」→「プロットをまるごとコピー」でコピーしたものを貼りつけてください。</p>
+        <p className="text-xs leading-relaxed text-ink/65">プロット帳（Shioria）の「書き出す」→「プロットをまるごとコピー」でコピーしたものを貼りつけてください。</p>
         <textarea
           autoFocus
           value={pasteText}
@@ -171,7 +171,7 @@ export default function PlotPanelView({
   if (!plot) {
     return (
       <div data-plot-panel="empty">
-        <p className="text-sm leading-relaxed text-ink/75">プロット帳で作ったプロットを読み込むと、この欄で章ごとに見ながら原稿を書けます。</p>
+        <p className="text-sm leading-relaxed text-ink/75">プロット帳（Shioria）で作ったプロットを読み込むと、この欄で章ごとに見ながら原稿を書けます。</p>
         <p data-plot-read-only-note="" className="mt-1 text-xs leading-relaxed text-ink/65">
           ここはプロットを見るための欄で、プロットを書くことはできません。プロットはプロット帳で書きます。思いついたことを書きとめたいときはメモを使ってください。
           <button type="button" onClick={onOpenMemo} className={`${linkButton} ml-1`}>メモを開く</button>

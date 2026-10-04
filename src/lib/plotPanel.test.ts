@@ -200,8 +200,8 @@ describe("PLT-LOOP-003 QA: the plot side says it is view-only and in preparation
 });
 
 describe("PLT-LOOP-003 QA: tab name", () => {
-  it("names the tab プロット帳の読み込み", async () => {
+  it("names the tab プロット帳（Shioria）", async () => {
     const { PLOT_TAB_LABEL } = await import("./plotPanel");
-    expect(PLOT_TAB_LABEL).toBe("プロット帳の読み込み");
+    expect(PLOT_TAB_LABEL).toBe("プロット帳（Shioria）");
   });
 });

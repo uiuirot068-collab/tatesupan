@@ -289,10 +289,11 @@ export interface PlotPanelStorage {
 }
 
 /**
- * The tab's name. 「プロット帳」 is a working name and will change; the tab
- * carries a 準備中 tag until the feature is officially released.
+ * The tab's name: the app is プロット帳, and Shioria is its name
+ * (spuntales.net/shioria/). The tab carries a 準備中 tag until the feature is
+ * officially released.
  */
-export const PLOT_TAB_LABEL = "プロット帳の読み込み";
+export const PLOT_TAB_LABEL = "プロット帳（Shioria）";
 
 const PLOT_PREFIX = "tatespun:plot-panel:v1:";
 export const MEMO_PANEL_TAB_KEY = "tatespun:memo-panel-tab:v1";
