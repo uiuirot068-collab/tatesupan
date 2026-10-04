@@ -26,8 +26,19 @@ export interface BetaFeedbackSecurity {
   environment: FeedbackEnvironment;
 }
 
+// SPN-UNIFY-001: the feedback Edge Function can live in a different Supabase
+// project from the login (it stays in the old one until it is moved), so it
+// has its own optional URL / key, falling back to the login project's.
+function feedbackBaseUrl(): string | undefined {
+  return process.env.NEXT_PUBLIC_BETA_FEEDBACK_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
+function feedbackAnonKey(): string | undefined {
+  return process.env.NEXT_PUBLIC_BETA_FEEDBACK_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+}
+
 function functionUrl(): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const base = feedbackBaseUrl();
   if (!base || !base.startsWith("http")) return null;
   return `${base.replace(/\/$/, "")}${BETA_FEEDBACK_FUNCTION_PATH}`;
 }
@@ -42,7 +53,7 @@ export async function submitBetaFeedback(
   security: BetaFeedbackSecurity
 ): Promise<{ ok: boolean }> {
   const url = functionUrl();
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = feedbackAnonKey();
   if (!url || !anonKey) {
     // Dev/local-only diagnostic: never shown to the user (UI always renders
     // the generic FEEDBACK_FAILURE_MESSAGE), but without this a developer

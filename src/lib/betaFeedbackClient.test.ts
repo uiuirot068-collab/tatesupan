@@ -65,6 +65,24 @@ describe("submitBetaFeedback — end-to-end Send pipeline", () => {
     expect(payload.clientContext).toEqual(environment);
   });
 
+  it("sends to the feedback project when its own URL / key are set (SPN-UNIFY-001: login and feedback in different projects)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://login.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "sb_publishable_login");
+    vi.stubEnv("NEXT_PUBLIC_BETA_FEEDBACK_SUPABASE_URL", "https://feedback.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_BETA_FEEDBACK_SUPABASE_ANON_KEY", "sb_publishable_feedback");
+    const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ ok: true, reportId: "r1" }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await submitBetaFeedback(submission, security);
+
+    expect(result.ok).toBe(true);
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://feedback.supabase.co/functions/v1/beta-feedback");
+    expect(init.headers).toEqual({ apikey: "sb_publishable_feedback" });
+  });
+
   it("reports ok:false (not a fabricated success) when the Edge Function responds with a non-2xx status", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");

@@ -31,6 +31,9 @@ export default defineConfig({
       "src/lib/spnXfix001.test.ts", "src/lib/snsCredit.test.ts",
       // CST-PORT-016: 長い原稿の速度計測（?perf=1、開発用）
       "src/lib/longDocumentPerf.test.ts",
+      // SPN-UNIFY-001: login and feedback in the SpunTales portal project
+      "src/lib/supabase/plans.test.ts",
+      "src/lib/betaFeedbackClient.test.ts",
     ],
   },
 });
