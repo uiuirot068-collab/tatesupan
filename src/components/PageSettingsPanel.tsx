@@ -857,7 +857,7 @@ export default function PageSettingsPanel({
                   }}
                   className="rounded border border-ink/20 bg-base px-2 py-1.5 text-sm text-ink"
                 />
-                <span className="text-[11px] leading-snug text-ink/55">入れたIDは、この端末のブラウザの中だけに残り、次の作品にも最初から入ります。</span>
+                <span className="text-[11px] leading-snug text-ink/55">入れたIDは、この端末のブラウザの中だけに残ります。SNS用を選んだときは、次の作品にも最初から入ります。</span>
               </label>
             )}
           </div>
