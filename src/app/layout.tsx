@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://spuntales.net"),
   title: "タテスパン | 縦書き小説PDF組版ツール",
   description: "Web上で簡単に縦書きWeb小説のPDF組み換えができるツールです。",
 };

@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/app/seo";
 import {
   INQUIRY_FORM_URL,
   LegalArticle,
   LegalFooterBlock,
 } from "@/components/legal/LegalArticle";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "プライバシーポリシー | TateSpun",
-  description: "TateSpun（運営者：caroad）のプライバシーポリシー。",
-};
+  description:
+    "TateSpun（運営者：caroad）のプライバシーポリシー。",
+  path: "/tatespun/privacy",
+});
 
 export default function PrivacyPolicyPage() {
   return (
