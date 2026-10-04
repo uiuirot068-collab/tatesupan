@@ -53,10 +53,13 @@ html[data-theme="dark"] .htv2 {
 .htv2 button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; }
 .htv2 h1, .htv2 h2, .htv2 h3 { word-break: auto-phrase; text-wrap: balance; }
 .htv2 p, .htv2 li { text-wrap: pretty; }
-.htv2 .v2-trydemo { margin-top: 48px; padding: 32px 4px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px 48px; align-items: center; }
+.htv2 .v2-trydemo { margin-top: 48px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+.htv2 .v2-try-row { padding: 30px 4px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px 48px; align-items: center; }
+.htv2 .v2-try-row + .v2-try-row { border-top: 1px dashed var(--line); }
+.htv2 .v2-try-row .v2-btn { justify-content: space-between; }
 .htv2 .v2-trydemo h3 { font-size: clamp(20px, 2vw, 24px); line-height: 1.5; }
 .htv2 .v2-trydemo p { margin-top: 8px; font-size: 14px; color: var(--sub); }
-@media (max-width: 760px) { .htv2 .v2-trydemo { grid-template-columns: 1fr; padding: 26px 0; } .htv2 .v2-trydemo .v2-btn { justify-self: start; } }
+@media (max-width: 760px) { .htv2 .v2-try-row { grid-template-columns: 1fr; padding: 26px 0; } .htv2 .v2-try-row .v2-btn { justify-self: start; } }
 .htv2 .v2-step p, .htv2 .v2-one, .htv2 .v2-ftab small, .htv2 .v2-sec-head p, .htv2 .v2-hcard p, .htv2 .v2-trydemo p { word-break: auto-phrase; }
 .htv2 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 

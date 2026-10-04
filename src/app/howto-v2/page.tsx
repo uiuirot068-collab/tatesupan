@@ -30,6 +30,8 @@ import {
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
 import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, type HowtoItem } from "./content";
 import { SISTER_TOOLS } from "@/lib/sisterTools";
+import { ensureSampleProject } from "@/lib/db";
+import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import "./howto-v2.css";
 
 /**
@@ -93,6 +95,23 @@ const indexOfItem = (items: HowtoItem[], id: string) =>
 const MOVED_ANCHORS: Record<string, string> = {
   "writing-check": "review-writing-check",
   "work-counter": "review-work-counter",
+};
+
+/** The 使い方ガイド book on the bookshelf (SAMPLE_PROJECT, fixed id -1). */
+const GUIDE_BOOK_HREF = `/editor?id=${SAMPLE_PROJECT.id}`;
+
+/**
+ * Someone who lands on HOW TO directly has never seen the Home, which is what
+ * registers the guide book; register it first so the editor opens the book
+ * instead of a blank new manuscript.
+ */
+const openGuideBook = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+  event.preventDefault();
+  const href = event.currentTarget.href;
+  void ensureSampleProject()
+    .catch(() => undefined)
+    .then(() => { window.location.href = href; });
 };
 
 /** How long each hero picture stays before cross-fading to the other. */
@@ -460,11 +479,20 @@ export default function HowToV2Page() {
             </ol>
 
             <div className="v2-trydemo">
-              <div>
-                <h3 className="v2-mincho">デモで、実際に触ってみる。</h3>
-                <p>見本の原稿が入ったエディターで、3ステップをそのまま試せます。おためしデモの内容は保存されません（本棚にも残りません）。</p>
+              <div className="v2-try-row">
+                <div>
+                  <h3 className="v2-mincho">デモで、実際に触ってみる。</h3>
+                  <p>見本の原稿が入ったエディターで、3ステップをそのまま試せます。おためしデモの内容は保存されません（本棚にも残りません）。</p>
+                </div>
+                <Link className="v2-btn v2-pri" href="/editor?demo=1">デモで実際に触ってみる<Arrow /></Link>
               </div>
-              <Link className="v2-btn v2-pri" href="/editor?demo=1">デモで実際に触ってみる<Arrow /></Link>
+              <div className="v2-try-row">
+                <div>
+                  <h3 className="v2-mincho">デモを触ったら、使い方ガイドの本へ。</h3>
+                  <p>本棚にある「使い方ガイド」の本には、操作のしかたが本文として書いてあります。読みながら書き換えて試すこともできます（編集内容は保存されません）。</p>
+                </div>
+                <a className="v2-btn" href={withBasePath(GUIDE_BOOK_HREF)} onClick={openGuideBook}>使い方ガイドの本をひらく<Arrow /></a>
+              </div>
             </div>
           </div>
         </section>

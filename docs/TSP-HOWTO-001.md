@@ -8,3 +8,10 @@
 - Preview images: real editor screenshots (Playwright, 1440×900 @2x, cropped, ≤1200px JPG) in `public/howto/assets/v2/`.
 - Kept: update log newest 3 + fold (TSP-HISTORY-001), old anchors (#varied-use, #export, #settings, #image-insert, #review-tools, #use-cases …) open the matching tab / dialog.
 - Swap to `/howto` only after Human QA.
+
+## Round 2–3 (なつお, 2026-10-04 evening)
+- Hero: guide cat and the design's open book cross-fade every 6 s (dots switch by hand; reduced motion stays on the cat).
+- SNS wording: any paper's JPG can be posted / used as a 書店委託 sample; SNS paper is only for X-shaped images (C3 and tip 10).
+- `src/lib/sisterTools.ts`: COLUMNSTAND and ことばテラス rows under 「小説の本のほかにも」, on both Home and HOW TO.
+- Video removed from HOW TO; replaced by a 「デモで実際に触ってみる」 row and a 「使い方ガイドの本をひらく」 row (registers the sample book first, then opens `/editor?id=-1`).
+- 22:23 JST なつお: 「並べたら公開してください」 → published with `/howto-v2` still beside `/howto` (noindex); the swap is a separate step.
