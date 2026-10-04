@@ -99,6 +99,11 @@ export default function TermsPage() {
         </a>
       </p>
 
+      <h2>10. 未成年の方のご利用</h2>
+      <p>
+        本サービスは、年齢にかかわらずご利用いただけます。未成年の方が会員登録や有料プランのお申し込みをするときは、保護者の方の同意を得てからご利用ください。
+      </p>
+
       <LegalFooterBlock date="2026年9月1日" />
     </LegalArticle>
   );

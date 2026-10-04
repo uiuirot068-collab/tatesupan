@@ -4,9 +4,12 @@ import {
   deriveSearchReplaceView,
   findMatchOffsets,
   planActiveReplace,
+  planUndoReceipt,
   replaceAllMatches,
   searchReplaceReducer,
-  stepMatchIndex,
+  stepFromView,
+  type MatchContext,
+  type ReplaceReceipt,
 } from "@/lib/searchReplaceNavigation";
 
 export { findMatchOffsets, stepMatchIndex } from "@/lib/searchReplaceNavigation";
@@ -23,8 +26,9 @@ interface SearchReplaceModalProps {
   onFind?: (start: number, end: number) => void;
   /**
    * 選択箇所を置換: replace exactly `[start, end)` with `text` as ONE editor
-   * edit (undoable on both surfaces). The dialog then activates the next
-   * match once the new content arrives back through `content`.
+   * edit (undoable on both surfaces), leaving the new text selected where it
+   * is. CST-PORT-015: the dialog stays on it (「3 件目を置換しました」 with
+   * its surroundings); only 次へ / 前へ move on.
    */
   onReplaceOne?: (start: number, end: number, text: string) => void;
   onReplace: (
@@ -34,6 +38,21 @@ interface SearchReplaceModalProps {
   onClose: () => void;
   /** Desktop Preview uses a non-blocking pane panel; phone keeps the screen modal. */
   placement?: "screen" | "preview";
+  /** CST-PORT-015: the text just replaced / restored, for the editor's pale tint (null = none). */
+  onMarkChange?: (range: { start: number; end: number } | null) => void;
+}
+
+const CONTEXT_CLASS = "mb-3 rounded border border-ink/10 bg-ink/[0.03] px-2 py-1.5 text-xs leading-relaxed text-ink/70";
+
+/** …before[hit]after… with the hit marked (B7). */
+function ContextText({ parts }: { parts: MatchContext }) {
+  return (
+    <>
+      …{parts.before}
+      <mark className="rounded-sm bg-accent/40 px-0.5 text-ink">{parts.hit || "（削除）"}</mark>
+      {parts.after}…
+    </>
+  );
 }
 
 export default function SearchReplaceModal({
@@ -43,29 +62,40 @@ export default function SearchReplaceModal({
   onReplace,
   onClose,
   placement = "screen",
+  onMarkChange,
 }: SearchReplaceModalProps) {
   const [state, dispatch] = useReducer(searchReplaceReducer, INITIAL_SEARCH_REPLACE_STATE);
   const { searchText, replaceText } = state;
   const matches = useMemo(() => findMatchOffsets(content, searchText), [content, searchText]);
   const view = deriveSearchReplaceView(content, state, matches);
 
-  // 選択箇所を置換 → the match to reveal once the replaced manuscript has
-  // actually committed (the editor surfaces map offsets against `content`).
-  const pendingAfterReplaceRef = useRef<{ content: string; index: number; offset: number } | null>(null);
+  // 置換 / この置換を戻す → the receipt to show once the edited manuscript
+  // has actually committed (offsets are only valid against `content`). The
+  // editor is NOT moved on to the next match (CST-PORT-015).
+  const pendingReceiptRef = useRef<{ content: string; receipt: ReplaceReceipt } | null>(null);
   useEffect(() => {
-    const pending = pendingAfterReplaceRef.current;
+    const pending = pendingReceiptRef.current;
     if (!pending || pending.content !== content) return;
-    pendingAfterReplaceRef.current = null;
-    dispatch({ type: "activate", index: pending.index });
-    if (pending.index >= 0) onFind?.(pending.offset, pending.offset + searchText.length);
-  }, [content, onFind, searchText.length]);
+    pendingReceiptRef.current = null;
+    // A restored match is the active one again, so 置換 can be pressed straight away.
+    const index = pending.receipt.kind === "restored" ? matches.indexOf(pending.receipt.start) : -1;
+    dispatch({ type: "receipt", receipt: pending.receipt, matchIndex: index });
+  }, [content, matches]);
+
+  const markStart = view.markRange?.start ?? -1;
+  const markEnd = view.markRange?.end ?? -1;
+  useEffect(() => {
+    onMarkChange?.(markStart >= 0 ? { start: markStart, end: markEnd } : null);
+  }, [onMarkChange, markStart, markEnd]);
+  useEffect(() => () => onMarkChange?.(null), [onMarkChange]);
 
   const step = (dir: 1 | -1) => {
     if (!view.canStep || !onFind) return;
-    pendingAfterReplaceRef.current = null;
+    pendingReceiptRef.current = null;
     // From the index that is valid for the CURRENT match list (an edit made
-    // while the panel is open can shrink it), never a stale stored one.
-    const next = stepMatchIndex(view.activeIndex, view.count, dir);
+    // while the panel is open can shrink it), or from the text just replaced.
+    const next = stepFromView(view, searchText.length, dir);
+    if (next < 0) return;
     dispatch({ type: "activate", index: next });
     onFind(matches[next], matches[next] + searchText.length);
   };
@@ -74,20 +104,37 @@ export default function SearchReplaceModal({
     if (!onReplaceOne) return;
     const plan = planActiveReplace(content, state, view.activeOffset);
     if (!plan) return;
+    const receipt: ReplaceReceipt = { kind: "replaced", start: plan.start, text: replaceText, previousText: searchText, ordinal: view.activeIndex + 1 };
     if (plan.nextContent === content) {
       // Replacing with identical text commits nothing, so no `content`
-      // change would ever release a pending reveal: just move on.
-      dispatch({ type: "activate", index: plan.nextIndex });
-      if (plan.nextIndex >= 0) onFind?.(plan.nextOffset, plan.nextOffset + searchText.length);
+      // change would ever release a pending receipt: show it now.
+      dispatch({ type: "receipt", receipt, matchIndex: -1 });
       return;
     }
-    pendingAfterReplaceRef.current = { content: plan.nextContent, index: plan.nextIndex, offset: plan.nextOffset };
+    pendingReceiptRef.current = { content: plan.nextContent, receipt };
     onReplaceOne(plan.start, plan.end, replaceText);
+  };
+
+  const handleUndoReceipt = () => {
+    if (!onReplaceOne || !view.receipt) return;
+    const plan = planUndoReceipt(content, view.receipt);
+    if (!plan) return;
+    const receipt: ReplaceReceipt = { kind: "restored", start: plan.start, text: plan.text, previousText: view.receipt.text, ordinal: view.receipt.ordinal };
+    if (plan.nextContent === content) {
+      dispatch({ type: "receipt", receipt, matchIndex: matches.indexOf(plan.start) });
+      return;
+    }
+    pendingReceiptRef.current = { content: plan.nextContent, receipt };
+    onReplaceOne(plan.start, plan.end, plan.text);
   };
 
   const handleReplaceAll = () => {
     if (!view.canReplaceAll) return;
     const { nextContent, count } = replaceAllMatches(content, searchText, replaceText);
+    // The panel stays open and says how many were replaced (CST-PORT-015).
+    const receipt: ReplaceReceipt = { kind: "all", start: -1, text: replaceText, previousText: searchText, ordinal: count };
+    if (nextContent === content) dispatch({ type: "receipt", receipt, matchIndex: -1 });
+    else pendingReceiptRef.current = { content: nextContent, receipt };
     onReplace(
       nextContent,
       Array.from({ length: count }, () => ({
@@ -127,7 +174,7 @@ export default function SearchReplaceModal({
           autoFocus
           value={searchText}
           onChange={(e) => {
-            pendingAfterReplaceRef.current = null;
+            pendingReceiptRef.current = null;
             dispatch({ type: "setSearch", searchText: e.target.value });
           }}
           onKeyDown={(e) => {
@@ -186,11 +233,34 @@ export default function SearchReplaceModal({
           )}
         </div>
 
-        {view.context && (
-          <p data-search-match-context="" className="mb-3 rounded border border-ink/10 bg-ink/[0.03] px-2 py-1.5 text-xs leading-relaxed text-ink/70">
-            …{view.context}…
-          </p>
+        {view.receiptLabel && (
+          <div className="mb-1 flex items-center justify-between gap-2" data-search-receipt={view.receipt?.kind}>
+            <p className="text-xs font-semibold text-ink/80" aria-live="polite">{view.receiptLabel}</p>
+            {view.canUndoReceipt && onReplaceOne && (
+              <button
+                type="button"
+                data-search-action="undo-one"
+                onClick={handleUndoReceipt}
+                title="いま置換した 1 件だけを元の文字に戻します"
+                className="rounded px-2 py-0.5 text-xs text-ink/70 underline underline-offset-2 hover:bg-ink/5"
+              >
+                この置換を戻す
+              </button>
+            )}
+          </div>
         )}
+        {view.receipt?.kind === "all" && (
+          <p className="mb-3 text-[11px] leading-relaxed text-ink/60">閉じたあと、エディターの「元に戻す」（Ctrl+Z）1回でまとめて戻せます。</p>
+        )}
+        {view.receiptContext ? (
+          <p data-search-receipt-context="" className={CONTEXT_CLASS}>
+            <ContextText parts={view.receiptContext} />
+          </p>
+        ) : view.contextParts ? (
+          <p data-search-match-context="" className={CONTEXT_CLASS}>
+            <ContextText parts={view.contextParts} />
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap justify-end gap-2">
           <button
@@ -207,7 +277,7 @@ export default function SearchReplaceModal({
               data-search-action="replace-one"
               onClick={handleReplaceActive}
               disabled={!view.canReplaceActive}
-              title={view.canReplaceActive ? "選択中の一致 1 件だけを置換して次へ進みます" : "「次へ」で一致箇所を選んでから置換できます"}
+              title={view.canReplaceActive ? "選択中の一致 1 件だけを置換します（画面はそのまま。次の一致へは「次へ」で進みます）" : "「次へ」で一致箇所を選んでから置換できます"}
               className={secondaryButton}
             >
               選択箇所を置換

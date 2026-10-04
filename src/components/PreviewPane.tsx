@@ -148,6 +148,7 @@ const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
 import { downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import ExportSupportLine from "./ExportSupportLine";
+import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
 import { exportPaintPagesToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
@@ -497,9 +498,6 @@ const PreviewSpread = memo(function PreviewSpread({
   );
 });
 
-/** SPN-SUPPORT-001: sessionStorage flag set when the after-export support line is closed. */
-const EXPORT_SUPPORT_LINE_DISMISSED_KEY = "tatespun:export-support-line-dismissed";
-
 interface PreviewPaneProps {
   content: string;
   /** Phase 9: the open document (TategakiEditor's work-session scope); a change forces a full Preview snapshot. */
@@ -577,6 +575,8 @@ interface PreviewPaneProps {
    * owns the post-export filename notice.
    */
   onPdfExportSuccess?: () => void;
+  /** SPN-SUPPORT-003: the after-export support line was shown (true) or closed (false). */
+  onExportSupportLineChange?: (visible: boolean) => void;
   /**
    * TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: the phone Editor view's 書き出し
    * button (MobileEditorNav) opens THIS pane's export menu as a ViewportModal
@@ -600,6 +600,13 @@ interface PreviewPaneProps {
   /** 0-based indices into `pages` currently selected — lifted to the parent so PageSettingsPanel's 「選択ページ」panel can read/apply against the same selection. */
   selected: Set<number>;
   onSelectedChange: (next: Set<number>) => void;
+  /**
+   * TSP-DEMO-001: the おためしデモ opens a phone preview one page at a time
+   * (a whole spread squeezed into a phone width is too small to read). Kept
+   * in memory only — the visitor's own 1P／見開き choice is never rewritten,
+   * and tapping 1P／見開き hands control back to that choice.
+   */
+  startSinglePageOnNarrow?: boolean;
 }
 
 function PreviewPane({
@@ -633,6 +640,7 @@ function PreviewPane({
   onNavigateToSource,
   onBodyPageCountChange,
   onPdfExportSuccess,
+  onExportSupportLineChange,
   mobileExportOpen = false,
   onMobileExportClose,
   onExportActiveChange,
@@ -641,6 +649,7 @@ function PreviewPane({
   onToggleCollapse,
   selected,
   onSelectedChange: setSelected,
+  startSinglePageOnNarrow = false,
 }: PreviewPaneProps) {
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002 / Phase 7: `content` already arrives
   // debounced from TategakiEditor (PREVIEW_PROP_DEBOUNCE_MS, a real setTimeout
@@ -939,7 +948,15 @@ function PreviewPane({
   // row instead; the rest of the preview (virtualization, zoom anchor, pager,
   // cursor-follow) works on these rows either way. Display only — pagination
   // and export never read this.
-  const [pageLayout, setPageLayout] = usePreviewPageLayout();
+  const [storedPageLayout, setStoredPageLayout] = usePreviewPageLayout();
+  // TSP-LOOP-020 — phone-width flag. Drives the width-fit branch below.
+  const isNarrow = useIsNarrowViewport();
+  const [singlePageOverride, setSinglePageOverride] = useState(startSinglePageOnNarrow);
+  const pageLayout = isNarrow && singlePageOverride ? "single" : storedPageLayout;
+  const setPageLayout = (next: typeof storedPageLayout) => {
+    setSinglePageOverride(false);
+    setStoredPageLayout(next);
+  };
   const isSinglePageLayout = pageLayout === "single";
   const spreadGroups = useMemo(
     () => previewNavigationGroups(presentationSequence.length, pageLayout),
@@ -1083,20 +1100,23 @@ function PreviewPane({
   // "100%" toolbar button still targets a literal 100%, matching its label;
   // only this initial mount value changes.
   const [zoomScale, setZoomScale] = useState<number>(0.5);
-
-  // TSP-LOOP-020 — phone-width flag. Drives the width-fit branch below.
-  const isNarrow = useIsNarrowViewport();
+  // TSP-DEMO-001: on a phone the preview already opens fitted to the screen
+  // width and never shows smaller than that (see `effectiveZoom` below), so
+  // 100% is the phone floor: the label shows the size actually on screen
+  // (never "50%"), and the first ＋ really enlarges.
+  const zoomFloor = isNarrow ? 1 : ZOOM_MIN;
+  const displayedZoom = Math.max(zoomScale, zoomFloor);
 
   const clampZoom = (value: number) =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
 
   const zoomOut = () => {
     captureZoomAnchor();
-    setZoomScale((prev) => clampZoom(prev - ZOOM_STEP));
+    setZoomScale((prev) => Math.max(zoomFloor, clampZoom(Math.max(prev, zoomFloor) - ZOOM_STEP)));
   };
   const zoomIn = () => {
     captureZoomAnchor();
-    setZoomScale((prev) => clampZoom(prev + ZOOM_STEP));
+    setZoomScale((prev) => clampZoom(Math.max(prev, zoomFloor) + ZOOM_STEP));
   };
   const zoomReset = () => {
     captureZoomAnchor();
@@ -1626,21 +1646,22 @@ function PreviewPane({
   // SPN-SUPPORT-001: after a successful export, show one quiet support line
   // in the header area (no popup). ✕ hides it for the rest of this visit.
   const [isExportSupportLineVisible, setIsExportSupportLineVisible] = useState(false);
+  // SPN-SUPPORT-003: on a phone the export can run from the 編集 view, where
+  // this pane is off-screen; onExportSupportLineChange lets the Editor show
+  // the same line there.
+  const onExportSupportLineChangeRef = useRef(onExportSupportLineChange);
+  useEffect(() => {
+    onExportSupportLineChangeRef.current = onExportSupportLineChange;
+  }, [onExportSupportLineChange]);
   const markExportSucceeded = useCallback(() => {
-    try {
-      if (window.sessionStorage.getItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY)) return;
-    } catch {
-      // Storage unavailable: still show the line.
-    }
+    if (isExportSupportLineDismissed()) return;
     setIsExportSupportLineVisible(true);
+    onExportSupportLineChangeRef.current?.(true);
   }, []);
   const dismissExportSupportLine = useCallback(() => {
     setIsExportSupportLineVisible(false);
-    try {
-      window.sessionStorage.setItem(EXPORT_SUPPORT_LINE_DISMISSED_KEY, "1");
-    } catch {
-      // Storage unavailable: hidden until the next export.
-    }
+    rememberExportSupportLineDismissed();
+    onExportSupportLineChangeRef.current?.(false);
   }, []);
 
   const continueExport = useCallback(() => {
@@ -3097,7 +3118,7 @@ function PreviewPane({
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
       `}</style>}
-      <div className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
+      <div data-demo-target="preview" className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
           {onToggleCollapse && (
             <button
@@ -3118,18 +3139,18 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomOut}
-              disabled={show3d || zoomScale <= ZOOM_MIN}
+              disabled={show3d || displayedZoom <= zoomFloor}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               －
             </button>
             <span className="w-10 flex-shrink-0 whitespace-nowrap text-center text-xs tabular-nums">
-              {Math.round(zoomScale * 100)}%
+              {Math.round(displayedZoom * 100)}%
             </span>
             <button
               type="button"
               onClick={zoomIn}
-              disabled={show3d || zoomScale >= ZOOM_MAX}
+              disabled={show3d || displayedZoom >= ZOOM_MAX}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ＋
@@ -3137,7 +3158,7 @@ function PreviewPane({
             <button
               type="button"
               onClick={zoomReset}
-              disabled={show3d || zoomScale === 1.0}
+              disabled={show3d || displayedZoom === 1.0}
               className="flex-shrink-0 whitespace-nowrap rounded border border-ink/20 px-2 py-1 text-xs hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
               100%

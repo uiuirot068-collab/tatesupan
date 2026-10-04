@@ -98,25 +98,24 @@ describe("Round 5 Demo contract", () => {
   const pane = source("src/components/EditorPane.tsx");
   const placement = source("src/lib/demoPlacement.ts");
 
-  it("adds Options immediately after the two Settings steps and explains all contents", () => {
+  it("keeps the TSP-DEMO-001 first-time path and explains the 本づくり contents", () => {
     const titles = Array.from(data.matchAll(/title: "([^"]+)"/g), (match) => match[1]);
-    expect(titles.slice(0, 6)).toEqual([
-      "作品にタイトルをつけよう",
-      "本のサイズを決めよう",
-      "ノンブルや柱も設定できるよ",
-      "本づくりメニューも使えます",
-      "困ったらヘルプへ",
-      "集中モードで本文を広く",
+    expect(titles).toEqual([
+      "文章を書いてみよう",
+      "プレビューで本の形を見よう",
+      "本のサイズと文字を決めよう",
+      "表紙や目次は「本づくり」へ",
+      "書き出してみよう",
+      "基本の流れはこれでおしまいです",
     ]);
-    expect(data).toContain("奥付（縦・横）、目次、完成前チェック、TXT出入力");
+    expect(data).toContain("表紙・奥付・目次・完成前チェック");
     expect(data).toContain('target: "options"');
     expect(pane).toContain('data-demo-target="options"');
   });
 
-  it("keeps mobile tab copy to 本文/プレビュー and adds a no-toggle Focus step", () => {
-    expect(data).toContain('"スマートフォンでは「本文」と「プレビュー」を切り替えられます。');
+  it("keeps mobile copy to the 本文/プレビュー tabs without toggling UI", () => {
+    expect(data).toContain("上の「プレビュー」を押すと");
     expect(data).not.toContain('「本文」「プレビュー」「設定」');
-    expect(data).toContain('target: "focus-mode"');
     expect(data).not.toContain("prepare:");
     expect(tour).not.toMatch(/setActiveDrawer|setIsMemoOpen|setFocusMode/);
   });

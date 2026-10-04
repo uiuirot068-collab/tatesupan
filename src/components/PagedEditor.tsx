@@ -100,7 +100,8 @@ export interface PagedEditorHandle {
   /** Switches to the editor page containing `[start, end)` (if needed), selects it, and focuses. Used for jumps that originate outside the current page (a Preview click, a Writing Check issue). Deferred until `compositionend` if mid-IME. */
   moveSelectionToGlobal(start: number, end: number): void;
   /** Replaces `[start, end)` of the canonical text with `text` as ONE atomic, undoable edit (e.g. page-break insertion), then places the caret `caretOffsetInInsertedText` code units into `text` (default: its end). */
-  replaceRangeGlobal(start: number, end: number, text: string, options?: { caretOffsetInInsertedText?: number }): void;
+  /** `selectInserted`: leave the inserted text selected (検索・置換, CST-PORT-015) instead of a caret. */
+  replaceRangeGlobal(start: number, end: number, text: string, options?: { caretOffsetInInsertedText?: number; selectInserted?: boolean }): void;
   /** Application-level undo/redo -- see the module doc for why this replaces native history here. */
   runHistory(command: "undo" | "redo"): void;
 }
@@ -1860,7 +1861,7 @@ function PagedEditorInner(
     reportCaret(end);
   };
 
-  const replaceRangeGlobal = (start: number, end: number, text: string, options?: { caretOffsetInInsertedText?: number }) => {
+  const replaceRangeGlobal = (start: number, end: number, text: string, options?: { caretOffsetInInsertedText?: number; selectInserted?: boolean }) => {
     if (isComposingRef.current) return;
     const removedText = content.slice(start, end);
     undoHistoryRef.current = pushEdit(undoHistoryRef.current, { rangeStart: start, removedText, insertedText: text, atomic: true });
@@ -1873,6 +1874,12 @@ function PagedEditorInner(
       insertedLength: text.length,
     });
     const newPages = paginate(nextCanonical, nextState);
+    if (options?.selectInserted && text.length > 0) {
+      // The page holding the inserted text's LAST character (like moveSelectionToGlobal), no scroll hint.
+      switchToPageForOffset(start + text.length, newPages, { start, end: start + text.length }, { nextContent: nextCanonical, affinity: "backward" });
+      reportCaretRange(start, start + text.length);
+      return;
+    }
     switchToPageForOffset(globalCaret, newPages, undefined, { nextContent: nextCanonical });
     reportCaret(globalCaret);
   };

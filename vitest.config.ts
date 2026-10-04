@@ -20,6 +20,11 @@ export default defineConfig({
       "src/hooks/useBookmakingSections.test.ts",
       // CST-PORT-012: 3D preview
       "src/lib/book3d/**/*.test.ts",
+      // CST-PORT-014: cloud version compare
+      "src/lib/cloudVersionCompare.test.ts",
+      "src/lib/cloudLink.test.ts",
+      // TSP-DEMO-001: おためしデモ on phones
+      "src/lib/tspDemo001.test.ts",
       // PLT-LOOP-003: メモ・プロット panel (reads プロット帳 files)
       "src/lib/plotPanel.test.ts",
     ],
