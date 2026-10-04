@@ -41,7 +41,7 @@ const CARDS: Card[] = [
   },
   {
     n: "02",
-    title: "JPG・PDF・Web版へ書き出し",
+    title: "JPG・PDFへ書き出し",
     body:
       "SNS用画像、確認用PDF、Web閲覧用など、用途に合わせてそのまま出力できます。",
     helpSection: "export",

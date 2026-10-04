@@ -74,11 +74,17 @@ export default function DemoTour({
       targetRect,
       { width: cardRect.width, height: card.scrollHeight },
       { width: document.documentElement.clientWidth, height: viewportHeight },
-      step.target === "export" ? "lower-safe" : "auto",
+      // SPN-XFIX-001: on phones every step prefers the bottom of the screen
+      // (the toolbar, the title field and the top of the page stay visible);
+      // on wide screens the preview step sits beside the preview, over the
+      // editor, so the pages it points at are not covered.
+      narrow || step.target === "export" ? "lower-safe" : step.target === "preview" ? "beside" : "auto",
       // TSP-DEMO-001: on phones the guide takes at most ~4 tenths of the
       // screen and, with nothing to point at, sits at the bottom — the
       // toolbar and the page in the middle stay readable.
-      narrow ? { maxCardHeight: Math.round(viewportHeight * 0.42), freeDock: "bottom" } : {}
+      narrow
+        ? { maxCardHeight: Math.round(viewportHeight * 0.36), freeDock: "bottom", largeTargetDock: "bottom" }
+        : { largeTargetDock: "bottom" }
     ));
   }, [targetQuery, step.target, narrow]);
 

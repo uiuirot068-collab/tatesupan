@@ -577,6 +577,8 @@ interface PreviewPaneProps {
   onPdfExportSuccess?: () => void;
   /** SPN-SUPPORT-003: the after-export support line was shown (true) or closed (false). */
   onExportSupportLineChange?: (visible: boolean) => void;
+  /** SPN-XFIX-001: JPG 書き出しが終わったことを、はっきり知らせる（Editor のお知らせ欄）。 */
+  onExportNotice?: (message: string) => void;
   /**
    * TSP-UX-V3-LOOP3-MOBILE-SHARED-EXPORT: the phone Editor view's 書き出し
    * button (MobileEditorNav) opens THIS pane's export menu as a ViewportModal
@@ -641,6 +643,7 @@ function PreviewPane({
   onBodyPageCountChange,
   onPdfExportSuccess,
   onExportSupportLineChange,
+  onExportNotice,
   mobileExportOpen = false,
   onMobileExportClose,
   onExportActiveChange,
@@ -987,7 +990,12 @@ function PreviewPane({
   // scale factor back up so it still lands correctly on the *real* 768×1024
   // DOM node (which is never resized or touched here).
   const WEB_PREVIEW_REFERENCE_WIDTH_PX = 240;
-  const WEB_PREVIEW_REFERENCE_HEIGHT_PX = 320;
+  // SPN-XFIX-001: the stand-in keeps the px paper's own aspect ratio
+  // (Web閲覧用 3:4 → 320, SNS用 正方形 → 240, SNS用 4:5 → 300).
+  const WEB_PREVIEW_REFERENCE_HEIGHT_PX =
+    layout.paper.isPx && layout.paper.widthPx && layout.paper.heightPx
+      ? (WEB_PREVIEW_REFERENCE_WIDTH_PX * layout.paper.heightPx) / layout.paper.widthPx
+      : 320;
   const isWebPreset = layout.paper.isPx;
   const fitUnitWidthPx = isWebPreset ? WEB_PREVIEW_REFERENCE_WIDTH_PX : layout.paper.widthMm * PX_PER_MM;
   const fitUnitHeightPx = isWebPreset ? WEB_PREVIEW_REFERENCE_HEIGHT_PX : layout.paper.heightMm * PX_PER_MM;
@@ -1003,10 +1011,16 @@ function PreviewPane({
   // the pane at that single-page scale simply overflows into the scroll
   // container's existing `overflow-x-auto`, rather than shrinking every
   // page to make the spread fit.
-  const spreadWidthPx = layout.paper.widthMm * 2 * PX_PER_MM + SPREAD_GAP_PX;
+  // SPN-XFIX-001: a print page card is drawn WITH its 塗り足し (PageCard's
+  // sheet is widthMm + 2×BLEED_MM wide), so the reserved 2-up box must use
+  // that same card width. Using the trim width made the box narrower than
+  // two cards: a lone page 1 (left slot) and the next spread's page 2 (right
+  // slot) overlapped sideways and read as pages "slipping diagonally".
+  const pageCardWidthPx = (layout.paper.widthMm + (layout.paper.isPx ? 0 : BLEED_MM * 2)) * PX_PER_MM;
+  const spreadWidthPx = pageCardWidthPx * 2 + SPREAD_GAP_PX;
   // CST-PORT-005: a 1P row is one page wide (also the size of its
   // virtualization placeholder, so the phone width-fit sees a single page).
-  const singlePageWidthPx = layout.paper.widthMm * PX_PER_MM;
+  const singlePageWidthPx = pageCardWidthPx;
   // True canonical single-page height, used only to reserve visual breathing
   // room below a still-single-page manuscript (see the spacer below) — never
   // for the fit-scale math, which uses `fitUnitHeightPx` instead.
@@ -1622,8 +1636,10 @@ function PreviewPane({
     onExportActiveChangeRef.current = onExportActiveChange;
   });
 
+  const lastExportRef = useRef<{ label: string; total: number }>({ label: "", total: 0 });
   const beginExport = useCallback((label: string, total = 0): AbortSignal => {
     const signal = exportCancellation.begin();
+    lastExportRef.current = { label, total };
     // Synchronous (not an effect): the parent's off-screen layout stage must be
     // committed before any capture geometry is read.
     onExportActiveChangeRef.current?.(true);
@@ -1653,7 +1669,19 @@ function PreviewPane({
   useEffect(() => {
     onExportSupportLineChangeRef.current = onExportSupportLineChange;
   }, [onExportSupportLineChange]);
+  const onExportNoticeRef = useRef(onExportNotice);
+  useEffect(() => {
+    onExportNoticeRef.current = onExportNotice;
+  }, [onExportNotice]);
   const markExportSucceeded = useCallback(() => {
+    // SPN-XFIX-001: JPG は保存が終わっても画面が変わらず、保存できたか分かりにくかった。
+    // PDF はファイル名のお知らせが別にあるので、ここでは画像だけ知らせる。
+    if (lastExportRef.current.label === "画像") {
+      const count = lastExportRef.current.total;
+      onExportNoticeRef.current?.(
+        `JPGを書き出しました${count > 1 ? `（${count}枚）` : ""}。ダウンロードした場所を確認してください。`
+      );
+    }
     if (isExportSupportLineDismissed()) return;
     setIsExportSupportLineVisible(true);
     onExportSupportLineChangeRef.current?.(true);
@@ -1839,7 +1867,11 @@ function PreviewPane({
         "Shippori Mincho",
         (pageNumber) => buildPageJpgFileNameFromStem(resolvedExportFilenameStem, filePageNumbers[pageNumber - 1]),
         mode,
-        undefined,
+        // SPN-XFIX-001: px papers (Web閲覧用・SNS用) come out at their own px
+        // size (768×1024, 1080×1080, 1080×1350) instead of the 600dpi print
+        // raster (≈11600px for SNS用 正方形 — too big to post, and past phone
+        // canvas limits). widthMm = widthPx / PX_PER_MM, so this dpi maps 1 px.
+        layout.paper.isPx ? PX_PER_MM * 25.4 : undefined,
         {
           beforePage: async () => waitForExportPermission(signal ?? undefined),
           onProgress: (current, total) => setExportProgress({ current, total }),
@@ -3456,6 +3488,18 @@ function PreviewPane({
                   : undefined,
               }}
             >
+              {!singleIsOdd && isSingle && !isSinglePageLayout && (
+                // SPN-XFIX-001: the empty side of a lone page's 見開き, drawn as a
+                // faint outline so page 1 (left) and the next spread read as
+                // spreads, not as pages slipping diagonally down the pane.
+                <div aria-hidden="true" data-preview-spread-blank="" className="flex shrink-0 flex-col items-center gap-2" style={{ width: pageCardWidthPx }}>
+                  <div
+                    className="border border-dashed border-ink/15"
+                    style={{ marginTop: "auto", width: pageCardWidthPx, height: canonicalPageHeightPx + (layout.paper.isPx ? 0 : BLEED_MM * 2 * PX_PER_MM) }}
+                  />
+                  <span className="invisible text-xs" style={{ transform: `scale(${chromeScale})`, transformOrigin: "center top" }}>&nbsp;</span>
+                </div>
+              )}
               {displayGroup.map((presIndex) => {
                 const physicalPageNumber = presentation.physicalNumbers[presIndex] ?? presIndex + 1;
                 const item = presentationSequence[presIndex];
@@ -3592,6 +3636,18 @@ function PreviewPane({
                   />
                 );
               })}
+              {singleIsOdd && isSingle && !isSinglePageLayout && (
+                // SPN-XFIX-001: the empty side of a lone page's 見開き, drawn as a
+                // faint outline so page 1 (left) and the next spread read as
+                // spreads, not as pages slipping diagonally down the pane.
+                <div aria-hidden="true" data-preview-spread-blank="" className="flex shrink-0 flex-col items-center gap-2" style={{ width: pageCardWidthPx }}>
+                  <div
+                    className="border border-dashed border-ink/15"
+                    style={{ marginTop: "auto", width: pageCardWidthPx, height: canonicalPageHeightPx + (layout.paper.isPx ? 0 : BLEED_MM * 2 * PX_PER_MM) }}
+                  />
+                  <span className="invisible text-xs" style={{ transform: `scale(${chromeScale})`, transformOrigin: "center top" }}>&nbsp;</span>
+                </div>
+              )}
             </PreviewSpread>
           );
         })}
@@ -3634,6 +3690,7 @@ function PreviewPane({
             onShowGutterGuideChange={book3d.setShowGutterGuide}
             onDismissGuideHelp={book3d.dismissGuideHelp}
             onAdjustGutter={onAdjustGutter}
+            snapshotFileStem={resolvedExportFilenameStem}
           />
           <p className="flex-none px-3 pb-1.5 text-center text-[10.5px] text-ink/50">
             表紙＋本文＋背の完成イメージ（印刷データではありません）。通常のプレビューへ戻るには 1P / 見開きを選択
@@ -3821,6 +3878,51 @@ function PreviewPane({
           overlayProps={{ "data-pdf-export-setup-modal": "" } as HTMLAttributes<HTMLDivElement>}
           footer={(
             <>
+              {(() => {
+                // SPN-XFIX-001: 書き出しボタンが押せない理由と、何をすればよいかを
+                // ボタンのすぐ上に出す（灰色のボタンだけでは反応しないように見えた）。
+                if (isPreparingProofCovers) return null;
+                if (!pdfPreflightReviewed) {
+                  return (
+                    <p data-pdf-export-blocked-reason="preflight" className="w-full text-[11px] leading-relaxed text-ink/70">
+                      書き出す前に「書き出し前チェック」を開いて、内容を確認してください。開くと書き出しボタンが押せるようになります。
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPdfPreflightOpen(true);
+                          setPdfPreflightReviewedFingerprint(pdfPreflightFingerprint);
+                          document.querySelector("[data-export-preflight]")?.scrollIntoView({ block: "start", behavior: "smooth" });
+                        }}
+                        className="ml-1 font-medium text-ink underline underline-offset-2 hover:opacity-80"
+                      >
+                        チェックを開く
+                      </button>
+                    </p>
+                  );
+                }
+                if (pdfPreflightReport.blockerCount > 0) {
+                  return (
+                    <p data-pdf-export-blocked-reason="blocker" className="w-full text-[11px] leading-relaxed text-red-700 dark:text-red-400">
+                      赤い「出力不可」の項目が残っています。項目の内容に沿って直すと書き出せます。
+                    </p>
+                  );
+                }
+                if (pdfScope === "selected" && selected.size === 0) {
+                  return (
+                    <p data-pdf-export-blocked-reason="selection" className="w-full text-[11px] leading-relaxed text-ink/70">
+                      ページが選ばれていません。プレビューでページを選ぶか、対象を「全ページ」にしてください。
+                    </p>
+                  );
+                }
+                if (pdfFilenameStem.length === 0) {
+                  return (
+                    <p data-pdf-export-blocked-reason="filename" className="w-full text-[11px] leading-relaxed text-ink/70">
+                      ファイル名を入力してください。
+                    </p>
+                  );
+                }
+                return null;
+              })()}
               <button
                 type="button"
                 onClick={() => setIsPdfModalOpen(false)}

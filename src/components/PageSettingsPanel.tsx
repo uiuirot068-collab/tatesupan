@@ -30,6 +30,7 @@ import {
   type TextFramePosition,
 } from "@/lib/textFramePosition";
 import { applyRunningHeads } from "@/lib/runningHeadApply";
+import { centerShortPiece } from "@/lib/centerShortPiece";
 
 interface PageSettingsPanelProps {
   settings: PageSettings;
@@ -52,6 +53,15 @@ interface PageSettingsPanelProps {
   mobileSurface?: boolean;
   /** Drawer IA: expose only page/master categories; Memo and Help live elsewhere. */
   settingsOnly?: boolean;
+  /** SPN-XFIX-001: 「本文を中央に置く」で本文の量を数えるために、いまの本文を読む。 */
+  getManuscript?: () => string;
+}
+
+/** 用紙の選択肢の表示名。文庫とA6は同じ寸法なので、文庫が A6判 だと分かるようにする。 */
+function paperOptionLabel(key: string, size: { name: string; width: number; height: number; isPx?: boolean }): string {
+  const dims = `${size.width}×${size.height}${size.isPx ? "px" : "mm"}`;
+  if (key === "文庫") return `${size.name}（A6判・${dims}）`;
+  return `${size.name}（${dims}）`;
 }
 
 type SettingsTab = "page" | "master" | "plot";
@@ -139,6 +149,7 @@ export default function PageSettingsPanel({
   mobileSurface = false,
   settingsOnly = false,
   focusSetting = null,
+  getManuscript,
 }: PageSettingsPanelProps) {
   // SSR/CSR のハイドレーション不一致を避けるため、初期値はサーバーと
   // 同じ "page" に固定し、window/localStorage に依存する判定は
@@ -796,10 +807,25 @@ export default function PageSettingsPanel({
           >
             {Object.entries(PAPER_SIZE_TEMPLATES).map(([key, size]) => (
               <option key={key} value={key}>
-                {size.name}（{size.width}×{size.height}{size.isPx ? "px" : "mm"}）
+                {paperOptionLabel(key, size)}
               </option>
             ))}
           </select>
+          {(settings.paperSize === "文庫" || settings.paperSize === "A6") && (
+            <span data-paper-note="a6" className="text-[11px] leading-snug text-ink/55">
+              文庫とA6は同じ大きさ（A6判）です。文庫は文庫本らしい字詰め、A6は少しゆったりした組み方が初期値です。
+            </span>
+          )}
+          {settings.paperSize === "Web閲覧用" && (
+            <span data-paper-note="web" className="text-[11px] leading-snug text-ink/55">
+              Web閲覧用は、ページの下にTateSpunのクレジット（URLと #スパンテイルズ）が入ります。クレジットのない画像にしたいときは「SNS用」の用紙を選んでください。
+            </span>
+          )}
+          {settings.paperSize.startsWith("SNS用") && (
+            <span data-paper-note="sns" className="text-[11px] leading-snug text-ink/55">
+              Xなどに貼る画像（JPG）向けの用紙です。PDFには書き出せません。短歌や詩は、下の「本文を用紙の中央に置く」で真ん中に置けます。
+            </span>
+          )}
         </label>
 
         <div data-settings-row="typography" className="order-[2] grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
@@ -1026,6 +1052,10 @@ export default function PageSettingsPanel({
             <span className="text-xs text-ink/50">未反映の変更があります</span>
           ) : null}
         </div>
+
+        {getManuscript && (
+          <CenterPieceField settings={settings} getManuscript={getManuscript} onApply={onChange} />
+        )}
       </div>
         </div>
       )}
@@ -1540,6 +1570,71 @@ function TextFramePositionField({
           <span className="text-xs text-ink/60">自動計算: {summaryParts.join(" / ")}</span>
         ) : null /* invalid-state reason is shown once, next to 「設定を反映」below */}
       </div>
+    </div>
+  );
+}
+
+/**
+ * SPN-XFIX-001: 短歌一首・短い詩を用紙の中央に置く。本文の量（いちばん長い
+ * 行の字数・行数）に合わせた版面を、「文字数・行数から設定する」の版面の位置で
+ * 中央に置き、天地・ノド・小口の余白として反映する。
+ */
+function CenterPieceField({
+  settings,
+  getManuscript,
+  onApply,
+}: {
+  settings: PageSettings;
+  getManuscript: () => string;
+  onApply: (next: PageSettings) => void;
+}) {
+  const [vertical, setVertical] = useState(true);
+  const [horizontal, setHorizontal] = useState(true);
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  const apply = () => {
+    const result = centerShortPiece(settings, getManuscript(), { vertical, horizontal });
+    if (!result.ok) {
+      setMessage({ tone: "error", text: result.reason });
+      return;
+    }
+    onApply(result.settings);
+    setMessage({
+      tone: "ok",
+      text: `${result.measure.longestLine}字×${result.measure.lineCount}行の本文に合わせて、用紙の中央に置きました。本文を書き足したら、もう一度押してください。`,
+    });
+  };
+
+  return (
+    <div data-settings-row="center-piece" className="order-[7] flex flex-col gap-2 border-t border-ink/10 pt-3">
+      <span className="text-xs font-medium text-ink/75">本文を用紙の中央に置く（短歌・詩など）</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink/70">
+        <label className="inline-flex items-center gap-1.5">
+          <input type="checkbox" checked={vertical} onChange={(e) => { setVertical(e.target.checked); setMessage(null); }} />
+          縦方向（天地）の中央
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          <input type="checkbox" checked={horizontal} onChange={(e) => { setHorizontal(e.target.checked); setMessage(null); }} />
+          横方向（左右）の中央
+        </label>
+      </div>
+      <div>
+        <button
+          type="button"
+          onClick={apply}
+          disabled={!vertical && !horizontal}
+          className="cursor-pointer select-none rounded border border-ink/25 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          本文の量に合わせて中央に置く
+        </button>
+      </div>
+      {message ? (
+        <span role="status" className={`text-xs ${message.tone === "error" ? "text-red-600" : "text-ink/60"}`}>{message.text}</span>
+      ) : (
+        <span className="text-[11px] leading-snug text-ink/50">
+          いちばん長い行と行数に合わせて余白を決めます。改ページで一首・一篇ずつ分けた短い作品向けです。
+        </span>
+      )}
     </div>
   );
 }

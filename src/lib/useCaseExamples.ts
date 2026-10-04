@@ -37,7 +37,7 @@ export const USE_CASE_EXAMPLES: UseCaseExample[] = [
   {
     title: "短歌・詩・エッセイの小冊子",
     body: "改ページで一首・一篇ずつページを分けて、文庫やA6などの小さな本の形で確かめられます。",
-    howtoHash: "#body-notation",
+    howtoHash: "#short-poems",
   },
   {
     title: "会報・サークルの冊子",
@@ -63,6 +63,31 @@ export const USE_CASE_EXAMPLES: UseCaseExample[] = [
     },
     preparing: true,
     howtoHash: "#settings",
+  },
+];
+
+// SPN-XFIX-001: 「短歌・詩・エッセイの小冊子」の「くわしく」の行き先（HOW TO）。
+export const SHORT_POEM_STEPS_HEADING = "短歌・詩の小冊子をつくる手順";
+export const SHORT_POEM_STEPS: { title: string; body: string }[] = [
+  {
+    title: "一首・一篇ごとにページを分ける",
+    body: "一首（一篇）を書き終えたら、タイトル下の「改ページ」を押してから次を書きます。1ページに一首ずつ並びます。",
+  },
+  {
+    title: "小さな本の用紙と、大きめの文字にする",
+    body: "▶設定の用紙サイズを「文庫」や「A6」にし、フォントサイズを14〜16ptくらいにして「設定を反映」を押します。",
+  },
+  {
+    title: "ページの真ん中に置く",
+    body: "▶設定の「本文を用紙の中央に置く」を押すと、いちばん長い一首に合わせて、縦方向・横方向の中央に置けます。",
+  },
+  {
+    title: "本の形で確かめて、書き出す",
+    body: "プレビューの「見開き」や「3D」で本の形を確かめ、印刷にはPDF、1ページずつの画像にはJPGで書き出します。",
+  },
+  {
+    title: "Xに貼る画像にする",
+    body: "用紙を「SNS用 正方形」か「SNS用 4:5」にして中央に置き、JPGで書き出すと、そのまま投稿に使えます。",
   },
 ];
 

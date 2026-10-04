@@ -444,7 +444,7 @@ function verticalPillarOps(settings: CoverSettings, box: FaceBox, color: string,
   ops.push({ kind: "clip", rect: content });
 
   const title = settings.simple.title || "タイトル";
-  const subtitle = settings.simple.subtitle || "サブタイトル";
+  const subtitle = subtitleText(settings.simple.subtitle);
   const author = settings.simple.author || "著者名";
 
   const titleFont: CoverFont = { family: COVER_MINCHO_FAMILY, sizePx: 19, weight: 500 };
@@ -456,7 +456,7 @@ function verticalPillarOps(settings: CoverSettings, box: FaceBox, color: string,
 
   const subFont: CoverFont = { family: COVER_MINCHO_FAMILY, sizePx: 10, weight: 400 };
   const subColumnWidth = subFont.sizePx * 1.1;
-  const subColumns = layoutVerticalColumns(subtitle, subFont, 0.08, contentHeight * 0.52, measure);
+  const subColumns = subtitle === null ? [] : layoutVerticalColumns(subtitle, subFont, 0.08, contentHeight * 0.52, measure);
   const subRight = right
     ? content.x + content.width * (1 - 0.42)
     : content.x + content.width * 0.42 + subColumns.length * subColumnWidth;
@@ -494,13 +494,13 @@ function lowerBandOps(settings: CoverSettings, box: FaceBox, color: string, meas
   const innerTop = content.y + padding;
   const innerHeight = content.height - padding * 2;
 
-  const subtitle = settings.simple.subtitle || "サブタイトル";
+  const subtitle = subtitleText(settings.simple.subtitle);
   const title = settings.simple.title || "タイトル";
   const author = settings.simple.author || "著者名";
 
   const subFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
   const subLineHeight = subFont.sizePx * LINE_HEIGHT_NORMAL;
-  const subLines = layoutHorizontalLines(subtitle, subFont, 0.12, content.width, measure);
+  const subLines = subtitle === null ? [] : layoutHorizontalLines(subtitle, subFont, 0.12, content.width, measure);
   const subHeight = subLines.length * subLineHeight;
 
   const authorFont: CoverFont = { family: COVER_SANS_FAMILY, sizePx: 8, weight: 400 };
@@ -517,7 +517,7 @@ function lowerBandOps(settings: CoverSettings, box: FaceBox, color: string, meas
   const titleLines = layoutHorizontalLines(title, titleFont, 0, titleWidth, measure);
   const titleHeight = titleLines.length * titleLineHeight;
 
-  const rowGap = 4;
+  const rowGap = subLines.length > 0 ? 4 : 0;
   const row2Height = Math.max(titleHeight, authorHeight);
   const total = subHeight + rowGap + row2Height;
   const startY = innerTop + (innerHeight - total) / 2;
@@ -551,7 +551,7 @@ function frameLabelOps(settings: CoverSettings, box: FaceBox, color: string, mea
 
   // 未入力は見本の文字、スペースだけなら「空欄」= その部分（文字の台紙ごと）を出さない。
   const title = frameLabelText(settings.simple.title, "タイトル");
-  const subtitle = frameLabelText(settings.simple.subtitle, "サブタイトル");
+  const subtitle = subtitleText(settings.simple.subtitle);
   const author = frameLabelText(settings.simple.author, "著者名");
   const paper = "rgba(247,242,232,0.96)";
 
@@ -619,6 +619,11 @@ function frameLabelOps(settings: CoverSettings, box: FaceBox, color: string, mea
  * 額縁ラベルの文字: 未入力 → 見本の文字（placeholder）、スペースだけ → null（空欄＝台紙ごと出さない）。
  * 入力欄の案内「空欄にしたい場合はスペースのみ入れてください」に合わせる。
  */
+/** サブタイトルは任意: 空欄（またはスペースだけ）なら表紙に出さない（見本の文字も出さない）。 */
+export function subtitleText(value: string): string | null {
+  return value.trim() === "" ? null : value;
+}
+
 export function frameLabelText(value: string, placeholder: string): string | null {
   if (!value) return placeholder;
   return value.trim() === "" ? null : value;

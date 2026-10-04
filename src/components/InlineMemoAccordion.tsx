@@ -18,6 +18,8 @@ export default function InlineMemoAccordion({
   onClose,
   plotStorageKey,
   currentHeading,
+  onInsertPlotTemplate,
+  manuscriptHasText = false,
 }: {
   open: boolean;
   storageKey: string;
@@ -28,6 +30,9 @@ export default function InlineMemoAccordion({
   plotStorageKey: string;
   /** the manuscript heading the cursor is under, for the plot to follow */
   currentHeading: string | null;
+  /** SPN-XFIX-001: 「本文のひな形として入れる」 */
+  onInsertPlotTemplate?: (template: { body: string; memo: string | null }) => void;
+  manuscriptHasText?: boolean;
 }) {
   const initialSavedDraft = () => typeof window === "undefined"
     ? null
@@ -99,7 +104,7 @@ export default function InlineMemoAccordion({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "plot" ? (
-          <PlotPanelView key={plotStorageKey} storageKey={plotStorageKey} currentHeading={currentHeading} onOpenMemo={() => chooseTab("memo")} />
+          <PlotPanelView key={plotStorageKey} storageKey={plotStorageKey} currentHeading={currentHeading} onOpenMemo={() => chooseTab("memo")} onInsertTemplate={onInsertPlotTemplate} manuscriptHasText={manuscriptHasText} />
         ) : editing ? (
           <>
             <textarea

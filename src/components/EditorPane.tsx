@@ -739,6 +739,20 @@ function EditorPaneInner(
     });
   };
 
+  /**
+   * SPN-XFIX-001: プロット帳の「本文のひな形として入れる」. Adds the template
+   * after the current text (never replaces it) as ONE undoable edit, and the
+   * scene plots, when chosen, after the confirmed メモ.
+   */
+  const insertPlotTemplate = ({ body, memo }: { body: string; memo: string | null }) => {
+    const trimmed = content.replace(/\s+$/, "");
+    replaceWholeText(trimmed.length > 0 ? `${trimmed}\n\n${body}` : body);
+    if (memo) {
+      const confirmed = confirmedMemo.replace(/\s+$/, "");
+      onConfirmMemo(confirmed.length > 0 ? `${confirmed}\n\n${memo}` : memo);
+    }
+  };
+
   // No deps: the handlers close over this render's `content`, so the handle
   // is refreshed on every commit (as it already was with per-render deps).
   useImperativeHandle(
@@ -1118,6 +1132,8 @@ function EditorPaneInner(
           onClose={onCloseMemo}
           plotStorageKey={plotStorageKey}
           currentHeading={currentHeading}
+          onInsertPlotTemplate={insertPlotTemplate}
+          manuscriptHasText={content.trim().length > 0}
         />
       </div>
 

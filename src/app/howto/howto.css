@@ -168,6 +168,9 @@ html[data-theme="dark"] .howto-page .toc-sheet-head { border-top-color: var(--go
 .howto-page .use-case-notyet-title { display: flex; align-items: center; gap: 10px; margin: 40px 0 0; font-family: var(--font-serif), serif; font-size: 18px; font-weight: 500; letter-spacing: .06em; }
 .howto-page .use-case-notyet-title::before { width: 24px; height: 1px; background: var(--gold); content: ""; }
 .howto-page .use-case-notyet { margin-top: 14px; }
+.howto-page .short-poem-steps { counter-reset: short-poem; }
+.howto-page .short-poem-steps li { counter-increment: short-poem; }
+.howto-page .short-poem-steps b::before { margin-right: 8px; color: var(--gold-text); content: counter(short-poem) "."; }
 .howto-page .use-case-notyet b { font-family: inherit; font-size: 14px; font-weight: 700; }
 
 /* Body layout: a side rail on wide screens ------------------------------- */

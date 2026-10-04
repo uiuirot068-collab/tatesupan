@@ -388,7 +388,11 @@ export default function CoverModal({
                         <span>{label}</span>
                         <input
                           value={settings.simple[key]}
-                          placeholder="空欄にしたい場合はスペースのみ入れてください。"
+                          placeholder={
+                            key === "subtitle"
+                              ? "空欄なら表紙には出ません。"
+                              : "空欄にしたい場合はスペースのみ入れてください。"
+                          }
                           onChange={(event) =>
                             change({
                               ...settings,
