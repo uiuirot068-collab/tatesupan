@@ -69,6 +69,8 @@ import {
   isEphemeralDocId,
 } from "@/constants/demoData";
 import { useAuth } from "./AuthProvider";
+import { AuthModal } from "./AuthModal";
+
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
 import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/txtTransfer";
@@ -80,6 +82,14 @@ import { memoDraftStorageKey } from "@/lib/memoDraft";
 import { headingAtCursor, manuscriptHeadings, plotPanelStorageKey } from "@/lib/plotPanel";
 import { resolveExportFilenameStem } from "@/utils/exportFilename";
 import { createDefaultTocSettings } from "@/lib/tocSettings";
+
+const CLOUD_SAVE_LOGIN_NOTICE =
+  "クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。";
+
+/** Supabase reports a missing login as "Auth session missing!"; projects.ts as "ログインしていません". */
+function isLoggedOutError(message: string): boolean {
+  return /auth session missing|ログインしていません/i.test(message);
+}
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -1065,7 +1075,17 @@ export default function TategakiEditor({
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
-  const handleSave = () => saveToCloud(false);
+  // SPN-XFIX-002: the phone nav's save button reached saveToCloud without a
+  // login check, so a logged-out tap only showed "Auth session missing!".
+  // Show the same login guidance the header save button shows instead.
+  const [cloudAuthNotice, setCloudAuthNotice] = useState<string | null>(null);
+  const handleSave = () => {
+    if (!user) {
+      setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
+      return;
+    }
+    void saveToCloud(false);
+  };
 
   const saveToCloud = async (skipNewerCheck: boolean) => {
     if (isSampleDocument) return;
@@ -1143,6 +1163,11 @@ export default function TategakiEditor({
 
       if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
         setCloudLimitPlan(knownPlan ?? 'resident');
+        return;
+      }
+
+      if (result.error && isLoggedOutError(result.error)) {
+        setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
         return;
       }
 
@@ -1359,6 +1384,12 @@ export default function TategakiEditor({
 
       {/* Phone-only navigation remains a fixed flex row in the viewport shell;
           manuscript and preview own their independent scrolling surfaces. */}
+      <AuthModal
+        isOpen={cloudAuthNotice !== null}
+        onClose={() => setCloudAuthNotice(null)}
+        notice={cloudAuthNotice}
+      />
+
       <MobileEditorNav
         mobileView={mobileView}
         onShowEditor={showEditorView}
