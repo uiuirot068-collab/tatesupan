@@ -290,9 +290,9 @@ export interface PlotPanelStorage {
 
 /**
  * The tab's name: the app is プロット帳, and Shioria is its name
- * (spuntales.net/shioria/). The tab carries a 準備中 tag until the feature is
- * officially released.
+ * (spuntales.net/shioria/).
  */
+export const PLOTBOOK_URL = "https://spuntales.net/shioria/";
 export const PLOT_TAB_LABEL = "プロット帳（Shioria）";
 
 const PLOT_PREFIX = "tatespun:plot-panel:v1:";

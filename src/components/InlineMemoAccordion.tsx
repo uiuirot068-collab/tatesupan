@@ -80,7 +80,6 @@ export default function InlineMemoAccordion({
           </button>
           <button type="button" role="tab" aria-selected={tab === "plot"} data-memo-tab="plot" onClick={() => chooseTab("plot")} className={tabClass(tab === "plot")}>
             {PLOT_TAB_LABEL}
-            <span data-plot-tab-preparing="" className="ml-1 rounded border border-ink/15 px-1 align-middle text-[10px] font-normal text-ink/55">準備中</span>
           </button>
           {tab === "memo" && hasSavedDraft && <span className="text-[10px] text-accent">下書き保存済み</span>}
         </div>

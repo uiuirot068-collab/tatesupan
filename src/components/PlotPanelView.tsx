@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import {
+  PLOTBOOK_URL,
   chapterHeading,
   chapterIndexForHeading,
   parsePlotFile,
@@ -171,7 +172,10 @@ export default function PlotPanelView({
   if (!plot) {
     return (
       <div data-plot-panel="empty">
-        <p className="text-sm leading-relaxed text-ink/75">プロット帳（Shioria）で作ったプロットを読み込むと、この欄で章ごとに見ながら原稿を書けます。</p>
+        <p className="text-sm leading-relaxed text-ink/75">
+          プロット帳（Shioria）で作ったプロットを読み込むと、この欄で章ごとに見ながら原稿を書けます。
+          <a href={PLOTBOOK_URL} target="_blank" rel="noopener noreferrer" className={`${linkButton} ml-1`}>プロット帳（Shioria）を開く</a>
+        </p>
         <p data-plot-read-only-note="" className="mt-1 text-xs leading-relaxed text-ink/65">
           ここはプロットを見るための欄で、プロットを書くことはできません。プロットはプロット帳で書きます。思いついたことを書きとめたいときはメモを使ってください。
           <button type="button" onClick={onOpenMemo} className={`${linkButton} ml-1`}>メモを開く</button>

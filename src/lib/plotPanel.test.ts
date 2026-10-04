@@ -192,7 +192,7 @@ describe("PLT-LOOP-003 QA: the plot side says it is view-only and in preparation
     expect(view).toContain("プロットを書くことはできません");
     expect(view).toContain("プロット帳で直して、読み込み直してください");
     expect(view).toContain("メモを開く");
-    expect(memo).toContain('data-plot-tab-preparing=""');
+    expect(memo).not.toContain("準備中");
     expect(memo).toContain("{PLOT_TAB_LABEL}");
     expect(memo).toContain('onOpenMemo={() => chooseTab("memo")}');
     expect(view + pane).not.toContain("原稿の横");
