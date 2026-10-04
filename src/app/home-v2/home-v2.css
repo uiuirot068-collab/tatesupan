@@ -1053,3 +1053,24 @@
   }
   .home-p3-slot .home-v2-next-spine-label { writing-mode: horizontal-tb; letter-spacing: .12em; }
 }
+
+/* SPN-XFIX-002: the SNS image sample in the first view — a hairline row, not a card. */
+.home-p3-sns-sample {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  max-width: 36rem;
+  padding: .85rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--home-night-text) 22%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--home-night-text) 22%, transparent);
+  color: var(--home-night-text);
+}
+.home-p3-sns-sample .home-p3-ticket-cta { margin-top: .4rem; }
+.home-p3-sns-sample:hover .home-p3-ticket-cta { text-decoration: underline; text-underline-offset: 4px; }
+.home-p3-sns-sample-img {
+  width: 64px;
+  height: 80px;
+  object-fit: cover;
+  background: #fff;
+}

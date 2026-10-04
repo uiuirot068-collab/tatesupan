@@ -28,7 +28,7 @@ export default defineConfig({
       // PLT-LOOP-003: メモ・プロット panel (reads プロット帳 files)
       "src/lib/plotPanel.test.ts",
       // SPN-XFIX-001: Xから来た50人のテストの直し
-      "src/lib/spnXfix001.test.ts",
+      "src/lib/spnXfix001.test.ts", "src/lib/snsCredit.test.ts",
     ],
   },
 });

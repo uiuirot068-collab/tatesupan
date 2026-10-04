@@ -137,7 +137,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     title: "書き出してみよう",
-    body: "プレビューの「書き出し」から、PDF・JPG（画像）で保存できます。Web閲覧用やSNS用の用紙はJPGで書き出します。デモでは保存しなくても大丈夫です。",
+    body: "プレビューの「書き出し」から、PDF・JPG（画像）で保存できます。SNS用の用紙はJPGで書き出します。デモでは保存しなくても大丈夫です。",
     target: "export",
   },
   {

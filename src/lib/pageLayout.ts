@@ -145,6 +145,10 @@ export interface PageSettings {
   layoutMode: "margin" | "capacity"; // 設定モード: 余白から設定 / 文字数・行数から設定
   /** 作品ごとの標準書き出し保存名（拡張子なし）。空 = 安全な自動候補。 */
   exportFilenameStem?: string;
+  /** SPN-XFIX-002: 「SNS用 4:5」の下にクレジットを入れるか（未設定＝入れる）。 */
+  snsCredit?: boolean;
+  /** SPN-XFIX-002: 4:5の下に入れる本人のSNSのID（未設定＝この端末で最後に入れたID）。 */
+  snsId?: string;
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;

@@ -69,6 +69,8 @@ import {
   isEphemeralDocId,
 } from "@/constants/demoData";
 import { useAuth } from "./AuthProvider";
+import { AuthModal } from "./AuthModal";
+
 import DemoTour from "./DemoTour";
 import { useEditorSessionActivity } from "@/hooks/useEditorSessionActivity";
 import { downloadLocalTxt, readLocalTxtFile, serializeReadableTxt } from "@/lib/txtTransfer";
@@ -80,6 +82,16 @@ import { memoDraftStorageKey } from "@/lib/memoDraft";
 import { headingAtCursor, manuscriptHeadings, plotPanelStorageKey } from "@/lib/plotPanel";
 import { resolveExportFilenameStem } from "@/utils/exportFilename";
 import { createDefaultTocSettings } from "@/lib/tocSettings";
+import { applyDestinationPaperPreset } from "@/lib/paperPresets";
+import type { PaperSizeKey } from "@/lib/pageLayout";
+
+const CLOUD_SAVE_LOGIN_NOTICE =
+  "クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。";
+
+/** Supabase reports a missing login as "Auth session missing!"; projects.ts as "ログインしていません". */
+function isLoggedOutError(message: string): boolean {
+  return /auth session missing|ログインしていません/i.test(message);
+}
 
 type SaveStatus = "loading" | "saved" | "saving" | "error";
 
@@ -99,11 +111,14 @@ export default function TategakiEditor({
   documentId,
   cloudProjectId,
   demoMode = false,
+  startPaperSize,
 }: {
   documentId?: number;
   cloudProjectId?: string;
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
+  /** SPN-XFIX-002: `/editor?paper=sns-45` starts a NEW work already on that paper (links from X posts). */
+  startPaperSize?: PaperSizeKey;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -722,8 +737,10 @@ export default function TategakiEditor({
       await previousDocumentFlushed;
       const doc = id ? await loadDocument(id) : undefined;
 
+      // SPN-XFIX-002: a new work opened from an SNS-image link starts on that paper.
+      const newDocSettings = !doc && startPaperSize ? applyDestinationPaperPreset(DEFAULT_PAGE_SETTINGS, startPaperSize) : null;
       if (!doc) {
-        id = await createDocument();
+        id = await createDocument(newDocSettings ?? undefined);
         router.replace(`/editor?id=${id}`);
       }
 
@@ -749,6 +766,8 @@ export default function TategakiEditor({
       setPlotNote(doc?.plotNote ?? "");
       if (doc) {
         setSettings(doc.settings ?? DEFAULT_PAGE_SETTINGS);
+      } else if (newDocSettings) {
+        setSettings(newDocSettings);
       }
       const opened = imageStateFromRecords(imageRecords);
       setImages(opened.images);
@@ -764,7 +783,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings, startPaperSize]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1065,7 +1084,17 @@ export default function TategakiEditor({
 
   useShortcuts([{ key: "s", handler: saveNow }]);
 
-  const handleSave = () => saveToCloud(false);
+  // SPN-XFIX-002: the phone nav's save button reached saveToCloud without a
+  // login check, so a logged-out tap only showed "Auth session missing!".
+  // Show the same login guidance the header save button shows instead.
+  const [cloudAuthNotice, setCloudAuthNotice] = useState<string | null>(null);
+  const handleSave = () => {
+    if (!user) {
+      setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
+      return;
+    }
+    void saveToCloud(false);
+  };
 
   const saveToCloud = async (skipNewerCheck: boolean) => {
     if (isSampleDocument) return;
@@ -1143,6 +1172,11 @@ export default function TategakiEditor({
 
       if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
         setCloudLimitPlan(knownPlan ?? 'resident');
+        return;
+      }
+
+      if (result.error && isLoggedOutError(result.error)) {
+        setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
         return;
       }
 
@@ -1359,6 +1393,12 @@ export default function TategakiEditor({
 
       {/* Phone-only navigation remains a fixed flex row in the viewport shell;
           manuscript and preview own their independent scrolling surfaces. */}
+      <AuthModal
+        isOpen={cloudAuthNotice !== null}
+        onClose={() => setCloudAuthNotice(null)}
+        notice={cloudAuthNotice}
+      />
+
       <MobileEditorNav
         mobileView={mobileView}
         onShowEditor={showEditorView}

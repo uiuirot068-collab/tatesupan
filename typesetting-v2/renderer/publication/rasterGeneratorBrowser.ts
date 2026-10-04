@@ -210,6 +210,8 @@ export interface BrowserRasterPage {
 export interface BrowserRasterProgressOptions {
   beforePage?: (pageNumber: number, pageCount: number) => Promise<void>;
   onProgress?: (completedPages: number, pageCount: number) => void;
+  /** Paints app-level additions (e.g. the SNS 4:5 credit) after the page, before encoding. Used by exportPaintPagesToBrowserJpgPages. */
+  afterPaint?: (ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number) => Promise<void>;
 }
 
 // Renders every page of the SAME `PaintPlan` PDF/Node-QA use to a real
@@ -347,6 +349,7 @@ export async function exportPaintPagesToBrowserJpgPages(
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, widthPx, heightPx);
     await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily, mode);
+    await options.afterPaint?.(ctx, widthPx, heightPx);
     // Yield between painting and encoding, as the two-pass executor above
     // does, so neither becomes one long main-thread task with the other.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
