@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { withBasePath } from "@/lib/basePath";
 import { BETA_FEEDBACK_ENABLED } from "@/lib/betaFeedback";
 import BetaFeedbackModal from "@/components/BetaFeedbackModal";
 import HelpModal from "@/components/HelpModal";
-import {
-  HOWTO_IMAGES,
-  EDITOR_PAGE_EXPLANATION_TITLE,
-  EDITOR_PAGE_EXPLANATION_BODY,
-  TITLE_AND_FILENAME_EXPLANATION,
-  PDF_FILENAME_EXPLANATION,
-  resolveAffiliateFooterConfig,
-} from "@/lib/howtoContent";
+import { resolveAffiliateFooterConfig } from "@/lib/howtoContent";
 import {
   SUPPORT_FANBOX_URL,
   SUPPORT_OFUSE_URL,
@@ -35,25 +28,23 @@ import {
   SHORT_POEM_STEPS,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
-import "./howto.css";
+import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, type HowtoItem } from "./content";
+import { SISTER_TOOLS } from "@/lib/sisterTools";
+import { ensureSampleProject } from "@/lib/db";
+import { SAMPLE_PROJECT } from "@/constants/sampleData";
+import "./howto-v2.css";
 
 /**
- * TSP-HOWTO-BETA-016 — `/howto`, the beta's first-time-user onboarding guide.
+ * TSP-HOWTO-001 — the redesigned HOW TO. Built at `/howto-v2` first, then
+ * swapped in here (なつお, 2026-10-04); the previous design lives at
+ * `/howto-v1` (noindex) and `/howto-v2` now forwards here.
  *
- * Distinct from `/guide` ("何ができるか" catalogue) and from `HelpModal`
- * ("困ったときの詳しい参照"): this page teaches the normal TateSpun journey
- * end-to-end (原稿を持ち込む → 編集する → 本の形を確認する → 必要な設定を
- * する → 入稿前チェック → PDF/JPGを書き出す) for someone who has never used
- * the app before.
- *
- * Content/layout is adapted from the approved docs/howto (Draft v3.4) static
- * mockup — same copy, same visual language (own scoped stylesheet, see
- * `./howto.css`) — wired into a real route: real images (no more IMAGE
- * FILE placeholders), basePath-safe asset paths, and the same HelpModal /
- * BetaFeedbackModal the rest of the app already uses (no forked Help/
- * Feedback logic). Two explanations the v3.4 draft didn't yet cover were
- * added: Editor Pages (split/join) inside the manuscript-bring-in chapter,
- * and the shipped PDF safe-filename field inside the export chapter.
+ * Layout follows the 「HOW TO TateSpun 再設計案」 design (なつお, 2026-10-04):
+ * a header that hides while scrolling down, a hero, 「はじめかた」 in three
+ * steps, the 5 essentials as tabs, the 10 tips as cards that open a dialog,
+ * help + FAQ, the greeting letter with the support block, and the update log
+ * (newest 3 + fold, kept from TSP-HISTORY-001). Every chapter of the current
+ * page is kept (quick reference, use cases, short poems, review tools).
  */
 
 interface UpdateLogEntry {
@@ -78,71 +69,14 @@ const toHowToLogEntry = (entry: UpdateHistoryEntry): UpdateLogEntry => ({
 });
 
 const asset = (file: string) => withBasePath(`/howto/assets/${file}`);
-// TSP-RC-HOWTO-FINALIZE-003: self-hosted β guide video + poster, produced to
-// the spec recorded in roadmap §18 (H.264/AAC, faststart, ~960px wide,
-// <25 MiB) -- verified present and valid before wiring this in.
-const HOWTO_GUIDE_VIDEO_SRC = withBasePath("/howto/media/tatespun-beta-guide.mp4");
-const HOWTO_GUIDE_VIDEO_POSTER = withBasePath("/howto/media/tatespun-beta-guide-poster.webp");
-// TSP-RC-AFFILIATE-FOOTER-001: no config anywhere in this repo/env today --
-// see resolveAffiliateFooterConfig's own doc. Resolved once at module scope
-// since these are build-time NEXT_PUBLIC_ values, same pattern as every
-// other NEXT_PUBLIC_* flag in this codebase (e.g. BETA_FEEDBACK_ENABLED).
 const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
   amazonUrl: process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_URL,
   amazonAssociateOperatorName: process.env.NEXT_PUBLIC_AMAZON_ASSOCIATE_OPERATOR_NAME,
   rakutenUrl: process.env.NEXT_PUBLIC_RAKUTEN_AFFILIATE_URL,
 });
 
-// Phase 3: one table of contents, in reading order, for the desktop side
-// rail (same chapters and names the hero menu already lists).
-const HOWTO_TOC: { group: string; items: { href: string; label: string }[] }[] = [
-  { group: "よく使う操作", items: [{ href: "#quick-reference", label: "操作と場所の早見表" }] },
-  {
-    group: "使い方の例",
-    items: [
-      { href: "#use-cases", label: USE_CASES_HEADING },
-      { href: "#short-poems", label: SHORT_POEM_STEPS_HEADING },
-    ],
-  },
-  {
-    group: "まずは知ってほしい５つの機能",
-    items: [
-      { href: "#my-check", label: "マイチェック" },
-      { href: "#writing-check", label: "文章チェックβ" },
-      { href: "#body-notation", label: "本文記法" },
-      { href: "#work-counter", label: "作業カウンター" },
-      { href: "#varied-use", label: "多様な使い方（原稿の持ち込み）" },
-    ],
-  },
-  {
-    group: "文章見直しツール",
-    items: [
-      { href: "#review-writing-check", label: "文章チェックβ" },
-      { href: "#review-work-counter", label: "作業カウンター" },
-      { href: "#review-read-aloud", label: "音読β" },
-      { href: "#review-description-check", label: "描写語・修飾表現チェックβ" },
-    ],
-  },
-  {
-    group: "便利な小技10選β版",
-    items: [
-      { href: "#settings", label: "設定" },
-      { href: "#preview", label: "プレビュー機能" },
-      { href: "#four-buttons", label: "便利な４ボタン" },
-      { href: "#memo", label: "メモ機能" },
-      { href: "#focus-mode", label: "集中モード" },
-      { href: "#folio-header", label: "ノンブル・柱" },
-      { href: "#image-insert", label: "画像挿入機能" },
-      { href: "#colophon", label: "奥付機能" },
-      { href: "#dark-mode", label: "ダークモード" },
-      { href: "#export", label: "多機能書き出し" },
-    ],
-  },
-  { group: "困ったとき", items: [{ href: "#faq", label: "FAQ" }, { href: "#report", label: "困ったとき" }] },
-];
-
-// Phase 3: the operations people look for most, and where each one lives
-// (the same places each chapter's 「場所」 line gives), linking to the chapter.
+// Same rows as /howto; the chapters they point at now live in the 5選 tabs
+// or the 小技 dialogs, which the hash router below opens.
 const HOWTO_QUICK_REFERENCE: { task: string; where: string; href: string }[] = [
   { task: "Word・TXTの原稿を読み込む", where: "▶本づくり→原稿ファイル", href: "#varied-use" },
   { task: "用紙・フォント・余白を変える", where: "テキストエディター直上→▶設定", href: "#settings" },
@@ -155,89 +89,235 @@ const HOWTO_QUICK_REFERENCE: { task: string; where: string; href: string }[] = [
   { task: "PDF・JPGで書き出す", where: "プレビュー画面左側「書き出し▼」", href: "#export" },
 ];
 
-export default function HowToPage() {
-  const [fiveOpen, setFiveOpen] = useState(false);
-  const [tipsOpen, setTipsOpen] = useState(false);
-  const [showLabels, setShowLabels] = useState(false);
+const indexOfItem = (items: HowtoItem[], id: string) =>
+  items.findIndex((item) => item.id === id || item.alias?.includes(id));
+
+// Old /howto anchors that moved into the 文章見直しツール chapter.
+const MOVED_ANCHORS: Record<string, string> = {
+  "writing-check": "review-writing-check",
+  "work-counter": "review-work-counter",
+};
+
+/** The 使い方ガイド book on the bookshelf (SAMPLE_PROJECT, fixed id -1). */
+const GUIDE_BOOK_HREF = `/editor?id=${SAMPLE_PROJECT.id}`;
+
+/**
+ * Someone who lands on HOW TO directly has never seen the Home, which is what
+ * registers the guide book; register it first so the editor opens the book
+ * instead of a blank new manuscript.
+ */
+const openGuideBook = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+  event.preventDefault();
+  const href = event.currentTarget.href;
+  void ensureSampleProject()
+    .catch(() => undefined)
+    .then(() => { window.location.href = href; });
+};
+
+/** How long each hero picture stays before cross-fading to the other. */
+const HERO_SLIDE_MS = 6000;
+
+/**
+ * Hero picture: the current guide cat and the design's open book take turns,
+ * cross-fading every few seconds. Without motion (prefers-reduced-motion) it
+ * stays on the cat; the two dots switch by hand and stop the rotation.
+ */
+function HeroVisual() {
+  const [slide, setSlide] = useState(0);
+  const [auto, setAuto] = useState(true);
+
+  useEffect(() => {
+    if (!auto) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setSlide((n) => (n + 1) % 2);
+    }, HERO_SLIDE_MS);
+    return () => window.clearInterval(timer);
+  }, [auto]);
+
+  const pick = (n: number) => {
+    setAuto(false);
+    setSlide(n);
+  };
+
+  return (
+    <div className="v2-hero-visual">
+      <div className="v2-hero-stage">
+        <div className={`v2-hero-slide${slide === 0 ? " is-on" : ""}`} aria-hidden={slide !== 0}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={asset(HERO_IMAGE.file)} alt={HERO_IMAGE.alt} />
+        </div>
+        <div className={`v2-hero-slide${slide === 1 ? " is-on" : ""}`} aria-hidden="true">
+          <div className="v2-book">
+            <div className="v2-spread">
+              <div className="v2-pg">
+                <span className="v2-hashira">TateSpun</span>
+                <div className="v2-vtext">確かめて、<br />持ち帰る。<br />ＰＤＦも、<br />ＪＰＧも。</div>
+                <span className="v2-nombre">13</span>
+              </div>
+              <div className="v2-pg">
+                <div className="v2-vtext">書くのは、<br /><ruby>好<rt>す</rt></ruby>きな場所で。<br />本の<ruby>形<rt>かたち</rt></ruby>に<br />するのは、ここで。</div>
+                <span className="v2-nombre">12</span>
+                <span className="v2-trim" />
+              </div>
+            </div>
+            <span className="v2-tag" style={{ top: "-14px", left: "12%" }}><i />柱</span>
+            <span className="v2-tag" style={{ top: "64%", right: "-10px", animationDelay: "-1.6s" }}><i />ルビ</span>
+            <span className="v2-tag" style={{ bottom: "-8px", left: "44%", animationDelay: "-3.2s" }}><i />ノンブル</span>
+          </div>
+        </div>
+      </div>
+      <div className="v2-hero-dots">
+        {["案内猫の絵", "本の見開き"].map((label, n) => (
+          <button
+            key={label}
+            type="button"
+            aria-label={`${label}を表示`}
+            aria-pressed={slide === n}
+            className={slide === n ? "is-on" : undefined}
+            onClick={() => pick(n)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const Arrow = ({ dir = "right" }: { dir?: "right" | "down" | "up" }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {dir === "right" && <path d="M5 12h14M13 6l6 6-6 6" />}
+    {dir === "down" && <path d="M12 5v14M6 13l6 6 6-6" />}
+    {dir === "up" && <path d="M12 19V5M6 11l6-6 6 6" />}
+  </svg>
+);
+
+const Pin = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </svg>
+);
+
+const Plus = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+export default function HowToV2Page() {
+  const [feat, setFeat] = useState(0);
+  const [tip, setTip] = useState(-1);
+  const [hidden, setHidden] = useState(false);
+  const [solid, setSolid] = useState(false);
+  const [showTop, setShowTop] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [logs, setLogs] = useState<UpdateLogEntry[]>([]);
   const [olderLogsOpen, setOlderLogsOpen] = useState(false);
   const [logLoadError, setLogLoadError] = useState(false);
-  const [activeTocHref, setActiveTocHref] = useState<string | null>(null);
-  const [allTipsOpen, setAllTipsOpen] = useState(false);
-  const [tocOpen, setTocOpen] = useState(false);
+  const lastY = useRef(0);
+  const menuOpenRef = useRef(false);
+  const tipReturnFocus = useRef<HTMLElement | null>(null);
 
-  // TSP-COPY-001: the full table of contents opens as a sheet from the top
-  // of the page and from the sticky bar, so any chapter is one tap away.
   useEffect(() => {
-    if (!tocOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTocOpen(false);
+    menuOpenRef.current = menuOpen;
+  }, [menuOpen]);
+
+  // Header hides while scrolling down and comes back on the way up.
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      setHidden(y > lastY.current && y > 160 && !menuOpenRef.current);
+      setSolid(y > 40);
+      setShowTop(y > 900);
+      lastY.current = y;
     };
-    document.addEventListener("keydown", onKey);
-    document.getElementById("howto-toc-close")?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [tocOpen]);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  // Phase 3: tips chapters are collapsible. Any in-page link (hero menu,
-  // rail, quick reference, a shared #hash URL) opens the chapter it points
-  // at before the browser scrolls to it.
+  const openTip = useCallback((index: number, from?: HTMLElement | null) => {
+    tipReturnFocus.current = from ?? (document.activeElement as HTMLElement | null);
+    setTip(index);
+  }, []);
+
+  const closeTip = useCallback(() => {
+    setTip(-1);
+    requestAnimationFrame(() => tipReturnFocus.current?.focus());
+  }, []);
+
+  // In-page anchors (and shared #hash URLs, incl. the old /howto ones) open
+  // the 5選 tab or the 小技 dialog they name.
   useEffect(() => {
-    const openTarget = (hash: string) => {
-      if (!hash || hash.length < 2) return;
-      const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    const route = (hash: string): boolean => {
+      if (!hash || hash.length < 2) return false;
+      const id = decodeURIComponent(hash.slice(1));
+      const f = indexOfItem(FEATURES, id);
+      if (f >= 0) {
+        setFeat(f);
+        document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+        return true;
+      }
+      const t = indexOfItem(TIPS, id);
+      if (t >= 0) {
+        document.getElementById("tips")?.scrollIntoView({ behavior: "smooth" });
+        openTip(t);
+        return true;
+      }
+      const moved = MOVED_ANCHORS[id];
+      const target = document.getElementById(moved ?? id);
       const details = target?.closest("details");
       if (details && !details.open) details.open = true;
+      if (moved) {
+        target?.scrollIntoView({ behavior: "smooth" });
+        return true;
+      }
+      return false;
     };
     const onClick = (event: MouseEvent) => {
       const link = (event.target as Element | null)?.closest?.('a[href^="#"]');
-      if (link) openTarget(link.getAttribute("href") ?? "");
+      if (!link) return;
+      const href = link.getAttribute("href") ?? "";
+      setMenuOpen(false);
+      if (route(href)) {
+        event.preventDefault();
+        if (tip >= 0 && indexOfItem(TIPS, href.slice(1)) < 0) setTip(-1);
+      }
     };
     const onHash = () => {
-      openTarget(window.location.hash);
-      document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+      if (!route(window.location.hash)) {
+        document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+      }
     };
     if (window.location.hash) onHash();
-    document.addEventListener("click", onClick, true);
+    document.addEventListener("click", onClick);
     window.addEventListener("hashchange", onHash);
     return () => {
-      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("click", onClick);
       window.removeEventListener("hashchange", onHash);
     };
-  }, []);
+  }, [openTip, tip]);
 
-  // Phase 3: the side rail marks the chapter being read.
+  // Dialog: Esc closes, ←/→ move between tips, the page behind stops scrolling.
   useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const ids = HOWTO_TOC.flatMap((group) => group.items.map((item) => item.href.slice(1)));
-    const targets = ids.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActiveTocHref(`#${visible[0].target.id}`);
-      },
-      { rootMargin: "-120px 0px -60% 0px" }
-    );
-    targets.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
-
-  const toggleAllTips = () => {
-    const next = !allTipsOpen;
-    document.querySelectorAll<HTMLDetailsElement>("details.tip").forEach((el) => {
-      el.open = next;
-    });
-    setAllTipsOpen(next);
-  };
-
-  useEffect(() => {
-    // Browser-only query-param read for the internal `?labels=1` review mode
-    // (see docs/howto TEXT_MAP.md) — cannot run during static-export
-    // prerendering, so this one-time mount effect is unavoidable here.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShowLabels(new URLSearchParams(window.location.search).get("labels") === "1");
-  }, []);
+    if (tip < 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeTip();
+      if (event.key === "ArrowRight") setTip((v) => (v + 1) % TIPS.length);
+      if (event.key === "ArrowLeft") setTip((v) => (v + TIPS.length - 1) % TIPS.length);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    document.getElementById("v2-tip-close")?.focus();
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [tip, closeTip]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,1046 +344,651 @@ export default function HowToPage() {
   const visibleLogs = olderLogsOpen ? sortedLogs : sortedLogs.slice(0, RECENT_LOG_COUNT);
   const olderLogCount = Math.max(0, sortedLogs.length - RECENT_LOG_COUNT);
 
+  const current = FEATURES[feat];
+  const nextFeat = (feat + 1) % FEATURES.length;
+  const openedTip = tip >= 0 ? TIPS[tip] : null;
+
+  const NAV = [
+    { href: "#start", label: "はじめかた", long: "はじめかた" },
+    { href: "#features", label: "5つの機能", long: "まずは知ってほしい5つの機能" },
+    { href: "#tips", label: "小技10選", long: "便利な小技10選" },
+    { href: "#review-tools", label: "見直し", long: "文章見直しツール" },
+    { href: "#help", label: "困ったとき", long: "困ったとき・FAQ" },
+  ];
+
   return (
-    <div
-      className={`howto-page${showLabels ? " show-copy-ids" : ""}`}
-      data-howto-page=""
-      lang="ja"
-    >
-      <h1 className="sr-only">HOW TO TateSpun｜タテスパン使い方ガイド</h1>
-      <main className="manual">
-        <section className="hero" id="howto-top">
-          <div className="hero-left">
-            <div className="hero-brand">
-              <span className="howto-label">HOW TO</span>
-              <strong>TateSpun</strong>
-            </div>
-            <p className="hero-copy" data-copy-id="TEXT_HERO_BODY_01">
-              色々出来るTateSpun<br />是非知ってもらいたい機能を<br />こちらのページにまとめました。
-              <br />ブラウザだけで動作し、原稿はあなたのものです。
-            </p>
-            <div className="hero-pills">
-              <Link className="pill dark" href="/" data-copy-id="TEXT_HERO_CHIP_01">
-                本棚に戻る
-              </Link>
-              <Link className="pill gold" href="/editor?demo=1" data-copy-id="TEXT_HERO_CHIP_02">
-                デモを見る
-              </Link>
-            </div>
+    <div className="htv2" id="top" lang="ja" data-howto-page="v2">
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&display=swap" />
+
+      <header className={`v2-hdr${hidden ? " is-hidden" : ""}${solid || menuOpen ? " is-solid" : ""}`}>
+        <div className="v2-hdr-in">
+          <a className="v2-logo" href="#top" aria-label="HOW TO TateSpun のトップへ戻る">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="v2-logo-cat" src={asset(GUIDE_CAT.file)} alt="" width={44} height={44} />
+            <span className="v2-logo-txt"><small>HOW TO</small><b>TateSpun</b></span>
+          </a>
+          <nav className="v2-gnav" aria-label="ページ内メニュー">
+            {NAV.map((item) => (
+              <a key={item.href} className="v2-gl" href={item.href}>{item.label}</a>
+            ))}
+            <button type="button" className="v2-gl v2-gl-btn" onClick={() => setHelpOpen(true)}>ヘルプ</button>
+            <Link className="v2-btn v2-sm v2-pri v2-demo" href="/editor?demo=1">
+              デモを見る
+              <Arrow />
+            </Link>
             <button
+              className="v2-menu-btn"
               type="button"
-              className="hero-toc-open"
-              data-howto-toc-open="hero"
-              aria-haspopup="dialog"
-              aria-expanded={tocOpen}
-              onClick={() => setTocOpen(true)}
+              aria-label="メニューを開閉する"
+              aria-expanded={menuOpen}
+              aria-controls="v2-mnav"
+              onClick={() => setMenuOpen((v) => !v)}
             >
-              <span>このページの目次をひらく</span>
-              <span aria-hidden="true">→</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 8h16M4 16h16" />}
+              </svg>
             </button>
-            {/* Phase 3: where to start. Three chapters in reading order on one
-                thread, so a first-time reader knows what to read first. */}
-            <div className="start-path-block">
-              <p className="howto-chip">Start Here</p>
-              <p className="start-path-title">はじめての方は、この順番で。</p>
-              <ol className="start-path">
-                <li><a href="#five-features"><span className="start-no" aria-hidden="true">01</span><b>まずは知ってほしい５つの機能</b><small>最初に読むならここから</small></a></li>
-                <li><a href="#review-tools"><span className="start-no" aria-hidden="true">02</span><b>文章見直しツール</b><small>書けたら、見直しに</small></a></li>
-                <li><a href="#tips"><span className="start-no" aria-hidden="true">03</span><b>便利な小技10選β版</b><small>必要になったときに</small></a></li>
-              </ol>
-              <p className="start-path-help">困ったときは <a href="#faq">FAQ</a> ／ <a href="#report">困ったとき</a> へ。</p>
-            </div>
-          </div>
-          <div className="hero-right">
-            <div className="hero-visual">
-              <img src={asset(HOWTO_IMAGES.hero.file)} alt={HOWTO_IMAGES.hero.alt} />
-            </div>
-            <p className="howto-chip hero-index-chip">Contents</p>
-            <nav className="hero-index" aria-label="ページ案内">
-              <button
-                type="button"
-                className="hero-simple-link"
-                data-howto-help-cta="hero-nav"
-                onClick={() => setHelpOpen(true)}
-              >
-                ヘルプを見る
-              </button>
-              <div className="hero-menu-block">
-                <div className="hero-menu-row">
-                  <button
-                    className="accordion-toggle"
-                    type="button"
-                    aria-expanded={fiveOpen}
-                    aria-controls="hero-five-panel"
-                    aria-label="5つの機能メニューを開く"
-                    onClick={() => setFiveOpen((v) => !v)}
-                  >
-                    <span className="hamburger"><i></i><i></i><i></i></span>
-                  </button>
-                  <a className="hero-menu-title" href="#five-features" data-copy-id="TEXT_HERO_MENU_01">
-                    まずは知ってほしい<br />５つの機能
-                  </a>
-                </div>
-                <ol className="hero-submenu" id="hero-five-panel" hidden={!fiveOpen}>
-                  <li><a href="#my-check">マイチェック</a></li>
-                  <li><a href="#writing-check">文章チェックβ</a></li>
-                  <li><a href="#body-notation">本文記法</a></li>
-                  <li><a href="#work-counter">作業カウンター</a></li>
-                  <li><a href="#varied-use">多様な使い方</a></li>
-                </ol>
+          </nav>
+        </div>
+      </header>
+      {menuOpen && (
+        <nav className="v2-mnav" id="v2-mnav" aria-label="メニュー">
+          {NAV.map((item) => (
+            <a key={item.href} href={item.href}>{item.long}<span aria-hidden="true">→</span></a>
+          ))}
+          <button type="button" onClick={() => { setMenuOpen(false); setHelpOpen(true); }}>ヘルプを見る<span aria-hidden="true">→</span></button>
+          <Link href="/editor?demo=1">デモを見る<span aria-hidden="true">→</span></Link>
+          <Link href="/">本棚に戻る<span aria-hidden="true">→</span></Link>
+        </nav>
+      )}
+
+      <main>
+        {/* ============ HERO ============ */}
+        <section className="v2-hero">
+          <div className="v2-wrap v2-hero-grid">
+            <div>
+              <span className="v2-eyebrow">HOW TO TateSpun</span>
+              <h1 className="v2-mincho">
+                <span className="v2-nw">縦書きの</span><span className="v2-nw">本づくりを、</span><br />
+                <span className="v2-nw"><span className="v2-mk">3ステップ</span>で。</span>
+              </h1>
+              <p className="v2-hero-lead">
+                色々出来るTateSpun<br />是非知ってもらいたい機能を<br />こちらのページにまとめました。
+                <br /><span className="v2-nw">ブラウザだけで動作し、</span><span className="v2-nw">原稿はあなたのものです。</span>
+              </p>
+              <div className="v2-hero-cta">
+                <a className="v2-btn v2-pri" href="#start">
+                  はじめかたを見る
+                  <Arrow dir="down" />
+                </a>
+                <Link className="v2-btn" href="/editor?demo=1">デモを見る</Link>
+                <Link className="v2-btn v2-ghost" href="/">本棚に戻る</Link>
               </div>
-              <a className="hero-simple-link" href="#review-tools" data-copy-id="TEXT_HERO_MENU_REVIEW">
-                文章見直し<br />ツール
-              </a>
-              <div className="hero-menu-block">
-                <div className="hero-menu-row">
-                  <button
-                    className="accordion-toggle"
-                    type="button"
-                    aria-expanded={tipsOpen}
-                    aria-controls="hero-tips-panel"
-                    aria-label="便利な小技10選メニューを開く"
-                    onClick={() => setTipsOpen((v) => !v)}
-                  >
-                    <span className="hamburger"><i></i><i></i><i></i></span>
-                  </button>
-                  <a className="hero-menu-title" href="#tips" data-copy-id="TEXT_HERO_MENU_02">
-                    便利な小技<br />10選β版
-                  </a>
-                </div>
-                <ol className="hero-submenu" id="hero-tips-panel" hidden={!tipsOpen}>
-                  <li><a href="#settings">設定</a></li>
-                  <li><a href="#preview">プレビュー機能</a></li>
-                  <li><a href="#four-buttons">便利な４ボタン</a></li>
-                  <li><a href="#memo">メモ機能</a></li>
-                  <li><a href="#focus-mode">集中モード</a></li>
-                  <li><a href="#folio-header">ノンブル・柱</a></li>
-                  <li><a href="#image-insert">画像挿入機能</a></li>
-                  <li><a href="#colophon">奥付機能</a></li>
-                  <li><a href="#dark-mode">ダークモード</a></li>
-                  <li><a href="#export">多機能書き出し</a></li>
-                </ol>
+              <div className="v2-hero-meta">
+                <span>インストール不要</span>
+                <span>PDF・JPG書き出し</span>
+                <span>β版公開中</span>
               </div>
-              <a className="hero-simple-link" href="#faq" data-copy-id="TEXT_HERO_MENU_03">FAQ</a>
-              <a className="hero-simple-link" href="#report" data-copy-id="TEXT_HERO_MENU_04">困ったとき</a>
-              <a className="hero-simple-link" href="#devlog" data-copy-id="TEXT_HERO_MENU_05">更新・デバック</a>
-            </nav>
+            </div>
+            <HeroVisual />
           </div>
         </section>
 
-        <header className="guide-header">
-          <a className="guide-logo" href="#howto-top" aria-label="HOW TO TateSpun のトップへ戻る">
-            <img className="guide-cat" src={asset(HOWTO_IMAGES.guideCat.file)} alt={HOWTO_IMAGES.guideCat.alt} />
-            <div><span>HOW TO</span><b>TateSpun</b></div>
-          </a>
-          {/* TSP-RC-HOWTO-HEADER-CORRECTION-002: original wording/structure
-              restored (TSP-RC-HOWTO-RESPONSIVE-VIDEO-001's shortened labels
-              and forced-2-row-at-every-width layout were rejected by Human
-              QA). The `<br />` per item is the original design, unchanged at
-              every width; `.guide-links a/button` now carries
-              `word-break: keep-all` (howto.css) so a narrow container wraps
-              at the `<br />`/word boundary only, never mid-character -- that
-              missing rule, not the label text or the <br/> itself, was the
-              actual root cause of the character-by-character collapse. */}
-          <div className="guide-links">
-            <a href="#five-features" data-copy-id="TEXT_NAV_01">まずは知ってほしい<br />５つの機能</a>
-            <a href="#review-tools" data-copy-id="TEXT_NAV_REVIEW">文章見直し<br />ツール</a>
-            <a href="#tips" data-copy-id="TEXT_NAV_02">便利な小技<br />10選β版</a>
-            <a href="#faq" data-copy-id="TEXT_NAV_03">FAQ<br /><span>困ったとき</span></a>
-            <button
-              type="button"
-              className="help-cta"
-              data-howto-help-cta="sticky-nav"
-              onClick={() => setHelpOpen(true)}
-            >
-              ヘルプ
-            </button>
-            <button
-              type="button"
-              className="toc-cta"
-              data-howto-toc-open="sticky-nav"
-              aria-haspopup="dialog"
-              aria-expanded={tocOpen}
-              onClick={() => setTocOpen(true)}
-            >
-              目次
-            </button>
-          </div>
-        </header>
+        <hr className="v2-dash" />
 
-        {tocOpen && (
-          <div className="toc-sheet-backdrop" onClick={() => setTocOpen(false)}>
-            <div
-              className="toc-sheet"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="howto-toc-title"
-              data-howto-toc-sheet=""
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="toc-sheet-head">
-                <p className="howto-chip">Contents</p>
-                <h2 id="howto-toc-title">目次</h2>
-                <button id="howto-toc-close" type="button" className="toc-sheet-close" onClick={() => setTocOpen(false)}>
-                  閉じる
-                </button>
+        {/* ============ START: 3 STEPS ============ */}
+        <section className="v2-sec" id="start">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">はじめかた</span>
+              <div>
+                <h2 className="v2-mincho">はじめての方は、この順番で。</h2>
+                <p>気になるところだけ、各ステップのリンクから詳しく読めます。</p>
               </div>
-              <div className="toc-sheet-body">
-                <div className="toc-sheet-group">
-                  <p className="toc-sheet-group-title">やりたいことから探す</p>
-                  <ul className="toc-sheet-tasks">
-                    {HOWTO_QUICK_REFERENCE.map((row) => (
-                      <li key={row.task}>
-                        <a href={row.href} onClick={() => setTocOpen(false)}>{row.task}</a>
-                      </li>
-                    ))}
-                  </ul>
+            </div>
+
+            <ol className="v2-steps">
+              <li className="v2-step">
+                <span className="v2-num">01</span>
+                <h3>原稿を用意する</h3>
+                <p>エディターに直接書くか、ほかのアプリで書いた原稿（TXT・Word）を読み込みます。</p>
+                <div className="v2-step-links">
+                  <a className="v2-chip" href="#varied-use">原稿の持ち込み</a>
+                  <a className="v2-chip" href="#body-notation">本文記法</a>
                 </div>
-                {HOWTO_TOC.map((group) => (
-                  <div key={group.group} className="toc-sheet-group">
-                    <p className="toc-sheet-group-title">{group.group}</p>
-                    <ul>
-                      {group.items.map((item) => (
-                        <li key={item.href}>
-                          <a href={item.href} onClick={() => setTocOpen(false)}>{item.label}</a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+              </li>
+              <li className="v2-step">
+                <span className="v2-num">02</span>
+                <h3>本の形に整える</h3>
+                <p>用紙・フォント・余白を決めて、プレビューで仕上がりを確かめます。</p>
+                <div className="v2-step-links">
+                  <a className="v2-chip" href="#settings">設定</a>
+                  <a className="v2-chip" href="#preview">プレビュー</a>
+                  <a className="v2-chip" href="#folio-header">ノンブル・柱</a>
+                </div>
+              </li>
+              <li className="v2-step">
+                <span className="v2-num">03</span>
+                <h3>確かめて、書き出す</h3>
+                <p>完成前チェックで最終確認して、PDF・JPGに書き出します。</p>
+                <div className="v2-step-links">
+                  <a className="v2-chip" href="#export">書き出し</a>
+                  <a className="v2-chip" href="#my-check">マイチェック</a>
+                </div>
+              </li>
+            </ol>
+
+            <div className="v2-trydemo">
+              <div className="v2-try-row">
+                <div>
+                  <h3 className="v2-mincho">デモで、実際に触ってみる。</h3>
+                  <p>見本の原稿が入ったエディターで、3ステップをそのまま試せます。おためしデモの内容は保存されません（本棚にも残りません）。</p>
+                </div>
+                <Link className="v2-btn v2-pri" href="/editor?demo=1">デモで実際に触ってみる<Arrow /></Link>
+              </div>
+              <div className="v2-try-row">
+                <div>
+                  <h3 className="v2-mincho">デモを触ったら、使い方ガイドの本へ。</h3>
+                  <p>本棚にある「使い方ガイド」の本には、操作のしかたが本文として書いてあります。読みながら書き換えて試すこともできます（編集内容は保存されません）。</p>
+                </div>
+                <a className="v2-btn" href={withBasePath(GUIDE_BOOK_HREF)} onClick={openGuideBook}>使い方ガイドの本をひらく<Arrow /></a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ 5 FEATURES ============ */}
+        <section className="v2-sec v2-tint" id="features" aria-labelledby="v2-features-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">五つの機能</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-features-title">まずは知ってほしい<br />５つの機能</h2>
+                <p>はじめての1冊で、かならず通る5つです。</p>
+              </div>
+            </div>
+
+            <div className="v2-feat">
+              <div className="v2-ftabs" role="tablist" aria-label="5つの機能">
+                {FEATURES.map((f, i) => (
+                  <button
+                    key={f.id}
+                    id={`v2-ftab-${f.id}`}
+                    className={`v2-ftab${i === feat ? " is-on" : ""}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={i === feat}
+                    aria-controls="v2-fpanel"
+                    tabIndex={i === feat ? 0 : -1}
+                    onClick={() => setFeat(i)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                      event.preventDefault();
+                      const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+                      const next = (i + step + FEATURES.length) % FEATURES.length;
+                      setFeat(next);
+                      document.getElementById(`v2-ftab-${FEATURES[next].id}`)?.focus();
+                    }}
+                  >
+                    <span className="v2-num">{f.no}</span>
+                    <span><b>{f.short}</b><small>{f.kicker}</small></span>
+                  </button>
                 ))}
               </div>
-            </div>
-          </div>
-        )}
 
-        <div className="howto-layout">
-          <nav className="howto-rail" aria-label="目次">
-            <p className="howto-chip">Contents</p>
-            {HOWTO_TOC.map((group) => (
-              <div key={group.group} className="rail-group">
-                <p className="rail-group-title">{group.group}</p>
-                <ul>
-                  {group.items.map((item) => (
-                    <li key={item.href}>
-                      <a href={item.href} aria-current={activeTocHref === item.href ? "location" : undefined}>{item.label}</a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
-          <div className="howto-flow">
-        <section className="quick-ref" id="quick-reference" aria-labelledby="quick-reference-title">
-          <p className="howto-chip">Quick Reference</p>
-          <h2 id="quick-reference-title">よく使う操作と、その場所</h2>
-          <p className="section-hint">やりたいことから探せます。項目を選ぶと、くわしい説明の章へ移動します。</p>
-          <ol className="quick-ref-list">
-            {HOWTO_QUICK_REFERENCE.map((row) => (
-              <li key={row.href}>
-                <a href={row.href}>
-                  <b>{row.task}</b>
-                  <span>{row.where}</span>
-                </a>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* TSP-COPY-001: what TateSpun can be used for besides a printed
-            novel, and what does not work yet (same copy as the Home). */}
-        <section className="use-cases" id="use-cases" aria-labelledby="use-cases-title">
-          <p className="howto-chip">Ways to Use</p>
-          <h2 id="use-cases-title">{USE_CASES_HEADING}</h2>
-          <p className="section-hint">{USE_CASES_LEAD}</p>
-          <ul className="use-case-list">
-            {USE_CASE_EXAMPLES.map((item) => (
-              <li key={item.title}>
-                <b>{item.title}{item.preparing && <em className="use-case-preparing">{USE_CASE_PREPARING_LABEL}</em>}</b>
-                <span>{item.body}</span>
-                {item.detail && (
-                  <details className="use-case-detail">
-                    <summary>{item.detail.summary}</summary>
-                    <p>{item.detail.body}</p>
-                  </details>
-                )}
-                {item.elsewhere && (
-                  <a href={item.elsewhere.href} className="use-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
-                )}
-                {item.howtoHash && (
-                  <a href={item.howtoHash} className="use-case-more">{USE_CASE_DETAIL_LABEL} <i aria-hidden="true">→</i></a>
-                )}
-              </li>
-            ))}
-          </ul>
-          <h3 className="use-case-notyet-title">{USE_CASES_NOT_YET_HEADING}</h3>
-          <ul className="use-case-list use-case-notyet">
-            {USE_CASES_NOT_YET.map((item) => (
-              <li key={item.title}>
-                <b>{item.title}</b>
-                <span>{item.body}</span>
-                {item.detail && (
-                  <details className="use-case-detail">
-                    <summary>{item.detail.summary}</summary>
-                    <p>{item.detail.body}</p>
-                  </details>
-                )}
-                {item.elsewhere && (
-                  <a href={item.elsewhere.href} className="use-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* SPN-XFIX-001: 使い方の例「短歌・詩・エッセイの小冊子」の「くわしく」の行き先。 */}
-        <section className="use-cases short-poems" id="short-poems" aria-labelledby="short-poems-title">
-          <p className="howto-chip">Short Poems</p>
-          <h2 id="short-poems-title">{SHORT_POEM_STEPS_HEADING}</h2>
-          <ol className="use-case-list short-poem-steps">
-            {SHORT_POEM_STEPS.map((step) => (
-              <li key={step.title}>
-                <b>{step.title}</b>
-                <span>{step.body}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="intro" id="five-features">
-          <div className="intro-title">
-            <p className="howto-chip">Chapter 1 · Essentials</p>
-            <span aria-hidden="true"></span>
-            <b data-copy-id="TEXT_INTRO_TITLE">まずは知ってほしい<br />５つの機能</b>
-          </div>
-          <div className="intro-copy">
-            <p data-copy-id="TEXT_INTRO_BODY_01"><a href="#my-check">1. 完成前マイチェックリスト＋PDF書き出し前チェック</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_02"><a href="#writing-check">2. 文章チェックβ</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_03"><a href="#body-notation">3. ルビ・縦中横・改ページの本文記法</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_04"><a href="#work-counter">4. 作業カウンター＋一時停止</a></p>
-            <p data-copy-id="TEXT_INTRO_BODY_05"><a href="#varied-use">5. 「ここで書かなくてもいい」原稿持ち込み運用</a></p>
-          </div>
-
-          {/* TSP-RC-HOWTO-FINALIZE-003: self-hosted from public/howto/media/
-              -- no YouTube/external embed. Native <video>, no autoplay, no
-              forced mute, no loop; controls + poster + preload="metadata"
-              keep initial page weight low. */}
-          <div className="guide-video-block">
-            <p className="guide-video-intro" data-copy-id="TEXT_GUIDE_VIDEO_INTRO">
-              β版公開前に制作したTateSpunの案内動画です。現在とは一部、画面や表記が異なる場合があります。
-            </p>
-            <video
-              className="guide-video"
-              controls
-              playsInline
-              preload="metadata"
-              poster={HOWTO_GUIDE_VIDEO_POSTER}
-            >
-              <source src={HOWTO_GUIDE_VIDEO_SRC} type="video/mp4" />
-              この環境では動画を再生できません。
-            </video>
-          </div>
-        </section>
-
-        <section className="chapter essential" id="my-check">
-          <h2 data-eyebrow="ESSENTIAL 01 / 05" data-copy-id="TEXT_SECTION_01_TITLE">1. 完成前マイチェックリスト＋PDF書き出し前チェック</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_01_SUBTITLE">場所：▶本づくり→完成前チェック</div>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.myCheck.file)} alt={HOWTO_IMAGES.myCheck.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_01_HEADING_01">使うタイミング</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_01_BODY_01">書き出し・入稿直前にチェックできるよう、着手直後や原稿中に頭の中を整理したいときに設定しておくのがおすすめです。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_01_HEADING_02">メリット</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_01_BODY_02">項目はプリセットを3種類用意しており、自分専用の確認項目・セットも作れます。指定したリストは任意でPDF書き出し直前に表示できます。その場合は、全項目を確認してからPDF書き出しへ進めます。書き出し・入稿事故の防止にお役立てください。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_01_HEADING_03">併せて知ってほしい機能！</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_01_BODY_03">
-                  PDF用チェックリストを設定していても、JPGはそのまま書き出せます。
-                  <ul>
-                    <li>PDFは「入稿前だから慎重に確認」</li>
-                    <li>JPGは「ちょっと見た目を確認したいからすぐ出す」</li>
-                    <li>地味ですが、実際の作業ではかなり便利です！</li>
-                  </ul>
-                </div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <section className="chapter essential" id="writing-check">
-          <h2 data-eyebrow="ESSENTIAL 02 / 05" data-copy-id="TEXT_SECTION_02_TITLE">2. 文章チェックβ</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_02_SUBTITLE">場所：「見直し」→文章チェックβ</div>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.writingCheck.file)} alt={HOWTO_IMAGES.writingCheck.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_02_HEADING_01">使うタイミング</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_02_BODY_01">常に使用していてもよいですし、完成稿を最後にざっと確認するときに使うのも便利です。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_02_HEADING_02">メリット</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_02_BODY_02">本文を書きながらでは見逃しやすい部分を、完成後に改めて確認するきっかけになります。自己確認系は赤波線、確認事項系は黄色波線、NGワードは紫波線と、何がチェックポイントなのか分かりやすく設計しています。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_02_HEADING_03">併せて知ってほしい機能！</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_02_BODY_03">
-                  <p><strong>【わたしの辞書】</strong><br />表記ゆれを起こしやすい単語を事前に登録しておくと、よく間違える単語に黄色の波線が付くようになります。</p>
-                  <p><strong>【NGワード】</strong><br />NGワードを登録すると、本文中に含まれる箇所を確認候補として紫の波線で表示します（自動置換はしません）。</p>
-                  <p><strong>【無視する・直す】</strong><br />画面下部に「事故確認／確認事項」が出ているときに該当箇所を押すと、一覧が表示されます。意図した内容であれば「無視」を押すことで波線を消せます。<br /><small>※「無視」はその確認候補を一時的に非表示にしますが、画面を再読み込みすると再度表示されます。</small></p>
-                  <p><strong>【直す／安全な項目をまとめて直す】</strong><br />黄色の波線が出ている部分に対応しています。ボタンを押したときにだけ本文を書き換えます。ボタンを押す以外で自動的に書き換わることはありません。「元に戻す」で直前の操作を一度だけ取り消せます。</p>
-                  <p>波線はプレビュー画面・出力には表示されないので、安心してご活用ください。</p>
-                </div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <section className="chapter essential" id="body-notation">
-          <h2 data-eyebrow="ESSENTIAL 03 / 05" data-copy-id="TEXT_SECTION_03_TITLE">3. ルビ・縦中横・改ページの本文記法</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_03_SUBTITLE">場所：タイトル下／ヘルプの中</div>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.bodyNotation.file)} alt={HOWTO_IMAGES.bodyNotation.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_03_HEADING_01">使うタイミング</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_03_BODY_01">特殊な読み、縦書き中の数字・英数字、章の強制改ページを入れたいときにご活用ください！</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_03_HEADING_02">メリット</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_03_BODY_02">知らないと普通に入力するだけで終わってしまう便利機能です。<br /><code>｜親文字《よみ》</code>、<code>[tate]縦中横[/tate]</code>、<code>【改ページ】</code> と書いて指定できます。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_03_HEADING_03">併せて知ってほしい機能！</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_03_BODY_03">改ページは、タイトル下のボタンひとつで本文に入力されます。<br />ルビ・縦中横はヘルプ内にコピーボタンがあるので、コピーして該当場所へ貼り付けてから中身を書き換えてください。「どう打つんだっけ？」となったときにも、暗記不要で使える便利機能です。</div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <section className="chapter essential" id="work-counter">
-          <h2 data-eyebrow="ESSENTIAL 04 / 05" data-copy-id="TEXT_SECTION_04_TITLE">4. 作業カウンター</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_04_SUBTITLE">場所：「見直し」→作業カウンター</div>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.workCounter.file)} alt={HOWTO_IMAGES.workCounter.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_04_HEADING_01">使うタイミング</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_04_BODY_01">実際に原稿へ向き合った時間を残したいときに。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_04_HEADING_02">メリット</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_04_BODY_02">設定をいじる時間、休憩、宅配での離席などは一時停止にして、実作業時間と分けられます。モーダルを閉じても一時停止を続行できるので、「文章を書いている時間だけ記録したい」という方も安心です。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_04_HEADING_03">併せて知ってほしい機能！</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_04_BODY_03">頑張った記録は、ぜひSNSへシェアしましょう！ 作業カウントは「入力した数」「貼り付けた文字数」をカウントするため、Delete／Backspaceで削除した文字も、それまで入力した文字数として残ります。そのとき頑張って書いた文字の総量を確認できる機能です。</div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <section className="chapter essential" id="varied-use">
-          <h2 data-eyebrow="ESSENTIAL 05 / 05" data-copy-id="TEXT_SECTION_05_TITLE">5. 「ここで書かなくてもいい」原稿持ち込み運用</h2>
-          <div className="subhead" data-copy-id="TEXT_SECTION_05_SUBTITLE">場所：▶本づくり→原稿ファイル</div>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.txtImportExport.file)} alt={HOWTO_IMAGES.txtImportExport.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_05_HEADING_01">使うタイミング</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_01">普段はお気に入りのアプリで執筆しながら、ページ数の確認やPDFの書き出し、書店委託用サンプルページの画像づくりなどにご活用ください。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_05_HEADING_02">メリット</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_02">TateSpunに執筆環境を乗り換える必要はありません。最後に原稿を持ってきて、「本の形にする・確認する・持ち帰る」という使い方ができます。</div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_05_HEADING_03">併せて知ってほしい機能！</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_03">
-                  <p><strong>TXTデータの読み込み・出力</strong><br />場所：▶本づくり→原稿ファイル</p>
-                  <p>メモ帳などで書いた <code>.txt</code> データを読み込めます。逆に、TateSpunで使っているマークダウン形式のまま保存することもできます。</p>
-                  <p>さらに、文章校正（行頭下げ等）をした状態で、マークダウンのない整形TXTを書き出すこともできます。作品公開サイトへ持っていくときにも便利です！</p>
-                </div>
-              </section>
-              <section className="copy-block">
-                <h3 data-copy-id="TEXT_SECTION_05_HEADING_04">{EDITOR_PAGE_EXPLANATION_TITLE}</h3>
-                <div className="copy-body" data-copy-id="TEXT_SECTION_05_BODY_04">{EDITOR_PAGE_EXPLANATION_BODY}</div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <section className="review-tools-guide" id="review-tools">
-          <p className="howto-chip">Chapter 2 · Review</p>
-          <h2 data-copy-id="TEXT_REVIEW_TOOLS_TITLE">文章見直し<br />ツール</h2>
-          <p className="review-tools-lead" data-copy-id="TEXT_REVIEW_TOOLS_LEAD">
-            エディターの「見直し」には、原稿を書きながら確認したい機能をまとめています。PCではプレビュー下の見直しバー、モバイルではエディター下の1行バーから開けます。
-          </p>
-
-          <div className="review-tools-usage">
-            <h3>よく使う機能はフッターに最大2つまで</h3>
-            <p>
-              各機能の「フッターに表示」から、すぐ触りたい機能を最大2つまで選べます。フッター表示は機能そのもののON／OFFとは別です。フッターから外しても「見直し」を開けばいつでも使えます。設定はこのブラウザに保存されます。
-            </p>
-          </div>
-
-          <div className="review-tool-sections">
-            <article className="review-tool-section" id="review-writing-check">
-              <h3>文章チェックβ</h3>
-              <div className="review-tool-copy">
-                <p>入力中の文章から、括弧の閉じ忘れや句読点の重複など「確認した方がよい箇所」を波線でお知らせする機能です。「見直し」からいつでもオン／オフを切り替えられます。設定はこの端末に保存され、本文には記録されません。</p>
-
-                <h4>赤い波線・黄色い波線について</h4>
-                <p>波線は「文章が間違っている」と断定するものではありません。小説・創作では意図的な表現もあるため、内容を確認したうえで最終的には作者ご自身がご判断ください。TateSpunが文章を自動で書き換えることはありません。</p>
-                <ul>
-                  <li><strong>赤い波線（事故確認）:</strong> 括弧の対応ミスなど、原稿の事故である可能性が高い確認候補</li>
-                  <li><strong>黄色い波線（確認推奨）:</strong> 三点リーダー・ダッシュの形や表記ゆれなど、文脈によって判断が分かれる確認候補</li>
-                </ul>
-
-                <h4>現在チェックするもの</h4>
-                <ul>
-                  <li>括弧の対応（「」 『』 （） ［］ 【】 の閉じ忘れ・対応ミス）</li>
-                  <li>句読点の重複や、疑問符・感嘆符の直後に空白なしで本文が続く箇所</li>
-                  <li>TateSpun記法の一部の入力ミス</li>
-                  <li>三点リーダー・ダッシュの形</li>
-                  <li>行末の余分な空白、行頭のタブと全角スペースの混在、連続する空行</li>
-                  <li>半角カタカナ、登録した表記ゆれ（わたしの辞書）・NGワード</li>
-                </ul>
-
-                <h4>直す・無視・まとめて直す</h4>
-                <p>「直す」はその1件だけを提案どおりに修正し、「無視」はその候補を一時的に非表示にします。「安全な項目をまとめて直す」は、書き換え内容が一意に決まる項目だけをまとめて修正します。「元に戻す」で直前の操作を一度だけ取り消せます。</p>
-
-                <h4>設定・辞書・プライバシー</h4>
-                <p>「⚙ 設定」から「入稿前おすすめ」「記号だけ」「しっかりチェック」のプリセットや、個別ルールを切り替えられます。「わたしの辞書」と「NGワード」も登録できます。判定はブラウザ内で行われ、この機能のために本文や登録内容を外部AI／APIへ送りません。波線はプレビュー・JPG・PDFにも出力されません。</p>
-              </div>
-            </article>
-
-            <article className="review-tool-section" id="review-work-counter">
-              <h3>作業カウンター</h3>
-              <div className="review-tool-copy">
-                <p>「作業スタート」から「作業終了」までの実作業時間と、その作業中に新しく入力した文字数を記録する機能です。タイトル横に表示される「現在の原稿文字数」とは別の値です。</p>
-
-                <h4>作業中の操作</h4>
-                <ul>
-                  <li><strong>作業スタート:</strong> その作品の記録を開始</li>
-                  <li><strong>一時停止:</strong> 作業時間のカウントを停止。一時停止中の時間は実作業時間に含まれません</li>
-                  <li><strong>作業を再開する:</strong> 一時停止した続きから記録を再開</li>
-                  <li><strong>作業終了:</strong> 今回の作業記録を確定</li>
-                </ul>
-
-                <h4>作業終了後・作業記録</h4>
-                <p>作業を終了すると、今回書いた文字数・実作業時間・開始時刻・終了時刻を確認できます。結果はテキストとしてコピーしたり、Xへシェアしたりできます。「作業記録」では過去の完了した作業を見返せます。</p>
-
-                <h4>文字数の数え方</h4>
-                <p>作品全体の現在文字数ではなく、作業中に入力した文字数を積み上げます。そのため、あとから文字を削除した場合でも「現在の原稿文字数」と一致しないことがあります。Undo／Redoなど一部の操作は加算されません。記録は作品ごとに、このブラウザ内へ保存されます。</p>
-              </div>
-            </article>
-
-            <article className="review-tool-section" id="review-read-aloud">
-              <h3>音読β</h3>
-              <div className="review-tool-copy">
-                <p>原稿をブラウザや端末の読み上げ機能で音読し、目で読むだけでは気づきにくい文章の引っかかりや誤字を確認するための機能です。</p>
-
-                <h4>読み上げる範囲と操作</h4>
-                <p>「選択範囲」「現在の段落」「全文」から読み上げる範囲を選べます。読み上げ中は一時停止・再開・停止ができ、速度も調整できます。利用できる環境では読み上げに使う音声も選べます。</p>
-                <p>音声読み上げに対応していないブラウザや、端末に日本語音声がない環境では使用できない場合があります。</p>
-
-                <h4>読み辞書</h4>
-                <p>固有名詞など、読み上げ方を直したい言葉と読みを登録できます。読み方は <strong>本文に明示したルビ → 音読βの読み辞書 → ブラウザ／端末の通常の読み方</strong> の順で優先されます。読み辞書は本文を書き換えず、このブラウザ内に保存されます。</p>
-
-                <h4>プライバシー</h4>
-                <p>この端末の音声を選んでいる場合、音読のために原稿を外部へ送りません。オンライン音声を選んだ場合は、読み上げる本文がブラウザの音声サービスへ送られる場合があり、その場合は画面にも注意が表示されます。</p>
-              </div>
-            </article>
-
-            <article className="review-tool-section" id="review-description-check">
-              <h3>描写語・修飾表現チェックβ</h3>
-              <div className="review-tool-copy">
-                <p>原稿の中から、描写や修飾として働いている表現を見つけ、黄色系の色で「見直し候補」として表示する機能です。文章の良し悪しや、削除した方がよい表現を判定するものではありません。</p>
-
-                <h4>A・B・Cについて</h4>
-                <ul>
-                  <li><strong>A｜直接的な説明:</strong> 状態・評価・様子などを直接説明している表現</li>
-                  <li><strong>B｜描写的な修飾:</strong> 比喩や様子など、描写として働く連体・連用修飾</li>
-                  <li><strong>C｜広い修飾:</strong> 時間・場所・用途・所属・識別など、より広い種類の修飾</li>
-                </ul>
-                <p>A・B・Cは重要度や「直した方がよい順番」ではなく、表現の種類です。確認したい種類だけを個別にオン／オフできます。最初はAだけが選ばれています。</p>
-
-                <h4>候補を確認する</h4>
-                <p>色の付いた箇所をクリック／タップすると、候補になった理由を確認できます。「前へ」「次へ」で候補を順番に見たり、「候補の一覧」から該当箇所へ移動したりできます。残した方がよい表現も多いため、最終的には作者ご自身で判断してください。</p>
-
-                <h4>オン／オフとプライバシー</h4>
-                <p>「描写語・修飾表現チェックβを使う」からいつでもオン／オフできます。オフのあいだは解析を行いません。判定はブラウザ内で行われ、この機能のために原稿本文を外部AI／APIへ送信しません。自動で削除・書き換えることもありません。</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section className="tips-index" id="tips">
-          <p className="howto-chip">Chapter 3 · Tips</p>
-          <h2 data-copy-id="TEXT_TIPS_TITLE">便利な小技 10選β版</h2>
-          <p className="section-hint">各項目は、見出しを押すとひらきます。</p>
-          <button type="button" className="tips-toggle-all" aria-pressed={allTipsOpen} onClick={toggleAllTips}>
-            {allTipsOpen ? "10項目をすべて閉じる" : "10項目をすべてひらく"}
-          </button>
-          <ol>
-            <li><a href="#settings">設定</a></li>
-            <li><a href="#preview">プレビュー機能</a></li>
-            <li><a href="#four-buttons">便利な４ボタン</a></li>
-            <li><a href="#memo">メモ機能</a></li>
-            <li><a href="#focus-mode">集中モード</a></li>
-            <li><a href="#folio-header">ノンブル・柱</a></li>
-            <li><a href="#image-insert">画像挿入機能</a></li>
-            <li><a href="#colophon">奥付機能</a></li>
-            <li><a href="#dark-mode">ダークモード</a></li>
-            <li><a href="#export">多機能書き出し</a></li>
-          </ol>
-        </section>
-
-        <details className="chapter tip" id="settings">
-          <summary className="tip-summary" data-eyebrow="TIPS 01 / 10">
-            <h2 data-copy-id="TEXT_SECTION_06_TITLE">1. 本の見た目を細かく調整「設定」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_06_SUBTITLE">場所：テキストエディター直上→▶設定</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.settings.file)} alt={HOWTO_IMAGES.settings.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_06_BODY_01">
-                設定では、一般的な組版のプリセットを用意しています。<br /><small>※現段階では特殊サイズには対応していません。</small>
-                <p>フォントから段組まで設定可能です。</p>
-                <p>天地・小口・ノドの余白も指定できます。余白から指定する方法に加え、文字数・行数を指定して余白を逆算設定することも可能です。合同誌・アンソロジーなど、組版を合わせる必要があるときに便利です。</p>
-                <p>余白から「1ページに何文字入るか」が分かるのも便利なポイントです！</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="preview">
-          <summary className="tip-summary" data-eyebrow="TIPS 02 / 10">
-            <h2 data-copy-id="TEXT_SECTION_07_TITLE">2. 色々見られるプレビュー機能</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_07_SUBTITLE">場所：テキストタイトル入力欄の下</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.preview.file)} alt={HOWTO_IMAGES.preview.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_07_BODY_01">
-                <p><strong>【画面上の「○字×○行／全○ページ」を見る】</strong><br />設定を開かなくても、現在の本の密度・ページ数を把握できます。「あと何ページ増えそう？」を見る目安にもなって便利です。</p>
-                <p><strong>【ズーム50％・100％・200％を使い分ける】</strong></p>
-                <ul>
-                  <li>50％：本全体のバランスを見る</li>
-                  <li>100％：通常確認</li>
-                  <li>200％：ルビ・句読点・細かい組版を見る</li>
-                </ul>
-                <p><strong>【ページの入れ替えができる】</strong><br />ページ上の［…］を押すと入れ替え機能があります。1ページ目をチェックしたあと、Shiftを押しながら任意のページをチェックすると、その間のページもまとめて選択されます。</p>
-                <p><strong>【プレビュー画面を気持ちよく見られる】</strong><br />マウスでも、指でも、スクロールでも、見たい場所へすいすい動かしてチェックできます。</p>
-                <p><strong>【プレビューページの点線について】</strong><br />指定サイズの部分に点線が入り、その外側は天地左右3mmの塗り足し部分です。画像配置などで天地指定をすると、塗り足し部分に配置される設計です。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="four-buttons">
-          <summary className="tip-summary" data-eyebrow="TIPS 03 / 10">
-            <h2 data-copy-id="TEXT_SECTION_08_TITLE">3. タイトル下の便利な４ボタン</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_08_SUBTITLE">場所：テキストエディター直上</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.fourButtons.file)} alt={HOWTO_IMAGES.fourButtons.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_08_BODY_01">
-                <ul>
-                  <li>「あ！」と思ったときに「↶元に戻す」「↷やり直す」</li>
-                  <li>改ページしたいときは、改行をたくさん入れなくてもボタンひとつでマークダウンを入力できます。章替わり・場面転換・扉の後などに便利です！</li>
-                </ul>
-                <p>集中モードでも表示されているので、いつでも活用できます。キャラ名変更、漢字表記、三点リーダーなどを統一するときにも便利です。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="memo">
-          <summary className="tip-summary" data-eyebrow="TIPS 04 / 10">
-            <h2 data-copy-id="TEXT_SECTION_09_TITLE">4. 本文には入れない作業を残す「メモ機能」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_09_SUBTITLE">場所：テキストタイトル入力欄の下→▶メモ・プロット</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.memo.file)} alt={HOWTO_IMAGES.memo.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_09_BODY_01">
-                「書いている間に思いついたこと」をメモできます。編集・確定機能があるので、誤操作で消えにくい設計です。プロットや起承転結、オチのifパターン、最新情報のメモまで幅広く使えます。
-                <p>書いているときの日記代わりに活用すると、見返したときにも楽しいです！</p>
-                <p>本文にTODOを書いて、そのまま消し忘れる事故を避けやすい機能でもあります。</p>
-                <p>欄の上の「プロット帳（Shioria）」に切り替えると、プロット帳（Shioria）で作ったプロットを読み込んで、章ごとに見ながら書けます。原稿の「# 第1章　帰郷」のような見出しにカーソルがあると、プロットも同じ章を開きます。プロットは見るだけで、原稿やメモは変わりません。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="focus-mode">
-          <summary className="tip-summary" data-eyebrow="TIPS 05 / 10">
-            <h2 data-copy-id="TEXT_SECTION_10_TITLE">5. “書くときだけ”余計なUIを消す「集中モード」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_10_SUBTITLE">場所：ヘッダー「集中モード」</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.focusMode.file)} alt={HOWTO_IMAGES.focusMode.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_10_BODY_01">
-                プレビュー、設定、文章チェック、作業カウント、文字数などをいったん隠して、作業に集中できます。
-                <p>特にモバイル版では各種ボタンが多く、テキストエディターが小さくなりやすいため、ぜひご活用ください！</p>
-                <p>集中モードでも、プレビューはすぐに見られる状態です。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="folio-header">
-          <summary className="tip-summary" data-eyebrow="TIPS 06 / 10">
-            <h2 data-copy-id="TEXT_SECTION_11_TITLE">6. 本に合わせて変えられるノンブル・柱</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_11_SUBTITLE">場所：▶設定→ページ・ノンブル・柱</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.folioHeader.file)} alt={HOWTO_IMAGES.folioHeader.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_11_BODY_01">
-                ノンブル・柱は固定ではなく、本に合わせて文字サイズ・フォントを変えられます。
-                <p>ノンブルは基本的に中央配置ですが、小口・ノド側への配置も可能です。「ノンブル非表示」をチェックすると、断ち切りの内側近くに隠しノンブルが表示されます。通常ノンブルと隠しノンブルの両方を載せることも可能です。</p>
-                <p>柱はヘッダー・フッター・ノド・小口中央など、好きな場所へ配置できます。<small>※ノンブルの位置と重ならないよう、各自でご調整ください。</small></p>
-                <p>作品全体、長編では章ごと、任意のページ、左右それぞれなど、用途に合わせて設定できます。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="image-insert">
-          <summary className="tip-summary" data-eyebrow="TIPS 07 / 10">
-            <h2 data-copy-id="TEXT_SECTION_12_TITLE">7. 挿絵を挿入できる「画像挿入機能」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_12_SUBTITLE">場所：プレビュー画面→ページ上［…］内</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.imageInsert.file)} alt={HOWTO_IMAGES.imageInsert.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_12_BODY_01">
-                挿絵・扉絵などを本文中へ入れたいときは、この機能をどうぞ！ PSDデータも配置可能です（高画質PNGへ変換されます）。
-                <p>文章だけの本ではなく、画像を含む構成もページ単位で確認できます。ちょっとした図解を載せたいときにも便利です。</p>
-                <p><small>※天地中央以外の細かな場所への配置はできません。<br />※文章の上にかぶさる形で配置されます。テキストエディターには <code>【IMG:…:center】</code> 等と入力されるため、前後に改ページマークダウンを入れることをおすすめします。</small></p>
-                <div className="mt-4 rounded border border-ink/10 p-3">
-                  <p><strong>画像の72時間保存について</strong></p>
-                  <p>72時間の対象は、クラウド作品を別の端末でも開けるように保存する<strong>クラウド上の一時画像コピーだけ</strong>です。この端末のブラウザに保存されている元画像を72時間後に削除する仕組みではありません。</p>
-                  <p>画像を含むクラウド保存が正常に完了すると、その時点から一時コピーの期限が72時間に更新されます。期限切れが近い／超過したクラウド作品は、トップページの本棚の背表紙に⚠️が表示されます。</p>
-                  <p><strong>画像切れになった場合</strong>、今のブラウザにも元画像がなければ、作業中に該当ページを知らせる警告が出ます。プレビューの画像位置にはCaroadと「再配置してください」の案内が表示され、フッターの「⚠️画像切れ」からページへ移動して、その場で画像を差し替えられます。</p>
-                  <p>画像が不要になった場合は、原稿からその画像を削除してください。手動で復旧済みなのに通知だけ残っている場合は、フッターの通知解除を使えます。未解決の画像そのものを通知解除だけで無視することはできません。</p>
+              <div className="v2-fpanel" id="v2-fpanel" role="tabpanel" aria-labelledby={`v2-ftab-${current.id}`} key={current.id}>
+                <figure className="v2-shot">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={asset(current.image.file)} alt={current.image.alt} loading="lazy" />
+                </figure>
+                <div className="v2-fbody">
+                  <span className="v2-place"><Pin />{current.place}</span>
+                  <h3 className="v2-mincho"><span className="v2-fno">ESSENTIAL {current.no} / 05</span>{current.title}</h3>
+                  <div className="v2-copy">{current.body}</div>
+                  <div className="v2-fnext">
+                    <button className="v2-btn v2-sm" type="button" onClick={() => {
+                      setFeat(nextFeat);
+                      document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+                    }}>
+                      次の機能：{FEATURES[nextFeat].short}
+                      <Arrow />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </details>
-
-        <details className="chapter tip" id="colophon">
-          <summary className="tip-summary" data-eyebrow="TIPS 08 / 10">
-            <h2 data-copy-id="TEXT_SECTION_13_TITLE">8. 横書きの奥付が配置できる「奥付機能」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_13_SUBTITLE">場所：▶本づくり→奥付（縦）、奥付（横）</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.colophon.file)} alt={HOWTO_IMAGES.colophon.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_13_BODY_01">
-                縦と横で、別機能の奥付を付けられます。
-                <p><strong>奥付（縦）</strong><br />項目を入力すると、本文の末尾にテキストとして入力されます。テキストエディター内でさらに細かく調整できます。</p>
-                <p><strong>奥付（横）</strong><br />TateSpun内で唯一、横書き表記ができる機能です。横書き専用ページをプレビュー内に1枚追加します。テキストエディターではなく、再度「本づくり→奥付（横）」を開くと編集できます。任意の位置にページを配置できます。</p>
-                <p>複数種類のテンプレートと配置位置を指定でき、項目も細かくカスタマイズ可能です。1冊につき1ページのみの機能なので、奥付以外にも活用方法がある……かも!?</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="dark-mode">
-          <summary className="tip-summary" data-eyebrow="TIPS 09 / 10">
-            <h2 data-copy-id="TEXT_SECTION_14_TITLE">9. 目の疲れにはダークモードを使おう</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_14_SUBTITLE">場所：ヘッダー「画面モード」</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.darkMode.file)} alt={HOWTO_IMAGES.darkMode.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_14_BODY_01">
-                TateSpunは初期設定でライトモードになっています。
-                <p>長時間明るい画面を見続けると、疲れ目の原因に……。ボタンを押すとダークモードになるので、状況に合わせてモードを変えてみましょう。</p>
-                <p><small>※プレビュー画面は白い紙のままです。デスクトップ版でそれが眩しい方は、プレビュー画面上部の「▶プレビュー」の▶を押すと格納できるのでご活用ください。</small></p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details className="chapter tip" id="export">
-          <summary className="tip-summary" data-eyebrow="TIPS 10 / 10">
-            <h2 data-copy-id="TEXT_SECTION_15_TITLE">10. 多機能書き出し・書き出し中断</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_15_SUBTITLE">場所：プレビュー画面左側「書き出し▼」</div>
-            <span className="tip-toggle" aria-hidden="true"></span>
-          </summary>
-          <div className="chapter-grid">
-            <div className="image-frame">
-              <img src={asset(HOWTO_IMAGES.exportMenu.file)} alt={HOWTO_IMAGES.exportMenu.alt} loading="lazy" />
-            </div>
-            <div className="chapter-copy">
-              <div className="copy-body" data-copy-id="TEXT_SECTION_15_BODY_01">
-                TateSpunでは現在、JPG／JPG一括（個別・ZIP）／PDFの書き出しが可能です。
-                <p>JPGは断ち切りの内側の画像を出力します。サイズは高さ1600px固定のため、原寸書き出しではない点をご承知おきください。</p>
-                <p>PDFは全ページ・個別ページの書き出しに加え、次の3パターンで出力できます。</p>
-                <ul>
-                  <li>仕上がりサイズ（塗り足し内側）</li>
-                  <li>断ち落としサイズ（塗り足し3mm込み・トンボなし）</li>
-                  <li>入稿用フルサイズ（トンボ＋塗り足し3mm付き）</li>
-                </ul>
-                <p><strong>作品タイトルと保存名</strong><br />{TITLE_AND_FILENAME_EXPLANATION}</p>
-                <p data-copy-id="TEXT_SECTION_15_BODY_02">{PDF_FILENAME_EXPLANATION}</p>
-                <p>PDFの解像度・フォント埋め込み・縦組み記号のβ版注意点は、このページ下部の<a href="#faq">FAQ</a>にまとめています。</p>
-                <p>デスクトップ版では、出力中にEscを押すと出力を中断できます。「書き出し途中にミスに気付いたけれど、出力が長い……」というときにご活用ください。</p>
-                <p><strong>画像切れがあるときは、画像切れを含むページだけ書き出しを停止します。</strong>たとえば12Pだけ画像切れしている場合、5Pだけの単ページ書き出しは可能ですが、12Pを含むJPG・複数ページ出力・全ページPDFは停止します。画像を再配置するか、不要な画像を削除すると再び書き出せます。</p>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <section className="faq" id="faq">
-          <p className="howto-chip">Questions</p>
-          <h2 data-copy-id="TEXT_FAQ_TITLE">FAQ</h2>
-          <p className="section-hint">質問をタップすると、答えがひらきます。</p>
-
-          <details className="faq-item">
-            <summary className="faq-q">600dpiでPDFを書き出す必要はありますか？</summary>
-            <div className="faq-text" data-copy-id="TEXT_FAQ_PDF_DPI">
-              <p><strong>いいえ。TateSpunのPDF出力は、600dpiなどの固定解像度に依存していません。</strong></p>
-              <p>本文文字は埋め込みフォントと文字の配置情報を中心に保持し、一部の縦組み字形やトンボなどはベクターデータ（線や輪郭を座標として保持するデータ）としてPDFへ出力します。ページサイズもmm・pt単位の実寸座標で保持されるため、本文文字やトンボの品質は「300dpi」「600dpi」といった画像解像度によって決まるものではありません。</p>
-              <p>なお、原稿内に写真やイラストなどの画像を使用する場合は、その画像自体には実効解像度（元画像のピクセル数と、紙面上で使用する大きさから決まるppi）が関係します。印刷所から画像解像度の指定がある場合は、その指定をご確認ください。</p>
-              <p>また、印刷所からPDF/Xなど特定のPDF形式を指定されている場合は、印刷所の入稿仕様を優先してください。</p>
-            </div>
-          </details>
-
-          <details className="faq-item">
-            <summary className="faq-q">縦組みで、かぎ括弧の文末の「。」「、」や全角の「！？」「？！」の位置がずれます。</summary>
-            <div className="faq-text" data-copy-id="TEXT_FAQ_VERTICAL_PUNCTUATION">
-              <p>現在（2026年9月時点）のβ版では、縦組みの約物（句読点・かぎ括弧・感嘆符などの記号）の組版に一部既知の制限があります。</p>
-              <p>たとえば「明日も、同じ場所で。」のように、閉じかぎ括弧「」」の直前へ「。」「、」を置いた場合、句読点の位置や文字間隔が不自然になることがあります。</p>
-              <p>また、全角の連続記号「！？」「？！」などは、縦組み時の配置によって一部の記号がずれて見える場合があります。</p>
-              <p>β版では、気になる場合は「閉じかぎ括弧直前の句点を省く」「全角の！？・？！を半角の!?・?!に置き換える」などの方法をご検討ください。これらは今後の組版改善対象です。</p>
-            </div>
-          </details>
-
-          <details className="faq-item">
-            <summary className="faq-q">印刷所のパソコンにTateSpunと同じフォントがなくても大丈夫ですか？</summary>
-            <div className="faq-text" data-copy-id="TEXT_FAQ_FONT_EMBEDDING">
-              <p>はい。TateSpunのPDFでは、使用するフォントをPDF内に埋め込んで出力します。そのため、PDFを開く側のパソコンに同じフォントがインストールされていなくても、基本的にはPDF内のフォント情報を使って同じ文字を表示できます。</p>
-              <p>現在TateSpunで使用しているShippori Minchoは、SIL Open Font License 1.1のフォントで、PDFへのフォント埋め込みが認められています。</p>
-              <p>ただし、印刷所によってPDF/Xなど独自の入稿形式が指定されている場合があります。最終入稿前には、利用する印刷所の入稿仕様もあわせてご確認ください。</p>
-            </div>
-          </details>
-
-          <details className="faq-item">
-            <summary className="faq-q">不具合があったら？</summary>
-            <div className="faq-text" data-copy-id="TEXT_FAQ_LEAD">
-              <p>エディター内のβ版フィードバック（「報告」ボタン）から送信できます。</p>
-              <p>いただいたご報告は真摯に受け止めますが、即時の実装・修正や、すべての内容への対応をお約束するものではありません。</p>
-              <p>報告時には、不具合の原因調査のため、ユーザーの利用環境に関する情報を自動で取得します。機種・ブラウザ等に依存するエラーかどうかを調べるために活用しますので、あらかじめご了承ください。</p>
-              <p>お名前・住所などの個人情報は書き込まないようお願いいたします。自動で取得するのはブラウザ・端末・表示環境等の情報であり、お名前や住所・所在地を取得するものではありません。作品本文・作品タイトル・ドキュメントIDも自動送信しない設定になっていますので、ご安心ください。</p>
-            </div>
-          </details>
         </section>
 
-        <section className="greeting" id="report">
-          <h2>ごあいさつ。</h2>
-          <p>caroad（運営者）です。ここまでご覧くださり、ありがとうございます。</p>
-          <p>Windows／Chrome・Googleスマートフォンを中心に動作確認をしています。加えて、協力者によりiPhone／iPad／Safariでの動作確認も行いました。</p>
-          <p>それ以外の環境については、2026年9月現在、十分な動作確認を行えていないため、不具合が発生した場合でも対応が難しいことがあります。</p>
-          <p>いつでも立ち寄れて、いつでも戻ってこられる場所。そんなTateSpunを目指しています。</p>
-          <p>一人でも多くの創作者の皆さまに、快適に執筆活動をしていただけるよう努めてまいります。一緒に育てていけるブラウザアプリだと思って、ご活用いただけるとうれしいです。</p>
-          <p>何卒よろしくお願い申し上げます。</p>
+        {/* ============ 10 TIPS ============ */}
+        <section className="v2-sec" id="tips" aria-labelledby="v2-tips-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">十の小技</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-tips-title">便利な小技<br />10選β版</h2>
+                <p>慣れてきたら。カードを押すと、画面の写真と使い方がひらきます。</p>
+              </div>
+            </div>
+            <ul className="v2-tips">
+              {TIPS.map((t, i) => (
+                <li key={t.id}>
+                  <button className="v2-tip" type="button" aria-haspopup="dialog" onClick={(event) => openTip(i, event.currentTarget)}>
+                    <span className="v2-tip-shot">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={asset(t.image.file)} alt="" loading="lazy" />
+                    </span>
+                    <span className="v2-tip-txt">
+                      <span className="v2-num">{t.no}</span>
+                      <b>{t.short}</b>
+                      <span className="v2-one">{t.kicker}</span>
+                      <span className="v2-more">くわしく<Plus /></span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-          <div className="contact-block">
-            <h3>困ったときは</h3>
-            <p>詳しい使い方は「ヘルプ」に、不具合や気になる点は「報告」からいつでもどうぞ。</p>
-            <div className="contact-actions">
-              <button type="button" data-howto-help-cta="" onClick={() => setHelpOpen(true)}>
-                ヘルプを見る
-              </button>
-              {BETA_FEEDBACK_ENABLED && (
+        <hr className="v2-dash" />
+
+        {/* ============ REVIEW TOOLS ============ */}
+        <section className="v2-sec" id="review-tools" aria-labelledby="v2-review-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">見直す</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-review-title">文章見直し<br />ツール</h2>
+                <p>エディターの「見直し」には、原稿を書きながら確認したい機能をまとめています。PCではプレビュー下の見直しバー、モバイルではエディター下の1行バーから開けます。</p>
+              </div>
+            </div>
+
+            <div className="v2-review">
+              <div className="v2-review-usage">
+                <h3>よく使う機能はフッターに最大2つまで</h3>
+                <p>各機能の「フッターに表示」から、すぐ触りたい機能を最大2つまで選べます。フッター表示は機能そのもののON／OFFとは別です。フッターから外しても「見直し」を開けばいつでも使えます。設定はこのブラウザに保存されます。</p>
+              </div>
+              <div className="v2-acc">
+                <details id="review-writing-check">
+                  <summary><span className="v2-acc-no">A</span>文章チェックβ<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-acc-body v2-copy">
+                    <p>入力中の文章から、括弧の閉じ忘れや句読点の重複など「確認した方がよい箇所」を波線でお知らせする機能です。「見直し」からいつでもオン／オフを切り替えられます。設定はこの端末に保存され、本文には記録されません。</p>
+                    <h4>赤い波線・黄色い波線について</h4>
+                    <p>波線は「文章が間違っている」と断定するものではありません。小説・創作では意図的な表現もあるため、内容を確認したうえで最終的には作者ご自身がご判断ください。TateSpunが文章を自動で書き換えることはありません。</p>
+                    <ul>
+                      <li><strong>赤い波線（事故確認）:</strong> 括弧の対応ミスなど、原稿の事故である可能性が高い確認候補</li>
+                      <li><strong>黄色い波線（確認推奨）:</strong> 三点リーダー・ダッシュの形や表記ゆれなど、文脈によって判断が分かれる確認候補</li>
+                    </ul>
+                    <h4>現在チェックするもの</h4>
+                    <ul>
+                      <li>括弧の対応（「」 『』 （） ［］ 【】 の閉じ忘れ・対応ミス）</li>
+                      <li>句読点の重複や、疑問符・感嘆符の直後に空白なしで本文が続く箇所</li>
+                      <li>TateSpun記法の一部の入力ミス</li>
+                      <li>三点リーダー・ダッシュの形</li>
+                      <li>行末の余分な空白、行頭のタブと全角スペースの混在、連続する空行</li>
+                      <li>半角カタカナ、登録した表記ゆれ（わたしの辞書）・NGワード</li>
+                    </ul>
+                    <h4>直す・無視・まとめて直す</h4>
+                    <p>「直す」はその1件だけを提案どおりに修正し、「無視」はその候補を一時的に非表示にします。「安全な項目をまとめて直す」は、書き換え内容が一意に決まる項目だけをまとめて修正します。「元に戻す」で直前の操作を一度だけ取り消せます。</p>
+                    <h4>設定・辞書・プライバシー</h4>
+                    <p>「⚙ 設定」から「入稿前おすすめ」「記号だけ」「しっかりチェック」のプリセットや、個別ルールを切り替えられます。「わたしの辞書」と「NGワード」も登録できます。判定はブラウザ内で行われ、この機能のために本文や登録内容を外部AI／APIへ送りません。波線はプレビュー・JPG・PDFにも出力されません。</p>
+                  </div>
+                </details>
+                <details id="review-work-counter">
+                  <summary><span className="v2-acc-no">B</span>作業カウンター<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-acc-body v2-copy">
+                    <p>「作業スタート」から「作業終了」までの実作業時間と、その作業中に新しく入力した文字数を記録する機能です。タイトル横に表示される「現在の原稿文字数」とは別の値です。</p>
+                    <h4>作業中の操作</h4>
+                    <ul>
+                      <li><strong>作業スタート:</strong> その作品の記録を開始</li>
+                      <li><strong>一時停止:</strong> 作業時間のカウントを停止。一時停止中の時間は実作業時間に含まれません</li>
+                      <li><strong>作業を再開する:</strong> 一時停止した続きから記録を再開</li>
+                      <li><strong>作業終了:</strong> 今回の作業記録を確定</li>
+                    </ul>
+                    <h4>作業終了後・作業記録</h4>
+                    <p>作業を終了すると、今回書いた文字数・実作業時間・開始時刻・終了時刻を確認できます。結果はテキストとしてコピーしたり、Xへシェアしたりできます。「作業記録」では過去の完了した作業を見返せます。</p>
+                    <h4>文字数の数え方</h4>
+                    <p>作品全体の現在文字数ではなく、作業中に入力した文字数を積み上げます。そのため、あとから文字を削除した場合でも「現在の原稿文字数」と一致しないことがあります。Undo／Redoなど一部の操作は加算されません。記録は作品ごとに、このブラウザ内へ保存されます。</p>
+                  </div>
+                </details>
+                <details id="review-read-aloud">
+                  <summary><span className="v2-acc-no">C</span>音読β<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-acc-body v2-copy">
+                    <p>原稿をブラウザや端末の読み上げ機能で音読し、目で読むだけでは気づきにくい文章の引っかかりや誤字を確認するための機能です。</p>
+                    <h4>読み上げる範囲と操作</h4>
+                    <p>「選択範囲」「現在の段落」「全文」から読み上げる範囲を選べます。読み上げ中は一時停止・再開・停止ができ、速度も調整できます。利用できる環境では読み上げに使う音声も選べます。</p>
+                    <p>音声読み上げに対応していないブラウザや、端末に日本語音声がない環境では使用できない場合があります。</p>
+                    <h4>読み辞書</h4>
+                    <p>固有名詞など、読み上げ方を直したい言葉と読みを登録できます。読み方は <strong>本文に明示したルビ → 音読βの読み辞書 → ブラウザ／端末の通常の読み方</strong> の順で優先されます。読み辞書は本文を書き換えず、このブラウザ内に保存されます。</p>
+                    <h4>プライバシー</h4>
+                    <p>この端末の音声を選んでいる場合、音読のために原稿を外部へ送りません。オンライン音声を選んだ場合は、読み上げる本文がブラウザの音声サービスへ送られる場合があり、その場合は画面にも注意が表示されます。</p>
+                  </div>
+                </details>
+                <details id="review-description-check">
+                  <summary><span className="v2-acc-no">D</span>描写語・修飾表現チェックβ<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-acc-body v2-copy">
+                    <p>原稿の中から、描写や修飾として働いている表現を見つけ、黄色系の色で「見直し候補」として表示する機能です。文章の良し悪しや、削除した方がよい表現を判定するものではありません。</p>
+                    <h4>A・B・Cについて</h4>
+                    <ul>
+                      <li><strong>A｜直接的な説明:</strong> 状態・評価・様子などを直接説明している表現</li>
+                      <li><strong>B｜描写的な修飾:</strong> 比喩や様子など、描写として働く連体・連用修飾</li>
+                      <li><strong>C｜広い修飾:</strong> 時間・場所・用途・所属・識別など、より広い種類の修飾</li>
+                    </ul>
+                    <p>A・B・Cは重要度や「直した方がよい順番」ではなく、表現の種類です。確認したい種類だけを個別にオン／オフできます。最初はAだけが選ばれています。</p>
+                    <h4>候補を確認する</h4>
+                    <p>色の付いた箇所をクリック／タップすると、候補になった理由を確認できます。「前へ」「次へ」で候補を順番に見たり、「候補の一覧」から該当箇所へ移動したりできます。残した方がよい表現も多いため、最終的には作者ご自身で判断してください。</p>
+                    <h4>オン／オフとプライバシー</h4>
+                    <p>「描写語・修飾表現チェックβを使う」からいつでもオン／オフできます。オフのあいだは解析を行いません。判定はブラウザ内で行われ、この機能のために原稿本文を外部AI／APIへ送信しません。自動で削除・書き換えることもありません。</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ USE CASES ============ */}
+        <section className="v2-sec v2-tint" id="use-cases" aria-labelledby="v2-use-cases-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">使い方の例</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-use-cases-title">{USE_CASES_HEADING}</h2>
+                <p>{USE_CASES_LEAD}</p>
+              </div>
+            </div>
+            <ul className="v2-cases">
+              {USE_CASE_EXAMPLES.map((item) => (
+                <li key={item.title}>
+                  <b>{item.title}{item.preparing && <em className="v2-preparing">{USE_CASE_PREPARING_LABEL}</em>}</b>
+                  <span>{item.body}</span>
+                  {item.detail && (
+                    <details className="v2-case-detail">
+                      <summary>{item.detail.summary}</summary>
+                      <p>{item.detail.body}</p>
+                    </details>
+                  )}
+                  {item.elsewhere && (
+                    <a href={item.elsewhere.href} className="v2-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
+                  )}
+                  {item.howtoHash && (
+                    <a href={item.howtoHash} className="v2-case-more">{USE_CASE_DETAIL_LABEL} <i aria-hidden="true">→</i></a>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <ul className="v2-promos" aria-label="ほかのSpunTalesの道具">
+              {SISTER_TOOLS.map((tool) => (
+                <li key={tool.href} className="v2-promo">
+                  <h3 className="v2-mincho">{tool.heading}</h3>
+                  <p>{tool.body}</p>
+                  <a className="v2-btn" href={tool.href}>{tool.label}<Arrow /></a>
+                </li>
+              ))}
+            </ul>
+            <h3 className="v2-cases-sub">{USE_CASES_NOT_YET_HEADING}</h3>
+            <ul className="v2-cases v2-cases-notyet">
+              {USE_CASES_NOT_YET.map((item) => (
+                <li key={item.title}>
+                  <b>{item.title}</b>
+                  <span>{item.body}</span>
+                  {item.detail && (
+                    <details className="v2-case-detail">
+                      <summary>{item.detail.summary}</summary>
+                      <p>{item.detail.body}</p>
+                    </details>
+                  )}
+                  {item.elsewhere && (
+                    <a href={item.elsewhere.href} className="v2-case-more">{item.elsewhere.label} <i aria-hidden="true">→</i></a>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <div className="v2-poems" id="short-poems">
+              <h3 className="v2-mincho">{SHORT_POEM_STEPS_HEADING}</h3>
+              <ol>
+                {SHORT_POEM_STEPS.map((step, i) => (
+                  <li key={step.title}>
+                    <span className="v2-num">{String(i + 1).padStart(2, "0")}</span>
+                    <div><b>{step.title}</b><span>{step.body}</span></div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ QUICK REFERENCE ============ */}
+        <section className="v2-sec" id="quick-reference" aria-labelledby="v2-quick-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">早見表</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-quick-title">よく使う操作と、その場所</h2>
+                <p>やりたいことから探せます。項目を選ぶと、くわしい説明の章へ移動します。</p>
+              </div>
+            </div>
+            <ol className="v2-quick">
+              {HOWTO_QUICK_REFERENCE.map((row) => (
+                <li key={row.task}>
+                  <a href={row.href}>
+                    <b>{row.task}</b>
+                    <span>{row.where}</span>
+                    <Arrow />
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <hr className="v2-dash" />
+
+        {/* ============ HELP / FAQ ============ */}
+        <section className="v2-sec" id="help" aria-labelledby="v2-help-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head">
+              <span className="v2-spine">困ったとき</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-help-title">困ったときは、ここから。</h2>
+              </div>
+            </div>
+            <div className="v2-help" id="report">
+              <div className="v2-help-cards">
+                <div className="v2-hcard v2-dark">
+                  <h3>困ったときは</h3>
+                  <p>詳しい使い方は「ヘルプ」に、不具合や気になる点は「報告」からいつでもどうぞ。</p>
+                  <div className="v2-hcard-actions">
+                    <button className="v2-btn v2-sm" type="button" data-howto-help-cta="" onClick={() => setHelpOpen(true)}>ヘルプを見る</button>
+                    {BETA_FEEDBACK_ENABLED && (
+                      <button className="v2-btn v2-sm" type="button" data-howto-feedback-cta="" onClick={() => setFeedbackOpen(true)}>報告</button>
+                    )}
+                  </div>
+                </div>
+                <div className="v2-hcard">
+                  <h3>動作を確認している環境</h3>
+                  <p>Windows／Chrome・Googleスマートフォンを中心に動作確認をしています。加えて、協力者によりiPhone／iPad／Safariでの動作確認も行いました。</p>
+                  <p>それ以外の環境については、2026年9月現在、十分な動作確認を行えていないため、不具合が発生した場合でも対応が難しいことがあります。</p>
+                </div>
+              </div>
+
+              <div className="v2-faq" id="faq">
+                <details>
+                  <summary><span className="v2-q">Q</span>600dpiでPDFを書き出す必要はありますか？<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-a">
+                    <p><strong>いいえ。TateSpunのPDF出力は、600dpiなどの固定解像度に依存していません。</strong></p>
+                    <p>本文文字は埋め込みフォントと文字の配置情報を中心に保持し、一部の縦組み字形やトンボなどはベクターデータ（線や輪郭を座標として保持するデータ）としてPDFへ出力します。ページサイズもmm・pt単位の実寸座標で保持されるため、本文文字やトンボの品質は「300dpi」「600dpi」といった画像解像度によって決まるものではありません。</p>
+                    <p>なお、原稿内に写真やイラストなどの画像を使用する場合は、その画像自体には実効解像度（元画像のピクセル数と、紙面上で使用する大きさから決まるppi）が関係します。印刷所から画像解像度の指定がある場合は、その指定をご確認ください。</p>
+                    <p>また、印刷所からPDF/Xなど特定のPDF形式を指定されている場合は、印刷所の入稿仕様を優先してください。</p>
+                  </div>
+                </details>
+                <details>
+                  <summary><span className="v2-q">Q</span>縦組みで、かぎ括弧の文末の「。」「、」や全角の「！？」「？！」の位置がずれます。<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-a">
+                    <p>現在（2026年9月時点）のβ版では、縦組みの約物（句読点・かぎ括弧・感嘆符などの記号）の組版に一部既知の制限があります。</p>
+                    <p>たとえば「明日も、同じ場所で。」のように、閉じかぎ括弧「」」の直前へ「。」「、」を置いた場合、句読点の位置や文字間隔が不自然になることがあります。</p>
+                    <p>また、全角の連続記号「！？」「？！」などは、縦組み時の配置によって一部の記号がずれて見える場合があります。</p>
+                    <p>β版では、気になる場合は「閉じかぎ括弧直前の句点を省く」「全角の！？・？！を半角の!?・?!に置き換える」などの方法をご検討ください。これらは今後の組版改善対象です。</p>
+                  </div>
+                </details>
+                <details>
+                  <summary><span className="v2-q">Q</span>印刷所のパソコンにTateSpunと同じフォントがなくても大丈夫ですか？<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-a">
+                    <p>はい。TateSpunのPDFでは、使用するフォントをPDF内に埋め込んで出力します。そのため、PDFを開く側のパソコンに同じフォントがインストールされていなくても、基本的にはPDF内のフォント情報を使って同じ文字を表示できます。</p>
+                    <p>現在TateSpunで使用しているShippori Minchoは、SIL Open Font License 1.1のフォントで、PDFへのフォント埋め込みが認められています。</p>
+                    <p>ただし、印刷所によってPDF/Xなど独自の入稿形式が指定されている場合があります。最終入稿前には、利用する印刷所の入稿仕様もあわせてご確認ください。</p>
+                  </div>
+                </details>
+                <details>
+                  <summary><span className="v2-q">Q</span>不具合があったら？<span className="v2-pm" aria-hidden="true"><Plus /></span></summary>
+                  <div className="v2-a">
+                    <p>エディター内のβ版フィードバック（「報告」ボタン）から送信できます。</p>
+                    <p>いただいたご報告は真摯に受け止めますが、即時の実装・修正や、すべての内容への対応をお約束するものではありません。</p>
+                    <p>報告時には、不具合の原因調査のため、ユーザーの利用環境に関する情報を自動で取得します。機種・ブラウザ等に依存するエラーかどうかを調べるために活用しますので、あらかじめご了承ください。</p>
+                    <p>お名前・住所などの個人情報は書き込まないようお願いいたします。自動で取得するのはブラウザ・端末・表示環境等の情報であり、お名前や住所・所在地を取得するものではありません。作品本文・作品タイトル・ドキュメントIDも自動送信しない設定になっていますので、ご安心ください。</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ LETTER + SUPPORT ============ */}
+        <section className="v2-sec v2-sec-tight">
+          <div className="v2-wrap">
+            <div className="v2-letter">
+              <div className="v2-support" id="support-tatespun" aria-labelledby="support-tatespun-title">
+                <span className="v2-eyebrow">SUPPORT</span>
+                <h3 className="v2-mincho" id="support-tatespun-title">{SUPPORT_HEADING}</h3>
+                <p>{SUPPORT_BODY}</p>
+                <div className="v2-support-actions">
+                  <a className="v2-btn v2-sm" data-support-cta="ofuse" href={SUPPORT_OFUSE_URL} target="_blank" rel="noopener noreferrer">{SUPPORT_OFUSE_LABEL}</a>
+                  <a className="v2-btn v2-sm" data-support-cta="fanbox" href={SUPPORT_FANBOX_URL} target="_blank" rel="noopener noreferrer">{SUPPORT_FANBOX_LABEL}</a>
+                </div>
+                <p className="v2-support-note">{SUPPORT_NOTE}</p>
+              </div>
+              <div className="v2-letter-v" id="greeting">
+                <h2>ごあいさつ。</h2>
+                <p>caroad（運営者）です。ここまでご覧くださり、ありがとうございます。</p>
+                <p>いつでも立ち寄れて、いつでも戻ってこられる場所。そんなTateSpunを目指しています。</p>
+                <p>一人でも多くの創作者の皆さまに、快適に執筆活動をしていただけるよう努めてまいります。一緒に育てていけるブラウザアプリだと思って、ご活用いただけるとうれしいです。</p>
+                <p>何卒よろしくお願い申し上げます。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============ LOG ============ */}
+        <section className="v2-sec v2-sec-log" id="devlog" aria-labelledby="v2-devlog-title">
+          <div className="v2-wrap">
+            <div className="v2-sec-head v2-sec-head-sm">
+              <span className="v2-spine">更新記録</span>
+              <div>
+                <h2 className="v2-mincho" id="v2-devlog-title">更新・デバッグログ</h2>
+              </div>
+            </div>
+            <div className="v2-log" id="devlog-list">
+              {logLoadError && <p className="v2-log-empty">更新履歴を読み込めませんでした。時間をおいてもう一度ご確認ください。</p>}
+              {!logLoadError && sortedLogs.length === 0 && <p className="v2-log-empty">更新履歴を読み込み中です…</p>}
+              {visibleLogs.map((entry, i) => (
+                <article className="v2-log-row" key={`${entry.date}-${i}`}>
+                  <time>{entry.date}</time>
+                  <span className={`v2-badge${/fix|bug/i.test(entry.type) ? " is-fix" : ""}`}>{entry.type}</span>
+                  <div><b>{entry.title}</b><span>{entry.body}</span></div>
+                </article>
+              ))}
+            </div>
+            {olderLogCount > 0 && (
+              <div className="v2-log-more">
                 <button
+                  className="v2-btn v2-sm"
                   type="button"
-                  className="primary"
-                  data-howto-feedback-cta=""
-                  onClick={() => setFeedbackOpen(true)}
+                  aria-expanded={olderLogsOpen}
+                  aria-controls="devlog-list"
+                  onClick={(event) => {
+                    const button = event.currentTarget;
+                    setOlderLogsOpen((v) => !v);
+                    // Folding a long list would leave the reader far below it:
+                    // follow the button back up to where the newest 3 end.
+                    if (olderLogsOpen) {
+                      requestAnimationFrame(() => button.scrollIntoView({ block: "center" }));
+                    }
+                  }}
                 >
-                  報告
+                  {olderLogsOpen ? "過去の更新をたたむ" : `過去の更新を見る（${olderLogCount}件）`}
                 </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-          </div>
-        </div>
-
-        <section className="support-footer" id="support-tatespun" aria-labelledby="support-tatespun-title">
-          <h2 id="support-tatespun-title" data-copy-id="TEXT_SUPPORT_TITLE">{SUPPORT_HEADING}</h2>
-          <p className="support-lead" data-copy-id="TEXT_SUPPORT_LEAD">{SUPPORT_BODY}</p>
-          <div className="support-actions">
-            <a
-              className="support-button"
-              data-support-cta="ofuse"
-              href={SUPPORT_OFUSE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {SUPPORT_OFUSE_LABEL}
-            </a>
-            <a
-              className="support-button"
-              data-support-cta="fanbox"
-              href={SUPPORT_FANBOX_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {SUPPORT_FANBOX_LABEL}
-            </a>
-          </div>
-          <p className="support-note" data-copy-id="TEXT_SUPPORT_NOTE">{SUPPORT_NOTE}</p>
-        </section>
-
-        <section className="devlog" id="devlog">
-          <div className="devlog-heading">
-            <div>
-              <span>UPDATE / DEBUG LOG</span>
-              <h2 data-copy-id="TEXT_DEVLOG_TITLE">更新・デバッグログ</h2>
-            </div>
-          </div>
-          <div className="log-list" id="devlog-list">
-            {logLoadError && (
-              <p className="log-empty">更新履歴を読み込めませんでした。時間をおいてもう一度ご確認ください。</p>
+              </div>
             )}
-            {!logLoadError && sortedLogs.length === 0 && (
-              <p className="log-empty">更新履歴を読み込み中です…</p>
-            )}
-            {visibleLogs.map((entry, i) => (
-              <article className="log-row" key={`${entry.date}-${i}`}>
-                <div className="log-date">{entry.date}</div>
-                <div className="log-type">{entry.type}</div>
-                <div>
-                  <div className="log-title">{entry.title}</div>
-                  <div className="log-body">{entry.body}</div>
-                </div>
-              </article>
-            ))}
           </div>
-          {olderLogCount > 0 && (
-            <button
-              className="more-logs"
-              type="button"
-              aria-expanded={olderLogsOpen}
-              aria-controls="devlog-list"
-              onClick={(event) => {
-                const button = event.currentTarget;
-                setOlderLogsOpen((v) => !v);
-                // Folding a long list would leave the reader far below it:
-                // follow the button back up to where the newest 3 end.
-                if (olderLogsOpen) {
-                  requestAnimationFrame(() => button.scrollIntoView({ block: "center" }));
-                }
-              }}
-            >
-              {olderLogsOpen ? "過去の更新をたたむ" : `過去の更新を見る（${olderLogCount}件）`}
-            </button>
-          )}
         </section>
 
-        {/* TSP-RC-AFFILIATE-FOOTER-001: hidden entirely unless at least one
-            of Amazon/Rakuten has real config (resolveAffiliateFooterConfig).
-            No support/donation-style call to action -- plain "buy via this
-            link" wording only, per Amazon/Rakuten program compliance. */}
         {AFFILIATE_FOOTER.showSection && (
-          <section className="affiliate-footer" id="shopping-links">
-            <h2 data-copy-id="TEXT_AFFILIATE_TITLE">お買い物リンク</h2>
-            <p className="affiliate-lead" data-copy-id="TEXT_AFFILIATE_LEAD">
-              TateSpunでは、Amazon・楽天市場のお買い物リンクをご案内しています。
-            </p>
-            <div className="affiliate-actions">
+          <section className="v2-sec v2-sec-tight v2-affiliate" id="shopping-links">
+            <div className="v2-wrap">
+              <h2>お買い物リンク</h2>
+              <p>TateSpunでは、Amazon・楽天市場のお買い物リンクをご案内しています。</p>
+              <div className="v2-support-actions">
+                {AFFILIATE_FOOTER.amazon && (
+                  <a className="v2-btn v2-sm" data-affiliate-cta="amazon" href={AFFILIATE_FOOTER.amazon.url} target="_blank" rel="noopener noreferrer" aria-label="Amazonでお買い物（外部サイトが新しいタブで開きます）">Amazonでお買い物</a>
+                )}
+                {AFFILIATE_FOOTER.rakuten && (
+                  <a className="v2-btn v2-sm" data-affiliate-cta="rakuten" href={AFFILIATE_FOOTER.rakuten.url} target="_blank" rel="noopener noreferrer" aria-label="楽天市場でお買い物（外部サイトが新しいタブで開きます）">楽天市場でお買い物</a>
+                )}
+              </div>
+              <p className="v2-support-note">このページにはアフィリエイトリンクが含まれます。リンク経由の購入により、運営者が紹介料を受け取る場合があります。</p>
               {AFFILIATE_FOOTER.amazon && (
-                <a
-                  className="affiliate-button"
-                  data-affiliate-cta="amazon"
-                  href={AFFILIATE_FOOTER.amazon.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Amazonでお買い物（外部サイトが新しいタブで開きます）"
-                >
-                  Amazonでお買い物
-                </a>
-              )}
-              {AFFILIATE_FOOTER.rakuten && (
-                <a
-                  className="affiliate-button"
-                  data-affiliate-cta="rakuten"
-                  href={AFFILIATE_FOOTER.rakuten.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="楽天市場でお買い物（外部サイトが新しいタブで開きます）"
-                >
-                  楽天市場でお買い物
-                </a>
+                <p className="v2-support-note">Amazonのアソシエイトとして、{AFFILIATE_FOOTER.amazon.operatorName}は適格販売により収入を得ています。</p>
               )}
             </div>
-            <p className="affiliate-disclosure" data-copy-id="TEXT_AFFILIATE_DISCLOSURE_GENERAL">
-              このページにはアフィリエイトリンクが含まれます。リンク経由の購入により、運営者が紹介料を受け取る場合があります。
-            </p>
-            {AFFILIATE_FOOTER.amazon && (
-              <p className="affiliate-disclosure" data-copy-id="TEXT_AFFILIATE_DISCLOSURE_AMAZON">
-                Amazonのアソシエイトとして、{AFFILIATE_FOOTER.amazon.operatorName}は適格販売により収入を得ています。
-              </p>
-            )}
           </section>
         )}
       </main>
 
-      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
-      {BETA_FEEDBACK_ENABLED && feedbackOpen && (
-        <BetaFeedbackModal onClose={() => setFeedbackOpen(false)} />
+      <footer className="v2-wrap v2-foot">
+        <a className="v2-logo" href="#top"><span className="v2-logo-txt"><small>HOW TO</small><b>TateSpun</b></span></a>
+        <div className="v2-foot-links">
+          <Link href="/">本棚に戻る</Link>
+          {NAV.map((item) => (
+            <a key={item.href} href={item.href}>{item.label}</a>
+          ))}
+          <a href="#quick-reference">早見表</a>
+          <a href="#devlog">更新・デバッグログ</a>
+        </div>
+      </footer>
+
+      <a className={`v2-to-top${showTop ? "" : " is-off"}`} href="#top" aria-label="ページの先頭へ">
+        <Arrow dir="up" />
+      </a>
+
+      {openedTip && (
+        <div className="v2-scrim">
+          <button className="v2-scrim-close" type="button" tabIndex={-1} aria-label="閉じる" onClick={closeTip}></button>
+          <div className="v2-modal" role="dialog" aria-modal="true" aria-labelledby="v2-tip-title" id={openedTip.id} key={openedTip.id}>
+            <button id="v2-tip-close" className="v2-x" type="button" aria-label="閉じる" onClick={closeTip}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <figure className="v2-shot">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={asset(openedTip.image.file)} alt={openedTip.image.alt} />
+            </figure>
+            <div className="v2-mbody">
+              <span className="v2-num v2-mno">{openedTip.no}</span>
+              <h3 className="v2-mincho" id="v2-tip-title">{openedTip.title}</h3>
+              <span className="v2-place"><Pin />{openedTip.place}</span>
+              <div className="v2-copy">{openedTip.body}</div>
+              <div className="v2-mnavs">
+                <button className="v2-btn v2-sm" type="button" onClick={() => setTip((tip + TIPS.length - 1) % TIPS.length)}>← 前の小技</button>
+                <button className="v2-btn v2-sm v2-pri" type="button" onClick={() => setTip((tip + 1) % TIPS.length)}>次の小技 →</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
+
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {BETA_FEEDBACK_ENABLED && feedbackOpen && <BetaFeedbackModal onClose={() => setFeedbackOpen(false)} />}
     </div>
   );
 }
