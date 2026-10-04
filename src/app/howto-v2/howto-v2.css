@@ -265,7 +265,8 @@ html[data-theme="dark"] .htv2 {
 .htv2 .v2-case-detail p { margin-top: 6px; font-size: 13px; color: var(--sub); }
 .htv2 .v2-case-more { margin-top: auto; font-size: 13px; font-weight: 700; text-decoration: none; }
 .htv2 .v2-case-more i { font-style: normal; }
-.htv2 .v2-promo { margin-top: 56px; padding: 36px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px 48px; align-items: start; }
+.htv2 .v2-promos { margin-top: 56px; padding: 0; list-style: none; border-top: 1px solid var(--ink); }
+.htv2 .v2-promo { padding: 36px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px 48px; align-items: start; }
 .htv2 .v2-promo h3 { font-size: clamp(20px, 2vw, 24px); line-height: 1.6; grid-row: span 2; }
 .htv2 .v2-promo p { color: var(--sub); word-break: auto-phrase; }
 .htv2 .v2-promo .v2-btn { justify-self: start; margin-top: 8px; }

@@ -28,7 +28,8 @@ import {
   SHORT_POEM_STEPS,
 } from "@/lib/useCaseExamples";
 import { parseUpdateHistory, type UpdateHistoryEntry } from "@/lib/updateHistory";
-import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, COLUMNSTAND_PROMO, type HowtoItem } from "./content";
+import { FEATURES, TIPS, HERO_IMAGE, GUIDE_CAT, type HowtoItem } from "./content";
+import { SISTER_TOOLS } from "@/lib/sisterTools";
 import "./howto-v2.css";
 
 /**
@@ -693,11 +694,15 @@ export default function HowToV2Page() {
                 </li>
               ))}
             </ul>
-            <aside className="v2-promo" aria-labelledby="v2-promo-title">
-              <h3 className="v2-mincho" id="v2-promo-title">{COLUMNSTAND_PROMO.heading}</h3>
-              <p>{COLUMNSTAND_PROMO.body}</p>
-              <a className="v2-btn" href={COLUMNSTAND_PROMO.href}>{COLUMNSTAND_PROMO.label}<Arrow /></a>
-            </aside>
+            <ul className="v2-promos" aria-label="ほかのSpunTalesの道具">
+              {SISTER_TOOLS.map((tool) => (
+                <li key={tool.href} className="v2-promo">
+                  <h3 className="v2-mincho">{tool.heading}</h3>
+                  <p>{tool.body}</p>
+                  <a className="v2-btn" href={tool.href}>{tool.label}<Arrow /></a>
+                </li>
+              ))}
+            </ul>
             <h3 className="v2-cases-sub">{USE_CASES_NOT_YET_HEADING}</h3>
             <ul className="v2-cases v2-cases-notyet">
               {USE_CASES_NOT_YET.map((item) => (

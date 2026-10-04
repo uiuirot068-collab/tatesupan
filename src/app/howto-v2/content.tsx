@@ -362,13 +362,3 @@ export const TIPS: HowtoItem[] = [
 export const HERO_IMAGE = HOWTO_IMAGES.hero;
 export const GUIDE_CAT = HOWTO_IMAGES.guideCat;
 
-/**
- * 「小説の本のほかにも」の中で COLUMNSTAND をすすめる囲み（HOW TOだけ）。
- * COLUMNSTAND は TateSpun の basePath の外なので、サイトの絶対パスで書く。
- */
-export const COLUMNSTAND_PROMO = {
-  heading: "ZINEやコラムなら、COLUMNSTANDも。",
-  body: "TateSpunは縦書きの本づくり専用です。同じSpunTalesのCOLUMNSTANDでは、縦書き・横書きの段組テンプレートを使って、文章と写真・イラストを並べた誌面をつくれます。ZINEやコラム、会報づくりには、COLUMNSTANDもあわせて使ってみてください。",
-  label: "COLUMNSTANDを見る",
-  href: "/columnstand/",
-};
