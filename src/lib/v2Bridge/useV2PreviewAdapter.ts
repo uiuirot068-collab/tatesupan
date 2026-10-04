@@ -7,6 +7,7 @@ import { referencedImages, ReusablePreviewWorker } from "./previewWorkerClient";
 import type { V2PreviewLayout, V2PublicationModel } from "./previewWorkerProtocol";
 import type { PaintDocument } from "../../../typesetting-v2/renderer/preview/paintModel";
 import { applyPreviewTransfer, type KeptPreview, type PreviewTransfer } from "./previewDelta";
+import { longDocumentPerfNow, noteLongDocumentPreviewComposed } from "../longDocumentPerf";
 
 /**
  * The ONE intentional debounce before a V2 composition (Phase 7): it bounds
@@ -120,6 +121,7 @@ export function useV2PreviewAdapter(
       const send = (allowDelta: boolean) => {
         const applied = appliedRef.current;
         const base = allowDelta && applied && applied.documentKey === documentKey ? applied.layoutId : undefined;
+        const requestedAt = longDocumentPerfNow();
         cancelRequest = workerClient.request(payload, (outcome) => {
           if (!outcome.ok) {
             fail(outcome.message);
@@ -144,6 +146,8 @@ export function useV2PreviewAdapter(
             setState({ layout, preview, error: null, loading: false, input: composing });
           });
           gate.complete(composing, layout);
+          // CST-PORT-016: `?perf=1` のときだけ記録する
+          noteLongDocumentPreviewComposed(composing.content, requestedAt, layout.pageSequence.length);
         }, base === undefined ? undefined : { basePreviewLayoutId: base });
       };
       send(true);

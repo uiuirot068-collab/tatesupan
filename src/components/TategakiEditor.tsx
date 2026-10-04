@@ -84,6 +84,8 @@ import { resolveExportFilenameStem } from "@/utils/exportFilename";
 import { createDefaultTocSettings } from "@/lib/tocSettings";
 import { applyDestinationPaperPreset } from "@/lib/paperPresets";
 import type { PaperSizeKey } from "@/lib/pageLayout";
+import LongDocumentPerfPanel from "./LongDocumentPerfPanel";
+import { noteLongDocumentInput } from "@/lib/longDocumentPerf";
 
 const CLOUD_SAVE_LOGIN_NOTICE =
   "クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。";
@@ -131,6 +133,12 @@ export default function TategakiEditor({
   );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  // CST-PORT-016: `?perf=1` の計測（付けていなければ何もしない）。本文の編集から
+  // 入る変更だけを「入力」として測る。
+  const handleEditorContentChange = useCallback((next: string) => {
+    noteLongDocumentInput(next);
+    setContent(next);
+  }, []);
   // TSP-EDITOR-LIVE-INPUT-LATENCY-002: PreviewPane is wrapped in React.memo,
   // but a *live* `content` prop changes every keystroke, so memo can never
   // bail and React still has to reconcile the entire (in LEGACY/non-V2
@@ -1467,7 +1475,7 @@ export default function TategakiEditor({
               }))
             }
             content={content}
-            onContentChange={setContent}
+            onContentChange={handleEditorContentChange}
             workSession={workSession}
             onRecordActivity={recordActivity}
             onStartWorkSession={startWorkSession}
@@ -1718,6 +1726,13 @@ export default function TategakiEditor({
           onOpenFeatureGuide={() => router.push("/guide")}
         />
       )}
+
+      <LongDocumentPerfPanel
+        content={content}
+        onChange={handleEditorContentChange}
+        onReplaceWholeText={replaceWholeText}
+        onTypeAt={(at, text) => editorPaneRef.current?.replaceSearchMatch(at, at, text)}
+      />
 
       {cloudCompare && (
         <CloudVersionCompareModal
