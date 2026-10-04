@@ -53,7 +53,11 @@ html[data-theme="dark"] .htv2 {
 .htv2 button { font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; }
 .htv2 h1, .htv2 h2, .htv2 h3 { word-break: auto-phrase; text-wrap: balance; }
 .htv2 p, .htv2 li { text-wrap: pretty; }
-.htv2 .v2-step p, .htv2 .v2-one, .htv2 .v2-ftab small, .htv2 .v2-sec-head p, .htv2 .v2-hcard p, .htv2 .v2-video p { word-break: auto-phrase; }
+.htv2 .v2-trydemo { margin-top: 48px; padding: 32px 4px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px 48px; align-items: center; }
+.htv2 .v2-trydemo h3 { font-size: clamp(20px, 2vw, 24px); line-height: 1.5; }
+.htv2 .v2-trydemo p { margin-top: 8px; font-size: 14px; color: var(--sub); }
+@media (max-width: 760px) { .htv2 .v2-trydemo { grid-template-columns: 1fr; padding: 26px 0; } .htv2 .v2-trydemo .v2-btn { justify-self: start; } }
+.htv2 .v2-step p, .htv2 .v2-one, .htv2 .v2-ftab small, .htv2 .v2-sec-head p, .htv2 .v2-hcard p, .htv2 .v2-trydemo p { word-break: auto-phrase; }
 .htv2 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .htv2 .v2-nw { display: inline-block; white-space: nowrap; }
@@ -165,10 +169,6 @@ html[data-theme="dark"] .htv2 {
 .htv2 .v2-chip { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: var(--paper); color: var(--ink); text-decoration: none; font-size: 13px; font-weight: 500; border: 1px solid var(--line); }
 .htv2 .v2-chip:hover { border-color: var(--ink); color: var(--ink); }
 
-.htv2 .v2-video { margin-top: 20px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 40px; align-items: center; background: #2a2622; color: #fff; border-radius: 28px; padding: 20px 48px 20px 20px; }
-.htv2 .v2-video-el { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; background: #3a352f; }
-.htv2 .v2-video h3 { font-size: 24px; line-height: 1.5; }
-.htv2 .v2-video p { margin-top: 10px; font-size: 14px; color: #d8cfc0; }
 
 /* ---------- 5 features ---------- */
 .htv2 .v2-feat { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 36px; align-items: start; scroll-margin-top: 100px; }
@@ -378,8 +378,6 @@ html[data-theme="dark"] .htv2 {
   .htv2 .v2-steps { grid-template-columns: 1fr; gap: 12px; }
   .htv2 .v2-step { padding: 26px 24px 24px; }
   .htv2 .v2-step .v2-num { font-size: 48px; }
-  .htv2 .v2-video { grid-template-columns: 1fr; padding: 14px 14px 26px; gap: 18px; }
-  .htv2 .v2-video > div:last-child { padding: 0 8px; }
   .htv2 .v2-fpanel { padding: 10px; border-radius: 24px; }
   .htv2 .v2-fbody { padding: 10px 8px 8px; }
   .htv2 .v2-fbody h3 { font-size: 20px; }

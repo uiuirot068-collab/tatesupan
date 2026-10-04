@@ -66,8 +66,6 @@ const toHowToLogEntry = (entry: UpdateHistoryEntry): UpdateLogEntry => ({
 });
 
 const asset = (file: string) => withBasePath(`/howto/assets/${file}`);
-const HOWTO_GUIDE_VIDEO_SRC = withBasePath("/howto/media/tatespun-beta-guide.mp4");
-const HOWTO_GUIDE_VIDEO_POSTER = withBasePath("/howto/media/tatespun-beta-guide-poster.webp");
 const AFFILIATE_FOOTER = resolveAffiliateFooterConfig({
   amazonUrl: process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_URL,
   amazonAssociateOperatorName: process.env.NEXT_PUBLIC_AMAZON_ASSOCIATE_OPERATOR_NAME,
@@ -461,15 +459,12 @@ export default function HowToV2Page() {
               </li>
             </ol>
 
-            <div className="v2-video">
-              <video className="v2-video-el" controls playsInline preload="metadata" poster={HOWTO_GUIDE_VIDEO_POSTER}>
-                <source src={HOWTO_GUIDE_VIDEO_SRC} type="video/mp4" />
-                この環境では動画を再生できません。
-              </video>
+            <div className="v2-trydemo">
               <div>
-                <h3 className="v2-mincho">動画で、ひととおり見る。</h3>
-                <p>β版公開前に制作したTateSpunの案内動画です。現在とは一部、画面や表記が異なる場合があります。</p>
+                <h3 className="v2-mincho">デモで、実際に触ってみる。</h3>
+                <p>見本の原稿が入ったエディターで、3ステップをそのまま試せます。おためしデモの内容は保存されません（本棚にも残りません）。</p>
               </div>
+              <Link className="v2-btn v2-pri" href="/editor?demo=1">デモで実際に触ってみる<Arrow /></Link>
             </div>
           </div>
         </section>
