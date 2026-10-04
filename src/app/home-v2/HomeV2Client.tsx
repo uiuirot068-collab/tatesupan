@@ -42,6 +42,7 @@ import {
   USE_CASE_DETAIL_LABEL,
   USE_CASES_TEASER,
 } from "@/lib/useCaseExamples";
+import { SISTER_TOOLS } from "@/lib/sisterTools";
 import { getProjectsResult } from "@/lib/supabase/projects";
 import { getCloudPlan, type CloudPlan } from "@/lib/supabase/plans";
 import {
@@ -669,6 +670,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                           {item.howtoHash && (
                             <Link href={`/howto${item.howtoHash}`} className="home-use-more">{USE_CASE_DETAIL_LABEL} <span aria-hidden="true">→</span></Link>
                           )}
+                        </li>
+                      ))}
+                    </ul>
+                    <ul className="home-sister mt-10" aria-label="ほかのSpunTalesの道具">
+                      {SISTER_TOOLS.map((tool) => (
+                        <li key={tool.href}>
+                          <strong className="font-serif">{tool.heading}</strong>
+                          <span>{tool.body}</span>
+                          <a href={tool.href} className="home-p3-pill">{tool.label} →</a>
                         </li>
                       ))}
                     </ul>
