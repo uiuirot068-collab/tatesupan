@@ -201,6 +201,8 @@ type PendingPdfExport = {
 
 /** Visual seam width (px) between the two pages of a spread. */
 const SPREAD_GAP_PX = 4;
+/** SPN-XFIX-001: px用紙（Web閲覧用・SNS用）のJPGは表示サイズの2倍で書き出す。 */
+const PX_PAPER_JPG_SCALE = 2;
 
 /** Padding (px) of the scroll container per axis (`p-6` = 1.5rem × 2 sides, uniform on all four sides). */
 const SCROLL_CONTAINER_PADDING_X_PX = 48;
@@ -1867,11 +1869,12 @@ function PreviewPane({
         "Shippori Mincho",
         (pageNumber) => buildPageJpgFileNameFromStem(resolvedExportFilenameStem, filePageNumbers[pageNumber - 1]),
         mode,
-        // SPN-XFIX-001: px papers (Web閲覧用・SNS用) come out at their own px
-        // size (768×1024, 1080×1080, 1080×1350) instead of the 600dpi print
-        // raster (≈11600px for SNS用 正方形 — too big to post, and past phone
-        // canvas limits). widthMm = widthPx / PX_PER_MM, so this dpi maps 1 px.
-        layout.paper.isPx ? PX_PER_MM * 25.4 : undefined,
+        // SPN-XFIX-001: px papers (Web閲覧用・SNS用) come out at TWICE their
+        // px size (1536×2048, 2160×2160, 2160×2700) for crisp text, instead of
+        // the 600dpi print raster (≈11600px for SNS用 正方形 — too big to post,
+        // and past phone canvas limits). widthMm = widthPx / PX_PER_MM, so
+        // PX_PER_MM × 25.4 dpi maps 1 px; PX_PAPER_JPG_SCALE doubles it.
+        layout.paper.isPx ? PX_PER_MM * 25.4 * PX_PAPER_JPG_SCALE : undefined,
         {
           beforePage: async () => waitForExportPermission(signal ?? undefined),
           onProgress: (current, total) => setExportProgress({ current, total }),
