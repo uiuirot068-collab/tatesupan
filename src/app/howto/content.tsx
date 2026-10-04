@@ -8,7 +8,7 @@ import {
 } from "@/lib/howtoContent";
 
 /**
- * TSP-HOWTO-001 — content of the redesigned HOW TO (`/howto-v2`).
+ * TSP-HOWTO-001 — content of the redesigned HOW TO (`/howto`).
  *
  * The chapter copy is the current `/howto` copy, moved as-is. Only the
  * grouping changed (なつお 2026-10-04): 「まず知ってほしい5選」 now follows the

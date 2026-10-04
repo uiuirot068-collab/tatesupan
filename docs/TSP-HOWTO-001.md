@@ -14,4 +14,5 @@
 - SNS wording: any paper's JPG can be posted / used as a 書店委託 sample; SNS paper is only for X-shaped images (C3 and tip 10).
 - `src/lib/sisterTools.ts`: COLUMNSTAND and ことばテラス rows under 「小説の本のほかにも」, on both Home and HOW TO.
 - Video removed from HOW TO; replaced by a 「デモで実際に触ってみる」 row and a 「使い方ガイドの本をひらく」 row (registers the sample book first, then opens `/editor?id=-1`).
-- 22:23 JST なつお: 「並べたら公開してください」 → published with `/howto-v2` still beside `/howto` (noindex); the swap is a separate step.
+- 23:23 JST なつお: 「並べたら公開してください」 → published with `/howto-v2` still beside `/howto` (noindex); the swap is a separate step.
+- 23:35 JST なつお「入れ替えて」→ the redesign now lives at `/howto` (indexable, same title/description/canonical as before). The previous design moved to `/howto-v1` (noindex, canonical → /howto); `/howto-v2` forwards to `/howto`, keeping the #chapter.
