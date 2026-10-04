@@ -82,6 +82,8 @@ import { memoDraftStorageKey } from "@/lib/memoDraft";
 import { headingAtCursor, manuscriptHeadings, plotPanelStorageKey } from "@/lib/plotPanel";
 import { resolveExportFilenameStem } from "@/utils/exportFilename";
 import { createDefaultTocSettings } from "@/lib/tocSettings";
+import { applyDestinationPaperPreset } from "@/lib/paperPresets";
+import type { PaperSizeKey } from "@/lib/pageLayout";
 
 const CLOUD_SAVE_LOGIN_NOTICE =
   "クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。";
@@ -109,11 +111,14 @@ export default function TategakiEditor({
   documentId,
   cloudProjectId,
   demoMode = false,
+  startPaperSize,
 }: {
   documentId?: number;
   cloudProjectId?: string;
   /** TSP-LOOP-024: run the real editor as the disposable おためしデモ. */
   demoMode?: boolean;
+  /** SPN-XFIX-002: `/editor?paper=sns-45` starts a NEW work already on that paper (links from X posts). */
+  startPaperSize?: PaperSizeKey;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -732,8 +737,10 @@ export default function TategakiEditor({
       await previousDocumentFlushed;
       const doc = id ? await loadDocument(id) : undefined;
 
+      // SPN-XFIX-002: a new work opened from an SNS-image link starts on that paper.
+      const newDocSettings = !doc && startPaperSize ? applyDestinationPaperPreset(DEFAULT_PAGE_SETTINGS, startPaperSize) : null;
       if (!doc) {
-        id = await createDocument();
+        id = await createDocument(newDocSettings ?? undefined);
         router.replace(`/editor?id=${id}`);
       }
 
@@ -759,6 +766,8 @@ export default function TategakiEditor({
       setPlotNote(doc?.plotNote ?? "");
       if (doc) {
         setSettings(doc.settings ?? DEFAULT_PAGE_SETTINGS);
+      } else if (newDocSettings) {
+        setSettings(newDocSettings);
       }
       const opened = imageStateFromRecords(imageRecords);
       setImages(opened.images);
@@ -774,7 +783,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings, startPaperSize]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

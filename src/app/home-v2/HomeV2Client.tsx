@@ -325,6 +325,16 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               </h1>
               <p className="home-p3-cover-lead mt-6 max-w-xl font-serif">書きかけの原稿をひらいて、縦組みで確かめる。<br className="hidden sm:block" />物語が紙の本になる、その直前までを静かに支えます。</p>
               <a data-home-use-cases-teaser="" href="#use-cases" className="home-p3-teaser mt-4 inline-block">{USE_CASES_TEASER} <span aria-hidden="true">→</span></a>
+              {/* SPN-XFIX-002: people arriving from an X post about vertical images
+                  see that image in the first view and reach it in one tap. */}
+              <Link data-home-sns-sample="" href="/editor?paper=sns-45" className="home-p3-sns-sample group mt-6">
+                <Image src={withBasePath("/howto/assets/sample-sns-45.jpg")} alt="TateSpunで書き出した、SNS用 4:5の縦書き画像の見本" width={128} height={160} className="home-p3-sns-sample-img" />
+                <span className="min-w-0">
+                  <strong className="block font-serif text-[15px] font-medium">Xに貼る縦書き画像もつくれます</strong>
+                  <span className="mt-1 block text-xs leading-relaxed opacity-75">用紙「SNS用 4:5」で新しい作品をひらきます。正方形にも切りかえられます。</span>
+                  <span className="home-p3-ticket-cta">縦書き画像をつくる →</span>
+                </span>
+              </Link>
               <div data-home-onboarding-actions="" className="mt-9 grid max-w-2xl gap-7">
                 <button type="button" onClick={handleCreate} disabled={creating} className="home-p3-cta home-p3-cta-gold w-fit">最初の一冊を書きはじめる <span aria-hidden="true">→</span></button>
                 <div className="grid gap-3 sm:grid-cols-2">

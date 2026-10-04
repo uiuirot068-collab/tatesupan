@@ -175,13 +175,13 @@ export async function loadDocument(id: number): Promise<DocumentRecord | undefin
 }
 
 /** Creates a new empty document and returns its id. */
-export async function createDocument(): Promise<number> {
+export async function createDocument(settings: PageSettings = DEFAULT_PAGE_SETTINGS): Promise<number> {
   const id = Date.now();
   const document: DocumentRecord = {
     id,
     title: "",
     content: "",
-    settings: DEFAULT_PAGE_SETTINGS,
+    settings,
     plotNote: "",
     updatedAt: Date.now(),
   };
