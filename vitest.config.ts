@@ -25,6 +25,8 @@ export default defineConfig({
       "src/lib/cloudLink.test.ts",
       // TSP-DEMO-001: おためしデモ on phones
       "src/lib/tspDemo001.test.ts",
+      // PLT-LOOP-003: メモ・プロット panel (reads プロット帳 files)
+      "src/lib/plotPanel.test.ts",
     ],
   },
 });

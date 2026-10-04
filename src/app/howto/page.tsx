@@ -923,7 +923,7 @@ export default function HowToPage() {
         <details className="chapter tip" id="memo">
           <summary className="tip-summary" data-eyebrow="TIPS 04 / 10">
             <h2 data-copy-id="TEXT_SECTION_09_TITLE">4. 本文には入れない作業を残す「メモ機能」</h2>
-            <div className="subhead" data-copy-id="TEXT_SECTION_09_SUBTITLE">場所：テキストタイトル入力欄の下→▶メモ</div>
+            <div className="subhead" data-copy-id="TEXT_SECTION_09_SUBTITLE">場所：テキストタイトル入力欄の下→▶メモ・プロット</div>
             <span className="tip-toggle" aria-hidden="true"></span>
           </summary>
           <div className="chapter-grid">
@@ -935,6 +935,7 @@ export default function HowToPage() {
                 「書いている間に思いついたこと」をメモできます。編集・確定機能があるので、誤操作で消えにくい設計です。プロットや起承転結、オチのifパターン、最新情報のメモまで幅広く使えます。
                 <p>書いているときの日記代わりに活用すると、見返したときにも楽しいです！</p>
                 <p>本文にTODOを書いて、そのまま消し忘れる事故を避けやすい機能でもあります。</p>
+                <p>欄の上の「プロット帳（Shioria）」に切り替えると、プロット帳（Shioria）で作ったプロットを読み込んで、章ごとに見ながら書けます。原稿の「# 第1章　帰郷」のような見出しにカーソルがあると、プロットも同じ章を開きます。プロットは見るだけで、原稿やメモは変わりません。</p>
               </div>
             </div>
           </div>
