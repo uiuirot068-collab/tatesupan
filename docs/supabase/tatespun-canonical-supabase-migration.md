@@ -1,3 +1,5 @@
+> **SPN-UNIFY-001 (2026-10-13): TateSpun now runs on `vjgxrqgnbgnewfvissgd`.** The data copy used `/mnt/project-files/SpunTales/supabase-unify/spn-unify-001/` (C/D SQL) instead of this runbook; `rgvqquuthovqjqfogfra` is kept untouched as the rollback copy.
+
 # SUPERSEDED — historical TateSpun cross-project migration plan
 
 > **DO NOT EXECUTE THIS RUNBOOK.** The authoritative TateSpun project is

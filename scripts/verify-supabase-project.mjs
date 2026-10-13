@@ -1,9 +1,11 @@
 // TateSpun Supabase project + cutover guard.
 //
-// TateSpun's backend (Auth + projects + user_plans + manuscript_cloud_images,
-// Storage, and Edge Functions) belongs to the project named `tatespun`.
+// SPN-UNIFY-001: TateSpun's login and data (Auth + projects +
+// manuscript_cloud_images + Storage) live in the SpunTales portal project,
+// shared with the portal, COLUMNSTAND, Shioria and the other tools.
 //
-//   CANONICAL (TateSpun): rgvqquuthovqjqfogfra
+//   CANONICAL (SpunTales): vjgxrqgnbgnewfvissgd
+//   Previous (rollback copy, untouched): rgvqquuthovqjqfogfra  (project `tatespun`)
 //
 // NEXT_PUBLIC_SUPABASE_URL normally must match the deployed Production ref
 // (defaulting to the current canonical ref above). A deliberate change is
@@ -18,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const CANONICAL_REF = "rgvqquuthovqjqfogfra"; // project name: tatespun
+const CANONICAL_REF = "vjgxrqgnbgnewfvissgd"; // SpunTales portal project (SPN-UNIFY-001)
 const REF_RE = /^[a-z0-9]{20}$/;
 
 let failures = 0;

@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 import { auditCutover } from "./lib/supabase-cutover-audit.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CURRENT_CANONICAL_REF = "rgvqquuthovqjqfogfra";
+// SPN-UNIFY-001: TateSpun moved to the SpunTales portal project. The old
+// project rgvqquuthovqjqfogfra stays untouched as the rollback copy.
+const CURRENT_CANONICAL_REF = "vjgxrqgnbgnewfvissgd";
 const REF_RE = /^[a-z0-9]{20}$/;
 const PAGE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 30000;
