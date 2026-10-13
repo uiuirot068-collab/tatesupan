@@ -44,6 +44,12 @@ export interface DocumentRecord {
   revision?: number;
   /** TSP-SAFE-001: set when this work is the device copy of a cloud work (lib/cloudDeviceCopy.ts). */
   cloudSync?: CloudSyncRecord;
+  /**
+   * TSP-SAFE-001: set by a bookshelf rename (renameDocument). While the latest
+   * revisions are renames only, a screen that read `renamedFrom` may still
+   * write its text — it keeps the new title instead of splitting the work.
+   */
+  rename?: { atRevision: number; renamedFrom: number };
 }
 
 /** A 挿絵 (illustration) uploaded by the user. Referenced from `content` by id. */
@@ -245,15 +251,17 @@ export async function saveDocumentIfUnchanged(
   return db.transaction("rw", db.documents, db.bookshelfMetadata, async (): Promise<LocalWriteResult> => {
     const current = await db.documents.get(job.docId);
     if (!current) return { kind: "deleted" };
-    if (expectedRevision !== undefined && (current.revision ?? 0) !== expectedRevision) return { kind: "changed" };
+    const stored = revisionOf(current);
+    const renamedOnly = isRenamedOnlySince(current, expectedRevision);
+    if (expectedRevision !== undefined && stored !== expectedRevision && !renamedOnly) return { kind: "changed" };
     const revision = await writeDocumentRecord(current, {
       id: job.docId,
-      title: job.title,
+      title: renamedOnly ? current.title : job.title,
       content: job.content,
       settings: job.settings,
       plotNote: job.plotNote,
     });
-    return { kind: "saved", revision };
+    return renamedOnly ? { kind: "saved", revision, renamedTitle: current.title } : { kind: "saved", revision };
   });
 }
 
@@ -310,6 +318,31 @@ async function writeDocumentRecord(
     await db.bookshelfMetadata.delete(fields.id);
   }
   return revision;
+}
+
+/** True when every change since `expectedRevision` was a bookshelf rename. */
+function isRenamedOnlySince(current: DocumentRecord, expectedRevision: number | undefined): boolean {
+  if (expectedRevision === undefined || !current.rename) return false;
+  return current.rename.atRevision === revisionOf(current) && current.rename.renamedFrom === expectedRevision && expectedRevision !== revisionOf(current);
+}
+
+/**
+ * TSP-SAFE-001: the bookshelf's 題名を変える. Counts as a change of the work
+ * (another tab learns the new title on its next save) but never splits a
+ * screen that only lacks the new title.
+ */
+export async function renameDocument(id: number, title: string): Promise<void> {
+  if (isEphemeralDocId(id)) return;
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    const current = await db.documents.get(id);
+    if (!current) return;
+    const stored = revisionOf(current);
+    const renamedFrom = current.rename && current.rename.atRevision === stored ? current.rename.renamedFrom : stored;
+    const revision = stored + 1;
+    await db.documents.update(id, { title, revision, rename: { atRevision: revision, renamedFrom } });
+    const metadata = await db.bookshelfMetadata.get(id);
+    if (metadata) await db.bookshelfMetadata.put({ ...metadata, title });
+  });
 }
 
 /** Reads a work's current revision (0 for records older than TSP-SAFE-001). */

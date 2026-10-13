@@ -9,6 +9,7 @@ import {
   createDocument,
   db,
   deleteDocument,
+  renameDocument,
   ensureSampleProject,
   listDocuments,
 } from "@/lib/db";
@@ -117,7 +118,7 @@ export default function Home() {
     if (creating) return;
     setCreating(true);
     try {
-      const count = await db.documents.filter((doc) => !doc.isSample).count();
+      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count(); // TSP-SAFE-001
       if (count >= LOCAL_DOCUMENT_LIMIT) {
         setIsLimitModalOpen(true);
         return;
@@ -309,7 +310,7 @@ export default function Home() {
                           documents={documents}
                           onOpen={(id) => router.push(`/editor?id=${id}`)}
                           onRename={async (id, title) => {
-                            await db.documents.update(id, { title });
+                            await renameDocument(id, title);
                           }}
                           onDelete={setPendingDeleteId}
                           showLocalOnlyLabel={!!user}

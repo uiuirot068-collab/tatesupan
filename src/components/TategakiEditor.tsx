@@ -396,7 +396,7 @@ export default function TategakiEditor({
   const [cloudSynced, setCloudSynced] = useState<{ title: string; content: string; settings: PageSettings | null } | null>(null);
   // TSP-SAFE-001: the open work was deleted in another tab; this screen's text is not saved.
   const [deletedElsewhere, setDeletedElsewhere] = useState(false);
-  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null } | null>(null);
+  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null; baseUnknown?: boolean } | null>(null);
   const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const workSessionScope = useMemo(() => {
@@ -829,7 +829,14 @@ export default function TategakiEditor({
       // with this document — and any technical break its manifest poll
       // reported while this load was in flight.
       setCurrentProjectId(null);
-      cloudBaseRef.current = null;
+      // TSP-SAFE-001: a work saved to the cloud from this browser remembers the
+      // cloud version it last matched, so クラウドに保存 compares with THAT
+      // (before, it compared with the screen and always cried "newer").
+      const sync = doc?.cloudSync;
+      cloudBaseRef.current =
+        id !== null && sync && readCloudLink(id) === sync.projectId
+          ? { updatedAt: sync.updatedAt, title: "", content: "", hash: sync.hash }
+          : null;
       setCloudSynced(null);
       setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
@@ -1123,6 +1130,8 @@ export default function TategakiEditor({
           if (event.docId === openDocId) setSaveStatus("saving");
           break;
         case "saved":
+          // Renamed on the bookshelf meanwhile: the work kept the new title; show it.
+          if (event.docId === openDocId && event.renamedTitle !== undefined) setTitle(event.renamedTitle);
           if (event.docId === openDocId && !pendingAutosave.hasPending && !localSaveQueue.hasUnsavedFor(event.docId)) {
             setSaveStatus("saved");
           }
@@ -1273,9 +1282,12 @@ export default function TategakiEditor({
         }
         // A screen that never saw the linked cloud version compares it with
         // what it shows now.
+        // TSP-SAFE-001: without a known base, which side is newer cannot be
+        // told — the dialog then only says the two differ.
+        const baseUnknown = !cloudBaseRef.current && linkedOnly;
         const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
         if (cloudNow && projectId && !skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
-          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null });
+          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null, baseUnknown });
           return;
         }
       }
@@ -1924,6 +1936,7 @@ export default function TategakiEditor({
           screen={{ title, content, updatedAt: cloudCompare.base }}
           cloud={{ title: cloudCompare.cloud.title, content: cloudCompare.cloud.content, updatedAt: cloudCompare.cloud.updated_at }}
           busy={cloudCompareBusy}
+          baseUnknown={cloudCompare.baseUnknown}
           onOverwrite={handleCloudCompareOverwrite}
           onOpenCloud={() => void handleCloudCompareOpenCloud()}
           onCancel={() => setCloudCompare(null)}

@@ -9,6 +9,7 @@ import {
   createDocument,
   db,
   deleteDocument,
+  renameDocument,
   ensureSampleProject,
   listDocuments,
   type DocumentRecord,
@@ -174,7 +175,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     }
     setCreating(true);
     try {
-      const count = await db.documents.filter((doc) => !doc.isSample).count();
+      // TSP-SAFE-001: a work linked to the cloud (incl. the copy kept when a cloud
+      // work is opened) is also in the cloud, so it does not count here.
+      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
       if (count >= LOCAL_DOCUMENT_LIMIT) {
         setIsLimitModalOpen(true);
         return;
@@ -520,7 +523,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                           documents={documents}
                           onOpen={(id) => router.push(qaMode ? "/editor?demo=1" : `/editor?id=${id}`)}
                           onRename={qaMode ? undefined : async (id, title) => {
-                            await db.documents.update(id, { title });
+                            await renameDocument(id, title);
                           }}
                           onDelete={qaMode ? undefined : setPendingDeleteId}
                           showLocalOnlyLabel={!!user}

@@ -8,6 +8,7 @@ import {
   loadDocument,
   markCloudSynced,
   openCloudDeviceCopy,
+  renameDocument,
   revisionOf,
   saveDocument,
   saveDocumentIfUnchanged,
@@ -15,7 +16,9 @@ import {
 } from "./db";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "./pageLayout";
 import { LocalSaveQueue } from "./localSaveQueue";
-import { cloudCompareLocalCopyTitle } from "./cloudVersionCompare";
+import { cloudCompareLocalCopyTitle, isCloudVersionChanged } from "./cloudVersionCompare";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * TSP-SAFE-001: the scenes of TSP-REVIEW-001 3の1・3の3・3の7, reproduced
@@ -216,5 +219,74 @@ describe("a cloud work is kept in this browser as one device copy (3の1)", () =
     expect((await loadDocument(opened.docId))?.content).toBe("新しい");
     const all = await listDocuments();
     expect(all.find((doc) => doc.id !== opened.docId)?.content).toBe("Aで書いた分");
+  });
+});
+
+describe("renaming on the bookshelf while the work is open in another tab", () => {
+  it("before: the open tab's next autosave put the old title back", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "旧題", "本文", settings, "");
+    await db.documents.update(id, { title: "新題" }); // the old bookshelf rename
+    await saveDocument(id, "旧題", "本文＋続き", settings, ""); // the open tab's autosave
+    expect((await loadDocument(id))?.title).toBe("旧題");
+  });
+
+  it("now: the open tab keeps writing its text, the new title stays, and the tab learns it", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "旧題", "本文", settings, "");
+    const tab = openTab();
+    const events: unknown[] = [];
+    tab.subscribe((event) => events.push(event));
+    await openInTab(tab, id);
+
+    await renameDocument(id, "新題");
+    await renameDocument(id, "新題2");
+    await tab.submit(edit(id, "本文＋続き", "旧題"));
+    await tab.submit(edit(id, "本文＋続き＋さらに", "旧題")); // typed before the screen showed the new title
+
+    const doc = await loadDocument(id);
+    expect(doc?.title).toBe("新題2");
+    expect(doc?.content).toBe("本文＋続き＋さらに");
+    expect(await listDocuments()).toHaveLength(1); // not split
+    expect(events).toContainEqual({ type: "saved", docId: id, renamedTitle: "新題2" });
+  });
+
+  it("a rename after another tab's text change still splits a stale screen (both texts kept)", async () => {
+    const id = await createDocument();
+    const stale = openTab();
+    await openInTab(stale, id);
+    const other = openTab();
+    await openInTab(other, id);
+    await other.submit(edit(id, "別のタブの本文"));
+    await renameDocument(id, "新題");
+    await stale.submit(edit(id, "古い画面の本文"));
+    expect((await loadDocument(id))?.content).toBe("別のタブの本文");
+    expect((await listDocuments()).some((doc) => doc.content === "古い画面の本文")).toBe(true);
+  });
+});
+
+describe("no false 「クラウド版の方が新しい」 on a work reopened from this browser (3の2)", () => {
+  it("compares with the cloud version the work last matched, not with the screen", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "長編", "送った本文", settings, "");
+    await markCloudSynced(id, { projectId: "cloud-1", updatedAt: "2026-10-13T06:00:00.000Z", title: "長編", content: "送った本文" });
+    const sync = (await loadDocument(id))!.cloudSync!;
+    const cloudNow = { updated_at: "2026-10-13T06:00:00.000Z", title: "長編", content: "送った本文" };
+    const screen = { title: "長編", content: "送った本文＋この端末で書き足した分" };
+
+    // Before: no remembered base → the screen itself was the base → always "changed".
+    expect(isCloudVersionChanged(cloudNow, { updatedAt: null, ...screen })).toBe(true);
+    // Now: the remembered version → unchanged, so クラウドに保存 just saves.
+    expect(isCloudVersionChanged(cloudNow, { updatedAt: sync.updatedAt, title: "", content: "", hash: sync.hash })).toBe(false);
+    // Saved from another device since → still asks.
+    const newer = { updated_at: "2026-10-13T07:00:00.000Z", title: "長編", content: "別の端末" };
+    expect(isCloudVersionChanged(newer, { updatedAt: sync.updatedAt, title: "", content: "", hash: sync.hash })).toBe(true);
+  });
+});
+
+describe("the 60-work limit of this browser's bookshelf", () => {
+  it("does not count works that are also in the cloud", () => {
+    const home = readFileSync(resolve("src/app/home-v2/HomeV2Client.tsx"), "utf8");
+    expect(home).toContain("db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count()");
   });
 });

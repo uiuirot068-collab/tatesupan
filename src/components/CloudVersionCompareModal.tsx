@@ -16,6 +16,8 @@ interface CloudVersionCompareModalProps {
   screen: VersionSide;
   cloud: VersionSide;
   busy?: boolean;
+  /** TSP-SAFE-001: which version this screen started from is unknown — say only that they differ. */
+  baseUnknown?: boolean;
   onOverwrite: () => void;
   onOpenCloud: () => void;
   onCancel: () => void;
@@ -30,6 +32,7 @@ export default function CloudVersionCompareModal({
   screen,
   cloud,
   busy = false,
+  baseUnknown = false,
   onOverwrite,
   onOpenCloud,
   onCancel,
@@ -41,7 +44,7 @@ export default function CloudVersionCompareModal({
 
   return (
     <ViewportModal
-      title={CLOUD_COMPARE_COPY.title}
+      title={baseUnknown ? CLOUD_COMPARE_COPY.unknownTitle : CLOUD_COMPARE_COPY.title}
       titleId="cloud-version-compare-title"
       closeLabel="クラウド版との比較を閉じる"
       onClose={busy ? () => undefined : onCancel}
@@ -79,7 +82,7 @@ export default function CloudVersionCompareModal({
         </>
       )}
     >
-      <p className="text-sm leading-relaxed text-ink">{CLOUD_COMPARE_COPY.lead}</p>
+      <p className="text-sm leading-relaxed text-ink">{baseUnknown ? CLOUD_COMPARE_COPY.unknownLead : CLOUD_COMPARE_COPY.lead}</p>
       <dl className="mt-4 grid grid-cols-2 border-y border-ink/15 text-xs">
         {sides.map(({ key, label, timeLabel, side }, index) => (
           <div

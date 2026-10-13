@@ -24,7 +24,15 @@
 import type { AutosaveJob } from "./pendingAutosave";
 
 export type LocalWriteResult =
-  | { kind: "saved"; revision: number }
+  | {
+      kind: "saved";
+      revision: number;
+      /**
+       * Set when the work was renamed on the bookshelf since this screen read
+       * it: the write kept that title, and the screen should show it too.
+       */
+      renamedTitle?: string;
+    }
   /** The stored work was saved by someone else after this screen read it. */
   | { kind: "changed" }
   /** The stored work no longer exists. */
@@ -43,7 +51,7 @@ export interface LocalSaveStore<TSettings> {
 
 export type LocalSaveEvent<TSettings> =
   | { type: "saving"; docId: number }
-  | { type: "saved"; docId: number }
+  | { type: "saved"; docId: number; renamedTitle?: string }
   | { type: "error"; docId: number; error: unknown }
   /** `docId` was changed elsewhere; this screen's text went to `copyId`. */
   | { type: "rescued"; docId: number; copyId: number; copyTitle: string }
@@ -75,6 +83,8 @@ export class LocalSaveQueue<TSettings = unknown> {
   private readonly revisions = new Map<number, number>();
   /** A work changed elsewhere: this screen's writes go to its rescue copy. */
   private readonly redirects = new Map<number, { id: number; title: string; fromTitle: string }>();
+  /** Renamed on the bookshelf: jobs still carrying the old title keep the new one. */
+  private readonly renames = new Map<number, { from: string; to: string }>();
   /** Works found deleted: never written again from this screen. */
   private readonly deleted = new Set<number>();
   /** Jobs whose last write failed (waiting for the retry timer). */
@@ -110,6 +120,7 @@ export class LocalSaveQueue<TSettings = unknown> {
   setBase(docId: number, revision: number): void {
     this.revisions.set(docId, revision);
     this.redirects.delete(docId);
+    this.renames.delete(docId);
     this.deleted.delete(docId);
   }
 
@@ -123,6 +134,8 @@ export class LocalSaveQueue<TSettings = unknown> {
    * (「…（書きかけの控え）」) until the screen renames the work.
    */
   private retarget(job: AutosaveJob<TSettings>): AutosaveJob<TSettings> {
+    const rename = this.renames.get(job.docId);
+    if (rename && job.title === rename.from) job = { ...job, title: rename.to };
     const redirect = this.redirects.get(job.docId);
     if (!redirect) return job;
     return { ...job, docId: redirect.id, title: job.title === redirect.fromTitle ? redirect.title : job.title };
@@ -212,9 +225,10 @@ export class LocalSaveQueue<TSettings = unknown> {
 
     if (result.kind === "saved") {
       this.revisions.set(target, result.revision);
+      if (result.renamedTitle !== undefined) this.renames.set(docId, { from: written.title, to: result.renamedTitle });
       if (this.latest.get(docId) === job) this.latest.delete(docId);
       this.retryAttempt = 0;
-      this.emit({ type: "saved", docId });
+      this.emit({ type: "saved", docId, renamedTitle: result.renamedTitle });
       return;
     }
 
