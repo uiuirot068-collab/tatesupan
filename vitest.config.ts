@@ -34,6 +34,8 @@ export default defineConfig({
       // SPN-UNIFY-001: login and feedback in the SpunTales portal project
       "src/lib/supabase/plans.test.ts",
       "src/lib/betaFeedbackClient.test.ts",
+      // TSP-SAFE-001: 保存の作り（端末控え・2つのタブ・失敗のやり直し）
+      "src/lib/localSaveQueue.test.ts", "src/lib/localSaveSafety.test.ts", "src/lib/cloudDeviceCopy.test.ts",
     ],
   },
 });

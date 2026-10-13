@@ -16,13 +16,16 @@ import ExportFilenameControl from './ExportFilenameControl';
 // `withBasePath`-relative in-app routing this Header otherwise uses.
 const SPUNTALES_PORTAL_URL = 'https://spuntales.net/';
 
-type SaveStatus = 'loading' | 'saved' | 'saving' | 'error';
+type SaveStatus = 'loading' | 'saved' | 'saving' | 'error' | 'stopped';
+type CloudSaveStatus = 'synced' | 'unsent';
 
 interface HeaderProps {
   onSave?: () => void;
   onSelectProject?: (project: Project) => void;
   isSaving?: boolean;
   saveStatus?: SaveStatus;
+  /** TSP-SAFE-001: shown only while the work is linked to a cloud work. */
+  cloudSaveStatus?: CloudSaveStatus;
   onOpenHelp?: () => void;
   exportFilenameStem?: string;
   onExportFilenameStemChange?: (stem: string) => void;
@@ -38,29 +41,39 @@ interface HeaderProps {
   variant?: 'editor' | 'home';
 }
 
-function SaveStatusLabel({ status }: { status: SaveStatus }) {
+// TSP-SAFE-001: this browser's copy and the cloud are shown separately — a
+// work saved here is not necessarily in the cloud, and the other way round.
+function SaveStatusLabel({ status, cloudStatus }: { status: SaveStatus; cloudStatus?: CloudSaveStatus }) {
   const text: Record<SaveStatus, string> = {
     loading: '読み込み中…',
-    saving: '下書き保存中…',
-    saved: '下書き保存済み',
-    error: '下書きの保存に失敗しました',
+    saving: 'この端末に保存中…',
+    saved: 'この端末に保存済み',
+    error: 'この端末に保存できません（やり直し中）',
+    stopped: 'この端末には保存していません',
   };
   const dot: Record<SaveStatus, string> = {
     loading: 'bg-gray-300',
     saving: 'bg-[#c5a059] animate-pulse',
     saved: 'bg-[#c5a059]',
     error: 'bg-red-500',
+    stopped: 'bg-red-500',
   };
   const label: Record<SaveStatus, string> = {
     loading: 'text-gray-400',
     saving: 'text-gray-600',
     saved: 'text-gray-600',
     error: 'text-red-500',
+    stopped: 'text-red-500',
   };
   return (
-    <span className="flex items-center gap-1.5 text-xs whitespace-nowrap flex-shrink-0">
+    <span className="flex items-center gap-1.5 text-xs whitespace-nowrap flex-shrink-0" data-save-status={status}>
       <span className={`h-1.5 w-1.5 rounded-full ${dot[status]}`} />
       <span className={`whitespace-nowrap ${label[status]}`}>{text[status]}</span>
+      {cloudStatus && (
+        <span className="whitespace-nowrap text-gray-500" data-cloud-save-status={cloudStatus}>
+          ・{cloudStatus === 'synced' ? 'クラウドにも保存済み' : 'クラウドには未送信'}
+        </span>
+      )}
     </span>
   );
 }
@@ -72,7 +85,7 @@ function SaveStatusLabel({ status }: { status: SaveStatus }) {
 // Nothing is hidden, renamed or reordered; from 906px up (and on phones) the header is exactly as before.
 const TABLET_COMPACT_SHELL = 'md:max-[905px]:my-1 md:max-[905px]:py-1.5 md:max-[905px]:gap-y-1';
 
-export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHelp, exportFilenameStem = "", onExportFilenameStemChange, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, cloudSaveStatus, onOpenHelp, exportFilenameStem = "", onExportFilenameStemChange, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
   const isHome = variant === 'home';
   // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
   // ログイン状態や作品数に関わらず表示しない（空の本棚でも重複表示しない）。
@@ -274,7 +287,7 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, onOpenHe
             save status — don't duplicate it in the (scrolled-away) header. */}
         {saveStatus && (
           <span className="hidden md:contents">
-            <SaveStatusLabel status={saveStatus} />
+            <SaveStatusLabel status={saveStatus} cloudStatus={cloudSaveStatus} />
           </span>
         )}
       </div>

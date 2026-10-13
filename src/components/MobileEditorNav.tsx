@@ -2,14 +2,22 @@
 
 import Link from "next/link";
 
-type SaveStatus = "loading" | "saved" | "saving" | "error";
+type SaveStatus = "loading" | "saved" | "saving" | "error" | "stopped";
+type CloudSaveStatus = "synced" | "unsent";
 type MobileView = "editor" | "preview";
 
+// TSP-SAFE-001: this browser and the cloud are shown separately (short form).
 const SAVE_TEXT: Record<SaveStatus, string> = {
   loading: "読み込み中…",
-  saving: "保存中…",
-  saved: "保存済み",
-  error: "保存に失敗",
+  saving: "端末に保存中…",
+  saved: "端末に保存済み",
+  error: "端末に保存できず再試行中",
+  stopped: "端末に保存していません",
+};
+
+const CLOUD_TEXT: Record<CloudSaveStatus, string> = {
+  synced: "クラウドも保存済み",
+  unsent: "クラウド未送信",
 };
 
 const SAVE_DOT: Record<SaveStatus, string> = {
@@ -17,6 +25,7 @@ const SAVE_DOT: Record<SaveStatus, string> = {
   saving: "bg-accent animate-pulse",
   saved: "bg-accent",
   error: "bg-red-500",
+  stopped: "bg-red-500",
 };
 
 interface MobileEditorNavProps {
@@ -32,6 +41,8 @@ interface MobileEditorNavProps {
   onExitFocus: () => void;
   /** Draft save status. Omitted for the sample/使い方ガイド document. */
   saveStatus?: SaveStatus;
+  /** TSP-SAFE-001: shown only while the work is linked to a cloud work. */
+  cloudSaveStatus?: CloudSaveStatus;
   /** Cloud-save handler. Omitted for the sample document. */
   onSave?: () => void;
   isSaving?: boolean;
@@ -70,6 +81,7 @@ export default function MobileEditorNav({
   onEnterFocus,
   onExitFocus,
   saveStatus,
+  cloudSaveStatus,
   onSave,
   isSaving,
   onOpenExport,
@@ -147,7 +159,10 @@ export default function MobileEditorNav({
         {saveStatus && (
           <span className="flex min-w-0 items-center gap-1.5 text-ink/60">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${SAVE_DOT[saveStatus]}`} />
-            <span className="truncate">{SAVE_TEXT[saveStatus]}</span>
+            <span className="truncate">
+              {SAVE_TEXT[saveStatus]}
+              {cloudSaveStatus && `・${CLOUD_TEXT[cloudSaveStatus]}`}
+            </span>
           </span>
         )}
 
