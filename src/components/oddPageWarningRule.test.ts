@@ -67,7 +67,11 @@ describe("PreviewPane.tsx source guards (TSP-UX-V3-LOOP2-ODD-PAGE-012)", () => {
   });
 
   it("primary action resumes the SAME pending export via runPdfExport, not a second export path", () => {
-    expect(source).toContain("void runPdfExport(pending);");
+    // The odd-page modal became a warning row in the unified preflight
+    // accordion (pre-repo); the PDF button builds one pending export and hands
+    // it to runPdfExport, which must stay the only PDF export call site.
+    expect(source).toMatch(/const pending: PendingPdfExport = \{[^}]*\};(\s*\/\/[^\n]*)*\s*await runPdfExport\(pending\);/);
+    expect(source.match(/\brunPdfExport\(/g)).toHaveLength(1);
   });
 
   it("11. no blank/synthetic page is ever pushed into the manuscript to fix odd-page count", () => {

@@ -118,7 +118,9 @@ describe("beta export cancellation", () => {
     expect(preview).toContain('data-export-cancel-action="abort"');
     expect(image.match(/waitForExportPermission\(signal\)/g)?.length).toBeGreaterThanOrEqual(10);
     expect(image).toMatch(/await waitForExportPermission\(signal\);\s*saveAs\(content, zipFileName\)/);
-    expect(pdf).toMatch(/await waitForExportPermission\(signal\);\s*pdf\.save\(fileName\)/);
+    // Only a perf timestamp may sit between the final gate and the save (pre-repo perf instrumentation).
+    expect(pdf).toMatch(/await waitForExportPermission\(signal\);\s*(const perf\w+ = performance\.now\(\);\s*)?pdf\.save\(fileName\)/);
+    expect(pdf.match(/pdf\.save\(/g)).toHaveLength(1);
     expect(preview).toMatch(/isExportCancelledError\(err\)[\s\S]{0,500}finally \{\s*finishExport\(signal\)/);
     expect(preview).toMatch(/await exportCustomPdf[\s\S]{0,900}onPdfExportSuccess\?\.\(\)/);
   });
@@ -131,7 +133,10 @@ describe("beta export cancellation", () => {
     expect(preview).toContain('exportCancellation.handleEscape() !== "open-confirmation"');
     expect(preview).toContain("event.stopImmediatePropagation()");
     expect(modal).toContain("modalStack.at(-1) !== id");
-    expect(modal).toMatch(/event\.preventDefault\(\);\s*event\.stopImmediatePropagation\(\);\s*onClose\(\)/);
+    // Close goes through refs now, with an optional onEscape hook that can consume Escape first
+    // (pre-repo); the topmost modal still swallows the event before anything else sees it.
+    expect(modal).toMatch(/if \(event\.key !== "Escape" \|\| modalStack\.at\(-1\) !== id\) return;\s*event\.preventDefault\(\);\s*event\.stopImmediatePropagation\(\);\s*if \(onEscapeRef\.current\?\.\(\)\) return;\s*onCloseRef\.current\(\);/);
+    expect(modal).toContain('document.addEventListener("keydown", closeTopModalOnEscape, true)');
     expect(preview).toContain("onClose={continueExport}");
   });
 });

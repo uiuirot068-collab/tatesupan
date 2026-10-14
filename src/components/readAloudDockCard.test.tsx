@@ -160,7 +160,11 @@ describe("Desktop Review Bar (bottom of Preview) — Revision 4", () => {
 
   it("cards keep a sane minimum width so they are never squeezed illegibly inside a popover", () => {
     expect(read("src/components/ReadAloudDockCard.tsx")).toContain("min-w-[15rem] flex-1");
-    expect(read("src/components/DescriptionCheckControls.tsx")).toContain("min-w-[15rem] flex-1");
+    // 描写・修飾チェックβ's card replaced its hard min width with a container-query card that
+    // reflows its controls below 360px (pre-repo), so it stays legible in a narrow popover.
+    const description = read("src/components/DescriptionCheckControls.tsx");
+    expect(description).toContain('className="@container min-w-0 w-full max-w-full flex-1');
+    expect(description).toContain("@max-[360px]:basis-full");
   });
 
   it("TategakiEditor mounts the bar at the bottom of the Preview pane only on the measured 'desktop' surface, and not in 集中モード or while Preview is collapsed -- unlike Revision 3's Rail, this is NOT pin-gated (見直し must stay reachable even with nothing pinned)", () => {
