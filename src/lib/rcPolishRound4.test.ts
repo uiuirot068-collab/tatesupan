@@ -97,10 +97,15 @@ describe("Round 4 Editor placement and visibility", () => {
   });
 
   it("hides focus-only status surfaces without deleting their state", () => {
-    expect(pane).toMatch(/data-writing-check-surface=""[\s\S]{0,100}focusMode \? "max-md:hidden md:hidden"/);
-    expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]{0,180}focusMode \? "max-md:hidden md:hidden"/);
-    expect(pane).toContain('data-ruby-tcy-status=""');
-    expect(pane).toContain("<WorkSessionTracker");
+    // TSP-IMPROVE-002: the old data-writing-check-surface / data-editor-status-surfaces
+    // footer (and its data-ruby-tcy-status strip) was replaced by the Review Hub
+    // footer. Focus mode now unmounts only the compact footer and the Desktop
+    // Review Bar; the state they show stays in hooks / TategakiEditor.
+    expect(pane).toMatch(/\{reviewSurface === "compact" && !focusMode && !keyboardActive && \(\s*<div\s+data-editor-footer-collapsed=""\s+data-mobile-review-footer=""/);
+    expect(shell).toContain('const reviewBarEligible = reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed;');
+    expect(shell).toContain("reviewBarNode={reviewBarEligible ? reviewBarNode : null}");
+    expect(pane).toContain("const [writingCheckEnabled, setWritingCheckEnabled] = useWritingCheckEnabled();");
+    expect(pane).toContain("<WorkSessionTracker\n            state={workSession}");
   });
 
   it("TSP-EDITOR-PAGINATION-AND-PREVIEW-NAVIGATION-009 §F: keeps the redundant mobile write-action guidance block removed so the textarea starts immediately below the toolbar", () => {
@@ -113,7 +118,8 @@ describe("Round 4 Editor placement and visibility", () => {
 
 describe("Round 4 Home and Demo", () => {
   it("matches the zero-work reference structure without the intermediate block", () => {
-    const home = source("src/app/page.tsx");
+    // TSP-IMPROVE-002: page.tsx only mounts HomeV2Client; the Home markup lives there.
+    const home = source("src/app/home-v2/HomeV2Client.tsx");
     const empty = home.slice(home.indexOf('data-home-empty-onboarding=""'), home.indexOf("</main>"));
     expect(empty).toContain('renderBrandPanel("onboarding")');
     expect(empty).toContain('data-home-empty-bookshelf=""');

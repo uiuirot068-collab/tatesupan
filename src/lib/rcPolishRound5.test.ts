@@ -17,7 +17,9 @@ describe("Round 5 Memo and Home contracts", () => {
   const memo = source("src/components/InlineMemoAccordion.tsx");
   const bookshelf = source("src/components/bookshelf/Bookshelf.tsx");
   const bookshelfCss = source("src/components/bookshelf/Bookshelf.module.css");
-  const home = source("src/app/page.tsx");
+  // TSP-IMPROVE-002: page.tsx only mounts HomeV2Client; the Home markup lives there.
+  const home = source("src/app/home-v2/HomeV2Client.tsx");
+  const homeCss = source("src/app/home-v2/home-v2.css");
 
   it("uses the same Memo entry as an open/close toggle without touching draft semantics", () => {
     expect(pane).toContain("onToggleMemo: () => void");
@@ -33,8 +35,10 @@ describe("Round 5 Memo and Home contracts", () => {
   it("removes the actual long shelf-front line while retaining card and popup borders", () => {
     expect(bookshelf).not.toContain("shelfFrontLip");
     expect(bookshelfCss).not.toContain(".shelfFrontLip {");
-    expect(home).toContain('role="tabpanel"');
-    expect(home).toContain('rounded-[18px] border border-[rgba(31,42,68,0.14)]');
+    // TSP-IMPROVE-002: the shelf card is now the bordered `home-p3-mat` tabpanel
+    // instead of a `rounded-[18px] border` utility card.
+    expect(home).toMatch(/role="tabpanel"[\s\S]{0,200}className="home-p3-mat /);
+    expect(homeCss).toMatch(/\.home-p3-mat\s*\{[^}]*border: 1px solid/);
     expect(bookshelfCss).toMatch(/\.menuPanel\s*\{[\s\S]*?border: 1px solid/);
     expect(bookshelfCss).toContain("background: var(--base)");
   });
@@ -75,8 +79,9 @@ describe("Round 5 compact mobile Editor controls", () => {
     expect(actionRow).toContain('data-editor-action="memo"');
     expect(actionRow).toContain('data-editor-action="report"');
     expect(actionRow).toContain('data-editor-action="exit-focus"');
-    expect(pane).toMatch(/data-writing-check-surface=""[\s\S]*?max-md:hidden/);
-    expect(pane).toMatch(/data-editor-status-surfaces=""[\s\S]*?max-md:hidden/);
+    // TSP-IMPROVE-002: the old writing-check / status surfaces became the Review Hub
+    // footer, which Focus mode removes on mobile (compact) widths.
+    expect(pane).toMatch(/\{reviewSurface === "compact" && !focusMode && !keyboardActive && \(\s*<div\s+data-editor-footer-collapsed=""\s+data-mobile-review-footer=""/);
   });
 
   it.each([320, 375, 390, 430])("keeps all four secondary controls in one content-aware row at %ipx", () => {
@@ -144,7 +149,9 @@ describe("Round 5 Web JPG footer branding", () => {
   it("uses a visibility-preserving placeholder and one high-quality direct paint", () => {
     const pageCard = source("src/components/PageCard.tsx");
     const capture = source("src/utils/exportCapture.ts");
-    expect(pageCard.match(/data-export-branding="web-footer"/g)).toHaveLength(1);
+    // TSP-IMPROVE-002: count the JSX attribute only; a JSDoc line above
+    // FooterBrandLogo (23e3aa1) also mentions it.
+    expect(pageCard.match(/^\s*data-export-branding="web-footer"\s*$/gm)).toHaveLength(1);
     expect(capture).toContain("img.style.visibility = \"hidden\"");
     expect(capture).toContain('img.setAttribute("data-export-direct-composite", "true")');
     expect(capture).toContain('ctx.imageSmoothingQuality = "high"');
