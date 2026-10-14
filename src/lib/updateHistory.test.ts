@@ -57,8 +57,14 @@ describe("the shipped public/data/tatespun-update-history.json", () => {
   });
 
   it("keeps same-date entries valid and the newest release first in source order", () => {
-    expect(entries[0]?.date).toBe("26/09/30");
-    expect(entries[1]?.date).toBe("26/09/30");
+    // TSP-IMPROVE-002: the head entry moved on as releases shipped (26/09/30 ->
+    // 26/10/04, 018b7eb CST-PORT-016), so check the ordering itself instead of
+    // a pinned date: dates (YY/MM/DD) never increase in source order.
+    const dates = entries.map((entry) => entry.date);
+    expect(dates.length).toBeGreaterThan(1);
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(dates[0]).toBe(dates[1]);
+    expect(entries.filter((entry) => entry.date === "26/09/30")).toHaveLength(2);
     expect(entries.filter((entry) => entry.date === "26/09/20")).toHaveLength(2);
   });
 

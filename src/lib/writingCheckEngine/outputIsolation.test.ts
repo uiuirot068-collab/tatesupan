@@ -22,6 +22,10 @@ function collectSourceFiles(dir: string): string[] {
     if (entry.name === "node_modules" || entry.name === ".next") continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) files.push(...collectSourceFiles(full));
+    // TSP-IMPROVE-002: production code only. Test files under typesetting-v2/
+    // (e.g. core/reviewHubFooterCustomization.test.ts, which pins Editor-side
+    // Review Hub strings) are not part of the output pipeline.
+    else if (/\.(test|spec)\.tsx?$/.test(entry.name)) continue;
     else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(full);
   }
   return files;

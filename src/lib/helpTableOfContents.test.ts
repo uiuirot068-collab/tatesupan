@@ -49,9 +49,13 @@ describe("Help top table of contents", () => {
 
   it("keeps TOC-dialog detection semantics and left-aligns its informational UI", () => {
     const dialog = readFileSync(join(ROOT, "src", "components", "BookPartsModal.tsx"), "utf8");
-    expect(dialog).toContain("computeTocItemsWithOffset(");
-    expect(dialog).toContain("generateTocText(tocItems)");
-    expect(dialog).toMatch(/className="text-left"[\s\S]{0,500}mt-2 block[\s\S]{0,250}再検出/);
+    // TSP-IMPROVE-002: detection runs through the V2 worker
+    // (computeTocItemsWithV2, predates the repo; 834ec2c), and since 9f59c3b
+    // the TOC is work-owned: the detected items go to onTocChange instead of
+    // being inserted as generateTocText(tocItems) text.
+    expect(dialog).toContain("computeTocItemsWithV2(");
+    expect(dialog).toContain("items: tocItems.map((item) => ({ ...item }))");
+    expect(dialog).toMatch(/className="text-left"[\s\S]{0,3000}className="block [^"]*text-left[^"]*"[\s\S]{0,250}再検出/);
     expect(dialog).toContain('className="py-4 text-left text-gray-400"');
   });
 });
