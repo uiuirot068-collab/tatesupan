@@ -3,8 +3,8 @@
  *
  * Single source of truth: the `NEXT_PUBLIC_BASE_PATH` build-time env var,
  * which `next.config.ts` also reads to set Next's own `basePath`.
- *   - unset / ""  → app is served from the domain root (local dev, current
- *     tatespun.pages.dev)
+ *   - unset / ""  → app is served from the domain root (local dev; see
+ *     docs/DEPLOY.md for production)
  *   - "/tatespun" → app is served under https://spuntales.net/tatespun/
  *
  * `next/link`, the `next/navigation` router, `next/image` and `metadata.icons`

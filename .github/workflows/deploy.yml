@@ -1,8 +1,8 @@
 name: Deploy to GitHub Pages
 
+# TSP-IMPROVE-002 (P0-2): not production. spuntales.net/tatespun/ is served by
+# Cloudflare Pages (`npm run build:basepath`, see docs/DEPLOY.md). Manual only.
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 permissions:
