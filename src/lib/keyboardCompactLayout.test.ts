@@ -84,8 +84,16 @@ describe("keyboard-active compact layout (CSS-only, mobile-only)", () => {
   });
 
   it("keeps the existing footer keyboard-active compaction (EditorPane) intact and separate from this CSS rule", () => {
-    expect(pane).toContain('footerCollapsed && !focusMode && !keyboardActive');
-    expect(pane).toContain('footerCollapsed || keyboardActive ? "max-md:hidden" : ""');
+    // TSP-IMPROVE-002: the old footerCollapsed footer was replaced by the Review
+    // Hub footer before the repo's first commit (55ce1b9). The keyboard-active
+    // compaction now lives in JS: the compact collapsed footer is gated on
+    // !keyboardActive, and the hub disclosure is suppressed (closed) while the
+    // keyboard is open.
+    expect(pane).toContain('{reviewSurface === "compact" && !focusMode && !keyboardActive && (');
+    expect(pane).toMatch(/!keyboardActive && \(\s*<div\s+data-editor-footer-collapsed=""/);
+    expect(pane).toContain("useReviewHubDisclosure({ focusMode, keyboardActive }");
+    const disclosure = readFileSync(join(__dirname, "..", "hooks", "useReviewHubDisclosure.ts"), "utf8");
+    expect(disclosure).toContain("const suppressed = chrome.focusMode || chrome.keyboardActive;");
   });
 
   it("writes data-keyboard-active as a genuinely absent attribute when inactive, not a \"false\" value -- so the plain [data-keyboard-active] presence selector can never match the inactive state", () => {

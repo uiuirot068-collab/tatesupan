@@ -5,7 +5,14 @@ import { describe, expect, it } from "vitest";
 const readSource = (path: string) => readFileSync(resolve(path), "utf8");
 
 describe("RC Home information architecture", () => {
-  const home = readSource("src/app/page.tsx");
+  // src/app/page.tsx only mounts HomeV2Client (already so at the start of git
+  // history, 55ce1b9); the live Home markup lives there.
+  const page = readSource("src/app/page.tsx");
+  const home = readSource("src/app/home-v2/HomeV2Client.tsx");
+
+  it("serves the Home from HomeV2Client", () => {
+    expect(page).toContain("<HomeV2Client />");
+  });
 
   it("puts the bookshelf first for returning users and moves the compact brand panel below it", () => {
     expect(home).toContain("data-home-returning-bookshelf");
@@ -17,16 +24,19 @@ describe("RC Home information architecture", () => {
   });
 
   it("keeps returning Create, Demo, and anthology actions together above the shelf", () => {
-    const start = home.indexOf("data-home-returning-actions");
+    const start = home.indexOf('data-home-returning-actions=""');
+    expect(start).toBeGreaterThan(-1);
     const end = home.indexOf("</div>", start);
     const actions = home.slice(start, end);
-    expect(actions).toContain("新しい作品を作成する");
+    // The Create action is now labelled 次の一冊を書く (predates history).
+    expect(actions).toMatch(/onClick=\{handleCreate\}[^>]*>[\s\S]{0,120}次の一冊を書く/);
     expect(actions).toContain("おためしデモ");
     expect(actions).toContain("総集編を編成する");
   });
 
   it("uses the Human-reference upper structure for zero-work without a bordered empty card", () => {
-    const start = home.indexOf("data-home-empty-onboarding");
+    const start = home.indexOf('data-home-empty-onboarding=""');
+    expect(start).toBeGreaterThan(-1);
     const end = home.indexOf("</main>", start);
     const emptyState = home.slice(start, end);
     expect(emptyState).toContain('renderBrandPanel("onboarding")');
@@ -86,7 +96,7 @@ describe("RC Editor information architecture", () => {
       'resize-none overflow-y-auto ${probeMode === "nowrap" ? "overflow-x-auto whitespace-pre" : "overflow-x-hidden"}'
     );
     expect(settings).toContain("min-h-0 flex-1 overflow-y-auto");
-    expect(options).toContain("min-h-0 flex-1 gap-3 overflow-y-auto");
+    expect(options).toContain("min-h-0 flex-1 flex-col gap-3 overflow-y-auto");
     expect(shell).toContain('data-editor-header-slot=""');
     expect(shell).toContain('focusMode ? "hidden" : "flex-none"');
     expect(shell).not.toContain('focusMode || demoMode ? "hidden');
@@ -118,7 +128,10 @@ describe("RC Editor information architecture", () => {
 
   it("keeps the requested main Settings visual order in one continuous drawer", () => {
     expect(Array.from(settingsPanel.matchAll(/data-settings-row="([^"]+)"/g), (match) => match[1]))
-      .toEqual(["paper", "typography", "columns", "layout-mode", "capacity", "capacity", "apply"]);
+      // SPN-XFIX-002 (23e3aa1) added the SNS-paper-only credit row beside paper;
+      // SPN-XFIX-001 (79e06dc) added the center-piece row after apply.
+      .toEqual(["paper", "sns-credit", "typography", "columns", "layout-mode", "capacity", "capacity", "apply", "center-piece"]);
+    expect(settingsPanel).toContain('data-settings-row="sns-credit" className="order-[1]');
     expect(settingsPanel).toContain('data-settings-row="typography" className="order-[2]');
     expect(settingsPanel).toContain('data-settings-row="columns" className="order-[3]');
   });
@@ -152,7 +165,8 @@ describe("RC Editor information architecture", () => {
 
   it("contains all five required Options categories", () => {
     expect(Array.from(options.matchAll(/data-editor-option="([^"]+)"/g), (match) => match[1]))
-      .toEqual(["vertical-colophon", "horizontal-colophon", "toc", "checklist", "txt-transfer"]);
+      // CST-PORT-011 (61eec0e) added the cover entry ahead of the five categories.
+      .toEqual(["cover", "vertical-colophon", "horizontal-colophon", "toc", "checklist", "txt-transfer"]);
     expect(options).toContain("A 原稿データ");
     expect(options).toContain("B 整形本文");
   });

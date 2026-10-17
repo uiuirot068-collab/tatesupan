@@ -25,11 +25,18 @@ describe("final drawer visual hierarchy", () => {
     expect(options).toContain(
       'const flatOptionClass = "border-b border-ink/10 pb-3"',
     );
+    // TSP-IMPROVE-002: CST-PORT-011B (61eec0e) moved the rounded group frame onto
+    // the 本づくり / 原稿ファイル accordions; TXT stays grouped (grid) inside its own
+    // 原稿ファイル accordion rather than flattened like the simple sections.
+    expect(options).toContain('const groupedOptionClass = "grid gap-3"');
     expect(options).toContain(
-      'const groupedOptionClass = "rounded-xl border border-ink/15 bg-base p-3"',
+      '<section data-bookmaking-section={id} className="rounded-xl border border-ink/15 bg-base">',
+    );
+    expect(options).toMatch(
+      /<DrawerAccordion id="files"[^>]*>\s*<section data-editor-option="txt-transfer" className=\{groupedOptionClass\}>/,
     );
 
-    for (const id of ["vertical-colophon", "horizontal-colophon", "toc", "checklist"]) {
+    for (const id of ["cover", "vertical-colophon", "horizontal-colophon", "toc", "checklist"]) {
       expect(options).toContain(
         `data-editor-option="${id}" className={flatOptionClass}`,
       );
@@ -37,7 +44,9 @@ describe("final drawer visual hierarchy", () => {
     expect(options).toContain(
       'data-editor-option="txt-transfer" className={groupedOptionClass}',
     );
-    expect(options.match(/onClick=\{\(\) => open\(/g)).toHaveLength(7);
+    // TSP-IMPROVE-002: 9 = the original 7 + DOCX import (predates the repo)
+    // + 表紙 (CST-PORT-011, 61eec0e).
+    expect(options.match(/onClick=\{\(\) => open\(/g)).toHaveLength(9);
   });
 });
 

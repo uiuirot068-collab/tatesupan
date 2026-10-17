@@ -84,15 +84,15 @@ describe("responsive demo card placement", () => {
     const tracker = readFileSync(join(__dirname, "..", "components", "WorkSessionTracker.tsx"), "utf8");
     const guide = readFileSync(join(__dirname, "..", "app", "guide", "page.tsx"), "utf8");
 
-    // TSP-PAGED-EDITOR-QA-FIXES-AND-DEMO-010 §G added one step (編集ページ).
-    expect(data.match(/^    title: "/gm)).toHaveLength(12);
+    // TSP-IMPROVE-002: TSP-DEMO-001 (71dd292) trimmed the tour from 12 to 6
+    // steps (書く -> プレビュー -> 設定 -> 本づくり -> 書き出し -> おしまい).
+    expect(data.match(/^    title: "/gm)).toHaveLength(6);
     expect(data).not.toMatch(/\bn:\s*\d+,/);
-    expect(data).toContain('title: "本づくりメニューも使えます"');
-    expect(data).toContain('title: "集中モードで本文を広く"');
-    expect(data).toContain('title: "作業タイムを記録しよう"');
-    expect(data).toContain("作業スタート");
-    expect(data).toContain("新しく書いた文字数");
-    expect(data).toContain("作業記録");
+    expect(data).toContain('title: "表紙や目次は「本づくり」へ"');
+    // TSP-IMPROVE-002: removed the focus-mode and work-session step assertions
+    // ("集中モードで本文を広く", "作業タイムを記録しよう", 作業スタート / 新しく書いた文字数 /
+    // 作業記録) - TSP-DEMO-001 (71dd292) deliberately dropped those steps from the
+    // tour. The tracker keeps its demo target hook.
     expect(tracker).toContain('data-demo-target="work-session"');
 
     expect(guide).toContain('title: "完成前マイチェックリスト"');

@@ -72,7 +72,9 @@ describe("DesktopReviewBar: pin-gated quick indicators, always-present 見直し
   it("音読β's status pill shows while pinned OR actively speaking/paused (closing/switching surfaces must never strand playback -- same rule as the compact mini bar)", () => {
     expect(source).toContain('const readAloudActive = readAloud.state.status !== "idle";');
     expect(source).toContain("const showReadAloud = readAloudPinned || readAloudActive;");
-    expect(source).toContain("{showReadAloud && <ReadAloudStatusPill");
+    // The status pill became the inline play/pause bar (pre-repo); the show rule is the same.
+    expect(source).toMatch(/\{showReadAloud && \(\s*<div[^>]*>\s*<ReadAloudInlineBar \{\.\.\.readAloud\} \/>/);
+    expect(source.match(/<ReadAloudInlineBar/g)).toHaveLength(1);
   });
 
   it("描写・修飾チェックβ's pill is pin-gated only (no 'unpinned but active' exception -- it has no comparable in-progress state to strand)", () => {
@@ -83,7 +85,13 @@ describe("DesktopReviewBar: pin-gated quick indicators, always-present 見直し
 
 describe("DesktopReviewBar: quick popovers overlay Preview without resizing it", () => {
   it("both quick popovers are absolutely positioned, anchored to the bar's own relative root, opening upward", () => {
-    expect(source.match(/className="absolute bottom-full left-0 z-20 mb-1\.5 w-\[19rem\] max-w-\[calc\(100vw-2rem\)\]"/g)).toHaveLength(2);
+    // The bar root is the relative anchor ...
+    expect(source).toMatch(/data-desktop-review-bar=""\s*className="[^"]*\brelative\b[^"]*"/);
+    // ... 音読β keeps its fixed-width upward popover ...
+    expect(source).toMatch(/data-desktop-review-popover="read-aloud" className="absolute bottom-full left-0 z-20 mb-1\.5 w-\[19rem\] max-w-\[calc\(100vw-2rem\)\]"/);
+    // ... and 描写・修飾チェックβ now spans the bar (capped width) but is still an absolute, upward overlay.
+    expect(source).toMatch(/data-desktop-review-popover="description-check"\s*className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-1\.5"/);
+    expect(source).toContain('className="pointer-events-auto w-full max-w-[24rem]"');
   });
 
   it("the Hub popover is the SAME `<ReviewHubPanel>` element EditorPane builds (not a duplicate) -- its own anchored variant already renders `absolute bottom-full`, so it needs no extra wrapper here", () => {

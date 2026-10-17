@@ -32,7 +32,9 @@ describe("Round 6 bookshelf layering", () => {
 });
 
 describe("Final zero-work Home polish", () => {
-  const home = source("src/app/page.tsx");
+  // TSP-IMPROVE-002: page.tsx only mounts HomeV2Client; the Home markup lives there.
+  const home = source("src/app/home-v2/HomeV2Client.tsx");
+  const homeCss = source("src/app/home-v2/home-v2.css");
   const css = source("src/components/bookshelf/Bookshelf.module.css");
   const onboarding = home.slice(
     home.indexOf('data-home-brand-panel={mode}'),
@@ -69,8 +71,10 @@ describe("Final zero-work Home polish", () => {
   });
 
   it("hides only the onboarding cat below the two-column breakpoint", () => {
-    expect(onboarding).toContain("max-[719px]:hidden");
-    expect(onboarding).toContain("min-[720px]:justify-self-end");
+    // TSP-IMPROVE-002: the two-column breakpoint moved to 900px in the HomeV2 cover;
+    // the cat column is hidden below it and shown (end-aligned) at/above it.
+    expect(onboarding).toContain("min-[900px]:grid-cols-[minmax(0,1fr)_minmax(200px,260px)]");
+    expect(onboarding).toMatch(/className="relative hidden items-end justify-end gap-6 min-\[900px\]:flex"[\s\S]{0,200}caroad_main1\.png/);
   });
 
   it("keeps the Demo CTA in one compact text flow, now width-constrained by the two-column HOW TO onboarding grid", () => {
@@ -88,8 +92,9 @@ describe("Final zero-work Home polish", () => {
     );
     expect(twoColumnWrapper).toContain("sm:grid-cols-2");
     expect(card).toContain('data-home-demo-cta=""');
-    expect(card).toContain("block rounded-xl");
-    expect(card).toContain("text-sm font-semibold");
+    // TSP-IMPROVE-002: the card's block flow now comes from the `home-p3-ticket` class.
+    expect(card).toContain('className="home-p3-ticket group"');
+    expect(homeCss).toMatch(/\.home-p3-ticket\s*\{[^}]*display: block;/);
     expect(card).not.toContain("grid-cols-[1fr_auto]");
   });
 });
@@ -102,7 +107,8 @@ describe("Round 6 mobile toolbar", () => {
   );
 
   it.each([320, 375, 390, 430])("uses compact content-width tracks without overflow at %ipx", () => {
-    expect(row).toContain("grid-cols-[44px_44px_max-content_max-content_max-content]");
+    // TSP-IMPROVE-002: 9f59c3b put the 保存名 control first; なつお checked on a narrow phone (2026-10-17) that 報告 stays visible.
+    expect(row).toContain("grid-cols-[max-content_44px_44px_max-content_max-content_max-content]");
     expect(row).toContain("justify-center");
     expect(row).toContain("gap-0.5");
     expect(row).not.toContain("minmax(0,1fr)");
@@ -114,7 +120,9 @@ describe("Round 6 mobile toolbar", () => {
     // 5 always-visible actions plus the focus-mode-only Memo and exit-focus
     // entries (the latter `hidden` below `md`, but still carrying the class
     // in this source-text count).
-    expect(row.match(/min-h-9/g)).toHaveLength(7);
+    // TSP-IMPROVE-002: 9f59c3b added the 保存名 filename control as the row's first
+    // item with the same compact min-h-9 height, so the count is now 8.
+    expect(row.match(/min-h-9/g)).toHaveLength(8);
     expect(row).not.toContain("min-h-10");
   });
 });
@@ -129,7 +137,9 @@ describe("Round 6 Demo Step 9", () => {
     // position without changing anything this test actually cares about.
     const targets = Array.from(data.matchAll(/target: "([^"]+)"/g), (match) => match[1]);
     expect(targets).toContain("export");
-    expect(tour).toContain('step.target === "export" ? "lower-safe" : "auto"');
+    // TSP-IMPROVE-002: narrow screens and the preview step got their own placements
+    // (79e06dc); Export still asks for lower-safe.
+    expect(tour).toContain('step.target === "export" ? "lower-safe" :');
     expect(tour).not.toMatch(/setExport|openExport|onOpenExport/);
   });
 });

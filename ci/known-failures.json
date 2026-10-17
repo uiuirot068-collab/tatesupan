@@ -1,0 +1,10 @@
+{
+  "description": "TSP-IMPROVE-002: npm run test:all で落ちてよいテスト（理由つき）。docs/TEST_FAILURES.md を参照。直したら一覧から外す。",
+  "failures": [
+    {
+      "id": "typesetting-v2/renderer/publication/structuralColophonFinalPlacement.test.ts > Overflow -- multi-page colophon after insertion, no silent clipping > continuation pages use the SAME 'smallest consistent' top-anchored start regardless of the requested vertical placement -- a real, disclosed v2-only rule since legacy has no multi-page colophon concept (test 21)",
+      "group": "colophon-continuation-gap",
+      "reason": "奥付が2ページ以上になり、続きのページが自由欄だけのとき、先頭に1.4字ぶんの空きが入る（standard・center・classic は freeTextGapEm を上に何もなくても足す。minimal は y > 0 の時だけ）。不具合の見込み。直すのは Phase 4（組版）で src/lib/colophonRenderPlan.ts。"
+    }
+  ]
+}

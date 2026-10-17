@@ -16,6 +16,12 @@
 // area is clamped inward, using each ACTUALLY-PAINTED header/folio
 // element's own real occupied band, so `respectVerticalMargins:false`
 // can no longer produce a real visual overlap.
+//
+// TSP-IMPROVE-002: block width, label column, freeText size/wrap width and
+// line height now come from `src/lib/colophonLayoutPlan.ts` (shared with the
+// Preview; なつお approved the resulting PDF on 2026-10-17), and the horizontal
+// anchor was retired in TSP-PHASE13-001 (「左右位置は紙面中央に固定」). Tests 2,
+// 6, 9/10 and 13 derive their expectations from the plan.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -38,6 +44,15 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
+
+// TSP-IMPROVE-002: these fixtures pass no template, so Publication uses "standard".
+const STANDARD_PLAN = colophonTemplateLayoutPlan("standard");
+/** The template frame width the renderer derives from the plan (8-em floor, clamped to the safe area). */
+function planFrameWidthMm(availableSafeWidthMm: number, emMm: number): number {
+  const widthEm = Math.max(8, (availableSafeWidthMm / emMm) * STANDARD_PLAN.frameWidthRatio);
+  return Math.min(widthEm * emMm, availableSafeWidthMm);
+}
 
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 const CAPACITY = { charsPerLine: 30, linesPerColumn: 12, columnCount: 1 as const };
@@ -184,7 +199,8 @@ describe("Free text block width (item 1)", () => {
   // the current real contract -- see
   // `structuralColophonFreeTextTypography.test.ts` for round 29F's own
   // full test set.
-  it("a freeText line wraps at its own 0.8x-em, 15-structured-em target width -- each wrapped fragment's own real (smaller-font) width stays within that target (test 2; round 29F correction)", () => {
+  // TSP-IMPROVE-002: was "0.8x em inside a 15-structured-em target"; now the plan's freeTextScale inside the plan's frame.
+  it("a freeText line wraps at the plan's frame width, painted at the plan's freeTextScale -- each wrapped fragment's own real (smaller-font) width stays within that frame (test 2)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", MINIMAL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
@@ -192,12 +208,14 @@ describe("Free text block width (item 1)", () => {
     const cmds = textCmds(plan, idx);
     expect(cmds.length).toBeGreaterThan(3); // label, value, + multiple wrapped freeText fragments
     const bodyEmMm = model.bodyEmMm;
-    const freeTextEmMm = bodyEmMm * 0.8;
-    const freeTextTargetWidthMm = 15 * bodyEmMm;
+    const freeTextEmMm = bodyEmMm * STANDARD_PLAN.freeTextScale;
+    // no placement given -> respectGutter off -> min(gutter, outer) on both sides
+    const availableSafeWidthMm = ASYMMETRIC_GEOMETRY.paperWidthMm - 2 * Math.min(ASYMMETRIC_GEOMETRY.marginGutterMm!, ASYMMETRIC_GEOMETRY.marginOuterMm!);
+    const frameWidthMm = planFrameWidthMm(availableSafeWidthMm, bodyEmMm);
     const freeTextCmds = cmds.slice(2);
     for (const c of freeTextCmds) {
       expect(c.fontSizePt).toBeCloseTo((freeTextEmMm / 25.4) * 72, 3); // painted at the smaller freeText font size
-      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(freeTextTargetWidthMm + 0.01);
+      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(frameWidthMm + 0.01);
     }
   });
 
@@ -249,26 +267,24 @@ describe("Free text block width (item 1)", () => {
     expect(blockLeftMm).toBeGreaterThanOrEqual(0);
   });
 
-  it("RIGHT placement's own block right edge is flush with the resolved content-right edge (test 6; round 29F: block width now also accounts for freeText's own 15-structured-em target)", () => {
+  // TSP-IMPROVE-002: was "RIGHT is flush with the content-right edge". The horizontal
+  // anchor was retired in TSP-PHASE13-001 (「左右位置は紙面中央に固定」, ColophonModal),
+  // so RIGHT now centres the plan's frame in the content area like every placement.
+  it("RIGHT placement centres the plan's frame in the content area -- equal margins on both sides, the same x as CENTER (test 6)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", MINIMAL_FIELDS, "短い文", { colophonPlacement: { horizontal: "right", vertical: "center", respectGutter: false, respectVerticalMargins: true } });
     const plan = buildPaintPlan(model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const bodyEmMm = model.bodyEmMm;
-    const labelWidthMm = measureMm(outlineContext, "書名", bodyEmMm);
-    const valueWidthMm = measureMm(outlineContext, "短編", bodyEmMm);
-    const structuredWidthMm = labelWidthMm + bodyEmMm + valueWidthMm;
-    // respectGutter:false -> symmetric margin = min(gutter,outer); the real
-    // available content width bounds freeText's own 15-em target (round 29F).
-    const expectedContentRightMmForClamp = ASYMMETRIC_GEOMETRY.paperWidthMm - ASYMMETRIC_GEOMETRY.marginOuterMm!;
-    const expectedContentLeftMmForClamp = ASYMMETRIC_GEOMETRY.marginOuterMm!;
-    const availableSafeWidthMm = expectedContentRightMmForClamp - expectedContentLeftMmForClamp;
-    const freeTextTargetWidthMm = Math.min(15 * bodyEmMm, availableSafeWidthMm);
-    const blockWidthMm = Math.max(structuredWidthMm, freeTextTargetWidthMm);
-    const labelXMm = cmds[0].xMm;
     // respectGutter:false -> symmetric margin = min(gutter,outer) = marginOuterMm(11) on both sides.
-    const expectedContentRightMm = ASYMMETRIC_GEOMETRY.paperWidthMm - ASYMMETRIC_GEOMETRY.marginOuterMm!;
-    expect(labelXMm + blockWidthMm).toBeCloseTo(expectedContentRightMm, 3);
+    const contentLeftMm = ASYMMETRIC_GEOMETRY.marginOuterMm!;
+    const contentRightMm = ASYMMETRIC_GEOMETRY.paperWidthMm - ASYMMETRIC_GEOMETRY.marginOuterMm!;
+    const frameWidthMm = planFrameWidthMm(contentRightMm - contentLeftMm, bodyEmMm);
+    const labelXMm = cmds[0].xMm;
+    expect(labelXMm - contentLeftMm).toBeCloseTo(contentRightMm - (labelXMm + frameWidthMm), 3);
+    const center = composeFull("あいうえお", MINIMAL_FIELDS, "短い文", { colophonPlacement: { horizontal: "center", vertical: "center", respectGutter: false, respectVerticalMargins: true } });
+    const centerPlan = buildPaintPlan(center.model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
+    expect(textCmds(centerPlan, colophonIdx(center.document))[0].xMm).toBeCloseTo(labelXMm, 6);
   });
 
   it("explicit freeText newlines are preserved as separate lines, never merged by wrapping (test 7)", () => {
@@ -307,7 +323,8 @@ describe("Furniture collision clamp (item 2)", () => {
     const topY = Math.min(...cmds.map((c) => c.yMm));
     // resolved minimally -- clamped exactly at the header's own bottom edge, not pushed further.
     expect(topY).toBeGreaterThanOrEqual(headerBottomEdgeMm - 0.01);
-    expect(topY).toBeCloseTo(headerBottomEdgeMm + model.bodyEmMm / 2, 1); // first line's own CENTER is one half-em below the clamp line
+    // TSP-IMPROVE-002: the first line's CENTER sits half the plan's line height below the clamp line (was half an em).
+    expect(topY).toBeCloseTo(headerBottomEdgeMm + (STANDARD_PLAN.lineHeight / 2) * model.bodyEmMm, 1);
   });
 
   it("respectVerticalMargins:false + a real folio WOULD collide at the bottom -- the clamp detects and prevents it (test 11, 12)", () => {
@@ -331,7 +348,8 @@ describe("Furniture collision clamp (item 2)", () => {
     const plan = buildPaintPlan(model, true, ASYMMETRIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const topY = Math.min(...cmds.map((c) => c.yMm));
-    expect(topY).toBeCloseTo(ASYMMETRIC_GEOMETRY.marginTopMm + model.bodyEmMm / 2, 3);
+    // TSP-IMPROVE-002: half the plan's line height below the top margin (was half an em).
+    expect(topY).toBeCloseTo(ASYMMETRIC_GEOMETRY.marginTopMm + (STANDARD_PLAN.lineHeight / 2) * model.bodyEmMm, 3);
   });
 
   it("no folio present -> no phantom folio exclusion band (bottom-anchored content reaches the real, unclamped placementBottomMm) (test 14)", () => {

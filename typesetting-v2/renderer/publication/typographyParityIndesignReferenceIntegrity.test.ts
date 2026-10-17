@@ -39,8 +39,11 @@ const REFERENCE_PDF_PATH = join(__dirname, "..", "..", "qa", "reference", "indes
 // DIFFERENT sha256, the file was replaced/modified after this round and
 // every typography-parity conclusion drawn from it (Rounds 2-7) must be
 // treated as suspect until re-verified against whatever is on disk now.
-const EXPECTED_SHA256 = "0029bf7008093105069717c1f72e9e3bf333054a2089003f81487dea4c1c7a12";
-const EXPECTED_SIZE_BYTES = 49522;
+// TSP-IMPROVE-002: re-locked to the copy in the repo since its first commit
+// (55ce1b9, 49,414 bytes). The 49,522-byte InDesign export this lock was first
+// recorded from is lost (no copy in Dropbox; なつお 2026-10-17).
+const EXPECTED_SHA256 = "f43da2f0931155afd983cfbbbe572a28659313bc4cbb927beb25a34f968aa9a1";
+const EXPECTED_SIZE_BYTES = 49414;
 const EXPECTED_TARGET_SNIPPETS = ["人は驚きすぎると", "スイはそれを初めて知った", "数歩先へ行ったモルが振り返る"];
 
 function loadPdf(): { bytes: Buffer; latin1: string; sha256: string } {
@@ -155,21 +158,6 @@ describe("Typography Parity Round 7A -- InDesign reference integrity LOCK", () =
     }
   });
 
-  it("diagnostic: raw PDF operators around the 人 glyph -- documents why Round 7's own narrower regex missed this run (Td-continued paragraph, not Tm-adjacent)", () => {
-    const { bytes } = loadPdf();
-    const latin1 = bytes.toString("latin1");
-    const streams = decompressAllFlateStreams(bytes, latin1);
-    const cmapStream = streams.find((s) => /begincmap/.test(s.decoded) && /beginbfchar|beginbfrange/.test(s.decoded));
-    const cidToUnicode = parseToUnicodeCMap(cmapStream!.decoded);
-    let ninjaCid: string | undefined;
-    for (const [cid, ch] of cidToUnicode) if (ch === "人") { ninjaCid = cid; break; }
-    expect(ninjaCid).toBeDefined();
-    const bodyStream = streams.find((s) => /Tj|TJ/.test(s.decoded) && /9 0 0 9/.test(s.decoded));
-    expect(bodyStream).toBeDefined();
-    const idx = bodyStream!.decoded.toLowerCase().indexOf(`<${ninjaCid!.toLowerCase()}`);
-    const around = bodyStream!.decoded.slice(Math.max(0, idx - 150), idx + 150);
-    // eslint-disable-next-line no-console
-    console.log("REFERENCE_INTEGRITY_RAW_OPERATORS_AROUND_NINJA", JSON.stringify(around));
-    expect(around).toContain("Td"); // confirms the Td-continuation pattern, not a fresh Tm, precedes this run
-  });
+  // TSP-IMPROVE-002: removed "diagnostic: raw PDF operators around the 人 glyph -- documents why Round 7's own narrower regex missed this run (Td-continued paragraph, not Tm-adjacent)" - it analysed TJ kerning in the lost 49,522-byte InDesign export; the copy in the repo has no such adjustments (なつお 2026-10-17: original not available)
+
 });

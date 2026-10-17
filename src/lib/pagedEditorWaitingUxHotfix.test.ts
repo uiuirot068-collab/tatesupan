@@ -66,7 +66,10 @@ describe("TSP-EDITOR-PAGE-WAITING-UX-HOTFIX-012A §E: forced boundaries stay mea
   it("computeEditorPages is called with the current forcedBoundaries state, not recomputed from scratch each time", () => {
     expect(editor).toMatch(/paginate\(content, \{ forcedBoundaries, joinedRanges \}\)/);
     // `paginate` is computeEditorPages behind a single-entry identity cache (one pagination per transaction).
-    expect(editor).toContain("const result = computeEditorPages(text, state);");
+    // TSP-IMPROVE-002: CST-PORT-016 (e137c85) wrapped the call in the dev-only perf probe.
+    expect(editor).toContain(
+      'const result = measureLongDocumentPerf("editorPagination", text.length, () => computeEditorPages(text, state), (pages) => pages.length);',
+    );
   });
 
   it("commitCanonical adjusts forcedBoundaries via adjustForcedBoundaries, gated on non-empty so the common case (no manual split yet) stays a single length check", () => {

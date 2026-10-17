@@ -137,8 +137,10 @@ describe("scrolling + top-anchor wiring (QA correction 016A)", () => {
   });
 
   it("has a stable #howto-top Hero anchor, and the sticky brand links back to it", () => {
-    expect(howtoPageSrc).toContain('id="howto-top"');
-    expect(howtoPageSrc).toContain('href="#howto-top"');
+    // TSP-HOWTO-001 (2983950): the redesigned page anchors its root as #top
+    // and the sticky header logo links back to it.
+    expect(howtoPageSrc).toMatch(/<div className="htv2" id="top"/);
+    expect(howtoPageSrc).toMatch(/<header[\s\S]{0,200}<a className="v2-logo" href="#top"/);
   });
 });
 
@@ -148,7 +150,12 @@ describe("Help is discoverable without scrolling to the bottom (QA correction 01
   });
 
   it("offers a labelled Help trigger in the persistent sticky nav", () => {
-    expect(howtoPageSrc).toContain("data-howto-help-cta=\"sticky-nav\"");
+    // TSP-HOWTO-001 (2983950): the sticky header nav carries a text-labelled ヘルプ button.
+    const stickyNav = howtoPageSrc.slice(
+      howtoPageSrc.indexOf('<nav className="v2-gnav"'),
+      howtoPageSrc.indexOf("</nav>", howtoPageSrc.indexOf('<nav className="v2-gnav"'))
+    );
+    expect(stickyNav).toMatch(/<button[^>]*onClick=\{\(\) => setHelpOpen\(true\)\}>ヘルプ<\/button>/);
   });
 });
 
@@ -166,7 +173,7 @@ describe("HOW TO 困ったとき Report action (QA correction 016B)", () => {
       /\{BETA_FEEDBACK_ENABLED\s*&&\s*\([\s\S]{0,300}data-howto-feedback-cta/
     );
     expect(howtoPageSrc).toMatch(
-      /\{BETA_FEEDBACK_ENABLED\s*&&\s*feedbackOpen\s*&&\s*\(\s*<BetaFeedbackModal/
+      /\{BETA_FEEDBACK_ENABLED\s*&&\s*feedbackOpen\s*&&\s*\(?\s*<BetaFeedbackModal/
     );
   });
 
@@ -366,8 +373,8 @@ describe("HOW TO affiliate footer source (TSP-RC-AFFILIATE-FOOTER-001)", () => {
 
   it("both affiliate buttons open externally via the project's existing convention", () => {
     const buttonBlock = howtoPageSrc.slice(
-      howtoPageSrc.indexOf('className="affiliate-actions"'),
-      howtoPageSrc.indexOf('className="affiliate-disclosure"')
+      howtoPageSrc.indexOf('id="shopping-links"'),
+      howtoPageSrc.indexOf("</section>", howtoPageSrc.indexOf('id="shopping-links"'))
     );
     const links = buttonBlock.match(/<a\b[^>]*data-affiliate-cta[^>]*>/g) ?? [];
     expect(links.length).toBe(2);

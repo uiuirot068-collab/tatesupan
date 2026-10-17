@@ -27,6 +27,11 @@
 // PaintCommand level (round 29F, `structuralColophonFreeTextTypography.test.ts`)
 // -- that level is unaffected by this round's own finding (the gap was
 // specifically paint-model-to-PDF-bytes parity, not the model itself).
+//
+// TSP-IMPROVE-002: the freeText size is now the layout plan's
+// `freeTextScale` (`src/lib/colophonLayoutPlan.ts`, shared with the Preview;
+// なつお approved the resulting PDF on 2026-10-17), not 0.8x. The Tf checks
+// below look for structuredPt x freeTextScale.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -48,6 +53,10 @@ import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, re
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
+
+// TSP-IMPROVE-002: these fixtures pass no template, so Publication uses "standard".
+const FREE_TEXT_SCALE = colophonTemplateLayoutPlan("standard").freeTextScale;
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
 
@@ -197,7 +206,7 @@ function extractTextXCoordinatesMm(content: string): number[] {
 }
 
 describe("Root cause audit: paint-model facts vs real serialized PDF bytes", () => {
-  it("the real PDF's own Tf operators contain BOTH the structured font size and a size close to 0.8x it (test 1, 6)", () => {
+  it("the real PDF's own Tf operators contain BOTH the structured font size and a size close to the plan's freeTextScale times it (test 1, 6)", () => {
     const { font, outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, { folioSettings: DEFAULT_FOLIO_SETTINGS, headerSettings: HEADER_SETTINGS });
     const plan = buildPaintPlan(model, true, QA_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
@@ -206,7 +215,7 @@ describe("Root cause audit: paint-model facts vs real serialized PDF bytes", () 
     const sizes = extractFontSizesPt(content);
     expect(sizes.length).toBeGreaterThan(0);
     const structuredPt = Math.max(...sizes);
-    const expectedFreeTextPt = structuredPt * 0.8;
+    const expectedFreeTextPt = structuredPt * FREE_TEXT_SCALE;
     const closestToExpected = sizes.reduce((best, s) => (Math.abs(s - expectedFreeTextPt) < Math.abs(best - expectedFreeTextPt) ? s : best));
     expect(Math.abs(closestToExpected - expectedFreeTextPt)).toBeLessThan(0.1);
     // real, distinct sizes -- not a single uniform size for everything.
@@ -223,7 +232,7 @@ describe("Root cause audit: paint-model facts vs real serialized PDF bytes", () 
     const content = decodeAllStreams(bytes);
     const sizes = extractFontSizesPt(content);
     const structuredPt = Math.max(...sizes);
-    const expectedFreeTextPt = structuredPt * 0.8;
+    const expectedFreeTextPt = structuredPt * FREE_TEXT_SCALE;
     const found = sizes.some((s) => Math.abs(s - expectedFreeTextPt) < 0.1);
     expect(found).toBe(true);
   });
@@ -263,14 +272,14 @@ describe("Root cause audit: paint-model facts vs real serialized PDF bytes", () 
 });
 
 describe("The ACTUAL regenerated Human QA file on disk (maximal directness)", () => {
-  it("qa/publication/p3-o08/structural-colophon-human-review-qa.pdf, as it exists on disk right now, contains real Tf operators at both the structured size and 0.8x it -- not just an isolated fixture", () => {
+  it("qa/publication/p3-o08/structural-colophon-human-review-qa.pdf, as it exists on disk right now, contains real Tf operators at both the structured size and the plan's freeTextScale times it -- not just an isolated fixture", () => {
     const qaPath = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "structural-colophon-human-review-qa.pdf");
     const bytes = readFileSync(qaPath);
     const content = decodeAllStreams(new Uint8Array(bytes));
     const sizes = extractFontSizesPt(content);
     expect(sizes.length).toBeGreaterThan(0);
     const structuredPt = Math.max(...sizes);
-    const expectedFreeTextPt = structuredPt * 0.8;
+    const expectedFreeTextPt = structuredPt * FREE_TEXT_SCALE;
     const found = sizes.some((s) => Math.abs(s - expectedFreeTextPt) < 0.1);
     expect(found).toBe(true);
     // Real, distinct sizes really are present -- this specific file was

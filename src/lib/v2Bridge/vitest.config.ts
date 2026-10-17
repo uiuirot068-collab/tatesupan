@@ -19,5 +19,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/lib/v2Bridge/**/*.test.{ts,tsx}"],
+    // TSP-IMPROVE-002: QA sample writes go to a scratch folder (UPDATE_QA_ARTIFACTS=1 to regenerate)
+    setupFiles: ["tests/setup/redirectQaArtifacts.ts"],
   },
 });

@@ -46,6 +46,7 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
 
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 const DIAGNOSTIC_GEOMETRY: PublicationPageGeometry = { paperWidthMm: 105, paperHeightMm: 148, marginTopMm: 15, marginBottomMm: 12, marginRightMm: 15, marginLeftMm: 15 };
@@ -263,7 +264,11 @@ describe("ColophonPlacement -- real legacy block-anchor semantics ported", () =>
     expect(a).toEqual(b);
   });
 
-  it("Publication resolves the SAME semantic placement into the SAME physical anchor deterministically, and a DIFFERENT horizontal produces a DIFFERENT physical anchor (test 14)", () => {
+  // TSP-IMPROVE-002: was "a DIFFERENT horizontal produces a DIFFERENT physical anchor".
+  // TSP-PHASE13-001 retired the horizontal anchor (「左右位置は紙面中央に固定」,
+  // ColophonModal; see structuralColophonMarginRespect.test.ts test 4): the block is
+  // the layout plan's frame (src/lib/colophonLayoutPlan.ts), centred in the content area.
+  it("Publication resolves the SAME semantic placement into the SAME physical anchor deterministically, and a DIFFERENT horizontal no longer moves the block -- the plan's frame stays centred (test 14)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const buildPlan = (placement: ColophonPlacement) => {
       const { model } = composeFull("あいうえお", MINIMAL_FIELDS, "自由記述欄です", { colophonPlacement: placement });
@@ -282,12 +287,18 @@ describe("ColophonPlacement -- real legacy block-anchor semantics ported", () =>
     const freeTextCmdLeft = leftA[1].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text")[rowCommandCount];
     const freeTextCmdRight = right[1].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text")[rowCommandCount];
     // freeText always left-aligns WITHIN its own block (natural paragraph
-    // flow) regardless of `horizontal` -- `horizontal` moves the WHOLE
-    // block's own xMm instead (proven directly below), not each line's
-    // own internal align.
+    // flow) regardless of `horizontal`.
     expect(freeTextCmdLeft?.align).toBe("left");
     expect(freeTextCmdRight?.align).toBe("left");
-    expect(freeTextCmdLeft?.xMm).not.toBe(freeTextCmdRight?.xMm);
+    // No gutter/outer in this geometry -> min(left, right) margin on both sides.
+    const sideMm = Math.min(DIAGNOSTIC_GEOMETRY.marginLeftMm, DIAGNOSTIC_GEOMETRY.marginRightMm);
+    const availableSafeWidthMm = DIAGNOSTIC_GEOMETRY.paperWidthMm - 2 * sideMm;
+    const { model } = composeFull("あいうえお", MINIMAL_FIELDS, "自由記述欄です");
+    const frameWidthEm = Math.max(8, (availableSafeWidthMm / model.bodyEmMm) * colophonTemplateLayoutPlan("standard").frameWidthRatio);
+    const frameWidthMm = Math.min(frameWidthEm * model.bodyEmMm, availableSafeWidthMm);
+    const centredBlockLeftMm = sideMm + (availableSafeWidthMm - frameWidthMm) / 2;
+    expect(freeTextCmdLeft?.xMm).toBeCloseTo(centredBlockLeftMm, 6);
+    expect(freeTextCmdRight?.xMm).toBeCloseTo(centredBlockLeftMm, 6);
   });
 
   it("horizontal orientation (angle 0) is unchanged regardless of placement (test 15)", () => {

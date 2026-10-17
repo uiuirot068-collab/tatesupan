@@ -135,14 +135,21 @@ describe("C. shared contract -- one export implementation, two entry points", ()
 
 describe("D. PDF Loop 2 contract is untouched", () => {
   it("still routes every PDF through the odd-page rule and runPdfExport (no second path)", () => {
-    expect(preview).toContain("shouldWarnOddPageExport({");
-    expect(preview).toMatch(/scope: pdfScope,\s*bodyPageCount: bodyPageCountForWarning,\s*includeColophon: includeColophonInPdf/);
+    // TSP-IMPROVE-002: the odd-page modal became the "odd-pages" warning of
+    // the unified preflight accordion (pre-repo restructure). The rule is
+    // still computed for the PDF's own scope and colophon choice ...
+    expect(preview).toMatch(/shouldWarnOddPageExport\(\{\s*scope: pdfScope,\s*\.\.\.pdfPageCountParams,?\s*\}\)/);
+    expect(preview).toMatch(/const pdfPageCountParams = \{\s*bodyPageCount: listPages\.length,\s*includeColophon: pdfWillIncludeColophon,/);
     // Phase 3: LEGACY page list only as the non-V2 default; V2 counts the
     // canonical layout the PDF will actually contain.
-    expect(preview).toContain("let bodyPageCountForWarning = pages.length;");
-    expect(preview).toMatch(/bodyPageCountForWarning = bodyPageCount\(\(await v2Adapter\.awaitComposition\(currentCompositionInput\(\)\)\)\.pageSequence\)/);
+    expect(preview).toContain("const listPages: TategakiPage[] = v2PageModel ? v2PageModel.overlayPages : pages;");
+    // ... surfaces as a preflight warning, which must be reviewed before the
+    // PDF button enables ...
+    expect(preview).toMatch(/\.\.\.\(pdfOddPageCheck\s*\?\s*\[\{\s*id: "odd-pages",\s*severity: "warning"/);
+    expect(preview).toContain("!canContinueExportAfterPreflight(pdfPreflightReport, pdfPreflightReviewed)");
+    // ... and every PDF goes through the single runPdfExport call site.
     expect(preview).toContain("await runPdfExport(pending)");
-    expect(preview).toContain("void runPdfExport(pending)");
+    expect(count(preview, "runPdfExport(")).toBe(1);
   });
 
   it("never brings window.confirm back into the export flow", () => {
@@ -173,12 +180,16 @@ describe("D. PDF Loop 2 contract is untouched", () => {
 
 describe("E. modals reused as-is by the phone entry", () => {
   it("PDF setup, odd-page warning (Return / Continue) and progress all live in PreviewPane and are not re-implemented", () => {
-    expect(count(preview, "<OddPageExportWarning")).toBe(1);
+    // TSP-IMPROVE-002: the odd-page Return / Continue modal is now the
+    // preflight accordion inside the PDF setup dialog (キャンセル / 確認してこのまま書き出す).
+    expect(count(preview, "<ExportPreflightAccordion")).toBe(1);
     expect(count(preview, 'titleId="pdf-export-setup-title"')).toBe(1);
-    expect(preview).toContain("onReturn={handleOddPageWarningReturn}");
-    expect(preview).toContain("onContinue={handleOddPageWarningContinue}");
+    expect(count(preview, 'id: "odd-pages"')).toBe(1);
+    expect(preview).toContain('"確認してこのまま書き出す"');
     expect(preview).toContain("<ExportProgressModal");
     for (const source of [nav, editor, sharedHook]) {
+      expect(source).not.toContain("ExportPreflightAccordion");
+      expect(source).not.toContain("odd-pages");
       expect(source).not.toContain("OddPageExportWarning");
       expect(source).not.toContain("ExportProgressModal");
       expect(source).not.toContain("pdf-export-setup");

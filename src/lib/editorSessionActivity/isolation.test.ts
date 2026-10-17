@@ -38,22 +38,7 @@ describe("11-B architectural and persistence isolation", () => {
     expect(editor).toContain("countVisualLength(deferredContent)");
   });
 
-  it("keeps Ruby/TCY help compact with accessible hover, focus, and touch disclosure", () => {
-    const counter = readFileSync(join(ROOT, "src", "components", "WorkSessionTracker.tsx"), "utf8");
-    const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
-    const help = readFileSync(join(ROOT, "src", "components", "EditorSyntaxHelp.tsx"), "utf8");
-    expect(editor).toContain("<EditorSyntaxHelp />");
-    expect(help).toContain("data-editor-footer-help");
-    expect(editor).toContain("data-editor-footer-controls");
-    expect(editor).toContain("現在の原稿文字数 {visualLength}文字");
-    expect(help).toContain("truncate whitespace-nowrap");
-    expect(help).toContain("title={EDITOR_SYNTAX_HELP}");
-    expect(help).toContain("aria-label={EDITOR_SYNTAX_HELP}");
-    expect(help).toContain("data-editor-syntax-help-modal");
-    expect(help).toContain("data-editor-syntax-help-full");
-    expect(counter).toContain("flex-wrap");
-  });
-
+  // TSP-IMPROVE-002: removed "keeps Ruby/TCY help compact with accessible hover, focus, and touch disclosure" - the editor footer (EditorSyntaxHelp, data-editor-footer-controls, footer char count) was replaced pre-repo (before 55ce1b9) by the header 文字 chip, the editor placeholder's 特殊記法 section and ▶ヘルプ; EditorSyntaxHelp.tsx is no longer mounted.
   it("exposes visible Undo/Redo controls through the textarea's native history path", () => {
     const editor = readFileSync(join(ROOT, "src", "components", "EditorPane.tsx"), "utf8");
     expect(editor).toContain('data-editor-history-action="undo"');
@@ -91,6 +76,9 @@ describe("11-B architectural and persistence isolation", () => {
     expect(counter).toContain("実作業時間");
     expect(counter).toContain('className="flex shrink-0 items-center gap-1"');
     expect(editor).toContain("inputActivityStateRef.current = createTextInputActivityState(content)");
-    expect(editor).toMatch(/data-editor-status-surfaces=[\s\S]*?focusMode \? "max-md:hidden md:hidden"/);
+    // Status surfaces moved (pre-repo) into the Review Hub's 文字数 section plus pinned footer
+    // pills; the compact footer still stays hidden in 集中モード (the desktop bar is not mounted then).
+    expect(editor).toMatch(/"character-count": \(\s*<WorkSessionTracker[\s\S]{0,200}onPause=\{onPauseWorkSession\}\s*onResume=\{resumeWorkSession\}/);
+    expect(editor).toMatch(/\{reviewSurface === "compact" && !focusMode && !keyboardActive && \(\s*<div\s*data-editor-footer-collapsed=""[\s\S]{0,1500}<WorkSessionFooterPill/);
   });
 });
