@@ -54,6 +54,7 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
 
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 const DIAGNOSTIC_GEOMETRY: PublicationPageGeometry = { paperWidthMm: 105, paperHeightMm: 148, marginTopMm: 15, marginBottomMm: 12, marginRightMm: 15, marginLeftMm: 15 };
@@ -315,17 +316,32 @@ describe("Publication rendering -- vector, horizontal, real compiled rows painte
     expect(textCmd?.angle).toBe(0);
   });
 
-  it("a real compiled row (label\\tvalue) paints as TWO separate commands, a naturally-sized label column followed by a value column, and the raw tab never reaches a painted command's own text (test 23; round 29C: value column left-aligns after the label column, replacing round 27's own full-width right-anchor)", () => {
+  // TSP-IMPROVE-002: was "paints as TWO commands". The value column is now the layout
+  // plan's (src/lib/colophonLayoutPlan.ts): frame width - labelWidthEm - labelValueGapEm.
+  // On this A6 page that column is narrower than the 7-character title, so the value
+  // wraps onto extra lines; the label still comes first and no character is lost.
+  it("a real compiled row (label\\tvalue) paints as a label command followed by the value column's line(s), wrapped at the plan's value-column width, and the raw tab never reaches a painted command's own text (test 23)", () => {
     const fields: ColophonFieldInput[] = [{ label: "書名", value: "吾輩は猫である", visible: true }];
     const { model } = composeFromSettings("あいうえお", fields);
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const plan = buildPaintPlan(model, true, DIAGNOSTIC_GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const textCommands = plan[1].commands.filter((c): c is Extract<PaintCommand, { op: "text" }> => c.op === "text");
-    expect(textCommands.length).toBe(2);
+    // Expected value lines, from the plan: no gutter/outer here -> min(left, right) margin on both sides.
+    const p = colophonTemplateLayoutPlan("standard");
+    const availableSafeWidthMm = DIAGNOSTIC_GEOMETRY.paperWidthMm - 2 * Math.min(DIAGNOSTIC_GEOMETRY.marginLeftMm, DIAGNOSTIC_GEOMETRY.marginRightMm);
+    const frameWidthEm = Math.max(8, (availableSafeWidthMm / model.bodyEmMm) * p.frameWidthRatio);
+    const labelWidthEm = Math.min(p.labelWidthEm, frameWidthEm * 0.45);
+    const valueWidthEm = frameWidthEm - labelWidthEm - p.labelValueGapEm;
+    const fullWidthCharsPerLine = Math.floor(valueWidthEm); // the title is all full-width (1 em each)
+    const expectedValueLines = Math.ceil(Array.from("吾輩は猫である").length / fullWidthCharsPerLine);
+    expect(textCommands.length).toBe(1 + expectedValueLines);
+    expect(textCommands[0].text).toBe("書名");
+    expect(textCommands.slice(1).map((c) => c.text).join("")).toBe("吾輩は猫である");
     for (const c of textCommands) expect(c.text.includes("\t")).toBe(false);
-    const aligns = textCommands.map((c) => c.align).sort();
-    expect(aligns).toEqual(["left", "left"]);
-    expect(textCommands[0].xMm).toBeLessThan(textCommands[1].xMm); // label column, then value column
+    for (const c of textCommands) expect(c.align).toBe("left");
+    for (const c of textCommands.slice(1)) {
+      expect(c.xMm).toBeCloseTo(textCommands[0].xMm + (labelWidthEm + p.labelValueGapEm) * model.bodyEmMm, 6); // value column after the label column
+    }
   });
 
   it("body font inheritance preserved -- colophon glyph size matches the fixed body-em size (test 24)", () => {

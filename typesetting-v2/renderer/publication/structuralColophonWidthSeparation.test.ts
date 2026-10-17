@@ -17,6 +17,12 @@
 // "Round 29C's equality assumption is retired" -- freeTextWrapWidth ===
 // structuredFrameWidth only when they happen to be numerically equal,
 // never assumed.
+//
+// TSP-IMPROVE-002: freeText's size and wrap width now come from
+// `src/lib/colophonLayoutPlan.ts` (shared with the Preview; なつお approved the
+// resulting PDF on 2026-10-17): `freeTextScale` x the structured size, wrapped
+// inside the template frame (`frameWidthRatio` x the safe width). Tests 2 and 9
+// follow the plan; the round 29F "0.8x / 15 structured ems" rule is retired.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -39,6 +45,19 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
+
+// TSP-IMPROVE-002: these fixtures pass no template, so Publication uses "standard".
+const STANDARD_PLAN = colophonTemplateLayoutPlan("standard");
+/** The template frame width the renderer derives from the plan (8-em floor, clamped to the safe area). */
+function planFrameWidthMm(availableSafeWidthMm: number, emMm: number): number {
+  const widthEm = Math.max(8, (availableSafeWidthMm / emMm) * STANDARD_PLAN.frameWidthRatio);
+  return Math.min(widthEm * emMm, availableSafeWidthMm);
+}
+/** No placement given -> respectGutter off -> min(gutter, outer) on both sides. */
+function symmetricSafeWidthMm(g: PublicationPageGeometry): number {
+  return g.paperWidthMm - 2 * Math.min(g.marginGutterMm!, g.marginOuterMm!);
+}
 
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 const CAPACITY = { charsPerLine: 30, linesPerColumn: 12, columnCount: 1 as const };
@@ -185,21 +204,22 @@ describe("Width separation -- structuredFrameWidth vs freeTextWrapWidth are inde
 // page). Updated (not deleted) -- see
 // `structuralColophonFreeTextTypography.test.ts` for round 29F's own
 // full test set.
-describe("freeText uses its own 15-structured-em target width, not the title row (test 2; round 29F correction)", () => {
-  it("freeText wraps at the 15-structured-em target width (safety-clamped), at its own 0.8x font size (test 2)", () => {
+// TSP-IMPROVE-002: was "15-structured-em target at 0.8x"; now the plan's frame and freeTextScale.
+describe("freeText uses the layout plan's frame width, not the title row (test 2)", () => {
+  it("freeText wraps at the plan's frame width (safety-clamped), at the plan's freeTextScale (test 2)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const idx = colophonIdx(document);
     const cmds = textCmds(plan, idx);
     const bodyEmMm = model.bodyEmMm;
-    const freeTextEmMm = bodyEmMm * 0.8;
-    const freeTextTargetWidthMm = 15 * bodyEmMm;
+    const freeTextEmMm = bodyEmMm * STANDARD_PLAN.freeTextScale;
+    const frameWidthMm = planFrameWidthMm(symmetricSafeWidthMm(GEOMETRY), bodyEmMm);
     const freeTextCmds = cmds.filter((c) => c.text.length > 0 && FULL_FREETEXT.includes(c.text));
     expect(freeTextCmds.length).toBeGreaterThan(0);
     for (const c of freeTextCmds) {
       expect(c.fontSizePt).toBeCloseTo((freeTextEmMm / 25.4) * 72, 3);
-      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(freeTextTargetWidthMm + 0.05);
+      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(frameWidthMm + 0.05);
     }
   });
 });
@@ -271,18 +291,23 @@ describe("Long contact value handling (tests 6-8)", () => {
   });
 });
 
-describe("freeText stays inside its own 15-structured-em target width (test 9; round 29F correction)", () => {
-  it("no freeText glyph paints beyond the block's own left edge + the 15-structured-em target width", () => {
+// TSP-IMPROVE-002: was "the 15-structured-em target width"; now the plan's frame width.
+describe("freeText stays inside the layout plan's frame (test 9)", () => {
+  it("no freeText glyph paints beyond the block's own left edge + the plan's frame width", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const bodyEmMm = model.bodyEmMm;
-    const freeTextEmMm = bodyEmMm * 0.8;
+    const freeTextEmMm = bodyEmMm * STANDARD_PLAN.freeTextScale;
     const blockLeftMm = cmds[0].xMm;
-    const freeTextTargetWidthMm = 15 * bodyEmMm;
+    const frameWidthMm = planFrameWidthMm(symmetricSafeWidthMm(GEOMETRY), bodyEmMm);
     const freeTextCmds = cmds.filter((c) => c.text.length > 0 && FULL_FREETEXT.includes(c.text));
-    for (const c of freeTextCmds) expect(c.xMm + measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(blockLeftMm + freeTextTargetWidthMm + 0.05);
+    expect(freeTextCmds.length).toBeGreaterThan(0);
+    for (const c of freeTextCmds) {
+      expect(c.xMm).toBeGreaterThanOrEqual(blockLeftMm - 0.01);
+      expect(c.xMm + measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(blockLeftMm + frameWidthMm + 0.05);
+    }
   });
 });
 

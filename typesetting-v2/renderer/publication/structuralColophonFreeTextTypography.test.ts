@@ -8,6 +8,12 @@
 //   freeTextEmMm       = structuredEmMm * 0.8
 //   freeTextTargetMm   = min(15 * structuredEmMm, availableSafeWidthMm)
 // Structured row width/typography (round 29E) is UNCHANGED.
+//
+// TSP-IMPROVE-002: the 0.8x / 15-em rule above is history. Colophon geometry
+// now comes from one source, `src/lib/colophonLayoutPlan.ts` (shared with the
+// Preview): freeText paints at `freeTextScale` x the structured size and wraps
+// inside the template frame (`frameWidthRatio` x the safe width). なつお
+// approved the resulting PDF on 2026-10-17. Tests 1, 5 and 7 follow the plan.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -30,6 +36,19 @@ import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits, type FixturePiece } from "../../tools/compare/fixtureBuilder";
+import { colophonTemplateLayoutPlan } from "../../../src/lib/colophonLayoutPlan";
+
+// TSP-IMPROVE-002: these fixtures pass no template, so Publication uses "standard".
+const STANDARD_PLAN = colophonTemplateLayoutPlan("standard");
+/** The template frame width the renderer derives from the plan (8-em floor, clamped to the safe area). */
+function planFrameWidthMm(availableSafeWidthMm: number, emMm: number): number {
+  const widthEm = Math.max(8, (availableSafeWidthMm / emMm) * STANDARD_PLAN.frameWidthRatio);
+  return Math.min(widthEm * emMm, availableSafeWidthMm);
+}
+/** No placement given -> respectGutter off -> min(gutter, outer) on both sides. */
+function symmetricSafeWidthMm(g: PublicationPageGeometry): number {
+  return g.paperWidthMm - 2 * Math.min(g.marginGutterMm!, g.marginOuterMm!);
+}
 
 const FONT_PATH = join(__dirname, "..", "..", "qa", "publication", "p3-o08", "font-poc", "fonts", "ShipporiMincho-Regular.ttf");
 const CAPACITY = { charsPerLine: 30, linesPerColumn: 12, columnCount: 1 as const };
@@ -158,14 +177,16 @@ function fontSizePtToMm(pt: number): number {
 }
 
 describe("freeText typography (tests 1-3)", () => {
-  it("freeText font size is exactly 0.8x the structured font size (test 1)", () => {
+  // TSP-IMPROVE-002: was "exactly 0.8x"; the scale now comes from the layout plan.
+  it("freeText font size is the layout plan's freeTextScale times the structured font size -- smaller than the rows (test 1)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const rowCmd = cmds[0];
     const freeTextCmd = cmds.find((c) => FULL_FREETEXT.includes(c.text) && c.text.length > 0)!;
-    expect(fontSizePtToMm(freeTextCmd.fontSizePt)).toBeCloseTo(fontSizePtToMm(rowCmd.fontSizePt) * 0.8, 4);
+    expect(STANDARD_PLAN.freeTextScale).toBeLessThan(1);
+    expect(fontSizePtToMm(freeTextCmd.fontSizePt)).toBeCloseTo(fontSizePtToMm(rowCmd.fontSizePt) * STANDARD_PLAN.freeTextScale, 4);
   });
 
   it("structured metadata font size is unchanged (test 2)", () => {
@@ -205,17 +226,21 @@ describe("Safety clamp + real font-metric wrapping (tests 4-6)", () => {
     }
   });
 
-  it("wrapping uses real font metrics at freeText's own smaller size, not the structured em (test 5)", () => {
+  // TSP-IMPROVE-002: was "within 15 structured ems at 0.8x"; the wrap width is now the plan's frame.
+  it("each freeText line, measured with real font metrics at freeText's own (plan freeTextScale) size, stays within the plan's frame width (test 5)", () => {
     const { outlineContext, gposContext, yakumonoContext } = realContexts();
     const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
     const plan = buildPaintPlan(model, true, GEOMETRY, undefined, outlineContext, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(document));
     const bodyEmMm = model.bodyEmMm;
-    const freeTextEmMm = bodyEmMm * 0.8;
-    const freeTextTargetWidthMm = 15 * bodyEmMm;
+    const freeTextEmMm = bodyEmMm * STANDARD_PLAN.freeTextScale;
+    const frameWidthMm = planFrameWidthMm(symmetricSafeWidthMm(GEOMETRY), bodyEmMm);
     const freeTextCmds = cmds.filter((c) => c.text.length > 0 && FULL_FREETEXT.includes(c.text));
     expect(freeTextCmds.length).toBeGreaterThan(0);
-    for (const c of freeTextCmds) expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(freeTextTargetWidthMm + 0.05);
+    for (const c of freeTextCmds) {
+      expect(fontSizePtToMm(c.fontSizePt)).toBeCloseTo(freeTextEmMm, 4);
+      expect(measureMm(outlineContext, c.text, freeTextEmMm)).toBeLessThanOrEqual(frameWidthMm + 0.05);
+    }
   });
 
   it("explicit freeText newline is preserved (test 6)", () => {
@@ -229,7 +254,9 @@ describe("Safety clamp + real font-metric wrapping (tests 4-6)", () => {
 });
 
 describe("Structured metadata unaffected (tests 7-9)", () => {
-  it("structured frame width is unchanged by freeText's own new typography (test 7)", () => {
+  // TSP-IMPROVE-002: the label column is now the plan's fixed labelWidthEm and the
+  // gap is labelValueGapEm (was: widest real label + 1 em).
+  it("structured row width is the plan's label column + labelValueGapEm + the widest value, and freeText does not change it (test 7)", () => {
     const { outlineContext } = realContexts();
     const withFreeText = (() => {
       const { model, document } = composeFull("あいうえお", FULL_FIELDS, FULL_FREETEXT, {});
@@ -239,13 +266,19 @@ describe("Structured metadata unaffected (tests 7-9)", () => {
     const plan = buildPaintPlan(withFreeText.model, true, GEOMETRY, undefined, oc2, gposContext, yakumonoContext);
     const cmds = textCmds(plan, colophonIdx(withFreeText.document));
     const bodyEmMm = withFreeText.model.bodyEmMm;
-    const labelColumnWidthMm = Math.max(...FULL_FIELDS.map((f) => measureMm(outlineContext, f.label, bodyEmMm)));
+    const frameWidthEm = planFrameWidthMm(symmetricSafeWidthMm(GEOMETRY), bodyEmMm) / bodyEmMm;
+    const labelColumnWidthMm = Math.min(STANDARD_PLAN.labelWidthEm, frameWidthEm * 0.45) * bodyEmMm;
     const widestValueWidthMm = Math.max(...FULL_FIELDS.map((f) => measureMm(outlineContext, f.value, bodyEmMm)));
-    const expectedStructuredWidthMm = labelColumnWidthMm + bodyEmMm + widestValueWidthMm;
+    const expectedStructuredWidthMm = labelColumnWidthMm + STANDARD_PLAN.labelValueGapEm * bodyEmMm + widestValueWidthMm;
     const rowCmds = cmds.slice(0, FULL_FIELDS.length * 2);
     const leftMm = Math.min(...rowCmds.map((c) => c.xMm));
     const rightMm = Math.max(...rowCmds.map((c) => c.xMm + measureMm(outlineContext, c.text, bodyEmMm)));
     expect(rightMm - leftMm).toBeCloseTo(expectedStructuredWidthMm, 1);
+    // freeText does not move the rows sideways: same row x positions without it.
+    const noFreeText = composeFull("あいうえお", FULL_FIELDS, "", {});
+    const noFreeTextPlan = buildPaintPlan(noFreeText.model, true, GEOMETRY, undefined, oc2, gposContext, yakumonoContext);
+    const noFreeTextRowCmds = textCmds(noFreeTextPlan, colophonIdx(noFreeText.document)).slice(0, FULL_FIELDS.length * 2);
+    expect(noFreeTextRowCmds.map((c) => [c.text, c.xMm])).toEqual(rowCmds.map((c) => [c.text, c.xMm]));
   });
 
   it("the date remains on one line (test 8)", () => {
