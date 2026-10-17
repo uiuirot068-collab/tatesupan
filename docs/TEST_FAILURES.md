@@ -9,23 +9,36 @@
 
 ## 結果
 
-| | 前（3879f28） | 後 |
-|---|---|---|
-| 不合格 | 74 | 37（すべて一覧に理由つき） |
-| `npm run test:all` | なし | 成功 |
+| | 前（3879f28） | 10/14 | 10/17（なつおの QA の答えのあと） |
+|---|---|---|---|
+| 不合格 | 74 | 37（すべて理由つきで一覧） | **1**（一覧に理由つき） |
+| `npm run test:all` | なし | 成功 | 成功 |
 
 文章チェックの「組版側は文章チェックを読まない」見張りは、テストファイルを見張る対象から外した（本番のコードだけを見る）。そのぶん見張りの件数が 105 件へった。
 
-## 一覧に残した 37 件
+## なつおの QA の答え（2026-10-17）と、それに合わせた直し
 
-| 分類 | 件数 | 中身 | 次にすること |
+| 問い | 答え | 直したこと |
+|---|---|---|
+| A. 幅の狭いスマホで「報告」が見えるか | 見えている | ボタン列のテスト 12 件を、保存名の欄が先頭にある今の形に合わせた（幅の足し算の見積りはやめた） |
+| B. PC の集中モードで文字数が見えてよいか | よい | postBlockerUx の 1 件から文字数の条件を外し、文章チェックと作業時間が集中モードで隠れることを確かめる形にした |
+| C. 奥付の自由欄の字の大きさ | 今のままでよい | 奥付のテスト 14 件の期待を `src/lib/colophonLayoutPlan.ts`（自由欄 0.86 倍、枠の幅の割合、ラベル列、行の高さ）から計算する形にした。左右位置は紙面中央に固定（TSP-PHASE13-001）として確かめる |
+| D. InDesign の元の見本 PDF | 手元にない | 指紋（SHA-256・大きさ）を、リポジトリ最初のコミットからある 49,414 バイトの写しに付けなおした。元のファイルにしかない字間の調整（TJ）を調べていた 4 件は、理由を書いて外した |
+
+## 一覧に残した 1 件
+
+| 分類 | テスト | 中身 | 次にすること |
 |---|---|---|---|
-| B-colophon-free-text | 15 | 奥付の自由欄の文字の大きさ・幅が、約束（構造欄の0.8倍、15字幅）とずれている（実測約0.86倍）。自由欄の見本PDFを読むテスト（もとの D 群 1 件）もここ。見本PDF `structural-colophon-human-review-qa.pdf` は他の見本と同じくリポジトリに入れたので、流す順番では落ちなくなった | なつおが奥付の見本PDFを見て決める（P4-2） |
-| C-indesign-reference | 9 | InDesign の見本PDF `typesetting-v2/qa/reference/indesign/molsui-indesign-reference.pdf` が、テストを書いた時のもの（49,522バイト）と違う。リポジトリの最初のコミットから 49,414 バイトで、Dropbox の控え 20 か所もすべて 49,414 バイト | 元のPDFが見つかれば戻す。無ければ、比べるテストを消すか見本を作りなおす |
-| UI-suspect-320px | 12 | スマホの原稿ボタンの列（rcPolishRound5・6、reportRestoration の 320/375/390/430px）。9f59c3b で「保存名」の欄が列の先頭に足され、幅 320px では「報告」がはみ出す見込み（見積り約341px／使える幅約304px、ブラウザで測ってはいない） | なつおが幅の狭いスマホで「報告」が見えるか確認。はみ出していれば直し、テストもその形に合わせる |
-| UI-suspect-focus-count | 1 | postBlockerUx。集中モードでも、PC では原稿の文字数が見えている（文字数が EditorPane のタイトル行へ移ったため）。EditorPane のコメントは「集中モードでは隠す」のまま | なつおが「集中モードで文字数が見えていてよいか」を決める |
+| colophon-continuation-gap | structuralColophonFinalPlacement の test 21 | 奥付が2ページ以上になり、続きのページが自由欄だけのとき、先頭に 1.4 字ぶんの空きが入る（standard・center・classic は `freeTextGapEm` を上に何もなくても足す。minimal は上に何かある時だけ） | 不具合の見込み。Phase 4（組版）で `src/lib/colophonRenderPlan.ts` を直す |
 
-## 画面の約束テスト 50 件の判断（UPDATE・DELETE の 37 件は直した。SUSPECT の 13 件は上の一覧に残した）
+## そのほか気づいたこと（直していない）
+
+- 奥付のテストのうち、古い 0.8 倍・15 字幅の数字のままでも合格しているものがある（typography の test 3・4、PDF の X の広がり）。test 3 は常に合格する書き方。
+- 奥付の行の折り返しは、英数字を 0.56 字幅と見積もっている。実際の書体ではメールアドレスが約 19 字幅あり、長い英数字は枠からはみ出すかもしれない。
+- 本番の流れでは、奥付が複数ページになると行の一覧と自由欄がどのページにも渡されている。行がページごとに繰り返されるかどうかは確かめていない。
+- `src/components/EditorSyntaxHelp.tsx` はどこからも使われていない（足もとのルビ・縦中横の説明が無くなったため）。
+
+## 10/14 の約束テスト 50 件の判断（SUSPECT の 13 件は、上の A・B の答えで 10/17 に直した）
 
 テストの期待を今のコードに合わせた。合格させるためだけの書きかえはしていない（同じ働きが無くなれば落ちる形にした）。消したのは1件だけで、その場所にコメントを残した。「pre-repo」は、リポジトリの最初のコミット（55ce1b9、2026-09-30）より前に変わっていたもの。
 
@@ -81,3 +94,23 @@
 | src/lib/postBlockerUx.test.ts > Desktop Focus Mode visibility contract > suppresses Writing Check, ruby help, work counter, and manuscript count together | SUSPECT | predates repo (55ce1b9; none of `data-writing-check-surface`, `data-editor-status-surfaces`, `data-ruby-tcy-status` exist anywhere in git history) | Writing Check and the work counter are still hidden in focus mode, but the 現在の原稿文字数 count pill (`data-editor-character-count`) now sits in the title row, which only has `max-md:hidden`, so it stays visible at md+ in focus mode, contradicting both this test and EditorPane's own focusMode doc comment. |
 | src/lib/updateHistory.test.ts > the shipped public/data/tatespun-update-history.json > keeps same-date entries valid and the newest release first in source order | UPDATE (data is correct) | 018b7eb (CST-PORT-016) / 73f80cc (PLT-LOOP-003) added the 26/10/04 entries | The JSON is correctly newest-first (dates never increase, and the first two share 26/10/04), so the test now checks that order directly instead of a pinned head date; it still requires the two 26/09/30 and two 26/09/20 entries. |
 | src/lib/writingCheckEngine/outputIsolation.test.ts > Writing Check engine -- output isolation (Core/Publication/Preview/export never reference it) > /home/user/tatesupan/typesetting-v2/core/reviewHubFooterCustomization.test.ts does not import or reference writingCheckEngine | UPDATE | predates repo (55ce1b9) | Confirmed: the match was in a test file that checks Editor-side strings, not in output code, so the guard now skips `*.test.*`/`*.spec.*` and scans production code only (96 files still checked, all pass). That per-file test id no longer exists. |
+
+## 10/17 奥付テスト 15 件の判断
+
+| Test id | Decision | Reason | New name (if renamed) |
+|---|---|---|---|
+| structuralColophonBlockModelAndCollision.test.ts > Free text block width (item 1) > a freeText line wraps at its own 0.8x-em, 15-structured-em target width -- each wrapped fragment's own real (smaller-font) width stays within that target (test 2; round 29F correction) | UPDATE | Free text is painted at the plan's freeTextScale (0.86) and wraps inside the plan's frame (0.68 x safe width), so the expectation now comes from the plan. | a freeText line wraps at the plan's frame width, painted at the plan's freeTextScale -- each wrapped fragment's own real (smaller-font) width stays within that frame (test 2) |
+| structuralColophonBlockModelAndCollision.test.ts > Free text block width (item 1) > RIGHT placement's own block right edge is flush with the resolved content-right edge (test 6; round 29F: block width now also accounts for freeText's own 15-structured-em target) | UPDATE | TSP-PHASE13-001 retired the horizontal anchor (ColophonModal: 「左右位置は紙面中央に固定されます」; MarginRespect test 4 already updated), so the test now checks that the plan's frame is centred and RIGHT gives the same x as CENTER. | RIGHT placement centres the plan's frame in the content area -- equal margins on both sides, the same x as CENTER (test 6) |
+| structuralColophonBlockModelAndCollision.test.ts > Furniture collision clamp (item 2) > respectVerticalMargins:false + a real header WOULD collide under the pre-29C formula -- the clamp detects and prevents it (test 9, 10) | UPDATE | The first line's centre is half the plan's lineHeight (1.8 em / 2 = 0.9 em) below the clamp line, not half an em; the clamp itself is unchanged. | (unchanged) |
+| structuralColophonBlockModelAndCollision.test.ts > Furniture collision clamp (item 2) > no header present -> no phantom header exclusion band (top-anchored content starts at the real, unclamped placementTopMm) (test 13) | UPDATE | Same as above: the offset below the top margin is half the plan's lineHeight, while the start is still the unclamped top margin. | (unchanged) |
+| structuralColophonFinalPlacement.test.ts > ColophonPlacement -- real legacy block-anchor semantics ported > Publication resolves the SAME semantic placement into the SAME physical anchor deterministically, and a DIFFERENT horizontal produces a DIFFERENT physical anchor (test 14) | UPDATE | The horizontal anchor was retired on purpose in TSP-PHASE13-001, so left and right placements both put the block at the centred plan-frame x (computed in the test), which the test now asserts. | ... and a DIFFERENT horizontal no longer moves the block -- the plan's frame stays centred (test 14) |
+| structuralColophonFinalPlacement.test.ts > Overflow -- multi-page colophon after insertion, no silent clipping > continuation pages use the SAME 'smallest consistent' top-anchored start regardless of the requested vertical placement -- a real, disclosed v2-only rule since legacy has no multi-page colophon concept (test 21) | SUSPECT | On continuation pages that hold only free text, the first line sits 4.72 mm (1.274 em) lower than on pages that start with a row, because `buildColophonRenderPlan` (standard/center/classic) adds `freeTextGapEm` (1.4 em) even when nothing is above the free text; the minimal template guards this with `if (y > 0)`. Test left unchanged. | - |
+| structuralColophonFreeTextFinalPdfParity.test.ts > Root cause audit: paint-model facts vs real serialized PDF bytes > the real PDF's own Tf operators contain BOTH the structured font size and a size close to 0.8x it (test 1, 6) | UPDATE | The real PDF has Tf 10.4995 and 9.0296 (= 10.4995 x 0.86), so the test now looks for structuredPt x the plan's freeTextScale. | ... and a size close to the plan's freeTextScale times it (test 1, 6) |
+| structuralColophonFreeTextFinalPdfParity.test.ts > Root cause audit: paint-model facts vs real serialized PDF bytes > generatePublicationPdf (the exact function the real product/QA path calls) produces the SAME real font-size parity (test 4, 5) | UPDATE | Same cause: the free-text Tf size is structured x 0.86 (the plan's freeTextScale), not x 0.8. | (unchanged) |
+| structuralColophonFreeTextFinalPdfParity.test.ts > The ACTUAL regenerated Human QA file on disk (maximal directness) > qa/publication/p3-o08/structural-colophon-human-review-qa.pdf, as it exists on disk right now, contains real Tf operators at both the structured size and 0.8x it -- not just an isolated fixture | UPDATE | The committed QA PDF (and the scratch copy) has Tf 9.0296 = 10.4995 x 0.86, so the test now checks for the plan's freeTextScale. | ... at both the structured size and the plan's freeTextScale times it -- not just an isolated fixture |
+| structuralColophonFreeTextTypography.test.ts > freeText typography (tests 1-3) > freeText font size is exactly 0.8x the structured font size (test 1) | UPDATE | The free-text size is the plan's freeTextScale (0.86) times the structured size; the test also asserts that the scale is below 1. | freeText font size is the layout plan's freeTextScale times the structured font size -- smaller than the rows (test 1) |
+| structuralColophonFreeTextTypography.test.ts > Safety clamp + real font-metric wrapping (tests 4-6) > wrapping uses real font metrics at freeText's own smaller size, not the structured em (test 5) | UPDATE | Free text wraps inside the plan's frame (0.68 x 120 mm = 81.6 mm here), not 15 em (55.6 mm), so each line's real-metric width at 0.86 em is checked against that frame. | each freeText line, measured with real font metrics at freeText's own (plan freeTextScale) size, stays within the plan's frame width (test 5) |
+| structuralColophonFreeTextTypography.test.ts > Structured metadata unaffected (tests 7-9) > structured frame width is unchanged by freeText's own new typography (test 7) | UPDATE | The label column is the plan's labelWidthEm (6 em) and the gap is labelValueGapEm (1.6 em), not widest-label + 1 em; the test also checks that the row x positions are the same with and without free text. | structured row width is the plan's label column + labelValueGapEm + the widest value, and freeText does not change it (test 7) |
+| structuralColophonRealSettings.test.ts > Publication rendering -- vector, horizontal, real compiled rows painted as label/value pairs > a real compiled row (label\tvalue) paints as TWO separate commands, a naturally-sized label column followed by a value column, and the raw tab never reaches a painted command's own text (test 23; round 29C: value column left-aligns after the label column, replacing round 27's own full-width right-anchor) | UPDATE | On this A6 page the plan's value column is 13.77 - 6 - 1.6 = 6.17 em, so the 7-character title wraps to 2 lines (3 commands); the test now derives the line count and value x from the plan and checks that no character is lost. | a real compiled row (label\tvalue) paints as a label command followed by the value column's line(s), wrapped at the plan's value-column width, and the raw tab never reaches a painted command's own text (test 23) |
+| structuralColophonWidthSeparation.test.ts > freeText uses its own 15-structured-em target width, not the title row (test 2; round 29F correction) > freeText wraps at the 15-structured-em target width (safety-clamped), at its own 0.8x font size (test 2) | UPDATE | Free text is painted at the plan's freeTextScale and wraps inside the plan's frame width, which the expectations now use. | freeText uses the layout plan's frame width, not the title row (test 2) > freeText wraps at the plan's frame width (safety-clamped), at the plan's freeTextScale (test 2) |
+| structuralColophonWidthSeparation.test.ts > freeText stays inside its own 15-structured-em target width (test 9; round 29F correction) > no freeText glyph paints beyond the block's own left edge + the 15-structured-em target width | UPDATE | The free-text bound is block-left + the plan's frame width at 0.86 em, not 15 em at 0.8 em. | freeText stays inside the layout plan's frame (test 9) > no freeText glyph paints beyond the block's own left edge + the plan's frame width |
