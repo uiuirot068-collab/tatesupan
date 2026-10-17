@@ -12,6 +12,8 @@
 // docs/supabase/migrations/20260912000000_projects_updated_at_trigger.sql）。
 // 端末の時計は使わない。
 
+import { contentHash } from "./cloudDeviceCopy";
+
 /**
  * `base` = この画面が最後に読んだ・保存したクラウド版の updated_at。
  * `cloud` = いまクラウドにある版の updated_at。
@@ -30,6 +32,12 @@ export interface CloudVersionBase {
   updatedAt: string | null;
   title: string;
   content: string;
+  /**
+   * TSP-SAFE-001: contentHash(title, content) of that version, when only the
+   * fingerprint is kept (a work reopened from this browser's bookshelf). Then
+   * the comparison uses it instead of title/content.
+   */
+  hash?: string;
 }
 
 /**
@@ -44,6 +52,7 @@ export function isCloudVersionChanged(
 ): boolean {
   if (!base) return false;
   if (isCloudVersionNewer(cloud.updated_at, base.updatedAt)) return true;
+  if (base.hash !== undefined) return contentHash(cloud.title, cloud.content) !== base.hash;
   return cloud.title !== base.title || cloud.content !== base.content;
 }
 
@@ -76,4 +85,8 @@ export const CLOUD_COMPARE_COPY = {
   openCloud: "クラウド版を開く",
   openCloudNote: "この画面の版は、本棚に「この端末の控え」として残します。",
   cancel: "やめる",
+  // TSP-SAFE-001: この画面がどのクラウド版から始まったか分からないとき（記録より前に
+  // クラウドへ保存した作品）。「クラウドの方が新しい」とは言い切らない。
+  unknownTitle: "クラウドの版とこの画面の版がちがいます",
+  unknownLead: "どちらが新しいかは、この画面からは分かりません。中身を見比べて、どちらを使うか選んでください。",
 } as const;

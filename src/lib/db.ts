@@ -12,6 +12,16 @@ import { SAMPLE_PROJECT } from "@/constants/sampleData";
 import { isEphemeralDocId } from "@/constants/demoData";
 import { initializeWorkSessionScope } from "./editorSessionActivity";
 import { bookshelfMetadataFromDocument, type BookshelfMetadataRecord } from "./bookshelfMetadata";
+import type { LocalWriteResult } from "./localSaveQueue";
+import {
+  contentHash,
+  decideDeviceCopy,
+  readDeviceCopyId,
+  writeDeviceCopyId,
+  type CloudSyncRecord,
+  type DeviceCopyDecision,
+} from "./cloudDeviceCopy";
+import { writeCloudLink } from "./cloudLink";
 
 export interface DocumentRecord {
   id: number;
@@ -26,6 +36,20 @@ export interface DocumentRecord {
   includedDocumentIds?: number[];
   /** 削除不可の初期サンプル作品フラグ */
   isSample?: boolean;
+  /**
+   * TSP-SAFE-001: bumped by every write of the work. A screen writes only if
+   * the work is still at the revision it read (lib/localSaveQueue.ts), so two
+   * tabs never silently overwrite each other. Missing on older records (= 0).
+   */
+  revision?: number;
+  /** TSP-SAFE-001: set when this work is the device copy of a cloud work (lib/cloudDeviceCopy.ts). */
+  cloudSync?: CloudSyncRecord;
+  /**
+   * TSP-SAFE-001: set by a bookshelf rename (renameDocument). While the latest
+   * revisions are renames only, a screen that read `renamedFrom` may still
+   * write its text — it keeps the new title instead of splitting the work.
+   */
+  rename?: { atRevision: number; renamedFrom: number };
 }
 
 /** A 挿絵 (illustration) uploaded by the user. Referenced from `content` by id. */
@@ -208,25 +232,237 @@ export async function saveDocument(
   // The 使い方ガイド (-1) and the TSP-024 おためしデモ (-2) are in-memory only —
   // never write a row for them.
   if (isEphemeralDocId(id)) return;
-  const document: DocumentRecord = {
-    id,
-    title,
-    content,
-    settings,
-    plotNote,
-    updatedAt: Date.now(),
-    isCollection: collection?.isCollection,
-    includedDocumentIds: collection?.includedDocumentIds,
-  };
-  const metadata = bookshelfMetadataFromDocument(document);
   await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
-    await db.documents.put(document);
-    if (metadata) {
-      await db.bookshelfMetadata.put(metadata);
-    } else {
-      await db.bookshelfMetadata.delete(id);
-    }
+    const current = await db.documents.get(id);
+    await writeDocumentRecord(current, { id, title, content, settings, plotNote }, collection);
   });
+}
+
+/**
+ * TSP-SAFE-001: the editor's write. Writes only while the stored work is
+ * still at `expectedRevision` (undefined skips that check) and never
+ * re-creates a work that was deleted (see lib/localSaveQueue.ts).
+ */
+export async function saveDocumentIfUnchanged(
+  job: { docId: number; title: string; content: string; settings: PageSettings; plotNote: string },
+  expectedRevision: number | undefined
+): Promise<LocalWriteResult> {
+  if (isEphemeralDocId(job.docId)) return { kind: "saved", revision: 0 };
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, async (): Promise<LocalWriteResult> => {
+    const current = await db.documents.get(job.docId);
+    if (!current) return { kind: "deleted" };
+    const stored = revisionOf(current);
+    const renamedOnly = isRenamedOnlySince(current, expectedRevision);
+    if (expectedRevision !== undefined && stored !== expectedRevision && !renamedOnly) return { kind: "changed" };
+    const revision = await writeDocumentRecord(current, {
+      id: job.docId,
+      title: renamedOnly ? current.title : job.title,
+      content: job.content,
+      settings: job.settings,
+      plotNote: job.plotNote,
+    });
+    return renamedOnly ? { kind: "saved", revision, renamedTitle: current.title } : { kind: "saved", revision };
+  });
+}
+
+/** TSP-SAFE-001: keeps a screen's text as a NEW work (rescue copy); returns its id and revision. */
+export async function createDocumentCopy(
+  source: { title: string; content: string; settings: PageSettings; plotNote: string },
+  title: string
+): Promise<{ id: number; revision: number }> {
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    const id = await unusedDocumentId();
+    const revision = await writeDocumentRecord(undefined, {
+      id,
+      title,
+      content: source.content,
+      settings: source.settings,
+      plotNote: source.plotNote,
+    });
+    return { id, revision };
+  });
+}
+
+async function unusedDocumentId(): Promise<number> {
+  let id = Date.now();
+  while (await db.documents.get(id)) id += 1;
+  return id;
+}
+
+/**
+ * Writes one work's fields, keeping what the editor does not hold (短編集 marks,
+ * the device-copy record) and bumping its revision. Must run inside a
+ * documents + bookshelfMetadata transaction.
+ */
+async function writeDocumentRecord(
+  current: DocumentRecord | undefined,
+  fields: { id: number; title: string; content: string; settings: PageSettings; plotNote: string },
+  collection?: { isCollection?: boolean; includedDocumentIds?: number[] },
+  cloudSync: CloudSyncRecord | undefined = current?.cloudSync
+): Promise<number> {
+  const revision = (current?.revision ?? 0) + 1;
+  const document: DocumentRecord = {
+    ...fields,
+    updatedAt: Date.now(),
+    isCollection: collection?.isCollection ?? current?.isCollection,
+    includedDocumentIds: collection?.includedDocumentIds ?? current?.includedDocumentIds,
+    revision,
+  };
+  if (current?.isSample) document.isSample = true;
+  if (cloudSync) document.cloudSync = cloudSync;
+  const metadata = bookshelfMetadataFromDocument(document);
+  await db.documents.put(document);
+  if (metadata) {
+    await db.bookshelfMetadata.put(metadata);
+  } else {
+    await db.bookshelfMetadata.delete(fields.id);
+  }
+  return revision;
+}
+
+/** True when every change since `expectedRevision` was a bookshelf rename. */
+function isRenamedOnlySince(current: DocumentRecord, expectedRevision: number | undefined): boolean {
+  if (expectedRevision === undefined || !current.rename) return false;
+  return current.rename.atRevision === revisionOf(current) && current.rename.renamedFrom === expectedRevision && expectedRevision !== revisionOf(current);
+}
+
+/**
+ * TSP-SAFE-001: the bookshelf's 題名を変える. Counts as a change of the work
+ * (another tab learns the new title on its next save) but never splits a
+ * screen that only lacks the new title.
+ */
+export async function renameDocument(id: number, title: string): Promise<void> {
+  if (isEphemeralDocId(id)) return;
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+    const current = await db.documents.get(id);
+    if (!current) return;
+    const stored = revisionOf(current);
+    const renamedFrom = current.rename && current.rename.atRevision === stored ? current.rename.renamedFrom : stored;
+    const revision = stored + 1;
+    await db.documents.update(id, { title, revision, rename: { atRevision: revision, renamedFrom } });
+    const metadata = await db.bookshelfMetadata.get(id);
+    if (metadata) await db.bookshelfMetadata.put({ ...metadata, title });
+  });
+}
+
+/** Reads a work's current revision (0 for records older than TSP-SAFE-001). */
+export function revisionOf(doc: Pick<DocumentRecord, "revision"> | undefined): number {
+  return doc?.revision ?? 0;
+}
+
+export interface OpenedDeviceCopy {
+  docId: number;
+  revision: number;
+  decision: DeviceCopyDecision;
+  /** The text the editor shows (the cloud version, or the copy's newer unsent text). */
+  title: string;
+  content: string;
+  settings: PageSettings;
+  plotNote: string;
+  /** Set when the copy's unsent text was kept as a separate work before being replaced. */
+  rescued: { id: number; title: string } | null;
+}
+
+/**
+ * TSP-SAFE-001: opens cloud work `project` through its ONE device copy in this
+ * browser (created on first open). See lib/cloudDeviceCopy.ts for the rules.
+ */
+export async function openCloudDeviceCopy(
+  project: { id: string; title: string; content: string; settings: PageSettings; updated_at?: string | null },
+  rescueTitle: (title: string) => string
+): Promise<OpenedDeviceCopy> {
+  const cloudHash = contentHash(project.title, project.content);
+  const cloudSync: CloudSyncRecord = { projectId: project.id, updatedAt: project.updated_at ?? null, hash: cloudHash };
+
+  const opened = await db.transaction("rw", db.documents, db.bookshelfMetadata, async (): Promise<OpenedDeviceCopy> => {
+    const local = await findDeviceCopy(project.id);
+    const decision = decideDeviceCopy(
+      local ? { hash: contentHash(local.title, local.content), sync: local.cloudSync ?? null } : null,
+      { updatedAt: cloudSync.updatedAt, hash: cloudHash }
+    );
+
+    if (local && decision === "keep-local") {
+      const doc = withDefaults(local);
+      return {
+        docId: doc.id,
+        revision: revisionOf(doc),
+        decision,
+        title: doc.title,
+        content: doc.content,
+        settings: doc.settings,
+        plotNote: doc.plotNote ?? "",
+        rescued: null,
+      };
+    }
+
+    let rescued: OpenedDeviceCopy["rescued"] = null;
+    if (local && decision === "rescue-then-replace") {
+      const kept = withDefaults(local);
+      const title = rescueTitle(kept.title);
+      const id = await unusedDocumentId();
+      await writeDocumentRecord(undefined, {
+        id,
+        title,
+        content: kept.content,
+        settings: kept.settings,
+        plotNote: kept.plotNote ?? "",
+      });
+      rescued = { id, title };
+    }
+
+    const id = local ? local.id : await unusedDocumentId();
+    const plotNote = local?.plotNote ?? "";
+    const revision = await writeDocumentRecord(
+      local,
+      { id, title: project.title, content: project.content, settings: project.settings, plotNote },
+      undefined,
+      cloudSync
+    );
+    return {
+      docId: id,
+      revision,
+      decision,
+      title: project.title,
+      content: project.content,
+      settings: project.settings,
+      plotNote,
+      rescued,
+    };
+  });
+
+  writeDeviceCopyId(project.id, opened.docId);
+  writeCloudLink(opened.docId, project.id);
+  return opened;
+}
+
+async function findDeviceCopy(projectId: string): Promise<DocumentRecord | undefined> {
+  const remembered = readDeviceCopyId(projectId);
+  if (remembered !== null) {
+    const doc = await db.documents.get(remembered);
+    if (doc?.cloudSync?.projectId === projectId) return doc;
+  }
+  // The remembered id is missing (site data partly cleared): look the copy up
+  // by its own record. Newest first if there are several.
+  const copies = await db.documents.filter((doc) => doc.cloudSync?.projectId === projectId).toArray();
+  return copies.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+}
+
+/**
+ * TSP-SAFE-001: after クラウドに保存, work `docId` is the device copy of that
+ * cloud version. Does not change the work's text or revision.
+ */
+export async function markCloudSynced(
+  docId: number,
+  saved: { projectId: string; updatedAt: string | null; title: string; content: string }
+): Promise<void> {
+  if (isEphemeralDocId(docId)) return;
+  const cloudSync: CloudSyncRecord = {
+    projectId: saved.projectId,
+    updatedAt: saved.updatedAt,
+    hash: contentHash(saved.title, saved.content),
+  };
+  const updated = await db.documents.update(docId, { cloudSync });
+  if (updated) writeDeviceCopyId(saved.projectId, docId);
 }
 
 export async function deleteDocument(id: number): Promise<void> {

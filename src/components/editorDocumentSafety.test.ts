@@ -26,13 +26,14 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
     const autosave = body(editor, "pendingAutosave.schedule(", "}, [docId, title, content, settings, plotNote");
     expect(autosave).toContain("pendingAutosave.schedule({ docId, title, content, settings, plotNote });");
     expect(autosave).toContain("const job = pendingAutosave.take();");
-    expect(autosave).toContain("saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)");
+    // TSP-SAFE-001: the job goes to the tab's save queue (retry, two-tab check).
+    expect(autosave).toContain("void localSaveQueue.submit(job);");
   });
 
   it("flushAutosave writes the job to ITS document", () => {
-    const flush = body(editor, "const flushAutosave = useCallback(", "}, [pendingAutosave]);");
-    expect(flush).toContain("flushPendingAutosave(pendingAutosave, (job) =>");
-    expect(flush).toContain("saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)");
+    const flush = body(editor, "const flushAutosave = useCallback(", "}, [localSaveQueue, pendingAutosave]);");
+    expect(flush).toContain("const job = pendingAutosave.take();");
+    expect(flush).toContain("return job ? localSaveQueue.submit(job) : localSaveQueue.flush();");
   });
 
   it("a route-driven document switch flushes BEFORE resetting, and a reload awaits the flush", () => {
@@ -44,7 +45,11 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
 
   it("保存作品一覧 flushes before switching and restores the project's images", () => {
     const select = body(editor, "const handleSelectProject = ", "const handleBookPartsInsert");
-    expect(select).toMatch(/void flushAutosave\(\);\s*beginDocumentSwitch\(\);\s*applyCloudProject\(project\);\s*void openCloudProjectImages\(project, documentEpoch\.capture\(\)\);/);
+    // TSP-SAFE-001: the project opens through its device copy, read after the flush.
+    expect(select).toMatch(/const previousDocumentFlushed = flushAutosave\(\);\s*beginDocumentSwitch\(\);\s*const isCurrent = documentEpoch\.capture\(\);/);
+    expect(select.indexOf("await previousDocumentFlushed;")).toBeLessThan(select.indexOf("openDeviceCopySafely(project)"));
+    expect(select).toMatch(/if \(!isCurrent\(\)\) return;\s*applyCloudProject\(project, opened\);/);
+    expect(select).toContain("await openCloudProjectImages(project, isCurrent);");
   });
 
   it("unmount and pagehide flush; Ctrl+S drops the job it replaces", () => {
@@ -58,7 +63,7 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
 
 describe("TategakiEditor: cloud project images", () => {
   it("both open paths share one restore, and the manifest poll waits for it", () => {
-    const route = body(editor, "applyCloudProject(project);\n        await openCloudProjectImages(", "hasLoadedRef.current = true;");
+    const route = body(editor, "applyCloudProject(project, opened);\n        if (opened?.rescued)", "hasLoadedRef.current = true;");
     expect(route).toContain("() => !isStale()");
     const restore = body(editor, "const openCloudProjectImages = useCallback(", "}, []);");
     expect(restore).toContain("if (!isCurrent()) return;");
@@ -103,5 +108,38 @@ describe("PreviewPane: selection pruning", () => {
     const prune = body(preview, "useEffect(() => {\n    if (!pageListIsCanonical) return;", "}, [pageListIsCanonical");
     expect(prune).toContain("pruneSelectedPages(selected, listPages.length)");
     expect(prune).toContain("if (pruned !== selected) setSelected(new Set(pruned));");
+  });
+});
+
+describe("TSP-SAFE-001: the save design is wired into the editor", () => {
+  it("a cloud work opens through its device copy, so it is autosaved", () => {
+    const route = body(editor, "if (cloudProjectId) {", "let id = documentId");
+    expect(route.indexOf("await previousDocumentFlushed;")).toBeLessThan(route.indexOf("openDeviceCopySafely(project)"));
+    expect(route).toContain('setSaveStatus(opened ? "saved" : "stopped");');
+    const apply = body(editor, "const applyCloudProject = useCallback(", "}, [localSaveQueue, setSettings]);");
+    expect(apply).toContain("localSaveQueue.setBase(opened.docId, opened.revision);");
+    expect(apply).toMatch(/loadedDocIdRef\.current = opened\.docId;\s*setDocId\(opened\.docId\);/);
+  });
+
+  it("a local load records the revision this screen read", () => {
+    const run = body(editor, "async function run()", "run();");
+    expect(run).toContain("localSaveQueue.setBase(id, revisionOf(doc));");
+  });
+
+  it("a split after another tab's save moves this screen onto its copy; a deletion stops saving", () => {
+    const events = body(editor, "return localSaveQueue.subscribe((event) => {", "}, [localSaveQueue, pendingAutosave, router]);");
+    expect(events).toContain("if (event.docId === openDocId) router.replace(`/editor?id=${event.copyId}`);");
+    expect(events).toMatch(/setSaveStatus\("stopped"\);\s*setDeletedElsewhere\(true\);/);
+  });
+
+  it("closing the tab with text not yet saved here asks first", () => {
+    const warn = body(editor, "const warnIfUnsaved = (event: BeforeUnloadEvent) => {", 'window.addEventListener("beforeunload", warnIfUnsaved);');
+    expect(warn).toContain('pendingAutosave.hasPending || localSaveQueue.hasUnsaved || saveStatusRef.current === "stopped"');
+    expect(warn).toContain("event.preventDefault();");
+  });
+
+  it("クラウドに保存 records the version the device copy now matches", () => {
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean) => {", "const handleCloudCompareOverwrite");
+    expect(save).toContain("void markCloudSynced(docId, { projectId: result.data.id, updatedAt: result.data.updated_at ?? null, title, content })");
   });
 });

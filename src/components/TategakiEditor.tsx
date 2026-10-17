@@ -9,8 +9,12 @@ import {
   listStoredImageIds,
   loadDocument,
   loadImagesByIds,
+  markCloudSynced,
+  openCloudDeviceCopy,
+  revisionOf,
   saveDocument,
   saveImage,
+  type OpenedDeviceCopy,
   updateImageLayerOrder,
   type ImageRecord,
 } from "@/lib/db";
@@ -33,7 +37,8 @@ import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type Clo
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages, openedCloudProjectImageState, referencedImageIds, referencedImageSignature, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
 import { DocumentEpoch } from "@/lib/documentScope";
-import { flushPendingAutosave, PendingAutosave } from "@/lib/pendingAutosave";
+import { PendingAutosave } from "@/lib/pendingAutosave";
+import { getLocalSaveQueue } from "@/lib/localDocumentSaver";
 import { lockUserSelect } from "@/lib/bodyUserSelect";
 import { imageIdsToTopUp, imageStateFromRecords } from "@/lib/documentImages";
 import { imageMarkerIds } from "@/lib/tategaki";
@@ -95,7 +100,25 @@ function isLoggedOutError(message: string): boolean {
   return /auth session missing|ログインしていません/i.test(message);
 }
 
-type SaveStatus = "loading" | "saved" | "saving" | "error";
+// TSP-SAFE-001: the save state of THIS browser's copy. "error" = the last
+// write failed and is being retried; "stopped" = nothing is being saved here
+// (the work was deleted in another tab, or no copy could be made).
+type SaveStatus = "loading" | "saved" | "saving" | "error" | "stopped";
+/** TSP-SAFE-001: the cloud work this screen is linked to — matched, or not yet sent. */
+type CloudSaveStatus = "synced" | "unsent";
+
+/** TSP-SAFE-001: what the screen shows after opening a cloud work (lib/db.ts openCloudDeviceCopy). */
+async function openDeviceCopySafely(project: Project): Promise<OpenedDeviceCopy | null> {
+  try {
+    return await openCloudDeviceCopy(
+      { ...project, settings: (project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS },
+      cloudCompareLocalCopyTitle
+    );
+  } catch (error) {
+    console.error("TateSpun: could not keep a copy of the cloud work in this browser", error);
+    return null;
+  }
+}
 
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -367,7 +390,13 @@ export default function TategakiEditor({
   // saved there since (other device / tab), the compare dialog asks which
   // version to keep.
   const cloudBaseRef = useRef<CloudVersionBase | null>(null);
-  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null } | null>(null);
+  // TSP-SAFE-001: the version this screen last matched in the cloud, for the
+  // 「クラウド」 part of the save status (null = not linked to a cloud work).
+  // `settings` is filled by the first settings commit after it is set.
+  const [cloudSynced, setCloudSynced] = useState<{ title: string; content: string; settings: PageSettings | null } | null>(null);
+  // TSP-SAFE-001: the open work was deleted in another tab; this screen's text is not saved.
+  const [deletedElsewhere, setDeletedElsewhere] = useState(false);
+  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null; baseUnknown?: boolean } | null>(null);
   const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const workSessionScope = useMemo(() => {
@@ -467,6 +496,7 @@ export default function TategakiEditor({
     setImageWarningBaselineIds(new Set());
     setCloudImagesRestoring(false);
     setSelectedPages(new Set());
+    setDeletedElsewhere(false);
   }, [documentEpoch]);
 
   const hasLoadedRef = useRef(false);
@@ -479,27 +509,20 @@ export default function TategakiEditor({
   // document switch, unmount or pagehide writes it now instead of dropping it,
   // and it is always written to ITS document, never the one open at flush time.
   const [pendingAutosave] = useState(() => new PendingAutosave<PageSettings>());
+  // TSP-SAFE-001: every write of a work to this browser goes through this
+  // tab's save queue (lib/localSaveQueue.ts): failed writes are retried, and a
+  // work changed or deleted in another tab is never silently overwritten or
+  // brought back. Its events drive saveStatus (see the subscription below).
+  const [localSaveQueue] = useState(() => getLocalSaveQueue());
   const isMountedRef = useRef(false);
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const flushAutosave = useCallback((): Promise<void> => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    return flushPendingAutosave(pendingAutosave, (job) =>
-      saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)
-    ).then(
-      (job) => {
-        if (job && isMountedRef.current && loadedDocIdRef.current === job.docId && !pendingAutosave.hasPending) {
-          setSaveStatus("saved");
-        }
-      },
-      (error: unknown) => {
-        console.error("TateSpun: autosave flush failed", error);
-        if (isMountedRef.current) setSaveStatus("error");
-      }
-    );
-  }, [pendingAutosave]);
+    const job = pendingAutosave.take();
+    return job ? localSaveQueue.submit(job) : localSaveQueue.flush();
+  }, [localSaveQueue, pendingAutosave]);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const releaseDividerUserSelectRef = useRef<(() => void) | null>(null);
@@ -641,18 +664,47 @@ export default function TategakiEditor({
     );
   };
 
-  const applyCloudProject = useCallback((project: Project) => {
+  // TSP-SAFE-001: long enough to read — it names a work added to the bookshelf.
+  const showRescuedCopyToast = useCallback((copyTitle: string) => {
+    setToast(`この端末にあった、まだクラウドに送っていない書きかけは、本棚に「${copyTitle}」として残しました。`);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 9000);
+  }, []);
+
+  // TSP-SAFE-001: a cloud work opens through its device copy in this browser
+  // (`opened`), so it is autosaved like any local work. `opened` is null only
+  // when no copy could be made: then, as before, nothing is saved here and the
+  // status says so.
+  const awaitingCloudSettingsRef = useRef(false);
+  const applyCloudProject = useCallback((project: Project, opened: OpenedDeviceCopy | null) => {
     setCurrentProjectId(project.id);
     cloudBaseRef.current = { updatedAt: project.updated_at ?? null, title: project.title, content: project.content };
-    setTitle(project.title);
-    setContent(project.content);
+    setCloudSynced({ title: project.title, content: project.content, settings: null });
+    awaitingCloudSettingsRef.current = true;
+    const shown = opened ?? { title: project.title, content: project.content, settings: project.settings as PageSettings, plotNote: "" };
+    setTitle(shown.title);
+    setContent(shown.content);
     setSettings(
-      withColophonDefaults((project.settings as PageSettings) ?? DEFAULT_PAGE_SETTINGS, project.title)
+      withColophonDefaults(shown.settings ?? DEFAULT_PAGE_SETTINGS, shown.title)
     );
-    setPlotNote("");
-    loadedDocIdRef.current = null;
-    setDocId(null);
-  }, [setSettings]);
+    setPlotNote(shown.plotNote);
+    if (opened) {
+      localSaveQueue.setBase(opened.docId, opened.revision);
+      loadedDocIdRef.current = opened.docId;
+      setDocId(opened.docId);
+    } else {
+      loadedDocIdRef.current = null;
+      setDocId(null);
+    }
+  }, [localSaveQueue, setSettings]);
+
+  // The first settings commit after a cloud work is applied is the settings
+  // that version opened with; a later change is 「未送信」 until saved.
+  useEffect(() => {
+    if (!awaitingCloudSettingsRef.current) return;
+    awaitingCloudSettingsRef.current = false;
+    setCloudSynced((previous) => (previous ? { ...previous, settings } : previous));
+  }, [settings]);
 
   // Phase 6.1: ONE image restore for both cloud-open paths — the `?cloudId=`
   // route and 保存作品一覧 (which used to swap only text and settings, leaving
@@ -678,6 +730,12 @@ export default function TategakiEditor({
       })),
       loadImagesByIds(imageMarkerIds(project.content)).catch(() => []),
     ]);
+    // TSP-SAFE-001: the device copy shows the same images when it is opened
+    // from this browser's bookshelf, so cloud-only images are kept here too.
+    const storedIds = new Set(localRecords.map((record) => record.id));
+    for (const [id, dataUrl] of Object.entries(restored.images)) {
+      if (!storedIds.has(id)) void saveImage({ id, dataUrl, createdAt: Date.now() }).catch(() => undefined);
+    }
     if (!isCurrent()) return;
     const opened = openedCloudProjectImageState(project.content, restored, localRecords);
     setImages(opened.images);
@@ -718,6 +776,7 @@ export default function TategakiEditor({
         setImageWarningBaselineIds(new Set());
         setCurrentProjectId(null);
         cloudBaseRef.current = null;
+        setCloudSynced(null);
         loadedDocIdRef.current = DEMO_PROJECT.id;
         setDocId(DEMO_PROJECT.id);
         hasLoadedRef.current = true;
@@ -732,11 +791,16 @@ export default function TategakiEditor({
           setSaveStatus("error");
           return;
         }
-        applyCloudProject(project);
+        // Opening the same cloud work again must read the copy's latest text.
+        await previousDocumentFlushed;
+        const opened = await openDeviceCopySafely(project);
+        if (isStale()) return;
+        applyCloudProject(project, opened);
+        if (opened?.rescued) showRescuedCopyToast(opened.rescued.title);
         await openCloudProjectImages(project, () => !isStale());
         if (isStale()) return;
         hasLoadedRef.current = true;
-        setSaveStatus("saved");
+        setSaveStatus(opened ? "saved" : "stopped");
         return;
       }
 
@@ -751,6 +815,9 @@ export default function TategakiEditor({
         id = await createDocument(newDocSettings ?? undefined);
         router.replace(`/editor?id=${id}`);
       }
+      // TSP-SAFE-001: this screen writes the work only while it is still at
+      // the revision read here (another tab may save it meanwhile).
+      if (id !== null) localSaveQueue.setBase(id, revisionOf(doc));
 
       // Phase 7: only this manuscript's images (lib/documentImages.ts).
       const imageRecords = await loadImagesByIds(imageMarkerIds(doc?.content ?? ""));
@@ -762,7 +829,15 @@ export default function TategakiEditor({
       // with this document — and any technical break its manifest poll
       // reported while this load was in flight.
       setCurrentProjectId(null);
-      cloudBaseRef.current = null;
+      // TSP-SAFE-001: a work saved to the cloud from this browser remembers the
+      // cloud version it last matched, so クラウドに保存 compares with THAT
+      // (before, it compared with the screen and always cried "newer").
+      const sync = doc?.cloudSync;
+      cloudBaseRef.current =
+        id !== null && sync && readCloudLink(id) === sync.projectId
+          ? { updatedAt: sync.updatedAt, title: "", content: "", hash: sync.hash }
+          : null;
+      setCloudSynced(null);
       setUnresolvedCloudImages(null);
       setImageWarningBaselineIds(new Set());
 
@@ -791,7 +866,7 @@ export default function TategakiEditor({
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, openCloudProjectImages, router, setSettings, startPaperSize]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, localSaveQueue, openCloudProjectImages, router, setSettings, showRescuedCopyToast, startPaperSize]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1037,15 +1112,81 @@ export default function TategakiEditor({
       saveTimeoutRef.current = null;
       const job = pendingAutosave.take();
       if (!job) return;
-      saveDocument(job.docId, job.title, job.content, job.settings, job.plotNote)
-        .then(() => { if (!pendingAutosave.hasPending) setSaveStatus("saved"); })
-        .catch(() => { setSaveStatus("error"); });
+      void localSaveQueue.submit(job);
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [docId, title, content, settings, plotNote, isSampleDocument, pendingAutosave]);
+  }, [docId, title, content, settings, plotNote, isSampleDocument, localSaveQueue, pendingAutosave]);
+
+  // TSP-SAFE-001: the save queue reports every write; only the open work's
+  // results change this screen's status.
+  useEffect(() => {
+    return localSaveQueue.subscribe((event) => {
+      const openDocId = loadedDocIdRef.current;
+      switch (event.type) {
+        case "saving":
+          if (event.docId === openDocId) setSaveStatus("saving");
+          break;
+        case "saved":
+          // Renamed on the bookshelf meanwhile: the work kept the new title; show it.
+          if (event.docId === openDocId && event.renamedTitle !== undefined) setTitle(event.renamedTitle);
+          if (event.docId === openDocId && !pendingAutosave.hasPending && !localSaveQueue.hasUnsavedFor(event.docId)) {
+            setSaveStatus("saved");
+          }
+          break;
+        case "error":
+          console.error("TateSpun: saving to this browser failed; retrying", event.error);
+          if (event.docId === openDocId) setSaveStatus("error");
+          break;
+        case "rescued":
+          // Another tab saved this work after this screen opened it. That
+          // version stays in the work; this screen's text is now its own work,
+          // and this screen continues on it.
+          setToast(`この作品は別の画面で先に保存されていました。両方を残すため、この画面の書きかけは本棚に「${event.copyTitle}」として分けました。`);
+          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+          toastTimeoutRef.current = setTimeout(() => setToast(null), 10000);
+          if (event.docId === openDocId) router.replace(`/editor?id=${event.copyId}`);
+          break;
+        case "deleted":
+          if (event.docId === openDocId) {
+            setSaveStatus("stopped");
+            setDeletedElsewhere(true);
+          }
+          break;
+      }
+    });
+  }, [localSaveQueue, pendingAutosave, router]);
+
+  // TSP-SAFE-001: closing the tab while this screen's text is not yet in this
+  // browser asks first (the pagehide flush below is only best effort).
+  const saveStatusRef = useRef<SaveStatus>(saveStatus);
+  useEffect(() => {
+    saveStatusRef.current = saveStatus;
+  }, [saveStatus]);
+  useEffect(() => {
+    const warnIfUnsaved = (event: BeforeUnloadEvent) => {
+      const unsaved = pendingAutosave.hasPending || localSaveQueue.hasUnsaved || saveStatusRef.current === "stopped";
+      if (!unsaved) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnIfUnsaved);
+    return () => window.removeEventListener("beforeunload", warnIfUnsaved);
+  }, [localSaveQueue, pendingAutosave]);
+
+  // TSP-SAFE-001: after a deletion in another tab, the person can keep this
+  // screen's text as a new work (it is never written back into the deleted one).
+  const keepDeletedWorkAsCopy = async () => {
+    if (docId === null) return;
+    const kept = await localSaveQueue.keepAsCopy(
+      { docId, title, content, settings, plotNote },
+      title.trim() || "無題"
+    );
+    setDeletedElsewhere(false);
+    router.replace(`/editor?id=${kept.id}`);
+  };
 
   // Phase 6.1: leaving the editor (client navigation unmounts it) or the page
   // writes the pending job to IndexedDB. pagehide / visibilitychange=hidden are
@@ -1082,12 +1223,9 @@ export default function TategakiEditor({
     // The pending job holds this same committed state; this write replaces it.
     pendingAutosave.clear();
     setSaveStatus("saving");
-    saveDocument(docId, title, content, settings, plotNote)
-      .then(() => {
-        setSaveStatus("saved");
-        showToast("下書きを保存しました");
-      })
-      .catch(() => setSaveStatus("error"));
+    void localSaveQueue.submit({ docId, title, content, settings, plotNote }).then(() => {
+      if (loadedDocIdRef.current === docId && !localSaveQueue.hasUnsavedFor(docId)) showToast("この端末に保存しました");
+    });
   };
 
   useShortcuts([{ key: "s", handler: saveNow }]);
@@ -1144,9 +1282,12 @@ export default function TategakiEditor({
         }
         // A screen that never saw the linked cloud version compares it with
         // what it shows now.
+        // TSP-SAFE-001: without a known base, which side is newer cannot be
+        // told — the dialog then only says the two differ.
+        const baseUnknown = !cloudBaseRef.current && linkedOnly;
         const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
         if (cloudNow && projectId && !skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
-          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null });
+          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null, baseUnknown });
           return;
         }
       }
@@ -1194,8 +1335,17 @@ export default function TategakiEditor({
       }
 
       if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
-      if (isSameDocument()) cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
-      if (docId !== null) writeCloudLink(docId, result.data.id);
+      if (isSameDocument()) {
+        cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
+        setCloudSynced({ title, content, settings });
+      }
+      if (docId !== null) {
+        writeCloudLink(docId, result.data.id);
+        // TSP-SAFE-001: this work is now the device copy of that cloud version.
+        void markCloudSynced(docId, { projectId: result.data.id, updatedAt: result.data.updated_at ?? null, title, content }).catch(
+          (error: unknown) => console.error("TateSpun: could not record the cloud version", error)
+        );
+      }
 
       // TSP-LOOP-007: 本文・設定は保存済み。続けて挿絵を private Storage へ
       // 72h 同期する。画像期限（expires_at）は *完全成功時のみ* +72h される。
@@ -1250,14 +1400,22 @@ export default function TategakiEditor({
         await flushAutosave();
       }
       if (!isSameDocument()) return;
+      // TSP-SAFE-001: through the device copy. If this screen IS that copy, its
+      // unsent text is kept as a separate work before the cloud version replaces it.
+      const opened = await openDeviceCopySafely(cloudProject);
+      if (!isSameDocument()) return;
       setCloudCompare(null);
       beginDocumentSwitch();
-      applyCloudProject(cloudProject);
+      applyCloudProject(cloudProject, opened);
       void openCloudProjectImages(cloudProject, documentEpoch.capture());
+      const screenKeptAs = keptTitle ?? opened?.rescued?.title ?? null;
       showToast(
-        keptTitle
-          ? `クラウド版を開きました。この画面の版は本棚に「${keptTitle}」として残しました。`
-          : "クラウド版を開きました。この画面の版は本棚のこの作品に残っています。"
+        screenKeptAs
+          ? `クラウド版を開きました。この画面の版は本棚に「${screenKeptAs}」として残しました。`
+          : opened && opened.docId === docId
+            ? "クラウド版を開きました。"
+            : "クラウド版を開きました。この画面の版は本棚のこの作品に残っています。",
+        6000
       );
     } catch (error) {
       console.error("TateSpun: open cloud version failed", error);
@@ -1270,11 +1428,32 @@ export default function TategakiEditor({
   const handleSelectProject = (project: Project) => {
     // Phase 6.1: the open document's pending edits are written to ITS docId
     // first; then the project's text, settings AND images replace it.
-    void flushAutosave();
+    // TSP-SAFE-001: the project opens through its device copy, which may be
+    // the work open now, so its edits must be written before it is read.
+    const previousDocumentFlushed = flushAutosave();
     beginDocumentSwitch();
-    applyCloudProject(project);
-    void openCloudProjectImages(project, documentEpoch.capture());
+    const isCurrent = documentEpoch.capture();
+    void (async () => {
+      await previousDocumentFlushed;
+      const opened = await openDeviceCopySafely(project);
+      if (!isCurrent()) return;
+      applyCloudProject(project, opened);
+      setSaveStatus(opened ? "saved" : "stopped");
+      if (opened?.rescued) showRescuedCopyToast(opened.rescued.title);
+      await openCloudProjectImages(project, isCurrent);
+    })();
   };
+
+  // TSP-SAFE-001: shown beside this browser's save status while the screen is
+  // linked to a cloud work: whether the cloud has what the screen shows.
+  const cloudSaveStatus: CloudSaveStatus | undefined =
+    isSampleDocument || !currentProjectId || !cloudSynced
+      ? undefined
+      : title !== cloudSynced.title ||
+          content !== cloudSynced.content ||
+          (cloudSynced.settings !== null && settings !== cloudSynced.settings)
+        ? "unsent"
+        : "synced";
 
   const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
@@ -1366,6 +1545,7 @@ export default function TategakiEditor({
           onSelectProject={isSampleDocument ? undefined : handleSelectProject}
           isSaving={isSaving}
           saveStatus={isSampleDocument ? undefined : saveStatus}
+          cloudSaveStatus={cloudSaveStatus}
           focusMode={focusMode}
           onEnterFocus={enterFocusMode}
           onExitFocus={exitFocusMode}
@@ -1377,6 +1557,22 @@ export default function TategakiEditor({
           {demoMode
             ? "おためしデモの内容は保存されません（本棚にも残りません）"
             : "使い方ガイドでの編集内容は保存されません"}
+        </p>
+      )}
+
+      {deletedElsewhere && (
+        <p
+          role="alert"
+          className="mx-auto -my-3 flex max-w-2xl flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-md bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-800"
+        >
+          <span>この作品は別の画面で削除されたため、ここで書いた分は保存されていません。</span>
+          <button
+            type="button"
+            onClick={() => void keepDeletedWorkAsCopy().catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)))}
+            className="rounded-full border border-amber-700/40 px-2 py-0.5 underline-offset-2 hover:bg-amber-200"
+          >
+            新しい作品として残す
+          </button>
         </p>
       )}
 
@@ -1415,6 +1611,7 @@ export default function TategakiEditor({
         onEnterFocus={enterFocusMode}
         onExitFocus={exitFocusMode}
         saveStatus={isSampleDocument ? undefined : saveStatus}
+        cloudSaveStatus={cloudSaveStatus}
         onSave={isSampleDocument ? undefined : handleSave}
         isSaving={isSaving}
         onOpenExport={sharedExport.openMobileExport}
@@ -1739,6 +1936,7 @@ export default function TategakiEditor({
           screen={{ title, content, updatedAt: cloudCompare.base }}
           cloud={{ title: cloudCompare.cloud.title, content: cloudCompare.cloud.content, updatedAt: cloudCompare.cloud.updated_at }}
           busy={cloudCompareBusy}
+          baseUnknown={cloudCompare.baseUnknown}
           onOverwrite={handleCloudCompareOverwrite}
           onOpenCloud={() => void handleCloudCompareOpenCloud()}
           onCancel={() => setCloudCompare(null)}
