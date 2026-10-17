@@ -52,27 +52,15 @@ describe("Desktop Focus Mode visibility contract", () => {
     }
   );
 
-  it("suppresses Writing Check, ruby help, work counter, and manuscript count together", () => {
-    const writingSurface = pane.slice(
-      pane.indexOf('data-writing-check-surface=""'),
-      pane.indexOf("<WritingCheckBar")
-    );
-    const statusSurface = pane.slice(
-      pane.indexOf('data-editor-status-surfaces=""'),
-      pane.indexOf("</div>\n    </div>\n  );")
-    );
-
-    // TSP-RC-LATIN-AND-MOBILE-COMPACT-001: these two surfaces now also fold
-    // in an independent, orthogonal `footerCollapsed` (mobile compact-bar)
-    // condition on the FALSE branch, so this checks the focusMode contract's
-    // TRUE branch (the actual invariant under test) as a prefix rather than
-    // the whole ternary as an exact string -- focusMode still unconditionally
-    // wins and still fully hides at every width when true, unchanged.
-    expect(writingSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ');
-    expect(statusSurface).toContain('focusMode ? "max-md:hidden md:hidden" : ');
-    expect(statusSurface).toContain('data-ruby-tcy-status=""');
-    expect(statusSurface).toContain("<WorkSessionTracker");
-    expect(statusSurface).toContain('title="現在の原稿文字数"');
+  // TSP-IMPROVE-002: the old status-surface footer became the Review Hub
+  // footer (compact) and the Desktop Review Bar; ruby/TCY help moved into the
+  // placeholder and ▶ヘルプ. The manuscript count moved into the title row and
+  // stays visible on desktop in focus mode -- なつお confirmed that is wanted
+  // (Human QA 2026-10-17), so it is no longer part of this test.
+  it("suppresses Writing Check and the work counter together in focus mode", () => {
+    expect(pane).toContain('{reviewSurface === "compact" && !focusMode && !keyboardActive && (');
+    expect(editor).toContain('const reviewBarEligible = reviewSurface === "desktop" && !focusMode && !isPreviewCollapsed;');
+    expect(editor).toContain("reviewBarNode={reviewBarEligible ? reviewBarNode : null}");
   });
 
   it("keeps the established mobile suppression and Preview collapse behavior", () => {

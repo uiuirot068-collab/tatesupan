@@ -107,7 +107,8 @@ describe("Round 6 mobile toolbar", () => {
   );
 
   it.each([320, 375, 390, 430])("uses compact content-width tracks without overflow at %ipx", () => {
-    expect(row).toContain("grid-cols-[44px_44px_max-content_max-content_max-content]");
+    // TSP-IMPROVE-002: 9f59c3b put the 保存名 control first; なつお checked on a narrow phone (2026-10-17) that 報告 stays visible.
+    expect(row).toContain("grid-cols-[max-content_44px_44px_max-content_max-content_max-content]");
     expect(row).toContain("justify-center");
     expect(row).toContain("gap-0.5");
     expect(row).not.toContain("minmax(0,1fr)");

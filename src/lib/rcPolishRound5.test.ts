@@ -57,7 +57,8 @@ describe("Round 5 compact mobile Editor controls", () => {
   );
 
   it.each([320, 375, 390, 430])("keeps all five manuscript actions in one nowrap row at %ipx", () => {
-    expect(actionRow).toContain("grid-cols-[44px_44px_max-content_max-content_max-content]");
+    // TSP-IMPROVE-002: 9f59c3b put the 保存名 control first; なつお checked on a narrow phone (2026-10-17) that 報告 stays visible.
+    expect(actionRow).toContain("grid-cols-[max-content_44px_44px_max-content_max-content_max-content]");
     expect(actionRow).not.toContain("grid-cols-2");
     expect(actionRow).toContain("whitespace-nowrap");
     expect(actionRow).toContain("min-h-9 min-w-11");

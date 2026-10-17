@@ -18,12 +18,12 @@
 
 ## GitHub Pages（本番ではない）
 
-- 2026-10-17 時点で公開されたまま: https://uiuirot068-collab.github.io/tatesupan/ （Source は GitHub Actions、最後の公開 10/13）。
+- 2026-10-17 なつおが「Unpublish site」で公開を止めた（それまで https://uiuirot068-collab.github.io/tatesupan/ に古い写しが出ていた）。
 - `.github/workflows/deploy.yml`。`master` への push のたびに `npm run build`（basePath なし）を GitHub Pages に出していた（2026-10-13 の run 102 まで成功）。
 - basePath が無いので `/tatesupan/` の下では画面の部品が読めない見込みで、spuntales.net とも関係がない。
 - **TSP-IMPROVE-002 で `workflow_dispatch`（Actions の画面で手で押した時だけ）に変えた。** ファイルは消していない。
 - 戻し方: `deploy.yml` の `on:` に `push: branches: [master]` を戻す。
-- GitHub の Settings → Pages の「Unpublish site」で公開を止めるかどうかは、なつおの判断。
+- もう一度出す時は、Actions の画面から「Deploy to GitHub Pages」を手で実行する。
 
 ## push の前後
 
