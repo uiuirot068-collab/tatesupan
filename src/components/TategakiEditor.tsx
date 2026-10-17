@@ -32,7 +32,15 @@ import { PREVIEW_EXPORT_STAGE_CLASS } from "@/lib/previewExportStage";
 import { useMobileFocusMode } from "@/hooks/useMobileFocusMode";
 import { mobileShellHeightStyle, useMobileKeyboardViewport } from "@/hooks/useMobileKeyboardViewport";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import { createProject, updateProject, getCloudProjectCount, getProjectById } from "@/lib/supabase/projects";
+import {
+  createProject,
+  updateProject,
+  getCloudProjectCount,
+  getProjectById,
+  lookupProject,
+  CLOUD_PROJECT_CHANGED_ERROR,
+  CLOUD_PROJECT_MISSING_ERROR,
+} from "@/lib/supabase/projects";
 import { getCloudPlan, CLOUD_PROJECT_LIMITS, CLOUD_PROJECT_LIMIT_ERROR, type CloudPlan } from "@/lib/supabase/plans";
 import { syncManuscriptImages, restoreManuscriptImages, getUnresolvedManuscriptImages } from "@/lib/supabase/manuscriptImages";
 import { contentHasImages, openedCloudProjectImageState, referencedImageIds, referencedImageSignature, technicallyUnresolvedImages, withoutUnresolvedImageIds } from "@/lib/cloudImageSync";
@@ -99,6 +107,15 @@ const CLOUD_SAVE_LOGIN_NOTICE =
 function isLoggedOutError(message: string): boolean {
   return /auth session missing|ログインしていません/i.test(message);
 }
+
+// TSP-SAFE-002: the cloud could not be read, so the save stopped and the
+// work's link to its cloud copy is kept (no second cloud copy is made).
+const CLOUD_UNREACHABLE_NOTICE =
+  "クラウドに接続できなかったため、保存をやめました。\n" +
+  "書いた分はこの端末に残っています。通信を確かめてから、もう一度「クラウドに保存」を押してください。";
+const CLOUD_MISSING_NOTICE =
+  "クラウドにあったこの作品が見つかりませんでした（別の端末で削除されたかもしれません）。\n" +
+  "書いた分はこの端末に残っています。もう一度「クラウドに保存」を押すと、新しい作品としてクラウドに保存します。";
 
 // TSP-SAFE-001: the save state of THIS browser's copy. "error" = the last
 // write failed and is being retried; "stopped" = nothing is being saved here
@@ -1239,10 +1256,14 @@ export default function TategakiEditor({
       setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
       return;
     }
-    void saveToCloud(false);
+    void saveToCloud(false, null);
   };
 
-  const saveToCloud = async (skipNewerCheck: boolean) => {
+  // `overwriteVersion`: the cloud save time the person agreed to overwrite in
+  // the compare dialog (skipNewerCheck). TSP-SAFE-002: every overwrite names
+  // the version it replaces, and the database refuses it if the cloud work
+  // was saved again meanwhile.
+  const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {
     if (isSampleDocument) return;
     // Phase 6: 保存作品一覧 stays usable while this save is in flight. The save
     // itself (this document's title/content, sent to this document's project)
@@ -1266,29 +1287,39 @@ export default function TategakiEditor({
         }
       }
 
-      // CST-PORT-014: never overwrite a newer cloud version silently. If the
-      // cloud cannot be read, save as before (the check must not block saving).
+      // A screen that never saw the linked cloud version compares it with
+      // what it shows now.
+      // TSP-SAFE-001: without a known base, which side is newer cannot be
+      // told — the dialog then only says the two differ.
+      const baseUnknown = !cloudBaseRef.current && linkedOnly;
+      const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
+      let expectedUpdatedAt: string | null | undefined = skipNewerCheck ? overwriteVersion : undefined;
+      let savedAsNewBecauseMissing = false;
+
+      // CST-PORT-014: never overwrite a newer cloud version silently.
       if (projectId && (linkedOnly || !skipNewerCheck)) {
-        const cloudNow = await getProjectById(projectId);
+        const lookup = await lookupProject(projectId);
         if (!isSameDocument()) return;
-        if (linkedOnly) {
-          if (!cloudNow) {
-            // The linked cloud work is gone (deleted): save as a new one.
-            if (docId !== null) clearCloudLink(docId);
-            projectId = null;
-          } else {
-            setCurrentProjectId(cloudNow.id);
-          }
-        }
-        // A screen that never saw the linked cloud version compares it with
-        // what it shows now.
-        // TSP-SAFE-001: without a known base, which side is newer cannot be
-        // told — the dialog then only says the two differ.
-        const baseUnknown = !cloudBaseRef.current && linkedOnly;
-        const base = cloudBaseRef.current ?? (linkedOnly ? { updatedAt: null, title, content } : null);
-        if (cloudNow && projectId && !skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
-          setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null, baseUnknown });
+        // TSP-SAFE-002: could not read (offline, signed out) ≠ deleted. Keep
+        // the link and stop; before, this saved a second cloud copy.
+        if (lookup.status === "unreachable") {
+          if (lookup.loggedOut) setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
+          else alert(CLOUD_UNREACHABLE_NOTICE);
           return;
+        }
+        if (lookup.status === "missing") {
+          // The cloud work is really gone (deleted): save as a new one.
+          if (docId !== null) clearCloudLink(docId);
+          projectId = null;
+          savedAsNewBecauseMissing = true;
+        } else {
+          const cloudNow = lookup.data;
+          if (linkedOnly) setCurrentProjectId(cloudNow.id);
+          if (!skipNewerCheck && isCloudVersionChanged(cloudNow, base)) {
+            setCloudCompare({ cloud: cloudNow, base: base?.updatedAt ?? null, baseUnknown });
+            return;
+          }
+          if (!skipNewerCheck) expectedUpdatedAt = cloudNow.updated_at ?? null;
         }
       }
 
@@ -1316,8 +1347,28 @@ export default function TategakiEditor({
       }
 
       const result = projectId
-        ? await updateProject(projectId, { title, content, settings })
+        ? await updateProject(projectId, { title, content, settings }, expectedUpdatedAt)
         : await createProject({ title, content, settings });
+
+      // TSP-SAFE-002: the database refused the overwrite — another device saved
+      // after the version checked above. Show the compare dialog again with
+      // the cloud as it is now.
+      if (projectId && result.error === CLOUD_PROJECT_CHANGED_ERROR) {
+        const latest = await lookupProject(projectId);
+        if (!isSameDocument()) return;
+        if (latest.status === "found") {
+          setCloudCompare({ cloud: latest.data, base: base?.updatedAt ?? null, baseUnknown });
+        } else {
+          alert(CLOUD_UNREACHABLE_NOTICE);
+        }
+        return;
+      }
+      if (result.error === CLOUD_PROJECT_MISSING_ERROR) {
+        if (docId !== null) clearCloudLink(docId);
+        if (isSameDocument()) setCurrentProjectId(null);
+        alert(CLOUD_MISSING_NOTICE);
+        return;
+      }
 
       if (result.error === CLOUD_PROJECT_LIMIT_ERROR) {
         setCloudLimitPlan(knownPlan ?? 'resident');
@@ -1334,7 +1385,7 @@ export default function TategakiEditor({
         return;
       }
 
-      if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);
+      if (isSameDocument()) setCurrentProjectId(result.data.id);
       if (isSameDocument()) {
         cloudBaseRef.current = { updatedAt: result.data.updated_at ?? null, title: result.data.title, content: result.data.content };
         setCloudSynced({ title, content, settings });
@@ -1357,9 +1408,12 @@ export default function TategakiEditor({
       if (sync.ok || sync.noImages) {
         if (isSameDocument()) setUnresolvedCloudImages(null);
         alert(
-          sync.noImages
+          (sync.noImages
             ? "クラウドに保存しました！"
-            : "クラウドに保存しました！（挿絵もクラウドへ同期しました）"
+            : "クラウドに保存しました！（挿絵もクラウドへ同期しました）") +
+            (savedAsNewBecauseMissing
+              ? "\nクラウドにあった元の作品が見つからなかったため、新しい作品として保存しました。"
+              : "")
         );
       } else {
         // 本文は保存済みだが画像同期は未完了。既存の有効なクラウド画像・期限は
@@ -1377,8 +1431,9 @@ export default function TategakiEditor({
   };
 
   const handleCloudCompareOverwrite = () => {
+    const agreedVersion = cloudCompare?.cloud.updated_at ?? null;
     setCloudCompare(null);
-    void saveToCloud(true);
+    void saveToCloud(true, agreedVersion);
   };
 
   // 「クラウド版を開く」: the screen's version is never thrown away. A local

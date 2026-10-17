@@ -59,18 +59,50 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {
+  const found = await lookupProject(id);
+  return found.status === 'found' ? found.data : null;
+}
+
+// TSP-SAFE-002: "could not read it" and "it is gone" are different answers.
+// Only `missing` (signed in, the read worked, no such row of this user) may
+// drop a work's link to the cloud; `unreachable` (offline, signed out, any
+// error) must keep the link and stop the save — before, every error looked
+// like a deletion and the next save made a second cloud copy.
+export type ProjectLookup =
+  | { status: 'found'; data: Project }
+  | { status: 'missing' }
+  | { status: 'unreachable'; error: string; loggedOut: boolean };
+
+function isSignedOutAuthError(error: { message?: string; name?: string; status?: number } | null): boolean {
+  if (!error) return true;
+  if (error.name === 'AuthSessionMissingError') return true;
+  return /auth session missing|not authenticated|jwt expired|invalid jwt/i.test(error.message ?? '');
+}
+
+export async function lookupProject(id: string): Promise<ProjectLookup> {
   const supabase = createClient();
+  // Signed out, RLS shows no rows — that is not a deletion.
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return {
+      status: 'unreachable',
+      error: userError?.message ?? 'ログインしていません',
+      loggedOut: isSignedOutAuthError(userError),
+    };
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .select('*')
     .eq('id', id)
-    .single();
+    .eq('user_id', user.id)
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching project:', error);
-    return null;
+    return { status: 'unreachable', error: error.message, loggedOut: false };
   }
-  return data;
+  return data ? { status: 'found', data } : { status: 'missing' };
 }
 
 export interface ProjectResult {
@@ -103,7 +135,23 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
   return { data, error: null };
 }
 
-export async function updateProject(id: string, input: UpdateProjectInput): Promise<ProjectResult> {
+// TSP-SAFE-002: an overwrite that did not happen because the cloud work
+// changed after it was read (another device saved), or no longer exists.
+export const CLOUD_PROJECT_CHANGED_ERROR = 'cloud_project_changed';
+export const CLOUD_PROJECT_MISSING_ERROR = 'cloud_project_missing';
+
+/**
+ * Overwrites a cloud work. With `expectedUpdatedAt`, the database writes only
+ * while the row is still at that save time (projects_set_updated_at keeps
+ * updated_at at the database's own clock), so a save from another device
+ * between our read and this write is never overwritten. Zero rows written is
+ * never a success.
+ */
+export async function updateProject(
+  id: string,
+  input: UpdateProjectInput,
+  expectedUpdatedAt?: string | null
+): Promise<ProjectResult> {
   const supabase = createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -112,21 +160,31 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
     return { data: null, error: userError?.message ?? 'ログインしていません' };
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('projects')
     // CST-PORT-014: also send the save time. The DB trigger
     // (projects_set_updated_at) overwrites it with its own clock where it is
     // installed; where it is not, updated_at would otherwise never change.
     .update({ ...input, user_id: user.id, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select()
-    .single();
+    .eq('user_id', user.id);
+  if (expectedUpdatedAt !== undefined) {
+    query = expectedUpdatedAt === null ? query.is('updated_at', null) : query.eq('updated_at', expectedUpdatedAt);
+  }
+  const { data, error } = await query.select();
 
   if (error) {
     console.error('Error updating project:', error);
     return { data: null, error: error.message };
   }
-  return { data, error: null };
+  const row = data?.[0];
+  if (row) return { data: row, error: null };
+
+  // Nothing written: tell "changed meanwhile" from "gone".
+  const now = await lookupProject(id);
+  if (now.status === 'found') return { data: null, error: CLOUD_PROJECT_CHANGED_ERROR };
+  if (now.status === 'missing') return { data: null, error: CLOUD_PROJECT_MISSING_ERROR };
+  return { data: null, error: now.error };
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

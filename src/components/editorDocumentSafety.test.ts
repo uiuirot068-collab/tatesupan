@@ -139,7 +139,31 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
   });
 
   it("クラウドに保存 records the version the device copy now matches", () => {
-    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean) => {", "const handleCloudCompareOverwrite");
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
     expect(save).toContain("void markCloudSynced(docId, { projectId: result.data.id, updatedAt: result.data.updated_at ?? null, title, content })");
+  });
+
+  // TSP-SAFE-002 (3の4・3の5): semantics in src/lib/supabase/projects.test.ts.
+  it("クラウドに保存: a cloud that cannot be read keeps the link and stops; only a real deletion saves as new", () => {
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
+    const check = body(save, "const lookup = await lookupProject(projectId);", "const isNewCloudSave = !projectId;");
+    const unreachable = body(check, 'if (lookup.status === "unreachable") {', "return;");
+    expect(unreachable).not.toContain("clearCloudLink");
+    const missing = body(check, 'if (lookup.status === "missing") {', "} else {");
+    expect(missing).toContain("clearCloudLink(docId)");
+    expect(save).not.toContain("getProjectById");
+  });
+
+  it("クラウドに保存: every overwrite names the version it replaces; a refused one is not a success", () => {
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
+    expect(save).toContain("let expectedUpdatedAt: string | null | undefined = skipNewerCheck ? overwriteVersion : undefined;");
+    expect(save).toContain("if (!skipNewerCheck) expectedUpdatedAt = cloudNow.updated_at ?? null;");
+    expect(save).toContain("await updateProject(projectId, { title, content, settings }, expectedUpdatedAt)");
+    const changed = body(save, "result.error === CLOUD_PROJECT_CHANGED_ERROR", "result.error === CLOUD_PROJECT_MISSING_ERROR");
+    expect(changed).toContain("setCloudCompare({ cloud: latest.data");
+    expect(changed).toContain("return;");
+    const overwrite = body(editor, "const handleCloudCompareOverwrite = () => {", "};");
+    expect(overwrite).toContain("const agreedVersion = cloudCompare?.cloud.updated_at ?? null;");
+    expect(overwrite).toContain("void saveToCloud(true, agreedVersion);");
   });
 });
