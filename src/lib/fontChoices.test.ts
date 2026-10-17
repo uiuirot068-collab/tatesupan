@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FONT_FAMILY_OPTIONS, normalizeFontChoice, normalizeSettingsFonts } from "../constants/fonts";
 import { DEFAULT_PAGE_SETTINGS } from "./pageLayout";
 import { normalizeColophonSettings } from "./colophon";
-import { PUBLICATION_FONT_ASSETS, publicationFontAssetFor } from "./v2BrowserExport";
+import { PUBLICATION_FONT_ASSETS, previewFontFamilyCss, publicationFontAssetFor } from "./v2BrowserExport";
 
 describe("TSP-PHASE13-001: every font choice prints in PDF", () => {
   it("offers only families PDF can embed (システム標準明朝 retired)", () => {
@@ -28,5 +28,18 @@ describe("TSP-PHASE13-001: every font choice prints in PDF", () => {
 
   it("returns current settings unchanged", () => {
     expect(normalizeSettingsFonts(DEFAULT_PAGE_SETTINGS)).toBe(DEFAULT_PAGE_SETTINGS);
+  });
+});
+
+describe("TSP-PRINT-001 (P4-1): Preview draws the typeface PDF embeds", () => {
+  it("every font choice gives the Preview the same family PDF embeds", () => {
+    for (const option of FONT_FAMILY_OPTIONS) {
+      expect(previewFontFamilyCss(option.value)).toBe(`"${publicationFontAssetFor(option.value).cssName}", serif`);
+    }
+  });
+
+  it("an unknown or empty family falls back to Shippori Mincho, as PDF does", () => {
+    expect(previewFontFamilyCss(undefined)).toBe('"Shippori Mincho", serif');
+    expect(previewFontFamilyCss("serif")).toBe('"Shippori Mincho", serif');
   });
 });

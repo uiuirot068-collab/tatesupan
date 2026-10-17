@@ -50,6 +50,14 @@ export function publicationFontAssetFor(cssFamily: string | undefined): Publicat
   return PUBLICATION_FONT_ASSETS.find((asset) => asset.cssName === first) ?? SHIPPORI_ASSET;
 }
 
+/**
+ * TSP-PRINT-001 (P4-1): the CSS font-family the Preview draws body glyphs with
+ * — the same typeface PDF embeds and JPG paints (unknown → Shippori Mincho).
+ */
+export function previewFontFamilyCss(cssFamily: string | undefined): string {
+  return `"${publicationFontAssetFor(cssFamily).cssName}", serif`;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
   let binary = "";

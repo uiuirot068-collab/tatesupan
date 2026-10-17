@@ -21,6 +21,7 @@ import {
   type TategakiToken,
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings, type PaperSize } from "@/lib/pageLayout";
+import { previewFontFamilyCss } from "@/lib/v2BrowserExport";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveSnsId, showsSnsCredit, SNS_CREDIT_URL } from "@/lib/snsCredit";
 import { resolveNombreFontFamily } from "@/constants/fonts";
@@ -1004,7 +1005,7 @@ function PageCard({
                 style={{
                   top: sheetStyle.paddingTop,
                   right: sheetStyle.paddingRight,
-                  fontFamily: '"Shippori Mincho", serif',
+                  fontFamily: previewFontFamilyCss(settings.fontFamily),
                 }}
               >
                 <PreviewPage
