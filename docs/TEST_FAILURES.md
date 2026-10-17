@@ -9,10 +9,10 @@
 
 ## 結果
 
-| | 前（3879f28） | 10/14 | 10/17（なつおの QA の答えのあと） |
-|---|---|---|---|
-| 不合格 | 74 | 37（すべて理由つきで一覧） | **1**（一覧に理由つき） |
-| `npm run test:all` | なし | 成功 | 成功 |
+| | 前（3879f28） | 10/14 | 10/17（なつおの QA の答えのあと） | TSP-PRINT-001 |
+|---|---|---|---|---|
+| 不合格 | 74 | 37（すべて理由つきで一覧） | 1（一覧に理由つき） | **0** |
+| `npm run test:all` | なし | 成功 | 成功 | 成功 |
 
 文章チェックの「組版側は文章チェックを読まない」見張りは、テストファイルを見張る対象から外した（本番のコードだけを見る）。そのぶん見張りの件数が 105 件へった。
 
@@ -25,11 +25,11 @@
 | C. 奥付の自由欄の字の大きさ | 今のままでよい | 奥付のテスト 14 件の期待を `src/lib/colophonLayoutPlan.ts`（自由欄 0.86 倍、枠の幅の割合、ラベル列、行の高さ）から計算する形にした。左右位置は紙面中央に固定（TSP-PHASE13-001）として確かめる |
 | D. InDesign の元の見本 PDF | 手元にない | 指紋（SHA-256・大きさ）を、リポジトリ最初のコミットからある 49,414 バイトの写しに付けなおした。元のファイルにしかない字間の調整（TJ）を調べていた 4 件は、理由を書いて外した |
 
-## 一覧に残した 1 件
+## 一覧に残した 1 件（TSP-PRINT-001 で直して一覧から外した）
 
 | 分類 | テスト | 中身 | 次にすること |
 |---|---|---|---|
-| colophon-continuation-gap | structuralColophonFinalPlacement の test 21 | 奥付が2ページ以上になり、続きのページが自由欄だけのとき、先頭に 1.4 字ぶんの空きが入る（standard・center・classic は `freeTextGapEm` を上に何もなくても足す。minimal は上に何かある時だけ） | 不具合の見込み。Phase 4（組版）で `src/lib/colophonRenderPlan.ts` を直す |
+| colophon-continuation-gap | structuralColophonFinalPlacement の test 21 | 奥付が2ページ以上になり、続きのページが自由欄だけのとき、先頭に 1.4 字ぶんの空きが入る（standard・center・classic は `freeTextGapEm` を上に何もなくても足す。minimal は上に何かある時だけ） | 不具合の見込み。Phase 4（組版）で `src/lib/colophonRenderPlan.ts` を直す → TSP-PRINT-001 で直した（docs/TSP-PRINT-001.md） |
 
 ## そのほか気づいたこと（直していない）
 
