@@ -672,7 +672,12 @@ function PreviewPane({
   // 2026-09-24 public RC: development continues to force V2 for reproducible
   // QA, while production follows v2Rollout.ts. That rollout now defaults to
   // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
-  const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
+  // TSP-PRINT-001 (P4-5): an explicit LEGACY also applies in development, so
+  // the emergency rollback can be tried before it is needed.
+  const useV2Engine =
+    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_TATESPUN_RENDERER?.trim() !== "LEGACY"
+      ? true
+      : internalV2Beta;
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
