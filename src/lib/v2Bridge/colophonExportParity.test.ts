@@ -91,3 +91,40 @@ describe("colophon ink/weight survive both executors", () => {
     expect(jpg).toHaveLength(1);
   });
 });
+
+// TSP-PRINT-001: before, every colophon page painted the WHOLE colophon
+// again (and past the paper's bottom), and the page count came from Core's
+// vertical layout of the colophon text.
+describe("a long colophon continues on the next pages in export", () => {
+  const bodyTexts = (commands: PaintCommand[]) => texts(commands).map((c) => c.text);
+  const colophonPages = (bridge: ReturnType<typeof compose>["bridge"]) =>
+    bridge.document.pageSequence.flatMap((ref, i) => (ref.kind === "colophon" ? [bridge.plan[i]] : []));
+
+  it.each(["standard", "center", "minimal", "classic"] as const)("%s: each line is painted once, inside the paper", (templateId) => {
+    const freeText = Array.from({ length: 60 }, (_, i) => `自由欄の${i + 1}行目です。`).join("\n");
+    const { bridge } = compose({ templateId, freeText });
+    const pages = colophonPages(bridge);
+    expect(pages.length).toBeGreaterThan(1);
+    const painted = pages.flatMap((p) => bodyTexts(p.commands)).filter((t) => t.startsWith("自由欄の"));
+    expect(painted).toEqual(Array.from({ length: 60 }, (_, i) => `自由欄の${i + 1}行目です。`));
+    const paperHeight = bridge.pageGeometry.paperHeightMm;
+    for (const page of pages) {
+      for (const c of texts(page.commands)) expect(c.yMm).toBeLessThan(paperHeight - bridge.pageGeometry.marginBottomMm + 0.01);
+    }
+  });
+
+  it("the physical page count follows the colophon's own pages, not Core's vertical layout", () => {
+    // 30 two-character lines: many vertical columns for Core, but a few
+    // horizontal lines fit one 文庫 page at a small colophon size.
+    const freeText = Array.from({ length: 30 }, () => "短文").join("\n");
+    const { bridge } = compose({ templateId: "standard", freeText, fontSizePt: 5 });
+    expect(colophonPages(bridge)).toHaveLength(1);
+    expect(bodyTexts(colophonPages(bridge)[0].commands).filter((t) => t === "短文")).toHaveLength(30);
+  });
+
+  it("a colophon that fits one page keeps Core's own colophon text", () => {
+    const { bridge } = compose({ templateId: "standard", freeText: "一行だけ" });
+    expect(colophonPages(bridge)).toHaveLength(1);
+    expect(bridge.colophonSource).toContain("一行だけ");
+  });
+});

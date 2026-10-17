@@ -25,6 +25,7 @@ import { tickToMm } from "./geometry";
 import { emphasisDotsForUnit, type EmphasisSide } from "../emphasisMarks";
 import { lastAtomExtentTicks } from "../lastAtomExtent";
 import { paintBodyExtentTicks, paintColumnPlacementTicks, type PaintColumnStackDirection } from "../columnStack";
+import type { ColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
 
 export type PaintUnitKind = "TEXT" | "RUBY" | "TCY" | "SEMANTIC_RUN" | "IMAGE" | "UNKNOWN";
 
@@ -293,6 +294,12 @@ export interface PublicationDocument {
   colophonRows?: Array<{ id?: string; label: string; value: string }>;
   colophonFreeText?: string;
   colophonTitleFallback?: string;
+  /**
+   * TSP-PRINT-001: the colophon already split into its pages
+   * (`src/lib/colophonPages.ts`), one per colophon page in order. When
+   * present, colophon page i paints `colophonRenderPages[i]`.
+   */
+  colophonRenderPages?: ColophonRenderPlan[];
 }
 
 interface PaintLookup {
@@ -553,6 +560,7 @@ export function buildPublicationDocument(
     rows?: Array<{ id?: string; label: string; value: string }>;
     freeText?: string;
     titleFallback?: string;
+    renderPages?: ColophonRenderPlan[];
   }
 ): PublicationDocument {
   const manualBreaks = detectManualBreaks(units, document.pages);
@@ -607,5 +615,6 @@ export function buildPublicationDocument(
     ...(typeof colophonVisual?.titleFallback === "string"
       ? { colophonTitleFallback: colophonVisual.titleFallback }
       : {}),
+    ...(colophonVisual?.renderPages ? { colophonRenderPages: colophonVisual.renderPages } : {}),
   };
 }
