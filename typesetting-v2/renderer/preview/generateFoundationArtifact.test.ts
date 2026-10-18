@@ -275,7 +275,9 @@ describe("P3-O09 — renderable foundation artifact generation", () => {
       expect(unitInkRuleMatch).not.toBeNull();
       expect(unitInkRuleMatch![0]).toContain("left: calc(50% - 0.5em)");
       expect(unitInkRuleMatch![0]).toContain("width: 1em");
-      expect(unitInkRuleMatch![0]).toContain("overflow: hidden");
+      // TSP-PRINT-001: the glyph clip is retired — it cut the bottom strokes
+      // of 治・と・言 when the typeface lacked vertical metrics.
+      expect(unitInkRuleMatch![0]).toContain("overflow: visible");
     });
   });
 

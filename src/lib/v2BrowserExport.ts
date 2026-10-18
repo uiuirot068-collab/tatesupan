@@ -51,11 +51,29 @@ export function publicationFontAssetFor(cssFamily: string | undefined): Publicat
 }
 
 /**
+ * TSP-PRINT-001: the Preview draws body glyphs from the same font file PDF
+ * embeds (`/fonts/*.ttf`), under its own family name. The Google Fonts copy
+ * of the same typeface has no vertical metrics, so in vertical writing the
+ * browser drops every glyph below its cell and the cell's clip cuts the
+ * bottom off (「治」「と」「言」). The bundled files carry them (vhea/vmtx).
+ */
+export function previewFontFaceName(cssFamily: string | undefined): string {
+  return `TateSpun Preview ${publicationFontAssetFor(cssFamily).cssName}`;
+}
+
+/** `@font-face` for {@link previewFontFaceName}; downloaded only once the Preview uses it. */
+export function previewFontFaceCss(cssFamily: string | undefined): string {
+  const asset = publicationFontAssetFor(cssFamily);
+  return `@font-face{font-family:"${previewFontFaceName(cssFamily)}";src:url("${withBasePath(asset.path)}") format("truetype");font-display:block;}`;
+}
+
+/**
  * TSP-PRINT-001 (P4-1): the CSS font-family the Preview draws body glyphs with
  * — the same typeface PDF embeds and JPG paints (unknown → Shippori Mincho).
+ * The webfont of the same name only stands in while the file loads.
  */
 export function previewFontFamilyCss(cssFamily: string | undefined): string {
-  return `"${publicationFontAssetFor(cssFamily).cssName}", serif`;
+  return `"${previewFontFaceName(cssFamily)}", "${publicationFontAssetFor(cssFamily).cssName}", serif`;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

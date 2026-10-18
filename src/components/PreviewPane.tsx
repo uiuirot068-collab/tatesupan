@@ -146,7 +146,7 @@ const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 const NO_LEGACY_PAGES: TategakiPage[] = [];
 const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
-import { downloadBytes, previewFontFamilyCss, publicationFontAssetFor, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { downloadBytes, previewFontFaceCss, previewFontFamilyCss, publicationFontAssetFor, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import ExportSupportLine from "./ExportSupportLine";
 import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
@@ -3171,7 +3171,8 @@ function PreviewPane({
           : "rounded-lg border border-ink/10 shadow-sm"
       }`}
     >
-      {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
+      {useV2Engine && <style>{`${previewFontFaceCss(settings.fontFamily)}
+        ${PREVIEW_RENDERER_STYLES}
         [data-v2-preview-root] .page{border:0;background:transparent}
         [data-v2-preview-root] .unit{font-family:${previewFontFamilyCss(settings.fontFamily)}}
       `}</style>}

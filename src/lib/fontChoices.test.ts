@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FONT_FAMILY_OPTIONS, normalizeFontChoice, normalizeSettingsFonts } from "../constants/fonts";
 import { DEFAULT_PAGE_SETTINGS } from "./pageLayout";
 import { normalizeColophonSettings } from "./colophon";
-import { PUBLICATION_FONT_ASSETS, previewFontFamilyCss, publicationFontAssetFor } from "./v2BrowserExport";
+import { PUBLICATION_FONT_ASSETS, previewFontFaceCss, previewFontFamilyCss, publicationFontAssetFor } from "./v2BrowserExport";
 
 describe("TSP-PHASE13-001: every font choice prints in PDF", () => {
   it("offers only families PDF can embed (システム標準明朝 retired)", () => {
@@ -34,12 +34,16 @@ describe("TSP-PHASE13-001: every font choice prints in PDF", () => {
 describe("TSP-PRINT-001 (P4-1): Preview draws the typeface PDF embeds", () => {
   it("every font choice gives the Preview the same family PDF embeds", () => {
     for (const option of FONT_FAMILY_OPTIONS) {
-      expect(previewFontFamilyCss(option.value)).toBe(`"${publicationFontAssetFor(option.value).cssName}", serif`);
+      const { cssName, path } = publicationFontAssetFor(option.value);
+      expect(previewFontFamilyCss(option.value)).toBe(`"TateSpun Preview ${cssName}", "${cssName}", serif`);
+      // The Preview reads the same file PDF embeds (it has vertical metrics; the webfont does not).
+      expect(previewFontFaceCss(option.value)).toContain(`font-family:"TateSpun Preview ${cssName}"`);
+      expect(previewFontFaceCss(option.value)).toContain(`url("${path}")`);
     }
   });
 
   it("an unknown or empty family falls back to Shippori Mincho, as PDF does", () => {
-    expect(previewFontFamilyCss(undefined)).toBe('"Shippori Mincho", serif');
-    expect(previewFontFamilyCss("serif")).toBe('"Shippori Mincho", serif');
+    expect(previewFontFamilyCss(undefined)).toBe('"TateSpun Preview Shippori Mincho", "Shippori Mincho", serif');
+    expect(previewFontFamilyCss("serif")).toBe('"TateSpun Preview Shippori Mincho", "Shippori Mincho", serif');
   });
 });
