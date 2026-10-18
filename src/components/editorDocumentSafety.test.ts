@@ -235,4 +235,13 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
     expect(autosave).toContain("openedFieldsRef.current = null;");
     expect(autosave.indexOf("return;")).toBeLessThan(autosave.indexOf('setSaveStatus("saving")'));
   });
+
+  it("PC QA (3回目): leaving a deleted-elsewhere screen with typed text asks first; keeping it restores cover images", () => {
+    expect(editor).toContain("failed: loadFailure !== null || deletedElsewhere,");
+    expect(editor).toContain("typedSinceStop");
+    const keep = editor.slice(editor.indexOf("const keepDeletedWorkAsCopyOnce"), editor.indexOf("router.replace(`/editor?id=${kept.id}`)"));
+    expect(keep).toContain("coverImageIds(settings.cover)");
+    expect(keep).toContain('elsewhereState === "purged" ? base : `${base}（書きかけの控え）`');
+    expect(editor).toContain("keepingCopyRef.current = true;");
+  });
 });

@@ -1330,9 +1330,19 @@ export default function TategakiEditor({
   // TSP-SAFE-004 QA: a screen that failed to open keeps nothing; it asks
   // before leaving only when something was typed into it.
   const failedScreenRef = useRef({ failed: false, typed: false });
+  // PC QA (3回目): a work deleted elsewhere stops saving too; what is typed
+  // after that is not on the bookshelf either.
+  const stoppedTextRef = useRef<string | null>(null);
   useEffect(() => {
-    failedScreenRef.current = { failed: loadFailure !== null, typed: loadFailure !== null && (title !== "" || content !== "" || plotNote !== "") };
-  }, [loadFailure, title, content, plotNote]);
+    const text = `${title}\u0000${content}\u0000${plotNote}`;
+    if (!deletedElsewhere) stoppedTextRef.current = null;
+    else if (stoppedTextRef.current === null) stoppedTextRef.current = text;
+    const typedSinceStop = deletedElsewhere && stoppedTextRef.current !== text;
+    failedScreenRef.current = {
+      failed: loadFailure !== null || deletedElsewhere,
+      typed: (loadFailure !== null && (title !== "" || content !== "" || plotNote !== "")) || typedSinceStop,
+    };
+  }, [loadFailure, deletedElsewhere, title, content, plotNote]);
   useEffect(() => {
     const warnIfUnsaved = (event: BeforeUnloadEvent) => {
       const failed = failedScreenRef.current;
@@ -1365,8 +1375,18 @@ export default function TategakiEditor({
 
   // TSP-SAFE-001: after a deletion in another tab, the person can keep this
   // screen's text as a new work (it is never written back into the deleted one).
+  const keepingCopyRef = useRef(false);
   const keepDeletedWorkAsCopy = async () => {
-    if (docId === null) return;
+    // A second click while the first is still writing must not make a second copy.
+    if (docId === null || keepingCopyRef.current) return;
+    keepingCopyRef.current = true;
+    try {
+      await keepDeletedWorkAsCopyOnce(docId);
+    } finally {
+      keepingCopyRef.current = false;
+    }
+  };
+  const keepDeletedWorkAsCopyOnce = async (docId: number) => {
     // TSP-SAFE-004 QA: 完全に削除 in another tab also removed the images only
     // that work used; this screen still shows them, so they are stored again.
     const usedIds = new Set(imageMarkerIds(content));
@@ -1375,12 +1395,20 @@ export default function TategakiEditor({
         .filter(([id]) => usedIds.has(id))
         .map(([id, dataUrl]) => saveImage({ id, dataUrl, createdAt: Date.now(), layerOrder: imageLayerOrder[id] }))
     );
+    // PC QA (3回目): the cover's images were removed with it too.
+    await Promise.all(
+      coverImageIds(settings.cover)
+        .filter((id) => coverImages[id] !== undefined)
+        .map((id) => saveImage({ id, dataUrl: coverImages[id], createdAt: Date.now() }))
+    );
     // QA2: once the work is back on the bookshelf, the copy gets a title of
     // its own (two works with one title looked like a duplicate).
+    // PC QA (3回目): also while the work is still in the ゴミ箱, since it may be
+    // put back later. Only a work removed for good leaves its title free.
     const base = title.trim() || "無題";
     const kept = await localSaveQueue.keepAsCopy(
       { docId, title, content, settings, plotNote },
-      elsewhereState === "restored" ? `${base}（書きかけの控え）` : base
+      elsewhereState === "purged" ? base : `${base}（書きかけの控え）`
     );
     setDeletedElsewhere(false);
     setElsewhereState("trashed");

@@ -183,4 +183,9 @@ describe("getProjectsResult: the list asks for this user's works itself (3の6)"
     state.authError = { message: "Auth session missing!", name: "AuthSessionMissingError" };
     expect(await getProjectsResult()).toEqual({ data: [], error: "Auth session missing!", signedOut: true });
   });
+
+  it("PC QA: signed in but offline is a failure to read, not signed out", async () => {
+    state.authError = { message: "Failed to fetch", name: "AuthRetryableFetchError" };
+    expect((await getProjectsResult()).signedOut).toBe(false);
+  });
 });
