@@ -425,7 +425,10 @@ function computeAtoms(
 // the line at this exact boundary, but only FORCED_PAGE propagates upward
 // as `forcedBreak` (closing the column+page, Contract §13/INV-006).
 // FORCED_LINE ends only this line — ordinary column/page flow continues.
-type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED_LINE" | "FORCED_PAGE";
+// FORCED_PARAGRAPH_PAGE (TSP-PRINT-002) closes the page like FORCED_PAGE and,
+// like FORCED_LINE, makes the next line a paragraph start (the line ending
+// after a FULL image).
+type BoundaryLegality = "LEGAL" | "ILLEGAL" | "FORCED_LINE" | "FORCED_PAGE" | "FORCED_PARAGRAPH_PAGE";
 
 function legalityForOpportunity(opportunity: BreakOpportunity): BoundaryLegality {
   switch (opportunity.reason) {
@@ -434,6 +437,8 @@ function legalityForOpportunity(opportunity: BreakOpportunity): BoundaryLegality
       return "LEGAL";
     case "MANUAL_FORCED":
       return "FORCED_PAGE";
+    case "PARAGRAPH_PAGE_FORCED":
+      return "FORCED_PARAGRAPH_PAGE";
     case "PARAGRAPH_FORCED":
       return "FORCED_LINE";
     case "PROHIBITED_KINSOKU":
@@ -458,7 +463,10 @@ function indexBoundaryLegalities(opportunities: BreakOpportunity[]): Map<number,
   const legalities = new Map<number, BoundaryLegality>();
   const priorities = new Map<number, number>();
   for (const opportunity of opportunities) {
-    const priority = opportunity.reason === "MANUAL_FORCED"
+    // A colocated MANUAL_FORCED (【改ページ】 right after a FULL image's line
+    // ending) is pushed first and keeps the offset: same page close, and
+    // the 改ページ's own paragraph rule.
+    const priority = opportunity.reason === "MANUAL_FORCED" || opportunity.reason === "PARAGRAPH_PAGE_FORCED"
       ? 2
       : opportunity.reason === "PARAGRAPH_FORCED"
         ? 1
@@ -619,8 +627,8 @@ export function composeLine(
         cutAtAtomIndex = hangEnd;
         sawAnyLegalCut = true;
         const legality = legalityByOffset.get(atoms[hangEnd].sourceSpan.end) ?? "LEGAL";
-        if (legality === "FORCED_PAGE") forcedCut = true;
-        if (legality === "FORCED_LINE") endedAtParagraphBreak = true;
+        if (legality === "FORCED_PAGE" || legality === "FORCED_PARAGRAPH_PAGE") forcedCut = true;
+        if (legality === "FORCED_LINE" || legality === "FORCED_PARAGRAPH_PAGE") endedAtParagraphBreak = true;
       }
       break;
     }
@@ -628,10 +636,11 @@ export function composeLine(
     // No candidate recorded here (e.g. end of stream) means nothing
     // prohibits the boundary, matching the previous legalityAfter fallback.
     const legality = legalityByOffset.get(atoms[i].sourceSpan.end) ?? "LEGAL";
-    if (legality === "FORCED_PAGE") {
+    if (legality === "FORCED_PAGE" || legality === "FORCED_PARAGRAPH_PAGE") {
       cutAtAtomIndex = i;
       sawAnyLegalCut = true;
       forcedCut = true;
+      endedAtParagraphBreak = legality === "FORCED_PARAGRAPH_PAGE";
       break;
     }
     if (legality === "FORCED_LINE") {

@@ -14,17 +14,16 @@ import { loadV2FontBytes, publicationFontAssetFor } from "../v2BrowserExport";
  * outline path keeps its exact fractional position (anti-aliased), the same
  * way JPG and PDF place it.
  *
- * TSP-PRINT-002: punctuation, brackets and small kana go this way too. Which
- * glyph and where (vertical presentation form or vertical alternate, flush
- * to a cell edge, small kana centred on their ink) comes from the PDF's own
+ * TSP-PRINT-002: every other character goes this way too (punctuation,
+ * brackets, small kana, ー, Latin and digits). Which glyph and where
+ * (vertical presentation form or vertical alternate, flush to a cell edge,
+ * small kana centred on their ink, upright ASCII) comes from the PDF's own
  * `resolveVerticalGraphemePaint`, so Preview and export cannot drift apart.
- * ASCII (upright browser text), ー (turned 90° in export) and characters the
- * font lacks stay browser text.
+ * Only what export turns 90° as text (ー in a font without its vertical
+ * alternate), spaces and characters the font lacks stay browser text.
  */
-const PRINTABLE_ASCII = /^[\x20-\x7e]$/;
-
 export function isPreviewOutlinedGrapheme(grapheme: string): boolean {
-  return Array.from(grapheme).length === 1 && !PRINTABLE_ASCII.test(grapheme) && !/^\s$/u.test(grapheme) && grapheme !== "ー";
+  return Array.from(grapheme).length === 1 && !/^\s$/u.test(grapheme);
 }
 
 // One hidden <defs> holds each glyph's path once; every occurrence on every

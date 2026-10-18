@@ -10,9 +10,9 @@ import { createPreviewGlyphOutlines, isPreviewOutlinedGrapheme } from "./preview
 const shippori = new Uint8Array(readFileSync(join(process.cwd(), "public/fonts/ShipporiMincho-Regular.ttf")));
 
 describe("TSP-PRINT-001: Preview body glyphs as outlines", () => {
-  it("outlines every non-ASCII character; ー, Latin, digits, spaces and clusters stay browser text", () => {
-    for (const ch of ["吾", "輩", "は", "ア", "々", "ゝ", "、", "。", "「", "」", "ぁ", "っ", "ャ", "！", "Ａ"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(true);
-    for (const ch of ["ー", "A", "1", "!", " ", "　", "東京"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(false);
+  it("outlines every single character except spaces; clusters stay browser text", () => {
+    for (const ch of ["吾", "輩", "は", "ア", "々", "ゝ", "、", "。", "「", "」", "ぁ", "っ", "ャ", "！", "Ａ", "ー", "A", "1", "!"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(true);
+    for (const ch of [" ", "　", "東京"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(false);
   });
 
   it("places glyphs like PDF / JPG: the font's own vertical origin, full-width advance", () => {
@@ -37,7 +37,7 @@ describe("TSP-PRINT-002: punctuation and small kana follow the export's own rule
   const outlines = createPreviewGlyphOutlines(shippori);
   const font = outlineContext.openTypeFont;
 
-  it.each(["、", "。", "「", "」", "（", "）", "ぁ", "っ", "ャ", "！", "？"])("%s: same glyph, same baseline, same size as PDF", (ch) => {
+  it.each(["、", "。", "「", "」", "（", "）", "ぁ", "っ", "ャ", "！", "？", "ー", "A", "g", "7"])("%s: same glyph, same baseline, same size as PDF", (ch) => {
     const paint = resolveVerticalGraphemePaint(ch, baselineRatio, outlineContext, yakumonoContext);
     expect(paint.kind).not.toBe("rotated");
     if (paint.kind === "rotated") return;
@@ -55,7 +55,15 @@ describe("TSP-PRINT-002: punctuation and small kana follow the export's own rule
     }
   });
 
-  it("small kana are drawn as the font's vertical alternate at one cell's size", () => {
+  it("small kana and ー are drawn as the font's vertical alternate at one cell's size", () => {
     expect(outlines.outline("っ")?.cellSized).toBe(true);
+    expect(outlines.outline("ー")?.cellSized).toBe(true);
+  });
+
+  it("ASCII stays the upright horizontal glyph, centred on its own (narrow) advance", () => {
+    const a = outlines.outline("A")!;
+    expect(a.cellSized).toBeUndefined();
+    expect(a.d).toBe(font.charToGlyph("A").getPath(0, 0, 1000).toPathData(1));
+    expect(a.advance).toBeLessThan(1000);
   });
 });
