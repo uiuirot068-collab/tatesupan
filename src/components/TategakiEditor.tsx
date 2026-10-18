@@ -1,5 +1,6 @@
 "use client";
 
+import { liveQuery } from "dexie";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,6 +16,7 @@ import {
   saveDocument,
   saveImage,
   listTrash,
+  isInTrash,
   type OpenedDeviceCopy,
   updateImageLayerOrder,
   type ImageRecord,
@@ -115,6 +117,17 @@ function isLoggedOutError(message: string): boolean {
 const CLOUD_UNREACHABLE_NOTICE =
   "クラウドに接続できなかったため、保存をやめました。\n" +
   "書いた分はこの端末に残っています。通信を確かめてから、もう一度「クラウドに保存」を押してください。";
+// TSP-SAFE-004 QA: a screen whose work did not open has nothing to send.
+const LOAD_FAILED_SAVE_NOTICE =
+  "作品を開けなかったため、この画面からは保存できません。\n「もう一度読み込む」を押して作品を開いてから保存してください。";
+const LOAD_FAILED_DISCARD_CONFIRM = "この画面で書いた分は保存されていません。消えてもよいですか？";
+const SAVED_AS_NEW_NOTE = "\nクラウドにあった元の作品が見つからなかったため、新しい作品として保存しました。";
+
+/** A fetch that never reached the server ("Failed to fetch", "NetworkError …", "Load failed"). */
+function isNetworkError(message: string): boolean {
+  return /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(message);
+}
+
 const CLOUD_MISSING_NOTICE =
   "クラウドにあったこの作品が見つかりませんでした（別の端末で削除されたかもしれません）。\n" +
   "書いた分はこの端末に残っています。もう一度「クラウドに保存」を押すと、新しい作品としてクラウドに保存します。";
@@ -415,11 +428,19 @@ export default function TategakiEditor({
   const [cloudSynced, setCloudSynced] = useState<{ title: string; content: string; settings: PageSettings | null } | null>(null);
   // TSP-SAFE-001: the open work was deleted in another tab; this screen's text is not saved.
   const [deletedElsewhere, setDeletedElsewhere] = useState(false);
+  // TSP-SAFE-004 QA: the work was put back from the ゴミ箱 meanwhile.
+  const [restoredElsewhere, setRestoredElsewhere] = useState(false);
   // TSP-SAFE-003: a work that could not be opened says why and can be read
   // again (`loadAttempt` re-runs the load) instead of staying 「読み込み中」.
   const [loadFailure, setLoadFailure] = useState<EditorLoadFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null; baseUnknown?: boolean } | null>(null);
+  const [cloudCompare, setCloudCompare] = useState<{
+    cloud: Project;
+    base: string | null;
+    baseUnknown?: boolean;
+    /** TSP-SAFE-004 QA: shown again because another device saved after the first check. */
+    changedMeanwhile?: boolean;
+  } | null>(null);
   const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const workSessionScope = useMemo(() => {
@@ -865,6 +886,12 @@ export default function TategakiEditor({
       // A → B → A: reopening a document must read the edits flushed above.
       await previousDocumentFlushed;
       const doc = id ? await loadDocument(id) : undefined;
+      // TSP-SAFE-004 QA: an old link to a work now in the trash says so,
+      // instead of quietly starting a new empty work.
+      if (id !== null && !doc && (await isInTrash(id))) {
+        await fail({ kind: "in-trash" });
+        return;
+      }
 
       // SPN-XFIX-002: a new work opened from an SNS-image link starts on that paper.
       const newDocSettings = !doc && startPaperSize ? applyDestinationPaperPreset(DEFAULT_PAGE_SETTINGS, startPaperSize) : null;
@@ -1250,9 +1277,19 @@ export default function TategakiEditor({
   useEffect(() => {
     saveStatusRef.current = saveStatus;
   }, [saveStatus]);
+  // TSP-SAFE-004 QA: a screen that failed to open keeps nothing; it asks
+  // before leaving only when something was typed into it.
+  const failedScreenRef = useRef({ failed: false, typed: false });
+  useEffect(() => {
+    failedScreenRef.current = { failed: loadFailure !== null, typed: loadFailure !== null && (title !== "" || content !== "" || plotNote !== "") };
+  }, [loadFailure, title, content, plotNote]);
   useEffect(() => {
     const warnIfUnsaved = (event: BeforeUnloadEvent) => {
-      const unsaved = pendingAutosave.hasPending || localSaveQueue.hasUnsaved || saveStatusRef.current === "stopped";
+      const failed = failedScreenRef.current;
+      const unsaved =
+        pendingAutosave.hasPending ||
+        localSaveQueue.hasUnsaved ||
+        (saveStatusRef.current === "stopped" && (!failed.failed || failed.typed));
       if (!unsaved) return;
       event.preventDefault();
       event.returnValue = "";
@@ -1261,17 +1298,51 @@ export default function TategakiEditor({
     return () => window.removeEventListener("beforeunload", warnIfUnsaved);
   }, [localSaveQueue, pendingAutosave]);
 
+  // TSP-SAFE-004 QA: the failure screen's buttons replace the screen; text
+  // typed into it (never saved) is not dropped without asking.
+  const leaveFailedScreen = (go: () => void) => {
+    if (failedScreenRef.current.typed && !window.confirm(LOAD_FAILED_DISCARD_CONFIRM)) return;
+    go();
+  };
+  const retryFailedLoad = () =>
+    leaveFailedScreen(() => {
+      // An unusable storage (a closed or blocked IndexedDB) only recovers on a
+      // fresh page load.
+      if (loadFailure?.kind === "storage") window.location.reload();
+      else setLoadAttempt((attempt) => attempt + 1);
+    });
+
   // TSP-SAFE-001: after a deletion in another tab, the person can keep this
   // screen's text as a new work (it is never written back into the deleted one).
   const keepDeletedWorkAsCopy = async () => {
     if (docId === null) return;
+    // TSP-SAFE-004 QA: 完全に削除 in another tab also removed the images only
+    // that work used; this screen still shows them, so they are stored again.
+    const usedIds = new Set(imageMarkerIds(content));
+    await Promise.all(
+      Object.entries(images)
+        .filter(([id]) => usedIds.has(id))
+        .map(([id, dataUrl]) => saveImage({ id, dataUrl, createdAt: Date.now(), layerOrder: imageLayerOrder[id] }))
+    );
     const kept = await localSaveQueue.keepAsCopy(
       { docId, title, content, settings, plotNote },
       title.trim() || "無題"
     );
     setDeletedElsewhere(false);
+    setRestoredElsewhere(false);
     router.replace(`/editor?id=${kept.id}`);
   };
+
+  // TSP-SAFE-004 QA: while the deleted notice shows, notice when the work is
+  // put back from the ゴミ箱 (in another tab) and say so.
+  useEffect(() => {
+    if (!deletedElsewhere || docId === null) return;
+    const subscription = liveQuery(() => loadDocument(docId)).subscribe({
+      next: (doc) => setRestoredElsewhere(doc !== undefined),
+      error: () => undefined,
+    });
+    return () => subscription.unsubscribe();
+  }, [deletedElsewhere, docId]);
 
   // Phase 6.1: leaving the editor (client navigation unmounts it) or the page
   // writes the pending job to IndexedDB. pagehide / visibilitychange=hidden are
@@ -1320,6 +1391,11 @@ export default function TategakiEditor({
   // Show the same login guidance the header save button shows instead.
   const [cloudAuthNotice, setCloudAuthNotice] = useState<string | null>(null);
   const handleSave = () => {
+    // TSP-SAFE-004 QA: before, this made a new untitled cloud work.
+    if (loadFailure) {
+      alert(LOAD_FAILED_SAVE_NOTICE);
+      return;
+    }
     if (!user) {
       setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
       return;
@@ -1332,7 +1408,7 @@ export default function TategakiEditor({
   // the version it replaces, and the database refuses it if the cloud work
   // was saved again meanwhile.
   const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {
-    if (isSampleDocument) return;
+    if (isSampleDocument || loadFailure) return;
     // Phase 6: 保存作品一覧 stays usable while this save is in flight. The save
     // itself (this document's title/content, sent to this document's project)
     // still completes, but if another document was opened meanwhile its result
@@ -1425,7 +1501,13 @@ export default function TategakiEditor({
         const latest = await lookupProject(projectId);
         if (!isSameDocument()) return;
         if (latest.status === "found") {
-          setCloudCompare({ cloud: latest.data, base: base?.updatedAt ?? null, baseUnknown });
+          setCloudCompare({ cloud: latest.data, base: base?.updatedAt ?? null, baseUnknown, changedMeanwhile: true });
+        } else if (latest.status === "missing") {
+          if (docId !== null) clearCloudLink(docId);
+          setCurrentProjectId(null);
+          alert(CLOUD_MISSING_NOTICE);
+        } else if (latest.loggedOut) {
+          setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
         } else {
           alert(CLOUD_UNREACHABLE_NOTICE);
         }
@@ -1445,6 +1527,11 @@ export default function TategakiEditor({
 
       if (result.error && isLoggedOutError(result.error)) {
         setCloudAuthNotice(CLOUD_SAVE_LOGIN_NOTICE);
+        return;
+      }
+
+      if (result.error && isNetworkError(result.error)) {
+        alert(CLOUD_UNREACHABLE_NOTICE);
         return;
       }
 
@@ -1479,9 +1566,7 @@ export default function TategakiEditor({
           (sync.noImages
             ? "クラウドに保存しました！"
             : "クラウドに保存しました！（挿絵もクラウドへ同期しました）") +
-            (savedAsNewBecauseMissing
-              ? "\nクラウドにあった元の作品が見つからなかったため、新しい作品として保存しました。"
-              : "")
+            (savedAsNewBecauseMissing ? SAVED_AS_NEW_NOTE : "")
         );
       } else {
         // 本文は保存済みだが画像同期は未完了。既存の有効なクラウド画像・期限は
@@ -1490,7 +1575,8 @@ export default function TategakiEditor({
         alert(
           "本文は保存しましたが、挿絵の一部をクラウドへ同期できませんでした。\n" +
             "元の画像がこの端末にあることを確認して、もう一度「クラウドに保存」してください。\n" +
-            "（同期できるまで、別端末では該当画像が表示されません）"
+            "（同期できるまで、別端末では該当画像が表示されません）" +
+            (savedAsNewBecauseMissing ? SAVED_AS_NEW_NOTE : "")
         );
       }
     } finally {
@@ -1549,22 +1635,16 @@ export default function TategakiEditor({
   };
 
   const handleSelectProject = (project: Project) => {
-    // Phase 6.1: the open document's pending edits are written to ITS docId
-    // first; then the project's text, settings AND images replace it.
-    // TSP-SAFE-001: the project opens through its device copy, which may be
-    // the work open now, so its edits must be written before it is read.
-    const previousDocumentFlushed = flushAutosave();
-    beginDocumentSwitch();
-    const isCurrent = documentEpoch.capture();
-    void (async () => {
-      await previousDocumentFlushed;
-      const opened = await openDeviceCopySafely(project);
-      if (!isCurrent()) return;
-      applyCloudProject(project, opened);
-      setSaveStatus(opened ? "saved" : "stopped");
-      if (opened?.rescued) showRescuedCopyToast(opened.rescued.title);
-      await openCloudProjectImages(project, isCurrent);
-    })();
+    // TSP-SAFE-004 QA: 保存作品一覧 opens the work through the same route load
+    // as a ?cloudId= link, so the cloud is read again and a work that could
+    // not be read shows the same failure screen (and its reason) instead of
+    // the list's possibly old copy. The route load flushes the open work's
+    // edits first (Phase 6.1) and opens the device copy (TSP-SAFE-001).
+    if (cloudProjectId === project.id && !documentId) {
+      setLoadAttempt((attempt) => attempt + 1);
+      return;
+    }
+    router.push(`/editor?cloudId=${encodeURIComponent(project.id)}`);
   };
 
   // TSP-SAFE-001: shown beside this browser's save status while the screen is
@@ -1688,15 +1768,15 @@ export default function TategakiEditor({
       {loadFailure && (
         <div
           role="alert"
-          className="mx-auto -my-3 flex max-w-2xl flex-col items-center gap-1.5 rounded-md bg-amber-100 px-3 py-2 text-center text-xs font-medium text-amber-800"
+          className="mx-auto flex max-w-2xl flex-col items-center gap-1.5 rounded-md bg-amber-100 px-3 py-2 text-center text-xs font-medium text-amber-800"
         >
           <span>{loadFailureMessage(loadFailure)}</span>
           <span>この画面で書いた分は保存されません。</span>
           <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            {loadFailure.kind !== "cloud-missing" && (
+            {loadFailure.kind !== "cloud-missing" && loadFailure.kind !== "in-trash" && (
               <button
                 type="button"
-                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                onClick={retryFailedLoad}
                 className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
               >
                 もう一度読み込む
@@ -1714,7 +1794,7 @@ export default function TategakiEditor({
             {"deviceCopyId" in loadFailure && loadFailure.deviceCopyId !== null && (
               <button
                 type="button"
-                onClick={() => router.push(`/editor?id=${loadFailure.deviceCopyId}`)}
+                onClick={() => leaveFailedScreen(() => router.push(`/editor?id=${loadFailure.deviceCopyId}`))}
                 className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
               >
                 この端末の控えを開く
@@ -1722,10 +1802,10 @@ export default function TategakiEditor({
             )}
             <button
               type="button"
-              onClick={() => router.push("/")}
+              onClick={() => leaveFailedScreen(() => router.push(loadFailure.kind === "in-trash" ? "/?trash=1" : "/"))}
               className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
             >
-              本棚へ戻る
+              {loadFailure.kind === "in-trash" ? "本棚のゴミ箱を開く" : "本棚へ戻る"}
             </button>
           </span>
         </div>
@@ -1734,9 +1814,13 @@ export default function TategakiEditor({
       {deletedElsewhere && (
         <p
           role="alert"
-          className="mx-auto -my-3 flex max-w-2xl flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-md bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-800"
+          className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-md bg-amber-100 px-3 py-1.5 text-center text-xs font-medium text-amber-800"
         >
-          <span>この作品は別の画面で削除されたため、ここで書いた分は保存されていません。</span>
+          <span>
+            {restoredElsewhere
+              ? "この作品は別の画面でゴミ箱から元に戻されました。この画面で書いた分は、まだ保存されていません。"
+              : "この作品は別の画面でゴミ箱に移されたため、ここで書いた分は保存されていません。本棚のゴミ箱から元に戻せます。"}
+          </span>
           <button
             type="button"
             onClick={() => void keepDeletedWorkAsCopy().catch((cause: unknown) => setToast(cause instanceof Error ? cause.message : String(cause)))}
@@ -2108,6 +2192,7 @@ export default function TategakiEditor({
           cloud={{ title: cloudCompare.cloud.title, content: cloudCompare.cloud.content, updatedAt: cloudCompare.cloud.updated_at }}
           busy={cloudCompareBusy}
           baseUnknown={cloudCompare.baseUnknown}
+          changedMeanwhile={cloudCompare.changedMeanwhile}
           onOverwrite={handleCloudCompareOverwrite}
           onOpenCloud={() => void handleCloudCompareOpenCloud()}
           onCancel={() => setCloudCompare(null)}

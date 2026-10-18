@@ -21,10 +21,10 @@ import {
   type CloudSyncRecord,
   type DeviceCopyDecision,
 } from "./cloudDeviceCopy";
-import { writeCloudLink } from "./cloudLink";
+import { readCloudLink, writeCloudLink } from "./cloudLink";
 import { imageMarkerIds } from "./tategaki";
 import { coverImageIds } from "./cover/coverModel";
-import { isTrashExpired, ORPHAN_IMAGE_MIN_AGE_MS, unreferencedImageIds } from "./trash";
+import { isTrashExpired, keepCloudWorkImages, keptCloudWorkImageIds, ORPHAN_IMAGE_MIN_AGE_MS, unreferencedImageIds } from "./trash";
 
 export interface DocumentRecord {
   id: number;
@@ -505,6 +505,10 @@ export async function listTrash(): Promise<TrashRecord[]> {
   return db.trash.orderBy("trashedAt").reverse().toArray();
 }
 
+export async function isInTrash(id: number): Promise<boolean> {
+  return (await db.trash.get(id)) !== undefined;
+}
+
 /**
  * Puts a trashed work back on the bookshelf and returns its id (a new id only
  * if its old one was taken meanwhile). The revision moves on, so a tab still
@@ -536,6 +540,13 @@ export async function purgeFromTrash(id: number): Promise<void> {
   const item = await db.trash.get(id);
   if (!item) return;
   await db.trash.delete(id);
+  // TSP-SAFE-004 QA: a work saved to the cloud may be opened from the cloud
+  // again, and the cloud keeps its illustrations only 72 hours: this browser
+  // keeps them (as it did before the trash existed).
+  if (item.document.cloudSync || readCloudLink(id) !== null) {
+    keepCloudWorkImages(imageIdsMentionedIn(item.document));
+    return;
+  }
   await removeUnusedImages(imageIdsMentionedIn(item.document), 0);
 }
 
@@ -567,7 +578,8 @@ async function removeUnusedImages(candidateIds: string[], minAgeMs: number, now:
     const stored = (await db.images.bulkGet(candidateIds)).filter((record): record is ImageRecord => !!record);
     if (stored.length === 0) return 0;
     const works: unknown[] = [...(await db.documents.toArray()), ...(await db.trash.toArray()).map((item) => item.document)];
-    const unused = new Set(unreferencedImageIds(stored.map((record) => record.id), works));
+    const kept = keptCloudWorkImageIds();
+    const unused = new Set(unreferencedImageIds(stored.map((record) => record.id).filter((imageId) => !kept.has(imageId)), works));
     const removable = stored
       .filter((record) => unused.has(record.id) && now - (record.createdAt ?? 0) >= minAgeMs)
       .map((record) => record.id);

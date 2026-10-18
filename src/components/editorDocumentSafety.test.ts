@@ -43,13 +43,15 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
     expect(run.indexOf("await previousDocumentFlushed;")).toBeLessThan(run.indexOf("await loadDocument(id)"));
   });
 
-  it("保存作品一覧 flushes before switching and restores the project's images", () => {
+  it("保存作品一覧 opens through the route load (flush, device copy, images, failure screen)", () => {
     const select = body(editor, "const handleSelectProject = ", "const handleBookPartsInsert");
-    // TSP-SAFE-001: the project opens through its device copy, read after the flush.
-    expect(select).toMatch(/const previousDocumentFlushed = flushAutosave\(\);\s*beginDocumentSwitch\(\);\s*const isCurrent = documentEpoch\.capture\(\);/);
-    expect(select.indexOf("await previousDocumentFlushed;")).toBeLessThan(select.indexOf("openDeviceCopySafely(project)"));
-    expect(select).toMatch(/if \(!isCurrent\(\)\) return;\s*applyCloudProject\(project, opened\);/);
-    expect(select).toContain("await openCloudProjectImages(project, isCurrent);");
+    // TSP-SAFE-004 QA: the same load as ?cloudId= — it re-reads the cloud.
+    expect(select).toContain("router.push(`/editor?cloudId=${encodeURIComponent(project.id)}`);");
+    expect(select).toContain("setLoadAttempt((attempt) => attempt + 1);");
+    expect(select).not.toContain("applyCloudProject(");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
+    expect(run.indexOf("await previousDocumentFlushed;")).toBeLessThan(run.indexOf("openDeviceCopySafely(project)"));
+    expect(run).toContain("await openCloudProjectImages(project, () => !isStale());");
   });
 
   it("unmount and pagehide flush; Ctrl+S drops the job it replaces", () => {
@@ -134,7 +136,9 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
 
   it("closing the tab with text not yet saved here asks first", () => {
     const warn = body(editor, "const warnIfUnsaved = (event: BeforeUnloadEvent) => {", 'window.addEventListener("beforeunload", warnIfUnsaved);');
-    expect(warn).toContain('pendingAutosave.hasPending || localSaveQueue.hasUnsaved || saveStatusRef.current === "stopped"');
+    expect(warn).toMatch(/pendingAutosave\.hasPending \|\|\s*localSaveQueue\.hasUnsaved \|\|\s*\(saveStatusRef\.current === "stopped"/);
+    // TSP-SAFE-004 QA: a screen that failed to open asks only when something was typed.
+    expect(warn).toContain("(!failed.failed || failed.typed)");
     expect(warn).toContain("event.preventDefault();");
   });
 
@@ -179,7 +183,24 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
     expect(fail).toContain("setLoadFailure(failure);");
     expect(fail).not.toContain("hasLoadedRef.current = true");
     expect(editor).toMatch(/\}, \[applyCloudProject,[^\]]*loadAttempt/);
-    expect(editor).toContain("onClick={() => setLoadAttempt((attempt) => attempt + 1)}");
+    expect(editor).toContain("onClick={retryFailedLoad}");
+    const retry = body(editor, "const retryFailedLoad = () =>", "// TSP-SAFE-001: after a deletion in another tab");
+    expect(retry).toContain('if (loadFailure?.kind === "storage") window.location.reload();');
+    expect(retry).toContain("else setLoadAttempt((attempt) => attempt + 1);");
+  });
+
+  it("QA: text typed on a failed screen is not dropped without asking", () => {
+    const leave = body(editor, "const leaveFailedScreen = (go: () => void) => {", "const retryFailedLoad");
+    expect(leave).toContain("if (failedScreenRef.current.typed && !window.confirm(LOAD_FAILED_DISCARD_CONFIRM)) return;");
+    expect(editor).toContain("leaveFailedScreen(() => router.push(`/editor?id=${loadFailure.deviceCopyId}`))");
+  });
+
+  it("QA: a failed screen cannot save to the cloud, and an old link to a trashed work says so", () => {
+    expect(body(editor, "const handleSave = ", "saveToCloud(false, null)")).toContain("if (loadFailure) {");
+    expect(body(editor, "const saveToCloud = async", "await ")).toContain("if (isSampleDocument || loadFailure) return;");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
+    expect(run).toMatch(/if \(id !== null && !doc && \(await isInTrash\(id\)\)\) \{\s*await fail\(\{ kind: "in-trash" \}\);\s*return;/);
+    expect(run.indexOf("isInTrash(id)")).toBeLessThan(run.indexOf("await createDocument("));
   });
 
   it("a cloud work that cannot be read offers this browser's copy", () => {
@@ -195,6 +216,6 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
     expect(errorPage).toContain("<EditorCrashScreen error={error} retry={retry} />");
     const globalError = readFileSync(resolve("src/app/global-error.tsx"), "utf8");
     expect(globalError).toContain("<html");
-    expect(globalError).toContain("<EditorCrashScreen error={error} retry={retry} />");
+    expect(globalError).toContain("<EditorCrashScreen error={error} retry={retry} offerRescueOnlyOnEditor />");
   });
 });

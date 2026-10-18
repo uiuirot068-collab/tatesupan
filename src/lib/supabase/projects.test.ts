@@ -112,6 +112,11 @@ describe("lookupProject: could not read ≠ deleted (3の5)", () => {
     expect(await lookupProject("p1")).toMatchObject({ status: "unreachable", loggedOut: true });
   });
 
+  it("an expired sign-in (refresh token no longer valid) is signed out", async () => {
+    state.authError = { message: "Invalid Refresh Token: Refresh Token Not Found", name: "AuthApiError" };
+    expect(await lookupProject("p1")).toMatchObject({ status: "unreachable", loggedOut: true });
+  });
+
   it("an auth request that failed on the network is not reported as signed out", async () => {
     state.authError = { message: "Failed to fetch", name: "AuthRetryableFetchError" };
     expect(await lookupProject("p1")).toMatchObject({ status: "unreachable", loggedOut: false });

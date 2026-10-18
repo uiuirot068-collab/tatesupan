@@ -63,6 +63,27 @@ import type { Project } from "@/types/database";
 // 全プラン共通（Traveler / Resident / Light / Unlimited）。サンプル（使い方ガイド）は含まない。
 const LOCAL_DOCUMENT_LIMIT = 60;
 
+const STORAGE_UNAVAILABLE = "storage-unavailable" as const;
+
+// TSP-SAFE-004 QA: when the bookshelf last looked for unused illustrations.
+const ORPHAN_SWEEP_KEY = "tatespun_orphan_image_sweep_at";
+const ORPHAN_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+function orphanSweepIsDue(): boolean {
+  try {
+    const last = Number(window.localStorage.getItem(ORPHAN_SWEEP_KEY));
+    return !Number.isFinite(last) || Date.now() - last >= ORPHAN_SWEEP_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+function noteOrphanSweep(): void {
+  try {
+    window.localStorage.setItem(ORPHAN_SWEEP_KEY, String(Date.now()));
+  } catch {
+    // storage blocked: the sweep simply runs again next visit
+  }
+}
+
 const QA_BOOKS: DocumentRecord[] = [
   {
     id: -101,
@@ -93,7 +114,8 @@ interface HomeV2ClientProps {
 
 export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps) {
   const router = useRouter();
-  const demo = useSearchParams().get("demo");
+  const searchParams = useSearchParams();
+  const demo = searchParams.get("demo");
   const qaMode = allowQaMode && (demo === "empty" || demo === "books") ? demo : undefined;
   const { user: authUser, session: authSession, isLoading: authIsLoading } = useAuth();
   const user = qaMode ? null : authUser;
@@ -104,26 +126,48 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   }, [qaMode]);
   // TSP-SAFE-004: tidy once per visit — works trashed long ago, then images no
   // work uses — and ask the browser to keep this site's saved works.
+  // TSP-SAFE-004 QA: the image sweep reads every image, so it runs at most
+  // once a day (not on every visit).
   useEffect(() => {
     if (qaMode) return;
     void purgeExpiredTrash()
-      .then(() => removeOrphanImages())
+      .then(() => (orphanSweepIsDue() ? removeOrphanImages().then(noteOrphanSweep) : undefined))
       .catch((error: unknown) => console.error("TateSpun: could not tidy the trash", error));
     void requestPersistentStorage();
   }, [qaMode]);
+  // TSP-SAFE-004 QA: when this browser's storage cannot be used, say so
+  // instead of staying at 「読み込み中」.
   const storedDocuments = useLiveQuery(
-    () => (qaMode ? Promise.resolve([] as DocumentRecord[]) : listDocuments()),
+    () =>
+      qaMode
+        ? Promise.resolve([] as DocumentRecord[])
+        : listDocuments().catch((error: unknown) => {
+            console.error("TateSpun: could not read the bookshelf", error);
+            return STORAGE_UNAVAILABLE;
+          }),
     [qaMode]
   );
+  const storageUnavailable = storedDocuments === STORAGE_UNAVAILABLE;
   const documents = useMemo(
-    () => (qaMode === "empty" ? [] : qaMode === "books" ? QA_BOOKS : storedDocuments),
+    () =>
+      qaMode === "empty"
+        ? []
+        : qaMode === "books"
+          ? QA_BOOKS
+          : storedDocuments === STORAGE_UNAVAILABLE
+            ? []
+            : storedDocuments,
     [qaMode, storedDocuments]
   );
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   // TSP-SAFE-004: 削除 moves a work to the ゴミ箱; the last one can be put back at once.
-  const trashItems = useLiveQuery(() => (qaMode ? Promise.resolve([]) : listTrash()), [qaMode]);
-  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const trashItems = useLiveQuery(
+    () => (qaMode ? Promise.resolve([]) : listTrash().catch(() => [])),
+    [qaMode]
+  );
+  // An editor link to a work in the trash (/?trash=1) opens the ゴミ箱.
+  const [isTrashOpen, setIsTrashOpen] = useState(() => !qaMode && searchParams.get("trash") === "1");
   const [trashOpenedAt, setTrashOpenedAt] = useState(0);
   const [lastTrashed, setLastTrashed] = useState<{ id: number; title: string } | null>(null);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
@@ -239,6 +283,17 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   };
 
   const handleRestore = async (id: number) => {
+    // TSP-SAFE-004 QA: putting a work back counts toward the same 60-work
+    // limit as a new one (a cloud-linked work does not count, as in handleCreate).
+    const trashed = trashItems?.find((item) => item.id === id);
+    if (trashed && !trashed.document.cloudSync) {
+      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
+      if (count >= LOCAL_DOCUMENT_LIMIT) {
+        setIsTrashOpen(false);
+        setIsLimitModalOpen(true);
+        return;
+      }
+    }
     await restoreFromTrash(id);
     setLastTrashed((last) => (last?.id === id ? null : last));
   };
@@ -252,6 +307,37 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     setTrashOpenedAt(Date.now());
     setIsTrashOpen(true);
   };
+
+  // TSP-SAFE-004 QA: shown on the empty bookshelf too, so the last work
+  // moved to the ゴミ箱 can still be put back.
+  const trashCount = trashItems?.length ?? 0;
+  const renderTrashLinks = (className: string) =>
+    (trashCount > 0 || lastTrashed) && (
+      <div className={className}>
+        {lastTrashed && (
+          <p role="status" className="flex min-w-0 max-w-full items-baseline gap-2 text-sm text-ink/70 dark:text-[#B9C2D3]">
+            <span className="min-w-0 truncate">「{lastTrashed.title}」</span>
+            <span className="shrink-0">をゴミ箱に移しました。</span>
+            <button
+              type="button"
+              onClick={() => void handleRestore(lastTrashed.id)}
+              className="shrink-0 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
+            >
+              元に戻す
+            </button>
+          </p>
+        )}
+        {trashCount > 0 && (
+          <button
+            type="button"
+            onClick={openTrash}
+            className="w-fit text-sm text-ink/55 underline underline-offset-4 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+          >
+            ゴミ箱 <span className="tabular-nums">{trashCount}</span>
+          </button>
+        )}
+      </div>
+    );
 
   const pendingDoc = documents?.find((doc) => doc.id === pendingDeleteId);
   const visibleCloudResult =
@@ -524,29 +610,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               </div>
               <p className="text-sm text-ink/55 dark:text-[#939DAF]">
                 {activeBookshelfTab === "cloud" ? "クラウド保存された作品" : "この端末に保存されている作品"}
-                {activeBookshelfTab === "local" && trashItems && trashItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={openTrash}
-                    className="ml-3 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
-                  >
-                    ゴミ箱 <span className="tabular-nums">{trashItems.length}</span>
-                  </button>
-                )}
               </p>
-              {activeBookshelfTab === "local" && lastTrashed && (
-                <p role="status" className="text-sm text-ink/70 dark:text-[#B9C2D3]">
-                  「{lastTrashed.title}」をゴミ箱に移しました。
-                  <button
-                    type="button"
-                    onClick={() => void handleRestore(lastTrashed.id)}
-                    className="ml-2 underline underline-offset-4 hover:text-ink"
-                  >
-                    元に戻す
-                  </button>
-                </p>
-              )}
             </div>
+            {activeBookshelfTab === "local" && renderTrashLinks("mb-3 flex flex-col gap-1 sm:items-end")}
 
             {/* The shelf on a mat: the books are the content, set on a
                 framed paper ground (no heavy card), with the next book's
@@ -651,7 +717,12 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           </section>
         ) : (
           <section data-home-empty-onboarding="" className="w-full" aria-label="最初の一冊">
-            {documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
+            {storageUnavailable ? (
+              <p role="alert" className="mx-auto max-w-xl px-4 py-16 text-center text-sm leading-7 text-ink/70 dark:text-[#AEB7C6]">
+                このブラウザの保存場所が使えないため、本棚を開けませんでした。プライベートモードや、サイトのデータを保存しない設定では使えないことがあります。設定を確かめてから、ページを読み込みなおしてください。
+              </p>
+            ) : documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
+            {renderTrashLinks("mx-auto mt-6 mb-6 flex w-full max-w-[1040px] flex-col gap-1 px-4 sm:px-6")}
             {documents !== undefined && (
               <>
                 {renderBrandPanel("onboarding")}

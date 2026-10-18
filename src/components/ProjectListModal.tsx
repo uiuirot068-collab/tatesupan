@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Project } from '@/types/database';
-import { getProjects, deleteProject } from '@/lib/supabase/projects';
+import { getProjectsResult, deleteProject } from '@/lib/supabase/projects';
 
 interface ProjectListModalProps {
   isOpen: boolean;
@@ -17,11 +17,15 @@ export function ProjectListModal({
 }: ProjectListModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // TSP-SAFE-004 QA: a list that could not be read is not an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     setIsLoading(true);
-    const data = await getProjects();
+    setLoadError(null);
+    const { data, error } = await getProjectsResult();
     setProjects(data);
+    setLoadError(error);
     setIsLoading(false);
   };
 
@@ -60,6 +64,17 @@ export function ProjectListModal({
           {isLoading ? (
             <div className="py-8 text-center text-sm text-gray-500">
               読み込み中...
+            </div>
+          ) : loadError !== null ? (
+            <div role="alert" className="py-8 text-center text-sm text-gray-600">
+              <p>クラウドの作品一覧を読み込めませんでした。通信やログインの状態を確かめて、もう一度お試しください。</p>
+              <button
+                type="button"
+                onClick={() => void fetchProjects()}
+                className="mt-3 rounded border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                もう一度読み込む
+              </button>
             </div>
           ) : projects.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-500">

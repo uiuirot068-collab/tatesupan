@@ -18,6 +18,8 @@ interface CloudVersionCompareModalProps {
   busy?: boolean;
   /** TSP-SAFE-001: which version this screen started from is unknown — say only that they differ. */
   baseUnknown?: boolean;
+  /** TSP-SAFE-004 QA: the overwrite was refused because another device saved meanwhile. */
+  changedMeanwhile?: boolean;
   onOverwrite: () => void;
   onOpenCloud: () => void;
   onCancel: () => void;
@@ -33,6 +35,7 @@ export default function CloudVersionCompareModal({
   cloud,
   busy = false,
   baseUnknown = false,
+  changedMeanwhile = false,
   onOverwrite,
   onOpenCloud,
   onCancel,
@@ -82,6 +85,11 @@ export default function CloudVersionCompareModal({
         </>
       )}
     >
+      {changedMeanwhile && (
+        <p role="status" className="mb-2 text-sm font-medium leading-relaxed text-ink">
+          上書きしませんでした。この確認を見ているあいだに、別の端末でクラウドの作品が保存されました。いまのクラウド版とくらべてください。
+        </p>
+      )}
       <p className="text-sm leading-relaxed text-ink">{baseUnknown ? CLOUD_COMPARE_COPY.unknownLead : CLOUD_COMPARE_COPY.lead}</p>
       <dl className="mt-4 grid grid-cols-2 border-y border-ink/15 text-xs">
         {sides.map(({ key, label, timeLabel, side }, index) => (

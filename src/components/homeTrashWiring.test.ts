@@ -24,8 +24,24 @@ describe("bookshelf: 削除 → ゴミ箱", () => {
     expect(home).toContain("<TrashModal");
   });
 
-  it("each visit tidies the expired trash, then images no work uses, and asks to keep the saved works", () => {
-    expect(home).toContain(".then(() => removeOrphanImages())");
+  it("QA: the ゴミ箱 and 元に戻す are on the empty bookshelf too", () => {
+    expect(home.match(/renderTrashLinks\(/g)?.length).toBe(2);
+    const empty = home.slice(home.indexOf('data-home-empty-onboarding=""'));
+    expect(empty).toContain("renderTrashLinks(");
+  });
+
+  it("QA: putting a work back respects the 60-work limit", () => {
+    const restore = home.slice(home.indexOf("const handleRestore = "), home.indexOf("const handlePurge = "));
+    expect(restore.indexOf("LOCAL_DOCUMENT_LIMIT")).toBeLessThan(restore.indexOf("await restoreFromTrash(id);"));
+    expect(restore).toContain("setIsLimitModalOpen(true);");
+  });
+
+  it("QA: an unusable storage is said, not left at 読み込み中", () => {
+    expect(home).toContain("このブラウザの保存場所が使えないため、本棚を開けませんでした。");
+  });
+
+  it("each visit tidies the expired trash, images no work uses at most daily, and asks to keep the saved works", () => {
+    expect(home).toContain(".then(() => (orphanSweepIsDue() ? removeOrphanImages().then(noteOrphanSweep) : undefined))");
     expect(home).toContain("void purgeExpiredTrash()");
     expect(home).toContain("void requestPersistentStorage();");
   });

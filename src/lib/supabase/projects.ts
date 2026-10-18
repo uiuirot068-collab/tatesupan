@@ -84,7 +84,7 @@ export type ProjectLookup =
 function isSignedOutAuthError(error: { message?: string; name?: string; status?: number } | null): boolean {
   if (!error) return true;
   if (error.name === 'AuthSessionMissingError') return true;
-  return /auth session missing|not authenticated|jwt expired|invalid jwt/i.test(error.message ?? '');
+  return /auth session missing|not authenticated|jwt expired|invalid jwt|refresh token/i.test(error.message ?? '');
 }
 
 export async function lookupProject(id: string): Promise<ProjectLookup> {

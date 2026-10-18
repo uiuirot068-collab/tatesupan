@@ -31,7 +31,18 @@ const DAY = 24 * 60 * 60 * 1000;
 const img = (id: string) => `【IMG:${id}:50:30:top】`;
 const OLD = Date.now() - ORPHAN_IMAGE_MIN_AGE_MS - DAY;
 
+// localStorage stand-in (this suite runs without a DOM).
+const local = new Map<string, string>();
+(globalThis as { window?: unknown }).window = {
+  localStorage: {
+    getItem: (key: string) => local.get(key) ?? null,
+    setItem: (key: string, value: string) => void local.set(key, value),
+    removeItem: (key: string) => void local.delete(key),
+  },
+};
+
 beforeEach(async () => {
+  local.clear();
   await db.documents.clear();
   await db.bookshelfMetadata.clear();
   await db.images.clear();
@@ -112,6 +123,19 @@ describe("ゴミ箱", () => {
     expect(await db.images.get("both")).toBeDefined();
     await purgeFromTrash(b);
     expect(await db.images.get("both")).toBeUndefined();
+  });
+
+  it("QA: 完全に削除 of a work saved to the cloud keeps its images, also from the daily tidy", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "クラウド", img("cloudimg"), settings, "");
+    await db.documents.update(id, { cloudSync: { projectId: "p1", updatedAt: "2026-10-18T00:00:00Z", hash: "h" } });
+    await saveImage({ id: "cloudimg", dataUrl: "data:x", createdAt: OLD });
+    await deleteDocument(id);
+    await purgeFromTrash(id);
+    expect(await listTrash()).toHaveLength(0);
+    expect(await db.images.get("cloudimg")).toBeDefined();
+    expect(await removeOrphanImages()).toBe(0);
+    expect(await db.images.get("cloudimg")).toBeDefined();
   });
 
   it("the 使い方ガイド sample is never moved to the trash", async () => {

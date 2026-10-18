@@ -59,6 +59,7 @@ export type EditorLoadFailure =
   | { kind: "cloud-unreachable"; detail: string; deviceCopyId: number | null }
   | { kind: "cloud-signed-out"; deviceCopyId: number | null }
   | { kind: "cloud-missing"; deviceCopyId: number | null }
+  | { kind: "in-trash" }
   | { kind: "other"; detail: string };
 
 // Dexie / IndexedDB errors that mean "this browser's storage cannot be used"
@@ -93,6 +94,8 @@ export function loadFailureMessage(failure: EditorLoadFailure): string {
       return "ログインが切れているため、クラウドの作品を開けませんでした。ログインしてから、もう一度読み込んでください。";
     case "cloud-missing":
       return "この作品はクラウドに見つかりませんでした（別の端末で削除されたかもしれません）。";
+    case "in-trash":
+      return "この作品はゴミ箱にあります。本棚の「ゴミ箱」から元に戻すと、また開けます。";
     case "other":
       return "作品を読み込めませんでした。もう一度読み込んでください。";
   }

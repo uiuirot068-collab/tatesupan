@@ -41,3 +41,38 @@ export function unreferencedImageIds(imageIds: Iterable<string>, works: Iterable
   }
   return unused;
 }
+
+// TSP-SAFE-004 QA: illustrations of works saved to the cloud are never tidied
+// away from this browser — the cloud keeps its copy only 72 hours, and the
+// work can be opened from the cloud again. Kept per browser (localStorage).
+const CLOUD_WORK_IMAGES_KEY = "tatespun:cloud-work-images";
+
+type KeepStorage = Pick<Storage, "getItem" | "setItem">;
+
+function keepStorage(): KeepStorage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function keptCloudWorkImageIds(storage: KeepStorage | null = keepStorage()): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(CLOUD_WORK_IMAGES_KEY) ?? "[]");
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function keepCloudWorkImages(ids: readonly string[], storage: KeepStorage | null = keepStorage()): void {
+  if (ids.length === 0) return;
+  try {
+    const kept = keptCloudWorkImageIds(storage);
+    for (const id of ids) kept.add(id);
+    storage?.setItem(CLOUD_WORK_IMAGES_KEY, JSON.stringify([...kept]));
+  } catch {
+    // best effort
+  }
+}

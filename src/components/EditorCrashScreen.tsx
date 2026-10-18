@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   hasRescuableText,
   readEditorRescue,
@@ -8,7 +8,8 @@ import {
   rescueText,
   rescueTitle,
 } from "@/lib/editorRescue";
-import { createDocument, saveDocument } from "@/lib/db";
+import { createDocument, db, saveDocument } from "@/lib/db";
+import { countVisualLength } from "@/lib/tategaki";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
 import { withBasePath } from "@/lib/basePath";
 
@@ -17,10 +18,29 @@ import { withBasePath } from "@/lib/basePath";
  * drawing. The text the screen last showed (lib/editorRescue.ts) can be taken
  * out as TXT, copied, or kept as a new work on the bookshelf before trying again.
  */
-export default function EditorCrashScreen({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
-  const [rescue] = useState(() => readEditorRescue());
+// Same limit as the bookshelf (app/home-v2/HomeV2Client.tsx).
+const LOCAL_DOCUMENT_LIMIT = 60;
+
+export default function EditorCrashScreen({
+  error,
+  retry,
+  offerRescueOnlyOnEditor = false,
+}: {
+  error: Error & { digest?: string };
+  retry: () => void;
+  offerRescueOnlyOnEditor?: boolean;
+}) {
+  const [rescue] = useState(() =>
+    offerRescueOnlyOnEditor && typeof window !== "undefined" && !window.location.pathname.includes("/editor")
+      ? null
+      : readEditorRescue()
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [keptAs, setKeptAs] = useState<string | null>(null);
+  // TSP-SAFE-004 QA: a second click while the first is still writing must not
+  // make a second copy.
+  const keepingRef = useRef(false);
+  const [keeping, setKeeping] = useState(false);
   const rescuable = hasRescuableText(rescue) && !rescue.sample;
 
   useEffect(() => {
@@ -50,8 +70,17 @@ export default function EditorCrashScreen({ error, retry }: { error: Error & { d
   };
 
   const keepOnBookshelf = async () => {
-    if (!rescuable || keptAs) return;
+    if (!rescuable || keptAs || keepingRef.current) return;
+    keepingRef.current = true;
+    setKeeping(true);
     try {
+      // TSP-SAFE-004 QA: the bookshelf's 60-work limit applies here too; the
+      // text can still be taken out with TXTで保存 / コピー.
+      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
+      if (count >= LOCAL_DOCUMENT_LIMIT) {
+        setNotice(`このブラウザの本棚がいっぱい（${LOCAL_DOCUMENT_LIMIT}作品）のため、本棚には残せませんでした。「TXTで保存」か「コピー」をお使いください。`);
+        return;
+      }
       const title = rescueTitle(rescue.title);
       const id = await createDocument();
       await saveDocument(id, title, rescue.content, (rescue.settings as PageSettings | undefined) ?? DEFAULT_PAGE_SETTINGS, rescue.plotNote);
@@ -59,6 +88,9 @@ export default function EditorCrashScreen({ error, retry }: { error: Error & { d
       setNotice(`本棚に「${title}」として残しました。`);
     } catch {
       setNotice("このブラウザの保存場所に残せませんでした。「TXTで保存」か「コピー」をお使いください。");
+    } finally {
+      keepingRef.current = false;
+      setKeeping(false);
     }
   };
 
@@ -71,7 +103,7 @@ export default function EditorCrashScreen({ error, retry }: { error: Error & { d
             ここまで書いた原稿は、ふだんはこの端末に自動で保存されています。念のため、もう一度開く前に控えを取ってください。
           </p>
           <p className="text-xs text-ink/70">
-            {rescue.title.trim() || "無題"}・{rescue.content.length.toLocaleString()}字
+            {rescue.title.trim() || "無題"}・{countVisualLength(rescue.content).toLocaleString("ja-JP")}字
           </p>
           <div className="flex flex-wrap gap-x-5 gap-y-3 border-y border-ink/15 py-3 text-sm">
             <button type="button" onClick={download} className="underline underline-offset-4 hover:text-ink/70">
@@ -83,7 +115,7 @@ export default function EditorCrashScreen({ error, retry }: { error: Error & { d
             <button
               type="button"
               onClick={() => void keepOnBookshelf()}
-              disabled={keptAs !== null}
+              disabled={keptAs !== null || keeping}
               className="underline underline-offset-4 hover:text-ink/70 disabled:no-underline disabled:opacity-50"
             >
               本棚に控えを残す
