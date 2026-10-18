@@ -3,7 +3,7 @@ import { asFontBinary } from "../../../typesetting-v2/renderer/publication/fontB
 import { deriveBaselineRatioFromFontBinary, resolveVerticalGraphemePaint } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 import { VerticalOutlineContext } from "../../../typesetting-v2/renderer/publication/verticalOutlinePaint";
 import { VerticalYakumonoAlignContext } from "../../../typesetting-v2/renderer/publication/verticalYakumonoAlign";
-import type { PreviewGlyphOutline, PreviewGlyphOutlines } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
+import type { PreviewGlyphOutline, PreviewGlyphOutlines, PreviewGlyphRun } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { loadV2FontBytes, publicationFontAssetFor } from "../v2BrowserExport";
 
 /**
@@ -19,7 +19,8 @@ import { loadV2FontBytes, publicationFontAssetFor } from "../v2BrowserExport";
  * (vertical presentation form or vertical alternate, flush to a cell edge,
  * small kana centred on their ink, upright ASCII) comes from the PDF's own
  * `resolveVerticalGraphemePaint`, so Preview and export cannot drift apart.
- * Only what export turns 90° as text (ー in a font without its vertical
+ * 縦中横 runs are drawn as PDF draws them too (`run`, placed by
+ * `tcyRunPlacement`). Only what export turns 90° as text (ー in a font without its vertical
  * alternate), spaces and characters the font lacks stay browser text.
  */
 export function isPreviewOutlinedGrapheme(grapheme: string): boolean {
@@ -53,6 +54,21 @@ export function createPreviewGlyphOutlines(bytes: Uint8Array): PreviewGlyphOutli
   const baselineRatio = deriveBaselineRatioFromFontBinary(fontBinary);
   const yakumonoContext = new VerticalYakumonoAlignContext(fontBinary, baselineRatio);
   const cache = new Map<string, PreviewGlyphOutline | null>();
+  const runCache = new Map<string, PreviewGlyphRun | null>();
+  // The glyph's path once in the shared <defs>; its id, or undefined
+  // outside a document.
+  const define = (index: number, d: string): string | undefined => {
+    const defs = glyphDefs();
+    if (!defs) return undefined;
+    const id = `${fontKey}-${index}`;
+    if (!defs.querySelector(`#${id}`)) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("id", id);
+      path.setAttribute("d", d);
+      defs.appendChild(path);
+    }
+    return id;
+  };
   return {
     unitsPerEm,
     baselineRatio,
@@ -69,17 +85,9 @@ export function createPreviewGlyphOutlines(bytes: Uint8Array): PreviewGlyphOutli
           // Font units, y down, horizontal baseline at 0.
           const d = glyph.getPath(0, 0, unitsPerEm).toPathData(1);
           if (d) {
-            const defs = glyphDefs();
-            const id = `${fontKey}-${glyph.index}`;
-            if (defs && !defs.querySelector(`#${id}`)) {
-              const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-              path.setAttribute("id", id);
-              path.setAttribute("d", d);
-              defs.appendChild(path);
-            }
             result = {
               d,
-              id: defs ? id : undefined,
+              id: define(glyph.index, d),
               advance: glyph.advanceWidth ?? unitsPerEm,
               ...(paint.baselineRatio !== baselineRatio ? { baselineRatio: paint.baselineRatio } : {}),
               ...(paint.kind === "outline" ? { cellSized: true } : {}),
@@ -88,6 +96,27 @@ export function createPreviewGlyphOutlines(bytes: Uint8Array): PreviewGlyphOutli
         }
       }
       cache.set(grapheme, result);
+      return result ?? undefined;
+    },
+    // 縦中横: PDF writes the run as horizontal text in the body font, so
+    // each character is its horizontal glyph at its advance (no kerning,
+    // as jsPDF). A character the font lacks keeps browser text.
+    run(text) {
+      const cached = runCache.get(text);
+      if (cached !== undefined) return cached ?? undefined;
+      let result: PreviewGlyphRun | null = { glyphs: [], advance: 0 };
+      for (const ch of Array.from(text)) {
+        const glyph = font.charToGlyph(ch);
+        if (!glyph || glyph.index === 0) {
+          result = null;
+          break;
+        }
+        const d = glyph.getPath(0, 0, unitsPerEm).toPathData(1);
+        if (d) result.glyphs.push({ d, id: define(glyph.index, d), x: result.advance });
+        result.advance += glyph.advanceWidth ?? unitsPerEm;
+      }
+      if (result && result.glyphs.length === 0) result = null;
+      runCache.set(text, result);
       return result ?? undefined;
     },
   };

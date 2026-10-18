@@ -34,6 +34,40 @@ export type OutlinePathCommand =
   | { type: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
   | { type: "Z" };
 
+/**
+ * TSP-PRINT-002 (P4-6, 案A): one glyph's outline, built once per document
+ * and shared by every occurrence. `commands` are in font units, y down,
+ * pen origin (left edge of the advance) on the baseline; `bbox` is the
+ * same space (x1,y1 top-left — x2,y2 bottom-right). PDF writes it once as a
+ * Form XObject and draws each occurrence by reference; a PaintPlan holds
+ * the same object for every occurrence (structured clone keeps it shared).
+ */
+export interface GlyphShape {
+  key: string;
+  unitsPerEm: number;
+  commands: OutlinePathCommand[];
+  bbox: { x1: number; y1: number; x2: number; y2: number };
+}
+
+
+/**
+ * TSP-PRINT-002 (P4-6): page-space (mm) path of a glyphOutline paint
+ * command, whichever form it has — the same numbers the inline form carried.
+ */
+export function glyphOutlineCommandsMmOf(
+  cmd: { commands: OutlinePathCommand[] } | { shape: GlyphShape; xMm: number; yMm: number; emSizeMm: number }
+): OutlinePathCommand[] {
+  if (!("shape" in cmd)) return cmd.commands;
+  const k = cmd.emSizeMm / cmd.shape.unitsPerEm;
+  const X = (x: number) => cmd.xMm + x * k;
+  const Y = (y: number) => cmd.yMm + y * k;
+  return cmd.shape.commands.map((c): OutlinePathCommand => {
+    if (c.type === "Z") return c;
+    if (c.type === "C") return { type: "C", x1: X(c.x1), y1: Y(c.y1), x2: X(c.x2), y2: Y(c.y2), x: X(c.x), y: Y(c.y) };
+    return { type: c.type, x: X(c.x), y: Y(c.y) };
+  });
+}
+
 // Standard quadratic-to-cubic Bézier degree elevation: given the current
 // point P0, a quadratic control point Q1, and endpoint P2, the EXACT
 // equivalent cubic control points are C1 = P0 + 2/3*(Q1-P0) and
@@ -109,6 +143,13 @@ export class VerticalOutlineContext {
   // behavior change -- every cached value is still the same real,
   // measured result `advanceWidthMm` would otherwise recompute.
   private readonly advanceWidthCache = new Map<string, number>();
+  private readonly shapeCache = new Map<number, GlyphShape>();
+  // Same font → same keys, whichever context built the plan (export builds
+  // pages with its own context; plans of one font must compare equal).
+  private get shapeKeyPrefix(): string {
+    const names = (this.font as unknown as { names?: { postScriptName?: { en?: string } } }).names;
+    return `${names?.postScriptName?.en ?? "font"}_${this.font.numGlyphs}_`;
+  }
 
   constructor(fontBuf: FontBinary) {
     this.fontBuf = fontBuf;
@@ -200,6 +241,38 @@ export class VerticalOutlineContext {
     const anchorXMm = xCenterMm - advanceWidthMm / 2;
     const path = glyph.getPath(anchorXMm, yBaselineMm, emSizeMm);
     return convertOpenTypePathCommands(path.commands);
+  }
+
+  /**
+   * TSP-PRINT-002 (P4-6, 案A): the shared shape for `glyphId` (see
+   * `GlyphShape`), built once per context.
+   */
+  glyphShape(glyphId: number): GlyphShape {
+    const cached = this.shapeCache.get(glyphId);
+    if (cached) return cached;
+    const glyph = this.getGlyph(glyphId);
+    const unitsPerEm = this.font.unitsPerEm;
+    const commands = convertOpenTypePathCommands(glyph.getPath(0, 0, unitsPerEm).commands);
+    let x1 = Infinity;
+    let y1 = Infinity;
+    let x2 = -Infinity;
+    let y2 = -Infinity;
+    for (const cmd of commands) {
+      if (cmd.type === "Z") continue;
+      const xs = cmd.type === "C" ? [cmd.x1, cmd.x2, cmd.x] : [cmd.x];
+      const ys = cmd.type === "C" ? [cmd.y1, cmd.y2, cmd.y] : [cmd.y];
+      for (const x of xs) { if (x < x1) x1 = x; if (x > x2) x2 = x; }
+      for (const y of ys) { if (y < y1) y1 = y; if (y > y2) y2 = y; }
+    }
+    const bbox = Number.isFinite(x1) ? { x1, y1, x2, y2 } : { x1: 0, y1: 0, x2: 0, y2: 0 };
+    const shape: GlyphShape = { key: `${this.shapeKeyPrefix}${glyphId}`, unitsPerEm, commands, bbox };
+    this.shapeCache.set(glyphId, shape);
+    return shape;
+  }
+
+  /** TSP-PRINT-002: horizontal advance of `glyphId` in font units. */
+  glyphAdvanceUnits(glyphId: number): number {
+    return this.getGlyph(glyphId).advanceWidth ?? this.font.unitsPerEm;
   }
 
   /**

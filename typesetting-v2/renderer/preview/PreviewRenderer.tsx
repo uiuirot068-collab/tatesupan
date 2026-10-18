@@ -55,6 +55,37 @@ export interface PreviewGlyphOutlines {
   unitsPerEm: number;
   baselineRatio: number;
   outline(grapheme: string): PreviewGlyphOutline | undefined;
+  /**
+   * TSP-PRINT-002: a 縦中横 run as horizontal glyphs side by side (font
+   * units, pen positions from 0), painted the way PDF paints its TCY text.
+   * `undefined` keeps browser text-combine-upright.
+   */
+  run?(text: string): PreviewGlyphRun | undefined;
+}
+
+/** TSP-PRINT-002: horizontal glyphs of one 縦中横 run, in font units. */
+export interface PreviewGlyphRun {
+  glyphs: { d: string; id?: string; x: number }[];
+  advance: number;
+}
+
+/**
+ * TSP-PRINT-002: where PDF puts a 縦中横 run (`tcyCommand` +
+ * `renderPaintPlanToPdf`): one em = the unit's own height, shrunk only when
+ * wider than the line, centred on the line, and jsPDF's `baseline:"middle"`
+ * (alphabetic baseline = centre + size × (1/2 − (1.15 − 1)), jsPDF's
+ * default line-height factor 1.15).
+ */
+export function tcyRunPlacement(run: PreviewGlyphRun, unitsPerEm: number, unit: { topPx: number; heightPx: number }, lineWidthPx: number) {
+  let sizePx = unit.heightPx;
+  const widthPx = (run.advance * sizePx) / unitsPerEm;
+  if (widthPx > lineWidthPx) sizePx *= lineWidthPx / widthPx;
+  const scale = sizePx / unitsPerEm;
+  return {
+    scale,
+    x: lineWidthPx / 2 - (run.advance * scale) / 2,
+    baselineY: unit.topPx + unit.heightPx / 2 + sizePx * (0.5 - 0.15),
+  };
 }
 
 const PREVIEW_RENDERER_RULES = `
@@ -298,7 +329,7 @@ function UnitBox({ unit, fontSizePx, linePitchPx, mode, outlined = false }: { un
           // top/height, set above from Core's already-composed placement)
           // is completely untouched; this wrapper only affects how the
           // text renders WITHIN that already-fixed box.
-          <span className="tcy">{unit.text}</span>
+          outlined ? null : <span className="tcy">{unit.text}</span>
         ) : outlined ? null : (
           unit.text
         )}
@@ -339,8 +370,14 @@ function UnitBox({ unit, fontSizePx, linePitchPx, mode, outlined = false }: { un
 
 function LineView({ line, fontSizePx, pageHeightPx, mode, glyphs }: { line: PaintLine; fontSizePx: number; pageHeightPx: number; mode: PreviewMode; glyphs?: PreviewGlyphOutlines }) {
   const outlines = new Map<string, PreviewGlyphOutline>();
+  const runs = new Map<string, PreviewGlyphRun>();
   if (glyphs) {
     for (const unit of line.units) {
+      if (unit.kind === "TCY" && unit.text.length > 0) {
+        const run = glyphs.run?.(unit.text);
+        if (run) runs.set(unit.id, run);
+        continue;
+      }
       if (unit.kind !== "TEXT" || unit.provisional) continue;
       const outline = glyphs.outline(unit.text);
       if (outline) outlines.set(unit.id, outline);
@@ -352,9 +389,9 @@ function LineView({ line, fontSizePx, pageHeightPx, mode, glyphs }: { line: Pain
       {mode === "debug" && <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />}
       {mode === "debug" && line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
       {line.units.map((unit) => (
-        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} outlined={outlines.has(unit.id)} />
+        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} outlined={outlines.has(unit.id) || runs.has(unit.id)} />
       ))}
-      {glyphs && outlines.size > 0 && (
+      {glyphs && (outlines.size > 0 || runs.size > 0) && (
         <svg className="line-glyphs" width={line.widthPx} height={pageHeightPx} aria-hidden="true">
           {line.units.map((unit) => {
             const outline = outlines.get(unit.id);
@@ -364,6 +401,18 @@ function LineView({ line, fontSizePx, pageHeightPx, mode, glyphs }: { line: Pain
             const y = unit.topPx + unit.heightPx * (outline.baselineRatio ?? glyphs.baselineRatio);
             const transform = `translate(${x} ${y}) scale(${glyphScale})`;
             return outline.id ? <use key={unit.id} href={`#${outline.id}`} transform={transform} /> : <path key={unit.id} d={outline.d} transform={transform} />;
+          })}
+          {line.units.map((unit) => {
+            const run = runs.get(unit.id);
+            if (!run) return null;
+            const { scale: runScale, x, baselineY } = tcyRunPlacement(run, glyphs.unitsPerEm, unit, line.widthPx);
+            return (
+              <g key={unit.id} data-tcy-run="" transform={`translate(${x} ${baselineY}) scale(${runScale})`}>
+                {run.glyphs.map((glyph, i) =>
+                  glyph.id ? <use key={i} href={`#${glyph.id}`} x={glyph.x} /> : <path key={i} d={glyph.d} transform={`translate(${glyph.x} 0)`} />
+                )}
+              </g>
+            );
           })}
         </svg>
       )}

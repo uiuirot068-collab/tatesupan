@@ -5,6 +5,7 @@ import { asFontBinary } from "../../../typesetting-v2/renderer/publication/fontB
 import { deriveBaselineRatioFromFontBinary, resolveVerticalGraphemePaint } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
 import { VerticalOutlineContext } from "../../../typesetting-v2/renderer/publication/verticalOutlinePaint";
 import { VerticalYakumonoAlignContext } from "../../../typesetting-v2/renderer/publication/verticalYakumonoAlign";
+import { tcyRunPlacement } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { createPreviewGlyphOutlines, isPreviewOutlinedGrapheme } from "./previewGlyphOutlines";
 
 const shippori = new Uint8Array(readFileSync(join(process.cwd(), "public/fonts/ShipporiMincho-Regular.ttf")));
@@ -65,5 +66,38 @@ describe("TSP-PRINT-002: punctuation and small kana follow the export's own rule
     expect(a.cellSized).toBeUndefined();
     expect(a.d).toBe(font.charToGlyph("A").getPath(0, 0, 1000).toPathData(1));
     expect(a.advance).toBeLessThan(1000);
+  });
+});
+
+describe("TSP-PRINT-002: 縦中横 is drawn the way PDF draws it", () => {
+  const outlines = createPreviewGlyphOutlines(shippori);
+  const font = new VerticalOutlineContext(asFontBinary(shippori)).openTypeFont;
+
+  it("horizontal glyphs side by side at their own advances (jsPDF: no kerning)", () => {
+    for (const text of ["12", "25", "!!", "?!"]) {
+      const run = outlines.run!(text)!;
+      const glyphs = Array.from(text).map((ch) => font.charToGlyph(ch));
+      expect(run.glyphs.map((g) => g.d)).toEqual(glyphs.map((g) => g.getPath(0, 0, 1000).toPathData(1)));
+      expect(run.glyphs.map((g) => g.x)).toEqual([0, glyphs[0].advanceWidth]);
+      expect(run.advance).toBe(glyphs[0].advanceWidth! + glyphs[1].advanceWidth!);
+    }
+  });
+
+  it("one em = the unit's height, centred on the line, baseline as jsPDF's middle", () => {
+    const run = outlines.run!("12")!;
+    const unit = { topPx: 100, heightPx: 20 };
+    const p = tcyRunPlacement(run, 1000, unit, 30);
+    expect(p.scale).toBeCloseTo(20 / 1000, 10);
+    expect(p.x + (run.advance * p.scale) / 2).toBeCloseTo(15, 10);
+    // jsPDF: y += size / 2 − size × (1.15 − 1)
+    expect(p.baselineY).toBeCloseTo(110 + 20 / 2 - 20 * 0.15, 10);
+  });
+
+  it("shrinks only when wider than the line (as renderPaintPlanToPdf does)", () => {
+    const run = { glyphs: [], advance: 3000 };
+    const p = tcyRunPlacement(run, 1000, { topPx: 0, heightPx: 20 }, 30);
+    expect(run.advance * p.scale).toBeCloseTo(30, 10);
+    expect(p.x).toBeCloseTo(0, 10);
+    expect(p.baselineY).toBeCloseTo(10 + 10 * 0.35, 10);
   });
 });

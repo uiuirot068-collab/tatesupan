@@ -48,14 +48,25 @@ run(`PDF memory, ${PAGES} pages`, () => {
 
   const commandsByOp: Record<string, number> = {};
   let outlineSegments = 0;
+  // TSP-PRINT-002 (案A): occurrences drawn by reference, and the distinct shapes they share.
+  let outlineRefs = 0;
+  const shapes = new Set<object>();
   let planJsonBytes = 0; // per page: the whole plan is over V8's longest string at 300 pages
   for (const page of plan) {
-    planJsonBytes += Buffer.byteLength(JSON.stringify(page));
+    // A shared shape is one object however many times it is used; count it once (below).
+    planJsonBytes += Buffer.byteLength(JSON.stringify(page, (key, value) => (key === "shape" ? (value as { key: string }).key : value)));
     for (const command of page.commands) {
       commandsByOp[command.op] = (commandsByOp[command.op] ?? 0) + 1;
-      if (command.op === "glyphOutline") outlineSegments += command.commands.length;
+      if (command.op === "glyphOutline") {
+        if ("shape" in command) {
+          outlineRefs += 1;
+          shapes.add(command.shape);
+        } else outlineSegments += command.commands.length;
+      }
     }
   }
+
+  for (const shape of shapes) planJsonBytes += Buffer.byteLength(JSON.stringify(shape));
 
   t = performance.now();
   const pdf = renderPaintPlanToPdf(plan, font);
@@ -71,6 +82,9 @@ run(`PDF memory, ${PAGES} pages`, () => {
     pdfMs,
     commandsByOp,
     outlineSegments,
+    outlineRefs,
+    distinctShapes: shapes.size,
+    shapeSegments: [...shapes].reduce((n, shape) => n + (shape as { commands: unknown[] }).commands.length, 0),
     planJsonMb: mb(planJsonBytes),
     pdfMb: mb(pdf.bytes.byteLength),
     fontMb: mb(fontBytes.byteLength),

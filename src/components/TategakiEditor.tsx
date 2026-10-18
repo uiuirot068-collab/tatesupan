@@ -1489,6 +1489,12 @@ export default function TategakiEditor({
           hideNombre: true,
           hideHashira: true,
         })),
+        // TSP-PRINT-002: 前の本文が増減してパーツのページが動いたら、
+        // 隠したページも一緒に動かす（PreviewPane の followInsertedPartPages）。
+        // V2 で数えた時だけ（LEGACY の数え方は V2 のページとずれることがある）。
+        ...(v2BodyPages
+          ? { insertedParts: [...(prev.insertedParts ?? []), { position, text: textToInsert, pages: hiddenPages }] }
+          : {}),
       }));
     }
 

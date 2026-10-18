@@ -55,7 +55,7 @@ import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
 import { publicationFurnitureFontSizePt } from "../../core/settings/outputTypography";
-import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
+import { VerticalOutlineContext, type GlyphShape, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
@@ -176,6 +176,12 @@ export type PaintCommand =
   // jsPDF's Unicode-string `text()` API — every other character keeps
   // using the existing "text" command, unchanged.
   | { op: "glyphOutline"; commands: OutlinePathCommand[] }
+  // TSP-PRINT-002 (P4-6, 案A): the same outline, drawn by reference to a
+  // shape shared by every occurrence (`GlyphShape`, font units) at pen
+  // origin (`xMm`, baseline `yMm`), one em = `emSizeMm`. PDF writes each
+  // shape once as a Form XObject; `glyphOutlineCommandsMmOf` gives the
+  // page-space path for anything that needs it.
+  | { op: "glyphOutline"; shape: GlyphShape; xMm: number; yMm: number; emSizeMm: number }
   // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
   // 3, real image embedding): real, already-resolved image bytes,
   // painted at Core's own canonical box (`xMm`/`yMm`/`widthMm`/`heightMm`
@@ -348,7 +354,8 @@ function verticalGraphemeCommands(
     const cellTopMm = topMm + i * perCharHeightMm;
     if (paint.kind === "outline" && outlineContext) {
       const yMm = cellTopMm + perCharHeightMm * paint.baselineRatio;
-      return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(paint.glyphId, xCenterMm, yMm, perCharHeightMm) };
+      const advanceMm = (outlineContext.glyphAdvanceUnits(paint.glyphId) / outlineContext.openTypeFont.unitsPerEm) * perCharHeightMm;
+      return { op: "glyphOutline" as const, shape: outlineContext.glyphShape(paint.glyphId), xMm: xCenterMm - advanceMm / 2, yMm, emSizeMm: perCharHeightMm };
     }
     if (paint.kind === "rotated") {
       return {
@@ -460,6 +467,9 @@ export function resolveVerticalGraphemePaint(
   if (ch === "ー") return { kind: "rotated" };
   return { kind: "text", text: verticalPaintGraphemeFor(ch), baselineRatio: effectiveBaselineRatio };
 }
+
+// TSP-PRINT-002 (P4-6): page-space (mm) path of either glyphOutline form.
+export { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
 // must read in NORMAL horizontal orientation (angle 0, never rotated) even
@@ -1469,6 +1479,70 @@ function grayByte(inkGray: number): number {
   return Math.round(Math.min(1, Math.max(0, inkGray)) * 255);
 }
 
+// TSP-PRINT-002 (P4-6, 案A): the glyph shapes already written to each PDF.
+const pdfGlyphForms = new WeakMap<jsPDF, Set<string>>();
+
+// jsPDF's form-object API: `Matrix` and `internal.write` exist at runtime
+// but are missing from its typings.
+type PdfMatrix = unknown;
+type JsPdfForms = {
+  Matrix: new (sx: number, shy: number, shx: number, sy: number, tx: number, ty: number) => PdfMatrix;
+  beginFormObject(x: number, y: number, width: number, height: number, matrix: PdfMatrix): void;
+  endFormObject(key: string): void;
+  doFormObject(key: string, matrix: PdfMatrix): void;
+  internal: { write(...args: string[]): void };
+};
+
+/** PDF operator number: short, never exponent notation. */
+function pdfNum(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+}
+
+/**
+ * TSP-PRINT-002 (P4-6, 案A): draws a shared glyph shape. The first time a
+ * shape is used in this PDF its path is written once as a Form XObject (in
+ * font units, y up); every occurrence is then a reference to it with the
+ * occurrence's own scale and position (`q … cm /Xo Do Q`). The pixels are
+ * the same as writing the path inline, the PDF and the memory grow with the
+ * number of distinct glyphs instead of the number of characters.
+ */
+function drawSharedGlyph(
+  pdf: jsPDF,
+  cmd: Extract<PaintCommand, { op: "glyphOutline"; shape: GlyphShape }>,
+  offsetX: number,
+  offsetY: number,
+): void {
+  const { shape } = cmd;
+  if (shape.commands.length === 0) return;
+  const forms = pdf as unknown as JsPdfForms;
+  let defined = pdfGlyphForms.get(pdf);
+  if (!defined) {
+    defined = new Set();
+    pdfGlyphForms.set(pdf, defined);
+  }
+  if (!defined.has(shape.key)) {
+    // BBox in the form's own space (font units, y up), one unit of margin.
+    const { x1, y1, x2, y2 } = shape.bbox;
+    forms.beginFormObject(x1 - 1, -y2 - 1, x2 - x1 + 2, y2 - y1 + 2, new forms.Matrix(1, 0, 0, 1, 0, 0));
+    const ops: string[] = [];
+    for (const c of shape.commands) {
+      if (c.type === "M") ops.push(`${pdfNum(c.x)} ${pdfNum(-c.y)} m`);
+      else if (c.type === "L") ops.push(`${pdfNum(c.x)} ${pdfNum(-c.y)} l`);
+      else if (c.type === "C") ops.push(`${pdfNum(c.x1)} ${pdfNum(-c.y1)} ${pdfNum(c.x2)} ${pdfNum(-c.y2)} ${pdfNum(c.x)} ${pdfNum(-c.y)} c`);
+      else ops.push("h");
+    }
+    ops.push("f");
+    forms.internal.write(ops.join("\n"));
+    forms.endFormObject(shape.key);
+    defined.add(shape.key);
+  }
+  const k = pdf.internal.scaleFactor;
+  const scale = (cmd.emSizeMm / shape.unitsPerEm) * k;
+  const pageHeightMm = pdf.internal.pageSize.getHeight();
+  forms.doFormObject(shape.key, new forms.Matrix(scale, 0, 0, scale, (cmd.xMm + offsetX) * k, (pageHeightMm - (cmd.yMm + offsetY)) * k));
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
@@ -1497,6 +1571,10 @@ function paintPageCommands(
         continue;
       }
       pdf.addImage(cmd.bytes, cmd.format, cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      continue;
+    }
+    if (cmd.op === "glyphOutline" && "shape" in cmd) {
+      drawSharedGlyph(pdf, cmd, offsetX, offsetY);
       continue;
     }
     if (cmd.op === "glyphOutline") {

@@ -152,6 +152,10 @@ export interface PageSettings {
   masterPage: MasterPageSettings;
   // ページ番号（1始まり）ごとの個別設定の上書き
   pageOverrides: Record<number, PageOverride>;
+  // TSP-PRINT-002: 「奥付（縦）」「扉」を差しこんだ時に柱・ノンブルを隠した
+  // ページ。あとで前の本文が増減してパーツのページが動いたら、隠すページも
+  // 一緒に動かす（src/lib/v2Bridge/insertedPartPages.ts）。
+  insertedParts?: InsertedPartRecord[];
   // TSP-LOOP-005: 本文とは独立した横書き専用の奥付ページ設定。本文文字列
   // （content）・ページ分割・改ページ位置には一切影響しない（enabled=true の
   // ときのみ、pagePosition が指す位置＝本文の指定ページ後 or 作品末尾へ
@@ -164,6 +168,15 @@ export interface PageSettings {
   // ページ分割には一切使わない（プレビューには cover を除いた settings を渡す）。
   // 未作成の作品は undefined。
   cover?: CoverSettings;
+}
+
+/** TSP-PRINT-002: 差しこんだ本づくりのパーツと、その柱・ノンブルを隠したページ。 */
+export interface InsertedPartRecord {
+  position: "start" | "end";
+  /** 差しこんだ文字列そのまま（原稿の先頭／末尾にこの文字列がある間だけ追う）。 */
+  text: string;
+  /** 本文の何ページ目（pageOverrides のキー）。 */
+  pages: number[];
 }
 
 /** 特定ページ単位でマスターページ設定を上書きする項目 */

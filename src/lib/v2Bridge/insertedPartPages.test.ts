@@ -9,7 +9,7 @@ import { generateColophonText, generateTitlePageText } from "@/utils/bookStructu
 import { computeInsertedPartPageRange } from "@/utils/tocGenerator";
 import { composeV2Layout } from "./composeV2Document";
 import { buildV2PreviewPageModel } from "./previewPageModel";
-import { insertedPartBodyPagesFromV2 } from "./insertedPartPages";
+import { followInsertedPartPages, insertedPartBodyPagesFromV2 } from "./insertedPartPages";
 
 const MEASUREMENT = createFakeMeasurementProvider();
 const pngBytes = encode({ width: 2, height: 3, channels: 4, data: new Uint8Array(24).fill(200) });
@@ -96,3 +96,58 @@ describe("本づくりの差しこみで隠すページ（V2 で数える）", (
     expect(insertedPartBodyPagesFromV2({ bodyPages: [] }, "本文【改ページ】", "【改ページ】", "end")).toBeNull();
   });
 });
+
+describe("差しこんだ奥付の前に挿絵や文を足すと、隠すページも奥付についていく（QA 1）", () => {
+  function modelOf(content: string) {
+    const layout = composeV2Layout({
+      title: "T",
+      content,
+      settings: DEFAULT_PAGE_SETTINGS,
+      measurement: MEASUREMENT,
+      imageResolver: () => ({ kind: "RESOLVED", url: "data:image/png;base64,qa", bytes: pngBytes, format: "PNG", pixelWidth: 2, pixelHeight: 3 }),
+    });
+    return buildV2PreviewPageModel(layout, content);
+  }
+  const hidden = { hideNombre: true, hideHashira: true } as const;
+
+  it("奥付→全面の挿絵の順でも、奥付のページが隠れ、挿絵のページは元にもどる", () => {
+    const before = body(10) + COLOPHON;
+    const first = v2Pages(body(10), COLOPHON, "end").pages!;
+    const settings = { pageOverrides: Object.fromEntries(first.map((p) => [p, { ...hidden }])), insertedParts: [{ position: "end" as const, text: COLOPHON, pages: first }] };
+    expect(followInsertedPartPages(settings, before, modelOf(before))).toBeNull();
+
+    const after = body(10) + fullImage() + "\n" + COLOPHON;
+    const model = modelOf(after);
+    const followed = followInsertedPartPages(settings, after, model)!;
+    const last = model.bodyPages.length;
+    expect(followed.insertedParts![0].pages).toEqual([last]);
+    expect(followed.pageOverrides[last]).toEqual(hidden);
+    expect(followed.pageOverrides[first[0]]).toBeUndefined(); // 挿絵のページ
+    // 動かしたあとはそのまま
+    expect(followInsertedPartPages(followed, after, model)).toBeNull();
+  });
+
+  it("手でノンブルを出したページは、動かしても出したまま（柱は隠したまま）", () => {
+    const first = v2Pages(body(10), COLOPHON, "end").pages!;
+    const settings = { pageOverrides: Object.fromEntries(first.map((p) => [p, { hideHashira: true }])), insertedParts: [{ position: "end" as const, text: COLOPHON, pages: first }] };
+    const after = body(10) + fullImage() + "\n" + COLOPHON;
+    const model = modelOf(after);
+    const followed = followInsertedPartPages(settings, after, model)!;
+    expect(followed.pageOverrides[model.bodyPages.length]).toEqual({ hideHashira: true });
+  });
+
+  it("奥付を書きかえたら（末尾にもう同じ文字列がない）追うのをやめ、隠したページはそのまま", () => {
+    const first = v2Pages(body(10), COLOPHON, "end").pages!;
+    const overrides = Object.fromEntries(first.map((p) => [p, { ...hidden }]));
+    const settings = { pageOverrides: overrides, insertedParts: [{ position: "end" as const, text: COLOPHON, pages: first }] };
+    const edited = body(10) + COLOPHON + "追記";
+    const followed = followInsertedPartPages(settings, edited, modelOf(edited))!;
+    expect(followed.insertedParts).toEqual([]);
+    expect(followed.pageOverrides).toEqual(overrides);
+  });
+
+  it("記録がない作品（前に差しこんだもの）は何もしない", () => {
+    expect(followInsertedPartPages({ pageOverrides: {} }, body(3), modelOf(body(3)))).toBeNull();
+  });
+});
+
