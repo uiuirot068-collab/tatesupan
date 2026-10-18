@@ -62,7 +62,8 @@ import { FontBinary } from "./fontBinary";
 import { DEFAULT_RUBY_SCALE, resolveFolioPhysicalSide, type ColophonPlacement } from "../../core";
 import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
-import { buildColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
+import { buildColophonRenderPlan, type ColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
+import { colophonEmMm as colophonEmMmFor, colophonPlacementAreaMm } from "../../../src/lib/colophonPages";
 import { layoutImageGroup, type GroupedImagePosition, type ImageRectMm } from "../../../src/lib/imageGeometry";
 import {
   PDF_BLEED_MM,
@@ -240,7 +241,11 @@ export const FALLBACK_BASELINE_RATIO = 0.88;
 // better: they deviated away from a position the font itself defines as
 // correct, uniformly, for every character class.
 export function deriveBaselineRatioFromFont(fontResource: PublicationFontResource): number {
-  const buf = FontBinary.fromBase64(fontResource.base64);
+  return deriveBaselineRatioFromFontBinary(FontBinary.fromBase64(fontResource.base64));
+}
+
+/** {@link deriveBaselineRatioFromFont} for font bytes already in hand (the Preview's glyph outlines use it). */
+export function deriveBaselineRatioFromFontBinary(buf: FontBinary): number {
   const reader = new FontMetricsReader(buf);
   if (!reader.hasTable("vhea") || !reader.hasTable("vmtx")) return FALLBACK_BASELINE_RATIO;
   // Any covered glyph gives the identical answer (measured uniform above);
@@ -967,7 +972,8 @@ function paintPlanPageSource(
       doc.colophonFontFamily,
       doc.colophonRows,
       doc.colophonFreeText,
-      doc.folioFontFamily
+      doc.folioFontFamily,
+      doc.colophonRenderPages?.[i]
     );
 
   if (doc.pageSequence) {
@@ -1115,7 +1121,8 @@ function buildColophonPaintPage(
   colophonFontFamily?: string,
   rawRows?: Array<{ id?: string; label: string; value: string }>,
   rawFreeText?: string,
-  folioFontFamily?: string
+  folioFontFamily?: string,
+  pagePlan?: ColophonRenderPlan
 ): PaintPagePlan {
   const paperWidthMm = pageGeometry?.paperWidthMm ?? page.widthMm;
   const paperHeightMm = pageGeometry?.paperHeightMm ?? page.heightMm;
@@ -1134,10 +1141,7 @@ function buildColophonPaintPage(
   };
   const commands: PaintCommand[] = [];
   const firstColumn = page.columns[0];
-  const colophonEmMm =
-    typeof colophonFontSizePt === "number" && Number.isFinite(colophonFontSizePt)
-      ? Math.min(24, Math.max(4, colophonFontSizePt)) * (25.4 / 72)
-      : bodyEmMm;
+  const colophonEmMm = colophonEmMmFor(colophonFontSizePt, bodyEmMm);
   const vertical = colophonPageCount === 1 ? (placement?.vertical ?? "center") : "top";
   const respectVerticalMargins = placement?.respectVerticalMargins ?? true;
 
@@ -1174,18 +1178,26 @@ function buildColophonPaintPage(
   };
 
   if (hasFont && firstColumn) {
-    const placementTopMm = respectVerticalMargins ? marginTopMm : Math.min(marginTopMm, marginBottomMm);
-    const placementBottomMm = respectVerticalMargins ? marginBottomMm : Math.min(marginTopMm, marginBottomMm);
     // TSP-PHASE13-001: the same placement area as the Preview
     // (`ColophonPageSurface`): respectGutter ON keeps ノド/小口 per physical
     // parity (odd: 小口 left / ノド right; even: mirrored), OFF uses the
-    // smaller of the two on both sides.
-    const gutterMm = pageGeometry?.marginGutterMm ?? marginRightMm;
-    const outerMm = pageGeometry?.marginOuterMm ?? marginLeftMm;
-    const symmetricHorizontalMm = Math.min(gutterMm, outerMm);
-    const respectGutter = placement?.respectGutter ?? false;
-    const contentLeftMm = respectGutter ? (isOddPage ? outerMm : gutterMm) : symmetricHorizontalMm;
-    const contentRightMm = paperWidthMm - (respectGutter ? (isOddPage ? gutterMm : outerMm) : symmetricHorizontalMm);
+    // smaller of the two on both sides. TSP-PRINT-001: one helper for both.
+    const area = colophonPlacementAreaMm(
+      {
+        paperWidthMm,
+        paperHeightMm,
+        marginTopMm,
+        marginBottomMm,
+        marginGutterMm: pageGeometry?.marginGutterMm ?? marginRightMm,
+        marginOuterMm: pageGeometry?.marginOuterMm ?? marginLeftMm,
+      },
+      { respectGutter: placement?.respectGutter ?? false, respectVerticalMargins },
+      isOddPage
+    );
+    const placementTopMm = area.topMm;
+    const placementBottomMm = paperHeightMm - area.bottomMm;
+    const contentLeftMm = area.leftMm;
+    const contentRightMm = area.rightMm;
 
     const halfFurnitureBandMm = bodyEmMm / 2;
     let contentAreaTopMm = placementTopMm;
@@ -1231,7 +1243,7 @@ function buildColophonPaintPage(
     }
 
     const availableSafeWidthMm = Math.max(contentRightMm - contentLeftMm, 0);
-    const renderPlan = buildColophonRenderPlan({
+    const renderPlan = pagePlan ?? buildColophonRenderPlan({
       templateId,
       rows,
       freeText: rawFreeText ?? fallbackFreeLines.join("\n"),

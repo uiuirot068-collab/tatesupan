@@ -24,7 +24,25 @@ import type { CanonicalDocument } from "../../../typesetting-v2/core/layout/sche
 import type { LogicalUnit } from "../../../typesetting-v2/core/units";
 import type { PageCompositionSettings } from "../../../typesetting-v2/core/compose/page";
 import { buildPublicationDocument, type ImageResolver, type PublicationRenderContext, type PublicationDocument } from "../../../typesetting-v2/renderer/publication/paintModel";
+import { tickToMm } from "../../../typesetting-v2/renderer/publication/geometry";
+import { buildColophonPagePlans, colophonEmMm } from "../colophonPages";
 import { buildPaintPlan, FALLBACK_BASELINE_RATIO, type PaintPlan, type PublicationPageGeometry } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+
+/** Core's stand-in text for one colophon page (see the page-count fix in composeV2Document). */
+const COLOPHON_PAGE_PLACEHOLDER = "奥付";
+
+/**
+ * TSP-PHASE13-001: keep each row's field id (the same rows the Preview's
+ * `colophonRenderModel` builds), so id-dependent template styling such as
+ * the classic title weight matches.
+ */
+function editorColophonRows(settings: PageSettings): { rows: { id: string; label: string; value: string }[]; freeText: string } {
+  const compiled = compileColophonContent({ fields: settings.colophon.fields, freeText: settings.colophon.freeText });
+  const ids = settings.colophon.fields
+    .filter((f) => f.visible && (f.label.trim() !== "" || f.value.trim() !== ""))
+    .map((f) => f.id);
+  return { rows: compiled.rows.map((row, index) => ({ id: ids[index], ...row })), freeText: compiled.freeText };
+}
 
 export interface V2BridgeInput {
   title: string;
@@ -162,7 +180,31 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
   const units = capEditorImageUnits(rawUnits, input.settings, layoutSettings.lineExtentTicks);
 
   const colophonEnabled = input.settings.colophon.enabled;
-  const colophonComposition = colophonEnabled ? buildV2UnitsFromManuscript("colophon", buildV2ColophonText(input.settings.colophon)) : undefined;
+  let colophonComposition = colophonEnabled ? buildV2UnitsFromManuscript("colophon", buildV2ColophonText(input.settings.colophon)) : undefined;
+  const colophonContent = colophonEnabled ? editorColophonRows(input.settings) : undefined;
+  // TSP-PRINT-001: the colophon's own pages (horizontal lines in the
+  // placement area). Preview, PDF and JPG paint these same pages.
+  const colophonRenderPages = colophonContent
+    ? buildColophonPagePlans({
+        templateId: input.settings.colophon.templateId,
+        rows: colophonContent.rows,
+        freeText: colophonContent.freeText,
+        titleFallback: input.title.trim(),
+        geometry: {
+          paperWidthMm: pageGeometry.paperWidthMm,
+          paperHeightMm: pageGeometry.paperHeightMm,
+          marginTopMm: pageGeometry.marginTopMm,
+          marginBottomMm: pageGeometry.marginBottomMm,
+          marginGutterMm: pageGeometry.marginGutterMm ?? pageGeometry.marginRightMm,
+          marginOuterMm: pageGeometry.marginOuterMm ?? pageGeometry.marginLeftMm,
+        },
+        placement: input.settings.colophon.placement,
+        emMm: colophonEmMm(
+          input.settings.colophon.fontSizePt,
+          tickToMm(mmToTicks((layoutSettings.bodyFontSizePt * 25.4) / 72))
+        ),
+      })
+    : undefined;
 
   // Core deliberately asks MeasurementFacts for an image's intrinsic box.
   // The Editor marker already carries that authoritative, persisted box in
@@ -202,6 +244,17 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
     });
   const requestedColophonPosition = colophonEnabled ? buildV2ColophonPagePosition(input.settings.colophon) : undefined;
   let composed = composeWithColophonPosition(requestedColophonPosition);
+  // Core lays the colophon text out like vertical body text, so its page
+  // count can differ from the colophon's real pages. Then Core gets one
+  // placeholder line per page, split by page breaks, so the physical page
+  // sequence (and every folio after it) has exactly the colophon's pages.
+  if (colophonRenderPages && composed.colophon && composed.colophon.pages.length !== colophonRenderPages.length) {
+    colophonComposition = buildV2UnitsFromManuscript(
+      "colophon",
+      colophonRenderPages.map(() => COLOPHON_PAGE_PLACEHOLDER).join("\n【改ページ】\n")
+    );
+    composed = composeWithColophonPosition(requestedColophonPosition);
+  }
 
   const tocPages = tocInsertion
     ? classifyTocPages(composed, composedBodySource, bodySourceMap, tocInsertion.offset, tocInsertion.text.length)
@@ -265,23 +318,10 @@ function composeV2LayoutOnce(input: V2BridgeInput, padToPageEnd: boolean): { lay
           templateId: input.settings.colophon.templateId,
           fontSizePt: input.settings.colophon.fontSizePt,
           fontFamily: input.settings.colophon.fontFamily,
-          ...(() => {
-            const compiled = compileColophonContent({
-              fields: input.settings.colophon.fields,
-              freeText: input.settings.colophon.freeText,
-            });
-            // TSP-PHASE13-001: keep each row's field id (the same rows the
-            // Preview's `colophonRenderModel` builds), so id-dependent
-            // template styling such as the classic title weight matches.
-            const ids = input.settings.colophon.fields
-              .filter((f) => f.visible && (f.label.trim() !== "" || f.value.trim() !== ""))
-              .map((f) => f.id);
-            return {
-              rows: compiled.rows.map((row, index) => ({ id: ids[index], ...row })),
-              freeText: compiled.freeText,
-              titleFallback: input.title.trim(),
-            };
-          })(),
+          rows: colophonContent!.rows,
+          freeText: colophonContent!.freeText,
+          titleFallback: input.title.trim(),
+          renderPages: colophonRenderPages,
         }
       )
     : buildPublicationDocument("editor-doc", input.title, document, units, source, ctx);

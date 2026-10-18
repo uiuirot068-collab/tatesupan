@@ -113,7 +113,9 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
     }
     const freeLines = wrapText(input.freeText, widthEm, p.freeTextScale);
     if (freeLines.length > 0) {
-      y += p.freeTextGapEm;
+      // Only when something is above it: a continuation page that holds
+      // nothing but free text starts at the top (TSP-PRINT-001).
+      if (y > 0) y += p.freeTextGapEm;
       const lineH = p.freeTextScale * p.lineHeight;
       for (const line of freeLines) {
         items.push({
@@ -252,12 +254,16 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
 
   const freeLines = wrapText(input.freeText, innerWidthEm, p.freeTextScale);
   if (freeLines.length > 0) {
-    if (input.templateId === "classic") {
-      y += p.freeTextGapEm;
-      items.push({ kind: "rule", xEm: padX, yEm: y, widthEm: innerWidthEm, alpha: 0.3 });
-      y += p.freeTextGapEm;
-    } else {
-      y += p.freeTextGapEm;
+    // Same as center and minimal: the gap (and classic's rule) only separates
+    // free text from rows above it (TSP-PRINT-001).
+    if (input.rows.length > 0) {
+      if (input.templateId === "classic") {
+        y += p.freeTextGapEm;
+        items.push({ kind: "rule", xEm: padX, yEm: y, widthEm: innerWidthEm, alpha: 0.3 });
+        y += p.freeTextGapEm;
+      } else {
+        y += p.freeTextGapEm;
+      }
     }
 
     const freeH = p.freeTextScale * p.lineHeight;
