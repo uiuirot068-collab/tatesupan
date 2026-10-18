@@ -972,12 +972,17 @@ function PageCard({
         // included) size rather than its content-box size; see the comment
         // there for why that distinction matters only for isPx pages.
         data-is-px-page={paper.isPx ? "true" : undefined}
-        className={`page-card shrink-0 overflow-hidden border bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
+        // TSP-PRINT-002: the sheet's edge line is an inset ring (box-shadow),
+        // not a CSS border. A border takes 1px inside the fixed-size sheet,
+        // so the text frame, 柱, ノンブル and images (all placed from the
+        // padding edge) sat 1px lower and 1px further from the right edge
+        // than in PDF/JPG — 0.5〜1mm on paper depending on the zoom.
+        className={`page-card shrink-0 overflow-hidden bg-paper shadow-md dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)] ${
           isInteractive ? "cursor-pointer" : ""
         } ${
           selected
-            ? "border-accent ring-2 ring-accent dark:border-accent"
-            : "border-gray-200 dark:border-gray-700"
+            ? "inset-ring inset-ring-accent ring-2 ring-accent"
+            : "inset-ring inset-ring-gray-200 dark:inset-ring-gray-700"
         }`}
         // ページ本体クリック: checkbox（このコンポーネントの外、`.page-card`の
         // 兄弟要素であるツールバー行にある）とは独立に、modifier対応の

@@ -12,7 +12,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, deriveBaselineRatioFromFont, generatePublicationPdf, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry, glyphOutlineCommandsMmOf } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
@@ -32,7 +32,7 @@ function horizontalBoundsMm(cmd: PaintCommand): { xMin: number; xMax: number } {
   if (cmd.op === "circle") {
     return { xMin: cmd.xMm - cmd.radiusMm, xMax: cmd.xMm + cmd.radiusMm };
   }
-  const xs = cmd.commands.flatMap((c) => (c.type === "Z" ? [] : c.type === "C" ? [c.x1, c.x2, c.x] : [c.x]));
+  const xs = glyphOutlineCommandsMmOf(cmd).flatMap((c) => (c.type === "Z" ? [] : c.type === "C" ? [c.x1, c.x2, c.x] : [c.x]));
   return { xMin: Math.min(...xs), xMax: Math.max(...xs) };
 }
 

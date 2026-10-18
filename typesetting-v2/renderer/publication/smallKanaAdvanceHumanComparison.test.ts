@@ -20,7 +20,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PaintPlacedUnit, type PublicationRenderContext } from "./paintModel";
-import { renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry, glyphOutlineCommandsMmOf } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { settingsFor } from "./fixtures";
@@ -138,7 +138,7 @@ describe("Small kana advance human comparison -- prototype invariants", () => {
     expect(oa.length).toBeGreaterThan(0);
     expect(oa.length).toBe(ob.length);
     // Same emSize (bodyEmMm) fed to opentype.js in both variants -> same advanceWidth-derived anchorX offset and identical path bounding extent, provable by the two outlines being non-degenerate and structurally equal in point count per contour.
-    oa.forEach((cmdA, i) => expect(cmdA.commands.length).toBe(ob[i].commands.length));
+    oa.forEach((cmdA, i) => expect(glyphOutlineCommandsMmOf(cmdA).length).toBe(glyphOutlineCommandsMmOf(ob[i]).length));
   });
 });
 

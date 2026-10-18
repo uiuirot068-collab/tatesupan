@@ -128,7 +128,7 @@ export interface InsertedPartPageRange {
  * 末尾の【改ページ】以降（次のパーツの先頭に流れ込む空行など）を「このパーツ
  * のページ」と誤検出しないようにするための下処理。
  */
-function coreContentRange(text: string): { start: number; end: number } {
+export function coreContentRange(text: string): { start: number; end: number } {
   let start = 0;
   if (text.startsWith(PAGE_BREAK_MARKER)) {
     start = PAGE_BREAK_MARKER.length;

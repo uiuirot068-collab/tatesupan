@@ -287,12 +287,13 @@ export default function ColophonPageSurface({
             : "奥付の内容が1ページに収まりきりません。項目を減らす・自由記述を短くする・非表示にするなどで調整してください（β版では自動でページ分割・縮小はしません）。"}
         </div>
       )}
+      {/* TSP-PRINT-002: the edge line is an inset ring, not a border (see PageCard). */}
       <div
         data-page-card="true"
         data-colophon-page="true"
         data-colophon-renderer={rendererSource}
         data-is-px-page={paper.isPx ? "true" : undefined}
-        className="page-card shrink-0 overflow-hidden border border-gray-200 bg-paper shadow-md dark:border-gray-700 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
+        className="page-card shrink-0 overflow-hidden bg-paper shadow-md inset-ring inset-ring-gray-200 dark:inset-ring-gray-700 dark:shadow-[0_0_0_1px_rgba(170,180,212,0.15),0_12px_36px_-8px_rgba(0,0,0,0.85)]"
         style={{ ...sheetStyle, marginTop: "auto" }}
       >
         {/* PlacementArea（余白/ノドを考慮した配置基準） > ColophonBlock > Template */}
