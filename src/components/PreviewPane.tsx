@@ -119,7 +119,7 @@ import {
   waitForExportPermission,
 } from "@/lib/exportCancellation";
 import { isV2BetaRendererEnabled } from "@/lib/v2Rollout";
-import { bodyPageNumber, colophonPhysicalIndex, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
+import { bodyPageNumber, colophonPhysicalIndices, physicalIndexForBodyIndex, physicalPageNumber, resolvePdfPhysicalIndices } from "@/lib/v2Bridge/pageIndex";
 import type { V2CompositionInput } from "@/lib/v2Bridge/compositionRevision";
 import { readPagesAhead, V2ExportWorkerClient, type ExportPageStream } from "@/lib/v2Bridge/exportWorkerClient";
 
@@ -146,7 +146,7 @@ const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 const NO_LEGACY_PAGES: TategakiPage[] = [];
 const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
-import { downloadBytes, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
+import { downloadBytes, previewFontFaceCss, previewFontFamilyCss, publicationFontAssetFor, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import ExportSupportLine from "./ExportSupportLine";
 import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
@@ -191,7 +191,7 @@ import { measureLongDocumentPerf } from "@/lib/longDocumentPerf";
 type PresentationItem =
   | { kind: "body"; bodyIndex: number }
   | { kind: "toc"; tocIndex: number }
-  | { kind: "colophon" };
+  | { kind: "colophon"; colophonIndex: number };
 
 /** PDF書き出しボタン押下時点で確定した、実際に書き出す対象。 */
 type PendingPdfExport = {
@@ -672,7 +672,12 @@ function PreviewPane({
   // 2026-09-24 public RC: development continues to force V2 for reproducible
   // QA, while production follows v2Rollout.ts. That rollout now defaults to
   // V2_BETA when unset and keeps explicit LEGACY as the emergency rollback.
-  const useV2Engine = process.env.NODE_ENV !== "production" ? true : internalV2Beta;
+  // TSP-PRINT-001 (P4-5): an explicit LEGACY also applies in development, so
+  // the emergency rollback can be tried before it is needed.
+  const useV2Engine =
+    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_TATESPUN_RENDERER?.trim() !== "LEGACY"
+      ? true
+      : internalV2Beta;
   const v2Adapter = useV2PreviewAdapter(useV2Engine, {
     content: deferredContent,
     settings,
@@ -899,8 +904,9 @@ function PreviewPane({
   // product-approved visual template layer with the fallback renderer instead
   // of treating the LEGACY card as V2's appearance implementation.
   // Phase 11 残件③: Core's canonical colophon furniture (V2 only).
+  // TSP-PRINT-001: one entry per colophon page (a long colophon continues).
   const v2ColophonFurniture = useMemo(
-    () => v2PageModel?.pages.find((page) => page.kind === "colophon")?.furniture,
+    () => v2PageModel?.pages.filter((page) => page.kind === "colophon").map((page) => page.furniture) ?? [],
     [v2PageModel]
   );
   const presentation = useMemo<{ items: PresentationItem[]; physicalNumbers: number[] }>(() => {
@@ -909,8 +915,8 @@ function PreviewPane({
       const physicalNumbers: number[] = [];
       for (const page of v2PageModel.pages) {
         if (page.kind === "colophon") {
-          if (items[items.length - 1]?.kind === "colophon") continue;
-          items.push({ kind: "colophon" });
+          // TSP-PRINT-001: every colophon page is its own card, as in PDF/JPG.
+          items.push({ kind: "colophon", colophonIndex: items.filter((item) => item.kind === "colophon").length });
         } else if (page.kind === "toc") {
           items.push({ kind: "toc", tocIndex: v2PageModel.tocPages.findIndex((toc) => toc.physicalIndex === page.physicalIndex) });
         } else {
@@ -922,11 +928,11 @@ function PreviewPane({
     }
     const seq: PresentationItem[] = [];
     for (let i = 0; i < listPages.length; i++) {
-      if (showColophon && i === colophonInsertion.precedingBodyPages) seq.push({ kind: "colophon" });
+      if (showColophon && i === colophonInsertion.precedingBodyPages) seq.push({ kind: "colophon", colophonIndex: 0 });
       seq.push({ kind: "body", bodyIndex: i });
     }
     if (showColophon && colophonInsertion.precedingBodyPages >= listPages.length) {
-      seq.push({ kind: "colophon" });
+      seq.push({ kind: "colophon", colophonIndex: 0 });
     }
     return { items: seq, physicalNumbers: seq.map((_, index) => physicalPageNumber(index)) };
   }, [v2PageModel, listPages.length, showColophon, colophonInsertion.precedingBodyPages]);
@@ -1874,7 +1880,9 @@ function PreviewPane({
       const output = await exportPaintPagesToBrowserJpgPages(
         physicalIndices.length,
         readPagesAhead(pages, physicalIndices),
-        "Shippori Mincho",
+        // TSP-PRINT-001 (P4-1): the body typeface PDF embeds, for text the
+        // plan does not give its own family (ruby, folio by default).
+        publicationFontAssetFor(settings.fontFamily).cssName,
         (pageNumber) => buildPageJpgFileNameFromStem(resolvedExportFilenameStem, filePageNumbers[pageNumber - 1]),
         mode,
         // SPN-XFIX-001: px papers (Web閲覧用・SNS用) come out at TWICE their
@@ -1966,8 +1974,10 @@ function PreviewPane({
   const handleExportColophonJpg = async () => {
     if (useV2Engine) {
       await exportV2JpgPages((sequence) => {
-        const physicalIndex = colophonPhysicalIndex(sequence.pageSequence);
-        return { physicalIndices: [physicalIndex], filePageNumbers: [physicalPageNumber(physicalIndex)] };
+        // TSP-PRINT-001: every colophon page (a long colophon continues).
+        const physicalIndices = colophonPhysicalIndices(sequence.pageSequence);
+        if (physicalIndices.length === 0) physicalIndices.push(-1);
+        return { physicalIndices, filePageNumbers: physicalIndices.map((index) => physicalPageNumber(index)) };
       }, false);
       return;
     }
@@ -3161,9 +3171,10 @@ function PreviewPane({
           : "rounded-lg border border-ink/10 shadow-sm"
       }`}
     >
-      {useV2Engine && <style>{`${PREVIEW_RENDERER_STYLES}
+      {useV2Engine && <style>{`${previewFontFaceCss(settings.fontFamily)}
+        ${PREVIEW_RENDERER_STYLES}
         [data-v2-preview-root] .page{border:0;background:transparent}
-        [data-v2-preview-root] .unit{font-family:"Shippori Mincho",serif}
+        [data-v2-preview-root] .unit{font-family:${previewFontFamilyCss(settings.fontFamily)}}
       `}</style>}
       <div data-demo-target="preview" className="flex flex-none flex-col gap-1.5 border-b border-ink/10 bg-gray-50 p-2 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-2">
@@ -3524,11 +3535,11 @@ function PreviewPane({
                   // Phase 11 残件③: the V2 card paints Core's canonical colophon
                   // furniture (the folio / 柱 PDF/JPG print). Before the first V2
                   // layout there is none yet and the card keeps the LEGACY rule.
-                  const colophonFurniture = useV2Engine ? v2ColophonFurniture : undefined;
+                  const colophonFurniture = useV2Engine ? v2ColophonFurniture[item.colophonIndex] : undefined;
                   return (
                     <div
-                      key="colophon"
-                      ref={colophonElementRef}
+                      key={`colophon-${item.colophonIndex}`}
+                      ref={item.colophonIndex === 0 ? colophonElementRef : undefined}
                       data-preview-physical-page={physicalPageNumber}
                       className="relative flex shrink-0"
                     >
@@ -3539,8 +3550,9 @@ function PreviewPane({
                           colophon={settings.colophon}
                           title={title}
                           physicalPageNumber={physicalPageNumber}
-                          onOverflowChange={setColophonOverflow}
+                          onOverflowChange={item.colophonIndex === 0 ? setColophonOverflow : undefined}
                           canonicalFurniture={colophonFurniture}
+                          colophonPageIndex={item.colophonIndex}
                         />
                       ) : (
                         <ColophonPageCard

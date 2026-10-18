@@ -22,6 +22,11 @@ export function colophonPhysicalIndex(pageSequence: readonly PhysicalPageRef[] |
   return pageSequence?.findIndex((ref) => ref.kind === "colophon") ?? -1;
 }
 
+/** TSP-PRINT-001: every colophon page, in order (a long colophon continues). */
+export function colophonPhysicalIndices(pageSequence: readonly PhysicalPageRef[] | undefined): number[] {
+  return (pageSequence ?? []).flatMap((ref, index) => (ref.kind === "colophon" ? [index] : []));
+}
+
 /**
  * Physical PaintPlan indices for a PDF export: every canonical page for
  * `scope: "all"`, otherwise the selected body pages (+ the colophon when
@@ -39,8 +44,7 @@ export function resolvePdfPhysicalIndices(input: {
     ? Array.from({ length: input.planLength }, (_, index) => index)
     : input.bodyIndices.map((bodyIndex) => physicalIndexForBodyIndex(input.pageSequence, bodyIndex));
   if (input.scope === "selected" && input.includeColophon) {
-    const colophon = colophonPhysicalIndex(input.pageSequence);
-    if (colophon >= 0) indices.push(colophon);
+    indices.push(...colophonPhysicalIndices(input.pageSequence));
   }
   return Array.from(new Set(indices)).sort((a, b) => a - b);
 }

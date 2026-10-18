@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColophonRenderRow, ColophonTemplateId } from "@/lib/colophon";
-import { buildColophonRenderPlan } from "@/lib/colophonRenderPlan";
+import { buildColophonRenderPlan, type ColophonRenderPlan } from "@/lib/colophonRenderPlan";
 
 interface ColophonTemplateContentProps {
   templateId: ColophonTemplateId;
@@ -10,6 +10,8 @@ interface ColophonTemplateContentProps {
   basePx: number;
   titleFallback: string;
   availableWidthEm: number;
+  /** TSP-PRINT-001: one page of a colophon split over pages (`colophonPages.ts`). */
+  plan?: ColophonRenderPlan;
 }
 
 export function ColophonTemplateContent({
@@ -19,8 +21,9 @@ export function ColophonTemplateContent({
   basePx,
   titleFallback,
   availableWidthEm,
+  plan: pagePlan,
 }: ColophonTemplateContentProps) {
-  const plan = buildColophonRenderPlan({
+  const plan = pagePlan ?? buildColophonRenderPlan({
     templateId,
     rows,
     freeText,

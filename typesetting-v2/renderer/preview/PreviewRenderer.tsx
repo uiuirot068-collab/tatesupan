@@ -26,6 +26,29 @@ import { emphasisDotLane } from "../emphasisMarks";
 
 export type PreviewMode = "normal" | "debug";
 
+/** One glyph outline in font units (y down, horizontal baseline at 0). */
+export interface PreviewGlyphOutline {
+  d: string;
+  /** Id of a document-level `<path>` with this `d`; painted with `<use>` when present. */
+  id?: string;
+  advance: number;
+}
+
+/**
+ * TSP-PRINT-001: optional outline source for body glyphs. When given, plain
+ * kanji/kana are painted as one SVG path per glyph at their exact fractional
+ * position, placed like PDF / JPG place them (baseline = cell top +
+ * `baselineRatio` × cell, centred on the line by the glyph's own advance).
+ * Browser text snaps each glyph to whole screen pixels, which made the
+ * character spacing alternate visibly. Anything `outline` declines stays
+ * browser text.
+ */
+export interface PreviewGlyphOutlines {
+  unitsPerEm: number;
+  baselineRatio: number;
+  outline(grapheme: string): PreviewGlyphOutline | undefined;
+}
+
 const PREVIEW_RENDERER_RULES = `
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; margin: 0; padding: 20px; background: #fafafa; color: #111; }
@@ -67,8 +90,15 @@ const PREVIEW_RENDERER_RULES = `
      this wrapper, not a descendant of it, so it is never subject to this
      clip -- CSS overflow only ever clips a box's own descendants, never
      its siblings, and moving the clip one level down is the minimal way
-     to keep glyph-ink clipping while un-clipping the annotation. */
-  .unit-ink { position: absolute; left: calc(50% - 0.5em); display: block; width: 1em; height: 100%; overflow: hidden; }
+     to keep glyph-ink clipping while un-clipping the annotation.
+     TSP-PRINT-001: the clip itself is retired. A typeface without vertical
+     metrics (the Google Fonts copies) puts each upright glyph below its em
+     box, and the clip cut the bottom strokes of 治・と・言 while PDF / JPG,
+     which never clip, drew them whole. The Preview now draws from the
+     bundled font file (see previewFontFaceCss), but the webfont still stands
+     in while that file loads. Units are absolutely placed, so unclipped ink
+     cannot move any neighbour. */
+  .unit-ink { position: absolute; left: calc(50% - 0.5em); display: block; width: 1em; height: 100%; overflow: visible; }
   .unit.kind-IMAGE .image-placeholder { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #ddd, #ddd 4px, #eee 4px, #eee 8px); border: 1px dashed #999; }
   /* P3-O03-TCY-VISUAL: text-combine-upright is the standard CSS mechanism
      for tategaki 縦中横 (Phase 2's own P2-L06B evidence already identified
@@ -136,8 +166,17 @@ const PREVIEW_RENDERER_RULES = `
      grapheme, positioned from the shared emphasisMarks.ts lane (the same
      geometry the vector PDF / JPG paint) -- never CSS text-emphasis, which
      html/PDF export could not reproduce. A sibling of .unit-ink (like the
-     ruby annotation) so glyph ink clipping never clips a dot. */
-  .emphasis-dot { position: absolute; border-radius: 50%; background: currentColor; pointer-events: none; }
+     ruby annotation) so glyph ink clipping never clips a dot.
+     TSP-PRINT-001: the dot is a fixed 100px circle moved and shrunk with
+     transform. A box only ~1px across (9pt at the Editor's unscaled size)
+     was rounded to whole pixels before transform:scale enlarged it, so it
+     read as a lump beside the glyph instead of a round 「・」; transforms are
+     never rounded, so the circle keeps its exact size and centre at any zoom. */
+  /* TSP-PRINT-001: body glyph outlines for one line (see PreviewGlyphOutlines).
+     One SVG per line, so its own box is snapped to the pixel grid once per
+     line and every glyph inside keeps its exact fractional place. */
+  .line-glyphs { position: absolute; top: 0; left: 0; overflow: visible; fill: currentColor; pointer-events: none; }
+  .emphasis-dot { position: absolute; top: 0; left: 50%; width: 100px; height: 100px; border-radius: 50%; background: currentColor; pointer-events: none; }
 
   /* DEBUG-mode-only decoration */
   .debug .page-label { position: absolute; top: -18px; left: 0; font-size: 11px; color: #555; }
@@ -182,9 +221,14 @@ function DebugBadge({ text }: { text: string }) {
 // Post-beta typography Phase 1 (傍点): paints the paint model's already-
 // resolved dot centres at the shared emphasisMarks.ts lane — never measures
 // or re-derives which characters are emphasised.
+// Matches the .emphasis-dot box (100px); see the stylesheet note on why the
+// dot is sized by transform instead of width/height.
+const EMPHASIS_DOT_BOX_PX = 100;
+
 function EmphasisDotMarks({ dots, fontSizePx, linePitchPx }: { dots: EmphasisDotsPaint; fontSizePx: number; linePitchPx: number }) {
   const lane = emphasisDotLane(fontSizePx, linePitchPx, dots.side);
-  const size = lane.radius * 2;
+  const scale = (lane.radius * 2) / EMPHASIS_DOT_BOX_PX;
+  const half = EMPHASIS_DOT_BOX_PX / 2;
   return (
     <>
       {dots.flowCentersPx.map((center, i) => (
@@ -192,14 +236,14 @@ function EmphasisDotMarks({ dots, fontSizePx, linePitchPx }: { dots: EmphasisDot
           key={i}
           className="emphasis-dot"
           data-emphasis-dot={dots.side}
-          style={{ top: center - lane.radius, left: `calc(50% + ${lane.centerFromParentCenter - lane.radius}px)`, width: size, height: size }}
+          style={{ transform: `translate(${lane.centerFromParentCenter - half}px, ${center - half}px) scale(${scale})` }}
         />
       ))}
     </>
   );
 }
 
-function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode }) {
+function UnitBox({ unit, fontSizePx, linePitchPx, mode, outlined = false }: { unit: PaintPlacedUnit; fontSizePx: number; linePitchPx: number; mode: PreviewMode; outlined?: boolean }) {
   const rubyLane = rubyLaneGeometry(fontSizePx, linePitchPx);
   // DEBUG mode only (`unit.debug` is absent in the Editor's live Preview reply).
   const debugText =
@@ -247,7 +291,7 @@ function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUni
           // is completely untouched; this wrapper only affects how the
           // text renders WITHIN that already-fixed box.
           <span className="tcy">{unit.text}</span>
-        ) : (
+        ) : outlined ? null : (
           unit.text
         )}
         {unit.provisional && <span className="provisional-badge">prov</span>}
@@ -285,30 +329,51 @@ function UnitBox({ unit, fontSizePx, linePitchPx, mode }: { unit: PaintPlacedUni
   );
 }
 
-function LineView({ line, fontSizePx, pageHeightPx, mode }: { line: PaintLine; fontSizePx: number; pageHeightPx: number; mode: PreviewMode }) {
+function LineView({ line, fontSizePx, pageHeightPx, mode, glyphs }: { line: PaintLine; fontSizePx: number; pageHeightPx: number; mode: PreviewMode; glyphs?: PreviewGlyphOutlines }) {
+  const outlines = new Map<string, PreviewGlyphOutline>();
+  if (glyphs) {
+    for (const unit of line.units) {
+      if (unit.kind !== "TEXT" || unit.provisional) continue;
+      const outline = glyphs.outline(unit.text);
+      if (outline) outlines.set(unit.id, outline);
+    }
+  }
+  const scale = glyphs ? fontSizePx / glyphs.unitsPerEm : 0;
   return (
     <div className="line" style={{ right: line.rightPx, width: line.widthPx, height: pageHeightPx }}>
       {mode === "debug" && <DebugBadge text={`line ${line.order}${line.indentPx !== undefined ? `, indent ${line.indentPx.toFixed(1)}px` : ""}`} />}
       {mode === "debug" && line.indentPx !== undefined && <div className="indent-marker" style={{ height: line.indentPx }} />}
       {line.units.map((unit) => (
-        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} />
+        <UnitBox key={unit.id} unit={unit} fontSizePx={fontSizePx} linePitchPx={line.widthPx} mode={mode} outlined={outlines.has(unit.id)} />
       ))}
+      {glyphs && outlines.size > 0 && (
+        <svg className="line-glyphs" width={line.widthPx} height={pageHeightPx} aria-hidden="true">
+          {line.units.map((unit) => {
+            const outline = outlines.get(unit.id);
+            if (!outline) return null;
+            const x = line.widthPx / 2 - (outline.advance * scale) / 2;
+            const y = unit.topPx + unit.heightPx * glyphs.baselineRatio;
+            const transform = `translate(${x} ${y}) scale(${scale})`;
+            return outline.id ? <use key={unit.id} href={`#${outline.id}`} transform={transform} /> : <path key={unit.id} d={outline.d} transform={transform} />;
+          })}
+        </svg>
+      )}
     </div>
   );
 }
 
-function ColumnView({ column, fontSizePx, pageHeightPx, mode }: { column: PaintColumn; fontSizePx: number; pageHeightPx: number; mode: PreviewMode }) {
+function ColumnView({ column, fontSizePx, pageHeightPx, mode, glyphs }: { column: PaintColumn; fontSizePx: number; pageHeightPx: number; mode: PreviewMode; glyphs?: PreviewGlyphOutlines }) {
   return (
     <div className="column" style={{ right: column.rightPx, width: column.widthPx, height: pageHeightPx }}>
       {mode === "debug" && <DebugBadge text={`col ${column.order}, residual ${column.residualSpacePx.toFixed(1)}px`} />}
       {column.lines.map((line) => (
-        <LineView key={line.id} line={line} fontSizePx={fontSizePx} pageHeightPx={pageHeightPx} mode={mode} />
+        <LineView key={line.id} line={line} fontSizePx={fontSizePx} pageHeightPx={pageHeightPx} mode={mode} glyphs={glyphs} />
       ))}
     </div>
   );
 }
 
-export function PreviewPage({ page, fontSizePx, mode, paintImages = true }: { page: PaintPage; fontSizePx: number; mode: PreviewMode; paintImages?: boolean }) {
+export function PreviewPage({ page, fontSizePx, mode, paintImages = true, glyphs }: { page: PaintPage; fontSizePx: number; mode: PreviewMode; paintImages?: boolean; glyphs?: PreviewGlyphOutlines }) {
   const rootClass = ["page", page.orientation === "horizontal" ? "horizontal" : "", mode === "debug" ? "debug" : ""].filter(Boolean).join(" ");
   return (
     <div className={rootClass} style={{ width: page.widthPx, height: page.heightPx }}>
@@ -326,6 +391,7 @@ export function PreviewPage({ page, fontSizePx, mode, paintImages = true }: { pa
           fontSizePx={fontSizePx}
           pageHeightPx={page.heightPx}
           mode={mode}
+          glyphs={glyphs}
         />
       ))}
     </div>

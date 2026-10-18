@@ -19,6 +19,7 @@ import {
 } from "./previewFurniture";
 import { ColophonTemplateContent } from "./ColophonTemplateContent";
 import { colophonTemplateLayoutPlan } from "@/lib/colophonLayoutPlan";
+import { buildColophonPagePlans, colophonEmMm } from "@/lib/colophonPages";
 
 /**
  * Phase 11 shared product surface — 本文とは完全に独立した「横書き専用の奥付ページ」。
@@ -65,6 +66,12 @@ export interface ColophonPageSurfaceProps {
    * PDF/JPG paint). Omitted (LEGACY), the historical nombre-only rule applies.
    */
   canonicalFurniture?: CanonicalPageFurniture;
+  /**
+   * TSP-PRINT-001 (V2): which page of the colophon this card shows. A long
+   * colophon continues on the next pages (`colophonPages.ts`, the same pages
+   * PDF/JPG print). Omitted (LEGACY), the whole colophon sits on one page.
+   */
+  colophonPageIndex?: number;
 }
 
 export default function ColophonPageSurface({
@@ -76,6 +83,7 @@ export default function ColophonPageSurface({
   onOverflowChange,
   rendererSource = "legacy",
   canonicalFurniture,
+  colophonPageIndex,
 }: ColophonPageSurfaceProps) {
   const { paper } = layout;
   const bleedMm = paper.isPx ? 0 : BLEED_MM;
@@ -116,6 +124,31 @@ export default function ColophonPageSurface({
   const topMarginMm = placement.respectVerticalMargins ? settings.marginTop : vMarginMin;
   const bottomMarginMm = placement.respectVerticalMargins ? settings.marginBottom : vMarginMin;
 
+  const { rows, freeText } = colophonRenderModel(colophon);
+  const titleFallback = title.trim();
+  const paged = colophonPageIndex !== undefined;
+  const pagePlans = paged
+    ? buildColophonPagePlans({
+        templateId: colophon.templateId,
+        rows,
+        freeText,
+        titleFallback,
+        geometry: {
+          paperWidthMm: paper.widthMm,
+          paperHeightMm: paper.heightMm,
+          marginTopMm: settings.marginTop,
+          marginBottomMm: settings.marginBottom,
+          marginGutterMm: settings.marginGutter,
+          marginOuterMm: settings.marginOuter,
+        },
+        placement,
+        emMm: colophonEmMm(colophon.fontSizePt, (settings.fontSizePt * 25.4) / 72),
+      })
+    : undefined;
+  const pagePlan = pagePlans ? (pagePlans[colophonPageIndex!] ?? { widthEm: 1, heightEm: 1, items: [] }) : undefined;
+  // PDF/JPG start a colophon of several pages at the top of every page.
+  const vertical = pagePlans && pagePlans.length > 1 ? "top" : placement.vertical;
+
   const placementAreaStyle: CSSProperties = {
     position: "absolute",
     top: (topMarginMm + bleedMm) * PX_PER_MM,
@@ -126,9 +159,9 @@ export default function ColophonPageSurface({
     display: "flex",
     justifyContent: "center",
     alignItems:
-      placement.vertical === "top"
+      vertical === "top"
         ? "flex-start"
-        : placement.vertical === "bottom"
+        : vertical === "bottom"
           ? "flex-end"
           : "center",
   };
@@ -136,14 +169,15 @@ export default function ColophonPageSurface({
   // 奥付は本文とは独立して文字サイズを持てる。未指定時のみ本文サイズへ
   // フォールバックする。pt -> mm -> preview px の変換は本文と同じ座標系。
   const colophonFontSizePt = colophon.fontSizePt ?? settings.fontSizePt;
-  const basePx = (colophonFontSizePt * 25.4 / 72) * PX_PER_MM;
+  // V2 uses the size PDF/JPG print (clamped to 4–24pt).
+  const basePx = paged
+    ? colophonEmMm(colophon.fontSizePt, (settings.fontSizePt * 25.4) / 72) * PX_PER_MM
+    : (colophonFontSizePt * 25.4 / 72) * PX_PER_MM;
   const fontFamily =
     colophon.fontFamily && colophon.fontFamily !== COLOPHON_FONT_SAME_AS_BODY
       ? colophon.fontFamily
       : settings.fontFamily || "'Shippori Mincho', serif";
 
-  const { rows, freeText } = colophonRenderModel(colophon);
-  const titleFallback = title.trim();
   const templatePlan = colophonTemplateLayoutPlan(colophon.templateId);
   const placementWidthPx =
     Math.max(paper.widthMm - leftMarginMm - rightMarginMm, 0) * PX_PER_MM;
@@ -189,6 +223,7 @@ export default function ColophonPageSurface({
     colophon.templateId,
     colophon.fields,
     colophon.freeText,
+    colophonPageIndex,
     fontFamily,
     basePx,
     sheetStyle.width,
@@ -197,7 +232,7 @@ export default function ColophonPageSurface({
     placementAreaStyle.left,
     placementAreaStyle.right,
     placementAreaStyle.bottom,
-    placement.vertical,
+    vertical,
     fontsNonce,
   ]);
 
@@ -247,8 +282,9 @@ export default function ColophonPageSurface({
           data-no-print="true"
           className="no-print w-full max-w-full rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800"
         >
-          奥付の内容が1ページに収まりきりません。項目を減らす・自由記述を短くする・
-          非表示にするなどで調整してください（β版では自動でページ分割・縮小はしません）。
+          {paged
+            ? "奥付の内容がページの幅に収まりきりません。項目や自由記述の長い行を短くしてください。"
+            : "奥付の内容が1ページに収まりきりません。項目を減らす・自由記述を短くする・非表示にするなどで調整してください（β版では自動でページ分割・縮小はしません）。"}
         </div>
       )}
       <div
@@ -270,6 +306,7 @@ export default function ColophonPageSurface({
                 basePx={basePx}
                 titleFallback={titleFallback}
                 availableWidthEm={availableWidthEm}
+                plan={pagePlan}
               />
             </div>
           </div>
