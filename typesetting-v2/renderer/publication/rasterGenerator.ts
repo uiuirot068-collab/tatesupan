@@ -19,6 +19,7 @@
 // native Canvas 2D -- see that module's own doc for why). `devDependency`
 // only; never imported by any browser-facing module.
 import { createCanvas, GlobalFonts, loadImage, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
+import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPlan, PublicationFontResource } from "./pdfGenerator";
 import { RASTER_DPI, mmToPx, ptToPx } from "./rasterShared";
 
@@ -88,7 +89,7 @@ async function paintCommandsOnContext(ctx: SKRSContext2D, commands: PaintCommand
       // fill(), so Canvas 2D's own nonzero-winding default (identical
       // to PDF's) renders inner counter-shapes as real holes.
       ctx.beginPath();
-      for (const outlineCmd of cmd.commands) {
+      for (const outlineCmd of glyphOutlineCommandsMmOf(cmd)) {
         if (outlineCmd.type === "M") ctx.moveTo(mmToPx(outlineCmd.x, dpi), mmToPx(outlineCmd.y, dpi));
         else if (outlineCmd.type === "L") ctx.lineTo(mmToPx(outlineCmd.x, dpi), mmToPx(outlineCmd.y, dpi));
         else if (outlineCmd.type === "C")

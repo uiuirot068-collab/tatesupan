@@ -1,0 +1,45 @@
+{
+  "pages": 100,
+  "pdfPages": 112,
+  "chars": 47439,
+  "composeMs": 308,
+  "planMs": 409,
+  "pdfMs": 803,
+  "commandsByOp": {
+    "glyphOutline": 26210,
+    "text": 20749
+  },
+  "outlineSegments": 0,
+  "outlineRefs": 26210,
+  "distinctShapes": 29,
+  "shapeSegments": 2994,
+  "planJsonMb": 5,
+  "pdfMb": 0.6,
+  "fontMb": 8.3,
+  "memory": {
+    "start": {
+      "heapMb": 25.8,
+      "externalMb": 31.8,
+      "rssMb": 118.9,
+      "peakRssMb": 118.9
+    },
+    "afterCompose": {
+      "heapMb": 74.3,
+      "externalMb": 32.8,
+      "rssMb": 187.7,
+      "peakRssMb": 187.7
+    },
+    "afterPlan": {
+      "heapMb": 124.3,
+      "externalMb": 65.9,
+      "rssMb": 260.2,
+      "peakRssMb": 260.2
+    },
+    "afterPdf": {
+      "heapMb": 149.5,
+      "externalMb": 77.5,
+      "rssMb": 358.9,
+      "peakRssMb": 361.4
+    }
+  }
+}

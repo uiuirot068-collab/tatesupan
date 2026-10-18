@@ -55,7 +55,7 @@ import { verticalPaintGraphemeFor } from "./verticalGlyphMap";
 import { createGlyphIdLookup } from "./fontCapability";
 import { FontMetricsReader } from "./fontMetrics";
 import { publicationFurnitureFontSizePt } from "../../core/settings/outputTypography";
-import { VerticalOutlineContext, type OutlinePathCommand } from "./verticalOutlinePaint";
+import { VerticalOutlineContext, type GlyphShape, type OutlinePathCommand } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
 import { FontBinary } from "./fontBinary";
@@ -176,6 +176,12 @@ export type PaintCommand =
   // jsPDF's Unicode-string `text()` API — every other character keeps
   // using the existing "text" command, unchanged.
   | { op: "glyphOutline"; commands: OutlinePathCommand[] }
+  // TSP-PRINT-002 (P4-6, 案A): the same outline, drawn by reference to a
+  // shape shared by every occurrence (`GlyphShape`, font units) at pen
+  // origin (`xMm`, baseline `yMm`), one em = `emSizeMm`. PDF writes each
+  // shape once as a Form XObject; `glyphOutlineCommandsMmOf` gives the
+  // page-space path for anything that needs it.
+  | { op: "glyphOutline"; shape: GlyphShape; xMm: number; yMm: number; emSizeMm: number }
   // Human Visual QA HOLD round 30 (P3-O08 final-page completion, Step
   // 3, real image embedding): real, already-resolved image bytes,
   // painted at Core's own canonical box (`xMm`/`yMm`/`widthMm`/`heightMm`
@@ -339,80 +345,24 @@ function verticalGraphemeCommands(
   gposContext?: VerticalGposContext,
   yakumonoContext?: VerticalYakumonoAlignContext
 ): PaintCommand[] {
+  void gposContext; // see the round-6 note in resolveVerticalGraphemePaint: no generic gpos nudge
   const graphemes = Array.from(text);
   if (graphemes.length === 0) return [];
   const perCharHeightMm = totalHeightMm / graphemes.length;
-  const emSizeMm = fontSizePt * (25.4 / 72);
   return graphemes.map((ch, i) => {
-    const yakumonoBaselineRatio = yakumonoContext?.baselineRatioFor(ch);
-    // Human Visual QA HOLD round 23: small kana's own real ink bbox is
-    // measurably smaller than an ordinary glyph's (round 14's own
-    // finding), so the uniform, vmtx-origin-derived default baseline
-    // ratio does not center it well within its own 1em slot along the
-    // vertical-flow axis. `inkCenteredBaselineRatioForSmallKana`
-    // computes a real, per-glyph, bbox-derived correction — never a
-    // guessed/hardcoded offset — scoped to cl-11 members only (ordinary
-    // characters, including punctuation the yakumono context already
-    // handles, are unaffected). Yakumono edge-alignment takes priority
-    // if both were ever somehow applicable (never in practice — small
-    // kana is never yakumono-classified).
-    const smallKanaBaselineRatio = outlineContext?.inkCenteredBaselineRatioForSmallKana(ch);
-    const effectiveBaselineRatio = yakumonoBaselineRatio ?? smallKanaBaselineRatio ?? baselineRatio;
-    // Typography Parity Round 6 (2026-09-09, qa/evidence/
-    // TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md): `vpal`'s own
-    // real, non-trivial YPlacement values were verified (round 10,
-    // P3_O08_YAKUMONO_GPOS.md) for yakumono characters (「「(+0.527em,
-    // 「（+0.623em) -- but yakumono ALREADY bypasses this branch entirely
-    // (routed to `yakumonoContext` above, whose own `yakumonoBaselineRatio`
-    // is what actually positions 「」（） ink -- this generic gposOffsetMm
-    // path is a no-op for them either way). Round 10's own "applying it
-    // everywhere is harmless" justification checked only ordinary KANJI
-    // (real vpal = 0, confirmed harmless) -- it never checked ordinary
-    // HIRAGANA, which this font gives real, substantial vpal values (up
-    // to -0.188em for い). A direct Human-supplied raster comparison
-    // against the real InDesign reference PDF (same font, same 9pt, same
-    // sequence) found TateSpun's per-glyph vertical-center offset from
-    // InDesign correlates almost exactly (same sign, closely matching
-    // magnitude) with this exact applied vpal value for every hiragana
-    // measured (e.g. い: applied -0.188em vs. measured InDesign-relative
-    // offset -1.68pt at 9pt = -0.187em) -- i.e. applying vpal to ordinary
-    // hiragana moves TateSpun's ink AWAY from InDesign's own rendering,
-    // not toward it. Retired for this branch, not merely re-tuned:
-    // ordinary (non-yakumono, non-small-kana) characters no longer
-    // receive any gpos Y-nudge. `gposContext`/`VerticalGposContext`/
-    // `gposReader.ts` themselves are UNCHANGED and still real, tested
-    // infrastructure -- only this one call site's own consumption of
-    // `yPlacementEmFor` for the generic/ordinary branch is removed.
-    const gposOffsetMm = 0;
-    const yMm = topMm + i * perCharHeightMm + perCharHeightMm * effectiveBaselineRatio + gposOffsetMm;
-    // CSS Preview inherits `text-orientation: upright` from PageCard, so
-    // ordinary printable ASCII occupies one upright vertical cell per
-    // grapheme. Shippori's `vert` GSUB also exposes alternates for Latin,
-    // but those outlines are sideways and therefore do not represent that
-    // product contract. Keep ordinary ASCII on the unrotated text path.
-    // TCY never reaches this function (it has its own one-command path), so
-    // automatic two-digit and explicit [tate] behavior remain independent.
-    const useUprightAsciiText = /^[\x20-\x7e]$/.test(ch);
-    const outlineGlyphId = useUprightAsciiText
-      ? undefined
-      : outlineContext?.resolveOutlineGlyphId(ch);
-    if (outlineGlyphId !== undefined && outlineContext) {
-      return { op: "glyphOutline" as const, commands: outlineContext.glyphOutlineCommandsMm(outlineGlyphId, xCenterMm, yMm, perCharHeightMm) };
+    const paint = resolveVerticalGraphemePaint(ch, baselineRatio, outlineContext, yakumonoContext);
+    const cellTopMm = topMm + i * perCharHeightMm;
+    if (paint.kind === "outline" && outlineContext) {
+      const yMm = cellTopMm + perCharHeightMm * paint.baselineRatio;
+      const advanceMm = (outlineContext.glyphAdvanceUnits(paint.glyphId) / outlineContext.openTypeFont.unitsPerEm) * perCharHeightMm;
+      return { op: "glyphOutline" as const, shape: outlineContext.glyphShape(paint.glyphId), xMm: xCenterMm - advanceMm / 2, yMm, emSizeMm: perCharHeightMm };
     }
-    // Browser Canvas has no vertical OpenType shaping API. The real PDF
-    // path above receives Shippori Mincho's `vert` GSUB outline for U+30FC,
-    // while the browser-only PaintPlan has no font bytes/outline context and
-    // therefore reaches this text fallback. Rotate ONLY the prolonged-sound
-    // mark around the center of its already-composed cell. This is paint-only:
-    // source, advance, line/page geometry, and U+2015's existing vertical-form
-    // substitution remain untouched. Both Web and print JPG consume this same
-    // command before print performs its final whole-page resize.
-    if (ch === "ー") {
+    if (paint.kind === "rotated") {
       return {
         op: "text" as const,
         text: ch,
         xMm: xCenterMm,
-        yMm: topMm + i * perCharHeightMm + perCharHeightMm / 2,
+        yMm: cellTopMm + perCharHeightMm / 2,
         fontSizePt,
         align: "center" as const,
         angle: 90,
@@ -421,14 +371,105 @@ function verticalGraphemeCommands(
     }
     return {
       op: "text" as const,
-      text: verticalPaintGraphemeFor(ch),
+      text: paint.kind === "text" ? paint.text : ch,
       xMm: xCenterMm,
-      yMm,
+      yMm: cellTopMm + perCharHeightMm * paint.baselineRatio,
       fontSizePt,
       align: "center" as const,
     };
   });
 }
+
+/**
+ * How one vertical grapheme is painted (TSP-PRINT-002: shared with the
+ * Preview's glyph outlines, so both place a character by the same rules).
+ * - "outline": the font's vertical alternate glyph `glyphId`, drawn as an
+ *   outline at one CELL's size (the alternate has no Unicode code point).
+ * - "text": the character `text` (its vertical presentation form when one
+ *   exists), drawn at the body em, centered on its own advance.
+ * - "rotated": ー without an outline, turned 90° around its cell center.
+ * `baselineRatio`: where the horizontal baseline sits, as a fraction of the
+ * cell height from the cell top (yakumono flush, small-kana ink centering,
+ * or the font's vertical origin).
+ */
+export type VerticalGraphemePaint =
+  | { kind: "outline"; glyphId: number; baselineRatio: number }
+  | { kind: "text"; text: string; baselineRatio: number }
+  | { kind: "rotated" };
+
+export function resolveVerticalGraphemePaint(
+  ch: string,
+  baselineRatio: number,
+  outlineContext?: VerticalOutlineContext,
+  yakumonoContext?: VerticalYakumonoAlignContext
+): VerticalGraphemePaint {
+  const yakumonoBaselineRatio = yakumonoContext?.baselineRatioFor(ch);
+  // Human Visual QA HOLD round 23: small kana's own real ink bbox is
+  // measurably smaller than an ordinary glyph's (round 14's own
+  // finding), so the uniform, vmtx-origin-derived default baseline
+  // ratio does not center it well within its own 1em slot along the
+  // vertical-flow axis. `inkCenteredBaselineRatioForSmallKana`
+  // computes a real, per-glyph, bbox-derived correction — never a
+  // guessed/hardcoded offset — scoped to cl-11 members only (ordinary
+  // characters, including punctuation the yakumono context already
+  // handles, are unaffected). Yakumono edge-alignment takes priority
+  // if both were ever somehow applicable (never in practice — small
+  // kana is never yakumono-classified).
+  const smallKanaBaselineRatio = outlineContext?.inkCenteredBaselineRatioForSmallKana(ch);
+  const effectiveBaselineRatio = yakumonoBaselineRatio ?? smallKanaBaselineRatio ?? baselineRatio;
+  // Typography Parity Round 6 (2026-09-09, qa/evidence/
+  // TYPOGRAPHY_PARITY_GLYPH_IN_CELL_VERTICAL_RHYTHM.md): `vpal`'s own
+  // real, non-trivial YPlacement values were verified (round 10,
+  // P3_O08_YAKUMONO_GPOS.md) for yakumono characters (「「(+0.527em,
+  // 「（+0.623em) -- but yakumono ALREADY bypasses this branch entirely
+  // (routed to `yakumonoContext` above, whose own `yakumonoBaselineRatio`
+  // is what actually positions 「」（） ink -- this generic gposOffsetMm
+  // path is a no-op for them either way). Round 10's own "applying it
+  // everywhere is harmless" justification checked only ordinary KANJI
+  // (real vpal = 0, confirmed harmless) -- it never checked ordinary
+  // HIRAGANA, which this font gives real, substantial vpal values (up
+  // to -0.188em for い). A direct Human-supplied raster comparison
+  // against the real InDesign reference PDF (same font, same 9pt, same
+  // sequence) found TateSpun's per-glyph vertical-center offset from
+  // InDesign correlates almost exactly (same sign, closely matching
+  // magnitude) with this exact applied vpal value for every hiragana
+  // measured (e.g. い: applied -0.188em vs. measured InDesign-relative
+  // offset -1.68pt at 9pt = -0.187em) -- i.e. applying vpal to ordinary
+  // hiragana moves TateSpun's ink AWAY from InDesign's own rendering,
+  // not toward it. Retired for this branch, not merely re-tuned:
+  // ordinary (non-yakumono, non-small-kana) characters no longer
+  // receive any gpos Y-nudge. `gposContext`/`VerticalGposContext`/
+  // `gposReader.ts` themselves are UNCHANGED and still real, tested
+  // infrastructure -- only this one call site's own consumption of
+  // `yPlacementEmFor` for the generic/ordinary branch is removed.
+  // CSS Preview inherits `text-orientation: upright` from PageCard, so
+  // ordinary printable ASCII occupies one upright vertical cell per
+  // grapheme. Shippori's `vert` GSUB also exposes alternates for Latin,
+  // but those outlines are sideways and therefore do not represent that
+  // product contract. Keep ordinary ASCII on the unrotated text path.
+  // TCY never reaches this function (it has its own one-command path), so
+  // automatic two-digit and explicit [tate] behavior remain independent.
+  const useUprightAsciiText = /^[\x20-\x7e]$/.test(ch);
+  const outlineGlyphId = useUprightAsciiText
+    ? undefined
+    : outlineContext?.resolveOutlineGlyphId(ch);
+  if (outlineGlyphId !== undefined && outlineContext) {
+    return { kind: "outline", glyphId: outlineGlyphId, baselineRatio: effectiveBaselineRatio };
+  }
+  // Browser Canvas has no vertical OpenType shaping API. The real PDF
+  // path above receives Shippori Mincho's `vert` GSUB outline for U+30FC,
+  // while the browser-only PaintPlan has no font bytes/outline context and
+  // therefore reaches this text fallback. Rotate ONLY the prolonged-sound
+  // mark around the center of its already-composed cell. This is paint-only:
+  // source, advance, line/page geometry, and U+2015's existing vertical-form
+  // substitution remain untouched. Both Web and print JPG consume this same
+  // command before print performs its final whole-page resize.
+  if (ch === "ー") return { kind: "rotated" };
+  return { kind: "text", text: verticalPaintGraphemeFor(ch), baselineRatio: effectiveBaselineRatio };
+}
+
+// TSP-PRINT-002 (P4-6): page-space (mm) path of either glyphOutline form.
+export { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 
 // TCY ("tate-chu-yoko" — horizontal-in-vertical): the digit/character run
 // must read in NORMAL horizontal orientation (angle 0, never rotated) even
@@ -1438,6 +1479,70 @@ function grayByte(inkGray: number): number {
   return Math.round(Math.min(1, Math.max(0, inkGray)) * 255);
 }
 
+// TSP-PRINT-002 (P4-6, 案A): the glyph shapes already written to each PDF.
+const pdfGlyphForms = new WeakMap<jsPDF, Set<string>>();
+
+// jsPDF's form-object API: `Matrix` and `internal.write` exist at runtime
+// but are missing from its typings.
+type PdfMatrix = unknown;
+type JsPdfForms = {
+  Matrix: new (sx: number, shy: number, shx: number, sy: number, tx: number, ty: number) => PdfMatrix;
+  beginFormObject(x: number, y: number, width: number, height: number, matrix: PdfMatrix): void;
+  endFormObject(key: string): void;
+  doFormObject(key: string, matrix: PdfMatrix): void;
+  internal: { write(...args: string[]): void };
+};
+
+/** PDF operator number: short, never exponent notation. */
+function pdfNum(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+}
+
+/**
+ * TSP-PRINT-002 (P4-6, 案A): draws a shared glyph shape. The first time a
+ * shape is used in this PDF its path is written once as a Form XObject (in
+ * font units, y up); every occurrence is then a reference to it with the
+ * occurrence's own scale and position (`q … cm /Xo Do Q`). The pixels are
+ * the same as writing the path inline, the PDF and the memory grow with the
+ * number of distinct glyphs instead of the number of characters.
+ */
+function drawSharedGlyph(
+  pdf: jsPDF,
+  cmd: Extract<PaintCommand, { op: "glyphOutline"; shape: GlyphShape }>,
+  offsetX: number,
+  offsetY: number,
+): void {
+  const { shape } = cmd;
+  if (shape.commands.length === 0) return;
+  const forms = pdf as unknown as JsPdfForms;
+  let defined = pdfGlyphForms.get(pdf);
+  if (!defined) {
+    defined = new Set();
+    pdfGlyphForms.set(pdf, defined);
+  }
+  if (!defined.has(shape.key)) {
+    // BBox in the form's own space (font units, y up), one unit of margin.
+    const { x1, y1, x2, y2 } = shape.bbox;
+    forms.beginFormObject(x1 - 1, -y2 - 1, x2 - x1 + 2, y2 - y1 + 2, new forms.Matrix(1, 0, 0, 1, 0, 0));
+    const ops: string[] = [];
+    for (const c of shape.commands) {
+      if (c.type === "M") ops.push(`${pdfNum(c.x)} ${pdfNum(-c.y)} m`);
+      else if (c.type === "L") ops.push(`${pdfNum(c.x)} ${pdfNum(-c.y)} l`);
+      else if (c.type === "C") ops.push(`${pdfNum(c.x1)} ${pdfNum(-c.y1)} ${pdfNum(c.x2)} ${pdfNum(-c.y2)} ${pdfNum(c.x)} ${pdfNum(-c.y)} c`);
+      else ops.push("h");
+    }
+    ops.push("f");
+    forms.internal.write(ops.join("\n"));
+    forms.endFormObject(shape.key);
+    defined.add(shape.key);
+  }
+  const k = pdf.internal.scaleFactor;
+  const scale = (cmd.emSizeMm / shape.unitsPerEm) * k;
+  const pageHeightMm = pdf.internal.pageSize.getHeight();
+  forms.doFormObject(shape.key, new forms.Matrix(scale, 0, 0, scale, (cmd.xMm + offsetX) * k, (pageHeightMm - (cmd.yMm + offsetY)) * k));
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
@@ -1466,6 +1571,10 @@ function paintPageCommands(
         continue;
       }
       pdf.addImage(cmd.bytes, cmd.format, cmd.xMm + offsetX, cmd.yMm + offsetY, cmd.widthMm, cmd.heightMm);
+      continue;
+    }
+    if (cmd.op === "glyphOutline" && "shape" in cmd) {
+      drawSharedGlyph(pdf, cmd, offsetX, offsetY);
       continue;
     }
     if (cmd.op === "glyphOutline") {

@@ -10,7 +10,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_RULE_SET_V2 } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, generatePublicationPdf, renderPaintPlanToPdf, type PublicationFontResource, type PublicationPageGeometry, type PaintCommand } from "./pdfGenerator";
+import { buildPaintPlan, generatePublicationPdf, glyphOutlineCommandsMmOf, renderPaintPlanToPdf, type PublicationFontResource, type PublicationPageGeometry, type PaintCommand } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { settingsFor } from "./fixtures";
 import { buildFixtureUnits } from "../../tools/compare/fixtureBuilder";
@@ -208,5 +208,41 @@ describe("QA artifacts -- focused GSUB outline PDFs (regenerated only after the 
     const plan = buildPaintPlan(model, true, undefined, undefined, ctx);
     expect(outlineCommands(plan).length).toBe(2); // both dash glyphs painted via outline
     expect(textCommands(plan).length).toBe(0);
+  });
+});
+
+describe("TSP-PRINT-002 (P4-6, 案A): one outline per glyph, used by reference", () => {
+  it("every occurrence of a kana shares one shape; the PDF holds one Form XObject per distinct glyph", () => {
+    const text = "つつつつかなかなつ";
+    const { model } = composeFor(text);
+    const ctx = new VerticalOutlineContext(readFileSync(FONT_PATH));
+    const plan = buildPaintPlan(model, true, undefined, undefined, ctx);
+    const outlines = outlineCommands(plan);
+    expect(outlines.length).toBe(Array.from(text).length);
+    const shapes = new Set(outlines.map((c) => ("shape" in c ? c.shape : undefined)));
+    expect(shapes.has(undefined)).toBe(false);
+    expect(shapes.size).toBe(3); // つ・か・な
+    const pdf = Buffer.from(renderPaintPlanToPdf(plan, fontResource()).bytes).toString("latin1");
+    expect(pdf.match(/\/Subtype \/Form/g)?.length).toBe(3);
+  });
+
+  it("the shared form draws the same path, in page mm, as the inline outline did", () => {
+    const { model } = composeFor("つ");
+    const ctx = new VerticalOutlineContext(readFileSync(FONT_PATH));
+    const [cmd] = outlineCommands(buildPaintPlan(model, true, undefined, undefined, ctx));
+    if (!("shape" in cmd)) throw new Error("expected a shared shape");
+    const glyphId = ctx.resolveOutlineGlyphId("つ")!;
+    const advanceMm = (ctx.glyphAdvanceUnits(glyphId) / ctx.openTypeFont.unitsPerEm) * cmd.emSizeMm;
+    const inline = ctx.glyphOutlineCommandsMm(glyphId, cmd.xMm + advanceMm / 2, cmd.yMm, cmd.emSizeMm);
+    const shared = glyphOutlineCommandsMmOf(cmd);
+    expect(shared.length).toBe(inline.length);
+    shared.forEach((c, i) => {
+      const d = inline[i];
+      expect(c.type).toBe(d.type);
+      if (c.type !== "Z" && d.type !== "Z") {
+        expect(c.x).toBeCloseTo(d.x, 9);
+        expect(c.y).toBeCloseTo(d.y, 9);
+      }
+    });
   });
 });

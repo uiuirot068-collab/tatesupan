@@ -1455,7 +1455,7 @@ export default function TategakiEditor({
         ? "unsent"
         : "synced";
 
-  const handleBookPartsInsert = (textToInsert: string, position: "start" | "end") => {
+  const handleBookPartsInsert = (textToInsert: string, position: "start" | "end", v2BodyPages?: number[] | null) => {
     const nextContent = position === "start" ? textToInsert + content : content + textToInsert;
 
     // Generated book-part prose is programmatic and excluded from the
@@ -1468,22 +1468,33 @@ export default function TategakiEditor({
     // 自動挿入は「柱も含めて表示しない」という別の既存意図を持つため、
     // ここでは明示的に両方をtrueにする）。ユーザーは挿入後もページ単位の
     // チェックボックスで一方だけ上書き可能。
-    const range = computeInsertedPartPageRange(nextContent, textToInsert, position, {
-      charsPerLine: layout.charsPerLine,
-      linesPerPage: layout.linesPerPage,
-    });
-    if (range) {
-      const pageNumbers: number[] = [];
-      for (let pageNumber = range.startPage; pageNumber <= range.endPage; pageNumber++) {
-        pageNumbers.push(pageNumber);
-      }
+    // TSP-PRINT-002 (P4-4): ページは V2 で数えたもの（BookPartsModal）。
+    // V2 が組めなかった時だけ、これまでの文字数での数え方に戻る。
+    let pageNumbers = v2BodyPages;
+    if (pageNumbers === undefined) {
+      const range = computeInsertedPartPageRange(nextContent, textToInsert, position, {
+        charsPerLine: layout.charsPerLine,
+        linesPerPage: layout.linesPerPage,
+      });
+      pageNumbers = range
+        ? Array.from({ length: range.endPage - range.startPage + 1 }, (_, i) => range.startPage + i)
+        : null;
+    }
+    if (pageNumbers && pageNumbers.length > 0) {
+      const hiddenPages = pageNumbers;
       setSettings((prev) => ({
         ...prev,
-        pageOverrides: updatePageOverrides(prev.pageOverrides, pageNumbers, (override) => ({
+        pageOverrides: updatePageOverrides(prev.pageOverrides, hiddenPages, (override) => ({
           ...override,
           hideNombre: true,
           hideHashira: true,
         })),
+        // TSP-PRINT-002: 前の本文が増減してパーツのページが動いたら、
+        // 隠したページも一緒に動かす（PreviewPane の followInsertedPartPages）。
+        // V2 で数えた時だけ（LEGACY の数え方は V2 のページとずれることがある）。
+        ...(v2BodyPages
+          ? { insertedParts: [...(prev.insertedParts ?? []), { position, text: textToInsert, pages: hiddenPages }] }
+          : {}),
       }));
     }
 

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { generateTitlePageText, generateColophonText, ColophonData } from '@/utils/bookStructure';
 import { extractHeadings, type TocItem } from '@/utils/tocGenerator';
 import { computeTocItemsWithV2 } from '@/lib/v2Bridge/tocPageNumbers';
+import { insertedPartBodyPagesFromV2 } from '@/lib/v2Bridge/insertedPartPages';
 import { ReusablePreviewWorker, referencedImages } from '@/lib/v2Bridge/previewWorkerClient';
 import type { V2PreviewLayout } from '@/lib/v2Bridge/previewWorkerProtocol';
 import type { PageLayout, PageSettings } from '@/lib/pageLayout';
@@ -22,7 +23,12 @@ import {
 interface BookPartsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onInsert: (textToInsert: string, position: 'start' | 'end') => void;
+  /**
+   * `bodyPages`: the Editor body pages the part occupies, counted by V2 on the
+   * manuscript with the part inserted (null: none). Undefined when V2 could
+   * not compose it; the Editor then falls back to its own count.
+   */
+  onInsert: (textToInsert: string, position: 'start' | 'end', bodyPages?: number[] | null) => void;
   onTocChange: (toc: TocSettings) => void;
   /** 「奥付（横）」= 本文とは独立した横書き専用ページ（ColophonModal）を開く。 */
   onOpenColophonModal: () => void;
@@ -101,18 +107,14 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     notice: '※ 本書の無断転載・複写・Web上への転載を禁じます。',
   });
 
-  const composeTocCandidate = (items: TocItem[], position: TocPosition): Promise<V2PreviewLayout> =>
+  const composeCandidate = (candidateContent: string, candidateSettings: PageSettings): Promise<V2PreviewLayout> =>
     new Promise((resolve, reject) => {
-      const candidateSettings: PageSettings = {
-        ...settings,
-        toc: { enabled: true, items: items.map((item) => ({ ...item })), position, leader: tocLeader, updatedAt: null },
-      };
       tocWorker.request(
         {
-          content,
+          content: candidateContent,
           settings: candidateSettings,
           title: currentTitle.trim() || "TateSpun",
-          images: referencedImages(images, content),
+          images: referencedImages(images, candidateContent),
         },
         (outcome) => {
           if (!outcome.ok) {
@@ -128,6 +130,31 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
         }
       );
     });
+
+  const composeTocCandidate = (items: TocItem[], position: TocPosition): Promise<V2PreviewLayout> =>
+    composeCandidate(content, {
+      ...settings,
+      toc: { enabled: true, items: items.map((item) => ({ ...item })), position, leader: tocLeader, updatedAt: null },
+    });
+
+  // TSP-PRINT-002 (P4-4): 扉・奥付（縦）を差しこむ前に、差しこんだ後の原稿を
+  // V2 で組んで、そのパーツが入るページを数える（柱・ノンブルを隠すページ）。
+  const [partInserting, setPartInserting] = useState(false);
+  const insertPart = (text: string, position: 'start' | 'end') => {
+    const finalContent = position === 'start' ? text + content : content + text;
+    setPartInserting(true);
+    composeCandidate(finalContent, settings).then(
+      (layout) => {
+        onInsert(text, position, insertedPartBodyPagesFromV2(layout.pageModel, finalContent, text, position));
+        onClose();
+      },
+      (cause: unknown) => {
+        console.warn('TateSpun: V2 page count for the inserted part failed', cause);
+        onInsert(text, position);
+        onClose();
+      }
+    );
+  };
 
   // 目次の検出は V2 worker への非同期リクエスト。結果の state 反映は必ず
   // Promise の resolve/reject コールバック内で行い、effect 本体や同期経路から
@@ -237,8 +264,7 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
     // 著者名は空欄可。空欄なら generateTitlePageText 側で「著：」行ごと省く。
     // プレースホルダー文字列で埋めない（TSP-LOOP-021 §8）。
     const text = generateTitlePageText(currentTitle, titleAuthor);
-    onInsert(text, 'start');
-    onClose();
+    insertPart(text, 'start');
   };
 
   const handleInsertColophon = () => {
@@ -247,8 +273,7 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
       return;
     }
     const text = generateColophonText(colophon);
-    onInsert(text, 'end');
-    onClose();
+    insertPart(text, 'end');
   };
 
   const handleInsertToc = () => {
@@ -498,12 +523,14 @@ export const BookPartsModal: React.FC<BookPartsModalProps> = ({
                     ? handleInsertTitlePage
                     : handleInsertToc
             }
-            disabled={activeTab === 'toc' && (tocLoading || !!tocError || !tocDetected)}
+            disabled={partInserting || (activeTab === 'toc' && (tocLoading || !!tocError || !tocDetected))}
             className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg"
           >
             {activeTab === 'colophon-h'
               ? '奥付（横）の設定を開く'
-              : activeTab === 'colophon'
+              : partInserting
+                ? 'ページを数えています…'
+                : activeTab === 'colophon'
                 ? '本文の末尾に挿入'
                 : activeTab === 'title'
                   ? '本文の先頭に挿入'

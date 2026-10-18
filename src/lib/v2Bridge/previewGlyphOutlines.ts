@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { parse as parseOpenTypeFont, type Font as OpenTypeFont } from "opentype.js";
 import { asFontBinary } from "../../../typesetting-v2/renderer/publication/fontBinary";
-import { deriveBaselineRatioFromFontBinary } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
-import type { PreviewGlyphOutline, PreviewGlyphOutlines } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
+import { deriveBaselineRatioFromFontBinary, resolveVerticalGraphemePaint } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { VerticalOutlineContext } from "../../../typesetting-v2/renderer/publication/verticalOutlinePaint";
+import { VerticalYakumonoAlignContext } from "../../../typesetting-v2/renderer/publication/verticalYakumonoAlign";
+import type { PreviewGlyphOutline, PreviewGlyphOutlines, PreviewGlyphRun } from "../../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { loadV2FontBytes, publicationFontAssetFor } from "../v2BrowserExport";
 
 /**
@@ -13,16 +14,17 @@ import { loadV2FontBytes, publicationFontAssetFor } from "../v2BrowserExport";
  * outline path keeps its exact fractional position (anti-aliased), the same
  * way JPG and PDF place it.
  *
- * Only plain kanji and kana go this way. Characters that PDF / JPG paint
- * with a special rule (punctuation and brackets, small kana, ー, Latin, 縦中横)
- * stay browser text, so nothing here re-derives those rules.
+ * TSP-PRINT-002: every other character goes this way too (punctuation,
+ * brackets, small kana, ー, Latin and digits). Which glyph and where
+ * (vertical presentation form or vertical alternate, flush to a cell edge,
+ * small kana centred on their ink, upright ASCII) comes from the PDF's own
+ * `resolveVerticalGraphemePaint`, so Preview and export cannot drift apart.
+ * 縦中横 runs are drawn as PDF draws them too (`run`, placed by
+ * `tcyRunPlacement`). Only what export turns 90° as text (ー in a font without its vertical
+ * alternate), spaces and characters the font lacks stay browser text.
  */
-const OUTLINED_GRAPHEME =
-  /^(?:\p{Script=Han}|[ぁ-ゖゝゞァ-ヺヽヾ々〆])$/u;
-const SMALL_KANA = /^[ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶ]$/u;
-
 export function isPreviewOutlinedGrapheme(grapheme: string): boolean {
-  return OUTLINED_GRAPHEME.test(grapheme) && !SMALL_KANA.test(grapheme);
+  return Array.from(grapheme).length === 1 && !/^\s$/u.test(grapheme);
 }
 
 // One hidden <defs> holds each glyph's path once; every occurrence on every
@@ -45,10 +47,28 @@ let nextFontKey = 0;
 
 export function createPreviewGlyphOutlines(bytes: Uint8Array): PreviewGlyphOutlines {
   const fontKey = `tsg${nextFontKey++}`;
-  const font: OpenTypeFont = parseOpenTypeFont(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  const fontBinary = asFontBinary(bytes);
+  const outlineContext = new VerticalOutlineContext(fontBinary);
+  const font = outlineContext.openTypeFont;
   const unitsPerEm = font.unitsPerEm;
-  const baselineRatio = deriveBaselineRatioFromFontBinary(asFontBinary(bytes));
+  const baselineRatio = deriveBaselineRatioFromFontBinary(fontBinary);
+  const yakumonoContext = new VerticalYakumonoAlignContext(fontBinary, baselineRatio);
   const cache = new Map<string, PreviewGlyphOutline | null>();
+  const runCache = new Map<string, PreviewGlyphRun | null>();
+  // The glyph's path once in the shared <defs>; its id, or undefined
+  // outside a document.
+  const define = (index: number, d: string): string | undefined => {
+    const defs = glyphDefs();
+    if (!defs) return undefined;
+    const id = `${fontKey}-${index}`;
+    if (!defs.querySelector(`#${id}`)) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("id", id);
+      path.setAttribute("d", d);
+      defs.appendChild(path);
+    }
+    return id;
+  };
   return {
     unitsPerEm,
     baselineRatio,
@@ -57,25 +77,46 @@ export function createPreviewGlyphOutlines(bytes: Uint8Array): PreviewGlyphOutli
       if (cached !== undefined) return cached ?? undefined;
       let result: PreviewGlyphOutline | null = null;
       if (isPreviewOutlinedGrapheme(grapheme)) {
-        const glyph = font.charToGlyph(grapheme);
+        const paint = resolveVerticalGraphemePaint(grapheme, baselineRatio, outlineContext, yakumonoContext);
+        const glyph =
+          paint.kind === "outline" ? font.glyphs.get(paint.glyphId) : paint.kind === "text" ? font.charToGlyph(paint.text) : undefined;
         // .notdef (index 0): the font lacks the character — keep browser text.
-        if (glyph.index !== 0) {
+        if (glyph && glyph.index !== 0 && paint.kind !== "rotated") {
           // Font units, y down, horizontal baseline at 0.
           const d = glyph.getPath(0, 0, unitsPerEm).toPathData(1);
           if (d) {
-            const defs = glyphDefs();
-            const id = `${fontKey}-${glyph.index}`;
-            if (defs && !defs.querySelector(`#${id}`)) {
-              const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-              path.setAttribute("id", id);
-              path.setAttribute("d", d);
-              defs.appendChild(path);
-            }
-            result = { d, id: defs ? id : undefined, advance: glyph.advanceWidth ?? unitsPerEm };
+            result = {
+              d,
+              id: define(glyph.index, d),
+              advance: glyph.advanceWidth ?? unitsPerEm,
+              ...(paint.baselineRatio !== baselineRatio ? { baselineRatio: paint.baselineRatio } : {}),
+              ...(paint.kind === "outline" ? { cellSized: true } : {}),
+            };
           }
         }
       }
       cache.set(grapheme, result);
+      return result ?? undefined;
+    },
+    // 縦中横: PDF writes the run as horizontal text in the body font, so
+    // each character is its horizontal glyph at its advance (no kerning,
+    // as jsPDF). A character the font lacks keeps browser text.
+    run(text) {
+      const cached = runCache.get(text);
+      if (cached !== undefined) return cached ?? undefined;
+      let result: PreviewGlyphRun | null = { glyphs: [], advance: 0 };
+      for (const ch of Array.from(text)) {
+        const glyph = font.charToGlyph(ch);
+        if (!glyph || glyph.index === 0) {
+          result = null;
+          break;
+        }
+        const d = glyph.getPath(0, 0, unitsPerEm).toPathData(1);
+        if (d) result.glyphs.push({ d, id: define(glyph.index, d), x: result.advance });
+        result.advance += glyph.advanceWidth ?? unitsPerEm;
+      }
+      if (result && result.glyphs.length === 0) result = null;
+      runCache.set(text, result);
       return result ?? undefined;
     },
   };

@@ -20,7 +20,10 @@ export type BreakOpportunityReason =
   | "RUBY_INTERNAL_ALLOWED"
   | "RUBY_INTERNAL_PROHIBITED"
   | "MANUAL_FORCED"
-  | "PARAGRAPH_FORCED";
+  | "PARAGRAPH_FORCED"
+  // TSP-PRINT-002: the line ending right after a FULL image ends both the
+  // paragraph and the image's page (see the pair loop below).
+  | "PARAGRAPH_PAGE_FORCED";
 
 export interface BreakOpportunity {
   position: SourceSpan; // zero-width span at the candidate boundary
@@ -171,7 +174,19 @@ export function deriveBreakOpportunities(
     let ruleApplied: string;
     const leftIsFullImage = left.kind === "IMAGE" && left.placement === "FULL";
     const rightIsFullImage = right.kind === "IMAGE" && right.placement === "FULL";
-    if (leftIsFullImage || rightIsFullImage) {
+    const before = i > 0 ? units[i - 1] : undefined;
+    if (leftIsFullImage && right.kind === "PARAGRAPH_BREAK") {
+      // TSP-PRINT-002: the manuscript line ending after a FULL image is that
+      // image's own line ending — it stays on the image's page. Isolating it
+      // too put it alone at the top of the next page: an empty first line
+      // before the following text, and a blank page before 【改ページ】 or at
+      // the end of the book. The page is closed right after it instead.
+      reason = "PROHIBITED_GROUP";
+      ruleApplied = "Contract §14 FULL image keeps its own line ending";
+    } else if (left.kind === "PARAGRAPH_BREAK" && before?.kind === "IMAGE" && before.placement === "FULL") {
+      reason = "PARAGRAPH_PAGE_FORCED";
+      ruleApplied = "Contract §14 FULL image isolation after its own line ending";
+    } else if (leftIsFullImage || rightIsFullImage) {
       // Contract §14: FULL placement forces isolation on both sides — the
       // already-frozen decision core/images/placeImage() records (P3-L11).
       // Reusing MANUAL_FORCED is a deliberate choice: it is the existing,

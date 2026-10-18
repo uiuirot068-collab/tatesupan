@@ -15,6 +15,7 @@
 // `rasterGenerator.ts` for Node/Vitest automated verification and QA
 // artifact generation -- this file contains ZERO runtime import of
 // `@napi-rs/canvas`, `Buffer`, `fs`, or `path`, and must never gain one.
+import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPagePlan, PaintPlan } from "./pdfGenerator";
 import { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, mmToPx, ptToPx, computeLongSideResize } from "./rasterShared";
 import { WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE } from "../../core/settings/outputTypography";
@@ -129,7 +130,7 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       // renders inner counter-shapes as real holes -- see
       // `rasterGenerator.ts`'s own identical comment.
       ctx.beginPath();
-      for (const outlineCmd of cmd.commands) {
+      for (const outlineCmd of glyphOutlineCommandsMmOf(cmd)) {
         if (outlineCmd.type === "M") ctx.moveTo(mmToPx(outlineCmd.x, dpi), mmToPx(outlineCmd.y, dpi));
         else if (outlineCmd.type === "L") ctx.lineTo(mmToPx(outlineCmd.x, dpi), mmToPx(outlineCmd.y, dpi));
         else if (outlineCmd.type === "C")

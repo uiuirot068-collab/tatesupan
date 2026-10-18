@@ -146,6 +146,7 @@ const NO_IMAGE_LAYER_ORDER: Record<string, number> = {};
 const NO_LEGACY_PAGES: TategakiPage[] = [];
 const NO_LEGACY_SOURCE_RANGES: Array<{ start: number; end: number }> = [];
 import { useV2PreviewAdapter } from "@/lib/v2Bridge/useV2PreviewAdapter";
+import { followInsertedPartPages } from "@/lib/v2Bridge/insertedPartPages";
 import { downloadBytes, previewFontFaceCss, previewFontFamilyCss, publicationFontAssetFor, type WorkerPdfHandle } from "@/lib/v2BrowserExport";
 import ExportSupportLine from "./ExportSupportLine";
 import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from "@/lib/exportSupportLineSession";
@@ -709,6 +710,14 @@ function PreviewPane({
     () => resolvePreviewListAuthority({ useV2Engine, v2SourceContent, content }),
     [useV2Engine, v2SourceContent, content]
   );
+  // TSP-PRINT-002 (QA 1): a 奥付（縦）/扉 that moved to another page (text or
+  // a full-page image added before it) takes its hidden ノンブル/柱 along.
+  // Only from a layout of the current text, so typing never moves them early.
+  useEffect(() => {
+    if (!v2PageModel || !onSettingsChange || v2PageModel.sourceContent !== content) return;
+    const followed = followInsertedPartPages(settings, content, v2PageModel);
+    if (followed) onSettingsChange({ ...settings, ...followed });
+  }, [v2PageModel, content, settings, onSettingsChange]);
   const pages = useMemo(() => {
     if (!legacyPaginationNeeded) return NO_LEGACY_PAGES;
     // CST-PORT-016: `?perf=1` のときだけ時間を記録する

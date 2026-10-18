@@ -12,7 +12,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { composeCanonicalDocument, createFakeMeasurementProvider, DEFAULT_FOLIO_SETTINGS, DEFAULT_RULE_SET_V2, type FolioSettings } from "../../core";
 import { buildPublicationDocument, type PublicationRenderContext } from "./paintModel";
-import { buildPaintPlan, deriveBaselineRatioFromFont, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry } from "./pdfGenerator";
+import { buildPaintPlan, deriveBaselineRatioFromFont, renderPaintPlanToPdf, type PaintCommand, type PublicationFontResource, type PublicationPageGeometry, glyphOutlineCommandsMmOf } from "./pdfGenerator";
 import { VerticalOutlineContext } from "./verticalOutlinePaint";
 import { VerticalGposContext } from "./verticalGposPaint";
 import { VerticalYakumonoAlignContext } from "./verticalYakumonoAlign";
@@ -110,8 +110,8 @@ describe("Folio Publication paint -- real Core data, real geometry resolution", 
     const xOf = (plan: ReturnType<typeof buildPaintPlan>): number => {
       const cmd = plan[0].commands[plan[0].commands.length - 1];
       if (cmd.op === "text" || cmd.op === "rect" || cmd.op === "image" || cmd.op === "circle") return cmd.xMm;
-      const first = cmd.commands.find((c): c is Extract<(typeof cmd.commands)[number], { x: number }> => c.type !== "Z");
-      return first?.x ?? NaN;
+      const first = glyphOutlineCommandsMmOf(cmd).find((c) => c.type !== "Z");
+      return first && "x" in first ? first.x : NaN;
     };
     expect(xOf(planWide)).not.toBeCloseTo(xOf(planNarrow), 3);
   });
