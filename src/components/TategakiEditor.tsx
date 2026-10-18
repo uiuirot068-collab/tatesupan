@@ -14,6 +14,7 @@ import {
   revisionOf,
   saveDocument,
   saveImage,
+  listTrash,
   type OpenedDeviceCopy,
   updateImageLayerOrder,
   type ImageRecord,
@@ -1026,9 +1027,13 @@ export default function TategakiEditor({
     });
     if (isSampleDocument) return;
     const currentDocId = loadedDocIdRef.current;
-    listDocuments()
-      .then((documents) => {
-        const others = documents.filter((document) => document.id !== currentDocId).map((document) => document.content);
+    // TSP-SAFE-004: a work in the ゴミ箱 may come back, so its images count too.
+    Promise.all([listDocuments(), listTrash()])
+      .then(([documents, trashed]) => {
+        const others = [
+          ...documents.filter((document) => document.id !== currentDocId).map((document) => document.content),
+          ...trashed.map((item) => item.document.content),
+        ];
         return imageOriginalDeletable(id, others) ? deleteImage(id) : undefined;
       })
       .catch(() => setSaveStatus("error"));

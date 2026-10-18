@@ -22,6 +22,9 @@ import {
   type DeviceCopyDecision,
 } from "./cloudDeviceCopy";
 import { writeCloudLink } from "./cloudLink";
+import { imageMarkerIds } from "./tategaki";
+import { coverImageIds } from "./cover/coverModel";
+import { isTrashExpired, ORPHAN_IMAGE_MIN_AGE_MS, unreferencedImageIds } from "./trash";
 
 export interface DocumentRecord {
   id: number;
@@ -68,10 +71,18 @@ export interface ImageRecord {
   layerOrder?: number;
 }
 
+/** TSP-SAFE-004: a work moved to the ゴミ箱, kept whole so it can be put back. */
+export interface TrashRecord {
+  id: number;
+  trashedAt: number;
+  document: DocumentRecord;
+}
+
 class TategakiDatabase extends Dexie {
   documents!: Table<DocumentRecord, number>;
   images!: Table<ImageRecord, string>;
   bookshelfMetadata!: Table<BookshelfMetadataRecord, number>;
+  trash!: Table<TrashRecord, number>;
 
   constructor() {
     super("tategaki-editor-db");
@@ -102,6 +113,15 @@ class TategakiDatabase extends Dexie {
           await tx.table<BookshelfMetadataRecord, number>("bookshelfMetadata").bulkPut(metadata);
         }
       });
+    // TSP-SAFE-004: the ゴミ箱. A separate table, so every reader of
+    // `documents` (bookshelf, limits, 本をまとめる, the save queue's "deleted in
+    // another tab") keeps treating a trashed work as gone.
+    this.version(5).stores({
+      documents: "id, updatedAt, isCollection",
+      images: "id, createdAt",
+      bookshelfMetadata: "id, updatedAt, isCollection",
+      trash: "id, trashedAt",
+    });
   }
 }
 
@@ -465,12 +485,111 @@ export async function markCloudSynced(
   if (updated) writeDeviceCopyId(saved.projectId, docId);
 }
 
-export async function deleteDocument(id: number): Promise<void> {
+/**
+ * TSP-SAFE-004: 本棚の「削除」 moves the work to the ゴミ箱 (before, it was
+ * gone at once). Its illustrations and cloud link stay, so 元に戻す brings
+ * back the same work. An editor tab still open on it sees it as deleted.
+ */
+export async function deleteDocument(id: number, now: number = Date.now()): Promise<void> {
   if (isEphemeralDocId(id)) return;
-  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+  await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const document = await db.documents.get(id);
+    if (!document || document.isSample) return;
+    await db.trash.put({ id, trashedAt: now, document });
     await db.documents.delete(id);
     await db.bookshelfMetadata.delete(id);
   });
+}
+
+export async function listTrash(): Promise<TrashRecord[]> {
+  return db.trash.orderBy("trashedAt").reverse().toArray();
+}
+
+/**
+ * Puts a trashed work back on the bookshelf and returns its id (a new id only
+ * if its old one was taken meanwhile). The revision moves on, so a tab still
+ * open on the deleted work keeps its own text as a separate copy instead of
+ * overwriting the restored one (lib/localSaveQueue.ts).
+ */
+export async function restoreFromTrash(id: number): Promise<number | null> {
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const item = await db.trash.get(id);
+    if (!item) return null;
+    const taken = await db.documents.get(id);
+    const restoredId = taken ? Date.now() : id;
+    const document: DocumentRecord = {
+      ...item.document,
+      id: restoredId,
+      revision: revisionOf(item.document) + 1,
+      rename: undefined,
+    };
+    await db.documents.put(document);
+    const metadata = bookshelfMetadataFromDocument(document);
+    if (metadata) await db.bookshelfMetadata.put(metadata);
+    await db.trash.delete(id);
+    return restoredId;
+  });
+}
+
+/** Removes a trashed work for good, with the illustrations only it used. */
+export async function purgeFromTrash(id: number): Promise<void> {
+  const item = await db.trash.get(id);
+  if (!item) return;
+  await db.trash.delete(id);
+  await removeUnusedImages(imageIdsMentionedIn(item.document), 0);
+}
+
+/** Removes every trashed work older than TRASH_KEEP_DAYS. Returns how many. */
+export async function purgeExpiredTrash(now: number = Date.now()): Promise<number> {
+  const expired = (await db.trash.toArray()).filter((item) => isTrashExpired(item.trashedAt, now));
+  for (const item of expired) await purgeFromTrash(item.id);
+  return expired.length;
+}
+
+/**
+ * TSP-SAFE-004: illustrations stayed forever after their work was deleted.
+ * Removes stored images no work (on the bookshelf or in the trash) mentions,
+ * once they are older than ORPHAN_IMAGE_MIN_AGE_MS. Returns how many.
+ */
+export async function removeOrphanImages(now: number = Date.now()): Promise<number> {
+  const ids = (await db.images.toCollection().primaryKeys()).map(String);
+  return removeUnusedImages(ids, ORPHAN_IMAGE_MIN_AGE_MS, now);
+}
+
+function imageIdsMentionedIn(document: DocumentRecord): string[] {
+  // Candidates only; removeUnusedImages checks every remaining work again.
+  return [...new Set([...imageMarkerIds(document.content ?? ""), ...coverImageIds(document.settings?.cover)])];
+}
+
+async function removeUnusedImages(candidateIds: string[], minAgeMs: number, now: number = Date.now()): Promise<number> {
+  if (candidateIds.length === 0) return 0;
+  return db.transaction("rw", db.documents, db.trash, db.images, async () => {
+    const stored = (await db.images.bulkGet(candidateIds)).filter((record): record is ImageRecord => !!record);
+    if (stored.length === 0) return 0;
+    const works: unknown[] = [...(await db.documents.toArray()), ...(await db.trash.toArray()).map((item) => item.document)];
+    const unused = new Set(unreferencedImageIds(stored.map((record) => record.id), works));
+    const removable = stored
+      .filter((record) => unused.has(record.id) && now - (record.createdAt ?? 0) >= minAgeMs)
+      .map((record) => record.id);
+    await db.images.bulkDelete(removable);
+    return removable.length;
+  });
+}
+
+/**
+ * TSP-SAFE-004: asks the browser not to clear this site's saved works when
+ * space runs low (Safari may otherwise clear sites not opened for a while).
+ * Firefox would show the person a question for this, so it is not asked there.
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.persist) return false;
+    if (/firefox/i.test(navigator.userAgent)) return false;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return false;
+  }
 }
 
 export async function saveImage(record: ImageRecord): Promise<void> {

@@ -42,9 +42,17 @@ export interface ProjectsResult {
 
 export async function getProjectsResult(): Promise<ProjectsResult> {
   const supabase = createClient();
+  // TSP-SAFE-004 (3の6): only this user's works, also on this side — the
+  // database's row security (docs/supabase/migrations/20260903000000_*) is
+  // the real guard; this keeps the list right even if that were ever off.
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return { data: [], error: userError?.message ?? 'ログインしていません' };
+  }
   const { data, error } = await supabase
     .from('projects')
     .select('*')
+    .eq('user_id', user.id)
     .order('updated_at', { ascending: false });
 
   if (error) {

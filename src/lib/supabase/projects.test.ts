@@ -16,6 +16,7 @@ const state = {
   authError: null as { message: string; name?: string } | null,
   readError: null as { message: string } | null,
   clock: 0,
+  rlsOff: false,
 };
 
 function nextTime(): string {
@@ -35,8 +36,11 @@ class Query {
     return this;
   }
   private visible(): Row[] {
-    // RLS: only the signed-in user's rows exist for this client.
-    return state.rows.filter((row) => state.user && row.user_id === state.user.id && this.filters.every((f) => f(row)));
+    // RLS: only the signed-in user's rows exist for this client (unless a
+    // test turns it off to check the app's own filter).
+    return state.rows.filter(
+      (row) => (state.rlsOff || (state.user && row.user_id === state.user.id)) && this.filters.every((f) => f(row))
+    );
   }
   select() {
     if (this.op === "update") {
@@ -45,6 +49,9 @@ class Query {
       return Promise.resolve({ data: hit.map((row) => ({ ...row })), error: null });
     }
     return this;
+  }
+  order() {
+    return Promise.resolve({ data: this.visible().map((row) => ({ ...row })), error: null });
   }
   maybeSingle() {
     if (state.readError) return Promise.resolve({ data: null, error: state.readError });
@@ -65,7 +72,7 @@ vi.mock("./client", () => ({
   }),
 }));
 
-const { lookupProject, updateProject, CLOUD_PROJECT_CHANGED_ERROR, CLOUD_PROJECT_MISSING_ERROR } = await import("./projects");
+const { getProjectsResult, lookupProject, updateProject, CLOUD_PROJECT_CHANGED_ERROR, CLOUD_PROJECT_MISSING_ERROR } = await import("./projects");
 
 function seed(id: string, content: string, user_id = "me"): Row {
   const row: Row = { id, user_id, title: "題", content, settings: {}, created_at: nextTime(), updated_at: nextTime() };
@@ -78,6 +85,7 @@ beforeEach(() => {
   state.user = { id: "me" };
   state.authError = null;
   state.readError = null;
+  state.rlsOff = false;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -154,5 +162,20 @@ describe("updateProject: the database checks the version it overwrites (3の4)",
     expect(result.data).toBeNull();
     expect(result.error).toMatch(/Auth session missing/);
     expect(state.rows[0].content).toBe("前");
+  });
+});
+
+describe("getProjectsResult: the list asks for this user's works itself (3の6)", () => {
+  it("even with the database's row security off, another user's works are not listed", async () => {
+    seed("mine", "本文");
+    seed("theirs", "本文", "someone-else");
+    state.rlsOff = true;
+    const { data } = await getProjectsResult();
+    expect(data.map((row) => row.id)).toEqual(["mine"]);
+  });
+
+  it("signed out: an empty list and a reason", async () => {
+    state.authError = { message: "Auth session missing!", name: "AuthSessionMissingError" };
+    expect(await getProjectsResult()).toEqual({ data: [], error: "Auth session missing!" });
   });
 });

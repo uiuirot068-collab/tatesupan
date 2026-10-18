@@ -12,8 +12,15 @@ import {
   renameDocument,
   ensureSampleProject,
   listDocuments,
+  listTrash,
+  purgeExpiredTrash,
+  purgeFromTrash,
+  removeOrphanImages,
+  requestPersistentStorage,
+  restoreFromTrash,
   type DocumentRecord,
 } from "@/lib/db";
+import { TrashModal } from "@/components/TrashModal";
 import { DEFAULT_PAGE_SETTINGS } from "@/lib/pageLayout";
 import { CombineModal } from "@/components/CombineModal";
 import HelpModal from "@/components/HelpModal";
@@ -95,6 +102,15 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   useEffect(() => {
     if (!qaMode) void ensureSampleProject();
   }, [qaMode]);
+  // TSP-SAFE-004: tidy once per visit — works trashed long ago, then images no
+  // work uses — and ask the browser to keep this site's saved works.
+  useEffect(() => {
+    if (qaMode) return;
+    void purgeExpiredTrash()
+      .then(() => removeOrphanImages())
+      .catch((error: unknown) => console.error("TateSpun: could not tidy the trash", error));
+    void requestPersistentStorage();
+  }, [qaMode]);
   const storedDocuments = useLiveQuery(
     () => (qaMode ? Promise.resolve([] as DocumentRecord[]) : listDocuments()),
     [qaMode]
@@ -105,6 +121,11 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   );
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  // TSP-SAFE-004: 削除 moves a work to the ゴミ箱; the last one can be put back at once.
+  const trashItems = useLiveQuery(() => (qaMode ? Promise.resolve([]) : listTrash()), [qaMode]);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [trashOpenedAt, setTrashOpenedAt] = useState(0);
+  const [lastTrashed, setLastTrashed] = useState<{ id: number; title: string } | null>(null);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   // 「本をまとめる」を作品2冊未満で押したときの案内（無反応にしない）。
@@ -211,8 +232,25 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       setPendingDeleteId(null);
       return;
     }
+    const title = documents?.find((doc) => doc.id === id)?.title || "無題のドキュメント";
     await deleteDocument(id);
     setPendingDeleteId(null);
+    setLastTrashed({ id, title });
+  };
+
+  const handleRestore = async (id: number) => {
+    await restoreFromTrash(id);
+    setLastTrashed((last) => (last?.id === id ? null : last));
+  };
+
+  const handlePurge = async (id: number) => {
+    await purgeFromTrash(id);
+    setLastTrashed((last) => (last?.id === id ? null : last));
+  };
+
+  const openTrash = () => {
+    setTrashOpenedAt(Date.now());
+    setIsTrashOpen(true);
   };
 
   const pendingDoc = documents?.find((doc) => doc.id === pendingDeleteId);
@@ -486,7 +524,28 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
               </div>
               <p className="text-sm text-ink/55 dark:text-[#939DAF]">
                 {activeBookshelfTab === "cloud" ? "クラウド保存された作品" : "この端末に保存されている作品"}
+                {activeBookshelfTab === "local" && trashItems && trashItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={openTrash}
+                    className="ml-3 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
+                  >
+                    ゴミ箱 <span className="tabular-nums">{trashItems.length}</span>
+                  </button>
+                )}
               </p>
+              {activeBookshelfTab === "local" && lastTrashed && (
+                <p role="status" className="text-sm text-ink/70 dark:text-[#B9C2D3]">
+                  「{lastTrashed.title}」をゴミ箱に移しました。
+                  <button
+                    type="button"
+                    onClick={() => void handleRestore(lastTrashed.id)}
+                    className="ml-2 underline underline-offset-4 hover:text-ink"
+                  >
+                    元に戻す
+                  </button>
+                </p>
+              )}
             </div>
 
             {/* The shelf on a mat: the books are the content, set on a
@@ -1100,7 +1159,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-sm text-ink">
-              「{pendingDoc.title || "無題のドキュメント"}」を削除しますか？この操作は取り消せません。
+              「{pendingDoc.title || "無題のドキュメント"}」をゴミ箱に移しますか？30日のあいだは元に戻せます。
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -1115,11 +1174,21 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 onClick={() => handleDelete(pendingDoc.id)}
                 className="rounded bg-red-500 px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
               >
-                削除する
+                ゴミ箱に移す
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {isTrashOpen && (
+        <TrashModal
+          items={trashItems ?? []}
+          now={trashOpenedAt}
+          onRestore={handleRestore}
+          onPurge={handlePurge}
+          onClose={() => setIsTrashOpen(false)}
+        />
       )}
 
       <CombineModal
