@@ -722,7 +722,6 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 このブラウザの保存場所が使えないため、本棚を開けませんでした。プライベートモードや、サイトのデータを保存しない設定では使えないことがあります。設定を確かめてから、ページを読み込みなおしてください。
               </p>
             ) : documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
-            {renderTrashLinks("mx-auto mt-6 mb-6 flex w-full max-w-[1040px] flex-col gap-1 px-4 sm:px-6")}
             {documents !== undefined && (
               <>
                 {renderBrandPanel("onboarding")}
@@ -735,6 +734,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                   </div>
                   <div className="min-w-0">
                     <p className="font-serif text-[15px] leading-8 text-ink/70 dark:text-[#AEB7C6]">まだ空いている棚は、次の一冊のための場所です。<br />書きはじめた作品は、ここに一冊ずつ並んでいきます。</p>
+                    {/* TSP-SAFE-004 QA: the last work moved to the ゴミ箱 is put back from here. */}
+                    {renderTrashLinks("mt-4 flex flex-col gap-1")}
                     <div className="home-p3-mat relative mt-5 px-2 pt-4 pb-6 sm:px-6">
                       <div className="flex justify-end">
                         <button
