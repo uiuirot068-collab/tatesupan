@@ -241,7 +241,11 @@ export const FALLBACK_BASELINE_RATIO = 0.88;
 // better: they deviated away from a position the font itself defines as
 // correct, uniformly, for every character class.
 export function deriveBaselineRatioFromFont(fontResource: PublicationFontResource): number {
-  const buf = FontBinary.fromBase64(fontResource.base64);
+  return deriveBaselineRatioFromFontBinary(FontBinary.fromBase64(fontResource.base64));
+}
+
+/** {@link deriveBaselineRatioFromFont} for font bytes already in hand (the Preview's glyph outlines use it). */
+export function deriveBaselineRatioFromFontBinary(buf: FontBinary): number {
   const reader = new FontMetricsReader(buf);
   if (!reader.hasTable("vhea") || !reader.hasTable("vmtx")) return FALLBACK_BASELINE_RATIO;
   // Any covered glyph gives the identical answer (measured uniform above);

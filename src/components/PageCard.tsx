@@ -22,6 +22,7 @@ import {
 } from "@/lib/tategaki";
 import { BLEED_MM, PX_PER_MM, type PageLayout, type PageSettings, type PaperSize } from "@/lib/pageLayout";
 import { previewFontFamilyCss } from "@/lib/v2BrowserExport";
+import { usePreviewGlyphOutlines } from "@/lib/v2Bridge/previewGlyphOutlines";
 import { PAPER_SIZE_TEMPLATES } from "@/constants/paperSizes";
 import { resolveSnsId, showsSnsCredit, SNS_CREDIT_URL } from "@/lib/snsCredit";
 import { resolveNombreFontFamily } from "@/constants/fonts";
@@ -297,6 +298,7 @@ function PageCard({
   // image is deleted or pagination moves images on/off this page, without a
   // separate effect to prune a stale id.
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const previewGlyphs = usePreviewGlyphOutlines(settings.fontFamily, Boolean(v2PreviewEnabled && v2PreviewPage));
   const { paper } = layout;
   const { masterPage } = settings;
 
@@ -1013,6 +1015,7 @@ function PageCard({
                   fontSizePx={v2PreviewFontSizePx ?? fontSizePx}
                   mode="normal"
                   paintImages={false}
+                  glyphs={previewGlyphs}
                 />
               </div>
               {fullImage ? (
