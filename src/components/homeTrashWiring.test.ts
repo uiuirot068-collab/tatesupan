@@ -40,8 +40,8 @@ describe("bookshelf: 削除 → ゴミ箱", () => {
     expect(home).toContain("このブラウザの保存場所が使えないため、本棚を開けませんでした。");
   });
 
-  it("each visit tidies the expired trash, images no work uses at most daily, and asks to keep the saved works", () => {
-    expect(home).toContain(".then(() => (orphanSweepIsDue() ? removeOrphanImages().then(noteOrphanSweep) : undefined))");
+  it("each visit tidies the expired trash and asks to keep the saved works; no sweep of unused images", () => {
+    expect(home).not.toContain("removeOrphanImages");
     expect(home).toContain("void purgeExpiredTrash()");
     expect(home).toContain("void requestPersistentStorage();");
   });

@@ -8,9 +8,9 @@ import {
   listDocuments,
   listTrash,
   loadDocument,
+  openCloudDeviceCopy,
   purgeExpiredTrash,
   purgeFromTrash,
-  removeOrphanImages,
   restoreFromTrash,
   revisionOf,
   saveDocument,
@@ -19,7 +19,7 @@ import {
 } from "./db";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "./pageLayout";
 import { LocalSaveQueue } from "./localSaveQueue";
-import { ORPHAN_IMAGE_MIN_AGE_MS, releaseCloudWorkImages, TRASH_KEEP_DAYS, trashDaysLeft, unreferencedImageIds } from "./trash";
+import { releaseCloudWorkImages, TRASH_KEEP_DAYS, trashDaysLeft, unreferencedImageIds } from "./trash";
 
 /**
  * TSP-SAFE-004 (TSP-REVIEW-001 3の8・3の9): the ゴミ箱 and tidying images,
@@ -29,7 +29,7 @@ import { ORPHAN_IMAGE_MIN_AGE_MS, releaseCloudWorkImages, TRASH_KEEP_DAYS, trash
 const settings: PageSettings = DEFAULT_PAGE_SETTINGS;
 const DAY = 24 * 60 * 60 * 1000;
 const img = (id: string) => `【IMG:${id}:50:30:top】`;
-const OLD = Date.now() - ORPHAN_IMAGE_MIN_AGE_MS - DAY;
+const OLD = Date.now() - 10 * DAY;
 
 // localStorage stand-in (this suite runs without a DOM).
 const local = new Map<string, string>();
@@ -125,7 +125,7 @@ describe("ゴミ箱", () => {
     expect(await db.images.get("both")).toBeUndefined();
   });
 
-  it("QA: 完全に削除 of a work saved to the cloud keeps its images, also from the daily tidy", async () => {
+  it("QA: 完全に削除 of a work saved to the cloud keeps its images", async () => {
     const id = await createDocument();
     await saveDocument(id, "クラウド", img("cloudimg"), settings, "");
     await db.documents.update(id, { cloudSync: { projectId: "p1", updatedAt: "2026-10-18T00:00:00Z", hash: "h" } });
@@ -134,11 +134,17 @@ describe("ゴミ箱", () => {
     await purgeFromTrash(id);
     expect(await listTrash()).toHaveLength(0);
     expect(await db.images.get("cloudimg")).toBeDefined();
-    expect(await removeOrphanImages()).toBe(0);
+    // QA2: once that cloud work is deleted, another work's purge may take the image.
+    const other = await createDocument();
+    await saveDocument(other, "同じ挿絵", img("cloudimg"), settings, "");
+    await deleteDocument(other);
+    await purgeFromTrash(other);
     expect(await db.images.get("cloudimg")).toBeDefined();
-    // QA2: once that cloud work is deleted, its images can be tidied away.
     releaseCloudWorkImages("p1");
-    expect(await removeOrphanImages()).toBe(1);
+    const again = await createDocument();
+    await saveDocument(again, "同じ挿絵", img("cloudimg"), settings, "");
+    await deleteDocument(again);
+    await purgeFromTrash(again);
     expect(await db.images.get("cloudimg")).toBeUndefined();
   });
 
@@ -150,21 +156,51 @@ describe("ゴミ箱", () => {
   });
 });
 
-describe("images no work uses", () => {
-  it("old images no work mentions are removed; used, cover and fresh ones stay", async () => {
-    const id = await createDocument();
-    await saveDocument(id, "本", img("in-text"), { ...settings, cover: { ...settings.cover, front: { ...settings.cover?.front, assetId: "on-cover" } } } as PageSettings, "");
-    const trashed = await createDocument();
-    await saveDocument(trashed, "ゴミ箱", img("in-trash"), settings, "");
-    await deleteDocument(trashed);
-    for (const imageId of ["in-text", "on-cover", "in-trash", "orphan"]) {
-      await saveImage({ id: imageId, dataUrl: "data:x", createdAt: OLD });
-    }
-    await saveImage({ id: "just-added", dataUrl: "data:x", createdAt: Date.now() });
+describe("PC QA: one cloud work never gets two device copies", () => {
+  const project = { id: "cloud-1", title: "クラウド作品", content: "本文", settings, updated_at: "2026-10-18T00:00:00.000Z" };
+  const rescue = (title: string) => `${title}（控え）`;
 
-    expect(await removeOrphanImages()).toBe(1);
-    const left = (await db.images.toCollection().primaryKeys()).map(String).sort();
-    expect(left).toEqual(["in-text", "in-trash", "just-added", "on-cover"]);
+  it("opening the cloud work again brings its trashed copy back instead of making a new one", async () => {
+    const first = await openCloudDeviceCopy(project, rescue);
+    await deleteDocument(first.docId);
+    const again = await openCloudDeviceCopy(project, rescue);
+    expect(again.docId).toBe(first.docId);
+    expect(await listTrash()).toHaveLength(0);
+    expect(await listDocuments()).toHaveLength(1);
+  });
+
+  it("restoring an old copy while another copy stands for the cloud work brings it back unlinked", async () => {
+    const first = await openCloudDeviceCopy(project, rescue);
+    await deleteDocument(first.docId);
+    // made outside this flow (e.g. before the update): a second copy
+    const second = await createDocument();
+    await saveDocument(second, "クラウド作品", "本文", settings, "");
+    await db.documents.update(second, { cloudSync: { projectId: "cloud-1", updatedAt: null, hash: "h" } });
+
+    const restored = await restoreFromTrash(first.docId);
+    const docs = await listDocuments();
+    expect(docs.filter((d) => d.cloudSync?.projectId === "cloud-1").map((d) => d.id)).toEqual([second]);
+    expect(docs.find((d) => d.id === restored)?.cloudSync).toBeUndefined();
+  });
+
+  it("a restored work whose id was taken gets an id free on the bookshelf and in the trash", async () => {
+    const a = await createDocument();
+    await saveDocument(a, "A", "a", settings, "");
+    await deleteDocument(a);
+    await db.documents.put({ id: a, title: "別", content: "", settings, updatedAt: 0 });
+    const restored = await restoreFromTrash(a);
+    expect(restored).not.toBe(a);
+    expect(await db.trash.get(restored!)).toBeUndefined();
+  });
+});
+
+describe("images no work uses", () => {
+  it("PC QA: images no work mentions are NOT swept (a cut image or a cloud work's image may come back)", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "本", "挿絵は切り取った", settings, "");
+    await saveImage({ id: "cut", dataUrl: "data:x", createdAt: OLD });
+    await purgeExpiredTrash();
+    expect(await db.images.get("cut")).toBeDefined();
   });
 });
 
@@ -174,6 +210,8 @@ describe("trash rules", () => {
     expect(trashDaysLeft(t, t)).toBe(TRASH_KEEP_DAYS);
     expect(trashDaysLeft(t, t + (TRASH_KEEP_DAYS - 0.5) * DAY)).toBe(1);
     expect(trashDaysLeft(t, t + (TRASH_KEEP_DAYS + 3) * DAY)).toBe(0);
+    // PC QA: a clock behind the time of deletion never shows 31
+    expect(trashDaysLeft(t, t - 2 * DAY)).toBe(TRASH_KEEP_DAYS);
   });
 
   it("an image is unused only if no work mentions it anywhere", () => {

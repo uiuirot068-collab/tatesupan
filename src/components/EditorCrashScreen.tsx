@@ -100,7 +100,10 @@ export default function EditorCrashScreen({
       {rescuable ? (
         <>
           <p className="text-sm leading-relaxed">
-            ここまで書いた原稿は、ふだんはこの端末に自動で保存されています。念のため、もう一度開く前に控えを取ってください。
+            {/* TSP-SAFE-004 PC QA: after a failed open, the text was never saved. */}
+            {rescue.unsaved
+              ? "この画面の原稿は、まだこの端末に保存されていません。もう一度開く前に、かならず控えを取ってください。"
+              : "ここまで書いた原稿は、ふだんはこの端末に自動で保存されています。念のため、もう一度開く前に控えを取ってください。"}
           </p>
           <p className="text-xs text-ink/70">
             {rescue.title.trim() || "無題"}・{countVisualLength(rescue.content).toLocaleString("ja-JP")}字

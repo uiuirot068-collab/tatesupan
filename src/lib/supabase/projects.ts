@@ -38,6 +38,8 @@ export async function getCloudProjectCount(): Promise<CloudProjectCountResult> {
 export interface ProjectsResult {
   data: Project[];
   error: string | null;
+  /** TSP-SAFE-004 PC QA: nobody is signed in (not a failure to say as one). */
+  signedOut?: boolean;
 }
 
 export async function getProjectsResult(): Promise<ProjectsResult> {
@@ -47,7 +49,7 @@ export async function getProjectsResult(): Promise<ProjectsResult> {
   // the real guard; this keeps the list right even if that were ever off.
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
-    return { data: [], error: userError?.message ?? 'ログインしていません' };
+    return { data: [], error: userError?.message ?? 'ログインしていません', signedOut: true };
   }
   const { data, error } = await supabase
     .from('projects')

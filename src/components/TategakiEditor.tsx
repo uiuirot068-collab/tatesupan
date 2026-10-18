@@ -556,6 +556,17 @@ export default function TategakiEditor({
   }, [documentEpoch]);
 
   const hasLoadedRef = useRef(false);
+  // TSP-SAFE-004 PC QA: the work as it was opened. Opening alone wrote it
+  // again (a new revision), so a second tab opened on the same work made the
+  // first tab's next edit split off as 「（書きかけの控え）」. Cleared by the
+  // first change; settings are taken from the first render after opening.
+  const openedFieldsRef = useRef<{
+    docId: number;
+    title: string;
+    content: string;
+    plotNote: string;
+    settings?: PageSettings;
+  } | null>(null);
   // Tracks which document's data is currently reflected in state, so the
   // autosave effect can refuse to write if a document switch is in flight.
   const loadedDocIdRef = useRef<number | null>(null);
@@ -962,6 +973,10 @@ export default function TategakiEditor({
 
       loadedDocIdRef.current = id;
       setDocId(id);
+      openedFieldsRef.current =
+        doc && id !== null
+          ? { docId: id, title: doc.title ?? "", content: doc.content ?? "", plotNote: doc.plotNote ?? "" }
+          : null;
       hasLoadedRef.current = true;
       setSaveStatus("saved");
     }
@@ -993,8 +1008,9 @@ export default function TategakiEditor({
   // TSP-SAFE-003: the error screen (app/editor/error.tsx) hands back the text
   // the screen last showed, even when the editor itself crashed.
   useEffect(() => {
-    noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument });
-  }, [docId, title, content, plotNote, settings, isSampleDocument]);
+    const unsaved = loadFailure !== null || deletedElsewhere;
+    noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument, unsaved });
+  }, [docId, title, content, plotNote, settings, isSampleDocument, loadFailure, deletedElsewhere]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1232,6 +1248,15 @@ export default function TategakiEditor({
     // changes but before the new document's data has fully loaded.
     if (loadedDocIdRef.current !== docId) return;
     if (isSampleDocument) return;
+    // TSP-SAFE-004 PC QA: nothing changed since opening, nothing to write.
+    const opened = openedFieldsRef.current;
+    if (opened) {
+      const sameText =
+        opened.docId === docId && opened.title === title && opened.content === content && opened.plotNote === plotNote;
+      if (sameText && opened.settings === undefined) opened.settings = settings;
+      if (sameText && (opened.settings === settings || JSON.stringify(opened.settings) === JSON.stringify(settings))) return;
+      openedFieldsRef.current = null;
+    }
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);

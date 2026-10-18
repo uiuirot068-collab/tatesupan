@@ -181,6 +181,6 @@ describe("getProjectsResult: the list asks for this user's works itself (3の6)"
 
   it("signed out: an empty list and a reason", async () => {
     state.authError = { message: "Auth session missing!", name: "AuthSessionMissingError" };
-    expect(await getProjectsResult()).toEqual({ data: [], error: "Auth session missing!" });
+    expect(await getProjectsResult()).toEqual({ data: [], error: "Auth session missing!", signedOut: true });
   });
 });

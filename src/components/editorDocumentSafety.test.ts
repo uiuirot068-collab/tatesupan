@@ -218,11 +218,21 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
   });
 
   it("the error screen can hand back the text the screen last showed", () => {
-    expect(editor).toContain("noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument });");
+    expect(editor).toContain("noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument, unsaved });");
+    // PC QA: after a failed open the error screen does not claim the text was saved.
+    expect(editor).toContain("const unsaved = loadFailure !== null || deletedElsewhere;");
+    expect(readFileSync(resolve("src/components/EditorCrashScreen.tsx"), "utf8")).toContain("rescue.unsaved");
     const errorPage = readFileSync(resolve("src/app/editor/error.tsx"), "utf8");
     expect(errorPage).toContain("<EditorCrashScreen error={error} retry={retry} />");
     const globalError = readFileSync(resolve("src/app/global-error.tsx"), "utf8");
     expect(globalError).toContain("<html");
     expect(globalError).toContain("<EditorCrashScreen error={error} retry={retry} offerRescueOnlyOnEditor />");
+  });
+
+  it("PC QA: opening a work writes nothing, so a second tab does not split the first tab's edits", () => {
+    expect(editor).toContain("openedFieldsRef.current =");
+    const autosave = editor.slice(editor.indexOf("// TSP-SAFE-004 PC QA: nothing changed since opening"), editor.indexOf("pendingAutosave.schedule("));
+    expect(autosave).toContain("openedFieldsRef.current = null;");
+    expect(autosave.indexOf("return;")).toBeLessThan(autosave.indexOf('setSaveStatus("saving")'));
   });
 });

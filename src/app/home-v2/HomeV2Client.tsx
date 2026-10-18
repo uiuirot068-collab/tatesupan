@@ -15,7 +15,6 @@ import {
   listTrash,
   purgeExpiredTrash,
   purgeFromTrash,
-  removeOrphanImages,
   requestPersistentStorage,
   restoreFromTrash,
   type DocumentRecord,
@@ -65,25 +64,6 @@ const LOCAL_DOCUMENT_LIMIT = 60;
 
 const STORAGE_UNAVAILABLE = "storage-unavailable" as const;
 
-// TSP-SAFE-004 QA: when the bookshelf last looked for unused illustrations.
-const ORPHAN_SWEEP_KEY = "tatespun_orphan_image_sweep_at";
-const ORPHAN_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-function orphanSweepIsDue(): boolean {
-  try {
-    const last = Number(window.localStorage.getItem(ORPHAN_SWEEP_KEY));
-    return !Number.isFinite(last) || Date.now() - last >= ORPHAN_SWEEP_INTERVAL_MS;
-  } catch {
-    return true;
-  }
-}
-function noteOrphanSweep(): void {
-  try {
-    window.localStorage.setItem(ORPHAN_SWEEP_KEY, String(Date.now()));
-  } catch {
-    // storage blocked: the sweep simply runs again next visit
-  }
-}
-
 const QA_BOOKS: DocumentRecord[] = [
   {
     id: -101,
@@ -125,14 +105,14 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     // TSP-SAFE-004 QA2: an unusable storage is said on the bookshelf below.
     if (!qaMode) void ensureSampleProject().catch(() => undefined);
   }, [qaMode]);
-  // TSP-SAFE-004: tidy once per visit — works trashed long ago, then images no
-  // work uses — and ask the browser to keep this site's saved works.
-  // TSP-SAFE-004 QA: the image sweep reads every image, so it runs at most
-  // once a day (not on every visit).
+  // TSP-SAFE-004: tidy once per visit (works trashed long ago) and ask the
+  // browser to keep this site's saved works.
+  // TSP-SAFE-004 PC QA: no sweep of 「images no work mentions」 any more — a
+  // cut (Ctrl+X) or undone illustration and the illustrations of a cloud work
+  // opened on another device look unused here, and were lost.
   useEffect(() => {
     if (qaMode) return;
     void purgeExpiredTrash()
-      .then(() => (orphanSweepIsDue() ? removeOrphanImages().then(noteOrphanSweep) : undefined))
       .catch((error: unknown) => console.error("TateSpun: could not tidy the trash", error));
     void requestPersistentStorage();
   }, [qaMode]);
@@ -292,8 +272,13 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       return;
     }
     const title = documents?.find((doc) => doc.id === id)?.title || "無題のドキュメント";
-    await deleteDocument(id);
+    const moved = await deleteDocument(id).catch(() => false);
     setPendingDeleteId(null);
+    // TSP-SAFE-004 PC QA: only a work actually moved is announced.
+    if (!moved) {
+      window.alert("ゴミ箱に移せませんでした。ページを読み込み直してから、もう一度お試しください。");
+      return;
+    }
     trashedAtRef.current = Date.now();
     setLastTrashed({ id, title });
     // TSP-SAFE-004 QA2: stay on this browser's shelf, where 元に戻す and the

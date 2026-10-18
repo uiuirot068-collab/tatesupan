@@ -1,18 +1,11 @@
 /**
- * TSP-SAFE-004: rules of the bookshelf's ゴミ箱 (trash) and of tidying
- * illustrations nothing uses any more. Pure; the IndexedDB side is in db.ts.
+ * TSP-SAFE-004: rules of the bookshelf's ゴミ箱 (trash) and of the
+ * illustrations a removed work leaves. Pure; the IndexedDB side is in db.ts.
  */
 
 /** A deleted work stays in the trash this long, then is removed for good. */
 export const TRASH_KEEP_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * An illustration no work uses is removed only after it is this old: a tab
- * that just added one saves the work a moment later (autosave), so a fresh
- * image without a work yet is not an orphan.
- */
-export const ORPHAN_IMAGE_MIN_AGE_MS = 7 * DAY_MS;
 
 export function trashExpiresAt(trashedAt: number): number {
   return trashedAt + TRASH_KEEP_DAYS * DAY_MS;
@@ -22,9 +15,13 @@ export function isTrashExpired(trashedAt: number, now: number): boolean {
   return now >= trashExpiresAt(trashedAt);
 }
 
-/** Whole days left before the work is removed for good (never below 0). */
+/**
+ * Whole days left before the work is removed for good: never below 0, and
+ * never above TRASH_KEEP_DAYS (PC QA: a clock a little behind showed 31).
+ */
 export function trashDaysLeft(trashedAt: number, now: number): number {
-  return Math.max(0, Math.ceil((trashExpiresAt(trashedAt) - now) / DAY_MS));
+  const left = Math.ceil((trashExpiresAt(trashedAt) - now) / DAY_MS);
+  return Math.min(TRASH_KEEP_DAYS, Math.max(0, left));
 }
 
 /**

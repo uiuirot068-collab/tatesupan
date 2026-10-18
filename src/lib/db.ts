@@ -21,10 +21,10 @@ import {
   type CloudSyncRecord,
   type DeviceCopyDecision,
 } from "./cloudDeviceCopy";
-import { readCloudLink, writeCloudLink } from "./cloudLink";
+import { clearCloudLink, readCloudLink, writeCloudLink } from "./cloudLink";
 import { imageMarkerIds } from "./tategaki";
 import { coverImageIds } from "./cover/coverModel";
-import { isTrashExpired, keepCloudWorkImages, keptCloudWorkImageIds, ORPHAN_IMAGE_MIN_AGE_MS, unreferencedImageIds } from "./trash";
+import { isTrashExpired, keepCloudWorkImages, keptCloudWorkImageIds, unreferencedImageIds } from "./trash";
 
 export interface DocumentRecord {
   id: number;
@@ -394,7 +394,7 @@ export async function openCloudDeviceCopy(
   const cloudHash = contentHash(project.title, project.content);
   const cloudSync: CloudSyncRecord = { projectId: project.id, updatedAt: project.updated_at ?? null, hash: cloudHash };
 
-  const opened = await db.transaction("rw", db.documents, db.bookshelfMetadata, async (): Promise<OpenedDeviceCopy> => {
+  const opened = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async (): Promise<OpenedDeviceCopy> => {
     const local = await findDeviceCopy(project.id);
     const decision = decideDeviceCopy(
       local ? { hash: contentHash(local.title, local.content), sync: local.cloudSync ?? null } : null,
@@ -455,6 +455,7 @@ export async function openCloudDeviceCopy(
   return opened;
 }
 
+// Must run inside a documents + bookshelfMetadata + trash transaction.
 async function findDeviceCopy(projectId: string): Promise<DocumentRecord | undefined> {
   const remembered = readDeviceCopyId(projectId);
   if (remembered !== null) {
@@ -464,7 +465,15 @@ async function findDeviceCopy(projectId: string): Promise<DocumentRecord | undef
   // The remembered id is missing (site data partly cleared): look the copy up
   // by its own record. Newest first if there are several.
   const copies = await db.documents.filter((doc) => doc.cloudSync?.projectId === projectId).toArray();
-  return copies.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const live = copies.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  if (live) return live;
+  // TSP-SAFE-004 PC QA: the device copy is in the ゴミ箱. It comes back to the
+  // bookshelf as this cloud work's copy (a new copy here, then 元に戻す of the
+  // old one, left two copies of one cloud work).
+  const trashed = (await db.trash.filter((item) => item.document.cloudSync?.projectId === projectId).toArray()).sort(
+    (a, b) => b.trashedAt - a.trashedAt
+  )[0];
+  return trashed ? (await putBackFromTrash(trashed)).document : undefined;
 }
 
 /**
@@ -490,14 +499,16 @@ export async function markCloudSynced(
  * gone at once). Its illustrations and cloud link stay, so 元に戻す brings
  * back the same work. An editor tab still open on it sees it as deleted.
  */
-export async function deleteDocument(id: number, now: number = Date.now()): Promise<void> {
-  if (isEphemeralDocId(id)) return;
-  await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+export async function deleteDocument(id: number, now: number = Date.now()): Promise<boolean> {
+  if (isEphemeralDocId(id)) return false;
+  // PC QA: says whether the work was moved, so 「移しました」 is never shown for nothing.
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
     const document = await db.documents.get(id);
-    if (!document || document.isSample) return;
+    if (!document || document.isSample) return false;
     await db.trash.put({ id, trashedAt: now, document });
     await db.documents.delete(id);
     await db.bookshelfMetadata.delete(id);
+    return true;
   });
 }
 
@@ -516,23 +527,51 @@ export async function isInTrash(id: number): Promise<boolean> {
  * overwriting the restored one (lib/localSaveQueue.ts).
  */
 export async function restoreFromTrash(id: number): Promise<number | null> {
-  return db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+  const restored = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
     const item = await db.trash.get(id);
-    if (!item) return null;
-    const taken = await db.documents.get(id);
-    const restoredId = taken ? Date.now() : id;
-    const document: DocumentRecord = {
-      ...item.document,
-      id: restoredId,
-      revision: revisionOf(item.document) + 1,
-      rename: undefined,
-    };
-    await db.documents.put(document);
-    const metadata = bookshelfMetadataFromDocument(document);
-    if (metadata) await db.bookshelfMetadata.put(metadata);
-    await db.trash.delete(id);
-    return restoredId;
+    return item ? putBackFromTrash(item) : null;
   });
+  if (!restored) return null;
+  const projectId = restored.document.cloudSync?.projectId;
+  if (projectId) {
+    writeDeviceCopyId(projectId, restored.document.id);
+    writeCloudLink(restored.document.id, projectId);
+  } else if (restored.unlinked && restored.document.id === id) {
+    clearCloudLink(id);
+  }
+  return restored.document.id;
+}
+
+/**
+ * Moves one trashed work back to the bookshelf. Must run inside a documents +
+ * bookshelfMetadata + trash transaction.
+ */
+async function putBackFromTrash(item: TrashRecord): Promise<{ document: DocumentRecord; unlinked: boolean }> {
+  let restoredId = item.id;
+  if (await db.documents.get(restoredId)) {
+    // PC QA: the new id is free on the bookshelf AND in the ゴミ箱.
+    restoredId = Date.now();
+    while ((await db.documents.get(restoredId)) || (await db.trash.get(restoredId))) restoredId += 1;
+  }
+  // TSP-SAFE-004 PC QA: the cloud work was opened again meanwhile and has
+  // another device copy now. This one comes back as a plain work, so the two
+  // never stand for the same cloud work.
+  const projectId = item.document.cloudSync?.projectId;
+  const otherCopy = projectId
+    ? await db.documents.filter((doc) => doc.id !== restoredId && doc.cloudSync?.projectId === projectId).first()
+    : undefined;
+  const document: DocumentRecord = {
+    ...item.document,
+    id: restoredId,
+    revision: revisionOf(item.document) + 1,
+    rename: undefined,
+    ...(otherCopy ? { cloudSync: undefined } : {}),
+  };
+  await db.documents.put(document);
+  const metadata = bookshelfMetadataFromDocument(document);
+  if (metadata) await db.bookshelfMetadata.put(metadata);
+  await db.trash.delete(item.id);
+  return { document, unlinked: !!otherCopy };
 }
 
 /** Removes a trashed work for good, with the illustrations only it used. */
@@ -548,7 +587,7 @@ export async function purgeFromTrash(id: number): Promise<void> {
     keepCloudWorkImages(cloudProjectId, imageIdsMentionedIn(item.document));
     return;
   }
-  await removeUnusedImages(imageIdsMentionedIn(item.document), 0);
+  await removeUnusedImages(imageIdsMentionedIn(item.document));
 }
 
 /** Removes every trashed work older than TRASH_KEEP_DAYS. Returns how many. */
@@ -558,22 +597,12 @@ export async function purgeExpiredTrash(now: number = Date.now()): Promise<numbe
   return expired.length;
 }
 
-/**
- * TSP-SAFE-004: illustrations stayed forever after their work was deleted.
- * Removes stored images no work (on the bookshelf or in the trash) mentions,
- * once they are older than ORPHAN_IMAGE_MIN_AGE_MS. Returns how many.
- */
-export async function removeOrphanImages(now: number = Date.now()): Promise<number> {
-  const ids = (await db.images.toCollection().primaryKeys()).map(String);
-  return removeUnusedImages(ids, ORPHAN_IMAGE_MIN_AGE_MS, now);
-}
-
 function imageIdsMentionedIn(document: DocumentRecord): string[] {
   // Candidates only; removeUnusedImages checks every remaining work again.
   return [...new Set([...imageMarkerIds(document.content ?? ""), ...coverImageIds(document.settings?.cover)])];
 }
 
-async function removeUnusedImages(candidateIds: string[], minAgeMs: number, now: number = Date.now()): Promise<number> {
+async function removeUnusedImages(candidateIds: string[]): Promise<number> {
   if (candidateIds.length === 0) return 0;
   return db.transaction("rw", db.documents, db.trash, db.images, async () => {
     const stored = (await db.images.bulkGet(candidateIds)).filter((record): record is ImageRecord => !!record);
@@ -581,9 +610,7 @@ async function removeUnusedImages(candidateIds: string[], minAgeMs: number, now:
     const works: unknown[] = [...(await db.documents.toArray()), ...(await db.trash.toArray()).map((item) => item.document)];
     const kept = keptCloudWorkImageIds();
     const unused = new Set(unreferencedImageIds(stored.map((record) => record.id).filter((imageId) => !kept.has(imageId)), works));
-    const removable = stored
-      .filter((record) => unused.has(record.id) && now - (record.createdAt ?? 0) >= minAgeMs)
-      .map((record) => record.id);
+    const removable = stored.filter((record) => unused.has(record.id)).map((record) => record.id);
     await db.images.bulkDelete(removable);
     return removable.length;
   });

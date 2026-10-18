@@ -14,6 +14,11 @@ export interface EditorRescue {
   settings: unknown;
   /** true for the 使い方ガイド / おためしデモ text, which is never saved. */
   sample: boolean;
+  /**
+   * TSP-SAFE-004 PC QA: saving was stopped (the work did not open, or was
+   * deleted elsewhere), so the text is NOT in this browser's storage.
+   */
+  unsaved?: boolean;
 }
 
 let latest: EditorRescue | null = null;
@@ -92,7 +97,7 @@ export function loadFailureMessage(failure: EditorLoadFailure): string {
     case "cloud-unreachable":
       return "クラウドに接続できなかったため、作品を開けませんでした。通信を確かめてから、もう一度読み込んでください。";
     case "cloud-signed-out":
-      return "ログインが切れているため、クラウドの作品を開けませんでした。ログインしてから、もう一度読み込んでください。";
+      return "ログインしていないため、クラウドの作品を開けませんでした。ログインしてから、もう一度読み込んでください。";
     case "cloud-missing":
       return "この作品はクラウドに見つかりませんでした（別の端末で削除されたかもしれません）。";
     case "local-missing":

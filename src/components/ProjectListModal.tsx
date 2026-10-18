@@ -20,13 +20,17 @@ export function ProjectListModal({
   const [isLoading, setIsLoading] = useState(true);
   // TSP-SAFE-004 QA: a list that could not be read is not an empty list.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // TSP-SAFE-004 PC QA: nobody signed in is not an error.
+  const [signedOut, setSignedOut] = useState(false);
 
   const fetchProjects = async () => {
     setIsLoading(true);
     setLoadError(null);
-    const { data, error } = await getProjectsResult();
+    setSignedOut(false);
+    const { data, error, signedOut: noOneSignedIn } = await getProjectsResult();
     setProjects(data);
-    setLoadError(error);
+    setSignedOut(!!noOneSignedIn);
+    setLoadError(noOneSignedIn ? null : error);
     setIsLoading(false);
   };
 
@@ -78,6 +82,10 @@ export function ProjectListModal({
           {isLoading ? (
             <div className="py-8 text-center text-sm text-gray-500 dark:text-[#AEB7C6]">
               読み込み中...
+            </div>
+          ) : signedOut ? (
+            <div className="py-8 text-center text-sm text-gray-600 dark:text-[#C8CFDA]">
+              ログインすると、クラウドに保存した作品がここに並びます。
             </div>
           ) : loadError !== null ? (
             <div role="alert" className="py-8 text-center text-sm text-gray-600 dark:text-[#C8CFDA]">
