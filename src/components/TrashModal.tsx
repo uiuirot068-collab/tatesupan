@@ -67,7 +67,7 @@ export function TrashModal({
             閉じる
           </button>
         </div>
-        <p className="mt-2 text-xs text-ink/60">削除した作品は{TRASH_KEEP_DAYS}日たつと自動で消えます。</p>
+        <p className="mt-2 text-xs text-ink/60">ゴミ箱に移した作品は{TRASH_KEEP_DAYS}日たつと自動で消えます。</p>
         {items.length === 0 ? (
           <p className="py-10 text-center text-sm text-ink/50">ゴミ箱は空です。</p>
         ) : (
