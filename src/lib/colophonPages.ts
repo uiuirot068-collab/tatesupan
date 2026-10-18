@@ -105,22 +105,40 @@ export function paginateColophonRenderPlan(
   lines.sort((a, b) => a.band.top - b.band.top);
   if (lines.length === 0) return [plan];
 
+  // TSP-PRINT-003: one row's lines (its label and every value line) form a
+  // block that moves to the next page as a whole, so a label never ends a
+  // page while its value starts the next one. Free text and the minimal
+  // template's title are one block per line. A row taller than a whole page
+  // still starts on a fresh page and then continues line by line.
+  const blocks: { first: number; last: number }[] = [];
+  lines.forEach((line, index) => {
+    const row = line.items[0].row;
+    const previous = blocks[blocks.length - 1];
+    if (row !== undefined && previous && lines[previous.last].items[0].row === row) previous.last = index;
+    else blocks.push({ first: index, last: index });
+  });
+
   const pageOfLine: number[] = [];
   const offsets: number[] = [];
   const bottoms: number[] = [];
-  lines.forEach((line, index) => {
-    const page = offsets.length - 1;
-    const fits = page >= 0 && line.band.bottom - offsets[page] + edgeEm <= pageHeightEm + EPSILON_EM;
-    if (fits) {
+  const fitsOnPage = (page: number, bottom: number) => page >= 0 && bottom - offsets[page] + edgeEm <= pageHeightEm + EPSILON_EM;
+  const openPage = (top: number) => {
+    // The first page keeps the plan's own top; later pages start at the line.
+    offsets.push(offsets.length === 0 ? 0 : top - edgeEm);
+    bottoms.push(top);
+  };
+  for (const block of blocks) {
+    const top = lines[block.first].band.top;
+    const bottom = lines[block.last].band.bottom;
+    if (!fitsOnPage(offsets.length - 1, bottom)) openPage(top);
+    for (let index = block.first; index <= block.last; index++) {
+      const line = lines[index];
+      if (!fitsOnPage(offsets.length - 1, line.band.bottom)) openPage(line.band.top);
+      const page = offsets.length - 1;
       pageOfLine[index] = page;
       bottoms[page] = line.band.bottom;
-      return;
     }
-    // The first page keeps the plan's own top; later pages start at the line.
-    offsets.push(page < 0 ? 0 : line.band.top - edgeEm);
-    bottoms.push(line.band.bottom);
-    pageOfLine[index] = offsets.length - 1;
-  });
+  }
   if (offsets.length === 1) return [plan];
 
   const pages: ColophonRenderPlan[] = offsets.map((offset, page) => ({

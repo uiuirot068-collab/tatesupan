@@ -17,7 +17,7 @@
 // `@napi-rs/canvas`, `Buffer`, `fs`, or `path`, and must never gain one.
 import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPagePlan, PaintPlan } from "./pdfGenerator";
-import { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, mmToPx, ptToPx, computeLongSideResize } from "./rasterShared";
+import { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, mmToPx, ptToPx, rasterTextBaseline, computeLongSideResize } from "./rasterShared";
 import { WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE } from "../../core/settings/outputTypography";
 
 // The browser executor only ever needs the font's own CSS family NAME
@@ -151,7 +151,7 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       ctx.font = `${ptToPx(outputFontSizePt, dpi)}px "${fontFamily}"`;
     }
     ctx.textAlign = cmd.align;
-    ctx.textBaseline = cmd.baseline ?? "alphabetic";
+    ctx.textBaseline = "alphabetic";
     let fontSizePx = ptToPx(outputFontSizePt, dpi);
     if (cmd.maxWidthMm !== undefined) {
       const widthPx = ctx.measureText(cmd.text).width;
@@ -166,7 +166,8 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       }
     }
     const xPx = mmToPx(cmd.xMm, dpi);
-    const yPx = mmToPx(cmd.yMm, dpi);
+    // jsPDF's "middle" baseline, not Canvas's own (see rasterTextBaseline).
+    const yPx = mmToPx(cmd.yMm, dpi) + rasterTextBaseline(cmd.baseline, fontSizePx).dyPx;
     if (cmd.angle) {
       // UNVERIFIED, defensive-only path -- see `rasterGenerator.ts`'s
       // own identical disclosure. No real Publication paint-model call

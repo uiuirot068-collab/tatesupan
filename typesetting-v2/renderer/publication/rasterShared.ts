@@ -34,6 +34,21 @@ export function ptToPx(pt: number, dpi: number): number {
   return (pt / 72) * dpi;
 }
 
+/**
+ * TSP-PRINT-003: where a text command with `baseline: "middle"` puts its
+ * alphabetic baseline, below its y, in em. jsPDF (the PDF) moves it by
+ * (1/2 − 0.15) em (its default line-height factor 1.15); Canvas 2D's own
+ * "middle" is the em box's middle, 0.38 em above the baseline in every
+ * bundled font, so JPG ノンブル / 柱 / 縦中横 sat 0.03 em lower than PDF.
+ * Both raster executors draw "middle" text at this offset instead.
+ */
+export const JSPDF_MIDDLE_BASELINE_EM = 0.5 - 0.15;
+
+/** Canvas `textBaseline` and y shift (px) that place a command's baseline as PDF does. */
+export function rasterTextBaseline(baseline: "alphabetic" | "middle" | undefined, fontSizePx: number): { textBaseline: "alphabetic"; dyPx: number } {
+  return { textBaseline: "alphabetic", dyPx: baseline === "middle" ? fontSizePx * JSPDF_MIDDLE_BASELINE_EM : 0 };
+}
+
 // v2 has no bleed/trim geometry (see `jpgExport.ts`'s own module doc for
 // the full disclosed rationale) -- the print transform is therefore
 // exactly this: resize the full base raster (already == the "trim"

@@ -486,6 +486,27 @@ function getCloneStyleProps(): string[] {
  * browser behavior instead of a reimplementation that has to be individually
  * patched for each CSS feature it doesn't support.
  */
+const XLINK_NS = 'http://www.w3.org/1999/xlink';
+
+/**
+ * TSP-PRINT-003: the Preview draws glyphs (body text, ノンブル, 柱) as SVG
+ * `<use href="#…">` of paths kept once in a shared `<defs>` outside the page
+ * (`previewGlyphOutlines.ts`). html-to-image copies a referenced definition
+ * into the capture only for `xlink:href`, so with plain `href` every glyph
+ * pointed at nothing and the captured page (3D book, screen-capture JPG) came
+ * out blank. Mirrors each `href` into `xlink:href` for the capture; returns
+ * the undo.
+ */
+export function exposeGlyphUsesForCapture(target: Element): () => void {
+  const added: Element[] = [];
+  target.querySelectorAll('use[href]').forEach((use) => {
+    if (use.hasAttributeNS(XLINK_NS, 'href')) return;
+    use.setAttributeNS(XLINK_NS, 'xlink:href', use.getAttribute('href') ?? '');
+    added.push(use);
+  });
+  return () => added.forEach((use) => use.removeAttributeNS(XLINK_NS, 'href'));
+}
+
 export async function capturePageToCanvas(
   root: HTMLElement,
   { pixelRatio }: CapturePageOptions
@@ -532,6 +553,7 @@ export async function capturePageToCanvas(
   // composited straight onto the finished canvas below. Restored in `finally`.
   const { restore: restoreInlinedImages, composites: imageComposites } =
     await prepareUrlImagesForCapture(target);
+  const restoreGlyphUses = exposeGlyphUsesForCapture(target);
 
   let tFontsReady = tResolved;
   let tMeasured = tResolved;
@@ -640,6 +662,7 @@ export async function capturePageToCanvas(
     return canvas;
   } finally {
     restoreInlinedImages();
+    restoreGlyphUses();
     if (scaleRoot) {
       scaleRoot.style.transform = previousTransform;
       scaleRoot.style.transition = previousTransition;

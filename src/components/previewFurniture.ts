@@ -167,3 +167,32 @@ export function resolveColophonPreviewFurniture(input: ColophonPreviewFurnitureI
     hashira: null,
   };
 }
+
+/**
+ * TSP-PRINT-003 (P4-7): where PDF puts one ノンブル / 柱 run, in card pixels.
+ * PDF writes furniture as one horizontal text (`horizontalFurnitureCommand`):
+ * one em = the furniture font size, x anchored by `align` on the run's
+ * advance width (jsPDF measures by advances, no kerning), and jsPDF's
+ * `baseline:"middle"` puts the alphabetic baseline at the placement's centre
+ * plus (1/2 − 0.15) em (its default line-height factor 1.15). The Preview
+ * draws the same font's glyphs at exactly this baseline, instead of centring
+ * a CSS line box (whose middle is not the glyphs' middle — the 0.2〜0.4mm
+ * offset seen before).
+ */
+export function furnitureRunPlacement(
+  advanceUnits: number,
+  unitsPerEm: number,
+  placement: FurniturePlacement,
+  fontSizePt: number,
+  bleedMm: number
+): { x: number; baselineY: number; scale: number } {
+  const sizeMm = fontSizePt * MM_PER_PT;
+  const widthMm = (advanceUnits / unitsPerEm) * sizeMm;
+  const leftMm =
+    placement.align === "left" ? placement.xMm : placement.align === "right" ? placement.xMm - widthMm : placement.xMm - widthMm / 2;
+  return {
+    x: (leftMm + bleedMm) * PX_PER_MM,
+    baselineY: (placement.yCenterMm + sizeMm * (0.5 - 0.15) + bleedMm) * PX_PER_MM,
+    scale: (sizeMm * PX_PER_MM) / unitsPerEm,
+  };
+}

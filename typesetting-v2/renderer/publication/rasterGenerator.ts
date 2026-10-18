@@ -21,7 +21,7 @@
 import { createCanvas, GlobalFonts, loadImage, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPlan, PublicationFontResource } from "./pdfGenerator";
-import { RASTER_DPI, mmToPx, ptToPx } from "./rasterShared";
+import { RASTER_DPI, mmToPx, ptToPx, rasterTextBaseline } from "./rasterShared";
 
 export { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY } from "./rasterShared";
 
@@ -105,7 +105,7 @@ async function paintCommandsOnContext(ctx: SKRSContext2D, commands: PaintCommand
     // translation table is needed for either value space).
     if (fontResource) ctx.font = `${ptToPx(cmd.fontSizePt, dpi)}px "${fontResource.fontName}"`;
     ctx.textAlign = cmd.align;
-    ctx.textBaseline = cmd.baseline ?? "alphabetic";
+    ctx.textBaseline = "alphabetic";
     let fontSizePx = ptToPx(cmd.fontSizePt, dpi);
     // Same TCY measure-then-scale-down fit pass as `renderPaintPlanToPdf`
     // (`pdf.getTextWidth`), using Canvas's own real registered-font
@@ -123,7 +123,8 @@ async function paintCommandsOnContext(ctx: SKRSContext2D, commands: PaintCommand
       }
     }
     const xPx = mmToPx(cmd.xMm, dpi);
-    const yPx = mmToPx(cmd.yMm, dpi);
+    // jsPDF's "middle" baseline, not Canvas's own (see rasterTextBaseline).
+    const yPx = mmToPx(cmd.yMm, dpi) + rasterTextBaseline(cmd.baseline, fontSizePx).dyPx;
     if (cmd.angle) {
       // UNVERIFIED, defensive-only path: no real Publication paint-model
       // call site sets a nonzero `angle` today (confirmed by direct

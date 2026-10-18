@@ -536,3 +536,27 @@ describe("QA -- jpg-export artifacts", () => {
     expect(pages.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// TSP-PRINT-003: a "middle" text (ノンブル / 柱 / 縦中横) sits where jsPDF puts
+// it — baseline at y + 0.35 em — not at Canvas's own "middle" (0.38 em).
+describe("JPG puts baseline-middle text where PDF does", () => {
+  it("the glyph's ink bottom lands on y + 0.35 em (+ its own descent below the baseline)", async () => {
+    const font = fontResource();
+    const glyph = new VerticalOutlineContext(readFileSync(FONT_PATH)).openTypeFont.charToGlyph("1");
+    const unitsPerEm = new VerticalOutlineContext(readFileSync(FONT_PATH)).openTypeFont.unitsPerEm;
+    const sizePt = 20;
+    const emMm = (sizePt * 25.4) / 72;
+    const yMm = 50;
+    const plan = [{ widthMm: 40, heightMm: 80, commands: [{ op: "text" as const, text: "1", xMm: 20, yMm, fontSizePt: sizePt, align: "center" as const, angle: 0, baseline: "middle" as const }] }];
+    const [page] = await renderPaintPlanToRasterPages(plan, font, RASTER_DPI);
+    const ctx = page.canvas.getContext("2d");
+    const { data } = ctx.getImageData(0, 0, page.pixelWidth, page.pixelHeight);
+    let bottom = -1;
+    for (let y = 0; y < page.pixelHeight; y++) {
+      for (let x = 0; x < page.pixelWidth; x++) if (data[(y * page.pixelWidth + x) * 4] < 128) bottom = y;
+    }
+    const inkBottomMm = ((bottom + 1) / RASTER_DPI) * 25.4;
+    const expectedMm = yMm + emMm * 0.35 - (glyph.getBoundingBox().y1 / unitsPerEm) * emMm;
+    expect(Math.abs(inkBottomMm - expectedMm)).toBeLessThan(0.05);
+  });
+});

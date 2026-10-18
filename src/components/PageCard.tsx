@@ -32,12 +32,13 @@ import {
   WEB_FOOTER_BRAND_SOURCE_WIDTH,
 } from "@/lib/webFooterBranding";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
-import { PreviewPage } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
+import { PreviewPage, type PreviewGlyphRun } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import { fitImageToBox, imageMaxBoxForTextArea, layoutImageGroup, type ImageContentBoxMm } from "@/lib/imageGeometry";
 import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
 import { resolvePreviewNombre } from "./previewNombre";
 import {
   folioSideForPage,
+  furnitureRunPlacement,
   previewFolioPlacement,
   previewFurnitureFontSize,
   previewFurnitureFrame,
@@ -46,7 +47,7 @@ import {
   resolvePreviewHashira,
 } from "./previewFurniture";
 import type { FolioPosition, ResolvedFolioPosition } from "../../typesetting-v2/core/layout/schema";
-import { hiddenNombreGlyphCentres, type FurniturePageFrame, type FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
+import { HIDDEN_NOMBRE_FONT_SIZE_PT, hiddenNombreGlyphCentres, type FurniturePageFrame, type FurniturePlacement } from "../../typesetting-v2/renderer/furnitureGeometry";
 
 // TSP-LOOP-003 yakumono model. FixedSlot absolute-positions every glyph and
 // (by default) flex-centres it in its canonical em cell — which is correct for
@@ -1233,7 +1234,7 @@ function PageCard({
             // TSP-PHASE13-001: same geometry/size as PDF/JPG; a print-shop
             // marker, so Web閲覧用 (which has no print furniture) omits it.
             !paper.isPx && (
-              <V2HiddenNombreOverlay text={String(nombreValue)} isOddPage={isOddPage} bleedMm={bleedMm} paperWidthMm={paper.widthMm} paperHeightMm={paper.heightMm} />
+              <V2HiddenNombreOverlay text={String(nombreValue)} isOddPage={isOddPage} bleedMm={bleedMm} paperWidthMm={paper.widthMm} paperHeightMm={paper.heightMm} fontFamily={settings.fontFamily} />
             )
           ) : (
             <HiddenNombreOverlay value={nombreValue} isOddPage={isOddPage} bleedMm={bleedMm} />
@@ -1466,6 +1467,24 @@ export function PageFurnitureText({
   fontSizePt: number;
   bleedMm: number;
 }) {
+  // TSP-PRINT-003 (P4-7): print papers draw the furniture as the font's own
+  // glyphs at PDF's position (see `furnitureRunPlacement`). Web閲覧用, and
+  // until the font file is read (or when it lacks a character), browser text.
+  const glyphs = usePreviewGlyphOutlines(fontFamily, !paper.isPx);
+  const run = glyphs?.run?.(text);
+  if (run && glyphs) {
+    return (
+      <FurnitureGlyphRun
+        dataAttribute={dataAttribute}
+        text={text}
+        run={run}
+        unitsPerEm={glyphs.unitsPerEm}
+        placement={placement}
+        fontSizePt={fontSizePt}
+        bleedMm={bleedMm}
+      />
+    );
+  }
   const style: CSSProperties = {
     ...previewFurnitureStyle(placement, paper.widthMm, bleedMm),
     writingMode: "horizontal-tb",
@@ -1482,6 +1501,44 @@ export function PageFurnitureText({
     >
       {text}
     </div>
+  );
+}
+
+/** One furniture run drawn as glyph outlines, at PDF's baseline and advance. */
+function FurnitureGlyphRun({
+  dataAttribute,
+  text,
+  run,
+  unitsPerEm,
+  placement,
+  fontSizePt,
+  bleedMm,
+}: {
+  dataAttribute?: "data-nombre" | "data-hashira";
+  text: string;
+  run: PreviewGlyphRun;
+  unitsPerEm: number;
+  placement: FurniturePlacement;
+  fontSizePt: number;
+  bleedMm: number;
+}) {
+  const at = furnitureRunPlacement(run.advance, unitsPerEm, placement, fontSizePt, bleedMm);
+  return (
+    <svg
+      data-nombre={dataAttribute === "data-nombre" ? "" : undefined}
+      data-hashira={dataAttribute === "data-hashira" ? "" : undefined}
+      data-furniture-outline=""
+      role="img"
+      aria-label={text}
+      className="pointer-events-none select-none"
+      style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, overflow: "visible" }}
+    >
+      <g transform={`translate(${at.x} ${at.baselineY}) scale(${at.scale})`} fill="#000000">
+        {run.glyphs.map((glyph, i) =>
+          glyph.id ? <use key={i} href={`#${glyph.id}`} x={glyph.x} /> : <path key={i} d={glyph.d} transform={`translate(${glyph.x} 0)`} />
+        )}
+      </g>
+    </svg>
   );
 }
 
@@ -1534,15 +1591,38 @@ function V2HiddenNombreOverlay({
   bleedMm,
   paperWidthMm,
   paperHeightMm,
+  fontFamily,
 }: {
   text: string;
   isOddPage: boolean;
   bleedMm: number;
   paperWidthMm: number;
   paperHeightMm: number;
+  /** The body font: PDF writes the 隠しノンブル digits in it. */
+  fontFamily: string;
 }) {
   const at = hiddenNombreGlyphCentres(text, { paperWidthMm, paperHeightMm }, isOddPage);
   const emPx = at.emMm * PX_PER_MM;
+  // TSP-PRINT-003: each digit as PDF writes it (centred, baseline "middle").
+  const glyphs = usePreviewGlyphOutlines(fontFamily, true);
+  const runs = glyphs ? Array.from(text).map((digit) => glyphs.run?.(digit)) : [];
+  if (glyphs && runs.length > 0 && runs.every(Boolean)) {
+    return (
+      <div className="pointer-events-none select-none" style={{ position: "absolute", inset: 0 }}>
+        {runs.map((run, i) => (
+          <FurnitureGlyphRun
+            key={i}
+            text={Array.from(text)[i]}
+            run={run!}
+            unitsPerEm={glyphs.unitsPerEm}
+            placement={{ xMm: at.xCenterMm, align: "center", yCenterMm: at.yCentersMm[i] }}
+            fontSizePt={HIDDEN_NOMBRE_FONT_SIZE_PT}
+            bleedMm={bleedMm}
+          />
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="pointer-events-none select-none" style={{ position: "absolute", inset: 0, writingMode: "horizontal-tb" }}>
       {Array.from(text).map((glyph, i) => (
