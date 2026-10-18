@@ -237,13 +237,13 @@ try {
   await cdp.waitFor("Boolean(document.querySelector('[role=\"dialog\"]'))");
   await cdp.evaluate(`(() => {
     const button = [...document.querySelectorAll('[role="dialog"] button')]
-      .find((candidate) => candidate.textContent.trim() === '削除');
+      .find((candidate) => candidate.textContent.trim() === 'ゴミ箱に移す');
     button.click(); return true;
   })()`);
-  await cdp.waitFor("[...document.querySelectorAll('button')].some((button) => button.textContent.trim() === '削除する')");
+  await cdp.waitFor("!document.querySelector('[role=\"dialog\"]') && [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'ゴミ箱に移す')");
   await cdp.evaluate(`(() => {
     const button = [...document.querySelectorAll('button')]
-      .find((candidate) => candidate.textContent.trim() === '削除する');
+      .find((candidate) => candidate.textContent.trim() === 'ゴミ箱に移す');
     button.click(); return true;
   })()`);
   await cdp.waitFor("Boolean(document.querySelector('[data-home-returning-actions] button'))");
