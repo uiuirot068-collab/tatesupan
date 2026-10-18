@@ -36,7 +36,6 @@ import {
   createProject,
   updateProject,
   getCloudProjectCount,
-  getProjectById,
   lookupProject,
   CLOUD_PROJECT_CHANGED_ERROR,
   CLOUD_PROJECT_MISSING_ERROR,
@@ -99,6 +98,8 @@ import { applyDestinationPaperPreset } from "@/lib/paperPresets";
 import type { PaperSizeKey } from "@/lib/pageLayout";
 import LongDocumentPerfPanel from "./LongDocumentPerfPanel";
 import { noteLongDocumentInput } from "@/lib/longDocumentPerf";
+import { classifyLoadError, loadFailureMessage, noteEditorScreen, type EditorLoadFailure } from "@/lib/editorRescue";
+import { readDeviceCopyId } from "@/lib/cloudDeviceCopy";
 
 const CLOUD_SAVE_LOGIN_NOTICE =
   "クラウド保存にはログインが必要です。\nローカル作品はこのブラウザにそのまま残ります。";
@@ -413,6 +414,10 @@ export default function TategakiEditor({
   const [cloudSynced, setCloudSynced] = useState<{ title: string; content: string; settings: PageSettings | null } | null>(null);
   // TSP-SAFE-001: the open work was deleted in another tab; this screen's text is not saved.
   const [deletedElsewhere, setDeletedElsewhere] = useState(false);
+  // TSP-SAFE-003: a work that could not be opened says why and can be read
+  // again (`loadAttempt` re-runs the load) instead of staying 「読み込み中」.
+  const [loadFailure, setLoadFailure] = useState<EditorLoadFailure | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [cloudCompare, setCloudCompare] = useState<{ cloud: Project; base: string | null; baseUnknown?: boolean } | null>(null);
   const [cloudCompareBusy, setCloudCompareBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -776,6 +781,28 @@ export default function TategakiEditor({
     // 保存作品一覧 can open another document while this load is in flight.
     const isCurrentDocument = documentEpoch.capture();
     const isStale = () => cancelled || !isCurrentDocument();
+    setLoadFailure(null);
+
+    // TSP-SAFE-003: nothing is saved while a load failed (hasLoadedRef stays
+    // false); the screen is emptied so the previous work's text is not taken
+    // for this one, after that work's pending edits were written.
+    const fail = async (failure: EditorLoadFailure) => {
+      await previousDocumentFlushed.catch(() => undefined);
+      if (isStale()) return;
+      setTitle("");
+      setContent("");
+      setPlotNote("");
+      setImages({});
+      setImageLayerOrder({});
+      setUnresolvedCloudImages(null);
+      setCurrentProjectId(null);
+      cloudBaseRef.current = null;
+      setCloudSynced(null);
+      loadedDocIdRef.current = null;
+      setDocId(null);
+      setLoadFailure(failure);
+      setSaveStatus("stopped");
+    };
 
     async function run() {
       if (demoMode) {
@@ -802,12 +829,24 @@ export default function TategakiEditor({
       }
 
       if (cloudProjectId) {
-        const project = await getProjectById(cloudProjectId);
+        const found = await lookupProject(cloudProjectId);
         if (isStale()) return;
-        if (!project) {
-          setSaveStatus("error");
+        // TSP-SAFE-003: say why it did not open; offer this browser's copy of
+        // the work when there is one (lib/cloudDeviceCopy.ts).
+        if (found.status !== "found") {
+          const copyId = readDeviceCopyId(cloudProjectId);
+          const copy = copyId !== null ? await loadDocument(copyId).catch(() => undefined) : undefined;
+          const deviceCopyId = copy ? copyId : null;
+          await fail(
+            found.status === "missing"
+              ? { kind: "cloud-missing", deviceCopyId }
+              : found.loggedOut
+                ? { kind: "cloud-signed-out", deviceCopyId }
+                : { kind: "cloud-unreachable", detail: found.error, deviceCopyId }
+          );
           return;
         }
+        const project = found.data;
         // Opening the same cloud work again must read the copy's latest text.
         await previousDocumentFlushed;
         const opened = await openDeviceCopySafely(project);
@@ -879,11 +918,35 @@ export default function TategakiEditor({
       setSaveStatus("saved");
     }
 
-    run();
+    // TSP-SAFE-003: a failed read (this browser's storage unusable, …) used to
+    // leave the screen at 「読み込み中」 for good.
+    run().catch((error: unknown) => {
+      if (isStale()) return;
+      console.error("TateSpun: could not open the work", error);
+      void fail(classifyLoadError(error));
+    });
     return () => {
       cancelled = true;
     };
-  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, localSaveQueue, openCloudProjectImages, router, setSettings, showRescuedCopyToast, startPaperSize]);
+  }, [applyCloudProject, beginDocumentSwitch, cloudProjectId, demoMode, documentEpoch, documentId, flushAutosave, loadAttempt, localSaveQueue, openCloudProjectImages, router, setSettings, showRescuedCopyToast, startPaperSize]);
+
+  // TSP-SAFE-003: Human QA only — on `npm run dev`, Ctrl+Shift+Alt+E makes the
+  // editor crash while drawing, to check the error screen. Never in a build.
+  const [qaCrash, setQaCrash] = useState(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.altKey && event.code === "KeyE") setQaCrash(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // TSP-SAFE-003: the error screen (app/editor/error.tsx) hands back the text
+  // the screen last showed, even when the editor itself crashed.
+  useEffect(() => {
+    noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument });
+  }, [docId, title, content, plotNote, settings, isSampleDocument]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1545,6 +1608,8 @@ export default function TategakiEditor({
     setContent(nextContent);
   };
 
+  if (qaCrash) throw new Error("TSP-SAFE-003: crash test (npm run dev only)");
+
   return (
     // Round 2: the route shell owns one dynamic viewport on narrow screens.
     // Each active manuscript/preview/drawer surface scrolls internally; no
@@ -1613,6 +1678,52 @@ export default function TategakiEditor({
             ? "おためしデモの内容は保存されません（本棚にも残りません）"
             : "使い方ガイドでの編集内容は保存されません"}
         </p>
+      )}
+
+      {loadFailure && (
+        <div
+          role="alert"
+          className="mx-auto -my-3 flex max-w-2xl flex-col items-center gap-1.5 rounded-md bg-amber-100 px-3 py-2 text-center text-xs font-medium text-amber-800"
+        >
+          <span>{loadFailureMessage(loadFailure)}</span>
+          <span>この画面で書いた分は保存されません。</span>
+          <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            {loadFailure.kind !== "cloud-missing" && (
+              <button
+                type="button"
+                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
+              >
+                もう一度読み込む
+              </button>
+            )}
+            {loadFailure.kind === "cloud-signed-out" && (
+              <button
+                type="button"
+                onClick={() => setCloudAuthNotice("ログインすると、クラウドの作品を開けます。")}
+                className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
+              >
+                ログイン
+              </button>
+            )}
+            {"deviceCopyId" in loadFailure && loadFailure.deviceCopyId !== null && (
+              <button
+                type="button"
+                onClick={() => router.push(`/editor?id=${loadFailure.deviceCopyId}`)}
+                className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
+              >
+                この端末の控えを開く
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="rounded-full border border-amber-700/40 px-2 py-0.5 hover:bg-amber-200"
+            >
+              本棚へ戻る
+            </button>
+          </span>
+        </div>
       )}
 
       {deletedElsewhere && (

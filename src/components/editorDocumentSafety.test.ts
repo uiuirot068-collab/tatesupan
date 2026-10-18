@@ -39,7 +39,7 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
   it("a route-driven document switch flushes BEFORE resetting, and a reload awaits the flush", () => {
     const load = body(editor, "const previousDocumentFlushed = flushAutosave();", "async function run()");
     expect(load.indexOf("flushAutosave()")).toBeLessThan(load.indexOf("beginDocumentSwitch();"));
-    const run = body(editor, "async function run()", "run();");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
     expect(run.indexOf("await previousDocumentFlushed;")).toBeLessThan(run.indexOf("await loadDocument(id)"));
   });
 
@@ -122,7 +122,7 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
   });
 
   it("a local load records the revision this screen read", () => {
-    const run = body(editor, "async function run()", "run();");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
     expect(run).toContain("localSaveQueue.setBase(id, revisionOf(doc));");
   });
 
@@ -165,5 +165,36 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
     const overwrite = body(editor, "const handleCloudCompareOverwrite = () => {", "};");
     expect(overwrite).toContain("const agreedVersion = cloudCompare?.cloud.updated_at ?? null;");
     expect(overwrite).toContain("void saveToCloud(true, agreedVersion);");
+  });
+});
+
+// TSP-SAFE-003 (3の10): semantics in src/lib/editorRescue.test.ts.
+describe("TategakiEditor: a failed load and a crash have a way out", () => {
+  it("a failed load is caught, says why, saves nothing, and can be read again", () => {
+    const load = body(editor, "const previousDocumentFlushed = flushAutosave();", "}, [applyCloudProject,");
+    expect(load).toContain("run().catch((error: unknown) => {");
+    expect(load).toContain("void fail(classifyLoadError(error));");
+    const fail = body(load, "const fail = async (failure: EditorLoadFailure) => {", "async function run()");
+    expect(fail).toContain("await previousDocumentFlushed");
+    expect(fail).toContain("setLoadFailure(failure);");
+    expect(fail).not.toContain("hasLoadedRef.current = true");
+    expect(editor).toMatch(/\}, \[applyCloudProject,[^\]]*loadAttempt/);
+    expect(editor).toContain("onClick={() => setLoadAttempt((attempt) => attempt + 1)}");
+  });
+
+  it("a cloud work that cannot be read offers this browser's copy", () => {
+    const cloud = body(editor, "const found = await lookupProject(cloudProjectId);", "const project = found.data;");
+    expect(cloud).toContain("readDeviceCopyId(cloudProjectId)");
+    expect(cloud).toContain('{ kind: "cloud-missing", deviceCopyId }');
+    expect(editor).toContain("router.push(`/editor?id=${loadFailure.deviceCopyId}`)");
+  });
+
+  it("the error screen can hand back the text the screen last showed", () => {
+    expect(editor).toContain("noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument });");
+    const errorPage = readFileSync(resolve("src/app/editor/error.tsx"), "utf8");
+    expect(errorPage).toContain("<EditorCrashScreen error={error} retry={retry} />");
+    const globalError = readFileSync(resolve("src/app/global-error.tsx"), "utf8");
+    expect(globalError).toContain("<html");
+    expect(globalError).toContain("<EditorCrashScreen error={error} retry={retry} />");
   });
 });
