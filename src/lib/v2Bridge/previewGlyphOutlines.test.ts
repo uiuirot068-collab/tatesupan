@@ -1,14 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { asFontBinary } from "../../../typesetting-v2/renderer/publication/fontBinary";
+import { deriveBaselineRatioFromFontBinary, resolveVerticalGraphemePaint } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import { VerticalOutlineContext } from "../../../typesetting-v2/renderer/publication/verticalOutlinePaint";
+import { VerticalYakumonoAlignContext } from "../../../typesetting-v2/renderer/publication/verticalYakumonoAlign";
 import { createPreviewGlyphOutlines, isPreviewOutlinedGrapheme } from "./previewGlyphOutlines";
 
 const shippori = new Uint8Array(readFileSync(join(process.cwd(), "public/fonts/ShipporiMincho-Regular.ttf")));
 
 describe("TSP-PRINT-001: Preview body glyphs as outlines", () => {
-  it("outlines plain kanji and kana only; punctuation, small kana, ー, Latin and digits stay browser text", () => {
-    for (const ch of ["吾", "輩", "は", "ア", "々", "ゝ"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(true);
-    for (const ch of ["、", "。", "「", "」", "ぁ", "っ", "ャ", "ー", "…", "―", "A", "1", "！", "東京"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(false);
+  it("outlines every non-ASCII character; ー, Latin, digits, spaces and clusters stay browser text", () => {
+    for (const ch of ["吾", "輩", "は", "ア", "々", "ゝ", "、", "。", "「", "」", "ぁ", "っ", "ャ", "！", "Ａ"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(true);
+    for (const ch of ["ー", "A", "1", "!", " ", "　", "東京"]) expect(isPreviewOutlinedGrapheme(ch)).toBe(false);
   });
 
   it("places glyphs like PDF / JPG: the font's own vertical origin, full-width advance", () => {
@@ -18,9 +22,40 @@ describe("TSP-PRINT-001: Preview body glyphs as outlines", () => {
     const kanji = outlines.outline("漢");
     expect(kanji?.advance).toBe(1000);
     expect(kanji?.d.startsWith("M")).toBe(true);
-    expect(outlines.outline("、")).toBeUndefined();
-    expect(outlines.outline("ぁ")).toBeUndefined();
+    expect(kanji?.baselineRatio).toBeUndefined();
+    expect(kanji?.cellSized).toBeUndefined();
     // Same object on repeat (parsed once per glyph).
     expect(outlines.outline("漢")).toBe(kanji);
+  });
+});
+
+describe("TSP-PRINT-002: punctuation and small kana follow the export's own rules", () => {
+  const fontBinary = asFontBinary(shippori);
+  const baselineRatio = deriveBaselineRatioFromFontBinary(fontBinary);
+  const outlineContext = new VerticalOutlineContext(fontBinary);
+  const yakumonoContext = new VerticalYakumonoAlignContext(fontBinary, baselineRatio);
+  const outlines = createPreviewGlyphOutlines(shippori);
+  const font = outlineContext.openTypeFont;
+
+  it.each(["、", "。", "「", "」", "（", "）", "ぁ", "っ", "ャ", "！", "？"])("%s: same glyph, same baseline, same size as PDF", (ch) => {
+    const paint = resolveVerticalGraphemePaint(ch, baselineRatio, outlineContext, yakumonoContext);
+    expect(paint.kind).not.toBe("rotated");
+    if (paint.kind === "rotated") return;
+    const glyph = paint.kind === "outline" ? font.glyphs.get(paint.glyphId) : font.charToGlyph(paint.text);
+    const outline = outlines.outline(ch);
+    expect(outline).toBeDefined();
+    expect(outline!.d).toBe(glyph.getPath(0, 0, 1000).toPathData(1));
+    expect(outline!.baselineRatio ?? outlines.baselineRatio).toBeCloseTo(paint.baselineRatio, 10);
+    expect(Boolean(outline!.cellSized)).toBe(paint.kind === "outline");
+  });
+
+  it("、 and 。 use their vertical forms (top right of the cell), not the horizontal glyphs", () => {
+    for (const ch of ["、", "。"]) {
+      expect(outlines.outline(ch)!.d).not.toBe(font.charToGlyph(ch).getPath(0, 0, 1000).toPathData(1));
+    }
+  });
+
+  it("small kana are drawn as the font's vertical alternate at one cell's size", () => {
+    expect(outlines.outline("っ")?.cellSized).toBe(true);
   });
 });

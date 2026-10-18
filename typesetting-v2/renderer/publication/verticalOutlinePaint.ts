@@ -148,6 +148,11 @@ export class VerticalOutlineContext {
     return this.font.glyphs.get(glyphId);
   }
 
+  /** The parsed font (TSP-PRINT-002: the Preview draws its glyph outlines from the same parse). */
+  get openTypeFont(): OpenTypeFont {
+    return this.font;
+  }
+
   /** unitsPerEm of the underlying font — exposed for callers that need to reason about font-unit quantities (e.g. real advance width) alongside outline paint. */
   get unitsPerEm(): number {
     return this.font.unitsPerEm;

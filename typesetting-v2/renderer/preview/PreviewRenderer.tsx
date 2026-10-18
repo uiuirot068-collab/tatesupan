@@ -32,11 +32,19 @@ export interface PreviewGlyphOutline {
   /** Id of a document-level `<path>` with this `d`; painted with `<use>` when present. */
   id?: string;
   advance: number;
+  /**
+   * TSP-PRINT-002: this glyph's own baseline fraction of the cell (yakumono
+   * flush to a cell edge, small kana centred on their ink); the font's
+   * `baselineRatio` when absent.
+   */
+  baselineRatio?: number;
+  /** TSP-PRINT-002: drawn at one cell's size instead of the body em (a vertical alternate glyph, as PDF draws it). */
+  cellSized?: boolean;
 }
 
 /**
- * TSP-PRINT-001: optional outline source for body glyphs. When given, plain
- * kanji/kana are painted as one SVG path per glyph at their exact fractional
+ * TSP-PRINT-001: optional outline source for body glyphs. When given, body
+ * characters (TSP-PRINT-002: also punctuation and small kana) are painted as one SVG path per glyph at their exact fractional
  * position, placed like PDF / JPG place them (baseline = cell top +
  * `baselineRatio` × cell, centred on the line by the glyph's own advance).
  * Browser text snaps each glyph to whole screen pixels, which made the
@@ -351,9 +359,10 @@ function LineView({ line, fontSizePx, pageHeightPx, mode, glyphs }: { line: Pain
           {line.units.map((unit) => {
             const outline = outlines.get(unit.id);
             if (!outline) return null;
-            const x = line.widthPx / 2 - (outline.advance * scale) / 2;
-            const y = unit.topPx + unit.heightPx * glyphs.baselineRatio;
-            const transform = `translate(${x} ${y}) scale(${scale})`;
+            const glyphScale = outline.cellSized ? unit.heightPx / glyphs.unitsPerEm : scale;
+            const x = line.widthPx / 2 - (outline.advance * glyphScale) / 2;
+            const y = unit.topPx + unit.heightPx * (outline.baselineRatio ?? glyphs.baselineRatio);
+            const transform = `translate(${x} ${y}) scale(${glyphScale})`;
             return outline.id ? <use key={unit.id} href={`#${outline.id}`} transform={transform} /> : <path key={unit.id} d={outline.d} transform={transform} />;
           })}
         </svg>
