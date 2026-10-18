@@ -43,8 +43,10 @@ export function unreferencedImageIds(imageIds: Iterable<string>, works: Iterable
 }
 
 // TSP-SAFE-004 QA: illustrations of works saved to the cloud are never tidied
-// away from this browser — the cloud keeps its copy only 72 hours, and the
-// work can be opened from the cloud again. Kept per browser (localStorage).
+// away from this browser while the cloud work exists — the cloud keeps its
+// copy only 72 hours, and the work can be opened from the cloud again. Kept
+// per browser (localStorage) by cloud work, and released when that cloud
+// work is deleted from 保存作品一覧 (QA2: before, the list only grew).
 const CLOUD_WORK_IMAGES_KEY = "tatespun:cloud-work-images";
 
 type KeepStorage = Pick<Storage, "getItem" | "setItem">;
@@ -57,21 +59,41 @@ function keepStorage(): KeepStorage | null {
   }
 }
 
-export function keptCloudWorkImageIds(storage: KeepStorage | null = keepStorage()): Set<string> {
+function readKept(storage: KeepStorage | null): Record<string, string[]> {
   try {
-    const parsed: unknown = JSON.parse(storage?.getItem(CLOUD_WORK_IMAGES_KEY) ?? "[]");
-    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+    const parsed: unknown = JSON.parse(storage?.getItem(CLOUD_WORK_IMAGES_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string[]> = {};
+    for (const [projectId, ids] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(ids)) out[projectId] = ids.filter((id): id is string => typeof id === "string");
+    }
+    return out;
   } catch {
-    return new Set();
+    return {};
   }
 }
 
-export function keepCloudWorkImages(ids: readonly string[], storage: KeepStorage | null = keepStorage()): void {
+export function keptCloudWorkImageIds(storage: KeepStorage | null = keepStorage()): Set<string> {
+  return new Set(Object.values(readKept(storage)).flat());
+}
+
+export function keepCloudWorkImages(projectId: string, ids: readonly string[], storage: KeepStorage | null = keepStorage()): void {
   if (ids.length === 0) return;
   try {
-    const kept = keptCloudWorkImageIds(storage);
-    for (const id of ids) kept.add(id);
-    storage?.setItem(CLOUD_WORK_IMAGES_KEY, JSON.stringify([...kept]));
+    const kept = readKept(storage);
+    kept[projectId] = [...new Set([...(kept[projectId] ?? []), ...ids])];
+    storage?.setItem(CLOUD_WORK_IMAGES_KEY, JSON.stringify(kept));
+  } catch {
+    // best effort
+  }
+}
+
+export function releaseCloudWorkImages(projectId: string, storage: KeepStorage | null = keepStorage()): void {
+  try {
+    const kept = readKept(storage);
+    if (!(projectId in kept)) return;
+    delete kept[projectId];
+    storage?.setItem(CLOUD_WORK_IMAGES_KEY, JSON.stringify(kept));
   } catch {
     // best effort
   }

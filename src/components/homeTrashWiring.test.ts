@@ -19,7 +19,7 @@ describe("bookshelf: 削除 → ゴミ箱", () => {
 
   it("the last deleted work can be put back at once, and the ゴミ箱 opens from the bookshelf", () => {
     expect(home).toContain("setLastTrashed({ id, title });");
-    expect(home).toContain("onClick={() => void handleRestore(lastTrashed.id)}");
+    expect(home).toContain("onClick={() => void handleRestore(undoable.id)}");
     expect(home).toMatch(/onClick=\{openTrash\}/);
     expect(home).toContain("<TrashModal");
   });

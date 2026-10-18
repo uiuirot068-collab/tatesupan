@@ -190,8 +190,12 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
   });
 
   it("QA: text typed on a failed screen is not dropped without asking", () => {
+    expect(editor).toContain("const confirmLeaveFailedScreen = () => !failedScreenRef.current.typed || window.confirm(LOAD_FAILED_DISCARD_CONFIRM);");
     const leave = body(editor, "const leaveFailedScreen = (go: () => void) => {", "const retryFailedLoad");
-    expect(leave).toContain("if (failedScreenRef.current.typed && !window.confirm(LOAD_FAILED_DISCARD_CONFIRM)) return;");
+    expect(leave).toContain("if (!confirmLeaveFailedScreen()) return;");
+    // QA2: 保存作品一覧, 「← 作品一覧」 and the phone's 「← 一覧」 ask too.
+    expect(body(editor, "const handleSelectProject = ", "const handleBookPartsInsert")).toContain("if (!confirmLeaveFailedScreen()) return;");
+    expect(editor.match(/confirmLeave=\{confirmLeaveFailedScreen\}/g)).toHaveLength(2);
     expect(editor).toContain("leaveFailedScreen(() => router.push(`/editor?id=${loadFailure.deviceCopyId}`))");
   });
 
@@ -201,6 +205,9 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
     const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
     expect(run).toMatch(/if \(id !== null && !doc && \(await isInTrash\(id\)\)\) \{\s*await fail\(\{ kind: "in-trash" \}\);\s*return;/);
     expect(run.indexOf("isInTrash(id)")).toBeLessThan(run.indexOf("await createDocument("));
+    // QA2: a link to a work gone for good says so; the dev double-run makes one work.
+    expect(run).toMatch(/if \(id !== null && !doc\) \{\s*await fail\(\{ kind: "local-missing" \}\);/);
+    expect(run.indexOf("if (isStale()) return;\n\n      // SPN-XFIX-002")).toBeGreaterThan(-1);
   });
 
   it("a cloud work that cannot be read offers this browser's copy", () => {

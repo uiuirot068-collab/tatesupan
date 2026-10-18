@@ -543,8 +543,9 @@ export async function purgeFromTrash(id: number): Promise<void> {
   // TSP-SAFE-004 QA: a work saved to the cloud may be opened from the cloud
   // again, and the cloud keeps its illustrations only 72 hours: this browser
   // keeps them (as it did before the trash existed).
-  if (item.document.cloudSync || readCloudLink(id) !== null) {
-    keepCloudWorkImages(imageIdsMentionedIn(item.document));
+  const cloudProjectId = item.document.cloudSync?.projectId ?? readCloudLink(id);
+  if (cloudProjectId) {
+    keepCloudWorkImages(cloudProjectId, imageIdsMentionedIn(item.document));
     return;
   }
   await removeUnusedImages(imageIdsMentionedIn(item.document), 0);

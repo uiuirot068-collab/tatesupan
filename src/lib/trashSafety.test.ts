@@ -19,7 +19,7 @@ import {
 } from "./db";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "./pageLayout";
 import { LocalSaveQueue } from "./localSaveQueue";
-import { ORPHAN_IMAGE_MIN_AGE_MS, TRASH_KEEP_DAYS, trashDaysLeft, unreferencedImageIds } from "./trash";
+import { ORPHAN_IMAGE_MIN_AGE_MS, releaseCloudWorkImages, TRASH_KEEP_DAYS, trashDaysLeft, unreferencedImageIds } from "./trash";
 
 /**
  * TSP-SAFE-004 (TSP-REVIEW-001 3の8・3の9): the ゴミ箱 and tidying images,
@@ -136,6 +136,10 @@ describe("ゴミ箱", () => {
     expect(await db.images.get("cloudimg")).toBeDefined();
     expect(await removeOrphanImages()).toBe(0);
     expect(await db.images.get("cloudimg")).toBeDefined();
+    // QA2: once that cloud work is deleted, its images can be tidied away.
+    releaseCloudWorkImages("p1");
+    expect(await removeOrphanImages()).toBe(1);
+    expect(await db.images.get("cloudimg")).toBeUndefined();
   });
 
   it("the 使い方ガイド sample is never moved to the trash", async () => {

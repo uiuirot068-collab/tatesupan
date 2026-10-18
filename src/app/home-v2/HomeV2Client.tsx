@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   createDocument,
@@ -122,7 +122,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   const session = qaMode ? null : authSession;
   const isAuthLoading = qaMode ? false : authIsLoading;
   useEffect(() => {
-    if (!qaMode) void ensureSampleProject();
+    // TSP-SAFE-004 QA2: an unusable storage is said on the bookshelf below.
+    if (!qaMode) void ensureSampleProject().catch(() => undefined);
   }, [qaMode]);
   // TSP-SAFE-004: tidy once per visit — works trashed long ago, then images no
   // work uses — and ask the browser to keep this site's saved works.
@@ -138,13 +139,17 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   // TSP-SAFE-004 QA: when this browser's storage cannot be used, say so
   // instead of staying at 「読み込み中」.
   const storedDocuments = useLiveQuery(
-    () =>
-      qaMode
-        ? Promise.resolve([] as DocumentRecord[])
-        : listDocuments().catch((error: unknown) => {
-            console.error("TateSpun: could not read the bookshelf", error);
-            return STORAGE_UNAVAILABLE;
-          }),
+    async () => {
+      if (qaMode) return [] as DocumentRecord[];
+      // A browser without IndexedDB at all (QA2): the same message.
+      if (typeof indexedDB === "undefined") return STORAGE_UNAVAILABLE;
+      try {
+        return await listDocuments();
+      } catch (error) {
+        console.error("TateSpun: could not read the bookshelf", error);
+        return STORAGE_UNAVAILABLE;
+      }
+    },
     [qaMode]
   );
   const storageUnavailable = storedDocuments === STORAGE_UNAVAILABLE;
@@ -168,9 +173,18 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   );
   // An editor link to a work in the trash (/?trash=1) opens the ゴミ箱.
   const [isTrashOpen, setIsTrashOpen] = useState(() => !qaMode && searchParams.get("trash") === "1");
-  const [trashOpenedAt, setTrashOpenedAt] = useState(0);
+  // TSP-SAFE-004 QA2: also set when the ゴミ箱 opens from /?trash=1 (it was 0:
+  // 「あと20775日」).
+  const [trashOpenedAt, setTrashOpenedAt] = useState(() => Date.now());
+  // The ?trash=1 that opened it is dropped, so a reload does not open it again.
+  useEffect(() => {
+    if (searchParams.get("trash") === "1") router.replace("/", { scroll: false });
+  }, [router, searchParams]);
   const [lastTrashed, setLastTrashed] = useState<{ id: number; title: string } | null>(null);
+  const trashedAtRef = useRef(0);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+  // TSP-SAFE-004 QA2: the limit message says which action it stopped.
+  const [limitStoppedRestore, setLimitStoppedRestore] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   // 「本をまとめる」を作品2冊未満で押したときの案内（無反応にしない）。
   const [showCombineGuide, setShowCombineGuide] = useState(false);
@@ -244,6 +258,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       // work is opened) is also in the cloud, so it does not count here.
       const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
       if (count >= LOCAL_DOCUMENT_LIMIT) {
+        setLimitStoppedRestore(false);
         setIsLimitModalOpen(true);
         return;
       }
@@ -279,8 +294,28 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     const title = documents?.find((doc) => doc.id === id)?.title || "無題のドキュメント";
     await deleteDocument(id);
     setPendingDeleteId(null);
+    trashedAtRef.current = Date.now();
     setLastTrashed({ id, title });
+    // TSP-SAFE-004 QA2: stay on this browser's shelf, where 元に戻す and the
+    // ゴミ箱 are (with cloud works it used to switch to the cloud shelf).
+    setSelectedBookshelfTab("local");
   };
+
+  // TSP-SAFE-004 QA2: after the last book, the page becomes the first-visit
+  // page and 元に戻す was far below; bring it into view.
+  const trashLinksRef = useRef<HTMLDivElement | null>(null);
+  // Runs again when the shelf changes, since the first-visit page appears
+  // only once the bookshelf has re-read its works.
+  useEffect(() => {
+    if (!lastTrashed || Date.now() - trashedAtRef.current > 3000) return;
+    const frame = window.requestAnimationFrame(() => {
+      const links = trashLinksRef.current;
+      if (!links) return;
+      const box = links.getBoundingClientRect();
+      if (box.top < 0 || box.bottom > window.innerHeight) links.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lastTrashed, documents, trashItems]);
 
   const handleRestore = async (id: number) => {
     // TSP-SAFE-004 QA: putting a work back counts toward the same 60-work
@@ -290,6 +325,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
       if (count >= LOCAL_DOCUMENT_LIMIT) {
         setIsTrashOpen(false);
+        setLimitStoppedRestore(true);
         setIsLimitModalOpen(true);
         return;
       }
@@ -311,17 +347,21 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   // TSP-SAFE-004 QA: shown on the empty bookshelf too, so the last work
   // moved to the ゴミ箱 can still be put back.
   const trashCount = trashItems?.length ?? 0;
+  // Gone from the ゴミ箱 (put back or removed for good, also in another tab):
+  // its 元に戻す would do nothing.
+  const undoable = lastTrashed && trashItems?.some((item) => item.id === lastTrashed.id) ? lastTrashed : null;
   const renderTrashLinks = (className: string) =>
-    (trashCount > 0 || lastTrashed) && (
-      <div className={className}>
-        {lastTrashed && (
-          <p role="status" className="flex min-w-0 max-w-full items-baseline gap-2 text-sm text-ink/70 dark:text-[#B9C2D3]">
-            <span className="min-w-0 truncate">「{lastTrashed.title}」</span>
-            <span className="shrink-0">をゴミ箱に移しました。</span>
+    (trashCount > 0 || undoable) && (
+      <div ref={trashLinksRef} className={className}>
+        {undoable && (
+          <p role="status" className="flex min-w-0 max-w-full items-baseline text-sm text-ink/70 dark:text-[#B9C2D3]">
+            <span className="shrink-0">「</span>
+            <span className="min-w-0 truncate">{undoable.title}</span>
+            <span className="shrink-0">」をゴミ箱に移しました。</span>
             <button
               type="button"
-              onClick={() => void handleRestore(lastTrashed.id)}
-              className="shrink-0 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
+              onClick={() => void handleRestore(undoable.id)}
+              className="ml-2 shrink-0 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
             >
               元に戻す
             </button>
@@ -722,7 +762,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 このブラウザの保存場所が使えないため、本棚を開けませんでした。プライベートモードや、サイトのデータを保存しない設定では使えないことがあります。設定を確かめてから、ページを読み込みなおしてください。
               </p>
             ) : documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
-            {documents !== undefined && (
+            {/* QA2: nothing here can be used without the storage. */}
+            {documents !== undefined && !storageUnavailable && (
               <>
                 {renderBrandPanel("onboarding")}
                 {/* The empty shelf, framed on a mat with a vertical title:
@@ -1287,7 +1328,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           >
             <h3 className="text-sm font-semibold text-ink">このブラウザの本棚がいっぱいです</h3>
             <p className="mt-2 text-sm text-ink/70">
-              このブラウザには最大{LOCAL_DOCUMENT_LIMIT}作品まで保存できます。不要な作品を整理するか、会員の場合は必要な作品をクラウドに保存できます。
+              {limitStoppedRestore
+                ? `このブラウザには最大${LOCAL_DOCUMENT_LIMIT}作品まで保存できるため、ゴミ箱から戻せませんでした。本棚の作品を整理してから、もう一度「元に戻す」を押してください。`
+                : `このブラウザには最大${LOCAL_DOCUMENT_LIMIT}作品まで保存できます。不要な作品を整理するか、会員の場合は必要な作品をクラウドに保存できます。`}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
