@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { db } from '@/lib/db';
+import { createCollection } from '@/lib/db';
 import type { PageSettings } from '@/lib/pageLayout';
 import { DEFAULT_PAGE_SETTINGS } from '@/lib/pageLayout';
 import { settingsWithoutCover } from '@/lib/cover/coverSettingsSync';
 import { combineNovelTexts, canUsePremiumFeatures, UserStatus } from '@/utils/combineProjects';
+
+// Same limit as the bookshelf (app/home-v2/HomeV2Client.tsx).
+const LOCAL_DOCUMENT_LIMIT = 60;
 
 /** 選択中の作品から「〜」ほか○編（短編集）形式のデフォルトタイトルを生成する */
 function buildDefaultTitle(titles: string[]): string {
@@ -115,17 +118,17 @@ export const CombineModal: React.FC<CombineModalProps> = ({
       // 表紙（CST-PORT-011）は作品ごとのものなので短編集へは引き継がない
       const baseSettings = settingsWithoutCover(targetDocs[0]?.settings ?? DEFAULT_PAGE_SETTINGS);
 
-      // DBへ新規短編集として保存
-      const newId = Date.now();
-      await db.documents.add({
-        id: newId,
-        title: newTitle.trim(),
-        content: combinedContent,
-        settings: baseSettings,
-        updatedAt: Date.now(),
-        isCollection: true,
-        includedDocumentIds: selectedIds,
-      });
+      // DBへ新規短編集として保存（SAFE-005: 空いている番号・本棚の札・60作品の上限）
+      const newId = await createCollection(
+        { title: newTitle.trim(), content: combinedContent, settings: baseSettings },
+        selectedIds,
+        LOCAL_DOCUMENT_LIMIT
+      );
+      if (newId === 'full') {
+        alert(`このブラウザの本棚がいっぱい（${LOCAL_DOCUMENT_LIMIT}作品）のため、まとめた本を作れませんでした。使わない作品をゴミ箱に移してから、もう一度お試しください。`);
+        setIsProcessing(false);
+        return;
+      }
 
       onSuccess(newId);
       onClose();

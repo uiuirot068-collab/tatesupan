@@ -905,6 +905,12 @@ export default function TategakiEditor({
         return;
       }
 
+      // SAFE-005: a broken link (/editor?id=abc) says so instead of quietly
+      // starting a new empty work.
+      if (documentId !== undefined && !Number.isFinite(documentId)) {
+        await fail({ kind: "bad-link" });
+        return;
+      }
       let id = documentId && Number.isFinite(documentId) ? documentId : null;
       // A → B → A: reopening a document must read the edits flushed above.
       await previousDocumentFlushed;
@@ -1009,8 +1015,17 @@ export default function TategakiEditor({
   // the screen last showed, even when the editor itself crashed.
   useEffect(() => {
     const unsaved = loadFailure !== null || deletedElsewhere;
-    noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument, unsaved });
-  }, [docId, title, content, plotNote, settings, isSampleDocument, loadFailure, deletedElsewhere]);
+    noteEditorScreen({
+      docId,
+      title,
+      content,
+      plotNote,
+      settings,
+      sample: isSampleDocument,
+      unsaved,
+      images: { ...coverImages, ...images },
+    });
+  }, [docId, title, content, plotNote, settings, isSampleDocument, loadFailure, deletedElsewhere, images, coverImages]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1490,7 +1505,7 @@ export default function TategakiEditor({
   const handleSave = () => {
     // TSP-SAFE-004 QA: before, this made a new untitled cloud work.
     if (loadFailure) {
-      alert(loadFailure.kind === "cloud-missing" || loadFailure.kind === "local-missing" ? LOAD_FAILED_SAVE_NOTICE_NO_RETRY : LOAD_FAILED_SAVE_NOTICE);
+      alert(loadFailure.kind === "cloud-missing" || loadFailure.kind === "local-missing" || loadFailure.kind === "bad-link" ? LOAD_FAILED_SAVE_NOTICE_NO_RETRY : LOAD_FAILED_SAVE_NOTICE);
       return;
     }
     if (!user) {
@@ -1884,7 +1899,7 @@ export default function TategakiEditor({
           <span>この画面で書いた分は保存されません。</span>
           <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
             {/* in-trash: put back in another tab, it opens again (QA2). */}
-            {loadFailure.kind !== "cloud-missing" && loadFailure.kind !== "local-missing" && (
+            {loadFailure.kind !== "cloud-missing" && loadFailure.kind !== "local-missing" && loadFailure.kind !== "bad-link" && (
               <button
                 type="button"
                 onClick={retryFailedLoad}

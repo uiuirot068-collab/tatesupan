@@ -218,7 +218,8 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
   });
 
   it("the error screen can hand back the text the screen last showed", () => {
-    expect(editor).toContain("noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument, unsaved });");
+    expect(editor).toContain("noteEditorScreen({");
+    expect(editor).toContain("sample: isSampleDocument,\n      unsaved,");
     // PC QA: after a failed open the error screen does not claim the text was saved.
     expect(editor).toContain("const unsaved = loadFailure !== null || deletedElsewhere;");
     expect(readFileSync(resolve("src/components/EditorCrashScreen.tsx"), "utf8")).toContain("rescue.unsaved");
@@ -243,5 +244,13 @@ describe("TategakiEditor: a failed load and a crash have a way out", () => {
     expect(keep).toContain("coverImageIds(settings.cover)");
     expect(keep).toContain('elsewhereState === "purged" ? base : `${base}（書きかけの控え）`');
     expect(editor).toContain("keepingCopyRef.current = true;");
+  });
+
+  it("SAFE-005: a broken link says so; the crash screen asks before dropping unsaved text and keeps images", () => {
+    expect(editor).toContain('await fail({ kind: "bad-link" });');
+    expect(editor).toContain("images: { ...coverImages, ...images },");
+    const crash = readFileSync(resolve("src/components/EditorCrashScreen.tsx"), "utf8");
+    expect(crash).toContain("window.confirm(UNSAVED_RETRY_CONFIRM)");
+    expect(crash).toContain("coverImageIds(settings.cover)");
   });
 });

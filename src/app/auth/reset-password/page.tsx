@@ -124,8 +124,8 @@ export default function ResetPasswordPage() {
       setFormError('パスワードが一致しません。');
       return;
     }
-    if (password.length < 6) {
-      setFormError('パスワードは6文字以上で入力してください。');
+    if (password.length < 8) {
+      setFormError('パスワードは8文字以上で入力してください。');
       return;
     }
     if (doneRef.current) return;
@@ -191,11 +191,11 @@ export default function ResetPasswordPage() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 w-full rounded border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="6文字以上"
+                placeholder="8文字以上"
               />
             </div>
             <div>
@@ -205,7 +205,7 @@ export default function ResetPasswordPage() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="mt-1 w-full rounded border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
