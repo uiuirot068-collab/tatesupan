@@ -10,7 +10,7 @@ SAFE-004 の PC 側の点検で残った4つと、TSP-REVIEW-001 3章「小」�
 - 作品の番号: 同じ瞬間に2つ作っても、時計が戻っても、本棚にもゴミ箱にもない番号を使う（前は上書きされうる）。新しい番号の作品・控えには古いクラウドのつながりを残さない。完全に削除した作品のつながりも消す。
 - 本をまとめる: 空いている番号で作り、本棚の札（bookshelfMetadata）も書き、60作品の上限を同じ手順の中で確かめる。短編集の印が書くと消える件は SAFE-001 で直っていた（writeDocumentRecord が印を残す）。
 - ログイン: 英語のエラーを日本語に。新しく作るパスワードは8文字以上（今あるアカウントはそのままログインできる）。パスワード再設定も8文字以上。
-- 守りのヘッダー（public/_headers）: nosniff・Referrer-Policy・Permissions-Policy（カメラ・マイク・位置情報を使わない）。
+- 守りのヘッダー（public/_headers）: nosniff・Referrer-Policy・Permissions-Policy（カメラ・マイク・位置情報を使わない）。 書き出しのとき out/_headers（いちばん上）へ移す（中に入ったままだと効かないため。scripts/build-basepath.mjs）。
 
 ## 直さなかったもの（理由）
 
