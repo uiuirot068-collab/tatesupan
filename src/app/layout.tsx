@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import MaintenanceGate from "@/components/MaintenanceGate";
+import BookshelfMoveNotice from "@/components/BookshelfMoveNotice";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -56,7 +57,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           }}
         />
         <AuthProvider>
-          <MaintenanceGate>{children}</MaintenanceGate>
+          <MaintenanceGate>
+            <BookshelfMoveNotice />
+            {children}
+          </MaintenanceGate>
         </AuthProvider>
       </body>
     </html>

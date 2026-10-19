@@ -25,6 +25,13 @@ import { clearCloudLink, readCloudLink, writeCloudLink } from "./cloudLink";
 import { imageMarkerIds } from "./tategaki";
 import { coverImageIds } from "./cover/coverModel";
 import { isTrashExpired, keepCloudWorkImages, keptCloudWorkImageIds, unreferencedImageIds } from "./trash";
+import {
+  isEmptyWork,
+  MOVE_FORMAT,
+  MOVE_VERSION,
+  type BookshelfMovePayload,
+  type MovedDocument,
+} from "./bookshelfMove";
 
 export interface DocumentRecord {
   id: number;
@@ -664,6 +671,188 @@ export async function purgeExpiredTrash(now: number = Date.now()): Promise<numbe
   const expired = (await db.trash.toArray()).filter((item) => isTrashExpired(item.trashedAt, now));
   for (const item of expired) await purgeFromTrash(item.id);
   return expired.length;
+}
+
+/** TSP-SAFE-006: a work the old address's bookshelf would move (not the sample, not empty). */
+function isMovableWork(doc: DocumentRecord): boolean {
+  return !doc.isSample && doc.id !== SAMPLE_PROJECT.id && !isEphemeralDocId(doc.id) && !isEmptyWork(doc);
+}
+
+/**
+ * TSP-SAFE-006: how many works this browser's bookshelf (and ゴミ箱) holds that
+ * are worth moving, and when the newest of them last changed.
+ */
+export async function countMovableWorks(): Promise<{ works: number; trash: number; latest: number }> {
+  return db.transaction("r", db.documents, db.trash, async () => {
+    const works = (await db.documents.toArray()).filter(isMovableWork);
+    const trash = (await db.trash.toArray()).filter((item) => isMovableWork(item.document));
+    const latest = Math.max(0, ...works.map((doc) => doc.updatedAt), ...trash.map((item) => item.trashedAt));
+    return { works: works.length, trash: trash.length, latest };
+  });
+}
+
+function toMovedDocument(doc: DocumentRecord): MovedDocument {
+  const cloudLink = readCloudLink(doc.id);
+  return {
+    id: doc.id,
+    title: doc.title ?? "",
+    content: doc.content ?? "",
+    settings: doc.settings,
+    plotNote: doc.plotNote ?? "",
+    updatedAt: doc.updatedAt,
+    isCollection: doc.isCollection === true,
+    includedDocumentIds: doc.includedDocumentIds ?? [],
+    ...(doc.cloudSync ? { cloudSync: doc.cloudSync } : {}),
+    ...(cloudLink ? { cloudLink } : {}),
+  };
+}
+
+/** TSP-SAFE-006: the whole bookshelf (works, ゴミ箱, their illustrations) to move to spuntales.net. */
+export async function exportBookshelf(now: number = Date.now()): Promise<BookshelfMovePayload> {
+  return db.transaction("r", db.documents, db.trash, db.images, async () => {
+    const works = (await db.documents.toArray()).filter(isMovableWork);
+    const trash = (await db.trash.toArray()).filter((item) => isMovableWork(item.document));
+    const imageIds = [...new Set([...works, ...trash.map((item) => item.document)].flatMap(imageIdsMentionedIn))];
+    const images = (await db.images.bulkGet(imageIds)).filter((record): record is ImageRecord => !!record);
+    return {
+      format: MOVE_FORMAT,
+      version: MOVE_VERSION,
+      exportedAt: now,
+      documents: works.map(toMovedDocument),
+      trash: trash.map((item) => ({ trashedAt: item.trashedAt, document: toMovedDocument(item.document) })),
+      images: images.map((image) => ({
+        id: image.id,
+        dataUrl: image.dataUrl,
+        createdAt: image.createdAt,
+        ...(image.layerOrder !== undefined ? { layerOrder: image.layerOrder } : {}),
+      })),
+    };
+  });
+}
+
+export interface BookshelfMoveResult {
+  /** Works put on this bookshelf. */
+  works: number;
+  /** Works put in this ゴミ箱. */
+  trash: number;
+  /** Works this bookshelf already had (moved before). */
+  skipped: number;
+}
+
+/**
+ * TSP-SAFE-006: puts a moved bookshelf on this one. Every work gets a free id
+ * here; a work already here (moved before) is skipped; a cloud work that
+ * already has its copy here comes as a plain work. All or nothing: past the
+ * bookshelf's limit nothing is moved ("full").
+ */
+export async function importBookshelf(payload: BookshelfMovePayload, limit: number): Promise<BookshelfMoveResult | "full"> {
+  const links: { id: number; projectId: string; deviceCopy: boolean }[] = [];
+  const newIds: number[] = [];
+  const outcome = await db.transaction(
+    "rw",
+    [db.documents, db.bookshelfMetadata, db.trash, db.images],
+    async (): Promise<BookshelfMoveResult | "full"> => {
+      links.length = 0;
+      newIds.length = 0;
+      const live = await db.documents.toArray();
+      const trashed = await db.trash.toArray();
+      const existing = [...live, ...trashed.map((item) => item.document)];
+      const takenProjects = new Set(existing.flatMap((doc) => (doc.cloudSync ? [doc.cloudSync.projectId] : [])));
+      for (const doc of existing) {
+        const link = readCloudLink(doc.id);
+        if (link) takenProjects.add(link);
+      }
+      const alreadyHere = (doc: MovedDocument) =>
+        existing.some(
+          (here) =>
+            (here.title ?? "") === doc.title &&
+            (here.content ?? "") === doc.content &&
+            (here.updatedAt === doc.updatedAt || (!!doc.cloudSync && here.cloudSync?.projectId === doc.cloudSync.projectId))
+        );
+
+      // Decide first (nothing is written past the limit).
+      const plan = (doc: MovedDocument) => {
+        if (alreadyHere(doc)) return null;
+        const projectId = doc.cloudSync?.projectId ?? doc.cloudLink;
+        const keepsLink = !!projectId && !takenProjects.has(projectId);
+        if (keepsLink) takenProjects.add(projectId);
+        return { doc, projectId: keepsLink ? projectId : undefined, cloudSync: keepsLink ? doc.cloudSync : undefined };
+      };
+      const works = payload.documents.map(plan);
+      const trash = payload.trash.map((item) => ({ trashedAt: item.trashedAt, planned: plan(item.document) }));
+      const skipped = works.filter((work) => !work).length + trash.filter((item) => !item.planned).length;
+      const plainHere = live.filter((doc) => !doc.isSample && !doc.cloudSync).length;
+      const plainMoved = works.filter((work) => work && !work.cloudSync).length;
+      if (plainMoved > 0 && plainHere + plainMoved > limit) return "full";
+
+      const toRecord = (planned: NonNullable<ReturnType<typeof plan>>, id: number, idMap: Map<number, number>) => {
+        const { doc } = planned;
+        const record: DocumentRecord = {
+          id,
+          title: doc.title,
+          content: doc.content,
+          settings: doc.settings as PageSettings,
+          plotNote: doc.plotNote ?? "",
+          updatedAt: doc.updatedAt,
+          isCollection: doc.isCollection === true,
+          includedDocumentIds: (doc.includedDocumentIds ?? []).flatMap((old) => {
+            const moved = idMap.get(old);
+            return moved === undefined ? [] : [moved];
+          }),
+          revision: 1,
+        };
+        if (planned.cloudSync) record.cloudSync = planned.cloudSync;
+        return record;
+      };
+
+      // Works a 短編集 lists come first, so its list can point at their new ids.
+      const idMap = new Map<number, number>();
+      payload.documents.forEach((doc, index) => {
+        if (works[index]) return;
+        const here = existing.find((work) => work.title === doc.title && work.content === doc.content);
+        if (here) idMap.set(doc.id, here.id);
+      });
+      const ordered = works
+        .filter((work): work is NonNullable<typeof work> => !!work)
+        .sort((a, b) => Number(a.doc.isCollection === true) - Number(b.doc.isCollection === true));
+      for (const planned of ordered) {
+        const id = await unusedDocumentId();
+        idMap.set(planned.doc.id, id);
+        const record = toRecord(planned, id, idMap);
+        await db.documents.add(record);
+        const metadata = bookshelfMetadataFromDocument(record);
+        if (metadata) await db.bookshelfMetadata.put(metadata);
+        newIds.push(id);
+        if (planned.projectId) links.push({ id, projectId: planned.projectId, deviceCopy: !!planned.cloudSync });
+      }
+      let trashMoved = 0;
+      for (const item of trash) {
+        if (!item.planned) continue;
+        const id = await unusedDocumentId();
+        await db.trash.add({ id, trashedAt: item.trashedAt, document: toRecord(item.planned, id, idMap) });
+        newIds.push(id);
+        if (item.planned.projectId) links.push({ id, projectId: item.planned.projectId, deviceCopy: false });
+        trashMoved += 1;
+      }
+
+      const imageIds = payload.images.map((image) => image.id);
+      const stored = new Set((await db.images.bulkGet(imageIds)).filter((record) => !!record).map((record) => record!.id));
+      const missing = payload.images.filter((image) => !stored.has(image.id));
+      if (missing.length > 0) await db.images.bulkPut(missing);
+
+      return { works: ordered.length, trash: trashMoved, skipped };
+    }
+  );
+  if (outcome === "full") return outcome;
+  for (const id of newIds) {
+    clearCloudLink(id);
+    initializeWorkSessionScope(`local:${id}`);
+  }
+  for (const link of links) {
+    writeCloudLink(link.id, link.projectId);
+    if (link.deviceCopy) writeDeviceCopyId(link.projectId, link.id);
+  }
+  return outcome;
 }
 
 function imageIdsMentionedIn(document: DocumentRecord): string[] {
