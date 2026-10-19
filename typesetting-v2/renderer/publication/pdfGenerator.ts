@@ -64,7 +64,7 @@ import { rubyLaneGeometry } from "../rubyLane";
 import { emphasisDotLane } from "../emphasisMarks";
 import { buildColophonRenderPlan, type ColophonRenderPlan } from "../../../src/lib/colophonRenderPlan";
 import { colophonEmMm as colophonEmMmFor, colophonPlacementAreaMm } from "../../../src/lib/colophonPages";
-import { layoutImageGroup, type GroupedImagePosition, type ImageRectMm } from "../../../src/lib/imageGeometry";
+import { fullPageCoverRect, layoutImageGroup, type GroupedImagePosition, type ImageRectMm } from "../../../src/lib/imageGeometry";
 import {
   PDF_BLEED_MM,
   resolvePublicationPdfPageOutput,
@@ -133,6 +133,13 @@ export interface PublicationPageGeometry {
    * Preview paints them; omitted, the historical placement is unchanged.
    */
   furniture?: PublicationFurnitureGeometry;
+  /**
+   * TSP-PRINT-004 (P4-8): the bleed a 「全面」 image covers beyond the
+   * finished page in every output (`fullPageCoverRect`), so a trim PDF / JPG
+   * crops it exactly as the bleed PDF and the Preview do. Omitted: 0 (the
+   * historical trim-page cover).
+   */
+  fullImageBleedMm?: number;
 }
 
 export type PaintCommand =
@@ -196,9 +203,10 @@ export type PaintCommand =
   // own SMask support.
   //
   // TSP-PHASE13-001: `fullPageCover` marks an Editor 「全面」 image whose box
-  // covers the finished page. The canonical box stays trim-based (JPG and
-  // trim-mode PDF are unchanged); the PDF executor re-covers the 3 mm bleed
-  // in bleed/full modes and clips to the bleed box.
+  // covers the finished page. The PDF executor re-covers the 3 mm bleed in
+  // bleed/full modes and clips to the bleed box; with the Editor's
+  // `fullImageBleedMm` (TSP-PRINT-004) the canonical box already covers it,
+  // so every mode crops the same.
   | { op: "image"; xMm: number; yMm: number; widthMm: number; heightMm: number; bytes: Uint8Array; format: "JPEG" | "PNG"; refId?: string; fullPageCover?: true }
   // Post-beta typography Phase 1 (傍点): one FILLED vector circle, centre
   // (xMm, yMm). Font-independent geometry, so PDF (jsPDF circle) and both
@@ -550,6 +558,7 @@ function unitCommands(
     contentHeightMm: number;
     paperWidthMm: number;
     paperHeightMm: number;
+    fullImageBleedMm?: number;
   },
   // TSP-PHASE13-001: the shared group placement (`layoutImageGroup`) of a
   // 天/中央/地 image, computed per page by `buildBodyPaintPage`. When given it
@@ -684,17 +693,19 @@ function unitCommands(
     const naturalHeightMm = unit.heightMm;
     const placement = unit.imagePlacement ?? "CENTER";
     if (placement === "FULL" && unit.imageFullPageCover && imageBoxMm) {
-      // Match the established editor contract: cover the physical page while
-      // preserving the marker box's aspect ratio. Any overflow is clipped by
-      // the PDF/JPG page surface; no raster-pixel remeasurement is involved.
-      const scale = Math.max(
-        imageBoxMm.paperWidthMm / naturalWidthMm,
-        imageBoxMm.paperHeightMm / naturalHeightMm
+      // Match the established editor contract: cover the physical page (and
+      // the bleed, TSP-PRINT-004) while preserving the marker box's aspect
+      // ratio — the rule the Preview uses too (`fullPageCoverRect`). Any
+      // overflow is clipped by the PDF/JPG page surface; no raster-pixel
+      // remeasurement is involved.
+      const cover = fullPageCoverRect(
+        { widthMm: naturalWidthMm, heightMm: naturalHeightMm },
+        { widthMm: imageBoxMm.paperWidthMm, heightMm: imageBoxMm.paperHeightMm },
+        imageBoxMm.fullImageBleedMm ?? 0
       );
-      const widthMm = naturalWidthMm * scale;
-      const heightMm = naturalHeightMm * scale;
-      const imageX = (imageBoxMm.paperWidthMm - widthMm) / 2;
-      const imageY = (imageBoxMm.paperHeightMm - heightMm) / 2;
+      const { widthMm, heightMm } = cover;
+      const imageX = cover.xMm;
+      const imageY = cover.yMm;
       const resolution = unit.imageResolution;
       return resolution && resolution.kind === "RESOLVED"
         ? [{ op: "image", xMm: imageX, yMm: imageY, widthMm, heightMm, bytes: resolution.bytes, format: resolution.format, ...(unit.imageRefId ? { refId: unit.imageRefId } : {}), fullPageCover: true }]
@@ -861,6 +872,7 @@ function buildBodyPaintPage(
       contentHeightMm: pageGeometry.paperHeightMm - pageGeometry.marginTopMm - pageGeometry.marginBottomMm,
       paperWidthMm: pageGeometry.paperWidthMm,
       paperHeightMm: pageGeometry.paperHeightMm,
+      ...(pageGeometry.fullImageBleedMm ? { fullImageBleedMm: pageGeometry.fullImageBleedMm } : {}),
     } : undefined;
     const imageRects = imageBoxMm ? groupedImageRects(page, imageBoxMm) : undefined;
     for (const column of page.columns) {
@@ -1543,11 +1555,119 @@ function drawSharedGlyph(
   forms.doFormObject(shape.key, new forms.Matrix(scale, 0, 0, scale, (cmd.xMm + offsetX) * k, (pageHeightMm - (cmd.yMm + offsetY)) * k));
 }
 
+interface PdfPaintFonts {
+  base: string;
+  byFamily: ReadonlyMap<string, string>;
+  /** TSP-PRINT-004: glyph outlines per registered jsPDF font name (lazy). */
+  outlines?: (fontName: string) => VerticalOutlineContext | undefined;
+}
+
+/** The registered fonts of one PDF, with their outlines parsed on first use. */
+function pdfPaintFonts(
+  fontResource: PublicationFontResource | undefined,
+  extraFonts: PublicationPdfRenderOptions["extraFonts"],
+  byFamily: ReadonlyMap<string, string>
+): PdfPaintFonts | undefined {
+  if (!fontResource) return undefined;
+  const resources = new Map<string, PublicationFontResource>([[fontResource.fontName, fontResource]]);
+  for (const extra of extraFonts ?? []) resources.set(extra.font.fontName, extra.font);
+  const contexts = new Map<string, VerticalOutlineContext | undefined>();
+  return {
+    base: fontResource.fontName,
+    byFamily,
+    outlines(fontName) {
+      if (!contexts.has(fontName)) {
+        const resource = resources.get(fontName);
+        let context: VerticalOutlineContext | undefined;
+        try {
+          context = resource ? new VerticalOutlineContext(FontBinary.fromBase64(resource.base64)) : undefined;
+        } catch {
+          context = undefined;
+        }
+        contexts.set(fontName, context);
+      }
+      return contexts.get(fontName);
+    },
+  };
+}
+
+/**
+ * TSP-PRINT-004: a ノンブル / 柱 run drawn as the font's glyph outlines, at
+ * the position jsPDF's `text()` would use (x by `align` on the advance width,
+ * alphabetic baseline at the centre + 0.35 em) and the Preview draws
+ * (`furnitureRunPlacement`). jsPDF measured a character outside the BMP
+ * (𠮷 …) as two and cut the run at a character its font lacks; here each
+ * code point is one glyph, and a character the run's font lacks is taken
+ * from another font of this PDF (the body font first), or the font's own
+ * missing-glyph box, so the run is never shortened. Returns false (the
+ * caller keeps `text()`) when no outlines are available.
+ */
+export interface FurnitureRunGlyph {
+  context: VerticalOutlineContext;
+  glyphId: number;
+  /** Pen origin (left of the advance) and alphabetic baseline, mm. */
+  xMm: number;
+  baselineMm: number;
+  emSizeMm: number;
+}
+
+/**
+ * TSP-PRINT-004: the glyphs of one horizontal furniture run — one per code
+ * point, from `primary` or the first fallback that has it (else `primary`'s
+ * missing-glyph box) — placed as jsPDF's `text()` and the Preview place the
+ * run (see `drawFurnitureRunAsGlyphs`).
+ */
+export function furnitureRunGlyphs(
+  cmd: Pick<Extract<PaintCommand, { op: "text" }>, "text" | "xMm" | "yMm" | "fontSizePt" | "align">,
+  primary: VerticalOutlineContext,
+  fallbacks: readonly VerticalOutlineContext[] = []
+): FurnitureRunGlyph[] {
+  const emSizeMm = cmd.fontSizePt * (25.4 / 72);
+  const picked = Array.from(cmd.text).map((ch) => {
+    const codePoint = ch.codePointAt(0)!;
+    for (const context of [primary, ...fallbacks]) {
+      const glyphId = context.horizontalGlyphId(codePoint);
+      if (glyphId !== undefined) return { context, glyphId };
+    }
+    return { context: primary, glyphId: 0 };
+  });
+  const advancesMm = picked.map(({ context, glyphId }) => (context.glyphAdvanceUnits(glyphId) / context.unitsPerEm) * emSizeMm);
+  const widthMm = advancesMm.reduce((sum, advance) => sum + advance, 0);
+  let xMm = cmd.align === "left" ? cmd.xMm : cmd.align === "right" ? cmd.xMm - widthMm : cmd.xMm - widthMm / 2;
+  const baselineMm = cmd.yMm + emSizeMm * (0.5 - 0.15);
+  return picked.map((glyph, index) => {
+    const placed = { ...glyph, xMm, baselineMm, emSizeMm };
+    xMm += advancesMm[index];
+    return placed;
+  });
+}
+
+function drawFurnitureRunAsGlyphs(
+  pdf: jsPDF,
+  cmd: Extract<PaintCommand, { op: "text" }>,
+  fontName: string,
+  fonts: PdfPaintFonts,
+  offsetX: number,
+  offsetY: number
+): boolean {
+  if ((cmd.angle ?? 0) !== 0 || cmd.baseline !== "middle" || cmd.maxWidthMm !== undefined) return false;
+  const primary = fonts.outlines?.(fontName);
+  if (!primary) return false;
+  const fallbacks = [fonts.base, ...fonts.byFamily.values()]
+    .filter((name, index, all) => name !== fontName && all.indexOf(name) === index)
+    .map((name) => fonts.outlines?.(name))
+    .filter((context): context is VerticalOutlineContext => !!context);
+  for (const glyph of furnitureRunGlyphs(cmd, primary, fallbacks)) {
+    drawSharedGlyph(pdf, { op: "glyphOutline", shape: glyph.context.glyphShape(glyph.glyphId), xMm: glyph.xMm, yMm: glyph.baselineMm, emSizeMm: glyph.emSizeMm }, offsetX, offsetY);
+  }
+  return true;
+}
+
 function paintPageCommands(
   pdf: jsPDF,
   page: PaintPagePlan,
   output: PublicationPdfPageOutput,
-  fonts?: { base: string; byFamily: ReadonlyMap<string, string> },
+  fonts?: PdfPaintFonts,
 ): void {
   const offsetX = output.contentOffsetXMm;
   const offsetY = output.contentOffsetYMm;
@@ -1595,6 +1715,7 @@ function paintPageCommands(
       continue;
     }
     const commandFont = cmd.fontFamily ? fonts?.byFamily.get(cmd.fontFamily.trim()) : undefined;
+    if (cmd.furnitureRole && fonts?.outlines && drawFurnitureRunAsGlyphs(pdf, cmd, commandFont ?? fonts.base, fonts, offsetX, offsetY)) continue;
     if (commandFont) pdf.setFont(commandFont);
     pdf.setFontSize(cmd.fontSizePt);
     if (cmd.maxWidthMm !== undefined) {
@@ -1643,6 +1764,7 @@ export function renderPaintPlanToPdf(
 ): PublicationPdfResult {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
   const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
+  const paintFonts = pdfPaintFonts(fontResource, options.extraFonts, fontsByFamily);
   // jsPDF always creates one initial page at construction time (sized to
   // `format` above, a throwaway placeholder) — every real page below is
   // added explicitly with its own correct physical size, then the
@@ -1654,7 +1776,7 @@ export function renderPaintPlanToPdf(
     pdf.setPage(i + 2); // page 1 is the throwaway placeholder
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
+    paintPageCommands(pdf, page, output, paintFonts);
   });
   pdf.deletePage(1);
 
@@ -1693,6 +1815,7 @@ export async function renderPaintPagesToPdfAsync(
 ): Promise<PublicationPdfResult> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [1, 1], compress: true, putOnlyUsedFonts: true });
   const fontsByFamily = registerPdfFonts(pdf, fontResource, options.extraFonts);
+  const paintFonts = pdfPaintFonts(fontResource, options.extraFonts, fontsByFamily);
   for (let index = 0; index < pageCount; index += 1) {
     await options.beforePage?.(index + 1, pageCount);
     const page = await pageAt(index);
@@ -1701,7 +1824,7 @@ export async function renderPaintPagesToPdfAsync(
     pdf.setPage(index + 2);
     applyPublicationPdfPageBoxes(pdf, output);
     if (fontResource) pdf.setFont(fontResource.fontName);
-    paintPageCommands(pdf, page, output, fontResource ? { base: fontResource.fontName, byFamily: fontsByFamily } : undefined);
+    paintPageCommands(pdf, page, output, paintFonts);
     options.onProgress?.(index + 1, pageCount);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }

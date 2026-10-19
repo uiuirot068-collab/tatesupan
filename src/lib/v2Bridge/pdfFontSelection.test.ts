@@ -89,10 +89,12 @@ describe("TSP-PHASE13-001 PDF font selection", () => {
     expect(loads).toEqual(["Zen Old Mincho"]);
   });
 
-  it("embeds and uses separate ノンブル and 奥付 fonts", async () => {
+  it("embeds and uses a separate 奥付 font; draws a separate ノンブル font as its outlines", async () => {
+    // TSP-PRINT-004: ノンブル / 柱 are the furniture font's glyph outlines
+    // (as the Preview draws them), so its font is no longer embedded as text.
     const bytes = await exportPdf(settingsWith(ZEN, NOTO_SANS, NOTO_SERIF));
-    expect(embeddedFonts(bytes)).toEqual(["Noto Sans JP", "Noto Serif JP", "Zen Old Mincho"]);
-    expect(usedFontResources(bytes).size).toBe(3);
+    expect(embeddedFonts(bytes)).toEqual(["Noto Serif JP", "Zen Old Mincho"]);
+    expect(usedFontResources(bytes).size).toBe(2);
   });
 
   it("keeps the historical Shippori-only PDF for the default settings", async () => {

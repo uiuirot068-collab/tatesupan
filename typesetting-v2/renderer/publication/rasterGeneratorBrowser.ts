@@ -18,7 +18,6 @@
 import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPagePlan, PaintPlan } from "./pdfGenerator";
 import { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY, mmToPx, ptToPx, rasterTextBaseline, computeLongSideResize } from "./rasterShared";
-import { WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE } from "../../core/settings/outputTypography";
 
 // The browser executor only ever needs the font's own CSS family NAME
 // (to set `ctx.font`/wait on `document.fonts`) -- never font BYTES
@@ -28,12 +27,7 @@ import { WEB_READING_FOLIO_FONT_SIZE, WEB_READING_RUNNING_HEAD_FONT_SIZE } from 
 // object with unused `fileName`/`base64` fields is needed here.
 export type BrowserFontFamily = string;
 
-export function resolveRasterCommandFontSizePt(command: Extract<PaintCommand, { op: "text" }>, mode: JpgExportMode): number {
-  if (mode !== "WEB") return command.fontSizePt;
-  if (command.furnitureRole === "folio") return WEB_READING_FOLIO_FONT_SIZE;
-  if (command.furnitureRole === "running-head") return WEB_READING_RUNNING_HEAD_FONT_SIZE;
-  return command.fontSizePt;
-}
+
 
 // --- Font readiness (Phase 5: never silently rasterize before the
 // intended font is ready) ---------------------------------------------
@@ -89,7 +83,7 @@ async function loadBrowserImage(bytes: Uint8Array): Promise<HTMLImageElement | I
 // --- Shared per-page paint executor (mirrors `rasterGenerator.ts`'s own
 // `paintCommandsOnContext` exactly, command-for-command) ----------------
 
-async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: PaintCommand[], dpi: number, fontFamily: BrowserFontFamily | undefined, mode: JpgExportMode): Promise<void> {
+async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: PaintCommand[], dpi: number, fontFamily: BrowserFontFamily | undefined): Promise<void> {
   ctx.strokeStyle = "black";
   ctx.fillStyle = "black";
   ctx.lineWidth = mmToPx(0.05, dpi); // matches pdfGenerator.ts's `pdf.setLineWidth(0.05)`
@@ -144,7 +138,10 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
     // (jsPDF's own text() options were modeled on the same DOM/canvas
     // convention). `baseline` goes through `rasterTextBaseline`, because
     // jsPDF's "middle" is not Canvas's "middle" (TSP-PRINT-003).
-    const outputFontSizePt = resolveRasterCommandFontSizePt(cmd, mode);
+    // TSP-PRINT-004: the plan's size in every mode (the user's ノンブル / 柱
+    // size, as the Preview draws it). WEB mode used to force the Web閲覧用
+    // defaults (15 / 20pt) whatever the setting.
+    const outputFontSizePt = cmd.fontSizePt;
     const commandFontFamily = cmd.fontFamily?.trim();
     if (commandFontFamily) {
       ctx.font = `${ptToPx(outputFontSizePt, dpi)}px ${commandFontFamily}`;
@@ -225,8 +222,7 @@ export async function renderPaintPlanToBrowserRasterPages(
   plan: PaintPlan,
   fontFamily: BrowserFontFamily | undefined,
   dpi: number = RASTER_DPI,
-  options: BrowserRasterProgressOptions = {},
-  mode: JpgExportMode = "PRINT"
+  options: BrowserRasterProgressOptions = {}
 ): Promise<BrowserRasterPage[]> {
   if (typeof document === "undefined") {
     throw new Error("renderPaintPlanToBrowserRasterPages: browser-only (no `document`) -- use rasterGenerator.ts (Node) instead");
@@ -245,7 +241,7 @@ export async function renderPaintPlanToBrowserRasterPages(
     if (!ctx) throw new Error("renderPaintPlanToBrowserRasterPages: 2d context unavailable");
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, widthPx, heightPx);
-    await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily, mode);
+    await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily);
     pages.push({ canvas, pixelWidth: widthPx, pixelHeight: heightPx });
     options.onProgress?.(index + 1, plan.length);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -304,7 +300,7 @@ export async function exportPaintPlanToBrowserJpgPages(
 ): Promise<BrowserJpgPageResult[]> {
   const basePages = await renderPaintPlanToBrowserRasterPages(plan, fontFamily, dpi, {
     beforePage: options.beforePage,
-  }, mode);
+  });
   const results: BrowserJpgPageResult[] = [];
   for (let i = 0; i < basePages.length; i++) {
     await options.beforePage?.(i + 1, basePages.length);
@@ -350,7 +346,7 @@ export async function exportPaintPagesToBrowserJpgPages(
     if (!ctx) throw new Error("exportPaintPagesToBrowserJpgPages: 2d context unavailable");
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, widthPx, heightPx);
-    await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily, mode);
+    await paintCommandsOnContext(ctx, page.commands, dpi, fontFamily);
     await options.afterPaint?.(ctx, widthPx, heightPx);
     // Yield between painting and encoding, as the two-pass executor above
     // does, so neither becomes one long main-thread task with the other.
