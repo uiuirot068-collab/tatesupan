@@ -23,6 +23,12 @@ export default defineConfig({
       // CST-PORT-014: cloud version compare
       "src/lib/cloudVersionCompare.test.ts",
       "src/lib/cloudLink.test.ts",
+      // TSP-SAFE-002: could not read ≠ deleted; the DB checks the overwritten version
+      "src/lib/supabase/projects.test.ts",
+      // TSP-SAFE-003: the way out when the editor crashes or a work cannot be opened
+      "src/lib/editorRescue.test.ts",
+      // TSP-SAFE-004: the ゴミ箱 and tidying images nothing uses
+      "src/lib/trashSafety.test.ts",
       // TSP-DEMO-001: おためしデモ on phones
       "src/lib/tspDemo001.test.ts",
       // PLT-LOOP-003: メモ・プロット panel (reads プロット帳 files)

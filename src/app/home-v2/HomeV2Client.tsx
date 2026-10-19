@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   createDocument,
@@ -12,8 +12,14 @@ import {
   renameDocument,
   ensureSampleProject,
   listDocuments,
+  listTrash,
+  purgeExpiredTrash,
+  purgeFromTrash,
+  requestPersistentStorage,
+  restoreFromTrash,
   type DocumentRecord,
 } from "@/lib/db";
+import { TrashModal } from "@/components/TrashModal";
 import { DEFAULT_PAGE_SETTINGS } from "@/lib/pageLayout";
 import { CombineModal } from "@/components/CombineModal";
 import HelpModal from "@/components/HelpModal";
@@ -56,6 +62,8 @@ import type { Project } from "@/types/database";
 // 全プラン共通（Traveler / Resident / Light / Unlimited）。サンプル（使い方ガイド）は含まない。
 const LOCAL_DOCUMENT_LIMIT = 60;
 
+const STORAGE_UNAVAILABLE = "storage-unavailable" as const;
+
 const QA_BOOKS: DocumentRecord[] = [
   {
     id: -101,
@@ -86,26 +94,77 @@ interface HomeV2ClientProps {
 
 export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps) {
   const router = useRouter();
-  const demo = useSearchParams().get("demo");
+  const searchParams = useSearchParams();
+  const demo = searchParams.get("demo");
   const qaMode = allowQaMode && (demo === "empty" || demo === "books") ? demo : undefined;
   const { user: authUser, session: authSession, isLoading: authIsLoading } = useAuth();
   const user = qaMode ? null : authUser;
   const session = qaMode ? null : authSession;
   const isAuthLoading = qaMode ? false : authIsLoading;
   useEffect(() => {
-    if (!qaMode) void ensureSampleProject();
+    // TSP-SAFE-004 QA2: an unusable storage is said on the bookshelf below.
+    if (!qaMode) void ensureSampleProject().catch(() => undefined);
   }, [qaMode]);
+  // TSP-SAFE-004: tidy once per visit (works trashed long ago) and ask the
+  // browser to keep this site's saved works.
+  // TSP-SAFE-004 PC QA: no sweep of 「images no work mentions」 any more — a
+  // cut (Ctrl+X) or undone illustration and the illustrations of a cloud work
+  // opened on another device look unused here, and were lost.
+  useEffect(() => {
+    if (qaMode) return;
+    void purgeExpiredTrash()
+      .catch((error: unknown) => console.error("TateSpun: could not tidy the trash", error));
+    void requestPersistentStorage();
+  }, [qaMode]);
+  // TSP-SAFE-004 QA: when this browser's storage cannot be used, say so
+  // instead of staying at 「読み込み中」.
   const storedDocuments = useLiveQuery(
-    () => (qaMode ? Promise.resolve([] as DocumentRecord[]) : listDocuments()),
+    async () => {
+      if (qaMode) return [] as DocumentRecord[];
+      // A browser without IndexedDB at all (QA2): the same message.
+      if (typeof indexedDB === "undefined") return STORAGE_UNAVAILABLE;
+      try {
+        return await listDocuments();
+      } catch (error) {
+        console.error("TateSpun: could not read the bookshelf", error);
+        return STORAGE_UNAVAILABLE;
+      }
+    },
     [qaMode]
   );
+  const storageUnavailable = storedDocuments === STORAGE_UNAVAILABLE;
   const documents = useMemo(
-    () => (qaMode === "empty" ? [] : qaMode === "books" ? QA_BOOKS : storedDocuments),
+    () =>
+      qaMode === "empty"
+        ? []
+        : qaMode === "books"
+          ? QA_BOOKS
+          : storedDocuments === STORAGE_UNAVAILABLE
+            ? []
+            : storedDocuments,
     [qaMode, storedDocuments]
   );
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  // TSP-SAFE-004: 削除 moves a work to the ゴミ箱; the last one can be put back at once.
+  const trashItems = useLiveQuery(
+    () => (qaMode ? Promise.resolve([]) : listTrash().catch(() => [])),
+    [qaMode]
+  );
+  // An editor link to a work in the trash (/?trash=1) opens the ゴミ箱.
+  const [isTrashOpen, setIsTrashOpen] = useState(() => !qaMode && searchParams.get("trash") === "1");
+  // TSP-SAFE-004 QA2: also set when the ゴミ箱 opens from /?trash=1 (it was 0:
+  // 「あと20775日」).
+  const [trashOpenedAt, setTrashOpenedAt] = useState(() => Date.now());
+  // The ?trash=1 that opened it is dropped, so a reload does not open it again.
+  useEffect(() => {
+    if (searchParams.get("trash") === "1") router.replace("/", { scroll: false });
+  }, [router, searchParams]);
+  const [lastTrashed, setLastTrashed] = useState<{ id: number; title: string } | null>(null);
+  const trashedAtRef = useRef(0);
   const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+  // TSP-SAFE-004 QA2: the limit message says which action it stopped.
+  const [limitStoppedRestore, setLimitStoppedRestore] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   // 「本をまとめる」を作品2冊未満で押したときの案内（無反応にしない）。
   const [showCombineGuide, setShowCombineGuide] = useState(false);
@@ -179,6 +238,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       // work is opened) is also in the cloud, so it does not count here.
       const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
       if (count >= LOCAL_DOCUMENT_LIMIT) {
+        setLimitStoppedRestore(false);
         setIsLimitModalOpen(true);
         return;
       }
@@ -211,9 +271,98 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
       setPendingDeleteId(null);
       return;
     }
-    await deleteDocument(id);
+    const title = documents?.find((doc) => doc.id === id)?.title || "無題のドキュメント";
+    const moved = await deleteDocument(id).catch(() => false);
     setPendingDeleteId(null);
+    // TSP-SAFE-004 PC QA: only a work actually moved is announced.
+    if (!moved) {
+      window.alert("ゴミ箱に移せませんでした。ページを読み込み直してから、もう一度お試しください。");
+      return;
+    }
+    trashedAtRef.current = Date.now();
+    setLastTrashed({ id, title });
+    // TSP-SAFE-004 QA2: stay on this browser's shelf, where 元に戻す and the
+    // ゴミ箱 are (with cloud works it used to switch to the cloud shelf).
+    setSelectedBookshelfTab("local");
   };
+
+  // TSP-SAFE-004 QA2: after the last book, the page becomes the first-visit
+  // page and 元に戻す was far below; bring it into view.
+  const trashLinksRef = useRef<HTMLDivElement | null>(null);
+  // Runs again when the shelf changes, since the first-visit page appears
+  // only once the bookshelf has re-read its works.
+  useEffect(() => {
+    if (!lastTrashed || Date.now() - trashedAtRef.current > 3000) return;
+    const frame = window.requestAnimationFrame(() => {
+      const links = trashLinksRef.current;
+      if (!links) return;
+      const box = links.getBoundingClientRect();
+      if (box.top < 0 || box.bottom > window.innerHeight) links.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lastTrashed, documents, trashItems]);
+
+  const handleRestore = async (id: number) => {
+    // TSP-SAFE-004 QA: putting a work back counts toward the same 60-work
+    // limit as a new one (a cloud-linked work does not count, as in handleCreate).
+    const trashed = trashItems?.find((item) => item.id === id);
+    if (trashed && !trashed.document.cloudSync) {
+      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
+      if (count >= LOCAL_DOCUMENT_LIMIT) {
+        setIsTrashOpen(false);
+        setLimitStoppedRestore(true);
+        setIsLimitModalOpen(true);
+        return;
+      }
+    }
+    await restoreFromTrash(id);
+    setLastTrashed((last) => (last?.id === id ? null : last));
+  };
+
+  const handlePurge = async (id: number) => {
+    await purgeFromTrash(id);
+    setLastTrashed((last) => (last?.id === id ? null : last));
+  };
+
+  const openTrash = () => {
+    setTrashOpenedAt(Date.now());
+    setIsTrashOpen(true);
+  };
+
+  // TSP-SAFE-004 QA: shown on the empty bookshelf too, so the last work
+  // moved to the ゴミ箱 can still be put back.
+  const trashCount = trashItems?.length ?? 0;
+  // Gone from the ゴミ箱 (put back or removed for good, also in another tab):
+  // its 元に戻す would do nothing.
+  const undoable = lastTrashed && trashItems?.some((item) => item.id === lastTrashed.id) ? lastTrashed : null;
+  const renderTrashLinks = (className: string) =>
+    (trashCount > 0 || undoable) && (
+      <div ref={trashLinksRef} className={className}>
+        {undoable && (
+          <p role="status" className="flex min-w-0 max-w-full items-baseline text-sm text-ink/70 dark:text-[#B9C2D3]">
+            <span className="shrink-0">「</span>
+            <span className="min-w-0 truncate">{undoable.title}</span>
+            <span className="shrink-0">」をゴミ箱に移しました。</span>
+            <button
+              type="button"
+              onClick={() => void handleRestore(undoable.id)}
+              className="ml-2 shrink-0 underline underline-offset-4 hover:text-ink dark:hover:text-[#D4DBE7]"
+            >
+              元に戻す
+            </button>
+          </p>
+        )}
+        {trashCount > 0 && (
+          <button
+            type="button"
+            onClick={openTrash}
+            className="w-fit text-sm text-ink/55 underline underline-offset-4 hover:text-ink dark:text-[#939DAF] dark:hover:text-[#D4DBE7]"
+          >
+            ゴミ箱 <span className="tabular-nums">{trashCount}</span>
+          </button>
+        )}
+      </div>
+    );
 
   const pendingDoc = documents?.find((doc) => doc.id === pendingDeleteId);
   const visibleCloudResult =
@@ -488,6 +637,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 {activeBookshelfTab === "cloud" ? "クラウド保存された作品" : "この端末に保存されている作品"}
               </p>
             </div>
+            {activeBookshelfTab === "local" && renderTrashLinks("mb-3 flex flex-col gap-1 sm:items-end")}
 
             {/* The shelf on a mat: the books are the content, set on a
                 framed paper ground (no heavy card), with the next book's
@@ -592,8 +742,13 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           </section>
         ) : (
           <section data-home-empty-onboarding="" className="w-full" aria-label="最初の一冊">
-            {documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
-            {documents !== undefined && (
+            {storageUnavailable ? (
+              <p role="alert" className="mx-auto max-w-xl px-4 py-16 text-center text-sm leading-7 text-ink/70 dark:text-[#AEB7C6]">
+                このブラウザの保存場所が使えないため、本棚を開けませんでした。プライベートモードや、サイトのデータを保存しない設定では使えないことがあります。設定を確かめてから、ページを読み込みなおしてください。
+              </p>
+            ) : documents === undefined && <p className="py-16 text-center text-sm text-ink/50">読み込み中…</p>}
+            {/* QA2: nothing here can be used without the storage. */}
+            {documents !== undefined && !storageUnavailable && (
               <>
                 {renderBrandPanel("onboarding")}
                 {/* The empty shelf, framed on a mat with a vertical title:
@@ -605,6 +760,8 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                   </div>
                   <div className="min-w-0">
                     <p className="font-serif text-[15px] leading-8 text-ink/70 dark:text-[#AEB7C6]">まだ空いている棚は、次の一冊のための場所です。<br />書きはじめた作品は、ここに一冊ずつ並んでいきます。</p>
+                    {/* TSP-SAFE-004 QA: the last work moved to the ゴミ箱 is put back from here. */}
+                    {renderTrashLinks("mt-4 flex flex-col gap-1")}
                     <div className="home-p3-mat relative mt-5 px-2 pt-4 pb-6 sm:px-6">
                       <div className="flex justify-end">
                         <button
@@ -1100,7 +1257,7 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-sm text-ink">
-              「{pendingDoc.title || "無題のドキュメント"}」を削除しますか？この操作は取り消せません。
+              「{pendingDoc.title || "無題のドキュメント"}」をゴミ箱に移しますか？30日のあいだは元に戻せます。
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -1115,11 +1272,21 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
                 onClick={() => handleDelete(pendingDoc.id)}
                 className="rounded bg-red-500 px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
               >
-                削除する
+                ゴミ箱に移す
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {isTrashOpen && (
+        <TrashModal
+          items={trashItems ?? []}
+          now={trashOpenedAt}
+          onRestore={handleRestore}
+          onPurge={handlePurge}
+          onClose={() => setIsTrashOpen(false)}
+        />
       )}
 
       <CombineModal
@@ -1146,7 +1313,9 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
           >
             <h3 className="text-sm font-semibold text-ink">このブラウザの本棚がいっぱいです</h3>
             <p className="mt-2 text-sm text-ink/70">
-              このブラウザには最大{LOCAL_DOCUMENT_LIMIT}作品まで保存できます。不要な作品を整理するか、会員の場合は必要な作品をクラウドに保存できます。
+              {limitStoppedRestore
+                ? `このブラウザには最大${LOCAL_DOCUMENT_LIMIT}作品まで保存できるため、ゴミ箱から戻せませんでした。本棚の作品を整理してから、もう一度「元に戻す」を押してください。`
+                : `このブラウザには最大${LOCAL_DOCUMENT_LIMIT}作品まで保存できます。不要な作品を整理するか、会員の場合は必要な作品をクラウドに保存できます。`}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button

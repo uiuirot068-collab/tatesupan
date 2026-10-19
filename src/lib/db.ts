@@ -21,7 +21,10 @@ import {
   type CloudSyncRecord,
   type DeviceCopyDecision,
 } from "./cloudDeviceCopy";
-import { writeCloudLink } from "./cloudLink";
+import { clearCloudLink, readCloudLink, writeCloudLink } from "./cloudLink";
+import { imageMarkerIds } from "./tategaki";
+import { coverImageIds } from "./cover/coverModel";
+import { isTrashExpired, keepCloudWorkImages, keptCloudWorkImageIds, unreferencedImageIds } from "./trash";
 
 export interface DocumentRecord {
   id: number;
@@ -68,10 +71,18 @@ export interface ImageRecord {
   layerOrder?: number;
 }
 
+/** TSP-SAFE-004: a work moved to the ゴミ箱, kept whole so it can be put back. */
+export interface TrashRecord {
+  id: number;
+  trashedAt: number;
+  document: DocumentRecord;
+}
+
 class TategakiDatabase extends Dexie {
   documents!: Table<DocumentRecord, number>;
   images!: Table<ImageRecord, string>;
   bookshelfMetadata!: Table<BookshelfMetadataRecord, number>;
+  trash!: Table<TrashRecord, number>;
 
   constructor() {
     super("tategaki-editor-db");
@@ -102,6 +113,15 @@ class TategakiDatabase extends Dexie {
           await tx.table<BookshelfMetadataRecord, number>("bookshelfMetadata").bulkPut(metadata);
         }
       });
+    // TSP-SAFE-004: the ゴミ箱. A separate table, so every reader of
+    // `documents` (bookshelf, limits, 本をまとめる, the save queue's "deleted in
+    // another tab") keeps treating a trashed work as gone.
+    this.version(5).stores({
+      documents: "id, updatedAt, isCollection",
+      images: "id, createdAt",
+      bookshelfMetadata: "id, updatedAt, isCollection",
+      trash: "id, trashedAt",
+    });
   }
 }
 
@@ -374,7 +394,7 @@ export async function openCloudDeviceCopy(
   const cloudHash = contentHash(project.title, project.content);
   const cloudSync: CloudSyncRecord = { projectId: project.id, updatedAt: project.updated_at ?? null, hash: cloudHash };
 
-  const opened = await db.transaction("rw", db.documents, db.bookshelfMetadata, async (): Promise<OpenedDeviceCopy> => {
+  const opened = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async (): Promise<OpenedDeviceCopy> => {
     const local = await findDeviceCopy(project.id);
     const decision = decideDeviceCopy(
       local ? { hash: contentHash(local.title, local.content), sync: local.cloudSync ?? null } : null,
@@ -435,6 +455,7 @@ export async function openCloudDeviceCopy(
   return opened;
 }
 
+// Must run inside a documents + bookshelfMetadata + trash transaction.
 async function findDeviceCopy(projectId: string): Promise<DocumentRecord | undefined> {
   const remembered = readDeviceCopyId(projectId);
   if (remembered !== null) {
@@ -444,7 +465,15 @@ async function findDeviceCopy(projectId: string): Promise<DocumentRecord | undef
   // The remembered id is missing (site data partly cleared): look the copy up
   // by its own record. Newest first if there are several.
   const copies = await db.documents.filter((doc) => doc.cloudSync?.projectId === projectId).toArray();
-  return copies.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const live = copies.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  if (live) return live;
+  // TSP-SAFE-004 PC QA: the device copy is in the ゴミ箱. It comes back to the
+  // bookshelf as this cloud work's copy (a new copy here, then 元に戻す of the
+  // old one, left two copies of one cloud work).
+  const trashed = (await db.trash.filter((item) => item.document.cloudSync?.projectId === projectId).toArray()).sort(
+    (a, b) => b.trashedAt - a.trashedAt
+  )[0];
+  return trashed ? (await putBackFromTrash(trashed)).document : undefined;
 }
 
 /**
@@ -465,12 +494,142 @@ export async function markCloudSynced(
   if (updated) writeDeviceCopyId(saved.projectId, docId);
 }
 
-export async function deleteDocument(id: number): Promise<void> {
-  if (isEphemeralDocId(id)) return;
-  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+/**
+ * TSP-SAFE-004: 本棚の「削除」 moves the work to the ゴミ箱 (before, it was
+ * gone at once). Its illustrations and cloud link stay, so 元に戻す brings
+ * back the same work. An editor tab still open on it sees it as deleted.
+ */
+export async function deleteDocument(id: number, now: number = Date.now()): Promise<boolean> {
+  if (isEphemeralDocId(id)) return false;
+  // PC QA: says whether the work was moved, so 「移しました」 is never shown for nothing.
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const document = await db.documents.get(id);
+    if (!document || document.isSample) return false;
+    await db.trash.put({ id, trashedAt: now, document });
     await db.documents.delete(id);
     await db.bookshelfMetadata.delete(id);
+    return true;
   });
+}
+
+export async function listTrash(): Promise<TrashRecord[]> {
+  return db.trash.orderBy("trashedAt").reverse().toArray();
+}
+
+export async function isInTrash(id: number): Promise<boolean> {
+  return (await db.trash.get(id)) !== undefined;
+}
+
+/**
+ * Puts a trashed work back on the bookshelf and returns its id (a new id only
+ * if its old one was taken meanwhile). The revision moves on, so a tab still
+ * open on the deleted work keeps its own text as a separate copy instead of
+ * overwriting the restored one (lib/localSaveQueue.ts).
+ */
+export async function restoreFromTrash(id: number): Promise<number | null> {
+  const restored = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const item = await db.trash.get(id);
+    return item ? putBackFromTrash(item) : null;
+  });
+  if (!restored) return null;
+  const projectId = restored.document.cloudSync?.projectId;
+  if (projectId) {
+    writeDeviceCopyId(projectId, restored.document.id);
+    writeCloudLink(restored.document.id, projectId);
+  } else if (restored.unlinked && restored.document.id === id) {
+    clearCloudLink(id);
+  }
+  return restored.document.id;
+}
+
+/**
+ * Moves one trashed work back to the bookshelf. Must run inside a documents +
+ * bookshelfMetadata + trash transaction.
+ */
+async function putBackFromTrash(item: TrashRecord): Promise<{ document: DocumentRecord; unlinked: boolean }> {
+  let restoredId = item.id;
+  if (await db.documents.get(restoredId)) {
+    // PC QA: the new id is free on the bookshelf AND in the ゴミ箱.
+    restoredId = Date.now();
+    while ((await db.documents.get(restoredId)) || (await db.trash.get(restoredId))) restoredId += 1;
+  }
+  // TSP-SAFE-004 PC QA: the cloud work was opened again meanwhile and has
+  // another device copy now. This one comes back as a plain work, so the two
+  // never stand for the same cloud work.
+  const projectId = item.document.cloudSync?.projectId;
+  const otherCopy = projectId
+    ? await db.documents.filter((doc) => doc.id !== restoredId && doc.cloudSync?.projectId === projectId).first()
+    : undefined;
+  const document: DocumentRecord = {
+    ...item.document,
+    id: restoredId,
+    revision: revisionOf(item.document) + 1,
+    rename: undefined,
+    ...(otherCopy ? { cloudSync: undefined } : {}),
+  };
+  await db.documents.put(document);
+  const metadata = bookshelfMetadataFromDocument(document);
+  if (metadata) await db.bookshelfMetadata.put(metadata);
+  await db.trash.delete(item.id);
+  return { document, unlinked: !!otherCopy };
+}
+
+/** Removes a trashed work for good, with the illustrations only it used. */
+export async function purgeFromTrash(id: number): Promise<void> {
+  const item = await db.trash.get(id);
+  if (!item) return;
+  await db.trash.delete(id);
+  // TSP-SAFE-004 QA: a work saved to the cloud may be opened from the cloud
+  // again, and the cloud keeps its illustrations only 72 hours: this browser
+  // keeps them (as it did before the trash existed).
+  const cloudProjectId = item.document.cloudSync?.projectId ?? readCloudLink(id);
+  if (cloudProjectId) {
+    keepCloudWorkImages(cloudProjectId, imageIdsMentionedIn(item.document));
+    return;
+  }
+  await removeUnusedImages(imageIdsMentionedIn(item.document));
+}
+
+/** Removes every trashed work older than TRASH_KEEP_DAYS. Returns how many. */
+export async function purgeExpiredTrash(now: number = Date.now()): Promise<number> {
+  const expired = (await db.trash.toArray()).filter((item) => isTrashExpired(item.trashedAt, now));
+  for (const item of expired) await purgeFromTrash(item.id);
+  return expired.length;
+}
+
+function imageIdsMentionedIn(document: DocumentRecord): string[] {
+  // Candidates only; removeUnusedImages checks every remaining work again.
+  return [...new Set([...imageMarkerIds(document.content ?? ""), ...coverImageIds(document.settings?.cover)])];
+}
+
+async function removeUnusedImages(candidateIds: string[]): Promise<number> {
+  if (candidateIds.length === 0) return 0;
+  return db.transaction("rw", db.documents, db.trash, db.images, async () => {
+    const stored = (await db.images.bulkGet(candidateIds)).filter((record): record is ImageRecord => !!record);
+    if (stored.length === 0) return 0;
+    const works: unknown[] = [...(await db.documents.toArray()), ...(await db.trash.toArray()).map((item) => item.document)];
+    const kept = keptCloudWorkImageIds();
+    const unused = new Set(unreferencedImageIds(stored.map((record) => record.id).filter((imageId) => !kept.has(imageId)), works));
+    const removable = stored.filter((record) => unused.has(record.id)).map((record) => record.id);
+    await db.images.bulkDelete(removable);
+    return removable.length;
+  });
+}
+
+/**
+ * TSP-SAFE-004: asks the browser not to clear this site's saved works when
+ * space runs low (Safari may otherwise clear sites not opened for a while).
+ * Firefox would show the person a question for this, so it is not asked there.
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.persist) return false;
+    if (/firefox/i.test(navigator.userAgent)) return false;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return false;
+  }
 }
 
 export async function saveImage(record: ImageRecord): Promise<void> {

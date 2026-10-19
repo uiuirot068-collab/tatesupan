@@ -12,7 +12,8 @@ const SAVE_TEXT: Record<SaveStatus, string> = {
   saving: "端末に保存中…",
   saved: "端末に保存済み",
   error: "端末に保存できず再試行中",
-  stopped: "端末に保存していません",
+  // TSP-SAFE-004 QA2: short enough for a phone (was cut to 「…保存していま…」).
+  stopped: "端末に未保存",
 };
 
 const CLOUD_TEXT: Record<CloudSaveStatus, string> = {
@@ -55,6 +56,8 @@ interface MobileEditorNavProps {
   onOpenExport?: () => void;
   /** An export is running -- the button is disabled (mirrors Preview's own 書き出し). */
   exportBusy?: boolean;
+  /** TSP-SAFE-004 QA2: asked before 「← 一覧」 leaves; false keeps the screen. */
+  confirmLeave?: () => boolean;
 }
 
 /**
@@ -86,6 +89,7 @@ export default function MobileEditorNav({
   isSaving,
   onOpenExport,
   exportBusy,
+  confirmLeave,
 }: MobileEditorNavProps) {
   const tab = (active: boolean) =>
     `flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors ${
@@ -101,6 +105,9 @@ export default function MobileEditorNav({
       <div className="flex items-center gap-1">
         <Link
           href="/"
+          onClick={(event) => {
+            if (confirmLeave && !confirmLeave()) event.preventDefault();
+          }}
           className="shrink-0 whitespace-nowrap rounded-md border border-ink/15 px-2 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/5"
           aria-label="作品一覧へ戻る"
         >
