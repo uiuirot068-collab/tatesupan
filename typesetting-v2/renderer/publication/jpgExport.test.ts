@@ -273,8 +273,8 @@ describe("Web JPG transform", () => {
 describe("Human QA Round 1 browser/JPG paint parity regressions", () => {
   it.each(["WEB", "PRINT"] as const)("paints U+30FC as a vertical mark in %s JPG without changing U+2015 dash handling", async (mode) => {
     const { model } = compose([{ kind: "TEXT", text: "ー" }]);
-    // Browser production has no font-byte outline context, so this is the
-    // exact fallback PaintPlan shape the native Canvas executor receives.
+    // A plan built without a font-byte outline context gets this rotated
+    // fallback (real exports pass the font, whose vertical ー is used).
     const plan = buildPaintPlan(model, true, GEOMETRY);
     const mark = plan[0].commands.find((command): command is Extract<PaintCommand, { op: "text" }> => command.op === "text" && command.text === "ー");
     expect(mark).toMatchObject({ angle: 90, baseline: "middle", align: "center" });
@@ -534,5 +534,48 @@ describe("QA -- jpg-export artifacts", () => {
       }
     }
     expect(pages.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// TSP-PRINT-003: a "middle" text (ノンブル / 柱 / 縦中横) sits where jsPDF puts
+// it — baseline at y + 0.35 em — not at Canvas's own "middle" (0.38 em).
+describe("JPG puts baseline-middle text where PDF does", () => {
+  it("the glyph's ink bottom lands on y + 0.35 em (+ its own descent below the baseline)", async () => {
+    const font = fontResource();
+    const glyph = new VerticalOutlineContext(readFileSync(FONT_PATH)).openTypeFont.charToGlyph("1");
+    const unitsPerEm = new VerticalOutlineContext(readFileSync(FONT_PATH)).openTypeFont.unitsPerEm;
+    const sizePt = 20;
+    const emMm = (sizePt * 25.4) / 72;
+    const yMm = 50;
+    const plan = [{ widthMm: 40, heightMm: 80, commands: [{ op: "text" as const, text: "1", xMm: 20, yMm, fontSizePt: sizePt, align: "center" as const, angle: 0, baseline: "middle" as const }] }];
+    const [page] = await renderPaintPlanToRasterPages(plan, font, RASTER_DPI);
+    const ctx = page.canvas.getContext("2d");
+    const { data } = ctx.getImageData(0, 0, page.pixelWidth, page.pixelHeight);
+    let bottom = -1;
+    for (let y = 0; y < page.pixelHeight; y++) {
+      for (let x = 0; x < page.pixelWidth; x++) if (data[(y * page.pixelWidth + x) * 4] < 128) bottom = y;
+    }
+    const inkBottomMm = ((bottom + 1) / RASTER_DPI) * 25.4;
+    const expectedMm = yMm + emMm * 0.35 - (glyph.getBoundingBox().y1 / unitsPerEm) * emMm;
+    expect(Math.abs(inkBottomMm - expectedMm)).toBeLessThan(0.05);
+  });
+
+  it("keeps rotated text (the 90° ー fallback) centred on its point, with no middle-baseline shift", async () => {
+    const sizePt = 20;
+    const emMm = (sizePt * 25.4) / 72;
+    const plan = [{ widthMm: 40, heightMm: 80, commands: [{ op: "text" as const, text: "ー", xMm: 20, yMm: 40, fontSizePt: sizePt, align: "center" as const, angle: 90, baseline: "middle" as const }] }];
+    const [page] = await renderPaintPlanToRasterPages(plan, fontResource(), RASTER_DPI);
+    const { data } = page.canvas.getContext("2d").getImageData(0, 0, page.pixelWidth, page.pixelHeight);
+    let minX = Infinity, maxX = -1, minY = Infinity, maxY = -1;
+    for (let y = 0; y < page.pixelHeight; y++) {
+      for (let x = 0; x < page.pixelWidth; x++) {
+        if (data[(y * page.pixelWidth + x) * 4] >= 128) continue;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+    const toMm = (px: number) => (px / RASTER_DPI) * 25.4;
+    expect(maxY - minY).toBeGreaterThan((maxX - minX) * 2);
+    expect(Math.abs(toMm((minX + maxX + 1) / 2) - 20)).toBeLessThan(emMm * 0.15);
+    expect(Math.abs(toMm((minY + maxY + 1) / 2) - 40)).toBeLessThan(emMm * 0.15);
   });
 });
