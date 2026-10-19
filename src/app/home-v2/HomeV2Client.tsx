@@ -266,13 +266,25 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
     setLocalOnlyNotice({ count: localCount });
   }, [user, documents]);
 
+  // PC QA (3回目): one ゴミ箱 action at a time (a double click did it twice),
+  // and a failure is said instead of nothing happening.
+  const trashBusyRef = useRef(false);
+  const TRASH_ACTION_FAILED = "ゴミ箱の操作ができませんでした。ページを読み込み直してから、もう一度お試しください。";
   const handleDelete = async (id: number) => {
     if (qaMode) {
       setPendingDeleteId(null);
       return;
     }
+    // PC QA (3回目): a double click on ゴミ箱に移す moved it once and then said
+    // it could not be moved.
+    if (trashBusyRef.current) return;
+    trashBusyRef.current = true;
     const title = documents?.find((doc) => doc.id === id)?.title || "無題のドキュメント";
-    const moved = await deleteDocument(id).catch(() => false);
+    const moved = await deleteDocument(id)
+      .catch(() => false)
+      .finally(() => {
+        trashBusyRef.current = false;
+      });
     setPendingDeleteId(null);
     // TSP-SAFE-004 PC QA: only a work actually moved is announced.
     if (!moved) {
@@ -303,25 +315,37 @@ export default function HomeV2Client({ allowQaMode = false }: HomeV2ClientProps)
   }, [lastTrashed, documents, trashItems]);
 
   const handleRestore = async (id: number) => {
-    // TSP-SAFE-004 QA: putting a work back counts toward the same 60-work
-    // limit as a new one (a cloud-linked work does not count, as in handleCreate).
-    const trashed = trashItems?.find((item) => item.id === id);
-    if (trashed && !trashed.document.cloudSync) {
-      const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
-      if (count >= LOCAL_DOCUMENT_LIMIT) {
+    if (trashBusyRef.current) return;
+    trashBusyRef.current = true;
+    try {
+      // TSP-SAFE-004 QA: putting a work back counts toward the same 60-work
+      // limit as a new one (a cloud-linked work does not count, as in handleCreate).
+      const restored = await restoreFromTrash(id, LOCAL_DOCUMENT_LIMIT);
+      if (restored === "full") {
         setIsTrashOpen(false);
         setLimitStoppedRestore(true);
         setIsLimitModalOpen(true);
         return;
       }
+      setLastTrashed((last) => (last?.id === id ? null : last));
+    } catch {
+      window.alert(TRASH_ACTION_FAILED);
+    } finally {
+      trashBusyRef.current = false;
     }
-    await restoreFromTrash(id);
-    setLastTrashed((last) => (last?.id === id ? null : last));
   };
 
   const handlePurge = async (id: number) => {
-    await purgeFromTrash(id);
-    setLastTrashed((last) => (last?.id === id ? null : last));
+    if (trashBusyRef.current) return;
+    trashBusyRef.current = true;
+    try {
+      await purgeFromTrash(id);
+      setLastTrashed((last) => (last?.id === id ? null : last));
+    } catch {
+      window.alert(TRASH_ACTION_FAILED);
+    } finally {
+      trashBusyRef.current = false;
+    }
   };
 
   const openTrash = () => {

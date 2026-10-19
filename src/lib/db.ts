@@ -401,7 +401,18 @@ export async function openCloudDeviceCopy(
       { updatedAt: cloudSync.updatedAt, hash: cloudHash }
     );
 
-    if (local && decision === "keep-local") {
+    // PC QA (3回目): opening a cloud work that matches its copy writes nothing
+    // (a new revision made another tab's next edit split off as a copy).
+    const unchanged =
+      local &&
+      decision === "replace" &&
+      local.title === project.title &&
+      local.content === project.content &&
+      local.cloudSync?.projectId === cloudSync.projectId &&
+      local.cloudSync?.updatedAt === cloudSync.updatedAt &&
+      local.cloudSync?.hash === cloudSync.hash &&
+      JSON.stringify(local.settings) === JSON.stringify(project.settings);
+    if (local && (decision === "keep-local" || unchanged)) {
       const doc = withDefaults(local);
       return {
         docId: doc.id,
@@ -526,11 +537,26 @@ export async function isInTrash(id: number): Promise<boolean> {
  * open on the deleted work keeps its own text as a separate copy instead of
  * overwriting the restored one (lib/localSaveQueue.ts).
  */
-export async function restoreFromTrash(id: number): Promise<number | null> {
-  const restored = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
-    const item = await db.trash.get(id);
-    return item ? putBackFromTrash(item) : null;
-  });
+export async function restoreFromTrash(id: number, limit?: number): Promise<number | null | "full"> {
+  let restored: Awaited<ReturnType<typeof putBackFromTrash>> | null;
+  try {
+    restored = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+      const item = await db.trash.get(id);
+      if (!item) return null;
+      const back = await putBackFromTrash(item);
+      // PC QA (3回目): the bookshelf's limit is checked in the same step, so a
+      // double click or another tab never puts back one work too many. A work
+      // still linked to the cloud does not count (as when making a new one).
+      if (limit !== undefined && !back.document.cloudSync) {
+        const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
+        if (count > limit) throw new BookshelfFullError();
+      }
+      return back;
+    });
+  } catch (error) {
+    if (error instanceof BookshelfFullError) return "full";
+    throw error;
+  }
   if (!restored) return null;
   const projectId = restored.document.cloudSync?.projectId;
   if (projectId) {
@@ -541,6 +567,8 @@ export async function restoreFromTrash(id: number): Promise<number | null> {
   }
   return restored.document.id;
 }
+
+class BookshelfFullError extends Error {}
 
 /**
  * Moves one trashed work back to the bookshelf. Must run inside a documents +

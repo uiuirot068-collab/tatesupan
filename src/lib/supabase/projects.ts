@@ -49,7 +49,8 @@ export async function getProjectsResult(): Promise<ProjectsResult> {
   // the real guard; this keeps the list right even if that were ever off.
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
-    return { data: [], error: userError?.message ?? 'ログインしていません', signedOut: true };
+    // PC QA (3回目): a signed-in person offline is not "signed out".
+    return { data: [], error: userError?.message ?? 'ログインしていません', signedOut: isSignedOutAuthError(userError) };
   }
   const { data, error } = await supabase
     .from('projects')
