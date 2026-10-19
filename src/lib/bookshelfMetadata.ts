@@ -30,9 +30,9 @@ export function bookshelfMetadataFromDocument(
 
   return {
     id: document.id,
-    title: document.title,
+    title: typeof document.title === "string" ? document.title : "",
     updatedAt: document.updatedAt,
-    characterCount: countVisualLength(document.content),
+    characterCount: countVisualLength(typeof document.content === "string" ? document.content : ""),
     isCollection: document.isCollection ?? false,
   };
 }

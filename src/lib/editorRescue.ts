@@ -19,6 +19,8 @@ export interface EditorRescue {
    * deleted elsewhere), so the text is NOT in this browser's storage.
    */
   unsaved?: boolean;
+  /** SAFE-005: the illustrations and cover images the screen showed (id → data URL). */
+  images?: Record<string, string>;
 }
 
 let latest: EditorRescue | null = null;
@@ -66,6 +68,8 @@ export type EditorLoadFailure =
   | { kind: "cloud-missing"; deviceCopyId: number | null }
   | { kind: "in-trash" }
   | { kind: "local-missing" }
+  /** SAFE-005: the link names no work at all (/editor?id=abc). */
+  | { kind: "bad-link" }
   | { kind: "other"; detail: string };
 
 // Dexie / IndexedDB errors that mean "this browser's storage cannot be used"
@@ -100,6 +104,8 @@ export function loadFailureMessage(failure: EditorLoadFailure): string {
       return "ログインしていないため、クラウドの作品を開けませんでした。ログインしてから、もう一度読み込んでください。";
     case "cloud-missing":
       return "この作品はクラウドに見つかりませんでした（別の端末で削除されたかもしれません）。";
+    case "bad-link":
+      return "このリンクでは作品を開けませんでした。本棚から開いてください。";
     case "local-missing":
       return "この作品は見つかりませんでした（完全に削除されたかもしれません）。";
     case "in-trash":
