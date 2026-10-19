@@ -283,10 +283,12 @@ async function main() {
     // html-to-image computed-style clone (getCloneStyleProps whitelists every
     // property except font-size).
     {
-      const nombreTags = [...svg.matchAll(/<div[^>]*data-nombre[^>]*>/g)].map((m) => m[0].replace(/&quot;/g, '"'));
+      // TSP-PRINT-003: a V2 print page draws the folio as the font's glyphs
+      // (<svg data-nombre data-font-family=…>); browser text is a <div>.
+      const nombreTags = [...svg.matchAll(/<(?:div|svg)[^>]*data-nombre[^>]*>/g)].map((m) => m[0].replace(/&quot;/g, '"'));
       if (nombreTags[0]) console.log(`nombre clone tag[0]: ${nombreTags[0].slice(0, 400)}`);
       check("selected page-number font survives the export clone",
-        nombreTags.length > 0 && nombreTags.every((tag) => /font(?:-family)?:[^;]*Noto Sans JP/.test(tag)),
+        nombreTags.length > 0 && nombreTags.every((tag) => /(?:font(?:-family)?:[^;]*|data-font-family="[^"]*)Noto Sans JP/.test(tag)),
         `nombre tags=${nombreTags.length}`);
     }
 

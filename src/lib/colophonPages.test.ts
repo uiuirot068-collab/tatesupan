@@ -77,6 +77,99 @@ describe("paginateColophonRenderPlan", () => {
   });
 });
 
+// TSP-PRINT-003: a row's label and value lines stay together on every template.
+describe("paginateColophonRenderPlan keeps each row on one page", () => {
+  const manyRows = Array.from({ length: 24 }, (_, i) => ({
+    id: `r${i}`,
+    label: `項目${i}`,
+    // Every third value wraps onto several lines.
+    value: i % 3 === 0 ? `値${i}の`.padEnd(40, "長") : `値${i}`,
+  }));
+  const rowsOnPages = (pages: ColophonRenderPlan[]) =>
+    pages.map((page) => new Set(texts(page).flatMap((t) => (t.row === undefined ? [] : [t.row]))));
+
+  it.each(TEMPLATES)("%s: no row is split across pages, for many page heights", (templateId) => {
+    const p = buildColophonRenderPlan({ templateId, rows: manyRows, freeText: "", titleFallback: "", availableWidthEm: 16 });
+    const layout = colophonTemplateLayoutPlan(templateId);
+    const edge = templateId === "classic" ? layout.paddingYEm + layout.rowPaddingEm : 0;
+    const rowHeight = (row: number) => {
+      const own = texts(p).filter((t) => t.row === row);
+      if (own.length === 0) return Infinity;
+      const top = Math.min(...own.map((t) => t.yEm - (t.fontScale * layout.lineHeight) / 2));
+      const bottom = Math.max(...own.map((t) => t.yEm + (t.fontScale * layout.lineHeight) / 2));
+      return bottom - top;
+    };
+    let splitSeen = 0;
+    for (let height = 6; height <= 30; height += 0.37) {
+      const pages = paginateColophonRenderPlan(p, height, templateId);
+      if (pages.length < 2) continue;
+      splitSeen++;
+      const sets = rowsOnPages(pages);
+      for (let row = 0; row < manyRows.length; row++) {
+        // Only a row that fits on a page at all can be kept whole.
+        if (rowHeight(row) + 2 * edge > height) continue;
+        expect(sets.filter((set) => set.has(row)).length, `row ${row} at height ${height}`).toBe(1);
+      }
+      expect(pages.flatMap(texts).map((t) => t.text)).toEqual(texts(p).map((t) => t.text));
+    }
+    expect(splitSeen).toBeGreaterThan(10);
+  });
+
+  it("center: a label never ends a page without its value (the reported case)", () => {
+    const p = buildColophonRenderPlan({ templateId: "center", rows: manyRows, freeText: "", titleFallback: "", availableWidthEm: 30 });
+    const label = texts(p).find((t) => t.text === "項目5")!;
+    const layout = colophonTemplateLayoutPlan("center");
+    // A page that ends just under the label of row 5.
+    const height = label.yEm + (label.fontScale * layout.lineHeight) / 2 + 0.01;
+    const pages = paginateColophonRenderPlan(p, height, "center");
+    const pageWithLabel = pages.findIndex((page) => texts(page).some((t) => t.text === "項目5"));
+    const pageWithValue = pages.findIndex((page) => texts(page).some((t) => t.text === "値5"));
+    expect(pageWithLabel).toBe(pageWithValue);
+  });
+
+  it("a row taller than a page is not moved: it continues line by line from where it is", () => {
+    const tall = [{ id: "a", label: "短い", value: "一" }, { id: "b", label: "長い", value: "長".repeat(200) }];
+    const p = buildColophonRenderPlan({ templateId: "standard", rows: tall, freeText: "", titleFallback: "", availableWidthEm: 16 });
+    const pages = paginateColophonRenderPlan(p, 8, "standard");
+    expect(pages.length).toBeGreaterThan(2);
+    // The long row starts right after the short one, leaving no gap.
+    expect(texts(pages[0]).map((t) => t.text).slice(0, 3)).toEqual(["短い", "一", "長い"]);
+    expect(pages.flatMap(texts).map((t) => t.text)).toEqual(texts(p).map((t) => t.text));
+  });
+
+  it.each(TEMPLATES)("%s: no page is ever empty, even when a line is taller than a page", (templateId) => {
+    const p = buildColophonRenderPlan({ templateId, rows: manyRows, freeText: "自由欄の一行目\n二行目", titleFallback: "書名", availableWidthEm: 16 });
+    for (let height = 0.3; height <= 12; height += 0.13) {
+      const pages = paginateColophonRenderPlan(p, height, templateId);
+      pages.forEach((page, index) => expect(texts(page).length, `page ${index} at height ${height}`).toBeGreaterThan(0));
+      expect(pages.flatMap(texts).map((t) => t.text)).toEqual(texts(p).map((t) => t.text));
+      // Never more pages than lines.
+      expect(pages.length).toBeLessThanOrEqual(new Set(texts(p).map((t) => t.yEm)).size);
+    }
+  });
+
+  it("classic at a 3em page keeps one page per line (the reported 14 → 28 case)", () => {
+    const p = buildColophonRenderPlan({ templateId: "classic", rows: manyRows.slice(0, 6), freeText: "", titleFallback: "", availableWidthEm: 30 });
+    const pages = paginateColophonRenderPlan(p, 3, "classic");
+    const lineCount = new Set(texts(p).map((t) => t.yEm)).size;
+    expect(pages.length).toBe(lineCount);
+  });
+});
+
+describe("paginateColophonRenderPlan trims trailing space that does not fit", () => {
+  it("center: all lines fit but the row gap under the last row does not → one page no taller than the area", () => {
+    const p = buildColophonRenderPlan({ templateId: "center", rows: [{ id: "a", label: "発行", value: "x" }], freeText: "", titleFallback: "", availableWidthEm: 20 });
+    const layout = colophonTemplateLayoutPlan("center");
+    const bottom = Math.max(...texts(p).map((t) => t.yEm + (t.fontScale * layout.lineHeight) / 2));
+    expect(p.heightEm).toBeGreaterThan(bottom + 0.5);
+    const height = (bottom + p.heightEm) / 2;
+    const pages = paginateColophonRenderPlan(p, height, "center");
+    expect(pages).toHaveLength(1);
+    expect(pages[0].heightEm).toBeLessThanOrEqual(height + 1e-9);
+    expect(texts(pages[0])).toEqual(texts(p));
+  });
+});
+
 describe("buildColophonPagePlans", () => {
   const geometry = { paperWidthMm: 105, paperHeightMm: 148, marginTopMm: 15, marginBottomMm: 15, marginGutterMm: 18, marginOuterMm: 12 };
   it("uses the placement area: its width for wrapping and its height for pages", () => {

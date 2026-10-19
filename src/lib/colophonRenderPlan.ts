@@ -10,6 +10,11 @@ export interface ColophonRenderText {
   align: "left" | "center" | "right";
   opacity?: number;
   weight?: 400 | 600 | 700;
+  /**
+   * The row (項目) this text belongs to. A multi-page colophon keeps a row's
+   * label and all its value lines on one page (TSP-PRINT-003).
+   */
+  row?: number;
 }
 
 export interface ColophonRenderRule {
@@ -83,7 +88,7 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
 
   if (input.templateId === "center") {
     let y = 0;
-    for (const row of input.rows) {
+    input.rows.forEach((row, rowIndex) => {
       if (row.label.trim() !== "") {
         const labelLineH = p.centerLabelScale * p.lineHeight;
         items.push({
@@ -94,6 +99,7 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
           fontScale: p.centerLabelScale,
           align: "center",
           opacity: 0.6,
+          row: rowIndex,
         });
         y += labelLineH + p.centerLabelValueGapEm;
       }
@@ -106,11 +112,12 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
           yEm: y + p.lineHeight / 2,
           fontScale: 1,
           align: "center",
+          row: rowIndex,
         });
         y += p.lineHeight;
       }
       y += p.centerRowGapEm;
-    }
+    });
     const freeLines = wrapText(input.freeText, widthEm, p.freeTextScale);
     if (freeLines.length > 0) {
       // Only when something is above it: a continuation page that holds
@@ -167,6 +174,7 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
             fontScale: p.restScale,
             align: "left",
             opacity: 0.8,
+            row: index,
           });
           y += restH;
         }
@@ -222,6 +230,7 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
       align: "left",
       opacity: 0.7,
       weight: row.id === "title" && input.templateId === "classic" ? 600 : 400,
+      row: index,
     });
 
     lines.forEach((line, lineIndex) => {
@@ -232,6 +241,7 @@ export function buildColophonRenderPlan(input: BuildColophonRenderPlanInput): Co
         yEm: textTop + lineIndex * p.lineHeight + p.lineHeight / 2,
         fontScale: 1,
         align: "left",
+        row: index,
       });
     });
 

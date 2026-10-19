@@ -9,7 +9,9 @@
  * function the Publication paint plan also uses. This module only converts
  * that shared millimetre placement into Preview CSS; it decides nothing.
  *
- * LEGACY cards (no V2 page yet / V2 disabled) keep the prop-based rules.
+ * V2 cards draw the text as the font's glyphs (`furnitureRunPlacement`, the
+ * position PDF paints). LEGACY cards (no V2 page yet / V2 disabled) keep the
+ * prop-based rules and browser text.
  */
 import type { CSSProperties } from "react";
 import { MM_PER_PT, PX_PER_MM, type PageSettings, type PaperSize } from "@/lib/pageLayout";
@@ -165,5 +167,34 @@ export function resolveColophonPreviewFurniture(input: ColophonPreviewFurnitureI
   return {
     nombre: input.legacyNombre ? { value: input.legacyNombre.value, side: input.legacySide } : null,
     hashira: null,
+  };
+}
+
+/**
+ * TSP-PRINT-003 (P4-7): where PDF puts one ノンブル / 柱 run, in card pixels.
+ * PDF writes furniture as one horizontal text (`horizontalFurnitureCommand`):
+ * one em = the furniture font size, x anchored by `align` on the run's
+ * advance width (jsPDF measures by advances, no kerning), and jsPDF's
+ * `baseline:"middle"` puts the alphabetic baseline at the placement's centre
+ * plus (1/2 − 0.15) em (its default line-height factor 1.15). The Preview
+ * draws the same font's glyphs at exactly this baseline, instead of centring
+ * a CSS line box (whose middle is not the glyphs' middle — the 0.2〜0.4mm
+ * offset seen before).
+ */
+export function furnitureRunPlacement(
+  advanceUnits: number,
+  unitsPerEm: number,
+  placement: FurniturePlacement,
+  fontSizePt: number,
+  bleedMm: number
+): { x: number; baselineY: number; scale: number } {
+  const sizeMm = fontSizePt * MM_PER_PT;
+  const widthMm = (advanceUnits / unitsPerEm) * sizeMm;
+  const leftMm =
+    placement.align === "left" ? placement.xMm : placement.align === "right" ? placement.xMm - widthMm : placement.xMm - widthMm / 2;
+  return {
+    x: (leftMm + bleedMm) * PX_PER_MM,
+    baselineY: (placement.yCenterMm + sizeMm * (0.5 - 0.15) + bleedMm) * PX_PER_MM,
+    scale: (sizeMm * PX_PER_MM) / unitsPerEm,
   };
 }

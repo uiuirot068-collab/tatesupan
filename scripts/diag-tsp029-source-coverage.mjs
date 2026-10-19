@@ -97,7 +97,9 @@ for (let pass = 0; pass < 3; pass++) {
       const card = cards[idx];
       card.scrollIntoView({ block: "center" });
       await new Promise((r) => setTimeout(r, 180));
-      const nombre = card.querySelector("[data-nombre]")?.textContent?.trim();
+      // A glyph-outline folio (<svg data-nombre aria-label>) has no text content.
+      const nombreEl = card.querySelector("[data-nombre]");
+      const nombre = (nombreEl?.getAttribute("aria-label") ?? nombreEl?.textContent)?.trim();
       const n = nombre && /^\d+$/.test(nombre) ? +nombre : null;
       let text = "";
       card.querySelectorAll(".tategaki-line").forEach((ln) => {

@@ -21,7 +21,7 @@
 import { createCanvas, GlobalFonts, loadImage, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 import { glyphOutlineCommandsMmOf } from "./verticalOutlinePaint";
 import type { PaintCommand, PaintPlan, PublicationFontResource } from "./pdfGenerator";
-import { RASTER_DPI, mmToPx, ptToPx } from "./rasterShared";
+import { RASTER_DPI, mmToPx, ptToPx, rasterTextBaseline } from "./rasterShared";
 
 export { RASTER_DPI, PRINT_JPG_LONG_SIDE_PX, JPEG_QUALITY } from "./rasterShared";
 
@@ -99,13 +99,12 @@ async function paintCommandsOnContext(ctx: SKRSContext2D, commands: PaintCommand
       ctx.fill();
       continue;
     }
-    // "text" -- `align`/`baseline` map directly onto Canvas 2D's own
-    // native `textAlign`/`textBaseline` (jsPDF's own text() options were
-    // deliberately modeled on the same DOM/canvas convention, so no
-    // translation table is needed for either value space).
+    // "text" -- `align` maps directly onto Canvas 2D's own `textAlign`
+    // (jsPDF's own text() options were modeled on the same DOM/canvas
+    // convention). `baseline` goes through `rasterTextBaseline`, because
+    // jsPDF's "middle" is not Canvas's "middle" (TSP-PRINT-003).
     if (fontResource) ctx.font = `${ptToPx(cmd.fontSizePt, dpi)}px "${fontResource.fontName}"`;
     ctx.textAlign = cmd.align;
-    ctx.textBaseline = cmd.baseline ?? "alphabetic";
     let fontSizePx = ptToPx(cmd.fontSizePt, dpi);
     // Same TCY measure-then-scale-down fit pass as `renderPaintPlanToPdf`
     // (`pdf.getTextWidth`), using Canvas's own real registered-font
@@ -123,15 +122,16 @@ async function paintCommandsOnContext(ctx: SKRSContext2D, commands: PaintCommand
       }
     }
     const xPx = mmToPx(cmd.xMm, dpi);
-    const yPx = mmToPx(cmd.yMm, dpi);
+    // jsPDF's "middle" baseline, not Canvas's own (see rasterTextBaseline).
+    const placed = rasterTextBaseline(cmd.baseline, fontSizePx, cmd.angle);
+    ctx.textBaseline = placed.textBaseline;
+    const yPx = mmToPx(cmd.yMm, dpi) + placed.dyPx;
     if (cmd.angle) {
-      // UNVERIFIED, defensive-only path: no real Publication paint-model
-      // call site sets a nonzero `angle` today (confirmed by direct
-      // search -- every "text" command in `pdfGenerator.ts` sets
-      // `angle: 0` or omits it entirely). Included for API completeness
-      // only; if a future round introduces real rotated text, this
-      // rotation direction must be empirically verified against jsPDF's
-      // own output before being trusted.
+      // Only the 90° ー fallback in `pdfGenerator.ts` (a font without a
+      // vertical ー outline) rotates text; every bundled font has that
+      // outline, so real exports do not reach this path. Its position is
+      // not matched to jsPDF's rotated text; it centres the glyph on its
+      // cell with Canvas's own baseline (see rasterTextBaseline).
       ctx.save();
       ctx.translate(xPx, yPx);
       ctx.rotate((cmd.angle * Math.PI) / 180);

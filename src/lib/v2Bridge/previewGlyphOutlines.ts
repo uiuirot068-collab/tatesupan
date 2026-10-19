@@ -148,8 +148,12 @@ export function loadPreviewGlyphOutlines(cssFamily: string | undefined): Promise
 export function usePreviewGlyphOutlines(cssFamily: string | undefined, enabled: boolean): PreviewGlyphOutlines | undefined {
   const path = publicationFontAssetFor(cssFamily).path;
   const [state, setState] = useState<{ path: string; outlines: PreviewGlyphOutlines } | undefined>(undefined);
+  // What this render saw: a file that finished loading between the render
+  // and the effect must still trigger a re-render, so the effect skips the
+  // load only when the render already had the outlines.
+  const seen = loaded.get(path) ?? (state?.path === path ? state.outlines : undefined);
   useEffect(() => {
-    if (!enabled || loaded.has(path)) return;
+    if (!enabled || seen) return;
     let cancelled = false;
     loadPreviewGlyphOutlines(cssFamily)
       .then((outlines) => {
@@ -159,7 +163,6 @@ export function usePreviewGlyphOutlines(cssFamily: string | undefined, enabled: 
     return () => {
       cancelled = true;
     };
-  }, [cssFamily, enabled, path]);
-  if (!enabled) return undefined;
-  return loaded.get(path) ?? (state?.path === path ? state.outlines : undefined);
+  }, [cssFamily, enabled, path, seen]);
+  return enabled ? seen : undefined;
 }
