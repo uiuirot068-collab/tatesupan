@@ -1,8 +1,12 @@
 # SAFE-005 (点検 小): basic protective headers for the Cloudflare Pages site.
-# A script-source rule (Content-Security-Policy) and frame blocking are left
-# out on purpose: they need a check against Supabase, the fonts and the
-# spuntales.net pages first.
+# SAFE-007: no other site may show TateSpun inside a frame (clickjacking).
+# Nothing legitimate frames it (checked spuntales.net and this app, 10/19).
+# A full script-source rule (Content-Security-Policy) is still left out:
+# Next's static export writes scripts into the page, so it needs a
+# Report-Only check against Supabase, the fonts and Turnstile first.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
