@@ -5,6 +5,7 @@
 // 2. next build            → out/*            (flat, URLs prefixed /tatespun/…)
 // 3. nest-export.mjs        → out/tatespun/*
 // 4. write out/_redirects   → legacy-root 302  (AFTER nesting, at build root)
+//    and move out/<base>/_headers → out/_headers
 //
 // Used locally and as the Cloudflare Pages `tatespun` project build command.
 // The plain `npm run build` (root-served) path does NONE of steps 3–4 (but its
@@ -40,6 +41,14 @@ if (!fs.existsSync(nested)) {
   console.error(`build:basepath — out/${base}/ missing; nest-export did not complete.`);
   process.exit(1);
 }
+// TSP-SAFE-005: public/_headers is copied into out/<base>/ by next build +
+// nest-export, where Cloudflare Pages does not read it. Move it to the root.
+const nestedHeaders = path.join(nested, "_headers");
+if (fs.existsSync(nestedHeaders)) {
+  fs.renameSync(nestedHeaders, path.join(outDir, "_headers"));
+  console.log("build:basepath — moved _headers to out/_headers");
+}
+
 const redirectsPath = path.join(outDir, "_redirects");
 fs.writeFileSync(redirectsPath, `/ /${base}/ 302\n`);
 console.log(`build:basepath — wrote out/_redirects  ("/ /${base}/ 302")`);

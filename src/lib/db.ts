@@ -132,6 +132,10 @@ function withDefaults(doc: DocumentRecord): DocumentRecord {
   // `masterPage` was added to it) still load with valid values.
   return {
     ...doc,
+    // SAFE-005: one damaged record (no text) used to take the whole bookshelf
+    // down to the error screen.
+    title: typeof doc.title === "string" ? doc.title : "",
+    content: typeof doc.content === "string" ? doc.content : "",
     settings: normalizeSettingsFonts(normalizeSettingsCover({
       ...DEFAULT_PAGE_SETTINGS,
       ...doc.settings,
@@ -220,24 +224,29 @@ export async function loadDocument(id: number): Promise<DocumentRecord | undefin
 
 /** Creates a new empty document and returns its id. */
 export async function createDocument(settings: PageSettings = DEFAULT_PAGE_SETTINGS): Promise<number> {
-  const id = Date.now();
-  const document: DocumentRecord = {
-    id,
-    title: "",
-    content: "",
-    settings,
-    plotNote: "",
-    updatedAt: Date.now(),
-  };
-  const metadata = bookshelfMetadataFromDocument(document);
-  await db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
-    await db.documents.put(document);
+  // SAFE-005 (点検 小): two works made in the same millisecond (or after the
+  // clock went back) took the same id and one overwrote the other.
+  const id = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const id = await unusedDocumentId();
+    const document: DocumentRecord = {
+      id,
+      title: "",
+      content: "",
+      settings,
+      plotNote: "",
+      updatedAt: Date.now(),
+    };
+    await db.documents.add(document);
+    const metadata = bookshelfMetadataFromDocument(document);
     if (metadata) await db.bookshelfMetadata.put(metadata);
+    return id;
   });
   // A deleted document's scoped history intentionally survives in localStorage.
   // If a timestamp id is ever reused (for example after a clock rollback), the
   // new document must claim a clean namespace without erasing any other work.
   initializeWorkSessionScope(`local:${id}`);
+  // SAFE-005: a cloud link left under a reused id belongs to an old work.
+  clearCloudLink(id);
   return id;
 }
 
@@ -290,7 +299,7 @@ export async function createDocumentCopy(
   source: { title: string; content: string; settings: PageSettings; plotNote: string },
   title: string
 ): Promise<{ id: number; revision: number }> {
-  return db.transaction("rw", db.documents, db.bookshelfMetadata, async () => {
+  return db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
     const id = await unusedDocumentId();
     const revision = await writeDocumentRecord(undefined, {
       id,
@@ -300,12 +309,39 @@ export async function createDocumentCopy(
       plotNote: source.plotNote,
     });
     return { id, revision };
+  }).then((copy) => {
+    // SAFE-005: a copy is never linked to a cloud work, even under a reused id.
+    clearCloudLink(copy.id);
+    return copy;
   });
 }
 
+/**
+ * SAFE-005 (点検 小): 本をまとめる makes its 短編集 here — under a free id,
+ * with its bookshelf entry, and within the bookshelf's limit (checked in the
+ * same step). Returns the new id, or "full".
+ */
+export async function createCollection(
+  fields: { title: string; content: string; settings: PageSettings },
+  includedDocumentIds: number[],
+  limit: number
+): Promise<number | "full"> {
+  const created = await db.transaction("rw", db.documents, db.bookshelfMetadata, db.trash, async () => {
+    const count = await db.documents.filter((doc) => !doc.isSample && !doc.cloudSync).count();
+    if (count >= limit) return "full" as const;
+    const id = await unusedDocumentId();
+    await writeDocumentRecord(undefined, { id, ...fields, plotNote: "" }, { isCollection: true, includedDocumentIds });
+    return id;
+  });
+  if (created !== "full") clearCloudLink(created);
+  return created;
+}
+
+// Must run inside a transaction that includes documents and trash: an id the
+// ゴミ箱 still holds is taken too (its 元に戻す would land on another work).
 async function unusedDocumentId(): Promise<number> {
   let id = Date.now();
-  while (await db.documents.get(id)) id += 1;
+  while ((await db.documents.get(id)) || (await db.trash.get(id))) id += 1;
   return id;
 }
 
@@ -463,6 +499,8 @@ export async function openCloudDeviceCopy(
 
   writeDeviceCopyId(project.id, opened.docId);
   writeCloudLink(opened.docId, project.id);
+  // SAFE-005: the rescued copy is a plain work, even under a reused id.
+  if (opened.rescued) clearCloudLink(opened.rescued.id);
   return opened;
 }
 
@@ -524,7 +562,8 @@ export async function deleteDocument(id: number, now: number = Date.now()): Prom
 }
 
 export async function listTrash(): Promise<TrashRecord[]> {
-  return db.trash.orderBy("trashedAt").reverse().toArray();
+  const items = await db.trash.orderBy("trashedAt").reverse().toArray();
+  return items.map((item) => ({ ...item, document: withDefaults(item.document) }));
 }
 
 export async function isInTrash(id: number): Promise<boolean> {
@@ -578,8 +617,7 @@ async function putBackFromTrash(item: TrashRecord): Promise<{ document: Document
   let restoredId = item.id;
   if (await db.documents.get(restoredId)) {
     // PC QA: the new id is free on the bookshelf AND in the ゴミ箱.
-    restoredId = Date.now();
-    while ((await db.documents.get(restoredId)) || (await db.trash.get(restoredId))) restoredId += 1;
+    restoredId = await unusedDocumentId();
   }
   // TSP-SAFE-004 PC QA: the cloud work was opened again meanwhile and has
   // another device copy now. This one comes back as a plain work, so the two
@@ -607,10 +645,13 @@ export async function purgeFromTrash(id: number): Promise<void> {
   const item = await db.trash.get(id);
   if (!item) return;
   await db.trash.delete(id);
+  // SAFE-005: the work is gone; its id may be used again later.
+  const linkedProjectId = readCloudLink(id);
+  clearCloudLink(id);
   // TSP-SAFE-004 QA: a work saved to the cloud may be opened from the cloud
   // again, and the cloud keeps its illustrations only 72 hours: this browser
   // keeps them (as it did before the trash existed).
-  const cloudProjectId = item.document.cloudSync?.projectId ?? readCloudLink(id);
+  const cloudProjectId = item.document.cloudSync?.projectId ?? linkedProjectId;
   if (cloudProjectId) {
     keepCloudWorkImages(cloudProjectId, imageIdsMentionedIn(item.document));
     return;

@@ -8,7 +8,9 @@ import {
   rescueText,
   rescueTitle,
 } from "@/lib/editorRescue";
-import { createDocument, db, saveDocument } from "@/lib/db";
+import { createDocument, db, saveDocument, saveImage } from "@/lib/db";
+import { coverImageIds } from "@/lib/cover/coverModel";
+import { imageMarkerIds } from "@/lib/tategaki";
 import { countVisualLength } from "@/lib/tategaki";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "@/lib/pageLayout";
 import { withBasePath } from "@/lib/basePath";
@@ -20,6 +22,7 @@ import { withBasePath } from "@/lib/basePath";
  */
 // Same limit as the bookshelf (app/home-v2/HomeV2Client.tsx).
 const LOCAL_DOCUMENT_LIMIT = 60;
+const UNSAVED_RETRY_CONFIRM = "この画面の原稿は保存されていません。控えを取らずに開きなおすと消えます。開きなおしますか？";
 
 export default function EditorCrashScreen({
   error,
@@ -37,6 +40,7 @@ export default function EditorCrashScreen({
   );
   const [notice, setNotice] = useState<string | null>(null);
   const [keptAs, setKeptAs] = useState<string | null>(null);
+  const [tookCopy, setTookCopy] = useState(false);
   // TSP-SAFE-004 QA: a second click while the first is still writing must not
   // make a second copy.
   const keepingRef = useRef(false);
@@ -57,6 +61,7 @@ export default function EditorCrashScreen({
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTookCopy(true);
   };
 
   const copy = async () => {
@@ -64,6 +69,7 @@ export default function EditorCrashScreen({
     try {
       await navigator.clipboard.writeText(rescueText(rescue));
       setNotice("原稿をコピーしました。メモ帳などに貼りつけて残してください。");
+      setTookCopy(true);
     } catch {
       setNotice("コピーできませんでした。「TXTで保存」をお使いください。");
     }
@@ -82,8 +88,16 @@ export default function EditorCrashScreen({
         return;
       }
       const title = rescueTitle(rescue.title);
+      const settings = (rescue.settings as PageSettings | undefined) ?? DEFAULT_PAGE_SETTINGS;
+      // SAFE-005: the illustrations and cover images go with the text (a work
+      // removed meanwhile took them out of this browser's storage).
+      const shown = rescue.images ?? {};
+      const usedIds = new Set([...imageMarkerIds(rescue.content), ...coverImageIds(settings.cover)]);
+      for (const imageId of usedIds) {
+        if (shown[imageId]) await saveImage({ id: imageId, dataUrl: shown[imageId], createdAt: Date.now() });
+      }
       const id = await createDocument();
-      await saveDocument(id, title, rescue.content, (rescue.settings as PageSettings | undefined) ?? DEFAULT_PAGE_SETTINGS, rescue.plotNote);
+      await saveDocument(id, title, rescue.content, settings, rescue.plotNote);
       setKeptAs(title);
       setNotice(`本棚に「${title}」として残しました。`);
     } catch {
@@ -92,6 +106,13 @@ export default function EditorCrashScreen({
       keepingRef.current = false;
       setKeeping(false);
     }
+  };
+
+  // SAFE-005: text that was never saved is not dropped by 「もう一度開く」
+  // without asking (unless a copy was already taken).
+  const retryAfterAsking = () => {
+    if (rescuable && rescue.unsaved && !keptAs && !tookCopy && !window.confirm(UNSAVED_RETRY_CONFIRM)) return;
+    retry();
   };
 
   return (
@@ -130,7 +151,7 @@ export default function EditorCrashScreen({
       )}
       {notice && <p className="text-sm">{notice}</p>}
       <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm">
-        <button type="button" onClick={() => retry()} className="font-bold underline underline-offset-4 hover:text-ink/70">
+        <button type="button" onClick={retryAfterAsking} className="font-bold underline underline-offset-4 hover:text-ink/70">
           もう一度開く
         </button>
         {/* A full page load: after a crash, start from a clean screen. */}

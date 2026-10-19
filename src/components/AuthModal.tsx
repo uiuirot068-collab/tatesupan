@@ -13,6 +13,23 @@ interface AuthModalProps {
 
 type ModalMode = 'signin' | 'signup' | 'forgot';
 
+// SAFE-005 (点検 小): a new password needs 8 characters (existing accounts
+// still sign in with what they have).
+const SIGN_UP_MIN_PASSWORD = 8;
+
+// SAFE-005 (点検 小): the login service answers in English; say it in plain Japanese.
+function authErrorMessage(err: { message?: string; status?: number } | null | undefined): string {
+  const message = err?.message ?? "";
+  if (/invalid login credentials/i.test(message)) return "メールアドレスかパスワードが違います。";
+  if (/email not confirmed/i.test(message)) return "メールアドレスの確認がまだです。届いたメールのリンクを開いてから、ログインしてください。";
+  if (/already registered|already been registered|user already exists/i.test(message)) return "このメールアドレスは登録済みです。ログインしてください。";
+  if (/password should be at least|weak password|password is too weak/i.test(message)) return `パスワードは${SIGN_UP_MIN_PASSWORD}文字以上にしてください。`;
+  if (/rate limit|too many requests|security purposes/i.test(message) || err?.status === 429) return "続けて試しすぎたため、少し時間をおいてから、もう一度お試しください。";
+  if (/invalid email|unable to validate email/i.test(message)) return "メールアドレスの形が正しくありません。";
+  if (/failed to fetch|network|load failed/i.test(message)) return "通信できませんでした。インターネットの接続を確かめて、もう一度お試しください。";
+  return "ログインできませんでした。時間をおいて、もう一度お試しください。";
+}
+
 export function AuthModal({ isOpen, onClose, onSuccess, notice }: AuthModalProps) {
   const [mode, setMode] = useState<ModalMode>('signin');
   const [email, setEmail] = useState('');
@@ -81,8 +98,8 @@ export function AuthModal({ isOpen, onClose, onSuccess, notice }: AuthModalProps
 
       if (onSuccess) onSuccess();
       handleClose();
-    } catch (err: any) {
-      setError(err.message || '認証に失敗しました。');
+    } catch (err: unknown) {
+      setError(authErrorMessage(err as { message?: string; status?: number }));
     } finally {
       setIsLoading(false);
     }
@@ -156,11 +173,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, notice }: AuthModalProps
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={isSignUp ? SIGN_UP_MIN_PASSWORD : undefined}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="mt-1 w-full rounded border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="6文字以上"
+                  placeholder={isSignUp ? `${SIGN_UP_MIN_PASSWORD}文字以上` : undefined}
                 />
               </div>
             )}

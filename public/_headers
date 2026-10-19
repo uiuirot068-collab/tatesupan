@@ -1,0 +1,8 @@
+# SAFE-005 (点検 小): basic protective headers for the Cloudflare Pages site.
+# A script-source rule (Content-Security-Policy) and frame blocking are left
+# out on purpose: they need a check against Supabase, the fonts and the
+# spuntales.net pages first.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

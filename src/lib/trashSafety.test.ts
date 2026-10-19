@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createCollection,
   createDocument,
   createDocumentCopy,
   db,
@@ -19,6 +20,7 @@ import {
 } from "./db";
 import { DEFAULT_PAGE_SETTINGS, type PageSettings } from "./pageLayout";
 import { LocalSaveQueue } from "./localSaveQueue";
+import { readCloudLink, writeCloudLink } from "./cloudLink";
 import { releaseCloudWorkImages, TRASH_KEEP_DAYS, trashDaysLeft, unreferencedImageIds } from "./trash";
 
 /**
@@ -212,6 +214,56 @@ describe("PC QA (3回目)", () => {
     const again = await openCloudDeviceCopy(project, (t) => t);
     expect(again.docId).toBe(first.docId);
     expect(again.revision).toBe(first.revision);
+  });
+});
+
+describe("SAFE-005", () => {
+  it("two works made in the same millisecond get different ids", async () => {
+    const spy = vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+    try {
+      const a = await createDocument();
+      const b = await createDocument();
+      expect(a).not.toBe(b);
+      expect(await listDocuments()).toHaveLength(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a new work never takes the id of a work in the trash, nor its old cloud link", async () => {
+    const spy = vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_500);
+    try {
+      const old = await createDocument();
+      writeCloudLink(old, "old-cloud");
+      await deleteDocument(old);
+      const fresh = await createDocument();
+      expect(fresh).not.toBe(old);
+      expect(readCloudLink(fresh)).toBeNull();
+      await purgeFromTrash(old);
+      expect(readCloudLink(old)).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a damaged record (no text) does not break the bookshelf or the trash", async () => {
+    await db.documents.put({ id: 42, updatedAt: 1, settings } as never);
+    const listed = (await listDocuments()).find((doc) => doc.id === 42);
+    expect(listed?.content).toBe("");
+    expect(listed?.title).toBe("");
+    await deleteDocument(42);
+    expect((await listTrash())[0].document.content).toBe("");
+  });
+
+  it("本をまとめる makes a 短編集 with its bookshelf entry, within the limit", async () => {
+    const a = await createDocument();
+    await saveDocument(a, "A", "一", settings, "");
+    const id = await createCollection({ title: "まとめ", content: "一\n【改ページ】\n二", settings }, [a], 60);
+    expect(typeof id).toBe("number");
+    const doc = await loadDocument(id as number);
+    expect(doc?.isCollection).toBe(true);
+    expect(await db.bookshelfMetadata.get(id as number)).toBeDefined();
+    expect(await createCollection({ title: "まとめ2", content: "", settings }, [a], 2)).toBe("full");
   });
 });
 
