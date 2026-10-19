@@ -29,6 +29,7 @@ export default defineConfig({
       "src/lib/editorRescue.test.ts",
       // TSP-SAFE-004: the ゴミ箱 and tidying images nothing uses
       "src/lib/trashSafety.test.ts",
+      "src/lib/bookshelfMove.test.ts",
       // TSP-DEMO-001: おためしデモ on phones
       "src/lib/tspDemo001.test.ts",
       // PLT-LOOP-003: メモ・プロット panel (reads プロット帳 files)
