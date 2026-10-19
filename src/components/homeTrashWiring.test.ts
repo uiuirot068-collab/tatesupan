@@ -32,7 +32,10 @@ describe("bookshelf: 削除 → ゴミ箱", () => {
 
   it("QA: putting a work back respects the 60-work limit", () => {
     const restore = home.slice(home.indexOf("const handleRestore = "), home.indexOf("const handlePurge = "));
-    expect(restore.indexOf("LOCAL_DOCUMENT_LIMIT")).toBeLessThan(restore.indexOf("await restoreFromTrash(id);"));
+    expect(restore).toContain("await restoreFromTrash(id, LOCAL_DOCUMENT_LIMIT);");
+    expect(restore).toContain('if (restored === "full")');
+    // PC QA (3回目): one ゴミ箱 action at a time
+    expect(restore).toContain("if (trashBusyRef.current) return;");
     expect(restore).toContain("setIsLimitModalOpen(true);");
   });
 

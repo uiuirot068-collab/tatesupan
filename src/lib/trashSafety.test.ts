@@ -190,7 +190,28 @@ describe("PC QA: one cloud work never gets two device copies", () => {
     await db.documents.put({ id: a, title: "別", content: "", settings, updatedAt: 0 });
     const restored = await restoreFromTrash(a);
     expect(restored).not.toBe(a);
-    expect(await db.trash.get(restored!)).toBeUndefined();
+    expect(await db.trash.get(restored as number)).toBeUndefined();
+  });
+});
+
+describe("PC QA (3回目)", () => {
+  it("putting back is refused when the bookshelf is full, in the same step", async () => {
+    const id = await createDocument();
+    await saveDocument(id, "戻す", "本文", settings, "");
+    await deleteDocument(id);
+    const other = await createDocument();
+    await saveDocument(other, "もう一冊", "本文", settings, "");
+    expect(await restoreFromTrash(id, 1)).toBe("full");
+    expect(await listTrash()).toHaveLength(1);
+    expect(await restoreFromTrash(id, 2)).toBe(id);
+  });
+
+  it("opening a cloud work that matches its copy writes nothing", async () => {
+    const project = { id: "cloud-2", title: "題", content: "本文", settings, updated_at: "2026-10-18T00:00:00.000Z" };
+    const first = await openCloudDeviceCopy(project, (t) => t);
+    const again = await openCloudDeviceCopy(project, (t) => t);
+    expect(again.docId).toBe(first.docId);
+    expect(again.revision).toBe(first.revision);
   });
 });
 
