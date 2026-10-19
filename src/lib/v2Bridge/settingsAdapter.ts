@@ -19,7 +19,8 @@
  * column spacing" note asked to be proven: real Editor settings must
  * reach the canonical geometry, not a renderer-chosen default.
  */
-import { resolvePaperSize, computeLinePitchMm, type PageSettings } from "../pageLayout";
+import { BLEED_MM, pxToInternalMm, resolvePaperSize, computeLinePitchMm, type PageSettings } from "../pageLayout";
+import { showsSnsCredit } from "../snsCredit";
 import { mmToTicks } from "../../../typesetting-v2/core/geometry/tick";
 import type { PageCompositionSettings } from "../../../typesetting-v2/core/compose/page";
 import { headerSettingsFromLegacy, type HeaderSettings, type HeaderPageOverride } from "../../../typesetting-v2/core/header";
@@ -27,6 +28,7 @@ import type { FolioSettings } from "../../../typesetting-v2/core/folio";
 import type { FolioPosition, ColophonPlacement } from "../../../typesetting-v2/core/layout/schema";
 import { compileColophonContent, type ColophonPagePosition } from "../../../typesetting-v2/core/colophon";
 import type { PublicationPageGeometry } from "../../../typesetting-v2/renderer/publication/pdfGenerator";
+import type { PublicationFurnitureGeometry } from "../../../typesetting-v2/renderer/furnitureGeometry";
 
 /**
  * `PageCompositionSettings` -- consumed by `composeCanonicalDocument`.
@@ -69,6 +71,30 @@ export function buildV2LayoutSettings(settings: PageSettings): PageCompositionSe
   };
 }
 
+/** Web閲覧用 / SNS credit folio corner (paper px; the Preview's long-standing 16px / 15px). */
+export const WEB_FOLIO_CORNER_PX = { left: 16, bottom: 15 };
+
+/**
+ * The Editor's page-furniture geometry — ONE definition for the Preview
+ * (`previewFurnitureFrame`) and the export (`buildV2PageGeometry`).
+ * Web閲覧用 and the 「SNS用 4:5」 credit put the folio at the bottom-left
+ * corner, clear of the footer; the 隠しノンブル is a print-shop marker, so
+ * px papers never carry it.
+ */
+export function editorFurnitureGeometry(settings: PageSettings): PublicationFurnitureGeometry {
+  const paper = resolvePaperSize(settings.paperSize);
+  const corner = settings.paperSize === "Web閲覧用" || showsSnsCredit(settings);
+  return {
+    marginGutterMm: settings.marginGutter,
+    marginOuterMm: settings.marginOuter,
+    folioBottomEdgeMm: settings.masterPage.nombreBottomMargin,
+    ...(settings.masterPage.showHiddenNombre && !paper.isPx
+      ? { hiddenNombre: { nombreStart: settings.masterPage.nombreStart } }
+      : {}),
+    ...(corner ? { folioCorner: { leftMm: pxToInternalMm(WEB_FOLIO_CORNER_PX.left), bottomMm: pxToInternalMm(WEB_FOLIO_CORNER_PX.bottom) } } : {}),
+  };
+}
+
 /**
  * Margin mapping is DIRECT, matching v2's own documented vertical-rl
  * convention (`PublicationPageGeometry`'s own field comments):
@@ -88,21 +114,13 @@ export function buildV2PageGeometry(settings: PageSettings): PublicationPageGeom
     // Phase 11 残件③: page furniture (folio / 柱) and the text frame are
     // placed with the Editor Preview's geometry — parity-aware ノド/小口 and
     // `nombreBottomMargin` — through `renderer/furnitureGeometry.ts`, so
-    // Preview / PDF / JPG print them in one place. Web閲覧用 (isPx) keeps its
-    // own fixed web-reading furniture (Preview: bottom-left folio + footer)
-    // and is intentionally left on the historical export placement.
-    ...(paper.isPx
-      ? {}
-      : {
-          furniture: {
-            marginGutterMm: settings.marginGutter,
-            marginOuterMm: settings.marginOuter,
-            folioBottomEdgeMm: settings.masterPage.nombreBottomMargin,
-            ...(settings.masterPage.showHiddenNombre
-              ? { hiddenNombre: { nombreStart: settings.masterPage.nombreStart } }
-              : {}),
-          },
-        }),
+    // Preview / PDF / JPG print them in one place. TSP-PRINT-004: px papers
+    // (Web閲覧用・SNS用) too; they used to keep a historical placement the
+    // Preview never drew.
+    furniture: editorFurnitureGeometry(settings),
+    // TSP-PRINT-004: a 「全面」 image covers the bleed in every output, as the
+    // Preview sheet shows it. px papers have no bleed.
+    fullImageBleedMm: paper.isPx ? 0 : BLEED_MM,
   };
 }
 

@@ -16,7 +16,9 @@
 // - the PDF has no furniture ink the Preview lacks (furniture bands outside
 //   every outline are blank in the PDF).
 //
-// A Web閲覧用 scenario only checks that it keeps browser text. Writes
+// A Web閲覧用 scenario only checks that its furniture is glyph outlines too
+// (TSP-PRINT-004; its position against the JPG is measured by
+// illustrationParity.e2e.mjs, as Web閲覧用 has no PDF). Writes
 // `<out>/furniture.json` + `.md`. Exit 1 on any failure or an edge
 // difference over 0.15mm.
 import assert from "node:assert/strict";
@@ -78,6 +80,9 @@ const SCENARIOS = [
   { name: "bunko-notoSans-center-bottom", settings: { paperSize: "文庫", fontFamily: "'Noto Sans JP', sans-serif", masterPage: masterPage({ nombrePosition: "center", hashiraPosition: "bottom", nombreBottomMargin: 3 }) } },
   { name: "a5-zenOld-small-notoSans-folio", settings: { paperSize: "A5", fontFamily: "'Zen Old Mincho', serif", masterPage: masterPage({ headerFontSize: 6, nombreFontSize: 6, nombreFontFamily: "'Noto Sans JP', sans-serif" }) } },
   { name: "bunko-shippori-colophon", colophon: true, settings: { paperSize: "文庫", fontFamily: "'Shippori Mincho', serif", colophon, masterPage: masterPage({}) } },
+  // TSP-PRINT-004: a character outside the BMP (jsPDF measured it as two) on
+  // both pages, so the right-aligned 柱 of page 2 shows any width error.
+  { name: "bunko-shippori-supplementary", settings: { paperSize: "文庫", fontFamily: "'Shippori Mincho', serif", masterPage: masterPage({ hashiraOdd: "𠮷野家の柱", hashiraEven: "𠮷野家 𩸽の章", nombrePosition: "center" }) } },
   { name: "web-reading", web: true, settings: { paperSize: "Web閲覧用", fontFamily: "'Shippori Mincho', serif", masterPage: masterPage({}) } },
 ];
 
@@ -233,9 +238,10 @@ try {
       const card = `document.querySelector('[data-preview-physical-page="1"] [data-page-card=true]')`;
       await cdp.evaluate(`(${card}.scrollIntoView({ block: "center" }), true)`);
       await sleep(1500);
-      const web = await cdp.evaluate(`(() => { const c = ${card}; return { outlines: c.querySelectorAll('[data-furniture-outline]').length, nombre: c.querySelector('div[data-nombre]')?.textContent?.trim() ?? null }; })()`);
-      if (web.outlines !== 0) fail(`${scenario.name}: Web閲覧用 has ${web.outlines} glyph-outline furniture (expected browser text)`);
-      if (!web.nombre) fail(`${scenario.name}: Web閲覧用 has no browser-text ノンブル`);
+      await cdp.waitFor(`${card}.querySelectorAll('svg[data-furniture-outline][data-nombre]').length > 0`, { timeoutMs: 15000, label: "Web furniture outlines" }).catch(() => {});
+      const web = await cdp.evaluate(`(() => { const c = ${card}; return { outlines: c.querySelectorAll('[data-furniture-outline]').length, browserText: c.querySelectorAll('div[data-nombre], div[data-hashira]').length, nombre: c.querySelector('[data-nombre]')?.getAttribute('aria-label') ?? null }; })()`);
+      if (web.outlines === 0 || web.browserText !== 0) fail(`${scenario.name}: Web閲覧用 furniture is not glyph outlines (${JSON.stringify(web)})`);
+      if (!web.nombre) fail(`${scenario.name}: Web閲覧用 has no ノンブル`);
       results.push({ scenario: scenario.name, page: 1, kind: "web", web });
       console.log(`${scenario.name}: done`);
       continue;

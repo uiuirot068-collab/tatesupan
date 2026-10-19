@@ -31,9 +31,24 @@ import {
   WEB_FOOTER_BRAND_SOURCE_HEIGHT,
   WEB_FOOTER_BRAND_SOURCE_WIDTH,
 } from "@/lib/webFooterBranding";
+import {
+  WEB_FOOTER_BOTTOM_PX,
+  WEB_FOOTER_FONT_FAMILY,
+  WEB_FOOTER_GAP_PX,
+  WEB_FOOTER_HASHTAG,
+  WEB_FOOTER_PAD_BOTTOM_PX,
+  WEB_FOOTER_PAD_LEFT_PX,
+  WEB_FOOTER_PAD_RIGHT_PX,
+  WEB_FOOTER_PAD_TOP_PX,
+  WEB_FOOTER_RULE_COLOR,
+  WEB_FOOTER_RULE_PX,
+  WEB_FOOTER_TEXT_COLOR,
+  WEB_FOOTER_URL,
+  webFooterFontSizesPx,
+} from "@/lib/webFooterLayout";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import { PreviewPage, type PreviewGlyphRun } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
-import { fitImageToBox, imageMaxBoxForTextArea, layoutImageGroup, type ImageContentBoxMm } from "@/lib/imageGeometry";
+import { fitImageToBox, fullPageCoverRect, imageMaxBoxForTextArea, layoutImageGroup, type ImageContentBoxMm } from "@/lib/imageGeometry";
 import { samePaintPage } from "@/lib/v2Bridge/paintPageEquality";
 import { resolvePreviewNombre } from "./previewNombre";
 import {
@@ -1026,7 +1041,7 @@ function PageCard({
                 />
               </div>
               {fullImage ? (
-                <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} />
+                <FullPageImage token={fullImage} images={images} unresolvedImageIds={unresolvedImageIds} cover={{ paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, bleedMm }} />
               ) : (
                 <>
                   {topImages.length > 0 && (
@@ -1419,8 +1434,9 @@ export function NombreOverlay({
 }) {
   const nombreFontSizePt = fontSize ?? 4;
 
-  // Web閲覧用のノンブルは左下に固定表示する。
-  if (webReading) {
+  // Web閲覧用のノンブルは左下に固定表示する（LEGACY）。V2 は同じ角を
+  // 書き出しと共通の置き場（furniture.folioCorner）から描く。
+  if (webReading && !glyphOutlines) {
     const webStyle: CSSProperties = {
       position: "absolute",
       left: "16px",
@@ -1477,11 +1493,11 @@ export function PageFurnitureText({
   /** V2 cards only; LEGACY cards keep browser text (and read no font file). */
   glyphOutlines: boolean;
 }) {
-  // TSP-PRINT-003 (P4-7): V2 print papers draw the furniture as the font's
-  // own glyphs at PDF's position (see `furnitureRunPlacement`). LEGACY,
-  // Web閲覧用, and until the font file is read (or when it lacks a
-  // character), browser text.
-  const glyphs = usePreviewGlyphOutlines(fontFamily, glyphOutlines && !paper.isPx);
+  // TSP-PRINT-003 (P4-7): V2 cards draw the furniture as the font's own
+  // glyphs at PDF's / JPG's position (see `furnitureRunPlacement`); since
+  // TSP-PRINT-004 px papers (Web閲覧用・SNS用) too. LEGACY, and until the font
+  // file is read (or when it lacks a character), browser text.
+  const glyphs = usePreviewGlyphOutlines(fontFamily, glyphOutlines);
   const run = glyphs?.run?.(text);
   if (run && glyphs) {
     return (
@@ -1502,7 +1518,7 @@ export function PageFurnitureText({
     writingMode: "horizontal-tb",
     color: "#000000",
     fontFamily,
-    fontSize: previewFurnitureFontSize(fontSizePt, paper),
+    fontSize: previewFurnitureFontSize(fontSizePt),
   };
   return (
     <div
@@ -1683,63 +1699,52 @@ function FooterBrandLogo({ cssWidthPx }: { cssWidthPx: number }) {
   );
 }
 
-/** Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。 */
+/**
+ * Web閲覧用ページ下部に表示するTateSpunロゴ・サイト情報フッター。寸法は
+ * JPG の書き出し（drawWebFooter）と共通（lib/webFooterLayout.ts）。
+ */
 function WebFooterOverlay({ bodyFontSizePx }: { bodyFontSizePx: number }) {
   // 親のsheetStyleが writingMode: vertical-rl を敷いているため、ここで
   // horizontal-tb に強制解除しないとロゴ・文字列が縦書きに巻き込まれて崩れる。
   const containerStyle: CSSProperties = {
     position: "absolute",
-    bottom: "15px",
+    bottom: WEB_FOOTER_BOTTOM_PX,
     left: 0,
     width: "100%",
     writingMode: "horizontal-tb",
   };
-
   const dividerStyle: CSSProperties = {
-    borderTop: "1px solid #333",
+    borderTop: `${WEB_FOOTER_RULE_PX}px solid ${WEB_FOOTER_RULE_COLOR}`,
     width: "100%",
   };
-
-  // このfooterは紙面（export対象）の一部なので、editor chrome（chromeScale）
-  // のようにscreen-space固定にはしない——canonical DOM上でpaperと一緒に
-  // scaleされる、という既存の挙動はそのまま。ただし固定"9.5px"は、Web閲覧用の
-  // 本文フォントがまだ16ptだった頃の値がそのまま残ったもので、本文フォント比
-  // 約76%（9.5÷12.42px）で釣り合っていた。Web本文サイズの変更時にも
-  // この固定値だけを取り残すと本文との比率が崩れるため、
-  // 本文に対して比率にして約1/3まで縮んで見えていた。本文フォントに対する
-  // 比率で算出し直すことで、以後どの本文サイズでも同じ見えの強さを保つ。
-  const FOOTER_TO_BODY_FONT_RATIO = 0.75;
-  const footerFontSizePx = bodyFontSizePx * FOOTER_TO_BODY_FONT_RATIO;
-  // TSP-LOOP-013A polish: keep the logo + wordmark as the footer's anchor and
-  // let the URL / hashtag read as quiet supporting text — a size step down
-  // (~18%), not a different visual weight.
-  const finePrintFontSizePx = footerFontSizePx * 0.82;
+  // 本文の大きさに対する比率で決める（webFooterFontSizesPx）。紙面の一部
+  // なので、editor chrome のように screen 固定にはしない。
+  const sizes = webFooterFontSizesPx(bodyFontSizePx);
   const contentStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    gap: "7px",
-    paddingTop: "4px",
-    paddingBottom: "6px",
-    paddingLeft: "48px",
-    paddingRight: "16px",
+    gap: WEB_FOOTER_GAP_PX,
+    paddingTop: WEB_FOOTER_PAD_TOP_PX,
+    paddingBottom: WEB_FOOTER_PAD_BOTTOM_PX,
+    paddingLeft: WEB_FOOTER_PAD_LEFT_PX,
+    paddingRight: WEB_FOOTER_PAD_RIGHT_PX,
     whiteSpace: "nowrap",
     writingMode: "horizontal-tb",
-    fontFamily: '"Shippori Mincho", serif',
-    fontSize: `${footerFontSizePx}px`,
-    color: "#888",
+    fontFamily: WEB_FOOTER_FONT_FAMILY,
+    fontSize: `${sizes.main}px`,
+    color: WEB_FOOTER_TEXT_COLOR,
   };
-
-  const finePrintStyle: CSSProperties = { fontSize: `${finePrintFontSizePx}px` };
+  const finePrintStyle: CSSProperties = { fontSize: `${sizes.fine}px` };
 
   return (
-    <div style={containerStyle} className="pointer-events-none select-none">
+    <div style={containerStyle} className="pointer-events-none select-none" data-web-footer="true">
       <div style={dividerStyle} />
       <div style={contentStyle}>
         <FooterBrandLogo cssWidthPx={WEB_FOOTER_BRAND_CSS_WIDTH} />
         <span>TateSpun</span>
-        <span style={finePrintStyle}>https://spuntales.net/tatespun/</span>
-        <span style={finePrintStyle}>#スパンテイルズ</span>
+        <span style={finePrintStyle}>{WEB_FOOTER_URL}</span>
+        <span style={finePrintStyle}>{WEB_FOOTER_HASHTAG}</span>
       </div>
     </div>
   );
@@ -2779,10 +2784,17 @@ function FullPageImage({
   token,
   images,
   unresolvedImageIds = NO_UNRESOLVED_IMAGES,
+  cover,
 }: {
   token: ImageToken;
   images: Record<string, string>;
   unresolvedImageIds?: ReadonlySet<string>;
+  /**
+   * V2 only (TSP-PRINT-004): place the image with the export's rule
+   * (`fullPageCoverRect`: the marker's aspect ratio, covering the page plus
+   * the bleed) instead of CSS object-fit over the sheet.
+   */
+  cover?: { paperWidthMm: number; paperHeightMm: number; bleedMm: number };
 }) {
   const src = images[token.id];
   if (!src) {
@@ -2822,6 +2834,28 @@ function FullPageImage({
           画像を再度配置してください
         </span>
       </span>
+    );
+  }
+  if (cover) {
+    const rect = fullPageCoverRect({ widthMm: token.widthMm, heightMm: token.heightMm }, { widthMm: cover.paperWidthMm, heightMm: cover.paperHeightMm }, cover.bleedMm);
+    return (
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- a page-local data URL, as the other 挿絵 */}
+        <img
+          src={src}
+          alt=""
+          data-full-page-image=""
+          style={{
+            position: "absolute",
+            left: (rect.xMm + cover.bleedMm) * PX_PER_MM,
+            top: (rect.yMm + cover.bleedMm) * PX_PER_MM,
+            width: rect.widthMm * PX_PER_MM,
+            height: rect.heightMm * PX_PER_MM,
+            maxWidth: "none",
+            filter: "grayscale(100%)",
+          }}
+        />
+      </div>
     );
   }
   return (

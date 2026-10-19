@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PAGE_SETTINGS, resolvePaperSize, type PageSettings } from "../pageLayout";
+import { DEFAULT_PAGE_SETTINGS, PX_PER_MM, resolvePaperSize, type PageSettings } from "../pageLayout";
+import { folioPlacement } from "../../../typesetting-v2/renderer/furnitureGeometry";
 import type { TocSettings } from "../tocSettings";
 import { composeV2Document, composeV2Layout } from "./composeV2Document";
 import { buildV2PageGeometry } from "./settingsAdapter";
@@ -177,8 +178,27 @@ describe("Phase 11 残件③: settings → geometry", () => {
     expect(buildV2PageGeometry(settings).furniture).toEqual({ marginGutterMm: 18, marginOuterMm: 10, folioBottomEdgeMm: 7 });
   });
 
-  it("Web閲覧用 keeps its own web-reading furniture (no print geometry)", () => {
-    expect(buildV2PageGeometry(base({ paperSize: "Web閲覧用" })).furniture).toBeUndefined();
+  it("TSP-PRINT-004: Web閲覧用 uses the Preview's geometry, the folio in the bottom-left corner, no 隠しノンブル", () => {
+    const settings = base({ paperSize: "Web閲覧用" });
+    settings.masterPage = { ...settings.masterPage, showHiddenNombre: true };
+    const geometry = buildV2PageGeometry(settings);
+    expect(geometry.furniture).toEqual(previewFurnitureFrame(settings, resolvePaperSize("Web閲覧用")).furniture);
+    expect(geometry.furniture?.folioCorner).toEqual({ leftMm: 16 / PX_PER_MM, bottomMm: 15 / PX_PER_MM });
+    expect(geometry.furniture?.hiddenNombre).toBeUndefined();
+    expect(geometry.fullImageBleedMm).toBe(0);
+    const paper = resolvePaperSize("Web閲覧用");
+    const frame = { paperWidthMm: paper.widthMm, paperHeightMm: paper.heightMm, marginTopMm: 0, marginBottomMm: 0, marginLeftMm: 0, marginRightMm: 0, furniture: geometry.furniture };
+    // Same corner on odd and even pages, whatever the folio side.
+    for (const isOdd of [true, false]) {
+      expect(folioPlacement("right", frame, isOdd, 15, 0)).toEqual({ xMm: 16 / PX_PER_MM, align: "left", yCenterMm: paper.heightMm - 15 / PX_PER_MM - (15 * 25.4) / 72 / 2 });
+    }
+  });
+
+  it("TSP-PRINT-004: the 「SNS用 4:5」 credit moves the folio to the corner; without it the folio keeps its side", () => {
+    expect(buildV2PageGeometry(base({ paperSize: "SNS用 4:5" })).furniture?.folioCorner).toBeDefined();
+    expect(buildV2PageGeometry(base({ paperSize: "SNS用 4:5", snsCredit: false })).furniture?.folioCorner).toBeUndefined();
+    expect(buildV2PageGeometry(base({ paperSize: "SNS用 正方形" })).furniture?.folioCorner).toBeUndefined();
+    expect(buildV2PageGeometry(base({ paperSize: "文庫" })).fullImageBleedMm).toBe(3);
   });
 });
 

@@ -15,6 +15,7 @@
  */
 import type { CSSProperties } from "react";
 import { MM_PER_PT, PX_PER_MM, type PageSettings, type PaperSize } from "@/lib/pageLayout";
+import { editorFurnitureGeometry } from "@/lib/v2Bridge/settingsAdapter";
 import type { FolioPosition, GeneratedHeader, GeneratedPageFurniture, ResolvedFolioPosition } from "../../typesetting-v2/core/layout/schema";
 import { resolveFolioPhysicalSide } from "../../typesetting-v2/core/folio";
 import {
@@ -82,22 +83,18 @@ export function previewFurnitureFrame(settings: PageSettings, paper: PaperSize):
     marginBottomMm: settings.marginBottom,
     marginLeftMm: settings.marginOuter,
     marginRightMm: settings.marginGutter,
-    furniture: {
-      marginGutterMm: settings.marginGutter,
-      marginOuterMm: settings.marginOuter,
-      folioBottomEdgeMm: settings.masterPage.nombreBottomMargin,
-    },
+    furniture: editorFurnitureGeometry(settings),
   };
 }
 
 /**
- * Furniture font size on the Preview card. Print papers are drawn at
+ * Furniture font size on the Preview card. Every paper is drawn at
  * `PX_PER_MM`, so the furniture is scaled exactly like body text and keeps
- * its printed proportion to the page. Web閲覧用 (isPx) keeps its fixed
- * web-reading point size.
+ * its exported proportion to the page. TSP-PRINT-004: px papers (Web閲覧用・
+ * SNS用) too — they used CSS points, 1.7× the size the JPG prints.
  */
-export function previewFurnitureFontSize(fontSizePt: number, paper: PaperSize): string {
-  return paper.isPx ? `${fontSizePt}pt` : `${fontSizePt * MM_PER_PT * PX_PER_MM}px`;
+export function previewFurnitureFontSize(fontSizePt: number): string {
+  return `${fontSizePt * MM_PER_PT * PX_PER_MM}px`;
 }
 
 /** Folio placement in paper millimetres (shared with PDF/JPG). */
