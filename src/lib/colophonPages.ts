@@ -109,7 +109,8 @@ export function paginateColophonRenderPlan(
   // block that moves to the next page as a whole, so a label never ends a
   // page while its value starts the next one. Free text and the minimal
   // template's title are one block per line. A row taller than a whole page
-  // still starts on a fresh page and then continues line by line.
+  // cannot be kept together, so it is not moved: it continues line by line
+  // from where it is (moving it would only leave a gap).
   const blocks: { first: number; last: number }[] = [];
   lines.forEach((line, index) => {
     const row = line.items[0].row;
@@ -121,25 +122,37 @@ export function paginateColophonRenderPlan(
   const pageOfLine: number[] = [];
   const offsets: number[] = [];
   const bottoms: number[] = [];
+  // A page with no line yet is never left empty: a line taller than a page
+  // stays on it instead of opening another page.
+  let currentPageEmpty = false;
   const fitsOnPage = (page: number, bottom: number) => page >= 0 && bottom - offsets[page] + edgeEm <= pageHeightEm + EPSILON_EM;
   const openPage = (top: number) => {
     // The first page keeps the plan's own top; later pages start at the line.
     offsets.push(offsets.length === 0 ? 0 : top - edgeEm);
     bottoms.push(top);
+    currentPageEmpty = true;
   };
   for (const block of blocks) {
     const top = lines[block.first].band.top;
     const bottom = lines[block.last].band.bottom;
-    if (!fitsOnPage(offsets.length - 1, bottom)) openPage(top);
+    const fitsFreshPage = bottom - top + 2 * edgeEm <= pageHeightEm + EPSILON_EM;
+    if (offsets.length === 0 || (fitsFreshPage && !currentPageEmpty && !fitsOnPage(offsets.length - 1, bottom))) openPage(top);
     for (let index = block.first; index <= block.last; index++) {
       const line = lines[index];
-      if (!fitsOnPage(offsets.length - 1, line.band.bottom)) openPage(line.band.top);
+      if (!currentPageEmpty && !fitsOnPage(offsets.length - 1, line.band.bottom)) openPage(line.band.top);
       const page = offsets.length - 1;
       pageOfLine[index] = page;
       bottoms[page] = line.band.bottom;
+      currentPageEmpty = false;
     }
   }
-  if (offsets.length === 1) return [plan];
+  if (offsets.length === 1) {
+    // Every line fits, but the plan's own height can still be taller than the
+    // page (the center template keeps a row gap under its last row). Trim that
+    // trailing space so the page does not overflow its placement area.
+    const heightEm = Math.min(plan.heightEm, Math.max(bottoms[0] + edgeEm, pageHeightEm));
+    return [{ ...plan, heightEm, items: plan.items.map((item) => (item.kind === "frame" ? { ...item, heightEm } : item)) }];
+  }
 
   const pages: ColophonRenderPlan[] = offsets.map((offset, page) => ({
     widthEm: plan.widthEm,

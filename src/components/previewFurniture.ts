@@ -9,7 +9,9 @@
  * function the Publication paint plan also uses. This module only converts
  * that shared millimetre placement into Preview CSS; it decides nothing.
  *
- * LEGACY cards (no V2 page yet / V2 disabled) keep the prop-based rules.
+ * V2 cards draw the text as the font's glyphs (`furnitureRunPlacement`, the
+ * position PDF paints). LEGACY cards (no V2 page yet / V2 disabled) keep the
+ * prop-based rules and browser text.
  */
 import type { CSSProperties } from "react";
 import { MM_PER_PT, PX_PER_MM, type PageSettings, type PaperSize } from "@/lib/pageLayout";

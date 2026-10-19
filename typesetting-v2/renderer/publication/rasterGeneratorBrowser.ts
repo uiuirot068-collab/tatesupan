@@ -140,9 +140,10 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       ctx.fill();
       continue;
     }
-    // "text" -- `align`/`baseline` map directly onto Canvas 2D's own
-    // native `textAlign`/`textBaseline` (jsPDF's own text() options were
-    // deliberately modeled on the same DOM/canvas convention).
+    // "text" -- `align` maps directly onto Canvas 2D's own `textAlign`
+    // (jsPDF's own text() options were modeled on the same DOM/canvas
+    // convention). `baseline` goes through `rasterTextBaseline`, because
+    // jsPDF's "middle" is not Canvas's "middle" (TSP-PRINT-003).
     const outputFontSizePt = resolveRasterCommandFontSizePt(cmd, mode);
     const commandFontFamily = cmd.fontFamily?.trim();
     if (commandFontFamily) {
@@ -151,7 +152,6 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
       ctx.font = `${ptToPx(outputFontSizePt, dpi)}px "${fontFamily}"`;
     }
     ctx.textAlign = cmd.align;
-    ctx.textBaseline = "alphabetic";
     let fontSizePx = ptToPx(outputFontSizePt, dpi);
     if (cmd.maxWidthMm !== undefined) {
       const widthPx = ctx.measureText(cmd.text).width;
@@ -167,11 +167,11 @@ async function paintCommandsOnContext(ctx: CanvasRenderingContext2D, commands: P
     }
     const xPx = mmToPx(cmd.xMm, dpi);
     // jsPDF's "middle" baseline, not Canvas's own (see rasterTextBaseline).
-    const yPx = mmToPx(cmd.yMm, dpi) + rasterTextBaseline(cmd.baseline, fontSizePx).dyPx;
+    const placed = rasterTextBaseline(cmd.baseline, fontSizePx, cmd.angle);
+    ctx.textBaseline = placed.textBaseline;
+    const yPx = mmToPx(cmd.yMm, dpi) + placed.dyPx;
     if (cmd.angle) {
-      // UNVERIFIED, defensive-only path -- see `rasterGenerator.ts`'s
-      // own identical disclosure. No real Publication paint-model call
-      // site sets a nonzero `angle` today.
+      // Only the 90° ー fallback rotates text -- see `rasterGenerator.ts`.
       ctx.save();
       ctx.translate(xPx, yPx);
       ctx.rotate((cmd.angle * Math.PI) / 180);

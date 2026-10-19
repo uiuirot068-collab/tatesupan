@@ -329,6 +329,7 @@ export default function ColophonPageSurface({
               settings.fontFamily || "'Shippori Mincho', serif"
             )}
             bleedMm={bleedMm}
+            glyphOutlines={rendererSource === "v2"}
           />
         )}
         {colophonHashira && (
@@ -340,6 +341,7 @@ export default function ColophonPageSurface({
             fontFamily={settings.fontFamily || "'Shippori Mincho', serif"}
             fontSizePt={masterPage.headerFontSize ?? 8}
             bleedMm={bleedMm}
+            glyphOutlines={rendererSource === "v2"}
           />
         )}
         {!paper.isPx && (

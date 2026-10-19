@@ -299,7 +299,8 @@ function PageCard({
   // image is deleted or pagination moves images on/off this page, without a
   // separate effect to prune a stale id.
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-  const previewGlyphs = usePreviewGlyphOutlines(settings.fontFamily, Boolean(v2PreviewEnabled && v2PreviewPage));
+  const hasV2Page = Boolean(v2PreviewEnabled && v2PreviewPage);
+  const previewGlyphs = usePreviewGlyphOutlines(settings.fontFamily, hasV2Page);
   const { paper } = layout;
   const { masterPage } = settings;
 
@@ -1210,6 +1211,7 @@ function PageCard({
             fontFamily={lineStyle.fontFamily as string}
             fontSizePt={runningHeadFontSizePt ?? 8}
             bleedMm={bleedMm}
+            glyphOutlines={hasV2Page}
           />
         )}
 
@@ -1226,6 +1228,7 @@ function PageCard({
             fontSize={folioFontSizePt}
             fontFamily={resolveNombreFontFamily(masterPage.nombreFontFamily, fontFamily)}
             bleedMm={bleedMm}
+            glyphOutlines={hasV2Page}
           />
         )}
 
@@ -1396,6 +1399,7 @@ export function NombreOverlay({
   fontSize,
   fontFamily,
   bleedMm,
+  glyphOutlines,
 }: {
   value: number;
   /** Web閲覧用: fixed bottom-left reading-view folio (clear of the web footer). */
@@ -1410,6 +1414,8 @@ export function NombreOverlay({
   // (see resolveNombreFontFamily). Affects the glyph face only.
   fontFamily: string;
   bleedMm: number;
+  /** V2 cards draw the folio as the font's glyphs at PDF's position; LEGACY keeps browser text. */
+  glyphOutlines: boolean;
 }) {
   const nombreFontSizePt = fontSize ?? 4;
 
@@ -1441,6 +1447,7 @@ export function NombreOverlay({
       fontFamily={fontFamily}
       fontSizePt={nombreFontSizePt}
       bleedMm={bleedMm}
+      glyphOutlines={glyphOutlines}
     />
   );
 }
@@ -1458,6 +1465,7 @@ export function PageFurnitureText({
   fontFamily,
   fontSizePt,
   bleedMm,
+  glyphOutlines,
 }: {
   dataAttribute: "data-nombre" | "data-hashira";
   text: string;
@@ -1466,11 +1474,14 @@ export function PageFurnitureText({
   fontFamily: string;
   fontSizePt: number;
   bleedMm: number;
+  /** V2 cards only; LEGACY cards keep browser text (and read no font file). */
+  glyphOutlines: boolean;
 }) {
-  // TSP-PRINT-003 (P4-7): print papers draw the furniture as the font's own
-  // glyphs at PDF's position (see `furnitureRunPlacement`). Web閲覧用, and
-  // until the font file is read (or when it lacks a character), browser text.
-  const glyphs = usePreviewGlyphOutlines(fontFamily, !paper.isPx);
+  // TSP-PRINT-003 (P4-7): V2 print papers draw the furniture as the font's
+  // own glyphs at PDF's position (see `furnitureRunPlacement`). LEGACY,
+  // Web閲覧用, and until the font file is read (or when it lacks a
+  // character), browser text.
+  const glyphs = usePreviewGlyphOutlines(fontFamily, glyphOutlines && !paper.isPx);
   const run = glyphs?.run?.(text);
   if (run && glyphs) {
     return (
@@ -1482,6 +1493,7 @@ export function PageFurnitureText({
         placement={placement}
         fontSizePt={fontSizePt}
         bleedMm={bleedMm}
+        fontFamily={fontFamily}
       />
     );
   }
@@ -1513,6 +1525,7 @@ function FurnitureGlyphRun({
   placement,
   fontSizePt,
   bleedMm,
+  fontFamily,
 }: {
   dataAttribute?: "data-nombre" | "data-hashira";
   text: string;
@@ -1521,6 +1534,8 @@ function FurnitureGlyphRun({
   placement: FurniturePlacement;
   fontSizePt: number;
   bleedMm: number;
+  /** The font the outlines come from (for QA scripts; the glyphs carry no CSS font). */
+  fontFamily: string;
 }) {
   const at = furnitureRunPlacement(run.advance, unitsPerEm, placement, fontSizePt, bleedMm);
   return (
@@ -1528,6 +1543,7 @@ function FurnitureGlyphRun({
       data-nombre={dataAttribute === "data-nombre" ? "" : undefined}
       data-hashira={dataAttribute === "data-hashira" ? "" : undefined}
       data-furniture-outline=""
+      data-font-family={fontFamily}
       role="img"
       aria-label={text}
       className="pointer-events-none select-none"
@@ -1618,6 +1634,7 @@ function V2HiddenNombreOverlay({
             placement={{ xMm: at.xCenterMm, align: "center", yCenterMm: at.yCentersMm[i] }}
             fontSizePt={HIDDEN_NOMBRE_FONT_SIZE_PT}
             bleedMm={bleedMm}
+            fontFamily={fontFamily}
           />
         ))}
       </div>

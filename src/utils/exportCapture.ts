@@ -469,6 +469,46 @@ function getCloneStyleProps(): string[] {
   return cloneStylePropsWithoutFontSize;
 }
 
+const XLINK_NS = 'http://www.w3.org/1999/xlink';
+const glyphUseCaptures = new WeakMap<Element, number>();
+
+/**
+ * TSP-PRINT-003: the Preview draws glyphs (body text, ノンブル, 柱) as SVG
+ * `<use href="#…">` of paths kept once in a shared `<defs>` outside the page
+ * (`previewGlyphOutlines.ts`). html-to-image copies a referenced definition
+ * into the capture only for `xlink:href`, so with plain `href` every glyph
+ * pointed at nothing and the captured page (3D book, screen-capture JPG) came
+ * out blank. Mirrors each `href` into `xlink:href` for the capture; returns
+ * the undo. Captures of the same page can overlap (the 3D book re-captures
+ * while an export runs), so each `<use>` counts its captures and keeps the
+ * mirrored attribute until the last one is done.
+ */
+export function exposeGlyphUsesForCapture(target: Element): () => void {
+  const exposed: Element[] = [];
+  target.querySelectorAll('use[href]').forEach((use) => {
+    const count = glyphUseCaptures.get(use);
+    // An xlink:href the page set itself is left alone.
+    if (count === undefined && use.hasAttributeNS(XLINK_NS, 'href')) return;
+    if (count === undefined) use.setAttributeNS(XLINK_NS, 'xlink:href', use.getAttribute('href') ?? '');
+    glyphUseCaptures.set(use, (count ?? 0) + 1);
+    exposed.push(use);
+  });
+  let undone = false;
+  return () => {
+    if (undone) return;
+    undone = true;
+    exposed.forEach((use) => {
+      const count = (glyphUseCaptures.get(use) ?? 1) - 1;
+      if (count > 0) {
+        glyphUseCaptures.set(use, count);
+        return;
+      }
+      glyphUseCaptures.delete(use);
+      use.removeAttributeNS(XLINK_NS, 'href');
+    });
+  };
+}
+
 /**
  * Shared capture entry point used by JPG/ZIP/PDF export alike (see
  * exportImage.ts / exportPdf.ts) so all three formats rasterize the same
@@ -486,27 +526,6 @@ function getCloneStyleProps(): string[] {
  * browser behavior instead of a reimplementation that has to be individually
  * patched for each CSS feature it doesn't support.
  */
-const XLINK_NS = 'http://www.w3.org/1999/xlink';
-
-/**
- * TSP-PRINT-003: the Preview draws glyphs (body text, ノンブル, 柱) as SVG
- * `<use href="#…">` of paths kept once in a shared `<defs>` outside the page
- * (`previewGlyphOutlines.ts`). html-to-image copies a referenced definition
- * into the capture only for `xlink:href`, so with plain `href` every glyph
- * pointed at nothing and the captured page (3D book, screen-capture JPG) came
- * out blank. Mirrors each `href` into `xlink:href` for the capture; returns
- * the undo.
- */
-export function exposeGlyphUsesForCapture(target: Element): () => void {
-  const added: Element[] = [];
-  target.querySelectorAll('use[href]').forEach((use) => {
-    if (use.hasAttributeNS(XLINK_NS, 'href')) return;
-    use.setAttributeNS(XLINK_NS, 'xlink:href', use.getAttribute('href') ?? '');
-    added.push(use);
-  });
-  return () => added.forEach((use) => use.removeAttributeNS(XLINK_NS, 'href'));
-}
-
 export async function capturePageToCanvas(
   root: HTMLElement,
   { pixelRatio }: CapturePageOptions

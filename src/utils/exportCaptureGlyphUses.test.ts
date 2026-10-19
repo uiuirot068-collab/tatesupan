@@ -37,4 +37,23 @@ describe("exposeGlyphUsesForCapture", () => {
     // One that already had xlink:href keeps it.
     expect(own.getAttribute("xlink:href")).toBe("#a");
   });
+
+  it("keeps xlink:href while another capture of the same page is still running", () => {
+    const glyph = fakeUse("#tsg0-3");
+    const card = { querySelectorAll: () => [glyph] };
+    const first = exposeGlyphUsesForCapture(card as unknown as Element);
+    const second = exposeGlyphUsesForCapture(card as unknown as Element);
+    first();
+    expect(glyph.getAttribute("xlink:href")).toBe("#tsg0-3");
+    second();
+    expect(glyph.attrs.has("xlink:href")).toBe(false);
+    // Calling an undo twice does not remove a later capture's attribute.
+    const third = exposeGlyphUsesForCapture(card as unknown as Element);
+    const fourth = exposeGlyphUsesForCapture(card as unknown as Element);
+    third();
+    third();
+    expect(glyph.getAttribute("xlink:href")).toBe("#tsg0-3");
+    fourth();
+    expect(glyph.attrs.has("xlink:href")).toBe(false);
+  });
 });
