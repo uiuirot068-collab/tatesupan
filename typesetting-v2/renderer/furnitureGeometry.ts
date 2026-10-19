@@ -31,6 +31,13 @@ export interface PublicationFurnitureGeometry {
    * when enabled; `nombreStart` gives the number of a page without a folio.
    */
   hiddenNombre?: { nombreStart: number };
+  /**
+   * TSP-PRINT-004 (P4-8): a folio fixed at the bottom-left corner (Web閲覧用
+   * and the 「SNS用 4:5」 credit, where the footer runs along the bottom):
+   * its left edge `leftMm` from the paper's left edge and its bottom edge
+   * `bottomMm` above the paper bottom, on every page.
+   */
+  folioCorner?: { leftMm: number; bottomMm: number };
 }
 
 export interface FurniturePageFrame {
@@ -88,6 +95,8 @@ export function folioPlacement(
           : frame.paperWidthMm / 2;
     return { xMm, align: "center", yCenterMm: frame.paperHeightMm - frame.marginBottomMm / 2 };
   }
+  const corner = frame.furniture.folioCorner;
+  if (corner) return { xMm: corner.leftMm, align: "left", yCenterMm: frame.paperHeightMm - corner.bottomMm - (fontSizePt * MM_PER_PT) / 2 };
   const { leftMm, rightMm } = furnitureFrameMargins(frame, isOddPage);
   const yCenterMm = frame.paperHeightMm - frame.furniture.folioBottomEdgeMm - (fontSizePt * MM_PER_PT) / 2;
   if (position === "left") return { xMm: leftMm, align: "left", yCenterMm };

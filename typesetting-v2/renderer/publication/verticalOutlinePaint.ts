@@ -270,6 +270,15 @@ export class VerticalOutlineContext {
     return shape;
   }
 
+  /**
+   * TSP-PRINT-004: the font's own (horizontal) glyph for one code point, or
+   * undefined when the font lacks it.
+   */
+  horizontalGlyphId(codePoint: number): number | undefined {
+    const id = this.glyphIdFor(codePoint);
+    return id ? id : undefined;
+  }
+
   /** TSP-PRINT-002: horizontal advance of `glyphId` in font units. */
   glyphAdvanceUnits(glyphId: number): number {
     return this.getGlyph(glyphId).advanceWidth ?? this.font.unitsPerEm;

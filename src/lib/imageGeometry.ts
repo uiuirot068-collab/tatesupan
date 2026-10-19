@@ -112,3 +112,23 @@ export function layoutImageGroup(
   });
   return rects;
 }
+
+/**
+ * TSP-PRINT-004 (P4-8): the box of a 「全面」 illustration, the ONE rule the
+ * Preview, PDF (every mode) and JPG share. The image keeps its marker's
+ * aspect ratio and covers the finished page plus `bleedMm` on every side,
+ * centred on the page; whatever overflows is clipped by the surface (the
+ * trim page in a trim PDF / JPG, the bleed box in a bleed PDF, the sheet in
+ * the Preview). Covering the bleed in every output keeps the crop inside the
+ * trim identical whether or not the bleed is printed.
+ * Coordinates are mm on the finished page, origin top-left.
+ */
+export function fullPageCoverRect(size: ImageSizeMm, page: { widthMm: number; heightMm: number }, bleedMm: number): ImageRectMm {
+  const targetWidthMm = page.widthMm + bleedMm * 2;
+  const targetHeightMm = page.heightMm + bleedMm * 2;
+  if (size.widthMm <= 0 || size.heightMm <= 0) return { xMm: -bleedMm, yMm: -bleedMm, widthMm: targetWidthMm, heightMm: targetHeightMm };
+  const scale = Math.max(targetWidthMm / size.widthMm, targetHeightMm / size.heightMm);
+  const widthMm = size.widthMm * scale;
+  const heightMm = size.heightMm * scale;
+  return { xMm: (page.widthMm - widthMm) / 2, yMm: (page.heightMm - heightMm) / 2, widthMm, heightMm };
+}

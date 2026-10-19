@@ -153,7 +153,7 @@ import { isExportSupportLineDismissed, rememberExportSupportLineDismissed } from
 import { exposeV2PdfPerfReport } from "@/lib/v2PdfPerfAudit";
 import { exportPaintPagesToBrowserJpgPages } from "../../typesetting-v2/renderer/publication/rasterGeneratorBrowser";
 import { resolveSnsId, showsSnsCredit } from "@/lib/snsCredit";
-import { drawSnsCredit } from "@/lib/snsCreditCanvas";
+import { drawSnsCredit, drawWebFooter } from "@/lib/snsCreditCanvas";
 import { PREVIEW_RENDERER_STYLES } from "../../typesetting-v2/renderer/preview/PreviewRenderer";
 import type { PaintPage } from "../../typesetting-v2/renderer/preview/paintModel";
 import {
@@ -1903,10 +1903,13 @@ function PreviewPane({
         {
           beforePage: async () => waitForExportPermission(signal ?? undefined),
           onProgress: (current, total) => setExportProgress({ current, total }),
-          // SPN-XFIX-002: 「SNS用 4:5」の下のクレジット（プレビューと同じもの）を画像にも入れる
+          // SPN-XFIX-002: 「SNS用 4:5」の下のクレジット（プレビューと同じもの）を画像にも入れる。
+          // TSP-PRINT-004: Web閲覧用の下の欄（ロゴ・URL・#スパンテイルズ）も同じく。
           afterPaint: showsSnsCredit(settings)
             ? (ctx, widthPx, heightPx) => drawSnsCredit(ctx, widthPx, heightPx, resolveSnsId(settings))
-            : undefined,
+            : settings.paperSize === "Web閲覧用"
+              ? (ctx, widthPx, heightPx) => drawWebFooter(ctx, widthPx, heightPx, layout.fontSizeMm * PX_PER_MM)
+              : undefined,
         }
       );
       await waitForExportPermission(signal);
