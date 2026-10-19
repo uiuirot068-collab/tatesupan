@@ -34,7 +34,8 @@ describe("TategakiEditor: one document-switch owner", () => {
 
   it("runs on every route-driven load and on 保存作品一覧", () => {
     expect(body(editor, "hasLoadedRef.current = false;", "async function run()")).toContain("beginDocumentSwitch();");
-    expect(body(editor, "const handleSelectProject = ", "const handleBookPartsInsert")).toMatch(/beginDocumentSwitch\(\);\s*const isCurrent = documentEpoch\.capture\(\);/);
+    // TSP-SAFE-004 QA: 保存作品一覧 goes through the route load above.
+    expect(body(editor, "const handleSelectProject = ", "const handleBookPartsInsert")).toContain("router.push(`/editor?cloudId=");
     // Phase 6.1: an in-flight route load cannot overwrite a project opened from 保存作品一覧.
     const load = body(editor, "beginDocumentSwitch();\n    // 保存作品一覧 can open", "async function run()");
     expect(load).toContain("const isStale = () => cancelled || !isCurrentDocument();");
@@ -47,9 +48,9 @@ describe("TategakiEditor: one document-switch owner", () => {
 
 describe("TategakiEditor: async handlers write only into the document they started in", () => {
   it("cloud save captures before its first await and guards the project link and technical state", () => {
-    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean) => {", "const handleCloudCompareOverwrite");
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
     expect(save.indexOf("documentEpoch.capture()")).toBeLessThan(save.indexOf("await "));
-    expect(save).toContain("if (!currentProjectId && isSameDocument()) setCurrentProjectId(result.data.id);");
+    expect(save).toContain("if (isSameDocument()) setCurrentProjectId(result.data.id);");
     expect(save.match(/setUnresolvedCloudImages\(/g)).toHaveLength(2);
     expect(save.match(/if \(isSameDocument\(\)\) setUnresolvedCloudImages\(/g)).toHaveLength(2);
   });

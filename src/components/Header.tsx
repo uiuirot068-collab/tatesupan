@@ -39,6 +39,8 @@ interface HeaderProps {
   onExitFocus?: () => void;
   /** 'editor'（既定・従来どおり「←作品一覧」を表示）/ 'home'（NON-EMPTY Home専用: 兄弟サービス表記、back linkなし） */
   variant?: 'editor' | 'home';
+  /** TSP-SAFE-004 QA2: asked before 「← 作品一覧」 leaves; false keeps the screen. */
+  confirmLeave?: () => boolean;
 }
 
 // TSP-SAFE-001: this browser's copy and the cloud are shown separately — a
@@ -85,7 +87,7 @@ function SaveStatusLabel({ status, cloudStatus }: { status: SaveStatus; cloudSta
 // Nothing is hidden, renamed or reordered; from 906px up (and on phones) the header is exactly as before.
 const TABLET_COMPACT_SHELL = 'md:max-[905px]:my-1 md:max-[905px]:py-1.5 md:max-[905px]:gap-y-1';
 
-export function Header({ onSave, onSelectProject, isSaving, saveStatus, cloudSaveStatus, onOpenHelp, exportFilenameStem = "", onExportFilenameStemChange, focusMode, onEnterFocus, onExitFocus, variant = 'editor' }: HeaderProps) {
+export function Header({ onSave, onSelectProject, isSaving, saveStatus, cloudSaveStatus, onOpenHelp, exportFilenameStem = "", onExportFilenameStemChange, focusMode, onEnterFocus, onExitFocus, variant = 'editor', confirmLeave }: HeaderProps) {
   const isHome = variant === 'home';
   // 「← 作品一覧」の遷移先は作品一覧ページ（"/"）。すでにそのページを開いているときは
   // ログイン状態や作品数に関わらず表示しない（空の本棚でも重複表示しない）。
@@ -240,6 +242,9 @@ export function Header({ onSave, onSelectProject, isSaving, saveStatus, cloudSav
           <>
             <Link
               href="/"
+              onClick={(event) => {
+                if (confirmLeave && !confirmLeave()) event.preventDefault();
+              }}
               // TSP-LOOP-022: the phone's sticky MobileEditorNav already has a
               // 「← 一覧」 link — don't duplicate it in the (non-sticky) header.
               className="hidden shrink-0 whitespace-nowrap text-xs font-medium text-gray-500 hover:text-gray-800 hover:underline md:inline"

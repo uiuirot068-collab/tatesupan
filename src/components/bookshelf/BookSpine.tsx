@@ -40,7 +40,7 @@ interface BookSpineProps extends BookSpineColors {
   cloudImageDetail?: string;
   /** TSP-LOOP-007: ⚠️ の hover/tap/aria 用の短い canonical 文言。あれば ⚠️ をボタン化する。 */
   cloudImageWarningText?: string;
-  /** "full" = 通常（改名/削除あり）, "info" = 閲覧のみ（クラウド作品）。 */
+  /** "full" = 通常（改名/ゴミ箱に移すあり）, "info" = 閲覧のみ（クラウド作品）。 */
   menuVariant?: "full" | "info";
 }
 
@@ -340,7 +340,7 @@ export function BookSpine({
                     onDelete();
                   }}
                 >
-                  削除
+                  ゴミ箱に移す
                 </button>
               )}
               </>

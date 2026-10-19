@@ -39,17 +39,19 @@ describe("TategakiEditor: autosave is flushed, not dropped", () => {
   it("a route-driven document switch flushes BEFORE resetting, and a reload awaits the flush", () => {
     const load = body(editor, "const previousDocumentFlushed = flushAutosave();", "async function run()");
     expect(load.indexOf("flushAutosave()")).toBeLessThan(load.indexOf("beginDocumentSwitch();"));
-    const run = body(editor, "async function run()", "run();");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
     expect(run.indexOf("await previousDocumentFlushed;")).toBeLessThan(run.indexOf("await loadDocument(id)"));
   });
 
-  it("保存作品一覧 flushes before switching and restores the project's images", () => {
+  it("保存作品一覧 opens through the route load (flush, device copy, images, failure screen)", () => {
     const select = body(editor, "const handleSelectProject = ", "const handleBookPartsInsert");
-    // TSP-SAFE-001: the project opens through its device copy, read after the flush.
-    expect(select).toMatch(/const previousDocumentFlushed = flushAutosave\(\);\s*beginDocumentSwitch\(\);\s*const isCurrent = documentEpoch\.capture\(\);/);
-    expect(select.indexOf("await previousDocumentFlushed;")).toBeLessThan(select.indexOf("openDeviceCopySafely(project)"));
-    expect(select).toMatch(/if \(!isCurrent\(\)\) return;\s*applyCloudProject\(project, opened\);/);
-    expect(select).toContain("await openCloudProjectImages(project, isCurrent);");
+    // TSP-SAFE-004 QA: the same load as ?cloudId= — it re-reads the cloud.
+    expect(select).toContain("router.push(`/editor?cloudId=${encodeURIComponent(project.id)}`);");
+    expect(select).toContain("setLoadAttempt((attempt) => attempt + 1);");
+    expect(select).not.toContain("applyCloudProject(");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
+    expect(run.indexOf("await previousDocumentFlushed;")).toBeLessThan(run.indexOf("openDeviceCopySafely(project)"));
+    expect(run).toContain("await openCloudProjectImages(project, () => !isStale());");
   });
 
   it("unmount and pagehide flush; Ctrl+S drops the job it replaces", () => {
@@ -122,7 +124,7 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
   });
 
   it("a local load records the revision this screen read", () => {
-    const run = body(editor, "async function run()", "run();");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
     expect(run).toContain("localSaveQueue.setBase(id, revisionOf(doc));");
   });
 
@@ -134,12 +136,103 @@ describe("TSP-SAFE-001: the save design is wired into the editor", () => {
 
   it("closing the tab with text not yet saved here asks first", () => {
     const warn = body(editor, "const warnIfUnsaved = (event: BeforeUnloadEvent) => {", 'window.addEventListener("beforeunload", warnIfUnsaved);');
-    expect(warn).toContain('pendingAutosave.hasPending || localSaveQueue.hasUnsaved || saveStatusRef.current === "stopped"');
+    expect(warn).toMatch(/pendingAutosave\.hasPending \|\|\s*localSaveQueue\.hasUnsaved \|\|\s*\(saveStatusRef\.current === "stopped"/);
+    // TSP-SAFE-004 QA: a screen that failed to open asks only when something was typed.
+    expect(warn).toContain("(!failed.failed || failed.typed)");
     expect(warn).toContain("event.preventDefault();");
   });
 
   it("クラウドに保存 records the version the device copy now matches", () => {
-    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean) => {", "const handleCloudCompareOverwrite");
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
     expect(save).toContain("void markCloudSynced(docId, { projectId: result.data.id, updatedAt: result.data.updated_at ?? null, title, content })");
+  });
+
+  // TSP-SAFE-002 (3の4・3の5): semantics in src/lib/supabase/projects.test.ts.
+  it("クラウドに保存: a cloud that cannot be read keeps the link and stops; only a real deletion saves as new", () => {
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
+    const check = body(save, "const lookup = await lookupProject(projectId);", "const isNewCloudSave = !projectId;");
+    const unreachable = body(check, 'if (lookup.status === "unreachable") {', "return;");
+    expect(unreachable).not.toContain("clearCloudLink");
+    const missing = body(check, 'if (lookup.status === "missing") {', "} else {");
+    expect(missing).toContain("clearCloudLink(docId)");
+    expect(save).not.toContain("getProjectById");
+  });
+
+  it("クラウドに保存: every overwrite names the version it replaces; a refused one is not a success", () => {
+    const save = body(editor, "const saveToCloud = async (skipNewerCheck: boolean, overwriteVersion: string | null) => {", "const handleCloudCompareOverwrite");
+    expect(save).toContain("let expectedUpdatedAt: string | null | undefined = skipNewerCheck ? overwriteVersion : undefined;");
+    expect(save).toContain("if (!skipNewerCheck) expectedUpdatedAt = cloudNow.updated_at ?? null;");
+    expect(save).toContain("await updateProject(projectId, { title, content, settings }, expectedUpdatedAt)");
+    const changed = body(save, "result.error === CLOUD_PROJECT_CHANGED_ERROR", "result.error === CLOUD_PROJECT_MISSING_ERROR");
+    expect(changed).toContain("setCloudCompare({ cloud: latest.data");
+    expect(changed).toContain("return;");
+    const overwrite = body(editor, "const handleCloudCompareOverwrite = () => {", "};");
+    expect(overwrite).toContain("const agreedVersion = cloudCompare?.cloud.updated_at ?? null;");
+    expect(overwrite).toContain("void saveToCloud(true, agreedVersion);");
+  });
+});
+
+// TSP-SAFE-003 (3の10): semantics in src/lib/editorRescue.test.ts.
+describe("TategakiEditor: a failed load and a crash have a way out", () => {
+  it("a failed load is caught, says why, saves nothing, and can be read again", () => {
+    const load = body(editor, "const previousDocumentFlushed = flushAutosave();", "}, [applyCloudProject,");
+    expect(load).toContain("run().catch((error: unknown) => {");
+    expect(load).toContain("void fail(classifyLoadError(error));");
+    const fail = body(load, "const fail = async (failure: EditorLoadFailure) => {", "async function run()");
+    expect(fail).toContain("await previousDocumentFlushed");
+    expect(fail).toContain("setLoadFailure(failure);");
+    expect(fail).not.toContain("hasLoadedRef.current = true");
+    expect(editor).toMatch(/\}, \[applyCloudProject,[^\]]*loadAttempt/);
+    expect(editor).toContain("onClick={retryFailedLoad}");
+    const retry = body(editor, "const retryFailedLoad = () =>", "// TSP-SAFE-001: after a deletion in another tab");
+    expect(retry).toContain('if (loadFailure?.kind === "storage") window.location.reload();');
+    expect(retry).toContain("else setLoadAttempt((attempt) => attempt + 1);");
+  });
+
+  it("QA: text typed on a failed screen is not dropped without asking", () => {
+    expect(editor).toContain("const confirmLeaveFailedScreen = () => !failedScreenRef.current.typed || window.confirm(LOAD_FAILED_DISCARD_CONFIRM);");
+    const leave = body(editor, "const leaveFailedScreen = (go: () => void) => {", "const retryFailedLoad");
+    expect(leave).toContain("if (!confirmLeaveFailedScreen()) return;");
+    // QA2: 保存作品一覧, 「← 作品一覧」 and the phone's 「← 一覧」 ask too.
+    expect(body(editor, "const handleSelectProject = ", "const handleBookPartsInsert")).toContain("if (!confirmLeaveFailedScreen()) return;");
+    expect(editor.match(/confirmLeave=\{confirmLeaveFailedScreen\}/g)).toHaveLength(2);
+    expect(editor).toContain("leaveFailedScreen(() => router.push(`/editor?id=${loadFailure.deviceCopyId}`))");
+  });
+
+  it("QA: a failed screen cannot save to the cloud, and an old link to a trashed work says so", () => {
+    expect(body(editor, "const handleSave = ", "saveToCloud(false, null)")).toContain("if (loadFailure) {");
+    expect(body(editor, "const saveToCloud = async", "await ")).toContain("if (isSampleDocument || loadFailure) return;");
+    const run = body(editor, "async function run()", "run().catch((error: unknown) => {");
+    expect(run).toMatch(/if \(id !== null && !doc && \(await isInTrash\(id\)\)\) \{\s*await fail\(\{ kind: "in-trash" \}\);\s*return;/);
+    expect(run.indexOf("isInTrash(id)")).toBeLessThan(run.indexOf("await createDocument("));
+    // QA2: a link to a work gone for good says so; the dev double-run makes one work.
+    expect(run).toMatch(/if \(id !== null && !doc\) \{\s*await fail\(\{ kind: "local-missing" \}\);/);
+    expect(run.indexOf("if (isStale()) return;\n\n      // SPN-XFIX-002")).toBeGreaterThan(-1);
+  });
+
+  it("a cloud work that cannot be read offers this browser's copy", () => {
+    const cloud = body(editor, "const found = await lookupProject(cloudProjectId);", "const project = found.data;");
+    expect(cloud).toContain("readDeviceCopyId(cloudProjectId)");
+    expect(cloud).toContain('{ kind: "cloud-missing", deviceCopyId }');
+    expect(editor).toContain("router.push(`/editor?id=${loadFailure.deviceCopyId}`)");
+  });
+
+  it("the error screen can hand back the text the screen last showed", () => {
+    expect(editor).toContain("noteEditorScreen({ docId, title, content, plotNote, settings, sample: isSampleDocument, unsaved });");
+    // PC QA: after a failed open the error screen does not claim the text was saved.
+    expect(editor).toContain("const unsaved = loadFailure !== null || deletedElsewhere;");
+    expect(readFileSync(resolve("src/components/EditorCrashScreen.tsx"), "utf8")).toContain("rescue.unsaved");
+    const errorPage = readFileSync(resolve("src/app/editor/error.tsx"), "utf8");
+    expect(errorPage).toContain("<EditorCrashScreen error={error} retry={retry} />");
+    const globalError = readFileSync(resolve("src/app/global-error.tsx"), "utf8");
+    expect(globalError).toContain("<html");
+    expect(globalError).toContain("<EditorCrashScreen error={error} retry={retry} offerRescueOnlyOnEditor />");
+  });
+
+  it("PC QA: opening a work writes nothing, so a second tab does not split the first tab's edits", () => {
+    expect(editor).toContain("openedFieldsRef.current =");
+    const autosave = editor.slice(editor.indexOf("// TSP-SAFE-004 PC QA: nothing changed since opening"), editor.indexOf("pendingAutosave.schedule("));
+    expect(autosave).toContain("openedFieldsRef.current = null;");
+    expect(autosave.indexOf("return;")).toBeLessThan(autosave.indexOf('setSaveStatus("saving")'));
   });
 });
